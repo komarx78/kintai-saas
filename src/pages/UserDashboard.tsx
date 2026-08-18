@@ -1,0 +1,879 @@
+import { useState, useEffect } from 'react';
+import { Clock, Calendar, LogOut, FileText, CheckCircle, UserCheck, XCircle, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+
+const UserDashboard = () => {
+  const navigate = useNavigate();
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [status, setStatus] = useState('未出勤'); // 未出勤, 勤務中, 退勤済
+  const [activeTab, setActiveTab] = useState('home');
+  const [viewMonth, setViewMonth] = useState(new Date()); // 現在の月に変更
+  const [user, setUser] = useState<any>(null);
+  const [currentRecord, setCurrentRecord] = useState<any>(null);
+  const [monthlyRecords, setMonthlyRecords] = useState<any[]>([]);
+
+  const [companyHolidays, setCompanyHolidays] = useState<Set<string>>(new Set());
+  const [roundingUnit, setRoundingUnit] = useState<number>(15);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    
+    const storedHolidays = localStorage.getItem('mock_company_holidays');
+    if (storedHolidays) setCompanyHolidays(new Set(JSON.parse(storedHolidays)));
+
+    const storedRounding = localStorage.getItem('mock_rounding_unit');
+    if (storedRounding) setRoundingUnit(parseInt(storedRounding));
+    
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const fetchUserAndStatus = async () => {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single();
+        setUser(profile);
+
+        // 今日の打刻データを取得
+        const today = new Date().toLocaleDateString('en-CA');
+        const { data: record } = await supabase
+          .from('attendance_records')
+          .select('*')
+          .eq('user_id', authUser.id)
+          .eq('date', today)
+          .single();
+          
+        if (record) {
+          setCurrentRecord(record);
+          if (record.check_out_time) setStatus('退勤済');
+          else if (record.check_in_time) setStatus('勤務中');
+        }
+      }
+    };
+    fetchUserAndStatus();
+  }, []);
+
+  const [userTakenLeaveDays, setUserTakenLeaveDays] = useState(0);
+
+  useEffect(() => {
+    if (user && activeTab === 'attendance') {
+      const fetchMonthly = async () => {
+        const y = viewMonth.getFullYear();
+        const m = viewMonth.getMonth() + 1;
+        const start = `${y}-${m.toString().padStart(2, '0')}-01`;
+        const end = `${y}-${m.toString().padStart(2, '0')}-31`;
+        
+        const { data } = await supabase
+          .from('attendance_records')
+          .select('*')
+          .eq('user_id', user.id)
+          .gte('date', start)
+          .lte('date', end);
+          
+        if (data) setMonthlyRecords(data);
+      };
+      
+      const fetchLeaveUsage = async () => {
+        // 今年度の取得日数を計算 (簡易的に今年承認されたものを合算)
+        const currentYear = new Date().getFullYear();
+        const startOfYear = `${currentYear}-01-01`;
+        const { data } = await supabase
+          .from('leave_requests')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', '承認')
+          .eq('type', '有給休暇')
+          .gte('start_date', startOfYear);
+        
+        if (data) {
+          let days = 0;
+          data.forEach(req => {
+            const start = new Date(req.start_date);
+            const end = new Date(req.end_date);
+            days += (end.getTime() - start.getTime()) / (1000 * 3600 * 24) + 1;
+          });
+          setUserTakenLeaveDays(days);
+        }
+      };
+
+      fetchMonthly();
+      fetchLeaveUsage();
+    }
+  }, [user, activeTab, viewMonth]);
+
+  const [compressedFile, setCompressedFile] = useState<{name: string, originalSize: string, compressedSize: string} | null>(null);
+
+  // Leave Request Form States
+  const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
+  const [leaveType, setLeaveType] = useState('有給休暇（全休）');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [leaveReason, setLeaveReason] = useState('');
+  const [punchTime, setPunchTime] = useState('');
+  const [punchType, setPunchType] = useState('出勤');
+  const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
+  const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (user) {
+      const fetchApprovals = async () => {
+        const { data: requests, error } = await supabase
+          .from('leave_requests')
+          .select('*')
+          .eq('approver_id', user.id)
+          .eq('status', '申請中')
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('fetchApprovals error:', error);
+          return;
+        }
+
+        if (requests && requests.length > 0) {
+          // 手動で applicant（申請者）の情報を取得して結合する（外部キーの曖昧さ回避のため）
+          const userIds = [...new Set(requests.map(r => r.user_id))];
+          const { data: usersData } = await supabase.from('users').select('id, name, department').in('id', userIds);
+          
+          const combined = requests.map(req => ({
+            ...req,
+            user: usersData?.find(u => u.id === req.user_id) || null
+          }));
+          setPendingApprovals(combined);
+        } else {
+          setPendingApprovals([]);
+        }
+      };
+      fetchApprovals();
+
+      if (activeTab === 'requests') {
+        const fetchLeaveTypes = async () => {
+          const { data } = await supabase
+            .from('leave_types')
+            .select('*')
+            .eq('tenant_id', user.tenant_id)
+            .order('created_at', { ascending: true });
+          
+          if (data && data.length > 0) {
+            setLeaveTypes(data);
+            if (leaveType === '有給休暇（全休）' && !data.find(d => d.name === leaveType)) {
+              setLeaveType(data[0].name);
+            }
+          }
+        };
+        fetchLeaveTypes();
+      }
+    }
+  }, [user, activeTab]);
+
+  const handleApprovalAction = async (requestId: string, status: '承認' | '却下') => {
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .update({ status })
+        .eq('id', requestId);
+        
+      if (error) {
+        console.error('Error updating request status:', error);
+        alert('ステータスの更新に失敗しました: ' + error.message);
+        return;
+      }
+      
+      // Update local state
+      setPendingApprovals(prev => prev.filter(r => r.id !== requestId));
+      alert(`${status}しました。`);
+    } catch (err: any) {
+      alert('エラーが発生しました: ' + err.message);
+    }
+  };
+
+  const handleApply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !user.tenant_id) return;
+    
+    setIsSubmittingLeave(true);
+    try {
+      const { error } = await supabase.from('leave_requests').insert({
+        tenant_id: user.tenant_id,
+        user_id: user.id,
+        approver_id: user.approver_id,
+        start_date: startDate,
+        end_date: leaveType === '打刻修正' ? startDate : endDate,
+        type: leaveType,
+        reason: leaveType === '打刻修正' ? `【修正区分: ${punchType}】【修正時刻: ${punchTime}】\n${leaveReason}` : leaveReason,
+        status: '申請中'
+      });
+
+      if (error) throw error;
+      
+      alert('申請を送信しました。（※管理者に通知メールが送信されます）');
+      
+      // Reset form
+      setLeaveType('有給休暇（全休）');
+      setStartDate('');
+      setEndDate('');
+      setLeaveReason('');
+      setActiveTab('home');
+      setCompressedFile(null);
+    } catch (err: any) {
+      console.error('Leave Request Error:', err);
+      alert('申請の送信に失敗しました。\nエラー詳細: ' + (err.message || JSON.stringify(err)));
+    } finally {
+      setIsSubmittingLeave(false);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setCompressedFile({
+        name: file.name,
+        originalSize: (file.size / 1024).toFixed(1) + ' KB',
+        compressedSize: (file.size / 1024).toFixed(1) + ' KB (非画像のため圧縮なし)'
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            setCompressedFile({
+              name: file.name,
+              originalSize: (file.size / 1024).toFixed(1) + ' KB',
+              compressedSize: (blob.size / 1024).toFixed(1) + ' KB (圧縮完了)'
+            });
+          }
+        }, 'image/jpeg', 0.7);
+      };
+    };
+  };
+
+  const handlePunchIn = async () => {
+    if (!user) return;
+    const today = new Date().toLocaleDateString('en-CA');
+    const now = new Date().toLocaleTimeString('en-GB'); // HH:mm:ss
+    const { data, error } = await supabase.from('attendance_records').insert({
+      user_id: user.id,
+      tenant_id: user.tenant_id,
+      date: today,
+      check_in_time: now,
+      status: '勤務中'
+    }).select().single();
+    
+    if (error) {
+      alert('エラーが発生しました: ' + error.message);
+      return;
+    }
+    setCurrentRecord(data);
+    setStatus('勤務中');
+    alert('出勤を記録しました');
+  };
+
+  const handlePunchOut = async () => {
+    if (!user || !currentRecord) return;
+    const now = new Date().toLocaleTimeString('en-GB');
+    const { data, error } = await supabase.from('attendance_records').update({
+      check_out_time: now,
+      status: '退勤済'
+    }).eq('id', currentRecord.id).select().single();
+    
+    if (error) {
+      alert('エラーが発生しました: ' + error.message);
+      return;
+    }
+    setCurrentRecord(data);
+    setStatus('退勤済');
+    alert('退勤を記録しました');
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+      {/* Sidebar */}
+      <div className="w-full md:w-64 bg-slate-800 text-white flex flex-col print:hidden">
+        <div className="p-4 text-xl font-bold border-b border-slate-700">
+          {user ? `${user.name} さん` : '読み込み中...'}
+        </div>
+        <nav className="flex-1 p-4 flex md:flex-col space-x-2 md:space-x-0 md:space-y-2 overflow-x-auto">
+          <button 
+            onClick={() => setActiveTab('home')}
+            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'home' ? 'bg-slate-600' : 'hover:bg-slate-700'}`}
+          >
+            <Clock className="mr-3 h-5 w-5" />
+            ホーム（打刻）
+          </button>
+          <button 
+            onClick={() => setActiveTab('attendance')}
+            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'attendance' ? 'bg-slate-600' : 'hover:bg-slate-700'}`}
+          >
+            <Calendar className="mr-3 h-5 w-5" />
+            勤怠・有給照会
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('requests')}
+            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'requests' ? 'bg-slate-600' : 'hover:bg-slate-700'}`}
+          >
+            <FileText className="mr-3 h-5 w-5" />
+            各種申請
+          </button>
+          <button 
+            onClick={() => setActiveTab('approvals')}
+            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'approvals' ? 'bg-slate-600' : 'hover:bg-slate-700'}`}
+          >
+            <UserCheck className="mr-3 h-5 w-5" />
+            部下からの申請承認
+            <span className="ml-auto bg-red-500 text-xs py-1 px-2 rounded-full">{pendingApprovals.length}</span>
+          </button>
+          
+          {user?.role === 'admin' && (
+            <button 
+              onClick={() => navigate('/admin')}
+              className="flex items-center w-full p-2 mt-4 rounded transition-colors whitespace-nowrap text-blue-300 hover:bg-slate-700"
+            >
+              <Settings className="mr-3 h-5 w-5" />
+              管理ダッシュボードへ
+            </button>
+          )}
+        </nav>
+        <div className="p-4 border-t border-slate-700 hidden md:block">
+          <button 
+            onClick={async () => {
+              await supabase.auth.signOut();
+              navigate('/');
+            }}
+            className="flex items-center w-full p-2 hover:bg-slate-700 rounded transition-colors"
+          >
+            <LogOut className="mr-3 h-5 w-5" />
+            ログアウト
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 p-4 md:p-8 overflow-auto">
+        <div className="max-w-4xl mx-auto space-y-6">
+          
+          {activeTab === 'home' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Clock Widget */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col items-center justify-center">
+                <h2 className="text-gray-500 font-medium mb-2">現在時刻</h2>
+                <div className="text-5xl font-bold text-gray-800 tracking-wider mb-6 tabular-nums">
+                  {currentTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </div>
+                
+                <div className="flex w-full space-x-4">
+                  <button 
+                    onClick={handlePunchIn}
+                    disabled={status !== '未出勤'}
+                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-blue-700 disabled:opacity-50 transition"
+                  >
+                    出勤
+                  </button>
+                  <button 
+                    onClick={handlePunchOut}
+                    disabled={status !== '勤務中'}
+                    className="flex-1 bg-orange-500 text-white py-3 rounded-lg font-bold text-lg hover:bg-orange-600 disabled:opacity-50 transition"
+                  >
+                    退勤
+                  </button>
+                </div>
+                
+                <div className="mt-4 flex flex-col space-y-3 items-center text-sm text-gray-600">
+                  <div className="flex items-center">
+                    <span className="mr-2">現在のステータス:</span>
+                    <span className={`px-3 py-1 rounded-full font-bold ${
+                      status === '未出勤' ? 'bg-gray-100 text-gray-600' :
+                      status === '勤務中' ? 'bg-blue-100 text-blue-700' :
+                      'bg-orange-100 text-orange-700'
+                    }`}>
+                      {status}
+                    </span>
+                  </div>
+                  {(currentRecord?.check_in_time || currentRecord?.check_out_time) && (
+                    <div className="flex space-x-6 bg-gray-50 px-4 py-2 rounded-md border border-gray-100">
+                      {currentRecord?.check_in_time && (
+                        <div className="flex flex-col items-center">
+                          <span className="text-xs text-gray-400">出勤時間</span>
+                          <span className="font-bold text-gray-800 text-lg">{currentRecord.check_in_time.substring(0, 5)}</span>
+                        </div>
+                      )}
+                      {currentRecord?.check_out_time && (
+                        <div className="flex flex-col items-center border-l pl-6 border-gray-200">
+                          <span className="text-xs text-gray-400">退勤時間</span>
+                          <span className="font-bold text-gray-800 text-lg">{currentRecord.check_out_time.substring(0, 5)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Leave Balance */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 className="text-lg font-medium text-gray-800 mb-4 border-b pb-2">有給休暇・代休 残数</h2>
+                
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center bg-blue-50 p-3 rounded-md">
+                    <span className="font-medium text-blue-900">有給休暇（今年度付与分）</span>
+                    <span className="text-2xl font-bold text-blue-700">{user?.paid_leave_balance || 0}<span className="text-sm font-normal ml-1">日</span></span>
+                  </div>
+                  <div className="flex justify-between items-center bg-gray-50 p-3 rounded-md">
+                    <span className="font-medium text-gray-700">有給休暇（前年度繰越分）</span>
+                    <span className="text-xl font-bold text-gray-700">{user?.paid_leave_carryover || 0}<span className="text-sm font-normal ml-1">日</span></span>
+                  </div>
+                  <div className="flex justify-between items-center bg-gray-100 p-3 rounded-md border border-gray-200">
+                    <span className="font-bold text-gray-800">有給休暇（合計残数）</span>
+                    <span className="text-2xl font-bold text-gray-900">
+                      {(user?.paid_leave_balance || 0) + (user?.paid_leave_carryover || 0)}
+                      <span className="text-sm font-normal ml-1">日</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center bg-green-50 p-3 rounded-md">
+                    <span className="font-medium text-green-900">利用可能な代休</span>
+                    <span className="text-xl font-bold text-green-700">0<span className="text-sm font-normal ml-1">日</span></span>
+                  </div>
+                  
+                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md flex items-start">
+                    <CheckCircle className="text-yellow-600 w-5 h-5 mr-2 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-yellow-800">
+                      有給取得義務（年間5日）に対して、今年度現在 <strong>{userTakenLeaveDays}日</strong> 取得済みです。
+                      {userTakenLeaveDays < 5 && (
+                        <span>期限までに残り <strong>{5 - userTakenLeaveDays}日</strong> の取得が必要です。</span>
+                      )}
+                      {userTakenLeaveDays >= 5 && (
+                        <span className="text-green-700 font-bold ml-1">義務日数をクリアしています。</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'attendance' && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:p-0 print:border-none print:shadow-none">
+              {/* Print-only Header */}
+              <div className="hidden print:block mb-4 text-center">
+                <h1 className="text-2xl font-bold">{user?.name}様 勤怠実績（{viewMonth.getFullYear()}年{viewMonth.getMonth() + 1}月）</h1>
+              </div>
+                {/* --- 事前計算ロジック --- */}
+                {(() => {
+                  const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
+                  let totalDays = 0;
+                  let totalActualMins = 0;
+                  let totalOvertimeMins = 0;
+
+                  const rows = Array.from({ length: daysInMonth }).map((_, i) => {
+                    const day = i + 1;
+                    const date = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), day);
+                    const dayOfWeekStr = ['日', '月', '火', '水', '木', '金', '土'][date.getDay()];
+                    const searchDateStr = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                    const mockDateStr = `${date.getFullYear()}-${date.getMonth() + 1}-${day}`;
+                    
+                    const record = monthlyRecords.find(r => r.date === searchDateStr);
+                    
+                    const isCompanyHoliday = companyHolidays.has(mockDateStr);
+                    const isTodayOrPast = date <= new Date();
+                    
+                    let trClass = "";
+                    let rawInTime = record?.check_in_time ? record.check_in_time.substring(0, 5) : "";
+                    let rawOutTime = record?.check_out_time ? record.check_out_time.substring(0, 5) : "";
+                    let note = record?.note || "";
+                    let isWorkingDay = false;
+                    let isPaidLeave = false;
+
+                    if (isCompanyHoliday && !record) {
+                      trClass = "bg-gray-50";
+                      rawInTime = "-";
+                      rawOutTime = "-";
+                      note = "公休";
+                    } else if (record) {
+                      isWorkingDay = true;
+                    } else if (isTodayOrPast && !isCompanyHoliday) {
+                      rawInTime = "-";
+                      rawOutTime = "-";
+                      note = "打刻漏れ";
+                      trClass = "bg-red-50 text-red-600";
+                    }
+
+                    let actualMins = 0;
+                    let overtimeMins = 0;
+                    let roundedIn = rawInTime;
+                    let roundedOut = rawOutTime;
+
+                    if (isWorkingDay && rawInTime && rawOutTime) {
+                      const parseMins = (t: string) => {
+                        const [h, m] = t.split(':').map(Number);
+                        return h * 60 + m;
+                      };
+                      let inM = parseMins(rawInTime);
+                      let outM = parseMins(rawOutTime);
+
+                      if (roundingUnit > 1) {
+                        const inRem = inM % roundingUnit;
+                        if (inRem > 0) inM += (roundingUnit - inRem);
+                        const outRem = outM % roundingUnit;
+                        if (outRem > 0) outM -= outRem;
+                      }
+
+                      roundedIn = `${Math.floor(inM / 60).toString().padStart(2, '0')}:${(inM % 60).toString().padStart(2, '0')}`;
+                      roundedOut = `${Math.floor(outM / 60).toString().padStart(2, '0')}:${(outM % 60).toString().padStart(2, '0')}`;
+
+                      const totalMins = Math.max(0, outM - inM);
+                      let breakMins = 0;
+                      if (totalMins >= 8 * 60) breakMins = 60;
+                      else if (totalMins >= 6 * 60) breakMins = 45;
+
+                      actualMins = Math.max(0, totalMins - breakMins);
+                      overtimeMins = Math.max(0, actualMins - 8 * 60);
+
+                      totalDays += 1;
+                      totalActualMins += actualMins;
+                      totalOvertimeMins += overtimeMins;
+                    }
+
+                    const formatHM = (mins: number) => {
+                      if (mins === 0) return '-';
+                      const h = Math.floor(mins / 60);
+                      const m = mins % 60;
+                      return `${h}h${m > 0 ? ` ${m}m` : ''}`;
+                    };
+
+                    return {
+                      day, date, dayOfWeekStr, trClass, isPaidLeave,
+                      rawInTime, rawOutTime, roundedIn, roundedOut, note,
+                      actualStr: formatHM(actualMins), overtimeStr: formatHM(overtimeMins),
+                      overtimeMins
+                    };
+                  });
+
+                  const handleExportCSV = () => {
+                    const headers = ['日付', '曜日', '出勤時間', '退勤時間', '実働時間', '残業時間', '備考'];
+                    const csvRows = rows.map(r => [
+                      `${r.date.getFullYear()}/${r.date.getMonth() + 1}/${r.day}`,
+                      r.dayOfWeekStr,
+                      r.roundedIn !== '-' ? r.roundedIn : '',
+                      r.roundedOut !== '-' ? r.roundedOut : '',
+                      r.actualStr !== '-' ? r.actualStr : '',
+                      r.overtimeStr !== '-' ? r.overtimeStr : '',
+                      r.note
+                    ]);
+                    const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+                    const csvContent = [headers.join(','), ...csvRows.map(e => e.map(field => `"${field}"`).join(','))].join('\n');
+                    const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = `勤怠実績_${viewMonth.getFullYear()}年${viewMonth.getMonth() + 1}月.csv`;
+                    link.click();
+                  };
+
+                  return (
+                    <>
+                      <div className="flex flex-col md:flex-row justify-between items-center mb-4 border-b pb-4 gap-4 print:hidden">
+                        <div className="flex items-center space-x-4">
+                          <h2 className="text-lg font-medium text-gray-800">月間勤怠照会</h2>
+                          <div className="flex items-center bg-gray-100 rounded-md">
+                            <button 
+                              onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))}
+                              className="p-2 hover:bg-gray-200 rounded-l-md transition"
+                            >
+                              <ChevronLeft className="w-5 h-5 text-gray-600" />
+                            </button>
+                            <span className="px-4 font-bold text-gray-700 min-w-[120px] text-center">
+                              {viewMonth.getFullYear()}年{viewMonth.getMonth() + 1}月
+                            </span>
+                            <button 
+                              onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))}
+                              className="p-2 hover:bg-gray-200 rounded-r-md transition"
+                            >
+                              <ChevronRight className="w-5 h-5 text-gray-600" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end space-y-2 mt-4 md:mt-0 print:hidden">
+                          <div className="flex space-x-2">
+                            <button onClick={() => window.print()} className="text-sm bg-gray-600 hover:bg-gray-700 text-white px-4 py-1.5 rounded shadow-sm flex items-center transition">
+                              <FileText className="w-4 h-4 mr-1" />
+                              PDF出力 (印刷)
+                            </button>
+                            <button onClick={handleExportCSV} className="text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded shadow-sm flex items-center transition">
+                              <FileText className="w-4 h-4 mr-1" />
+                              CSV出力
+                            </button>
+                          </div>
+                          <div className="flex space-x-2 text-sm">
+                            <span className="bg-gray-100 px-3 py-1 rounded border border-gray-200">
+                            出勤: <span className="font-bold">{totalDays}</span> 日
+                          </span>
+                          <span className="bg-blue-50 text-blue-800 px-3 py-1 rounded border border-blue-200">
+                            実働: <span className="font-bold">{Math.floor(totalActualMins/60)}</span> 時間 <span className="font-bold">{totalActualMins%60}</span> 分
+                          </span>
+                          <span className="bg-red-50 text-red-800 px-3 py-1 rounded border border-red-200">
+                            残業: <span className="font-bold">{Math.floor(totalOvertimeMins/60)}</span> 時間 <span className="font-bold">{totalOvertimeMins%60}</span> 分
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    
+                    <div className="overflow-x-auto print:overflow-visible">
+                      <table className="min-w-full divide-y divide-gray-200 print:text-[11px]">
+                        <thead>
+                          <tr>
+                            <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">日付</th>
+                            <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">出勤 (打刻)</th>
+                            <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">退勤 (打刻)</th>
+                            <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase">実働時間</th>
+                            <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase">残業時間</th>
+                            <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">備考</th>
+                            <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase print:hidden">アクション</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {rows.map((r) => (
+                            <tr key={r.day} className={r.trClass}>
+                              <td className={`px-3 py-2 print:py-1.5 whitespace-nowrap text-sm print:text-[11px] ${r.isPaidLeave ? '' : 'text-gray-900'} ${r.date.getDay() === 0 ? 'text-red-500' : r.date.getDay() === 6 ? 'text-blue-500' : ''}`}>
+                                {(viewMonth.getMonth() + 1).toString().padStart(2, '0')}/{r.day.toString().padStart(2, '0')} ({r.dayOfWeekStr})
+                              </td>
+                              <td className="px-3 py-2 print:py-1.5 whitespace-nowrap text-sm print:text-[11px] text-gray-900">
+                                {r.roundedIn}
+                                {r.rawInTime && r.rawInTime !== r.roundedIn && r.rawInTime !== '-' && (
+                                  <span className="ml-2 text-xs print:text-[9px] text-gray-400">({r.rawInTime})</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2 print:py-1.5 whitespace-nowrap text-sm print:text-[11px] text-gray-900">
+                                {r.roundedOut}
+                                {r.rawOutTime && r.rawOutTime !== r.roundedOut && r.rawOutTime !== '-' && (
+                                  <span className="ml-2 text-xs print:text-[9px] text-gray-400">({r.rawOutTime})</span>
+                                )}
+                              </td>
+                              <td className="px-3 py-2 print:py-1.5 whitespace-nowrap text-sm print:text-[11px] text-right font-medium text-gray-700">
+                                {r.actualStr}
+                              </td>
+                              <td className={`px-3 py-2 print:py-1.5 whitespace-nowrap text-sm print:text-[11px] text-right font-medium ${r.overtimeMins > 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                                {r.overtimeStr}
+                              </td>
+                              <td className="px-3 py-2 print:py-1.5 whitespace-nowrap text-sm print:text-[11px] text-gray-500">{r.note}</td>
+                              <td className="px-3 py-2 print:py-1.5 whitespace-nowrap text-sm text-right print:hidden">
+                                <button 
+                                  onClick={() => {
+                                    const y = r.date.getFullYear();
+                                    const m = String(r.date.getMonth() + 1).padStart(2, '0');
+                                    const d = String(r.date.getDate()).padStart(2, '0');
+                                    const ds = `${y}-${m}-${d}`;
+                                    setStartDate(ds);
+                                    setEndDate(ds);
+                                    setActiveTab('requests');
+                                  }}
+                                  className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition text-xs border border-blue-200"
+                                >
+                                  申請する
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {activeTab === 'requests' && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-medium text-gray-800 mb-6 border-b pb-2">各種申請フォーム</h2>
+              <form className="space-y-6 max-w-lg" onSubmit={handleApply}>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">申請種類</label>
+                  <select 
+                    value={leaveType}
+                    onChange={(e) => setLeaveType(e.target.value)}
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
+                  >
+                    {leaveTypes.map(lt => (
+                      <option key={lt.id} value={lt.name}>{lt.name}</option>
+                    ))}
+                    {leaveTypes.length === 0 && (
+                      <>
+                        <option>有給休暇（全休）</option>
+                        <option>有給休暇（午前半休）</option>
+                        <option>有給休暇（午後半休）</option>
+                        <option>代休（全休）</option>
+                        <option>代休（午前半休）</option>
+                        <option>代休（午後半休）</option>
+                        <option>特別休暇（慶弔など）</option>
+                      </>
+                    )}
+                    <option>打刻修正</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">{leaveType === '打刻修正' ? '対象日' : '開始日'}</label>
+                    <input 
+                      type="date" 
+                      required 
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="mt-1 block w-full pl-3 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
+                    />
+                  </div>
+                  {leaveType === '打刻修正' ? (
+                    <div className="flex space-x-2">
+                      <div className="w-1/3">
+                        <label className="block text-sm font-medium text-gray-700">区分</label>
+                        <select 
+                          value={punchType}
+                          onChange={(e) => setPunchType(e.target.value)}
+                          className="mt-1 block w-full pl-3 pr-8 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        >
+                          <option>出勤</option>
+                          <option>退勤</option>
+                        </select>
+                      </div>
+                      <div className="w-2/3">
+                        <label className="block text-sm font-medium text-gray-700">正しい打刻時間</label>
+                        <input 
+                          type="time" 
+                          required 
+                          value={punchTime}
+                          onChange={(e) => setPunchTime(e.target.value)}
+                          className="mt-1 block w-full pl-3 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">終了日</label>
+                      <input 
+                        type="date" 
+                        required 
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="mt-1 block w-full pl-3 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">事由・備考</label>
+                  <textarea 
+                    rows={3} 
+                    required 
+                    value={leaveReason}
+                    onChange={(e) => setLeaveReason(e.target.value)}
+                    className="mt-1 block w-full pl-3 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
+                    placeholder="理由を入力してください"
+                  ></textarea>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">添付ファイル（遅延証明書など）</label>
+                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:bg-gray-50 transition cursor-pointer">
+                    <div className="space-y-1 text-center">
+                      <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <div className="flex text-sm text-gray-600 justify-center">
+                        <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                          <span>ファイルを選択</span>
+                          <input id="file-upload" name="file-upload" type="file" accept="image/*,.pdf" className="sr-only" onChange={handleFileUpload} />
+                        </label>
+                        <p className="pl-1">またはドラッグ＆ドロップ</p>
+                      </div>
+                      <p className="text-xs text-gray-500">PNG, JPG, PDF 最大 10MB（画像は自動で圧縮されます）</p>
+                    </div>
+                  </div>
+                  {compressedFile && (
+                    <div className="mt-2 text-sm text-green-700 bg-green-50 p-3 rounded border border-green-200 shadow-sm">
+                      <p className="font-medium text-green-800 flex items-center">
+                        <CheckCircle className="w-4 h-4 mr-1" />
+                        ファイルの添付・圧縮が完了しました
+                      </p>
+                      <p className="mt-1 ml-5 text-gray-600">ファイル名: {compressedFile.name}</p>
+                      <p className="mt-1 ml-5">元のサイズ: {compressedFile.originalSize} ➔ <span className="font-bold">{compressedFile.compressedSize}</span></p>
+                    </div>
+                  )}
+                </div>
+
+                <button type="submit" disabled={isSubmittingLeave} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
+                  {isSubmittingLeave ? '送信中...' : '申請を送信'}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {activeTab === 'approvals' && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div className="p-4 border-b border-gray-200">
+                <h2 className="text-lg font-medium">部下からの承認待ちの申請</h2>
+              </div>
+              <div className="p-4">
+                {pendingApprovals.length === 0 ? (
+                  <p className="text-gray-500 text-sm">現在、承認待ちの申請はありません。</p>
+                ) : (
+                  <ul className="divide-y divide-gray-200">
+                    {pendingApprovals.map((req) => (
+                      <li key={req.id} className="py-4 flex justify-between items-center">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{req.user?.name || '不明'}さん（{req.user?.department || '部署未設定'}）からの申請</p>
+                          <p className="text-sm text-gray-500">{req.type} - {req.start_date} {req.start_date !== req.end_date ? `～ ${req.end_date}` : ''}</p>
+                          <p className="text-xs text-gray-400 mt-1 whitespace-pre-wrap">理由: {req.reason || '記載なし'}</p>
+                        </div>
+                        <div className="flex space-x-2">
+                          <button onClick={() => handleApprovalAction(req.id, '承認')} className="flex items-center text-sm bg-green-50 text-green-600 border border-green-200 px-3 py-1 rounded hover:bg-green-100">
+                            <CheckCircle className="w-4 h-4 mr-1" /> 承認
+                          </button>
+                          <button onClick={() => handleApprovalAction(req.id, '却下')} className="flex items-center text-sm bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded hover:bg-red-100">
+                            <XCircle className="w-4 h-4 mr-1" /> 却下
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default UserDashboard;
