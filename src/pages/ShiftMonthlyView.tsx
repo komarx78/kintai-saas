@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Calendar as CalendarIcon, ArrowLeft, ArrowRight, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, isSameMonth, isToday } from 'date-fns';
-import { ja } from 'date-fns/locale';
 
 const ShiftMonthlyView: React.FC = () => {
   const navigate = useNavigate();

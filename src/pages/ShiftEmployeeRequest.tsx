@@ -63,7 +63,7 @@ const ShiftEmployeeRequest: React.FC = () => {
           if (settings.auto_lock_days) {
             const days = settings.auto_lock_days.split(',').map((d: string) => Number(d.trim())).filter((d: number) => !isNaN(d));
             if (days.length > 0) {
-              days.sort((a, b) => a - b);
+              days.sort((a: number, b: number) => a - b);
               const today = new Date().getDate();
               
               // 次の締め切り日を探す
@@ -318,7 +318,7 @@ const ShiftEmployeeRequest: React.FC = () => {
           </div>
           
           <div className="grid grid-cols-7 gap-1 md:gap-2">
-            {calendarDays.map((date, i) => {
+            {calendarDays.map((date) => {
               const isCurrentMonth = isSameMonth(date, currentMonthStart);
               const dateStr = format(date, 'yyyy-MM-dd');
               const req = requests[dateStr];
@@ -387,7 +387,7 @@ const ShiftEmployeeRequest: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-7 gap-1 md:gap-2">
-              {calendarDays.map((date, i) => {
+              {calendarDays.map((date) => {
                 const isCurrentMonth = isSameMonth(date, currentMonthStart);
                 const dateStr = format(date, 'yyyy-MM-dd');
                 const isTodayDate = isToday(date);
