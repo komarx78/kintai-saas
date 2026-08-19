@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import SuperAdminLogin from './pages/SuperAdminLogin';
@@ -7,11 +7,11 @@ import Portal from './pages/Portal';
 import AdminDashboard from './pages/AdminDashboard';
 import ShiftRequirementSettings from './pages/ShiftRequirementSettings';
 import ShiftAdminDashboard from './pages/ShiftAdminDashboard';
-import ShiftMonthlyView from './pages/ShiftMonthlyView';
 import ShiftSettings from './pages/ShiftSettings';
 import ShiftEmployeeRequest from './pages/ShiftEmployeeRequest';
 import ShiftEmployeeMaster from './pages/ShiftEmployeeMaster';
 import ShiftCalendarView from './pages/ShiftCalendarView';
+import ShiftMonthlyView from './pages/ShiftMonthlyView';
 import ShiftRequestsView from './pages/ShiftRequestsView';
 import UserDashboard from './pages/UserDashboard';
 import TrialEnded from './pages/TrialEnded';
@@ -121,14 +121,14 @@ function App() {
             <ShiftSettings />
           </PrivateRoute>
         } />
-        <Route path="/shift/admin/calendar" element={
-          <PrivateRoute requiredRole="admin">
-            <ShiftCalendarView />
-          </PrivateRoute>
-        } />
         <Route path="/shift/admin/monthly" element={
           <PrivateRoute requiredRole="admin">
             <ShiftMonthlyView />
+          </PrivateRoute>
+        } />
+        <Route path="/shift/admin/calendar" element={
+          <PrivateRoute requiredRole="admin">
+            <ShiftCalendarView />
           </PrivateRoute>
         } />
         <Route path="/shift/admin/employees" element={

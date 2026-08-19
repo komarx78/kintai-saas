@@ -1,5 +1,5 @@
-﻿import React, { useState, useEffect } from 'react';
-import { DollarSign, Zap, Calendar, ArrowLeft, CheckCircle, Settings, Users, ClipboardList } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { DollarSign, Zap, Calendar, ArrowLeft, CheckCircle, Settings, Users, ClipboardList, Send } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { startOfWeek, endOfWeek, format, addDays } from 'date-fns';
@@ -10,6 +10,7 @@ const ShiftAdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [loadingStats, setLoadingStats] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [generationResult, setGenerationResult] = useState<{added: number}|null>(null);
 
   const [allEmployees, setAllEmployees] = useState<any[]>([]);
@@ -17,6 +18,15 @@ const ShiftAdminDashboard: React.FC = () => {
   
   const [estimatedLaborCost, setEstimatedLaborCost] = useState(0);
   const [requiredLaborCost, setRequiredLaborCost] = useState(0);
+
+  const [shiftPeriod, setShiftPeriod] = useState<string>('1week');
+  const [submissionDeadlineRule, setSubmissionDeadlineRule] = useState<string>('');
+  const [isSubmissionLocked, setIsSubmissionLocked] = useState(false);
+  const [autoLockDays, setAutoLockDays] = useState<string>('');
+  const [isSavingPeriod, setIsSavingPeriod] = useState(false);
+  const [isSavingRule, setIsSavingRule] = useState(false);
+  const [isSavingLock, setIsSavingLock] = useState(false);
+  const [isSavingAutoLock, setIsSavingAutoLock] = useState(false);
 
   const currentDate = new Date();
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -37,7 +47,7 @@ const ShiftAdminDashboard: React.FC = () => {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
       if (!tenantId) return;
 
-      const { data: empData } = await supabase.from('users').select('id, name, email').eq('tenant_id', tenantId).eq('has_shift_access', true).eq('role', 'user');
+      const { data: empData } = await supabase.from('users').select('id, name, email').eq('tenant_id', tenantId);
       setAllEmployees(empData || []);
 
       const startDate = format(weekStart, 'yyyy-MM-dd');
@@ -47,9 +57,23 @@ const ShiftAdminDashboard: React.FC = () => {
       const uniqueIds = [...new Set((reqData || []).map(r => r.user_id))];
       setSubmittedUserIds(uniqueIds);
 
-      const { data: settingsData } = await supabase.from('shift_settings').select('monthly_labor_budget').eq('tenant_id', tenantId).single();
+      const { data: settingsData } = await supabase.from('shift_settings').select('monthly_labor_budget, shift_period, submission_deadline_rule, is_submission_locked, auto_lock_day, auto_lock_days').eq('tenant_id', tenantId).single();
       if (settingsData) {
         setRequiredLaborCost(settingsData.monthly_labor_budget);
+        if (settingsData.shift_period) {
+          setShiftPeriod(settingsData.shift_period);
+        }
+        if (settingsData.submission_deadline_rule) {
+          setSubmissionDeadlineRule(settingsData.submission_deadline_rule);
+        }
+        if (settingsData.is_submission_locked !== undefined) {
+          setIsSubmissionLocked(settingsData.is_submission_locked);
+        }
+        if (settingsData.auto_lock_days !== undefined && settingsData.auto_lock_days !== null) {
+          setAutoLockDays(settingsData.auto_lock_days);
+        } else if (settingsData.auto_lock_day !== undefined && settingsData.auto_lock_day !== null) {
+          setAutoLockDays(String(settingsData.auto_lock_day));
+        }
       }
 
       const { data: shiftsData } = await supabase.from('advanced_shifts').select('*').eq('tenant_id', tenantId).gte('target_date', format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-01')).lte('target_date', format(endOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-31'));
@@ -63,6 +87,96 @@ const ShiftAdminDashboard: React.FC = () => {
       console.error('統計データ取得エラー:', error);
     } finally {
       setLoadingStats(false);
+    }
+  };
+
+  const handlePeriodChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newPeriod = e.target.value;
+    setShiftPeriod(newPeriod);
+    setIsSavingPeriod(true);
+    try {
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
+      const { error } = await supabase.from('shift_settings').update({ shift_period: newPeriod }).eq('tenant_id', tenantId);
+      if (error) throw error;
+    } catch (err) {
+      console.error('期間設定保存エラー:', err);
+      alert('保存に失敗しました');
+    } finally {
+      setIsSavingPeriod(false);
+    }
+  };
+
+  const handleSaveRule = async () => {
+    setIsSavingRule(true);
+    try {
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
+      const { error } = await supabase.from('shift_settings').update({ submission_deadline_rule: submissionDeadlineRule }).eq('tenant_id', tenantId);
+      if (error) throw error;
+      alert('提出ルールを保存しました。');
+    } catch (err) {
+      console.error('ルール設定保存エラー:', err);
+      alert('保存に失敗しました');
+    } finally {
+      setIsSavingRule(false);
+    }
+  };
+
+  const handleToggleLock = async () => {
+    setIsSavingLock(true);
+    try {
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
+      const newValue = !isSubmissionLocked;
+      const { error } = await supabase.from('shift_settings').update({ is_submission_locked: newValue }).eq('tenant_id', tenantId);
+      if (error) throw error;
+      setIsSubmissionLocked(newValue);
+    } catch (err) {
+      console.error('ロック設定保存エラー:', err);
+      alert('保存に失敗しました');
+    } finally {
+      setIsSavingLock(false);
+    }
+  };
+
+  const handleSaveAutoLockDays = async () => {
+    setIsSavingAutoLock(true);
+    try {
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
+      const val = autoLockDays.trim() === '' ? null : autoLockDays.trim();
+      const { error } = await supabase.from('shift_settings').update({ auto_lock_days: val }).eq('tenant_id', tenantId);
+      if (error) throw error;
+      alert('自動締め切り日を保存しました。');
+    } catch (err) {
+      console.error('自動締め切り日設定保存エラー:', err);
+      alert('保存に失敗しました');
+    } finally {
+      setIsSavingAutoLock(false);
+    }
+  };
+
+
+  const handlePublishDrafts = async () => {
+    if (!window.confirm('対象期間の下書きシフトをすべて確定（公開）します。よろしいですか？')) return;
+    setIsPublishing(true);
+    try {
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
+      const startDate = format(weekStart, 'yyyy-MM-dd');
+      const endDate = format(weekEnd, 'yyyy-MM-dd');
+
+      const { error } = await supabase.from('advanced_shifts')
+        .update({ status: 'confirmed' })
+        .eq('tenant_id', tenantId)
+        .eq('status', 'draft')
+        .gte('target_date', startDate)
+        .lte('target_date', endDate);
+      
+      if (error) throw error;
+      alert('シフトを確定しました！');
+      fetchStats();
+    } catch (err) {
+      console.error('確定エラー:', err);
+      alert('確定処理中にエラーが発生しました。');
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -134,11 +248,22 @@ const ShiftAdminDashboard: React.FC = () => {
             </h1>
           </div>
           <div className="flex space-x-3">
+            <button 
+              onClick={handlePublishDrafts} 
+              disabled={isPublishing}
+              className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg px-4 py-2 rounded-xl flex items-center transition font-bold text-sm disabled:opacity-50"
+            >
+              {isPublishing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full mr-2"></div> : <Send className="w-4 h-4 mr-2" />}
+              下書きシフトを確定する（Publish）
+            </button>
             <button onClick={() => navigate('/shift/admin/employees')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm">
               <Users className="w-4 h-4 mr-2" />人員マスタ
             </button>
             <button onClick={() => navigate('/shift/admin/patterns')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm">
               <ClipboardList className="w-4 h-4 mr-2" />必要枠設定
+            </button>
+            <button onClick={() => navigate('/shift/admin/monthly')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm">
+              <Calendar className="w-4 h-4 mr-2" />月間シフト状況
             </button>
             <button onClick={() => navigate('/shift/admin/settings')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm">
               <Settings className="w-4 h-4 mr-2" />詳細設定
@@ -214,12 +339,9 @@ const ShiftAdminDashboard: React.FC = () => {
                   <CheckCircle className="w-5 h-5 mr-2 text-emerald-300" />
                   {generationResult.added}件のシフトを自動生成しました！
                 </p>
-                <div className="grid grid-cols-2 gap-2 mt-4">
-                  <button onClick={() => navigate('/shift/admin/calendar')} className="w-full bg-white text-indigo-700 font-bold py-3 rounded-xl shadow-lg hover:bg-indigo-50 transition text-sm">
-                    1デイ ガントチャート
-                  </button>
-                  <button onClick={() => navigate('/shift/admin/monthly')} className="w-full bg-indigo-50 text-indigo-700 font-bold py-3 rounded-xl shadow-lg hover:bg-indigo-100 transition border border-indigo-200 text-sm">
-                    月間カレンダー
+                <div className="mt-4">
+                  <button onClick={() => navigate('/shift/admin/calendar')} className="w-full bg-white text-indigo-700 font-bold py-3 rounded-xl shadow-lg hover:bg-indigo-50 transition text-sm flex items-center justify-center">
+                    📅 シフトカレンダーを開く
                   </button>
                 </div>
               </div>
@@ -237,6 +359,106 @@ const ShiftAdminDashboard: React.FC = () => {
               </button>
             )}
           </div>
+        </div>
+
+        <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 relative overflow-hidden mb-8">
+          <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
+            <Settings className="w-6 h-6 mr-2 text-indigo-500" />
+            シフト管理期間設定
+          </h2>
+          <div className="flex items-center space-x-4">
+            <select
+              value={shiftPeriod}
+              onChange={handlePeriodChange}
+              disabled={isSavingPeriod}
+              className="px-4 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-700 font-bold min-w-[200px]"
+            >
+              <option value="1week">1週間</option>
+              <option value="2weeks">2週間</option>
+              <option value="1month">1ヶ月</option>
+            </select>
+            {isSavingPeriod && <span className="text-sm text-indigo-500 font-bold animate-pulse">保存中...</span>}
+            {!isSavingPeriod && shiftPeriod && (
+              <span className="text-sm text-emerald-600 font-bold flex items-center">
+                <CheckCircle className="w-4 h-4 mr-1" />
+                現在の設定: {shiftPeriod === '1week' ? '1週間' : shiftPeriod === '2weeks' ? '2週間' : '1ヶ月'}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mt-2">※この設定はシフト提出画面やカレンダーの表示期間に影響します。</p>
+        </div>
+
+        <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 relative overflow-hidden mb-8">
+          <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
+            <Settings className="w-6 h-6 mr-2 text-indigo-500" />
+            提出ルールの設定（テキスト）
+          </h2>
+          <div className="flex flex-col space-y-3">
+            <textarea
+              value={submissionDeadlineRule}
+              onChange={(e) => setSubmissionDeadlineRule(e.target.value)}
+              placeholder="例: 1〜15日のシフトは前月20日までに提出してください"
+              className="w-full p-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-700 min-h-[100px]"
+            />
+            <div className="flex justify-end">
+              <button
+                onClick={handleSaveRule}
+                disabled={isSavingRule}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-xl transition shadow flex items-center disabled:opacity-50"
+              >
+                {isSavingRule ? '保存中...' : 'ルールを保存'}
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 mt-2">※従業員のシフト提出画面の上部にこのルールが表示されます。</p>
+        </div>
+
+        <div className="bg-white rounded-3xl p-6 shadow-xl border border-red-100 relative overflow-hidden mb-8">
+          <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
+            <Settings className="w-6 h-6 mr-2 text-red-500" />
+            提出を締め切る（ロック）
+          </h2>
+          <div className="flex items-center space-x-4">
+            <label className="flex items-center cursor-pointer">
+              <div className="relative">
+                <input type="checkbox" className="sr-only" checked={isSubmissionLocked} onChange={handleToggleLock} disabled={isSavingLock} />
+                <div className={`block w-14 h-8 rounded-full transition-colors ${isSubmissionLocked ? 'bg-red-500' : 'bg-slate-300'}`}></div>
+                <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${isSubmissionLocked ? 'transform translate-x-6' : ''}`}></div>
+              </div>
+              <div className="ml-3 text-slate-700 font-bold">
+                {isSubmissionLocked ? 'ロック中（提出不可）' : '提出可能'}
+              </div>
+            </label>
+            {isSavingLock && <span className="text-sm text-indigo-500 font-bold animate-pulse">保存中...</span>}
+          </div>
+          <p className="text-xs text-slate-500 mt-2">※オンにすると、従業員はシフト希望の提出・変更ができなくなります。</p>
+        </div>
+
+        <div className="bg-white rounded-3xl p-6 shadow-xl border border-orange-100 relative overflow-hidden mb-8">
+          <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
+            <Settings className="w-6 h-6 mr-2 text-orange-500" />
+            自動締め切り日（複数設定可）
+          </h2>
+          <div className="flex flex-col md:flex-row md:items-center space-y-3 md:space-y-0 md:space-x-4">
+            <div className="flex items-center w-full md:w-auto">
+              <input
+                type="text"
+                value={autoLockDays}
+                onChange={(e) => setAutoLockDays(e.target.value)}
+                placeholder="例: 10,25"
+                className="px-4 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-700 w-full md:w-64"
+              />
+              <span className="font-bold text-slate-700 ml-3 whitespace-nowrap">日</span>
+            </div>
+            <button
+              onClick={handleSaveAutoLockDays}
+              disabled={isSavingAutoLock}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-xl transition shadow flex items-center justify-center disabled:opacity-50 w-full md:w-auto"
+            >
+              {isSavingAutoLock ? '保存中...' : '保存する'}
+            </button>
+          </div>
+          <p className="text-xs text-slate-500 mt-2">※カンマ区切りで複数指定できます（例: 10,25）。指定した日を過ぎると、次のサイクルの提出開始まで自動的にシフト提出がロックされます（空欄で無効化）。</p>
         </div>
       </div>
     </div>

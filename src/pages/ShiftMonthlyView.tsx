@@ -1,142 +1,132 @@
-﻿import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { ArrowLeft, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calendar as CalendarIcon, ArrowLeft, ArrowRight, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { format, addMonths, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
-
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, isSameMonth, isToday } from 'date-fns';
+import { ja } from 'date-fns/locale';
 
 const ShiftMonthlyView: React.FC = () => {
   const navigate = useNavigate();
-  const [currentDate, setCurrentDate] = useState(startOfMonth(new Date()));
-  const [loading, setLoading] = useState(true);
-  const [dailyStats, setDailyStats] = useState<Record<string, { assigned: number, required: number }>>({});
+  const [currentDate, setCurrentDate] = useState(new Date());
 
-  useEffect(() => {
-    fetchData();
-  }, [currentDate]);
-
-  const fetchData = async () => {
-    setLoading(true);
+  const monthStart = startOfMonth(currentDate);
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 }); // Sunday start
+  const calendarEnd = endOfWeek(endOfMonth(monthStart), { weekStartsOn: 0 });
+  // 安全にカレンダー日付を生成
+  const calendarDays = (() => {
     try {
-      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
-      if (!tenantId) return;
-
-      const startDateStr = format(startOfMonth(currentDate), 'yyyy-MM-dd');
-      const endDateStr = format(endOfMonth(currentDate), 'yyyy-MM-dd');
-
-      const { data: shifts } = await supabase.from('advanced_shifts').select('target_date').eq('tenant_id', tenantId).gte('target_date', startDateStr).lte('target_date', endDateStr);
-      const { data: reqs } = await supabase.from('advanced_shift_requirements').select('day_of_week, target_date, required_count').eq('tenant_id', tenantId);
-
-      const stats: Record<string, { assigned: number, required: number }> = {};
-      const days = eachDayOfInterval({ start: startOfMonth(currentDate), end: endOfMonth(currentDate) });
-
-      days.forEach(day => {
-        const dStr = format(day, 'yyyy-MM-dd');
-        let dbDow = day.getDay();
-        if (dbDow === 0) dbDow = 7;
-
-        const assigned = (shifts || []).filter(s => s.target_date === dStr).length;
-        const required = (reqs || []).filter(r => r.target_date === dStr || r.day_of_week === dbDow).reduce((sum, r) => sum + r.required_count, 0);
-
-        stats[dStr] = { assigned, required };
-      });
-
-      setDailyStats(stats);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+      return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+    } catch (e) {
+      console.error("カレンダーの日付生成に失敗:", e);
+      return [];
     }
+  })();
+  const weekDays = ['日', '月', '火', '水', '木', '金', '土'];
+
+  const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
+  const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
+
+  // モックデータ：不足枠数をランダムに生成（0なら充足、1以上なら不足）
+  const getMockShortage = (date: Date) => {
+    if (!date || isNaN(date.getTime())) return 0;
+    const day = date.getDate();
+    if (day % 3 === 0) return Math.floor(Math.random() * 3) + 1; // 1〜3枠不足
+    if (day % 5 === 0) return 1;
+    return 0; // 充足
   };
 
-  const days = eachDayOfInterval({ start: startOfMonth(currentDate), end: endOfMonth(currentDate) });
-  const firstDayOfWeek = days[0].getDay();
-  const paddingDays = Array.from({ length: firstDayOfWeek }, (_, i) => i);
-
   return (
-    <div className="min-h-screen bg-slate-50 p-6 font-sans text-slate-800">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
-          <div className="flex items-center space-x-4">
-            <button onClick={() => navigate('/shift/admin')} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-              <ArrowLeft className="w-5 h-5 text-slate-600" />
-            </button>
-            <h1 className="text-2xl font-bold flex items-center">
-              <CalendarIcon className="w-6 h-6 mr-3 text-indigo-600" />
-              月間シフト状況
-            </h1>
-          </div>
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-indigo-50/30 pb-20">
+      {/* App Bar */}
+      <div className="bg-white/80 backdrop-blur-md border-b border-white shadow-sm sticky top-0 z-30 px-4 py-4 flex items-center justify-between">
+        <button onClick={() => navigate('/shift/admin')} className="p-2 -ml-2 rounded-full hover:bg-slate-100 transition-colors">
+          <ArrowLeft className="w-5 h-5 text-slate-600" />
+        </button>
+        <h1 className="text-lg font-bold text-slate-800 flex items-center">
+          <CalendarIcon className="w-5 h-5 mr-2 text-indigo-600" />
+          月間シフト状況
+        </h1>
+        <div className="w-9"></div>
+      </div>
+
+      <div className="max-w-5xl mx-auto p-4 md:p-6 space-y-6 mt-4">
+        {/* 月切り替えヘッダー */}
+        <div className="flex items-center justify-between bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+          <button 
+            onClick={prevMonth}
+            className="p-2 hover:bg-slate-100 rounded-xl transition-colors flex items-center text-slate-600 font-bold"
+          >
+            <ArrowLeft className="w-5 h-5 mr-1" />
+            <span className="hidden md:inline">先月</span>
+          </button>
           
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center bg-slate-100 rounded-xl p-1">
-              <button onClick={() => setCurrentDate(addMonths(currentDate, -1))} className="p-2 hover:bg-white rounded-lg transition-colors">
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <span className="font-bold px-6 text-lg">
-                {format(currentDate, 'yyyy年M月')}
-              </span>
-              <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-2 hover:bg-white rounded-lg transition-colors">
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <button 
-              onClick={() => navigate('/shift/admin/calendar')}
-              className="bg-indigo-100 text-indigo-700 px-4 py-2.5 rounded-xl flex items-center hover:bg-indigo-200 transition font-bold"
-            >
-              <Clock className="w-4 h-4 mr-2" />
-              1デイ・ガントチャートへ
-            </button>
-          </div>
+          <h2 className="text-2xl font-black text-slate-800">
+            {format(currentDate, 'yyyy年 M月')}
+          </h2>
+          
+          <button 
+            onClick={nextMonth}
+            className="p-2 hover:bg-slate-100 rounded-xl transition-colors flex items-center text-slate-600 font-bold"
+          >
+            <span className="hidden md:inline">翌月</span>
+            <ArrowRight className="w-5 h-5 ml-1" />
+          </button>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-          {loading ? (
-            <div className="h-64 flex justify-center items-center"><div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div></div>
-          ) : (
-            <div>
-              <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
-                {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
-                  <div key={d} className={`p-3 text-center font-bold text-sm ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-500'}`}>
-                    {d}
-                  </div>
-                ))}
+        {/* カレンダー */}
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-2 md:p-4 overflow-hidden">
+          <div className="grid grid-cols-7 gap-1 md:gap-2 mb-2">
+            {weekDays.map((day, i) => (
+              <div key={day} className={`text-center font-bold py-2 text-sm md:text-base ${
+                i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-slate-500'
+              }`}>
+                {day}
               </div>
-              <div className="grid grid-cols-7">
-                {paddingDays.map(i => (
-                  <div key={`pad-${i}`} className="min-h-[120px] p-2 border-b border-r border-slate-100 bg-slate-50/50"></div>
-                ))}
-                {days.map(day => {
-                  const dStr = format(day, 'yyyy-MM-dd');
-                  const stat = dailyStats[dStr];
-                  const isSuffient = stat && stat.assigned >= stat.required;
-                  const isOver = stat && stat.assigned > stat.required;
-                  const isZero = stat && stat.required === 0;
-
-                  return (
-                    <div key={dStr} className="min-h-[120px] p-2 border-b border-r border-slate-100 relative group hover:bg-slate-50 transition-colors">
-                      <div className="font-bold text-slate-700 mb-2">{format(day, 'd')}</div>
-                      
-                      {stat && !isZero && (
-                        <div className="space-y-1">
-                          <div className="text-xs text-slate-500">アサイン状況</div>
-                          <div className={`font-black text-lg ${isSuffient ? (isOver ? 'text-blue-500' : 'text-emerald-500') : 'text-red-500'}`}>
-                            {stat.assigned} / {stat.required}
-                          </div>
-                          {!isSuffient && <div className="text-[10px] font-bold text-red-500 bg-red-50 inline-block px-1 rounded border border-red-100">不足あり</div>}
+            ))}
+          </div>
+          
+          <div className="grid grid-cols-7 gap-1 md:gap-2">
+            {Array.isArray(calendarDays) && calendarDays.map((date, i) => {
+              if (!date) return null;
+              const isCurrentMonth = isSameMonth(date, monthStart);
+              const isTodayDate = isToday(date);
+              const shortage = getMockShortage(date);
+              
+              return (
+                <button
+                  key={i}
+                  onClick={() => navigate(`/shift/admin/calendar?date=${format(date, 'yyyy-MM-dd')}`)}
+                  className={`flex flex-col items-center justify-start min-h-[80px] md:min-h-[100px] p-1 md:p-2 rounded-xl transition-all border ${
+                    !isCurrentMonth ? 'opacity-40 bg-slate-50/50 border-transparent' : 
+                    isTodayDate ? 'border-indigo-300 bg-indigo-50 shadow-inner' : 'border-slate-100 bg-white hover:border-indigo-300 hover:shadow-md'
+                  }`}
+                >
+                  <span className={`text-sm md:text-base font-bold mb-1 md:mb-2 ${
+                    date.getDay() === 0 ? 'text-red-500' : 
+                    date.getDay() === 6 ? 'text-blue-500' : 
+                    'text-slate-700'
+                  } ${isTodayDate ? 'bg-indigo-600 text-white w-7 h-7 flex items-center justify-center rounded-full shadow-sm' : ''}`}>
+                    {format(date, 'd')}
+                  </span>
+                  
+                  {isCurrentMonth && (
+                    <div className="w-full mt-auto">
+                      {shortage === 0 ? (
+                        <div className="bg-green-100 text-green-700 text-[10px] md:text-xs font-bold py-1 px-0.5 rounded-lg w-full text-center flex flex-col md:flex-row items-center justify-center border border-green-200">
+                          <CheckCircle2 className="w-3 h-3 md:mr-1 mb-0.5 md:mb-0" />
+                          <span>充足</span>
+                        </div>
+                      ) : (
+                        <div className="bg-red-100 text-red-600 text-[10px] md:text-xs font-bold py-1 px-0.5 rounded-lg w-full text-center flex flex-col md:flex-row items-center justify-center border border-red-200 shadow-sm">
+                          <AlertTriangle className="w-3 h-3 md:mr-1 mb-0.5 md:mb-0" />
+                          <span>不足({shortage})</span>
                         </div>
                       )}
-                      {stat && isZero && (
-                        <div className="text-xs text-slate-400 mt-4 text-center">枠設定なし</div>
-                      )}
-                      
-                      <div className="absolute inset-0 bg-indigo-500/0 group-hover:bg-indigo-500/5 transition-colors cursor-pointer" onClick={() => navigate('/shift/admin/calendar?date=' + format(day, 'yyyy-MM-dd'))}></div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>
@@ -144,4 +134,3 @@ const ShiftMonthlyView: React.FC = () => {
 };
 
 export default ShiftMonthlyView;
-

@@ -1,4 +1,4 @@
-﻿export interface AdvancedShift {
+export interface AdvancedShift {
   id: string;
   user_id: string;
   target_date: string;
@@ -170,7 +170,7 @@ export function generateAutoShift(
           start_time: finalStartStr,
           end_time: finalEndStr,
           role: req.role,
-          status: 'confirmed'
+          status: 'draft'
         });
         needed--;
 
