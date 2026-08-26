@@ -1,38 +1,32 @@
 // Google Gemini API クライアント
 
-// GitHub Secret Scan対策のため、環境変数を第一優先とし、フォールバックは難読化デコードで取得
-const getGeminiApiKey = (): string => {
-  if (import.meta.env.VITE_GEMINI_API_KEY) {
-    return import.meta.env.VITE_GEMINI_API_KEY;
-  }
-  try {
-    // デフォルトキーのBase64デコード
-    return atob('QVEuQWI4Uk42SjN4WnNkdXBiQ3dvNF9Ld25wRndMMmMtaFNnUXhnaWpndUwwekxiUUNvY0E=');
-  } catch {
-    return '';
-  }
-};
-
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
 }
 
 /**
- * 就業規則をもとにGemini AIに質問する
+ * 就業規則をもとにGemini AIに質問する（SaaSマルチテナント対応）
  * @param query ユーザーの質問
  * @param companyRules 就業規則・社内規定テキスト
  * @param chatHistory これまでのチャット履歴
+ * @param tenantApiKey テナントごとの個別APIキー（任意）
  */
 export async function askEmploymentRulesAI(
   query: string,
   companyRules: string,
-  chatHistory: ChatMessage[] = []
+  chatHistory: ChatMessage[] = [],
+  tenantApiKey?: string
 ): Promise<string> {
-  const apiKey = getGeminiApiKey();
+  // 1. 販売元プラットフォーム設定キー ➔ 2. 環境変数 ➔ 3. テナント個別キー
+  const apiKey = tenantApiKey ||
+    localStorage.getItem('platform_gemini_api_key') ||
+    import.meta.env.VITE_GEMINI_API_KEY ||
+    localStorage.getItem('gemini_api_key_custom') ||
+    '';
 
   if (!apiKey || apiKey.includes('placeholder')) {
-    return 'APIキーが設定されていないため、AIの回答を生成できません。管理者に確認してください。';
+    return '【AI機能のご案内】現在、就業規則AI相談機能の準備中です。システム管理者にお問い合わせいただくか、就業規則の直接のご確認をお願いいたします。';
   }
 
   const systemInstruction = `あなたは企業の就業規則・社内規定に精通した親切で優秀な人事労務アシスタントAIです。

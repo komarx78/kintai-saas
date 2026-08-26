@@ -22,32 +22,38 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
   const [inputQuery, setInputQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [companyRules, setCompanyRules] = useState<string>(DEFAULT_EMPLOYMENT_RULES);
+  const [tenantApiKey, setTenantApiKey] = useState<string>('');
   const [showFullRules, setShowFullRules] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 就業規則の取得（DBまたはLocalStorage）
+  // 就業規則 & テナントAPIキーの取得（DBまたはLocalStorage）
   useEffect(() => {
     const fetchRules = async () => {
       if (!tenantId) {
         const saved = localStorage.getItem('company_employment_rules');
         if (saved) setCompanyRules(saved);
+        const savedKey = localStorage.getItem('gemini_api_key_custom');
+        if (savedKey) setTenantApiKey(savedKey);
         return;
       }
 
       try {
         const { data } = await supabase
           .from('company_rules')
-          .select('content')
+          .select('content, gemini_api_key')
           .eq('tenant_id', tenantId)
           .eq('title', '就業規則')
           .maybeSingle();
 
         if (data && data.content) {
           setCompanyRules(data.content);
+          if (data.gemini_api_key) setTenantApiKey(data.gemini_api_key);
         } else {
           // LocalStorage fallback
           const saved = localStorage.getItem(`company_employment_rules_${tenantId}`);
           if (saved) setCompanyRules(saved);
+          const savedKey = localStorage.getItem(`gemini_api_key_${tenantId}`) || localStorage.getItem('gemini_api_key_custom');
+          if (savedKey) setTenantApiKey(savedKey);
         }
       } catch (e) {
         console.error('Fetch company rules error:', e);
@@ -74,7 +80,7 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
     setIsLoading(true);
 
     try {
-      const aiResponse = await askEmploymentRulesAI(textToSend, companyRules, newMessages);
+      const aiResponse = await askEmploymentRulesAI(textToSend, companyRules, newMessages, tenantApiKey);
       setMessages([
         ...newMessages,
         { role: 'assistant', content: aiResponse }

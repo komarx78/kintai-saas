@@ -1,15 +1,21 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Settings, Users, Save, Database, Edit, X } from 'lucide-react';
+import { Settings, Users, Save, Database, Edit, X, Sparkles, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
   
-  const [activeTab, setActiveTab] = useState('billing'); // 'billing' or 'staff'
+  const [activeTab, setActiveTab] = useState('billing'); // 'billing', 'staff', 'ai_settings'
 
   // Settings State
   const [settingsId, setSettingsId] = useState<string | null>(null);
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [isSavingAi, setIsSavingAi] = useState(false);
+  const [aiTestResult, setAiTestResult] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string }>({
+    status: 'idle',
+    message: ''
+  });
   
   const [sysPrices, setSysPrices] = useState({
     price_1_user: 2000, price_1_user_annual: 20000,
@@ -35,25 +41,32 @@ export default function SuperAdminDashboard() {
   }, []);
 
   const fetchSystemSettings = async () => {
-    const { data, error } = await supabase.from('system_settings').select('*').limit(1).single();
-    if (data) {
-      setSettingsId(data.id);
-      setSysPrices({
-        price_1_user: data.price_1_user || 2000,
-        price_1_user_annual: data.price_1_user_annual || 20000,
-        price_2_users: data.price_2_users || 4000,
-        price_2_users_annual: data.price_2_users_annual || 40000,
-        price_3_users: data.price_3_users || 6000,
-        price_3_users_annual: data.price_3_users_annual || 60000,
-        price_4_users: data.price_4_users || 8000,
-        price_4_users_annual: data.price_4_users_annual || 80000,
-        price_5_users: data.price_5_users || 10000,
-        price_5_users_annual: data.price_5_users_annual || 100000,
-        additional_user_price: data.additional_user_price || 500,
-        additional_user_price_annual: data.additional_user_price_annual || 5000,
-      });
-    } else if (error) {
-      console.error('Failed to fetch system settings:', error);
+    // ローカルストレージフォールバック
+    const localKey = localStorage.getItem('platform_gemini_api_key') || localStorage.getItem('gemini_api_key_custom') || '';
+    if (localKey) setGeminiApiKey(localKey);
+
+    try {
+      const { data } = await supabase.from('system_settings').select('*').limit(1).maybeSingle();
+      if (data) {
+        setSettingsId(data.id);
+        if (data.gemini_api_key) setGeminiApiKey(data.gemini_api_key);
+        setSysPrices({
+          price_1_user: data.price_1_user || 2000,
+          price_1_user_annual: data.price_1_user_annual || 20000,
+          price_2_users: data.price_2_users || 4000,
+          price_2_users_annual: data.price_2_users_annual || 40000,
+          price_3_users: data.price_3_users || 6000,
+          price_3_users_annual: data.price_3_users_annual || 60000,
+          price_4_users: data.price_4_users || 8000,
+          price_4_users_annual: data.price_4_users_annual || 80000,
+          price_5_users: data.price_5_users || 10000,
+          price_5_users_annual: data.price_5_users_annual || 100000,
+          additional_user_price: data.additional_user_price || 500,
+          additional_user_price_annual: data.additional_user_price_annual || 5000,
+        });
+      }
+    } catch (e) {
+      console.warn('Fetch system settings note:', e);
     }
   };
 
@@ -93,6 +106,70 @@ export default function SuperAdminDashboard() {
     } catch (err) {
       console.error(err);
       alert('保存に失敗しました。');
+    }
+  };
+
+  // 販売元AIキー保存処理
+  const handleSaveAiKey = async () => {
+    setIsSavingAi(true);
+    try {
+      const cleanKey = geminiApiKey.trim();
+      localStorage.setItem('platform_gemini_api_key', cleanKey);
+      localStorage.setItem('gemini_api_key_custom', cleanKey);
+
+      if (settingsId) {
+        await supabase.from('system_settings').update({ gemini_api_key: cleanKey }).eq('id', settingsId);
+      } else {
+        const { data } = await supabase.from('system_settings').insert([{ ...sysPrices, gemini_api_key: cleanKey }]).select().single();
+        if (data) setSettingsId(data.id);
+      }
+      alert('🤖 全テナント共通のGemini APIキーを保存しました！\n全顧客企業の従業員AI相談ボットに即座に適用されます。');
+    } catch (err: any) {
+      console.error(err);
+      alert('APIキーの保存に失敗しました: ' + err.message);
+    } finally {
+      setIsSavingAi(false);
+    }
+  };
+
+  // AIキー接続テスト実行
+  const handleTestAiKey = async () => {
+    const key = geminiApiKey.trim();
+    if (!key) {
+      alert('APIキーを入力してください。');
+      return;
+    }
+    setAiTestResult({ status: 'loading', message: 'Gemini 3.5 Flash にテスト通信中...' });
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${key}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: '「こんにちは！就業規則AIの接続テストです。」とだけ返答してください。' }] }],
+          generationConfig: { maxOutputTokens: 100 }
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || '通信成功';
+        setAiTestResult({
+          status: 'success',
+          message: `✅ 接続成功！Gemini 3.5 Flash 応答: 「${reply.trim()}」`
+        });
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        setAiTestResult({
+          status: 'error',
+          message: `❌ 接続失敗 (${res.status}): ${errJson.error?.message || 'APIキーまたはエンドポイントが無効です'}`
+        });
+      }
+    } catch (e: any) {
+      setAiTestResult({
+        status: 'error',
+        message: `❌ 通信エラー: ${e.message}`
+      });
     }
   };
 
@@ -226,20 +303,27 @@ export default function SuperAdminDashboard() {
         <nav className="flex-1 p-4 space-y-2 flex flex-col">
           <button 
             onClick={() => setActiveTab('billing')}
-            className={`w-full flex items-center px-4 py-3 text-sm rounded-md transition ${activeTab === 'billing' ? 'bg-blue-800 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+            className={`w-full flex items-center px-4 py-3 text-sm rounded-md transition cursor-pointer ${activeTab === 'billing' ? 'bg-blue-800 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
           >
             <Settings className="h-5 w-5 mr-3" />
             プラン＆価格管理
           </button>
           <button 
+            onClick={() => setActiveTab('ai_settings')}
+            className={`w-full flex items-center px-4 py-3 text-sm rounded-md transition cursor-pointer ${activeTab === 'ai_settings' ? 'bg-blue-800 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+          >
+            <Sparkles className="h-5 w-5 mr-3 text-amber-400" />
+            AIプラットフォーム設定
+          </button>
+          <button 
             onClick={() => setActiveTab('staff')}
-            className={`w-full flex items-center px-4 py-3 text-sm rounded-md transition ${activeTab === 'staff' ? 'bg-blue-800 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+            className={`w-full flex items-center px-4 py-3 text-sm rounded-md transition cursor-pointer ${activeTab === 'staff' ? 'bg-blue-800 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
           >
             <Users className="h-5 w-5 mr-3" />
             運営スタッフ管理
           </button>
           <div className="mt-auto pt-4">
-            <button onClick={() => navigate('/')} className="w-full flex items-center px-4 py-3 text-sm rounded-md transition text-gray-400 hover:bg-gray-800 hover:text-white">
+            <button onClick={() => navigate('/')} className="w-full flex items-center px-4 py-3 text-sm rounded-md transition text-gray-400 hover:bg-gray-800 hover:text-white cursor-pointer">
               ログアウト
             </button>
           </div>
@@ -419,6 +503,103 @@ export default function SuperAdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'ai_settings' && (
+            <div className="bg-white p-6 sm:p-8 rounded-xl shadow-sm border border-gray-200 space-y-6">
+              <div className="border-b pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-md">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-800">
+                      AIプラットフォーム設定（全テナント共通）
+                    </h2>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      販売元（システム管理者）として全顧客企業に提供する Google Gemini API キーを一括管理します
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* APIキー設定カード */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-800 mb-1">
+                    Google Gemini API キー（プラットフォーム提供キー）
+                  </label>
+                  <p className="text-xs text-gray-500 mb-3">
+                    ここに設定したAPIキーが、全導入企業の「社内規定・就業規則AI相談ボット」の動力源として利用されます。<br />
+                    顧客企業側でAPIキーを用意・設定する必要は一切ありません。（※キーはサーバー上に安全に保管されます）
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="password"
+                      value={geminiApiKey}
+                      onChange={(e) => setGeminiApiKey(e.target.value)}
+                      placeholder="AIzaSy... または AQ.Ab8..."
+                      className="flex-1 text-sm p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-amber-500 font-mono shadow-xs"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleTestAiKey}
+                        className="px-4 py-3 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                        接続テスト
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveAiKey}
+                        disabled={isSavingAi}
+                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap disabled:opacity-50"
+                      >
+                        {isSavingAi ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            保存中...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4" />
+                            設定を保存
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* テスト結果表示 */}
+                {aiTestResult.status !== 'idle' && (
+                  <div className={`p-4 rounded-xl text-xs font-bold flex items-start gap-2 animate-in fade-in ${
+                    aiTestResult.status === 'loading' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
+                    aiTestResult.status === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
+                    'bg-rose-50 text-rose-800 border border-rose-200'
+                  }`}>
+                    {aiTestResult.status === 'loading' && <Loader2 className="w-4 h-4 animate-spin shrink-0 mt-0.5" />}
+                    {aiTestResult.status === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />}
+                    {aiTestResult.status === 'error' && <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />}
+                    <span>{aiTestResult.message}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 運用ガイド */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 text-xs text-blue-900 space-y-2">
+                <h4 className="font-bold flex items-center gap-1.5 text-blue-950">
+                  <Database className="w-4 h-4 text-blue-600" />
+                  SaaSビジネスにおけるAI機能の提供フロー
+                </h4>
+                <ul className="list-disc list-inside space-y-1 text-blue-800 pl-1">
+                  <li><strong>販売元（我が君）</strong>: この画面でGemini APIキーを一度設定するだけで完了です。</li>
+                  <li><strong>導入企業（顧客）</strong>: 管理画面で自社の就業規則をコピペ・保存するだけでOKです。</li>
+                  <li><strong>従業員（エンドユーザー）</strong>: スマホやPCから「就業規則AI相談」を開けば、自動で自社の規則に沿ってAIが回答します。</li>
+                </ul>
               </div>
             </div>
           )}

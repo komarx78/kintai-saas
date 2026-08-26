@@ -114,11 +114,16 @@ ${tenantId || '（エラー：コード取得失敗）'}
     }
   };
 
-  // 就業規則 State & 保存処理
+  // 就業規則 & Gemini APIキー State & 保存処理
   const [companyRulesText, setCompanyRulesText] = useState<string>(DEFAULT_EMPLOYMENT_RULES);
+  const [geminiApiKeyCustom, setGeminiApiKeyCustom] = useState<string>('');
   const [isSavingRules, setIsSavingRules] = useState(false);
 
   useEffect(() => {
+    // APIキーの読み込み（ローカルフォールバック）
+    const savedKey = localStorage.getItem(`gemini_api_key_${tenantId}`) || localStorage.getItem('gemini_api_key_custom') || '';
+    if (savedKey) setGeminiApiKeyCustom(savedKey);
+
     const loadCompanyRules = async () => {
       if (!tenantId) {
         const saved = localStorage.getItem('company_employment_rules');
@@ -128,13 +133,14 @@ ${tenantId || '（エラー：コード取得失敗）'}
       try {
         const { data } = await supabase
           .from('company_rules')
-          .select('content')
+          .select('content, gemini_api_key')
           .eq('tenant_id', tenantId)
           .eq('title', '就業規則')
           .maybeSingle();
 
-        if (data && data.content) {
-          setCompanyRulesText(data.content);
+        if (data) {
+          if (data.content) setCompanyRulesText(data.content);
+          if (data.gemini_api_key) setGeminiApiKeyCustom(data.gemini_api_key);
         } else {
           const saved = localStorage.getItem(`company_employment_rules_${tenantId}`);
           if (saved) setCompanyRulesText(saved);
@@ -152,8 +158,15 @@ ${tenantId || '（エラー：コード取得失敗）'}
     try {
       localStorage.setItem(`company_employment_rules_${tenantId}`, companyRulesText);
       localStorage.setItem('company_employment_rules', companyRulesText);
+      if (geminiApiKeyCustom) {
+        localStorage.setItem(`gemini_api_key_${tenantId}`, geminiApiKeyCustom.trim());
+        localStorage.setItem('gemini_api_key_custom', geminiApiKeyCustom.trim());
+      } else {
+        localStorage.removeItem(`gemini_api_key_${tenantId}`);
+        localStorage.removeItem('gemini_api_key_custom');
+      }
 
-      // Supabaseへの保存（テーブルが存在すれば保存）
+      // Supabaseへの保存（テナント単位のクラウドDB保存）
       try {
         await supabase
           .from('company_rules')
@@ -161,11 +174,14 @@ ${tenantId || '（エラー：コード取得失敗）'}
             tenant_id: tenantId,
             title: '就業規則',
             content: companyRulesText,
+            gemini_api_key: geminiApiKeyCustom.trim() || null,
             updated_at: new Date().toISOString()
           }, { onConflict: 'tenant_id,title' });
-      } catch (e) {}
+      } catch (e) {
+        console.warn('DB upsert note:', e);
+      }
 
-      alert('📜 就業規則・社内規定を保存しました！\n従業員画面のAI相談ボットに即座に反映されます。');
+      alert('📜 就業規則・社内規定およびAI設定をクラウドに保存しました！\n自社のすべての従業員（スマホ・PC）のAI相談ボットに即座に反映されます。');
     } catch (err: any) {
       console.error(err);
       alert('就業規則を保存しました。');
