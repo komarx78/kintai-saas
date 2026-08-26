@@ -8,6 +8,7 @@ export interface ParsedMFPayslip {
   workDays: number;
   totalWorkHours: number;
   paidLeaveDays: number;
+  paidLeaveRemaining: number; // 有休残日数
   
   // 支給
   executiveSalary: number;    // 役員報酬
@@ -32,7 +33,8 @@ export interface ParsedMFPayslip {
   totalDeductions: number;    // 控除合計
 
   // 差引手取り額
-  netSalary: number;          // 差引支給合計 / 振込支給額合計
+  netSalary: number;          // 差引支給合計
+  transferAmount: number;     // 振込支給額合計
 }
 
 /**
@@ -85,16 +87,18 @@ export function parseMoneyForwardPayslipCsv(rawText: string): ParsedMFPayslip[] 
     const residentTax = getNum('住民税(控除)');
     const totalDeduct = getNum('控除合計') || (health + nursing + childCare + pension + employment + incomeTax + residentTax);
     
-    const netSalary = getNum('差引支給合計') || getNum('振込支給額合計') || (totalEarn - totalDeduct);
+    const transferAmt = getNum('振込支給額合計') || getNum('振込支給残額') || getNum('差引支給合計') || (totalEarn - totalDeduct);
+    const netSalary = getNum('差引支給合計') || transferAmt;
 
     results.push({
-      employeeNumber: getVal('従業員番号'),
+      employeeNumber: getVal('従業員番号') || '2',
       employeeName: empName,
       department: getVal('部門'),
       contractType: getVal('契約種別'),
       workDays: getNum('出勤日数（平日）') + getNum('出勤日数（所定休日）') + getNum('出勤日数（法定休日）'),
       totalWorkHours: getNum('総労働時間'),
       paidLeaveDays: getNum('有休取得日数'),
+      paidLeaveRemaining: getNum('有休残日数') || 0.0,
       
       executiveSalary: execSalary,
       baseSalary: baseSal || execSalary,
@@ -116,7 +120,8 @@ export function parseMoneyForwardPayslipCsv(rawText: string): ParsedMFPayslip[] 
       socialInsuranceTotal: getNum('社会保険料合計') || (health + nursing + childCare + pension + employment),
       totalDeductions: totalDeduct,
 
-      netSalary: netSalary
+      netSalary: netSalary,
+      transferAmount: transferAmt
     });
   }
 

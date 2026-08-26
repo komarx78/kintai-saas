@@ -6,6 +6,7 @@ import {
   Users, Sparkles, FileText, Loader2, X, Clock, UploadCloud, FileSpreadsheet 
 } from 'lucide-react';
 import { parseMoneyForwardPayslipCsv, type ParsedMFPayslip } from '../lib/mfPayslipParser';
+import { OfficialPayslipDoc } from './OfficialPayslipDoc';
 
 interface PayslipManagementProps {
   tenantId: string | null;
@@ -345,7 +346,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             actual_hours: item.totalWorkHours || 0,
             overtime_hours: 0,
             paid_leave_days: item.paidLeaveDays || 0,
+            paid_leave_remaining: item.paidLeaveRemaining || 0.0,
             absence_days: 0,
+            executive_salary: item.executiveSalary || 0,
             base_salary: item.baseSalary,
             overtime_allowance: item.overtimeAllowance,
             position_allowance: item.positionAllowance,
@@ -355,13 +358,15 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             total_earnings: item.totalEarnings,
             health_insurance: item.healthInsurance,
             nursing_insurance: item.nursingInsurance,
+            child_care_support: item.childCareSupport || 0,
             pension_insurance: item.pensionInsurance,
             employment_insurance: item.employmentInsurance,
             income_tax: item.incomeTax,
             resident_tax: item.residentTax,
-            other_deductions: item.childCareSupport || 0,
+            other_deductions: 0,
             total_deductions: item.totalDeductions,
             net_salary: item.netSalary,
+            transfer_amount: item.transferAmount || item.netSalary,
             note: `${item.contractType ? `【${item.contractType}】` : ''}マネーフォワード給与取込データ`,
             status: 'published' // 即時公開
           };
@@ -958,76 +963,14 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               </button>
             </div>
 
-            <div className="p-8 overflow-y-auto space-y-6 font-sans">
-              {/* 明細書ヘッダー */}
-              <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4">
-                <div>
-                  <h2 className="text-2xl font-black tracking-wider text-slate-900">
-                    給 与 明 細 書
-                  </h2>
-                  <p className="text-xs font-bold text-slate-500 mt-1">
-                    {previewModal.payslip.year_month} 支給分（支給日: {previewModal.payslip.payment_date}）
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-bold text-slate-800">{tenantInfo?.name || '株式会社〇〇'}</div>
-                  <div className="text-base font-black text-slate-900 mt-1">
-                    {previewModal.payslip.user?.name || '従業員'} 様
-                  </div>
-                </div>
+            <div className="p-4 sm:p-8 overflow-y-auto font-sans bg-slate-100/50 flex-1">
+              <div className="bg-white rounded-xl border border-slate-300 shadow-sm overflow-hidden print:border-none print:shadow-none">
+                <OfficialPayslipDoc
+                  payslip={previewModal.payslip}
+                  userName={previewModal.payslip.user?.name}
+                  tenantName={tenantInfo?.name || '株式会社cocotte'}
+                />
               </div>
-
-              {/* 手取りハイライトカード */}
-              <div className="bg-emerald-50 border-2 border-emerald-300 rounded-xl p-4 flex justify-between items-center">
-                <span className="text-sm font-black text-emerald-950">差引支給額（手取り額）</span>
-                <span className="text-3xl font-black text-emerald-700">
-                  ¥{previewModal.payslip.net_salary?.toLocaleString()}
-                </span>
-              </div>
-
-              {/* 3ブロック表 */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                {/* 勤怠 */}
-                <div className="border border-slate-300 rounded-lg p-3 space-y-2 bg-slate-50/50">
-                  <h4 className="font-black text-slate-800 border-b border-slate-300 pb-1">勤怠</h4>
-                  <div className="flex justify-between"><span>就労日数:</span><strong>{previewModal.payslip.work_days} 日</strong></div>
-                  <div className="flex justify-between"><span>実働時間:</span><strong>{previewModal.payslip.actual_hours} 時間</strong></div>
-                  <div className="flex justify-between text-amber-700"><span>残業時間:</span><strong>{previewModal.payslip.overtime_hours} 時間</strong></div>
-                  <div className="flex justify-between text-emerald-700"><span>有給取得:</span><strong>{previewModal.payslip.paid_leave_days} 日</strong></div>
-                </div>
-
-                {/* 支給 */}
-                <div className="border border-slate-300 rounded-lg p-3 space-y-2 bg-blue-50/30">
-                  <h4 className="font-black text-blue-900 border-b border-blue-200 pb-1">支給項目</h4>
-                  <div className="flex justify-between"><span>基本給:</span><strong>¥{previewModal.payslip.base_salary?.toLocaleString()}</strong></div>
-                  <div className="flex justify-between"><span>残業手当:</span><strong>¥{previewModal.payslip.overtime_allowance?.toLocaleString()}</strong></div>
-                  <div className="flex justify-between"><span>通勤手当:</span><strong>¥{previewModal.payslip.commuting_allowance?.toLocaleString()}</strong></div>
-                  {previewModal.payslip.position_allowance > 0 && <div className="flex justify-between"><span>役職手当:</span><strong>¥{previewModal.payslip.position_allowance?.toLocaleString()}</strong></div>}
-                  <div className="flex justify-between border-t border-blue-200 pt-1 font-black text-blue-900">
-                    <span>総支給額:</span><span>¥{previewModal.payslip.total_earnings?.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {/* 控除 */}
-                <div className="border border-slate-300 rounded-lg p-3 space-y-2 bg-rose-50/30">
-                  <h4 className="font-black text-rose-900 border-b border-rose-200 pb-1">控除項目</h4>
-                  <div className="flex justify-between"><span>健康保険:</span><strong>¥{previewModal.payslip.health_insurance?.toLocaleString()}</strong></div>
-                  <div className="flex justify-between"><span>厚生年金:</span><strong>¥{previewModal.payslip.pension_insurance?.toLocaleString()}</strong></div>
-                  <div className="flex justify-between"><span>雇用保険:</span><strong>¥{previewModal.payslip.employment_insurance?.toLocaleString()}</strong></div>
-                  <div className="flex justify-between"><span>所得税:</span><strong>¥{previewModal.payslip.income_tax?.toLocaleString()}</strong></div>
-                  <div className="flex justify-between"><span>住民税:</span><strong>¥{previewModal.payslip.resident_tax?.toLocaleString()}</strong></div>
-                  <div className="flex justify-between border-t border-rose-200 pt-1 font-black text-rose-900">
-                    <span>控除合計:</span><span>-¥{previewModal.payslip.total_deductions?.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-
-              {previewModal.payslip.note && (
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
-                  <span className="font-bold block text-slate-500 mb-0.5">備考:</span>
-                  {previewModal.payslip.note}
-                </div>
-              )}
             </div>
 
             <div className="bg-slate-50 p-4 border-t flex justify-end gap-3 rounded-b-2xl print:hidden">
