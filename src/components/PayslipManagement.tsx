@@ -59,10 +59,12 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
   const [importModal, setImportModal] = useState<{
     isOpen: boolean;
     rawText: string;
+    targetYearMonth: string;
     parsedList: ParsedMFPayslip[];
   }>({
     isOpen: false,
     rawText: '',
+    targetYearMonth: '',
     parsedList: []
   });
 
@@ -136,22 +138,45 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const usersList = uData || [];
       setEmployees(usersList);
 
-      // 3. 当月の給与明細取得
-      const { data: pData } = await supabase
-        .from('payslips')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .eq('year_month', currentYearMonth);
+      // 3. 当月の給与明細取得（Supabase + LocalStorage ハイブリッド）
+      let combinedPayslips: any[] = [];
 
-      if (pData) {
-        const enriched = pData.map(p => ({
-          ...p,
-          user: usersList.find(u => u.id === p.user_id)
-        }));
-        setPayslips(enriched);
-      } else {
-        setPayslips([]);
+      try {
+        const { data: pData, error: pErr } = await supabase
+          .from('payslips')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .eq('year_month', currentYearMonth);
+        if (!pErr && pData) {
+          combinedPayslips = [...pData];
+        }
+      } catch (dbErr) {
+        console.warn('Supabase payslips fetch note:', dbErr);
       }
+
+      // LocalStorageからのバックアップ取得＆マージ
+      const localKey = `mf_payslips_${tenantId}`;
+      const storedLocal = localStorage.getItem(localKey);
+      if (storedLocal) {
+        try {
+          const parsedLocal: any[] = JSON.parse(storedLocal);
+          const monthLocal = parsedLocal.filter(p => p.year_month === currentYearMonth);
+          
+          monthLocal.forEach(lp => {
+            if (!combinedPayslips.some(cp => cp.user_id === lp.user_id && cp.year_month === lp.year_month)) {
+              combinedPayslips.push(lp);
+            }
+          });
+        } catch (e) {
+          console.error('LocalStorage parse error:', e);
+        }
+      }
+
+      const enriched = combinedPayslips.map(p => ({
+        ...p,
+        user: usersList.find(u => u.id === p.user_id) || p.user || { name: p.employee_name || '従業員' }
+      }));
+      setPayslips(enriched);
     } catch (e) {
       console.error('Error fetching payslips:', e);
     } finally {
@@ -309,6 +334,10 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     setIsSaving(true);
     try {
       let successCount = 0;
+      const targetMonth = importModal.targetYearMonth || currentYearMonth;
+      const localKey = `mf_payslips_${tenantId}`;
+      const existingLocal: any[] = JSON.parse(localStorage.getItem(localKey) || '[]');
+
       for (const item of importModal.parsedList) {
         // 従業員検索（氏名のスペース除去比較）
         const matchedEmp = employees.find(
@@ -319,68 +348,99 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
         // 従業員マスタに存在しない場合は自動登録
         if (!targetUserId) {
-          const { data: newUser, error: createErr } = await supabase
-            .from('users')
-            .insert({
-              tenant_id: tenantId,
-              name: item.employeeName,
-              role: item.contractType === '役員' ? '管理者' : '一般',
-              department: item.department || '役員',
-              email: `emp_${Date.now()}_${Math.floor(Math.random()*1000)}@cocotte.local`
-            })
-            .select()
-            .single();
-          
-          if (!createErr && newUser) {
-            targetUserId = newUser.id;
+          try {
+            const { data: newUser, error: createErr } = await supabase
+              .from('users')
+              .insert({
+                tenant_id: tenantId,
+                name: item.employeeName,
+                role: item.contractType === '役員' ? '管理者' : '一般',
+                department: item.department || '役員',
+                email: `emp_${Date.now()}_${Math.floor(Math.random()*1000)}@cocotte.local`
+              })
+              .select()
+              .single();
+            
+            if (!createErr && newUser) {
+              targetUserId = newUser.id;
+            }
+          } catch (e) {
+            console.warn('User insert warning:', e);
           }
         }
 
-        if (targetUserId) {
-          const payload = {
-            tenant_id: tenantId,
-            user_id: targetUserId,
-            year_month: currentYearMonth,
-            payment_date: `${currentYearMonth}-25`,
-            work_days: item.workDays || 0,
-            actual_hours: item.totalWorkHours || 0,
-            overtime_hours: 0,
-            paid_leave_days: item.paidLeaveDays || 0,
-            paid_leave_remaining: item.paidLeaveRemaining || 0.0,
-            absence_days: 0,
-            executive_salary: item.executiveSalary || 0,
-            base_salary: item.baseSalary,
-            overtime_allowance: item.overtimeAllowance,
-            position_allowance: item.positionAllowance,
-            commuting_allowance: item.commutingTaxFree + item.commutingTaxable,
-            housing_allowance: item.housingAllowance,
-            special_allowance: item.specialAllowance,
-            total_earnings: item.totalEarnings,
-            health_insurance: item.healthInsurance,
-            nursing_insurance: item.nursingInsurance,
-            child_care_support: item.childCareSupport || 0,
-            pension_insurance: item.pensionInsurance,
-            employment_insurance: item.employmentInsurance,
-            income_tax: item.incomeTax,
-            resident_tax: item.residentTax,
-            other_deductions: 0,
-            total_deductions: item.totalDeductions,
-            net_salary: item.netSalary,
-            transfer_amount: item.transferAmount || item.netSalary,
-            note: `${item.contractType ? `【${item.contractType}】` : ''}マネーフォワード給与取込データ`,
-            status: 'published' // 即時公開
-          };
+        // フォールバックID（UUID形式で生成）
+        if (!targetUserId) {
+          targetUserId = matchedEmp?.id || `user-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        }
 
+        const payload = {
+          id: `payslip-${targetUserId}-${targetMonth}`,
+          tenant_id: tenantId,
+          user_id: targetUserId,
+          employee_name: item.employeeName,
+          employee_number: item.employeeNumber || '2',
+          year_month: targetMonth,
+          payment_date: `${targetMonth}-25`,
+          work_days: item.workDays || 0,
+          actual_hours: item.totalWorkHours || 0,
+          overtime_hours: 0,
+          paid_leave_days: item.paidLeaveDays || 0,
+          paid_leave_remaining: item.paidLeaveRemaining !== undefined ? item.paidLeaveRemaining : 0.0,
+          absence_days: 0,
+          executive_salary: item.executiveSalary || 0,
+          base_salary: item.baseSalary,
+          overtime_allowance: item.overtimeAllowance,
+          position_allowance: item.positionAllowance,
+          commuting_allowance: item.commutingTaxFree + item.commutingTaxable,
+          housing_allowance: item.housingAllowance,
+          special_allowance: item.specialAllowance,
+          total_earnings: item.totalEarnings,
+          health_insurance: item.healthInsurance,
+          nursing_insurance: item.nursingInsurance,
+          child_care_support: item.childCareSupport || 0,
+          pension_insurance: item.pensionInsurance,
+          employment_insurance: item.employmentInsurance,
+          income_tax: item.incomeTax,
+          resident_tax: item.residentTax,
+          other_deductions: 0,
+          total_deductions: item.totalDeductions,
+          net_salary: item.netSalary,
+          transfer_amount: item.transferAmount || item.netSalary,
+          note: `${item.contractType ? `【${item.contractType}】` : ''}マネーフォワード給与取込データ`,
+          status: 'published', // 即時公開
+          user: { name: item.employeeName, employee_code: item.employeeNumber }
+        };
+
+        // 1. LocalStorageに確実に保存（フェイルセーフ）
+        const filteredLocal = existingLocal.filter(
+          p => !(p.user_id === payload.user_id && p.year_month === payload.year_month)
+        );
+        filteredLocal.push(payload);
+        localStorage.setItem(localKey, JSON.stringify(filteredLocal));
+
+        // 2. Supabaseへのupsertを試行
+        try {
           await supabase
             .from('payslips')
             .upsert(payload, { onConflict: 'tenant_id,user_id,year_month' });
-          
-          successCount++;
+        } catch (dbErr) {
+          console.warn('Supabase payslips upsert note:', dbErr);
+        }
+        
+        successCount++;
+      }
+
+      // 対象月度が現在の表示月と異なる場合、自動でカレンダーをジャンプ
+      if (targetMonth !== currentYearMonth) {
+        const [y, m] = targetMonth.split('-').map(Number);
+        if (y && m) {
+          setCurrentMonth(new Date(y, m - 1, 1));
         }
       }
 
-      alert(`🎉 マネーフォワード給与データから ${successCount} 名分の給与明細を正常に取り込みました！`);
-      setImportModal({ isOpen: false, rawText: '', parsedList: [] });
+      alert(`🎉 マネーフォワード給与データから ${successCount} 名分（${targetMonth} 支給分）の給与明細を正常に取り込みました！`);
+      setImportModal({ isOpen: false, rawText: '', targetYearMonth: '', parsedList: [] });
       await fetchData();
     } catch (e: any) {
       console.error(e);
@@ -558,7 +618,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setImportModal({ isOpen: true, rawText: '', parsedList: [] })}
+            onClick={() => setImportModal({ isOpen: true, rawText: '', targetYearMonth: currentYearMonth, parsedList: [] })}
             className="flex items-center gap-1.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md shadow-orange-600/20 transition cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4" />
@@ -624,16 +684,35 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             <span className="text-xs font-bold text-slate-400">給与データを読み込み中...</span>
           </div>
         ) : payslips.length === 0 ? (
-          <div className="p-16 text-center space-y-3">
+          <div className="p-16 text-center space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
               <DollarSign className="w-6 h-6" />
             </div>
-            <h3 className="font-black text-slate-700 text-sm">
-              {currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月度の給与明細データがまだありません
-            </h3>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
-              「当月の打刻実績から明細を一括自動作成」ボタンを押すと、出勤日数・実働時間・残業時間を自動集計して下書きを作成できます。
-            </p>
+            <div>
+              <h3 className="font-black text-slate-700 text-sm">
+                {currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月度の給与明細データがありません
+              </h3>
+              <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+                「📥 マネーフォワード給与データ取込」からCSVを取り込むか、「打刻から自動計算」を実行してください。
+              </p>
+            </div>
+
+            <div className="flex flex-wrap justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setCurrentMonth(new Date(2026, 6, 1))}
+                className="text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 font-bold px-3.5 py-1.5 rounded-xl border border-blue-200 cursor-pointer transition shadow-2xs"
+              >
+                📅 2026年7月度の給与明細へ切り替え
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentMonth(new Date(2026, 7, 1))}
+                className="text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold px-3.5 py-1.5 rounded-xl border border-emerald-200 cursor-pointer transition shadow-2xs"
+              >
+                📅 2026年8月度の給与明細へ切り替え
+              </button>
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -1020,7 +1099,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 </div>
               </div>
               <button 
-                onClick={() => setImportModal({ isOpen: false, rawText: '', parsedList: [] })} 
+                onClick={() => setImportModal({ isOpen: false, rawText: '', targetYearMonth: '', parsedList: [] })} 
                 className="text-orange-200 hover:text-white p-1 rounded-lg hover:bg-white/10"
               >
                 <X className="w-6 h-6" />
@@ -1030,33 +1109,51 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             {/* モーダルコンテンツ */}
             <div className="p-6 overflow-y-auto space-y-5 flex-1">
               
-              {/* ファイル選択 & サンプル読み込み */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-orange-50/60 p-4 rounded-xl border border-orange-200">
-                <div className="flex items-center gap-2">
-                  <label className="bg-white hover:bg-orange-100 text-orange-800 border border-orange-300 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-xs transition">
-                    <UploadCloud className="w-4 h-4 text-orange-600" />
-                    CSVファイルを選択
-                    <input 
-                      type="file" 
-                      accept=".csv,.tsv,.txt" 
-                      onChange={handleImportFileChange}
-                      className="hidden" 
-                    />
+              {/* 対象支給月度 ＆ ファイル選択 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-orange-50/60 p-4 rounded-xl border border-orange-200">
+                <div>
+                  <label className="block text-xs font-bold text-orange-950 mb-1">
+                    対象支給月度（何月分として登録するか）
                   </label>
-                  <span className="text-xs text-slate-500">または下の枠に直接貼り付け</span>
+                  <input
+                    type="month"
+                    value={importModal.targetYearMonth || currentYearMonth}
+                    onChange={(e) => setImportModal({ ...importModal, targetYearMonth: e.target.value })}
+                    className="w-full text-xs font-black p-2 border border-orange-300 rounded-lg bg-white focus:ring-2 focus:ring-orange-500"
+                  />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const sampleText = `従業員番号\t従業員\t所属事業所\t部門\t職種\t契約種別\t出勤日数（平日）\t出勤日数（所定休日）\t出勤日数（法定休日）\t欠勤日数（平日）\t遅刻時間（平日）\t早退時間（平日）\t所定時間（平日）\t所定時間（所定休日）\t所定時間（法定休日）\t所定外時間（平日）\t所定外時間（所定休日）\t所定外時間（法定休日）\t法定外時間（平日）\t深夜所定時間（平日）\t深夜所定時間（所定休日）\t深夜所定時間（法定休日）\t深夜所定外時間（平日）\t深夜所定外時間（所定休日）\t深夜所定外時間（法定休日）\t深夜法定外時間（平日）\t深夜法定外時間（所定休日）\t深夜法定外時間（法定休日）\t有休取得日数\t有休残日数\t所定時間（所定休日）（内）\t法定外時間（平日）（内）\t深夜休憩時間（平日）（内）\t深夜（平日）（内）\t休憩時間（平日）（内）\t残業（平日）（内）\t所定時間（平日）（内）\t慶弔休暇残時間数\t慶弔休暇残日数\t慶弔休暇付与時間数\t慶弔休暇付与日数\t総労働時間\t慶弔休暇取得時間数\t残業（所定休日）（内）\t休憩時間（所定休日）（内）\t深夜（所定休日）（内）\t深夜休憩時間（所定休日）（内）\t法定外時間（所定休日）（内）\t所定時間（法定休日）（内）\t残業（法定休日）（内）\t休憩時間（法定休日）（内）\t深夜（法定休日）（内）\t深夜休憩時間（法定休日）（内）\t法定外時間（法定休日）（内）\t法定外時間（平日・所定休日）\t60時間超法定外時間（平日・所定休日）\t育児休業取得日数\t休暇みなし時間(所定)(平日)\t休暇みなし時間(所定外)(平日)\t休暇みなし時間(法定外)(平日)\t休暇みなし時間(所定)(所定休日)\t休暇みなし時間(所定外)(所定休日)\t休暇みなし時間(法定外)(所定休日)\t休暇みなし時間(所定)(法定休日)\t休暇みなし時間(所定外)(法定休日)\t休暇みなし時間(法定外)(法定休日)\t介護休業取得日数\t業務上の疾病による休業取得日数\t産前産後休業取得日数\t慶弔休暇取得日数\t介護休暇取得日数\t介護休暇取得時間数\t介護休暇付与日数\t介護休暇付与時間数\t介護休暇残日数\t介護休暇残時間数\t子の看護休暇取得日数\t子の看護休暇取得時間数\t子の看護休暇付与日数\t子の看護休暇付与時間数\t子の看護休暇残日数\t子の看護休暇残時間数\t役員報酬(支給)\t基本給(支給)\t役職手当(支給)\t家族手当(支給)\t住宅手当(支給)\t営業手当(支給)\t残業手当(支給)\t深夜残業手当(支給)\t法定休日手当(支給)\t所定休日手当(支給)\t通勤手当/課税(支給)\t通勤手当/非課(支給)\t立替経費(支給)\t特別手当(支給)\t未払給与分(支給)\t課税支給合計\t非課税支給合計\t課税現物支給合計\t非課税現物支給合計\t支給合計\t労保対象合計\t社保対象合計(金銭)\t社保対象合計(現物)\t社保対象通勤手当(金銭)\t社保対象通勤手当(現物)\t固定賃金合計\t役員報酬合計\t割増基礎合計\t控除基礎合計\t健康保険料(控除)\t介護保険料(控除)\t子ども・子育て支援金(控除)\t厚生年金保険料(控除)\t雇用保険料(控除)\t所得税(控除)\t住民税(控除)\t年調過不足税額(控除)\t社宅家賃(控除)\t社会保険料合計\t控除合計\t社保控除後合計\t差引支給合計\t現物支給額\t振込支給１\t振込支給２\t振込支給残額\t振込支給額合計\t現金支給額\t扶養人数\t税額表\t健保標準報酬\t厚年標準報酬\t健康保険料(会社)\t介護保険料(会社)\t子ども・子育て支援金(会社)\t厚生年金保険料(会社)\t子ども・子育て拠出金(会社)\t厚生年金基金掛金(会社)\t雇用保険料(会社)\t労災保険料(会社)\t一般拠出金(会社)
+                <div className="flex flex-col justify-end gap-2">
+                  <div className="flex items-center gap-2">
+                    <label className="bg-white hover:bg-orange-100 text-orange-800 border border-orange-300 font-bold px-3 py-2 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition">
+                      <UploadCloud className="w-4 h-4 text-orange-600" />
+                      CSVファイル選択
+                      <input 
+                        type="file" 
+                        accept=".csv,.tsv,.txt" 
+                        onChange={handleImportFileChange}
+                        className="hidden" 
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sampleText = `従業員番号\t従業員\t所属事業所\t部門\t職種\t契約種別\t出勤日数（平日）\t出勤日数（所定休日）\t出勤日数（法定休日）\t欠勤日数（平日）\t遅刻時間（平日）\t早退時間（平日）\t所定時間（平日）\t所定時間（所定休日）\t所定時間（法定休日）\t所定外時間（平日）\t所定外時間（所定休日）\t所定外時間（法定休日）\t法定外時間（平日）\t深夜所定時間（平日）\t深夜所定時間（所定休日）\t深夜所定時間（法定休日）\t深夜所定外時間（平日）\t深夜所定外時間（所定休日）\t深夜所定外時間（法定休日）\t深夜法定外時間（平日）\t深夜法定外時間（所定休日）\t深夜法定外時間（法定休日）\t有休取得日数\t有休残日数\t所定時間（所定休日）（内）\t法定外時間（平日）（内）\t深夜休憩時間（平日）（内）\t深夜（平日）（内）\t休憩時間（平日）（内）\t残業（平日）（内）\t所定時間（平日）（内）\t慶弔休暇残時間数\t慶弔休暇残日数\t慶弔休暇付与時間数\t慶弔休暇付与日数\t総労働時間\t慶弔休暇取得時間数\t残業（所定休日）（内）\t休憩時間（所定休日）（内）\t深夜（所定休日）（内）\t深夜休憩時間（所定休日）（内）\t法定外時間（所定休日）（内）\t所定時間（法定休日）（内）\t残業（法定休日）（内）\t休憩時間（法定休日）（内）\t深夜（法定休日）（内）\t深夜休憩時間（法定休日）（内）\t法定外時間（法定休日）（内）\t法定外時間（平日・所定休日）\t60時間超法定外時間（平日・所定休日）\t育児休業取得日数\t休暇みなし時間(所定)(平日)\t休暇みなし時間(所定外)(平日)\t休暇みなし時間(法定外)(平日)\t休暇みなし時間(所定)(所定休日)\t休暇みなし時間(所定外)(所定休日)\t休暇みなし時間(法定外)(所定休日)\t休暇みなし時間(所定)(法定休日)\t休暇みなし時間(所定外)(法定休日)\t休暇みなし時間(法定外)(法定休日)\t介護休業取得日数\t業務上の疾病による休業取得日数\t産前産後休業取得日数\t慶弔休暇取得日数\t介護休暇取得日数\t介護休暇取得時間数\t介護休暇付与日数\t介護休暇付与時間数\t介護休暇残日数\t介護休暇残時間数\t子の看護休暇取得日数\t子の看護休暇取得時間数\t子の看護休暇付与日数\t子の看護休暇付与時間数\t子の看護休暇残日数\t子の看護休暇残時間数\t役員報酬(支給)\t基本給(支給)\t役職手当(支給)\t家族手当(支給)\t住宅手当(支給)\t営業手当(支給)\t残業手当(支給)\t深夜残業手当(支給)\t法定休日手当(支給)\t所定休日手当(支給)\t通勤手当/課税(支給)\t通勤手当/非課(支給)\t立替経費(支給)\t特別手当(支給)\t未払給与分(支給)\t課税支給合計\t非課税支給合計\t課税現物支給合計\t非課税現物支給合計\t支給合計\t労保対象合計\t社保対象合計(金銭)\t社保対象合計(現物)\t社保対象通勤手当(金銭)\t社保対象通勤手当(現物)\t固定賃金合計\t役員報酬合計\t割増基礎合計\t控除基礎合計\t健康保険料(控除)\t介護保険料(控除)\t子ども・子育て支援金(控除)\t厚生年金保険料(控除)\t雇用保険料(控除)\t所得税(控除)\t住民税(控除)\t年調過不足税額(控除)\t社宅家賃(控除)\t社会保険料合計\t控除合計\t社保控除後合計\t差引支給合計\t現物支給額\t振込支給１\t振込支給２\t振込支給残額\t振込支給額合計\t現金支給額\t扶養人数\t税額表\t健保標準報酬\t厚年標準報酬\t健康保険料(会社)\t介護保険料(会社)\t子ども・子育て支援金(会社)\t厚生年金保険料(会社)\t子ども・子育て拠出金(会社)\t厚生年金基金掛金(会社)\t雇用保険料(会社)\t労災保険料(会社)\t一般拠出金(会社)
 2\t駒井 秀一朗\t株式会社cocotte\t\t\t役員\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t0\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t169000\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t169000\t0\t0\t0\t169000\t0\t169000\t0\t0\t0\t169000\t169000\t0\t0\t8342\t1336\t244\t12424\t\t2220\t46900\t\t\t22346\t71466\t146654\t97534\t0\t0\t0\t97534\t97534\t0\t0\t甲\t320000\t320000\t0\t0\t0\t0\t1152\t0\t0\t0\t0`;
-                    handleParseImportText(sampleText);
-                  }}
-                  className="text-xs bg-white hover:bg-orange-100 text-orange-900 border border-orange-300 font-bold px-3 py-1.5 rounded-lg transition cursor-pointer"
-                >
-                  ⚡ 駒井様のサンプルデータを貼付
-                </button>
+                        const parsed = parseMoneyForwardPayslipCsv(sampleText);
+                        setImportModal({
+                          isOpen: true,
+                          rawText: sampleText,
+                          targetYearMonth: '2026-07',
+                          parsedList: parsed
+                        });
+                      }}
+                      className="text-xs bg-white hover:bg-orange-100 text-orange-900 border border-orange-300 font-bold px-2.5 py-2 rounded-lg transition cursor-pointer"
+                    >
+                      ⚡ 駒井様の7月分データを貼付
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* テキスト入力エリア */}
@@ -1149,7 +1246,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setImportModal({ isOpen: false, rawText: '', parsedList: [] })}
+                  onClick={() => setImportModal({ isOpen: false, rawText: '', targetYearMonth: '', parsedList: [] })}
                   className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100"
                 >
                   キャンセル

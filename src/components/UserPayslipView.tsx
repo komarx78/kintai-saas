@@ -19,7 +19,6 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
 
   useEffect(() => {
     const fetchPayslips = async () => {
-      if (!userId) return;
       setIsLoading(true);
       try {
         if (tenantId) {
@@ -27,16 +26,54 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
           if (tData?.name) setTenantName(tData.name);
         }
 
-        const { data } = await supabase
-          .from('payslips')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('status', 'published')
-          .order('year_month', { ascending: false });
+        let combined: any[] = [];
 
-        if (data && data.length > 0) {
-          setPayslips(data);
-          setSelectedPayslip(data[0]); // 最新の明細を選択
+        // 1. Supabaseから取得
+        if (userId) {
+          try {
+            const { data } = await supabase
+              .from('payslips')
+              .select('*')
+              .eq('user_id', userId)
+              .eq('status', 'published')
+              .order('year_month', { ascending: false });
+
+            if (data && data.length > 0) {
+              combined = [...data];
+            }
+          } catch (dbErr) {
+            console.warn('Supabase fetch note:', dbErr);
+          }
+        }
+
+        // 2. LocalStorageから取得＆マージ
+        const localKey = tenantId ? `mf_payslips_${tenantId}` : 'mf_payslips_default';
+        const storedLocal = localStorage.getItem(localKey);
+        if (storedLocal) {
+          try {
+            const parsedLocal: any[] = JSON.parse(storedLocal);
+            // 自分のIDまたは名前でフィルタ
+            const myLocal = parsedLocal.filter(p => 
+              (userId && p.user_id === userId) ||
+              (userName && p.employee_name && p.employee_name.replace(/\s+/g, '') === userName.replace(/\s+/g, '')) ||
+              (userName && p.user?.name && p.user.name.replace(/\s+/g, '') === userName.replace(/\s+/g, ''))
+            );
+
+            myLocal.forEach(lp => {
+              if (!combined.some(cp => cp.year_month === lp.year_month)) {
+                combined.push(lp);
+              }
+            });
+          } catch (e) {
+            console.error('LocalStorage parse error:', e);
+          }
+        }
+
+        combined.sort((a, b) => (b.year_month || '').localeCompare(a.year_month || ''));
+
+        if (combined.length > 0) {
+          setPayslips(combined);
+          setSelectedPayslip(combined[0]); // 最新の明細を選択
         } else {
           setPayslips([]);
           setSelectedPayslip(null);
@@ -49,7 +86,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
     };
 
     fetchPayslips();
-  }, [userId, tenantId]);
+  }, [userId, userName, tenantId]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
