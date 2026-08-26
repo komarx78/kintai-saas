@@ -1090,7 +1090,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                     <table className="w-full text-left text-xs border-collapse">
                       <thead className="bg-slate-100 text-slate-600 font-black sticky top-0">
                         <tr>
-                          <th className="p-2.5">従業員名</th>
+                          <th className="p-2.5">CSV従業員名</th>
+                          <th className="p-2.5">社内紐付け先</th>
                           <th className="p-2.5">区分</th>
                           <th className="p-2.5 text-right">総支給額</th>
                           <th className="p-2.5 text-right">社会保険料</th>
@@ -1100,17 +1101,38 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 bg-white">
-                        {importModal.parsedList.map((item, idx) => (
-                          <tr key={idx} className="hover:bg-orange-50/50">
-                            <td className="p-2.5 font-bold text-slate-900">{item.employeeName}</td>
-                            <td className="p-2.5 text-slate-500">{item.contractType || '社員'}</td>
-                            <td className="p-2.5 text-right font-bold text-blue-700">¥{item.totalEarnings.toLocaleString()}</td>
-                            <td className="p-2.5 text-right text-slate-600">¥{item.socialInsuranceTotal.toLocaleString()}</td>
-                            <td className="p-2.5 text-right text-slate-600">¥{(item.incomeTax + item.residentTax).toLocaleString()}</td>
-                            <td className="p-2.5 text-right text-rose-600 font-bold">-¥{item.totalDeductions.toLocaleString()}</td>
-                            <td className="p-2.5 text-right font-black text-emerald-600">¥{item.netSalary.toLocaleString()}</td>
-                          </tr>
-                        ))}
+                        {importModal.parsedList.map((item, idx) => {
+                          const matched = employees.find(
+                            e => e.name.replace(/\s+/g, '') === item.employeeName.replace(/\s+/g, '')
+                          );
+                          return (
+                            <tr key={idx} className="hover:bg-orange-50/50">
+                              <td className="p-2.5 font-bold text-slate-900">
+                                {item.employeeName}
+                                <span className="text-[10px] text-slate-400 block">No.{item.employeeNumber}</span>
+                              </td>
+                              <td className="p-2.5">
+                                {matched ? (
+                                  <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-300">
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    {matched.name}（一致）
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-300">
+                                    <Plus className="w-3 h-3 text-blue-600" />
+                                    新規ユーザー自動作成
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-2.5 text-slate-500">{item.contractType || '社員'}</td>
+                              <td className="p-2.5 text-right font-bold text-blue-700">¥{item.totalEarnings.toLocaleString()}</td>
+                              <td className="p-2.5 text-right text-slate-600">¥{item.socialInsuranceTotal.toLocaleString()}</td>
+                              <td className="p-2.5 text-right text-slate-600">¥{(item.incomeTax + item.residentTax).toLocaleString()}</td>
+                              <td className="p-2.5 text-right text-rose-600 font-bold">-¥{item.totalDeductions.toLocaleString()}</td>
+                              <td className="p-2.5 text-right font-black text-emerald-600">¥{item.netSalary.toLocaleString()}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
