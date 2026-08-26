@@ -49,7 +49,15 @@ const AdminDashboard = () => {
   // Debug State
   const [debugError, setDebugError] = useState<string | null>(null);
   const [tenantName, setTenantName] = useState<string>('');
-  const [tenantInfo, setTenantInfo] = useState<{ plan_type?: string; trial_ends_at?: string | null } | null>(null);
+  const [tenantInfo, setTenantInfo] = useState<any>(null);
+  const [systemPrices, setSystemPrices] = useState<any>({
+    price_1_user: 200, price_1_user_annual: 2400,
+    price_2_users: 400, price_2_users_annual: 4800,
+    price_3_users: 600, price_3_users_annual: 7200,
+    price_4_users: 800, price_4_users_annual: 9600,
+    price_5_users: 1000, price_5_users_annual: 12000,
+    additional_user_price: 200, additional_user_price_annual: 2400
+  });
 
   const inviteMessage = `お疲れ様です！
 勤怠・有給管理システムへの初期登録をお願いいたします。
@@ -374,15 +382,26 @@ ${tenantId || '（エラー：コード取得失敗）'}
   };
 
   useEffect(() => {
-    const fetchTenantName = async () => {
+    const fetchTenantAndPrices = async () => {
       if (!tenantId) return;
-      const { data } = await supabase.from('tenants').select('name, plan_type, trial_ends_at').eq('id', tenantId).maybeSingle();
-      if (data) {
-        setTenantName(data.name);
-        setTenantInfo({ plan_type: data.plan_type, trial_ends_at: data.trial_ends_at });
+      try {
+        // 1. テナント情報と個別価格を取得
+        const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
+        if (tData) {
+          setTenantName(tData.name);
+          setTenantInfo(tData);
+        }
+
+        // 2. システム共通価格表を取得
+        const { data: sysData } = await supabase.from('system_settings').select('*').limit(1).maybeSingle();
+        if (sysData) {
+          setSystemPrices(sysData);
+        }
+      } catch (e) {
+        console.warn('Fetch prices error:', e);
       }
     };
-    fetchTenantName();
+    fetchTenantAndPrices();
     fetchEmployees();
     fetchLeaveTypes();
   }, [tenantId]);
@@ -424,8 +443,38 @@ ${tenantId || '（エラー：コード取得失敗）'}
   }, [tenantId, activeTab]);
 
   const currentUsers = employees.length;
-  const planLimit = 5;
-  const monthlyFee = 2000 + (Math.max(0, currentUsers - planLimit) * 500);
+  
+  // 登録人数および設定価格に基づく正確な料金計算
+  const calculateCurrentFee = () => {
+    const count = currentUsers;
+    const isAnnual = tenantInfo?.billing_cycle === 'annual';
+    const custom = tenantInfo || {};
+    const sys = systemPrices || {};
+
+    if (count <= 0) return 0;
+    if (count === 1) {
+      return (isAnnual ? custom.custom_price_1_user_annual : custom.custom_price_1_user) ?? (isAnnual ? sys.price_1_user_annual : sys.price_1_user) ?? (isAnnual ? 2400 : 200);
+    }
+    if (count === 2) {
+      return (isAnnual ? custom.custom_price_2_users_annual : custom.custom_price_2_users) ?? (isAnnual ? sys.price_2_users_annual : sys.price_2_users) ?? (isAnnual ? 4800 : 400);
+    }
+    if (count === 3) {
+      return (isAnnual ? custom.custom_price_3_users_annual : custom.custom_price_3_users) ?? (isAnnual ? sys.price_3_users_annual : sys.price_3_users) ?? (isAnnual ? 7200 : 600);
+    }
+    if (count === 4) {
+      return (isAnnual ? custom.custom_price_4_users_annual : custom.custom_price_4_users) ?? (isAnnual ? sys.price_4_users_annual : sys.price_4_users) ?? (isAnnual ? 9600 : 800);
+    }
+    if (count === 5) {
+      return (isAnnual ? custom.custom_price_5_users_annual : custom.custom_price_5_users) ?? (isAnnual ? sys.price_5_users_annual : sys.price_5_users) ?? (isAnnual ? 12000 : 1000);
+    }
+    
+    // 6名以降
+    const base5 = (isAnnual ? custom.custom_price_5_users_annual : custom.custom_price_5_users) ?? (isAnnual ? sys.price_5_users_annual : sys.price_5_users) ?? (isAnnual ? 12000 : 1000);
+    const additionalUnit = (isAnnual ? sys.additional_user_price_annual : sys.additional_user_price) ?? (isAnnual ? 2400 : 200);
+    return base5 + ((count - 5) * additionalUnit);
+  };
+
+  const calculatedFee = calculateCurrentFee();
 
   const handleOpenModal = (employee: any = null) => {
     setEditingEmployee(employee);
@@ -678,7 +727,11 @@ ${tenantId || '（エラー：コード取得失敗）'}
                   
                   <p className="text-sm font-bold text-gray-800">
                     登録従業員数: <strong>{currentUsers}</strong> 名
-                    {isPaid && <span className="text-xs font-normal text-gray-500 ml-1">（基本枠 {planLimit}名）</span>}
+                    {isPaid && (
+                      <span className="text-xs font-bold text-slate-500 ml-1.5">
+                        （{currentUsers <= 5 ? `${currentUsers}名様枠` : '5名枠＋追加分'} / {tenantInfo?.billing_cycle === 'annual' ? '年額払い' : '月額払い'}）
+                      </span>
+                    )}
                   </p>
 
                   {isTrial && (
@@ -698,12 +751,12 @@ ${tenantId || '（エラー：コード取得失敗）'}
 
                 <div className="sm:text-right bg-slate-50 sm:bg-transparent p-3 sm:p-0 rounded-xl w-full sm:w-auto">
                   <h3 className="text-xs font-bold text-gray-500">
-                    {isPaid ? '今月のご利用料金' : '今月のお支払い予定額'}
+                    {isPaid ? (tenantInfo?.billing_cycle === 'annual' ? '今期のご利用料金（年額）' : '今月のご利用料金（月額）') : '今月のお支払い予定額'}
                   </h3>
                   <div className="flex sm:justify-end items-baseline gap-1 mt-0.5">
                     {isPaid ? (
                       <p className="text-2xl font-black text-blue-600 font-mono">
-                        ¥{monthlyFee.toLocaleString()}
+                        ¥{calculatedFee.toLocaleString()}
                       </p>
                     ) : (
                       <div className="flex items-baseline gap-1.5">
