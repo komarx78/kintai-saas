@@ -417,7 +417,7 @@ const UserDashboard = () => {
           
           {user?.role === 'admin' && (
             <button 
-              onClick={() => navigate('/admin')}
+              onClick={() => navigate('/kintai/admin')}
               className="flex items-center w-full p-2 mt-4 rounded transition-colors whitespace-nowrap text-blue-300 hover:bg-slate-700"
             >
               <Settings className="mr-3 h-5 w-5" />

@@ -156,6 +156,10 @@ function App() {
             <ShiftEmployeeRequest />
           </PrivateRoute>
         } />
+        {/* 旧URLや未定義ルートへのアクセス対策リダイレクト */}
+        <Route path="/admin/*" element={<Navigate to="/kintai/admin" replace />} />
+        <Route path="/user/*" element={<Navigate to="/kintai/user" replace />} />
+        <Route path="*" element={<Navigate to="/portal" replace />} />
       </Routes>
     </Router>
   );
