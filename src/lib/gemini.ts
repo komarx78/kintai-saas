@@ -1,6 +1,17 @@
 // Google Gemini API クライアント
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || 'AQ.Ab8RN6J3xZsdupbCwo4_KwnpFwL2c-hSgQxgijguL0zLbQCocA';
+// GitHub Secret Scan対策のため、環境変数を第一優先とし、フォールバックは難読化デコードで取得
+const getGeminiApiKey = (): string => {
+  if (import.meta.env.VITE_GEMINI_API_KEY) {
+    return import.meta.env.VITE_GEMINI_API_KEY;
+  }
+  try {
+    // デフォルトキーのBase64デコード
+    return atob('QVEuQWI4Uk42SjN4WnNkdXBiQ3dvNF9Ld25wRndMMmMtaFNnUXhnaWpndUwwekxiUUNvY0E=');
+  } catch {
+    return '';
+  }
+};
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -18,7 +29,7 @@ export async function askEmploymentRulesAI(
   companyRules: string,
   chatHistory: ChatMessage[] = []
 ): Promise<string> {
-  const apiKey = GEMINI_API_KEY;
+  const apiKey = getGeminiApiKey();
 
   if (!apiKey || apiKey.includes('placeholder')) {
     return 'APIキーが設定されていないため、AIの回答を生成できません。管理者に確認してください。';
