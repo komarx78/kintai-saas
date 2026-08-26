@@ -23,7 +23,8 @@ export default function SuperAdminDashboard() {
     price_3_users: 6000, price_3_users_annual: 60000,
     price_4_users: 8000, price_4_users_annual: 80000,
     price_5_users: 10000, price_5_users_annual: 100000,
-    additional_user_price: 500, additional_user_price_annual: 5000
+    additional_user_price: 500, additional_user_price_annual: 5000,
+    default_trial_days: 30
   });
 
   // Tenants State
@@ -63,6 +64,7 @@ export default function SuperAdminDashboard() {
           price_5_users_annual: data.price_5_users_annual || 100000,
           additional_user_price: data.additional_user_price || 500,
           additional_user_price_annual: data.additional_user_price_annual || 5000,
+          default_trial_days: data.default_trial_days || 30
         });
       }
     } catch (e) {
@@ -170,6 +172,46 @@ export default function SuperAdminDashboard() {
         status: 'error',
         message: `❌ 通信エラー: ${e.message}`
       });
+    }
+  };
+
+  // トライアル期限の変更・延長処理
+  const handleExtendTrial = async (tenantId: string, action: number | 'unlimited' | 'expire', customDateStr?: string) => {
+    try {
+      let newDateStr: string | null = null;
+      if (customDateStr) {
+        newDateStr = new Date(customDateStr + 'T23:59:59').toISOString();
+      } else if (action === 'unlimited') {
+        newDateStr = null;
+      } else if (action === 'expire') {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        newDateStr = yesterday.toISOString();
+      } else if (typeof action === 'number') {
+        const targetTenant = tenants.find(t => t.id === tenantId);
+        let baseDate = new Date();
+        if (targetTenant?.trial_ends_at) {
+          const currentEnd = new Date(targetTenant.trial_ends_at);
+          if (currentEnd > baseDate) {
+            baseDate = currentEnd;
+          }
+        }
+        baseDate.setDate(baseDate.getDate() + action);
+        newDateStr = baseDate.toISOString();
+      }
+
+      const { error } = await supabase
+        .from('tenants')
+        .update({ trial_ends_at: newDateStr })
+        .eq('id', tenantId);
+
+      if (error) throw error;
+      
+      setTenants(tenants.map(t => t.id === tenantId ? { ...t, trial_ends_at: newDateStr } : t));
+      alert('⏰ トライアル期限を更新しました！');
+    } catch (err: any) {
+      console.error(err);
+      alert('トライアル期限の更新に失敗しました: ' + err.message);
     }
   };
 
@@ -362,21 +404,40 @@ export default function SuperAdminDashboard() {
                   </table>
                 </div>
 
-                <div className="flex justify-end">
-                  <button onClick={handleSaveSettings} className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-medium flex items-center shadow-sm">
+                {/* デフォルトトライアル設定 & 保存ボタン */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t pt-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-gray-700">新規登録時の無料トライアル期間:</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min="1"
+                        max="365"
+                        value={sysPrices.default_trial_days || 30}
+                        onChange={(e) => setSysPrices({ ...sysPrices, default_trial_days: Number(e.target.value) })}
+                        className="w-20 border border-gray-300 rounded-lg p-2 text-sm font-bold text-center bg-gray-50 focus:bg-white"
+                      />
+                      <span className="text-sm font-bold text-gray-600">日間</span>
+                    </div>
+                  </div>
+
+                  <button onClick={handleSaveSettings} className="bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 font-bold text-sm flex items-center shadow-sm cursor-pointer">
                     <Save className="w-4 h-4 mr-2" />
-                    共通価格表を保存
+                    共通価格・トライアル設定を保存
                   </button>
                 </div>
               </div>
 
               {/* テナント管理リスト */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="p-6 border-b border-gray-200">
+                <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                   <h2 className="text-lg font-bold text-gray-800 flex items-center">
                     <Users className="w-5 h-5 mr-2 text-green-600" />
-                    導入企業（テナント）一覧
+                    導入企業（テナント）一覧・契約＆トライアル管理
                   </h2>
+                  <span className="text-xs text-gray-500">
+                    登録企業数: <strong>{tenants.length}</strong> 社
+                  </span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -385,50 +446,137 @@ export default function SuperAdminDashboard() {
                         <th className="px-4 py-3 text-left font-medium text-gray-500">企業名</th>
                         <th className="px-4 py-3 text-left font-medium text-gray-500">プラン</th>
                         <th className="px-4 py-3 text-left font-medium text-gray-500">支払いサイクル</th>
-                        <th className="px-4 py-3 text-left font-medium text-gray-500">トライアル期限</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-500">トライアル期限 / 残日数 / 調整</th>
                         <th className="px-4 py-3 text-center font-medium text-gray-500">個別価格</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {tenants.map(t => (
-                        <tr key={t.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-4 font-bold text-gray-900">{t.name}</td>
-                          <td className="px-4 py-4">
-                            <select 
-                              value={t.plan_type || 'trial'} 
-                              onChange={e => handleUpdateTenant(t.id, 'plan_type', e.target.value)}
-                              className="border border-gray-300 rounded px-2 py-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                            >
-                              <option value="trial">トライアル</option>
-                              <option value="free">無料プラン</option>
-                              <option value="paid">有料プラン</option>
-                            </select>
-                          </td>
-                          <td className="px-4 py-4">
-                            <select 
-                              value={t.billing_cycle || 'monthly'} 
-                              onChange={e => handleUpdateTenant(t.id, 'billing_cycle', e.target.value)}
-                              className="border border-gray-300 rounded px-2 py-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                            >
-                              <option value="monthly">月額払い</option>
-                              <option value="annual">年額払い</option>
-                            </select>
-                          </td>
-                          <td className="px-4 py-4 text-gray-600">
-                            {/* トライアル期限はDBの値をフォーマットして表示するだけ */}
-                            {t.trial_ends_at ? new Date(t.trial_ends_at).toLocaleDateString('ja-JP') : '期限なし'}
-                          </td>
-                          <td className="px-4 py-4 text-center">
-                            <button
-                              onClick={() => setEditingTenant(t)}
-                              className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                            >
-                              <Edit className="w-3.5 h-3.5 mr-1" />
-                              価格表を上書き
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {tenants.map(t => {
+                        const now = new Date();
+                        const trialEnd = t.trial_ends_at ? new Date(t.trial_ends_at) : null;
+                        const diffDays = trialEnd ? Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+                        const isExpired = diffDays !== null && diffDays <= 0;
+                        const dateInputValue = trialEnd ? trialEnd.toISOString().split('T')[0] : '';
+
+                        return (
+                          <tr key={t.id} className="hover:bg-gray-50/80 transition-colors">
+                            <td className="px-4 py-4 font-bold text-gray-900">
+                              <div>{t.name}</div>
+                              <span className="text-[11px] text-gray-400 font-mono">ID: {t.id?.slice(0, 8)}...</span>
+                            </td>
+                            <td className="px-4 py-4">
+                              <select 
+                                value={t.plan_type || 'trial'} 
+                                onChange={e => handleUpdateTenant(t.id, 'plan_type', e.target.value)}
+                                className={`border rounded px-2.5 py-1 text-xs font-bold ${
+                                  t.plan_type === 'paid' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' :
+                                  t.plan_type === 'free' ? 'bg-blue-50 text-blue-800 border-blue-300' :
+                                  'bg-amber-50 text-amber-800 border-amber-300'
+                                }`}
+                              >
+                                <option value="trial">トライアル</option>
+                                <option value="free">無料プラン</option>
+                                <option value="paid">有料プラン</option>
+                              </select>
+                            </td>
+                            <td className="px-4 py-4">
+                              <select 
+                                value={t.billing_cycle || 'monthly'} 
+                                onChange={e => handleUpdateTenant(t.id, 'billing_cycle', e.target.value)}
+                                className="border border-gray-300 rounded px-2.5 py-1 text-xs font-medium bg-white"
+                              >
+                                <option value="monthly">月額払い</option>
+                                <option value="annual">年額払い</option>
+                              </select>
+                            </td>
+                            
+                            {/* トライアル期限・残日数・調整アクション */}
+                            <td className="px-4 py-4 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="date"
+                                  value={dateInputValue}
+                                  onChange={(e) => handleExtendTrial(t.id, 0, e.target.value)}
+                                  className="border border-gray-300 rounded px-2 py-1 text-xs font-bold bg-white focus:ring-1 focus:ring-blue-500"
+                                />
+                                {t.trial_ends_at ? (
+                                  isExpired ? (
+                                    <span className="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-300">
+                                      期限切れ (ロック中)
+                                    </span>
+                                  ) : (
+                                    <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-300">
+                                      残り {diffDays} 日
+                                    </span>
+                                  )
+                                ) : (
+                                  <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-300">
+                                    無期限 (制限なし)
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* クイック調整ボタン */}
+                              <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                                <button
+                                  type="button"
+                                  onClick={() => handleExtendTrial(t.id, 7)}
+                                  className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-bold transition cursor-pointer"
+                                  title="期限を+7日延長"
+                                >
+                                  +7日
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleExtendTrial(t.id, 14)}
+                                  className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-bold transition cursor-pointer"
+                                  title="期限を+14日延長"
+                                >
+                                  +14日
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleExtendTrial(t.id, 30)}
+                                  className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-bold transition cursor-pointer"
+                                  title="期限を+30日(1ヶ月)延長"
+                                >
+                                  +30日
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleExtendTrial(t.id, 'unlimited')}
+                                  className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-2 py-0.5 rounded font-bold transition cursor-pointer"
+                                  title="トライアル期限を解除（無制限）"
+                                >
+                                  無制限
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (confirm(`${t.name} のトライアルを即時終了（ロック）しますか？`)) {
+                                      handleExtendTrial(t.id, 'expire');
+                                    }
+                                  }}
+                                  className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded font-bold transition cursor-pointer"
+                                  title="トライアルを即時終了してロック"
+                                >
+                                  即時終了
+                                </button>
+                              </div>
+                            </td>
+
+                            <td className="px-4 py-4 text-center">
+                              <button
+                                onClick={() => setEditingTenant(t)}
+                                className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-bold rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer"
+                              >
+                                <Edit className="w-3.5 h-3.5 mr-1" />
+                                個別価格設定
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                   {tenants.length === 0 && (
