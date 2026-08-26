@@ -3,8 +3,9 @@ import { supabase } from '../lib/supabase';
 import { 
   DollarSign, ChevronLeft, ChevronRight, Plus, 
   Eye, Edit3, Trash2, CheckCircle2, Lock, Unlock, Printer, 
-  Users, Sparkles, FileText, Loader2, X, Clock 
+  Users, Sparkles, FileText, Loader2, X, Clock, UploadCloud, FileSpreadsheet 
 } from 'lucide-react';
+import { parseMoneyForwardPayslipCsv, type ParsedMFPayslip } from '../lib/mfPayslipParser';
 
 interface PayslipManagementProps {
   tenantId: string | null;
@@ -21,6 +22,7 @@ export interface Payslip {
   overtime_hours: number;
   paid_leave_days: number;
   absence_days: number;
+  executive_salary?: number;
   base_salary: number;
   overtime_allowance: number;
   position_allowance: number;
@@ -30,6 +32,7 @@ export interface Payslip {
   total_earnings: number;
   health_insurance: number;
   nursing_insurance: number;
+  child_care_support?: number;
   pension_insurance: number;
   employment_insurance: number;
   income_tax: number;
@@ -38,6 +41,7 @@ export interface Payslip {
   total_deductions: number;
   net_salary: number;
   note: string;
+  pdf_data_base64?: string;
   status: 'draft' | 'published';
   user?: any;
 }
@@ -49,6 +53,17 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
+
+  // CSV/TSVインポートモーダルState
+  const [importModal, setImportModal] = useState<{
+    isOpen: boolean;
+    rawText: string;
+    parsedList: ParsedMFPayslip[];
+  }>({
+    isOpen: false,
+    rawText: '',
+    parsedList: []
+  });
 
   // 編集モーダルState
   const [editModal, setEditModal] = useState<{
@@ -265,6 +280,111 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     }
   };
 
+  // マネーフォワード給与テキスト解析
+  const handleParseImportText = (text: string) => {
+    const list = parseMoneyForwardPayslipCsv(text);
+    setImportModal(prev => ({
+      ...prev,
+      rawText: text,
+      parsedList: list
+    }));
+  };
+
+  // ファイル選択時の解析
+  const handleImportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) handleParseImportText(content);
+    };
+    reader.readAsText(file);
+  };
+
+  // マネーフォワード給与データ取込実行
+  const handleExecuteImport = async () => {
+    if (!tenantId || importModal.parsedList.length === 0) return;
+    setIsSaving(true);
+    try {
+      let successCount = 0;
+      for (const item of importModal.parsedList) {
+        // 従業員検索（氏名のスペース除去比較）
+        const matchedEmp = employees.find(
+          e => e.name.replace(/\s+/g, '') === item.employeeName.replace(/\s+/g, '')
+        );
+
+        let targetUserId = matchedEmp?.id;
+
+        // 従業員マスタに存在しない場合は自動登録
+        if (!targetUserId) {
+          const { data: newUser, error: createErr } = await supabase
+            .from('users')
+            .insert({
+              tenant_id: tenantId,
+              name: item.employeeName,
+              role: item.contractType === '役員' ? '管理者' : '一般',
+              department: item.department || '役員',
+              email: `emp_${Date.now()}_${Math.floor(Math.random()*1000)}@cocotte.local`
+            })
+            .select()
+            .single();
+          
+          if (!createErr && newUser) {
+            targetUserId = newUser.id;
+          }
+        }
+
+        if (targetUserId) {
+          const payload = {
+            tenant_id: tenantId,
+            user_id: targetUserId,
+            year_month: currentYearMonth,
+            payment_date: `${currentYearMonth}-25`,
+            work_days: item.workDays || 0,
+            actual_hours: item.totalWorkHours || 0,
+            overtime_hours: 0,
+            paid_leave_days: item.paidLeaveDays || 0,
+            absence_days: 0,
+            base_salary: item.baseSalary,
+            overtime_allowance: item.overtimeAllowance,
+            position_allowance: item.positionAllowance,
+            commuting_allowance: item.commutingTaxFree + item.commutingTaxable,
+            housing_allowance: item.housingAllowance,
+            special_allowance: item.specialAllowance,
+            total_earnings: item.totalEarnings,
+            health_insurance: item.healthInsurance,
+            nursing_insurance: item.nursingInsurance,
+            pension_insurance: item.pensionInsurance,
+            employment_insurance: item.employmentInsurance,
+            income_tax: item.incomeTax,
+            resident_tax: item.residentTax,
+            other_deductions: item.childCareSupport || 0,
+            total_deductions: item.totalDeductions,
+            net_salary: item.netSalary,
+            note: `${item.contractType ? `【${item.contractType}】` : ''}マネーフォワード給与取込データ`,
+            status: 'published' // 即時公開
+          };
+
+          await supabase
+            .from('payslips')
+            .upsert(payload, { onConflict: 'tenant_id,user_id,year_month' });
+          
+          successCount++;
+        }
+      }
+
+      alert(`🎉 マネーフォワード給与データから ${successCount} 名分の給与明細を正常に取り込みました！`);
+      setImportModal({ isOpen: false, rawText: '', parsedList: [] });
+      await fetchData();
+    } catch (e: any) {
+      console.error(e);
+      alert('インポート中にエラーが発生しました: ' + e.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // 全員分一括公開 / 非公開
   const handleBulkTogglePublish = async (publish: boolean) => {
     if (payslips.length === 0) return;
@@ -433,12 +553,21 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={() => setImportModal({ isOpen: true, rawText: '', parsedList: [] })}
+            className="flex items-center gap-1.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md shadow-orange-600/20 transition cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            📥 マネーフォワード給与データ取込
+          </button>
+
+          <button
+            type="button"
             onClick={handleAutoGenerateFromAttendance}
             disabled={isSaving}
-            className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md shadow-emerald-600/20 transition cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer shadow-xs disabled:opacity-50"
           >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            当月の打刻実績から明細を一括自動作成
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-amber-500" />}
+            打刻から自動計算
           </button>
 
           <button
@@ -453,7 +582,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             className="flex items-center gap-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer shadow-xs"
           >
             <Plus className="w-4 h-4 text-emerald-600" />
-            個別明細を追加
+            個別入力
           </button>
         </div>
 
@@ -918,6 +1047,160 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 PDF保存 / 印刷
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* マネーフォワード給与 CSV/TSV インポートモーダル                            */}
+      {/* ========================================================================= */}
+      {importModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col border border-slate-200 animate-in zoom-in-95">
+            
+            {/* ヘッダー */}
+            <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-amber-700 p-5 text-white flex items-center justify-between rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                  <FileSpreadsheet className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base tracking-tight flex items-center gap-2">
+                    マネーフォワード給与データ インポート
+                    <span className="bg-white/25 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      CSV / TSV 自動解析
+                    </span>
+                  </h3>
+                  <p className="text-xs text-orange-100 font-medium">
+                    マネーフォワード給与から出力したCSVファイルを読み込むか、テキストを貼り付けてください
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setImportModal({ isOpen: false, rawText: '', parsedList: [] })} 
+                className="text-orange-200 hover:text-white p-1 rounded-lg hover:bg-white/10"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* モーダルコンテンツ */}
+            <div className="p-6 overflow-y-auto space-y-5 flex-1">
+              
+              {/* ファイル選択 & サンプル読み込み */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-orange-50/60 p-4 rounded-xl border border-orange-200">
+                <div className="flex items-center gap-2">
+                  <label className="bg-white hover:bg-orange-100 text-orange-800 border border-orange-300 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-xs transition">
+                    <UploadCloud className="w-4 h-4 text-orange-600" />
+                    CSVファイルを選択
+                    <input 
+                      type="file" 
+                      accept=".csv,.tsv,.txt" 
+                      onChange={handleImportFileChange}
+                      className="hidden" 
+                    />
+                  </label>
+                  <span className="text-xs text-slate-500">または下の枠に直接貼り付け</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sampleText = `従業員番号\t従業員\t所属事業所\t部門\t職種\t契約種別\t出勤日数（平日）\t出勤日数（所定休日）\t出勤日数（法定休日）\t欠勤日数（平日）\t遅刻時間（平日）\t早退時間（平日）\t所定時間（平日）\t所定時間（所定休日）\t所定時間（法定休日）\t所定外時間（平日）\t所定外時間（所定休日）\t所定外時間（法定休日）\t法定外時間（平日）\t深夜所定時間（平日）\t深夜所定時間（所定休日）\t深夜所定時間（法定休日）\t深夜所定外時間（平日）\t深夜所定外時間（所定休日）\t深夜所定外時間（法定休日）\t深夜法定外時間（平日）\t深夜法定外時間（所定休日）\t深夜法定外時間（法定休日）\t有休取得日数\t有休残日数\t所定時間（所定休日）（内）\t法定外時間（平日）（内）\t深夜休憩時間（平日）（内）\t深夜（平日）（内）\t休憩時間（平日）（内）\t残業（平日）（内）\t所定時間（平日）（内）\t慶弔休暇残時間数\t慶弔休暇残日数\t慶弔休暇付与時間数\t慶弔休暇付与日数\t総労働時間\t慶弔休暇取得時間数\t残業（所定休日）（内）\t休憩時間（所定休日）（内）\t深夜（所定休日）（内）\t深夜休憩時間（所定休日）（内）\t法定外時間（所定休日）（内）\t所定時間（法定休日）（内）\t残業（法定休日）（内）\t休憩時間（法定休日）（内）\t深夜（法定休日）（内）\t深夜休憩時間（法定休日）（内）\t法定外時間（法定休日）（内）\t法定外時間（平日・所定休日）\t60時間超法定外時間（平日・所定休日）\t育児休業取得日数\t休暇みなし時間(所定)(平日)\t休暇みなし時間(所定外)(平日)\t休暇みなし時間(法定外)(平日)\t休暇みなし時間(所定)(所定休日)\t休暇みなし時間(所定外)(所定休日)\t休暇みなし時間(法定外)(所定休日)\t休暇みなし時間(所定)(法定休日)\t休暇みなし時間(所定外)(法定休日)\t休暇みなし時間(法定外)(法定休日)\t介護休業取得日数\t業務上の疾病による休業取得日数\t産前産後休業取得日数\t慶弔休暇取得日数\t介護休暇取得日数\t介護休暇取得時間数\t介護休暇付与日数\t介護休暇付与時間数\t介護休暇残日数\t介護休暇残時間数\t子の看護休暇取得日数\t子の看護休暇取得時間数\t子の看護休暇付与日数\t子の看護休暇付与時間数\t子の看護休暇残日数\t子の看護休暇残時間数\t役員報酬(支給)\t基本給(支給)\t役職手当(支給)\t家族手当(支給)\t住宅手当(支給)\t営業手当(支給)\t残業手当(支給)\t深夜残業手当(支給)\t法定休日手当(支給)\t所定休日手当(支給)\t通勤手当/課税(支給)\t通勤手当/非課(支給)\t立替経費(支給)\t特別手当(支給)\t未払給与分(支給)\t課税支給合計\t非課税支給合計\t課税現物支給合計\t非課税現物支給合計\t支給合計\t労保対象合計\t社保対象合計(金銭)\t社保対象合計(現物)\t社保対象通勤手当(金銭)\t社保対象通勤手当(現物)\t固定賃金合計\t役員報酬合計\t割増基礎合計\t控除基礎合計\t健康保険料(控除)\t介護保険料(控除)\t子ども・子育て支援金(控除)\t厚生年金保険料(控除)\t雇用保険料(控除)\t所得税(控除)\t住民税(控除)\t年調過不足税額(控除)\t社宅家賃(控除)\t社会保険料合計\t控除合計\t社保控除後合計\t差引支給合計\t現物支給額\t振込支給１\t振込支給２\t振込支給残額\t振込支給額合計\t現金支給額\t扶養人数\t税額表\t健保標準報酬\t厚年標準報酬\t健康保険料(会社)\t介護保険料(会社)\t子ども・子育て支援金(会社)\t厚生年金保険料(会社)\t子ども・子育て拠出金(会社)\t厚生年金基金掛金(会社)\t雇用保険料(会社)\t労災保険料(会社)\t一般拠出金(会社)
+2\t駒井 秀一朗\t株式会社cocotte\t\t\t役員\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t0\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t169000\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t169000\t0\t0\t0\t169000\t0\t169000\t0\t0\t0\t169000\t169000\t0\t0\t8342\t1336\t244\t12424\t\t2220\t46900\t\t\t22346\t71466\t146654\t97534\t0\t0\t0\t97534\t97534\t0\t0\t甲\t320000\t320000\t0\t0\t0\t0\t1152\t0\t0\t0\t0`;
+                    handleParseImportText(sampleText);
+                  }}
+                  className="text-xs bg-white hover:bg-orange-100 text-orange-900 border border-orange-300 font-bold px-3 py-1.5 rounded-lg transition cursor-pointer"
+                >
+                  ⚡ 駒井様のサンプルデータを貼付
+                </button>
+              </div>
+
+              {/* テキスト入力エリア */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  CSV / TSV テキスト（貼り付け）
+                </label>
+                <textarea
+                  value={importModal.rawText}
+                  onChange={(e) => handleParseImportText(e.target.value)}
+                  rows={6}
+                  placeholder="マネーフォワード給与のCSVデータをここに貼り付けてください..."
+                  className="w-full font-mono text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:bg-white bg-slate-50 leading-relaxed"
+                />
+              </div>
+
+              {/* 解析結果プレビューテーブル */}
+              {importModal.parsedList.length > 0 && (
+                <div className="space-y-2 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      解析成功：{importModal.parsedList.length} 名分の給与明細データ
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      ※インポート実行時に自動で従業員・給与明細と紐付けます
+                    </span>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs max-h-60 overflow-y-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-slate-100 text-slate-600 font-black sticky top-0">
+                        <tr>
+                          <th className="p-2.5">従業員名</th>
+                          <th className="p-2.5">区分</th>
+                          <th className="p-2.5 text-right">総支給額</th>
+                          <th className="p-2.5 text-right">社会保険料</th>
+                          <th className="p-2.5 text-right">所得税・住民税</th>
+                          <th className="p-2.5 text-right">控除合計</th>
+                          <th className="p-2.5 text-right font-black text-emerald-700">差引手取り額</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {importModal.parsedList.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-orange-50/50">
+                            <td className="p-2.5 font-bold text-slate-900">{item.employeeName}</td>
+                            <td className="p-2.5 text-slate-500">{item.contractType || '社員'}</td>
+                            <td className="p-2.5 text-right font-bold text-blue-700">¥{item.totalEarnings.toLocaleString()}</td>
+                            <td className="p-2.5 text-right text-slate-600">¥{item.socialInsuranceTotal.toLocaleString()}</td>
+                            <td className="p-2.5 text-right text-slate-600">¥{(item.incomeTax + item.residentTax).toLocaleString()}</td>
+                            <td className="p-2.5 text-right text-rose-600 font-bold">-¥{item.totalDeductions.toLocaleString()}</td>
+                            <td className="p-2.5 text-right font-black text-emerald-600">¥{item.netSalary.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* フッター */}
+            <div className="bg-slate-50 p-4 border-t flex justify-between items-center rounded-b-2xl">
+              <span className="text-xs text-slate-500 font-medium">
+                対象月度: <strong>{currentYearMonth}</strong> 支給分として登録されます
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setImportModal({ isOpen: false, rawText: '', parsedList: [] })}
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExecuteImport}
+                  disabled={importModal.parsedList.length === 0 || isSaving}
+                  className="px-6 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-xl text-xs font-black shadow-md shadow-orange-600/20 disabled:opacity-50 transition cursor-pointer flex items-center gap-1.5"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  給与明細を一括インポートする
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
