@@ -84,12 +84,11 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
 
         setAttendanceRecords(attData || []);
 
-        // 3. 当月の承認済み休暇申請取得
+        // 3. 当月の全申請（申請中・承認・却下）を取得
         const { data: reqData } = await supabase
           .from('leave_requests')
           .select('*')
           .eq('tenant_id', tenantId)
-          .eq('status', '承認')
           .gte('start_date', startDate)
           .lte('start_date', endDate);
 
@@ -108,6 +107,90 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
   useEffect(() => {
     fetchData();
   }, [tenantId, currentMonth]);
+
+  // 申請の承認処理（打刻修正はattendance_recordsにも自動反映）
+  const handleApproveRequest = async (req: any) => {
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .update({ status: '承認' })
+        .eq('id', req.id);
+
+      if (error) throw error;
+
+      // 打刻修正申請の場合、attendance_records に打刻時刻を自動反映
+      if (req.type === '打刻修正' && req.start_date) {
+        const reasonText = req.reason || '';
+        const punchTypeMatch = reasonText.match(/【修正区分:\s*([^】]+)】/);
+        const punchTimeMatch = reasonText.match(/【修正時刻:\s*([^】]+)】/);
+
+        const pType = punchTypeMatch ? punchTypeMatch[1].trim() : '';
+        const pTime = punchTimeMatch ? punchTimeMatch[1].trim() : '';
+        const targetDate = req.start_date;
+
+        if (pType && pTime) {
+          const { data: existRec } = await supabase
+            .from('attendance_records')
+            .select('*')
+            .eq('tenant_id', req.tenant_id || tenantId)
+            .eq('user_id', req.user_id)
+            .eq('date', targetDate)
+            .maybeSingle();
+
+          if (existRec) {
+            const updatePayload: any = {};
+            if (pType === '出勤') updatePayload.check_in_time = pTime;
+            if (pType === '退勤') {
+              updatePayload.check_out_time = pTime;
+              updatePayload.status = '退勤済';
+            }
+            await supabase
+              .from('attendance_records')
+              .update(updatePayload)
+              .eq('id', existRec.id);
+          } else {
+            const insertPayload: any = {
+              tenant_id: req.tenant_id || tenantId,
+              user_id: req.user_id,
+              date: targetDate,
+              status: pType === '退勤' ? '退勤済' : '勤務中'
+            };
+            if (pType === '出勤') insertPayload.check_in_time = pTime;
+            if (pType === '退勤') insertPayload.check_out_time = pTime;
+
+            await supabase
+              .from('attendance_records')
+              .insert(insertPayload);
+          }
+        }
+      }
+
+      showToast(`🎉 ${req.type}申請を承認し、出勤簿に反映しました！`);
+      await fetchData();
+    } catch (err: any) {
+      console.error('Error approving request:', err);
+      alert('承認処理に失敗しました: ' + err.message);
+    }
+  };
+
+  // 申請の却下処理
+  const handleRejectRequest = async (req: any) => {
+    if (!confirm('この申請を却下しますか？')) return;
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .update({ status: '却下' })
+        .eq('id', req.id);
+
+      if (error) throw error;
+
+      showToast(`申請を却下しました`);
+      await fetchData();
+    } catch (err: any) {
+      console.error('Error rejecting request:', err);
+      alert('却下処理に失敗しました: ' + err.message);
+    }
+  };
 
   // 前月・次月移動
   const handlePrevMonth = () => {
@@ -156,7 +239,10 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       }
     });
 
-    const paidLeaveDays = userLeaves.reduce((acc, req) => {
+    const approvedLeaves = userLeaves.filter(l => l.status === '承認');
+    const pendingRequests = userLeaves.filter(l => l.status === '申請中');
+
+    const paidLeaveDays = approvedLeaves.reduce((acc, req) => {
       if (req.type?.includes('半休')) return acc + 0.5;
       if (req.type?.includes('有給')) return acc + 1.0;
       return acc;
@@ -167,7 +253,8 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       totalHours: (totalActualMins / 60).toFixed(1),
       overtimeHours: (totalOvertimeMins / 60).toFixed(1),
       paidLeaveDays,
-      missedPunchCount
+      missedPunchCount,
+      pendingRequestsCount: pendingRequests.length
     };
   };
 
@@ -193,7 +280,10 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
       const record = userRecords.find(r => r.date === dateStr);
-      const leave = userLeaves.find(l => l.start_date <= dateStr && l.end_date >= dateStr);
+      
+      // 当日の申請データを取得
+      const dayPendingRequests = userLeaves.filter(l => l.status === '申請中' && l.start_date <= dateStr && (l.end_date ? l.end_date >= dateStr : l.start_date >= dateStr));
+      const dayApprovedLeave = userLeaves.find(l => l.status === '承認' && l.start_date <= dateStr && (l.end_date ? l.end_date >= dateStr : l.start_date >= dateStr));
 
       let actualStr = '-';
       let overtimeStr = '-';
@@ -228,14 +318,15 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         isWeekend,
         dayOfWeek,
         record,
-        leave,
+        approvedLeave: dayApprovedLeave,
+        pendingRequests: dayPendingRequests,
         checkIn: record?.check_in_time || '-',
         checkOut: record?.check_out_time || '-',
         actualStr,
         overtimeStr,
         overtimeMins,
-        status: record?.status || (leave ? leave.type : '-'),
-        note: record?.note || leave?.reason || ''
+        status: record?.status || (dayApprovedLeave ? dayApprovedLeave.type : '-'),
+        note: record?.note || dayApprovedLeave?.reason || ''
       });
     }
 
@@ -483,13 +574,14 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                       <th className="p-4 text-right">総残業時間</th>
                       <th className="p-4 text-right">有給取得</th>
                       <th className="p-4 text-center">打刻エラー</th>
+                      <th className="p-4 text-center">各種申請</th>
                       <th className="p-4 text-center w-36">アクション</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {users.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="p-12 text-center text-slate-400 font-bold">
+                        <td colSpan={10} className="p-12 text-center text-slate-400 font-bold">
                           登録されている従業員がいません
                         </td>
                       </tr>
@@ -534,6 +626,15 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                               <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded text-xs font-black animate-pulse">
                                 <AlertCircle className="w-3.5 h-3.5" />
                                 {summary.missedPunchCount}件
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 text-xs">-</span>
+                            )}
+                          </td>
+                          <td className="p-4 text-center">
+                            {summary.pendingRequestsCount > 0 ? (
+                              <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full text-xs font-black shadow-2xs animate-pulse">
+                                🟡 申請中 {summary.pendingRequestsCount}件
                               </span>
                             ) : (
                               <span className="text-slate-300 text-xs">-</span>
@@ -609,6 +710,12 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                       <div className="text-[11px] font-bold text-amber-600">有給取得</div>
                       <div className="text-lg font-black text-amber-900">{selectedUserSummary.paidLeaveDays}<span className="text-xs font-normal ml-0.5">日</span></div>
                     </div>
+                    {selectedUserSummary.pendingRequestsCount > 0 && (
+                      <div className="bg-amber-50 border border-amber-300 px-3.5 py-2 rounded-xl text-center animate-pulse">
+                        <div className="text-[11px] font-bold text-amber-700">申請中</div>
+                        <div className="text-lg font-black text-amber-900">{selectedUserSummary.pendingRequestsCount}<span className="text-xs font-normal ml-0.5">件</span></div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -621,28 +728,32 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                     {selectedUser?.name} さんの月間出勤簿明細（{currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月）
                   </h3>
                   <span className="text-xs text-slate-400 font-medium">
-                    ※各行の「編集」ボタンから管理者が打刻時間を直接修正できます
+                    ※申請中の項目はその場で「承認」「却下」できます
                   </span>
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse min-w-[850px]">
+                  <table className="w-full text-left border-collapse min-w-[950px]">
                     <thead>
                       <tr className="bg-slate-100/70 border-b border-slate-200 text-xs font-black text-slate-600 uppercase">
                         <th className="p-3.5 w-28">日付</th>
                         <th className="p-3.5 w-28">出勤打刻</th>
                         <th className="p-3.5 w-28">退勤打刻</th>
-                        <th className="p-3.5 text-right w-28">実働時間</th>
-                        <th className="p-3.5 text-right w-28">残業時間</th>
-                        <th className="p-3.5">事由・備考</th>
-                        <th className="p-3.5 text-center w-28">操作</th>
+                        <th className="p-3.5 text-right w-24">実働時間</th>
+                        <th className="p-3.5 text-right w-24">残業時間</th>
+                        <th className="p-3.5">事由・申請・備考</th>
+                        <th className="p-3.5 text-center w-36">操作</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
                       {selectedUserRows.map(row => {
                         let dateColorClass = "text-slate-900";
                         let rowBgClass = "hover:bg-blue-50/20";
-                        if (row.dayOfWeek === 0) {
+                        const hasPending = row.pendingRequests && row.pendingRequests.length > 0;
+
+                        if (hasPending) {
+                          rowBgClass = "bg-amber-50/60 hover:bg-amber-100/60 border-l-4 border-l-amber-500";
+                        } else if (row.dayOfWeek === 0) {
                           dateColorClass = "text-red-500 font-bold";
                           rowBgClass = "bg-red-50/20 hover:bg-red-50/40";
                         } else if (row.dayOfWeek === 6) {
@@ -673,13 +784,57 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                             <td className={`p-3.5 text-right font-bold text-xs ${row.overtimeMins > 0 ? 'text-red-600' : 'text-slate-400'}`}>
                               {row.overtimeStr}
                             </td>
-                            <td className="p-3.5 text-xs text-slate-500">
-                              {row.leave && (
-                                <span className="mr-2 inline-block bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded text-[11px] font-bold">
-                                  {row.leave.type}
-                                </span>
-                              )}
-                              {row.note || '-'}
+                            <td className="p-3.5 text-xs text-slate-600">
+                              <div className="space-y-1.5">
+                                {/* 承認済み休暇バッジ */}
+                                {row.approvedLeave && (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="inline-block bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded text-[11px] font-bold">
+                                      ✓ 承認済: {row.approvedLeave.type}
+                                    </span>
+                                    <span className="text-slate-500">{row.approvedLeave.reason}</span>
+                                  </div>
+                                )}
+
+                                {/* 申請中の各種申請（打刻修正・有給など） */}
+                                {row.pendingRequests?.map((pReq: any) => (
+                                  <div key={pReq.id} className="flex flex-wrap items-center gap-2 bg-white/90 border border-amber-300 p-1.5 rounded-lg shadow-2xs">
+                                    <span className="bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded">
+                                      申請中
+                                    </span>
+                                    <span className="font-bold text-slate-800 text-xs">
+                                      【{pReq.type}】
+                                    </span>
+                                    <span className="text-slate-600 text-xs">
+                                      {pReq.reason}
+                                    </span>
+                                    <div className="ml-auto flex items-center gap-1">
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleApproveRequest(pReq)}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-0.5 rounded text-[11px] font-bold shadow-2xs transition cursor-pointer"
+                                      >
+                                        ✓ 承認
+                                      </button>
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleRejectRequest(pReq)}
+                                        className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded text-[11px] font-bold transition cursor-pointer"
+                                      >
+                                        ✗ 却下
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+
+                                {/* 通常備考 */}
+                                {row.note && !row.approvedLeave && !hasPending && (
+                                  <span className="text-slate-500">{row.note}</span>
+                                )}
+                                {!row.note && !row.approvedLeave && !hasPending && (
+                                  <span className="text-slate-300">-</span>
+                                )}
+                              </div>
                             </td>
                             <td className="p-3.5 text-center">
                               <button 
