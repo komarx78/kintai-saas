@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock, Bot, BookOpen, Sparkles, Printer } from 'lucide-react';
+import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock, Bot, BookOpen, Sparkles, Printer, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { PaidLeaveManagement } from '../components/PaidLeaveManagement';
@@ -1480,62 +1480,181 @@ ${tenantId || '（エラー：コード取得失敗）'}
                 </div>
               </div>
 
-              {/* 印刷プレビュー用紙（A4風デザイン） */}
-              <div id="rules-print-area" className="bg-white p-8 sm:p-12 rounded-xl shadow-lg border border-slate-300 max-w-4xl mx-auto text-slate-900 font-serif leading-relaxed space-y-12">
+              {/* 社労士法準拠・作成支援に関する注記（免責事項バナー） */}
+              <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-4 text-xs text-blue-900 leading-relaxed print:hidden flex items-start gap-3">
+                <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-blue-950 mb-1">【ご利用上の注記（社労士法・作成支援に関するご案内）】</h4>
+                  <p className="text-blue-800 text-[11px]">
+                    ※ 本機能は、厚生労働省策定のモデル就業規則および法定様式を基にした事業主様向けの<strong>「自社作成支援ツール」</strong>です（提出代行等は行いません）。<br />
+                    ※ 就業規則の最終的な内容決定、従業員代表からの意見聴取、および労働基準監督署への届出は、<strong>事業主様ご自身の責任</strong>において行ってください。<br />
+                    ※ 個別具体的な労務相談や法的適合性判断については、所轄労働基準監督署または社会保険労務士へご相談されることを推奨いたします。
+                  </p>
+                </div>
+              </div>
+
+              {/* 届出書類の情報入力フォーム（印刷時は非表示） */}
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm print:hidden">
+                <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <Settings className="w-4 h-4 text-blue-600" />
+                  届出書類の記載情報（差し替え設定）
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">事業場名称（会社名）</label>
+                    <input
+                      type="text"
+                      value={submitDocInfo.companyName}
+                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, companyName: e.target.value })}
+                      placeholder="例: 株式会社〇〇"
+                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">事業場所在地</label>
+                    <input
+                      type="text"
+                      value={submitDocInfo.companyAddress}
+                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, companyAddress: e.target.value })}
+                      placeholder="例: 東京都千代田区〇〇 1-2-3"
+                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">使用者職氏名（代表者）</label>
+                    <input
+                      type="text"
+                      value={submitDocInfo.representativeName}
+                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, representativeName: e.target.value })}
+                      placeholder="例: 代表取締役 山田 太郎"
+                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">所轄労働基準監督署</label>
+                    <input
+                      type="text"
+                      value={submitDocInfo.inspectionOffice}
+                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, inspectionOffice: e.target.value })}
+                      placeholder="例: 中央労働基準監督署長"
+                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">届出年月日</label>
+                    <input
+                      type="date"
+                      value={submitDocInfo.submitDate}
+                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, submitDate: e.target.value })}
+                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">労働者代表 氏名</label>
+                    <input
+                      type="text"
+                      value={submitDocInfo.workerRepName}
+                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, workerRepName: e.target.value })}
+                      placeholder="例: 従業員代表 佐藤 次郎"
+                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 印刷プレビュー用紙（各A4シート独立表示） */}
+              <div id="rules-print-area" className="max-w-4xl mx-auto space-y-8 print:space-y-0 text-slate-900 font-serif leading-relaxed">
                 
-                {/* 1ページ目：就業規則（変更）届 ＋ 意見書 */}
-                <div className="space-y-8 border-b-2 border-dashed border-slate-300 pb-12 print:border-none print:pb-0">
-                  <div className="text-center">
-                    <span className="text-xs text-slate-500 block text-left">様式第９号（第４９条関係）</span>
-                    <h1 className="text-2xl font-black tracking-widest mt-2 border-b-2 border-slate-900 pb-2 inline-block">
-                      就　業　規　則　届
-                    </h1>
-                  </div>
-
-                  <div className="flex justify-between items-start text-sm pt-4">
-                    <div className="text-base font-bold underline underline-offset-4">
-                      {submitDocInfo.inspectionOffice || '所轄労働基準監督署長'}　殿
+                {/* ========================================================================= */}
+                {/* ページ 1: 就業規則届（様式第9号）- A4 1枚完結                               */}
+                {/* ========================================================================= */}
+                <div className="bg-white p-10 sm:p-14 rounded-xl shadow-lg border border-slate-300 min-h-[800px] flex flex-col justify-between print:min-h-screen print:shadow-none print:border-none print:p-8 print:rounded-none print:break-after-page">
+                  <div className="space-y-8">
+                    <div>
+                      <span className="text-xs text-slate-500 block text-left font-sans">様式第９号（第４９条関係）</span>
+                      <div className="text-center mt-4">
+                        <h1 className="text-2xl font-black tracking-widest border-b-2 border-slate-900 pb-2 inline-block">
+                          就　業　規　則　届
+                        </h1>
+                      </div>
                     </div>
-                    <div className="text-right space-y-1 text-xs">
-                      <div>届出年月日：令和 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getFullYear() - 2018 : '　'} 年 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getMonth() + 1 : '　'} 月 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getDate() : '　'} 日</div>
-                      <div>事業場名称：<strong>{submitDocInfo.companyName || '株式会社〇〇'}</strong></div>
-                      <div>事業場所在地：{submitDocInfo.companyAddress || '東京都千代田区〇〇 1-2-3'}</div>
-                      <div className="pt-2">使用者職氏名：<strong>{submitDocInfo.representativeName || '代表取締役 〇〇 〇〇'}</strong>　　　印</div>
+
+                    <div className="flex justify-between items-start text-sm pt-6">
+                      <div className="text-base font-bold underline underline-offset-4">
+                        {submitDocInfo.inspectionOffice || '所轄労働基準監督署長'}　殿
+                      </div>
+                      <div className="text-right space-y-1.5 text-xs">
+                        <div>届出年月日：令和 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getFullYear() - 2018 : '　'} 年 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getMonth() + 1 : '　'} 月 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getDate() : '　'} 日</div>
+                        <div>事業場名称：<strong>{submitDocInfo.companyName || '株式会社〇〇'}</strong></div>
+                        <div>事業場所在地：{submitDocInfo.companyAddress || '東京都千代田区〇〇 1-2-3'}</div>
+                        <div className="pt-2">使用者職氏名：<strong>{submitDocInfo.representativeName || '代表取締役 〇〇 〇〇'}</strong>　　　印</div>
+                      </div>
+                    </div>
+
+                    <div className="text-sm py-8 text-center font-medium leading-loose border-y border-slate-200 my-8">
+                      労働基準法第８９条の規定により、別添のとおり就業規則を届け出ます。
+                    </div>
+
+                    <div className="space-y-3 text-xs bg-slate-50/50 p-6 rounded border border-slate-200">
+                      <p className="font-bold text-slate-800">【添付書類】</p>
+                      <ul className="list-disc list-inside space-y-1 text-slate-700">
+                        <li>就業規則（新規制定）　１部</li>
+                        <li>労働基準法第９０条第２項に基づく労働者代表の意見書　１部</li>
+                      </ul>
                     </div>
                   </div>
 
-                  <div className="text-sm py-4 text-center font-medium">
-                    労働基準法第８９条の規定により、別添のとおり就業規則（新規制定）を届け出ます。
+                  <div className="text-center text-[10px] text-slate-400 font-sans print:hidden">
+                    --- ページ 1 / 就業規則届（A4 1枚目） ---
                   </div>
+                </div>
 
-                  <div className="border-t-2 border-slate-800 pt-6 mt-8">
-                    <h2 className="text-lg font-black text-center tracking-wider mb-4 border-b border-slate-400 pb-1 inline-block">
-                      意　見　書（労働基準法第９０条第２項）
-                    </h2>
+                {/* ========================================================================= */}
+                {/* ページ 2: 労働者代表の意見書 - A4 1枚完結                                   */}
+                {/* ========================================================================= */}
+                <div className="bg-white p-10 sm:p-14 rounded-xl shadow-lg border border-slate-300 min-h-[800px] flex flex-col justify-between print:min-h-screen print:shadow-none print:border-none print:p-8 print:rounded-none print:break-after-page print:break-before-page">
+                  <div className="space-y-8">
+                    <div className="text-center">
+                      <h2 className="text-2xl font-black tracking-widest border-b-2 border-slate-900 pb-2 inline-block">
+                        意　見　書
+                      </h2>
+                      <span className="text-xs text-slate-500 block mt-1 font-sans">（労働基準法第９０条第２項に基づく意見書）</span>
+                    </div>
 
-                    <div className="flex justify-between items-start text-xs pt-2">
-                      <div className="font-bold underline underline-offset-4 text-sm">
+                    <div className="flex justify-between items-start text-sm pt-6">
+                      <div className="font-bold underline underline-offset-4 text-base">
                         {submitDocInfo.representativeName || '代表取締役 〇〇 〇〇'}　殿
                       </div>
-                      <div className="text-right space-y-1">
+                      <div className="text-right space-y-1.5 text-xs">
                         <div>提出年月日：令和 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getFullYear() - 2018 : '　'} 年 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getMonth() + 1 : '　'} 月 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getDate() : '　'} 日</div>
                         <div>労働者代表氏名：<strong>{submitDocInfo.workerRepName || '従業員代表 〇〇 〇〇'}</strong>　　　印</div>
                         <div className="text-[11px] text-slate-600">（選任方法：{submitDocInfo.workerRepSelectMethod}）</div>
                       </div>
                     </div>
 
-                    <div className="mt-4 p-4 border border-slate-400 rounded bg-slate-50/50 text-xs leading-relaxed">
-                      <p className="font-bold mb-1">【意　見】</p>
-                      <p>
-                        貴社より提示された就業規則（新規制定）について、従業員への周知及び内容の精査を行いました。内容について異議・異存はありません。就業規則を誠実に遵守いたします。
+                    <div className="text-sm py-4 text-center font-medium">
+                      貴社より提示された就業規則（新規制定）について、以下のとおり意見を提出します。
+                    </div>
+
+                    <div className="p-8 border-2 border-slate-800 rounded-lg bg-slate-50/50 text-sm leading-relaxed space-y-3">
+                      <p className="font-bold text-base border-b border-slate-300 pb-1">【意　見】</p>
+                      <p className="pt-2">
+                        貴社より提示された就業規則（新規制定）について、従業員への周知及び内容の精査を行いました。<br />
+                        内容について異議・異存はありません。就業規則を誠実に遵守いたします。
                       </p>
                     </div>
                   </div>
+
+                  <div className="text-center text-[10px] text-slate-400 font-sans print:hidden">
+                    --- ページ 2 / 労働者代表の意見書（A4 2枚目） ---
+                  </div>
                 </div>
 
-                {/* 2ページ目以降：就業規則 本文 */}
-                <div className="space-y-6 print:break-before-page pt-4">
-                  <div className="text-center border-b-2 border-slate-900 pb-3">
+                {/* ========================================================================= */}
+                {/* ページ 3以降: 就業規則 本文                                               */}
+                {/* ========================================================================= */}
+                <div className="bg-white p-10 sm:p-14 rounded-xl shadow-lg border border-slate-300 min-h-[800px] print:min-h-screen print:shadow-none print:border-none print:p-8 print:rounded-none print:break-before-page">
+                  <div className="text-center border-b-2 border-slate-900 pb-4 mb-8">
                     <h2 className="text-2xl font-black tracking-widest">
                       {submitDocInfo.companyName ? `${submitDocInfo.companyName}　就業規則` : '就　業　規　則'}
                     </h2>
