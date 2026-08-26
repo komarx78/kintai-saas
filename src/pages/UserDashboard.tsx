@@ -1126,12 +1126,12 @@ const UserDashboard = () => {
                   </div>
                 </div>
 
-                {/* クイック一括設定バー（超便利） */}
-                <div className="my-4 p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-indigo-950 flex items-center gap-1">
+                {/* クイック一括設定バー（管理者の会社カレンダー設定に完全連動） */}
+                <div className="my-4 p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-slate-800 flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                      クイック入力:
+                      一括設定:
                     </span>
                     <button
                       type="button"
@@ -1140,17 +1140,18 @@ const UserDashboard = () => {
                         const daysCount = new Date(y, m, 0).getDate();
                         const nextMap: Record<string, { type: 'working' | 'off'; startTime: string; endTime: string }> = {};
                         for (let d = 1; d <= daysCount; d++) {
-                          const dayOfWeek = new Date(y, m - 1, d).getDay();
                           const dateStr = `${shiftMonth}-${d.toString().padStart(2, '0')}`;
-                          if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                          const mockDateStr = `${y}-${m}-${d}`;
+                          const isHoliday = companyHolidays.has(mockDateStr);
+                          if (!isHoliday) {
                             nextMap[dateStr] = { type: 'working', startTime: '09:00', endTime: '18:00' };
                           }
                         }
                         setShiftRequestsMap(prev => ({ ...prev, ...nextMap }));
                       }}
-                      className="bg-white hover:bg-indigo-100 text-indigo-900 border border-indigo-200 px-3 py-1 rounded-lg font-bold transition cursor-pointer"
+                      className="bg-white hover:bg-indigo-50 text-indigo-900 border border-indigo-200 px-3 py-1 rounded-lg font-bold transition cursor-pointer shadow-2xs"
                     >
-                      ⚡ 平日を一括出勤（09:00〜18:00）
+                      🏢 会社営業日を一括出勤希望（09:00〜18:00）
                     </button>
                     <button
                       type="button"
@@ -1159,17 +1160,18 @@ const UserDashboard = () => {
                         const daysCount = new Date(y, m, 0).getDate();
                         const nextMap: Record<string, { type: 'working' | 'off'; startTime: string; endTime: string }> = {};
                         for (let d = 1; d <= daysCount; d++) {
-                          const dayOfWeek = new Date(y, m - 1, d).getDay();
                           const dateStr = `${shiftMonth}-${d.toString().padStart(2, '0')}`;
-                          if (dayOfWeek === 0 || dayOfWeek === 6) {
+                          const mockDateStr = `${y}-${m}-${d}`;
+                          const isHoliday = companyHolidays.has(mockDateStr);
+                          if (isHoliday) {
                             nextMap[dateStr] = { type: 'off', startTime: '', endTime: '' };
                           }
                         }
                         setShiftRequestsMap(prev => ({ ...prev, ...nextMap }));
                       }}
-                      className="bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 px-3 py-1 rounded-lg font-bold transition cursor-pointer"
+                      className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1 rounded-lg font-bold transition cursor-pointer shadow-2xs"
                     >
-                      🏖️ 土日を一括休み（公休）
+                      🏖️ 会社所定休日を一括休み希望
                     </button>
                   </div>
 
@@ -1231,6 +1233,8 @@ const UserDashboard = () => {
                         const dayOfWeek = new Date(y, m - 1, d).getDay();
                         const isSunday = dayOfWeek === 0;
                         const isSaturday = dayOfWeek === 6;
+                        const mockDateStr = `${y}-${m}-${d}`;
+                        const isCompanyHoliday = companyHolidays.has(mockDateStr);
 
                         // 確定シフト
                         const confirmed = myShifts.find(s => s.work_date === dateStr);
@@ -1245,14 +1249,21 @@ const UserDashboard = () => {
                                 ? (confirmed.is_holiday ? 'bg-slate-100' : 'bg-indigo-50/80')
                                 : (req
                                     ? (req.type === 'working' ? 'bg-blue-50/90 ring-1 ring-blue-300' : 'bg-rose-50/90 ring-1 ring-rose-300')
-                                    : 'bg-white hover:bg-slate-50/80')
+                                    : (isCompanyHoliday ? 'bg-slate-50/80 hover:bg-slate-100' : 'bg-white hover:bg-slate-50/80'))
                             }`}
                           >
                             {/* 上部: 日付番号 ＆ ステータスバッジ */}
                             <div className="flex justify-between items-start">
-                              <span className={`text-xs sm:text-sm font-black ${isSunday ? 'text-rose-600' : isSaturday ? 'text-blue-600' : 'text-slate-800'}`}>
-                                {d}
-                              </span>
+                              <div className="flex items-center gap-1">
+                                <span className={`text-xs sm:text-sm font-black ${isSunday ? 'text-rose-600' : isSaturday ? 'text-blue-600' : 'text-slate-800'}`}>
+                                  {d}
+                                </span>
+                                {isCompanyHoliday && (
+                                  <span className="text-[9px] font-bold text-slate-500 bg-slate-200/80 px-1 py-0.2 rounded">
+                                    会社休
+                                  </span>
+                                )}
+                              </div>
 
                               {confirmed ? (
                                 <span className={`text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 rounded-md ${
