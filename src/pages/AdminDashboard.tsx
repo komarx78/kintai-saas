@@ -49,6 +49,7 @@ const AdminDashboard = () => {
   // Debug State
   const [debugError, setDebugError] = useState<string | null>(null);
   const [tenantName, setTenantName] = useState<string>('');
+  const [tenantInfo, setTenantInfo] = useState<{ plan_type?: string; trial_ends_at?: string | null } | null>(null);
 
   const inviteMessage = `お疲れ様です！
 勤怠・有給管理システムへの初期登録をお願いいたします。
@@ -375,8 +376,11 @@ ${tenantId || '（エラー：コード取得失敗）'}
   useEffect(() => {
     const fetchTenantName = async () => {
       if (!tenantId) return;
-      const { data } = await supabase.from('tenants').select('name').eq('id', tenantId).single();
-      if (data) setTenantName(data.name);
+      const { data } = await supabase.from('tenants').select('name, plan_type, trial_ends_at').eq('id', tenantId).maybeSingle();
+      if (data) {
+        setTenantName(data.name);
+        setTenantInfo({ plan_type: data.plan_type, trial_ends_at: data.trial_ends_at });
+      }
     };
     fetchTenantName();
     fetchEmployees();
@@ -645,21 +649,73 @@ ${tenantId || '（エラー：コード取得失敗）'}
             </div>
           )}
 
-          {/* Billing Info Alert */}
-          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">現在のご利用状況（自動課金）</h3>
-              <p className="text-lg font-bold text-gray-900 mt-1">
-                登録人数: {currentUsers}名 <span className="text-sm font-normal text-gray-500">(基本枠 {planLimit}名)</span>
-              </p>
-            </div>
-            <div className="sm:text-right">
-              <h3 className="text-sm font-medium text-gray-500">今月の想定請求額</h3>
-              <p className="text-2xl font-bold text-blue-600 mt-1">
-                ¥{monthlyFee.toLocaleString()}
-              </p>
-            </div>
-          </div>
+          {/* Billing Info Alert (SaaS安心・トライアル対応) */}
+          {(() => {
+            const isTrial = !tenantInfo || tenantInfo.plan_type === 'trial';
+            const isFree = tenantInfo?.plan_type === 'free';
+            const isPaid = tenantInfo?.plan_type === 'paid';
+            const trialEnd = tenantInfo?.trial_ends_at ? new Date(tenantInfo.trial_ends_at) : null;
+            const diffDays = trialEnd ? Math.ceil((trialEnd.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+            return (
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    {isTrial ? (
+                      <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-2.5 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1 shadow-2xs">
+                        🎁 無料トライアル利用中
+                      </span>
+                    ) : isFree ? (
+                      <span className="bg-blue-100 text-blue-800 text-xs font-black px-2.5 py-0.5 rounded-full border border-blue-300 flex items-center gap-1 shadow-2xs">
+                        ✨ 無料プラン利用中
+                      </span>
+                    ) : (
+                      <span className="bg-slate-900 text-white text-xs font-black px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                        👑 有料プラン利用中
+                      </span>
+                    )}
+                  </div>
+                  
+                  <p className="text-sm font-bold text-gray-800">
+                    登録従業員数: <strong>{currentUsers}</strong> 名
+                    {isPaid && <span className="text-xs font-normal text-gray-500 ml-1">（基本枠 {planLimit}名）</span>}
+                  </p>
+
+                  {isTrial && (
+                    <p className="text-xs text-emerald-700 font-bold">
+                      ※現在トライアル期間のため、<strong>料金は一切発生いたしません。</strong>
+                      {trialEnd ? (
+                        diffDays && diffDays > 0 ? ` (残り ${diffDays} 日 / ${trialEnd.toLocaleDateString('ja-JP')} まで)` : ' (期限終了)'
+                      ) : ' (無期限無料トライアル適用中)'}
+                    </p>
+                  )}
+                  {isFree && (
+                    <p className="text-xs text-blue-700 font-bold">
+                      ※無料プラン適用中のため、月額料金は発生いたしません。
+                    </p>
+                  )}
+                </div>
+
+                <div className="sm:text-right bg-slate-50 sm:bg-transparent p-3 sm:p-0 rounded-xl w-full sm:w-auto">
+                  <h3 className="text-xs font-bold text-gray-500">
+                    {isPaid ? '今月のご利用料金' : '今月のお支払い予定額'}
+                  </h3>
+                  <div className="flex sm:justify-end items-baseline gap-1 mt-0.5">
+                    {isPaid ? (
+                      <p className="text-2xl font-black text-blue-600 font-mono">
+                        ¥{monthlyFee.toLocaleString()}
+                      </p>
+                    ) : (
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-2xl font-black text-emerald-600 font-mono">¥0</span>
+                        <span className="text-xs font-bold text-emerald-700">（無料）</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {activeTab === 'employees' && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
