@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { PaidLeaveManagement } from '../components/PaidLeaveManagement';
@@ -283,131 +283,45 @@ ${tenantId || '（エラー：コード取得失敗）'}
     fetchLeaveTypes();
   }, [tenantId]);
 
-  useEffect(() => {
-    if (tenantId) {
-      const fetchRequests = async () => {
-        const { data: requests, error } = await supabase
-          .from('leave_requests')
-          .select('*')
-          .eq('tenant_id', tenantId)
-          .eq('status', '申請中')
-          .order('created_at', { ascending: false });
+  const fetchRequests = async () => {
+    if (!tenantId) return;
+    try {
+      const { data: requests, error } = await supabase
+        .from('leave_requests')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('status', '申請中')
+        .order('created_at', { ascending: false });
 
-        if (error) {
-          console.error('fetchRequests error:', error);
-          return;
-        }
+      if (error) {
+        console.error('fetchRequests error:', error);
+        return;
+      }
 
-        if (requests && requests.length > 0) {
-          const userIds = [...new Set(requests.map(r => r.user_id))];
-          const { data: usersData } = await supabase.from('users').select('id, name, department').in('id', userIds);
-          
-          const combined = requests.map(req => ({
-            ...req,
-            user: usersData?.find(u => u.id === req.user_id) || null
-          }));
-          setLeaveRequests(combined);
-        } else {
-          setLeaveRequests([]);
-        }
-      };
-      fetchRequests();
+      if (requests && requests.length > 0) {
+        const userIds = [...new Set(requests.map(r => r.user_id))];
+        const { data: usersData } = await supabase.from('users').select('id, name, department').in('id', userIds);
+        
+        const combined = requests.map(req => ({
+          ...req,
+          user: usersData?.find(u => u.id === req.user_id) || null
+        }));
+        setLeaveRequests(combined);
+      } else {
+        setLeaveRequests([]);
+      }
+    } catch (e) {
+      console.error(e);
     }
+  };
+
+  useEffect(() => {
+    fetchRequests();
   }, [tenantId, activeTab]);
 
   const currentUsers = employees.length;
   const planLimit = 5;
   const monthlyFee = 2000 + (Math.max(0, currentUsers - planLimit) * 500);
-
-  const handleApproveRequest = async (req: any) => {
-    try {
-      const { error } = await supabase
-        .from('leave_requests')
-        .update({ status: '承認' })
-        .eq('id', req.id);
-
-      if (error) {
-        console.error('Error approving request:', error);
-        alert('承認処理に失敗しました: ' + error.message);
-        return;
-      }
-
-      // 打刻修正の場合、attendance_recordsを更新/作成
-      if (req.type === '打刻修正' && req.reason) {
-        const punchTypeMatch = req.reason.match(/【修正区分:\s*([^】]+)】/);
-        const punchTimeMatch = req.reason.match(/【修正時刻:\s*([^】]+)】/);
-        const pType = punchTypeMatch ? punchTypeMatch[1].trim() : '';
-        const pTime = punchTimeMatch ? punchTimeMatch[1].trim() : '';
-
-        if (pType && pTime && tenantId) {
-          const targetDate = req.start_date;
-          const { data: existRec } = await supabase
-            .from('attendance_records')
-            .select('*')
-            .eq('tenant_id', tenantId)
-            .eq('user_id', req.user_id)
-            .eq('date', targetDate)
-            .maybeSingle();
-
-          if (existRec) {
-            const updatePayload: any = {};
-            if (pType === '出勤') {
-              updatePayload.check_in_time = pTime;
-            } else if (pType === '退勤') {
-              updatePayload.check_out_time = pTime;
-              updatePayload.status = '退勤済';
-            }
-            await supabase
-              .from('attendance_records')
-              .update(updatePayload)
-              .eq('id', existRec.id);
-          } else {
-            const insertPayload: any = {
-              tenant_id: tenantId,
-              user_id: req.user_id,
-              date: targetDate,
-              status: pType === '退勤' ? '退勤済' : '勤務中'
-            };
-            if (pType === '出勤') insertPayload.check_in_time = pTime;
-            if (pType === '退勤') insertPayload.check_out_time = pTime;
-
-            await supabase
-              .from('attendance_records')
-              .insert(insertPayload);
-          }
-        }
-      }
-
-      setLeaveRequests(prev => prev.filter(r => r.id !== req.id));
-      await fetchEmployees();
-      alert('申請を承認しました。');
-    } catch (err: any) {
-      console.error('Approve Exception:', err);
-      alert('エラーが発生しました: ' + err.message);
-    }
-  };
-
-  const handleRejectRequest = async (req: any) => {
-    if (!window.confirm('この申請を却下しますか？')) return;
-    try {
-      const { error } = await supabase
-        .from('leave_requests')
-        .update({ status: '却下' })
-        .eq('id', req.id);
-
-      if (error) {
-        console.error('Error rejecting request:', error);
-        alert('却下処理に失敗しました: ' + error.message);
-        return;
-      }
-
-      setLeaveRequests(prev => prev.filter(r => r.id !== req.id));
-      alert('申請を却下しました。');
-    } catch (err: any) {
-      console.error('Reject Exception:', err);
-      alert('エラーが発生しました: ' + err.message);
-    }
-  };
 
   const handleOpenModal = (employee: any = null) => {
     setEditingEmployee(employee);
@@ -565,13 +479,15 @@ ${tenantId || '（エラー：コード取得失敗）'}
             従業員管理
           </button>
           <button 
-            onClick={() => setActiveTab('requests')}
-            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'requests' ? 'bg-blue-800' : 'hover:bg-blue-800'}`}
+            onClick={() => setActiveTab('attendance')}
+            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'attendance' ? 'bg-blue-800 font-bold' : 'hover:bg-blue-800'}`}
           >
-            <FileText className="mr-3 h-5 w-5" />
-            各種申請承認
+            <Calendar className="mr-3 h-5 w-5 text-cyan-400" />
+            月間勤怠・出勤簿管理
             {leaveRequests.length > 0 && (
-              <span className="ml-auto bg-red-500 text-xs py-1 px-2 rounded-full">{leaveRequests.length}</span>
+              <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold animate-pulse shadow-sm">
+                {leaveRequests.length}
+              </span>
             )}
           </button>
           <button 
@@ -580,13 +496,6 @@ ${tenantId || '（エラー：コード取得失敗）'}
           >
             <Coffee className="mr-3 h-5 w-5 text-amber-400" />
             有給・休暇管理システム
-          </button>
-          <button 
-            onClick={() => setActiveTab('attendance')}
-            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'attendance' ? 'bg-blue-800 font-bold' : 'hover:bg-blue-800'}`}
-          >
-            <Calendar className="mr-3 h-5 w-5 text-cyan-400" />
-            月間勤怠・出勤簿管理
           </button>
           <button 
             onClick={() => setActiveTab('settings')}
@@ -720,46 +629,12 @@ ${tenantId || '（エラー：コード取得失敗）'}
             </div>
           )}
 
-          {activeTab === 'requests' && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="p-4 border-b border-gray-200">
-                <h2 className="text-lg font-medium">承認待ちの申請</h2>
-              </div>
-              <div className="p-4">
-                <ul className="divide-y divide-gray-200">
-                  {leaveRequests.map(req => (
-                    <li key={req.id} className="py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{req.user?.name || '不明'}からの申請</p>
-                        <p className="text-sm text-gray-500">{req.type} - {req.start_date} {req.start_date !== req.end_date ? `～ ${req.end_date}` : ''}</p>
-                        <p className="text-xs text-gray-400 mt-1 whitespace-pre-wrap">理由: {req.reason || '記載なし'}</p>
-                      </div>
-                      <div className="flex space-x-2">
-                        <button onClick={() => handleApproveRequest(req)} className="flex items-center text-sm bg-green-50 text-green-600 border border-green-200 px-3 py-1 rounded hover:bg-green-100 cursor-pointer">
-                          <CheckCircle className="w-4 h-4 mr-1" />
-                          承認
-                        </button>
-                        <button onClick={() => handleRejectRequest(req)} className="flex items-center text-sm bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded hover:bg-red-100 cursor-pointer">
-                          <XCircle className="w-4 h-4 mr-1" />
-                          却下
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-                {leaveRequests.length === 0 && (
-                  <p className="text-center text-gray-500 py-8">承認待ちの申請はありません</p>
-                )}
-              </div>
-            </div>
-          )}
-
           {activeTab === 'ledger' && (
             <PaidLeaveManagement tenantId={tenantId} onRefreshEmployees={fetchEmployees} />
           )}
 
           {activeTab === 'attendance' && (
-            <MonthlyAttendanceManagement tenantId={tenantId} />
+            <MonthlyAttendanceManagement tenantId={tenantId} onRefreshRequests={fetchRequests} />
           )}
 
           {activeTab === 'settings' && (

@@ -7,14 +7,16 @@ import {
 
 interface MonthlyAttendanceManagementProps {
   tenantId: string | null;
+  onRefreshRequests?: () => Promise<void>;
 }
 
-export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementProps> = ({ tenantId }) => {
+export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementProps> = ({ tenantId, onRefreshRequests }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [users, setUsers] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBulkApproving, setIsBulkApproving] = useState(false);
   
   // viewMode: 'summary' (全社サマリー) | 'individual' (個人別タイムカード)
   const [viewMode, setViewMode] = useState<'summary' | 'individual'>('summary');
@@ -167,6 +169,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
 
       showToast(`🎉 ${req.type}申請を承認し、出勤簿に反映しました！`);
       await fetchData();
+      if (onRefreshRequests) await onRefreshRequests();
     } catch (err: any) {
       console.error('Error approving request:', err);
       alert('承認処理に失敗しました: ' + err.message);
@@ -186,9 +189,75 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
 
       showToast(`申請を却下しました`);
       await fetchData();
+      if (onRefreshRequests) await onRefreshRequests();
     } catch (err: any) {
       console.error('Error rejecting request:', err);
       alert('却下処理に失敗しました: ' + err.message);
+    }
+  };
+
+  // 全件一括承認
+  const handleBulkApprove = async () => {
+    const pendingList = leaveRequests.filter(r => r.status === '申請中');
+    if (pendingList.length === 0) return;
+    if (!confirm(`未承認の申請 ${pendingList.length} 件を一括承認しますか？`)) return;
+
+    setIsBulkApproving(true);
+    try {
+      for (const req of pendingList) {
+        await supabase
+          .from('leave_requests')
+          .update({ status: '承認' })
+          .eq('id', req.id);
+
+        if (req.type === '打刻修正' && req.start_date) {
+          const reasonText = req.reason || '';
+          const punchTypeMatch = reasonText.match(/【修正区分:\s*([^】]+)】/);
+          const punchTimeMatch = reasonText.match(/【修正時刻:\s*([^】]+)】/);
+          const pType = punchTypeMatch ? punchTypeMatch[1].trim() : '';
+          const pTime = punchTimeMatch ? punchTimeMatch[1].trim() : '';
+          const targetDate = req.start_date;
+
+          if (pType && pTime) {
+            const { data: existRec } = await supabase
+              .from('attendance_records')
+              .select('*')
+              .eq('tenant_id', req.tenant_id || tenantId)
+              .eq('user_id', req.user_id)
+              .eq('date', targetDate)
+              .maybeSingle();
+
+            if (existRec) {
+              const updatePayload: any = {};
+              if (pType === '出勤') updatePayload.check_in_time = pTime;
+              if (pType === '退勤') {
+                updatePayload.check_out_time = pTime;
+                updatePayload.status = '退勤済';
+              }
+              await supabase.from('attendance_records').update(updatePayload).eq('id', existRec.id);
+            } else {
+              const insertPayload: any = {
+                tenant_id: req.tenant_id || tenantId,
+                user_id: req.user_id,
+                date: targetDate,
+                status: pType === '退勤' ? '退勤済' : '勤務中'
+              };
+              if (pType === '出勤') insertPayload.check_in_time = pTime;
+              if (pType === '退勤') insertPayload.check_out_time = pTime;
+              await supabase.from('attendance_records').insert(insertPayload);
+            }
+          }
+        }
+      }
+
+      showToast(`⚡ ${pendingList.length} 件の申請を一括承認しました！`);
+      await fetchData();
+      if (onRefreshRequests) await onRefreshRequests();
+    } catch (e: any) {
+      console.error(e);
+      alert('一括承認中にエラーが発生しました: ' + e.message);
+    } finally {
+      setIsBulkApproving(false);
     }
   };
 
@@ -458,6 +527,16 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     }
   };
 
+  // 全社未承認申請リスト
+  const allPendingRequests = useMemo(() => {
+    return leaveRequests
+      .filter(r => r.status === '申請中')
+      .map(r => ({
+        ...r,
+        user: users.find(u => u.id === r.user_id)
+      }));
+  }, [leaveRequests, users]);
+
   const selectedUser = users.find(u => u.id === selectedUserId);
   const selectedUserSummary = selectedUser ? calculateUserMonthlySummary(selectedUser) : null;
 
@@ -539,6 +618,85 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           </button>
         </div>
       </div>
+
+      {/* 🔔 未承認申請クイック確認＆一括承認バナー */}
+      {allPendingRequests.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-orange-500/10 border-2 border-amber-300 rounded-2xl p-5 shadow-sm space-y-3 print:hidden animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-3 w-3 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+              </span>
+              <h3 className="text-sm font-black text-amber-950 flex items-center gap-1.5">
+                🔔 未承認の申請が <span className="text-base text-amber-700 font-black">{allPendingRequests.length}</span> 件あります
+              </h3>
+              <span className="text-xs text-amber-700/80 font-bold hidden md:inline">
+                （打刻修正・有給休暇など）
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleBulkApprove}
+              disabled={isBulkApproving}
+              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white px-4 py-2 rounded-xl font-black text-xs shadow-md shadow-amber-600/20 transition cursor-pointer disabled:opacity-50"
+            >
+              {isBulkApproving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+              全 {allPendingRequests.length} 件を一括承認する
+            </button>
+          </div>
+
+          {/* 申請カード一覧 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+            {allPendingRequests.map(req => (
+              <div key={req.id} className="bg-white/95 border border-amber-200/80 rounded-xl p-3 shadow-2xs flex flex-col justify-between gap-2">
+                <div>
+                  <div className="flex items-center justify-between gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedUserId(req.user_id);
+                        setViewMode('individual');
+                      }}
+                      className="font-black text-xs text-slate-900 hover:text-blue-600 underline cursor-pointer"
+                      title="このスタッフの出勤簿を開く"
+                    >
+                      {req.user?.name || '従業員'}
+                    </button>
+                    <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black px-1.5 py-0.5 rounded">
+                      {req.type}
+                    </span>
+                  </div>
+                  <div className="text-[11px] font-bold text-slate-500 mt-0.5">
+                    対象日: {req.start_date} {req.end_date && req.end_date !== req.start_date ? `〜 ${req.end_date}` : ''}
+                  </div>
+                  <div className="text-xs text-slate-700 mt-1 line-clamp-2">
+                    {req.reason || '（理由なし）'}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-1.5 pt-1.5 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => handleApproveRequest(req)}
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black rounded-lg shadow-2xs transition cursor-pointer"
+                  >
+                    ✓ 承認
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRejectRequest(req)}
+                    className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold rounded-lg transition cursor-pointer"
+                  >
+                    ✗ 却下
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="bg-white rounded-2xl p-16 flex flex-col items-center justify-center gap-3 border border-slate-200 shadow-sm">
