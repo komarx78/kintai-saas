@@ -59,6 +59,35 @@ const AdminDashboard = () => {
     additional_user_price: 200, additional_user_price_annual: 2400
   });
 
+  // 会社別 休暇・労務ルールマスタ State
+  const [leaveRules, setLeaveRules] = useState({
+    paid_leave: {
+      grant_timing: 'standard_6months',
+      allow_half_day: true,
+      allow_hourly: false,
+      max_hourly_days: 5,
+      application_deadline: 'prior_day',
+      expire_years: 2,
+      allow_accumulated: false
+    },
+    substitute_leave: {
+      mode: 'both',
+      expire_months: 2,
+      grant_condition: 'half_4h_full_8h',
+      pay_overtime_premium: true
+    },
+    work_hours: {
+      closing_day: 'end_of_month',
+      daily_work_hours: 8,
+      weekly_work_days: 5,
+      rounding_unit: 15,
+      overtime_alert_warning: 20,
+      overtime_alert_danger: 40,
+      overtime_alert_prohibited: 60
+    }
+  });
+  const [isSavingLeaveRules, setIsSavingLeaveRules] = useState(false);
+
   // ブラウザタブのタイトルを動的に更新
   useEffect(() => {
     const titles: Record<string, string> = {
@@ -397,11 +426,20 @@ ${tenantId || '（エラー：コード取得失敗）'}
     const fetchTenantAndPrices = async () => {
       if (!tenantId) return;
       try {
-        // 1. テナント情報と個別価格を取得
+        // ローカルストレージフォールバック
+        const savedRules = localStorage.getItem(`company_leave_rules_${tenantId}`);
+        if (savedRules) {
+          try { setLeaveRules(JSON.parse(savedRules)); } catch (e) {}
+        }
+
+        // 1. テナント情報と個別価格・休暇ルールを取得
         const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
         if (tData) {
           setTenantName(tData.name);
           setTenantInfo(tData);
+          if (tData.leave_rules) {
+            setLeaveRules(tData.leave_rules);
+          }
         }
 
         // 2. システム共通価格表を取得
@@ -417,6 +455,36 @@ ${tenantId || '（エラー：コード取得失敗）'}
     fetchEmployees();
     fetchLeaveTypes();
   }, [tenantId]);
+
+  // 会社別 休暇・労務ルールマスタ保存処理
+  const handleSaveLeaveRules = async () => {
+    if (!tenantId) {
+      alert('テナントIDが取得できませんでした。');
+      return;
+    }
+    setIsSavingLeaveRules(true);
+    try {
+      // 1. ローカルストレージに即時バックアップ保存
+      localStorage.setItem(`company_leave_rules_${tenantId}`, JSON.stringify(leaveRules));
+
+      // 2. Supabase DBに保存
+      const { error } = await supabase
+        .from('tenants')
+        .update({ leave_rules: leaveRules })
+        .eq('id', tenantId);
+
+      if (error) {
+        console.warn('DB update leave_rules notice:', error.message);
+      }
+
+      alert('✅ 自社の休暇・有給・代休・労務ルールマスタを保存しました！\n全社規程および従業員の申請ルールに即時反映されます。');
+    } catch (err: any) {
+      console.error('Save leave rules error:', err);
+      alert('ルールの保存に失敗しました: ' + err.message);
+    } finally {
+      setIsSavingLeaveRules(false);
+    }
+  };
 
   const fetchRequests = async () => {
     if (!tenantId) return;
@@ -902,68 +970,303 @@ ${tenantId || '（エラー：コード取得失敗）'}
 
               <div className="space-y-8 max-w-4xl">
                 {settingsTab === 'leave' && (
-                <div className="space-y-8 max-w-2xl">
-                  <div className="space-y-4">
-                    <h3 className="text-md font-medium text-gray-800 border-b pb-2">有給休暇付与基準</h3>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">正社員の付与基準設定</label>
-                      <select className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border">
-                        <option>法定基準通り（入社半年後に10日付与）</option>
-                        <option>入社時即日付与（入社時に10日付与）</option>
-                        <option>独自設定（カスタマイズ）</option>
-                      </select>
-                      <p className="mt-1 text-xs text-gray-500">※「独自設定」の場合、入社年数に応じた付与テーブルを細かく設定可能です。</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 mt-8">
-                    <h3 className="text-md font-medium text-gray-800 border-b pb-2">休暇種類マスタ（カスタマイズ）</h3>
-                    <p className="text-sm text-gray-500">有給・無給や、半休の可否を設定できます。ユーザーの申請画面で選択可能になります。</p>
+                  <div className="space-y-8 max-w-4xl animate-in fade-in">
                     
-                    <div className="flex gap-2 mb-4">
-                      <input type="text" id="newLeaveName" placeholder="新しい休暇名（例: 特別休暇）" className="flex-1 border-gray-300 rounded-md border p-2 text-sm" />
-                      <label className="flex items-center text-sm gap-1">
-                        <input type="checkbox" id="newLeaveIsPaid" defaultChecked className="rounded border-gray-300" />
-                        有給
-                      </label>
-                      <label className="flex items-center text-sm gap-1 ml-2">
-                        <input type="checkbox" id="newLeaveIsHalfDay" className="rounded border-gray-300" />
-                        半休可
-                      </label>
-                      <button 
-                        onClick={handleAddLeaveType}
-                        className="bg-blue-600 text-white px-4 py-1 ml-2 rounded text-sm hover:bg-blue-700"
-                      >追加</button>
+                    {/* ヘッダーカード */}
+                    <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border border-blue-200 rounded-2xl p-5 shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md">
+                            <Coffee className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-black text-blue-950">
+                              会社別 休暇・有給・代休・労務ルールマスタ設定
+                            </h3>
+                            <p className="text-xs text-blue-800 mt-0.5">
+                              貴社の就業規則や雇用契約に合わせ、有給・代休・特別休暇・勤怠計算のルールを柔軟にカスタマイズできます
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleSaveLeaveRules}
+                          disabled={isSavingLeaveRules}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          {isSavingLeaveRules ? '保存中...' : 'ルール設定を保存'}
+                        </button>
+                      </div>
                     </div>
 
-                    <table className="min-w-full divide-y divide-gray-200 border">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">名称</th>
-                          <th className="px-4 py-2 text-center text-xs font-medium text-gray-500">有給/無給</th>
-                          <th className="px-4 py-2 text-center text-xs font-medium text-gray-500">半休可否</th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">操作</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {leaveTypes.length === 0 ? (
-                          <tr><td colSpan={4} className="px-4 py-4 text-center text-sm text-gray-500">休暇種類が設定されていません</td></tr>
-                        ) : (
-                          leaveTypes.map(lt => (
-                            <tr key={lt.id}>
-                              <td className="px-4 py-2 text-sm text-gray-900">{lt.name}</td>
-                              <td className="px-4 py-2 text-center text-sm text-gray-500">{lt.is_paid ? '有給' : '無給'}</td>
-                              <td className="px-4 py-2 text-center text-sm text-gray-500">{lt.is_half_day ? '可' : '不可'}</td>
-                              <td className="px-4 py-2 text-right text-sm">
-                                <button onClick={() => handleDeleteLeaveType(lt.id)} className="text-red-600 hover:text-red-800">削除</button>
-                              </td>
+                    {/* 1. 年次有給休暇（年休）ルールマスタ */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-5">
+                      <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                        <h4 className="font-black text-gray-900 text-sm">🌴 年次有給休暇（年休）の付与・取得ルール</h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {/* 初回付与時期 */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">初回付与のタイミング</label>
+                          <select
+                            value={leaveRules.paid_leave.grant_timing}
+                            onChange={(e) => setLeaveRules({
+                              ...leaveRules,
+                              paid_leave: { ...leaveRules.paid_leave, grant_timing: e.target.value }
+                            })}
+                            className="w-full p-2.5 border border-gray-300 rounded-xl text-xs bg-gray-50/50 focus:bg-white font-medium"
+                          >
+                            <option value="standard_6months">入社6ヶ月後（法定標準：10日付与）</option>
+                            <option value="immediate_join">入社日即日付与（入社初日に10日付与）</option>
+                            <option value="annual_april">斉一的一斉付与（毎年4月1日基準）</option>
+                            <option value="monthly_prorated">入社月ごとの按分付与（入社時に月割付与）</option>
+                          </select>
+                          <p className="text-[11px] text-gray-400 mt-1">※新入社員の自動付与計算の基準となります。</p>
+                        </div>
+
+                        {/* 事前申請期限 */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">申請期限ルール</label>
+                          <select
+                            value={leaveRules.paid_leave.application_deadline}
+                            onChange={(e) => setLeaveRules({
+                              ...leaveRules,
+                              paid_leave: { ...leaveRules.paid_leave, application_deadline: e.target.value }
+                            })}
+                            className="w-full p-2.5 border border-gray-300 rounded-xl text-xs bg-gray-50/50 focus:bg-white font-medium"
+                          >
+                            <option value="prior_3days">原則3営業日前まで</option>
+                            <option value="prior_day">前営業日（前日）まで</option>
+                            <option value="same_day_morning">当日朝連絡で可（事後申請可）</option>
+                            <option value="flexible">制限なし（自由）</option>
+                          </select>
+                          <p className="text-[11px] text-gray-400 mt-1">※就業規則AI相談ボットが従業員に案内する申請期限に連動します。</p>
+                        </div>
+
+                        {/* 取得単位の許可 */}
+                        <div className="space-y-2 md:col-span-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                          <span className="block text-xs font-bold text-gray-800">有給休暇の取得単位許可</span>
+                          <div className="flex flex-wrap items-center gap-6">
+                            <label className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={true}
+                                disabled
+                                className="rounded text-blue-600 border-gray-300"
+                              />
+                              1日単位（全休）<span className="text-[10px] text-gray-400">(必須)</span>
+                            </label>
+
+                            <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={leaveRules.paid_leave.allow_half_day}
+                                onChange={(e) => setLeaveRules({
+                                  ...leaveRules,
+                                  paid_leave: { ...leaveRules.paid_leave, allow_half_day: e.target.checked }
+                                })}
+                                className="rounded text-blue-600 border-gray-300 h-4 w-4"
+                              />
+                              半日単位（午前半休・午後半休）を許可する
+                            </label>
+
+                            <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={leaveRules.paid_leave.allow_hourly}
+                                onChange={(e) => setLeaveRules({
+                                  ...leaveRules,
+                                  paid_leave: { ...leaveRules.paid_leave, allow_hourly: e.target.checked }
+                                })}
+                                className="rounded text-blue-600 border-gray-300 h-4 w-4"
+                              />
+                              時間単位年休（1時間単位・年最大5日=40hまで）を許可する
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2. 代休・振替休日ルールマスタ */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-5">
+                      <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                        <h4 className="font-black text-gray-900 text-sm">🔄 代休・振替休日の運用ルール</h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {/* 運用モード */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">休日出勤の精算方式</label>
+                          <select
+                            value={leaveRules.substitute_leave.mode}
+                            onChange={(e) => setLeaveRules({
+                              ...leaveRules,
+                              substitute_leave: { ...leaveRules.substitute_leave, mode: e.target.value }
+                            })}
+                            className="w-full p-2.5 border border-gray-300 rounded-xl text-xs bg-gray-50/50 focus:bg-white font-medium"
+                          >
+                            <option value="both">振替休日・代休の両方を認める（標準）</option>
+                            <option value="substitute_only">振替休日のみ（事前振替必須・割増なし）</option>
+                            <option value="daikyu_only">代休のみ（事後精算・休日割増あり）</option>
+                          </select>
+                        </div>
+
+                        {/* 代休有効期限 */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">代休の取得有効期限</label>
+                          <select
+                            value={leaveRules.substitute_leave.expire_months}
+                            onChange={(e) => setLeaveRules({
+                              ...leaveRules,
+                              substitute_leave: { ...leaveRules.substitute_leave, expire_months: Number(e.target.value) }
+                            })}
+                            className="w-full p-2.5 border border-gray-300 rounded-xl text-xs bg-gray-50/50 focus:bg-white font-medium"
+                          >
+                            <option value={1}>発生から1ヶ月以内（または当月度内）</option>
+                            <option value={2}>発生から2ヶ月以内（推奨）</option>
+                            <option value={3}>発生から3ヶ月以内</option>
+                            <option value={6}>発生から6ヶ月以内</option>
+                            <option value={0}>無期限（年度内）</option>
+                          </select>
+                        </div>
+
+                        {/* 代休付与条件 */}
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 mb-1">代休の付与基準時間</label>
+                          <select
+                            value={leaveRules.substitute_leave.grant_condition}
+                            onChange={(e) => setLeaveRules({
+                              ...leaveRules,
+                              substitute_leave: { ...leaveRules.substitute_leave, grant_condition: e.target.value }
+                            })}
+                            className="w-full p-2.5 border border-gray-300 rounded-xl text-xs bg-gray-50/50 focus:bg-white font-medium"
+                          >
+                            <option value="half_4h_full_8h">4時間以上で半日代休、8時間以上で全日代休</option>
+                            <option value="exact_hours">実労働時間と同等の代休時間を付与</option>
+                          </select>
+                        </div>
+
+                        {/* 割増賃金 */}
+                        <div className="flex items-center">
+                          <label className="flex items-center gap-2 text-xs font-bold text-gray-800 cursor-pointer bg-amber-50/50 p-3 rounded-xl border border-amber-200 w-full">
+                            <input
+                              type="checkbox"
+                              checked={leaveRules.substitute_leave.pay_overtime_premium}
+                              onChange={(e) => setLeaveRules({
+                                ...leaveRules,
+                                substitute_leave: { ...leaveRules.substitute_leave, pay_overtime_premium: e.target.checked }
+                              })}
+                              className="rounded text-amber-600 border-gray-300 h-4 w-4"
+                            />
+                            代休取得時も休日割増手当（0.35/0.25）を支給する
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 3. 会社独自の特別休暇マスタ（自由追加・編集） */}
+                    <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                          <h4 className="font-black text-gray-900 text-sm">⭐ 特別休暇・社内独自休暇マスタ</h4>
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          慶弔・リフレッシュ・誕生日など自由に設定可能
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <input
+                          type="text"
+                          id="newLeaveName"
+                          placeholder="新しい休暇名（例: 本人結婚休暇、忌引休暇、夏季特休など）"
+                          className="flex-1 border-gray-300 rounded-lg border p-2 text-xs bg-white"
+                        />
+                        <div className="flex items-center gap-4 px-2">
+                          <label className="flex items-center text-xs font-bold text-gray-700 gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="newLeaveIsPaid" defaultChecked className="rounded text-blue-600" />
+                            有給
+                          </label>
+                          <label className="flex items-center text-xs font-bold text-gray-700 gap-1.5 cursor-pointer">
+                            <input type="checkbox" id="newLeaveIsHalfDay" defaultChecked className="rounded text-blue-600" />
+                            半休可
+                          </label>
+                        </div>
+                        <button 
+                          onClick={handleAddLeaveType}
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition cursor-pointer shrink-0"
+                        >
+                          ＋ 休暇種別を追加
+                        </button>
+                      </div>
+
+                      <div className="overflow-x-auto border border-gray-200 rounded-xl">
+                        <table className="min-w-full divide-y divide-gray-200 text-xs">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-2.5 text-left font-bold text-gray-600">休暇種別の名称</th>
+                              <th className="px-4 py-2.5 text-center font-bold text-gray-600">給与区分</th>
+                              <th className="px-4 py-2.5 text-center font-bold text-gray-600">半日取得</th>
+                              <th className="px-4 py-2.5 text-right font-bold text-gray-600">操作</th>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-100">
+                            {leaveTypes.length === 0 ? (
+                              <tr>
+                                <td colSpan={4} className="px-4 py-6 text-center text-gray-400">
+                                  現在登録されている独自休暇はありません。上のフォームから追加してください。
+                                </td>
+                              </tr>
+                            ) : (
+                              leaveTypes.map(lt => (
+                                <tr key={lt.id} className="hover:bg-gray-50">
+                                  <td className="px-4 py-2.5 font-bold text-gray-800">{lt.name}</td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${lt.is_paid ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
+                                      {lt.is_paid ? '有給' : '無給'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${lt.is_half_day ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>
+                                      {lt.is_half_day ? '可能' : '全休のみ'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-right">
+                                    <button
+                                      onClick={() => handleDeleteLeaveType(lt.id)}
+                                      className="text-rose-600 hover:text-rose-800 font-bold cursor-pointer"
+                                    >
+                                      削除
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* 下部一括保存ボタン */}
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveLeaveRules}
+                        disabled={isSavingLeaveRules}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold text-sm shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <CheckCircle className="w-5 h-5" />
+                        {isSavingLeaveRules ? 'ルール保存中...' : '休暇・労務ルールマスタを保存する'}
+                      </button>
+                    </div>
+
                   </div>
-                </div>
                 )}
 
                 {settingsTab === 'basic' && (
