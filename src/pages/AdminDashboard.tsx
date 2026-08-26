@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock, Bot, BookOpen, Sparkles, Printer, ShieldCheck } from 'lucide-react';
+import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock, Bot, BookOpen, Sparkles, Printer, ShieldCheck, DollarSign } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { PaidLeaveManagement } from '../components/PaidLeaveManagement';
 import { MonthlyAttendanceManagement } from '../components/MonthlyAttendanceManagement';
+import { PayslipManagement } from '../components/PayslipManagement';
 import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 
 // 2026年の日本の祝日（簡易モック用リスト）
@@ -581,6 +582,13 @@ ${tenantId || '（エラー：コード取得失敗）'}
             有給・休暇管理システム
           </button>
           <button 
+            onClick={() => setActiveTab('payslips')}
+            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'payslips' ? 'bg-emerald-700 font-bold text-white shadow-sm' : 'hover:bg-blue-800 text-emerald-200'}`}
+          >
+            <DollarSign className="mr-3 h-5 w-5 text-emerald-400" />
+            Web給与明細管理
+          </button>
+          <button 
             onClick={() => setActiveTab('settings')}
             className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'settings' ? 'bg-blue-800' : 'hover:bg-blue-800'}`}
           >
@@ -718,6 +726,10 @@ ${tenantId || '（エラー：コード取得失敗）'}
 
           {activeTab === 'attendance' && (
             <MonthlyAttendanceManagement tenantId={tenantId} onRefreshRequests={fetchRequests} />
+          )}
+
+          {activeTab === 'payslips' && (
+            <PayslipManagement tenantId={tenantId} />
           )}
 
           {activeTab === 'settings' && (

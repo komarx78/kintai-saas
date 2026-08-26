@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Clock, Calendar, LogOut, FileText, CheckCircle, UserCheck, XCircle, ChevronLeft, ChevronRight, Settings, Bot } from 'lucide-react';
+import { Clock, Calendar, LogOut, FileText, CheckCircle, UserCheck, XCircle, ChevronLeft, ChevronRight, Settings, Bot, DollarSign } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { RulesAiAssistant } from '../components/RulesAiAssistant';
+import { UserPayslipView } from '../components/UserPayslipView';
 
 const UserDashboard = () => {
   const navigate = useNavigate();
@@ -399,6 +400,13 @@ const UserDashboard = () => {
             <Calendar className="mr-3 h-5 w-5 text-blue-400" />
             月次勤怠・有給照会
           </button>
+          <button 
+            onClick={() => setActiveTab('payslips')}
+            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'payslips' ? 'bg-emerald-700 font-bold text-white shadow-sm' : 'hover:bg-slate-700 text-emerald-300'}`}
+          >
+            <DollarSign className="mr-3 h-5 w-5 text-emerald-400" />
+            Web給与明細
+          </button>
 
           <button 
             onClick={() => setActiveTab('requests')}
@@ -620,6 +628,13 @@ const UserDashboard = () => {
                   >
                     <FileText className="w-4 h-4" />
                     <span>打刻修正・有給申請を行う</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('payslips')}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg transition-all flex items-center justify-center space-x-2 text-xs whitespace-nowrap cursor-pointer shadow-md"
+                  >
+                    <DollarSign className="w-4 h-4 text-emerald-200" />
+                    <span>最新の給与明細書を見る</span>
                   </button>
                   <button 
                     onClick={() => setActiveTab('rules_ai')}
@@ -1093,6 +1108,10 @@ const UserDashboard = () => {
 
           {activeTab === 'rules_ai' && (
             <RulesAiAssistant tenantId={user?.tenant_id} userName={user?.name} />
+          )}
+
+          {activeTab === 'payslips' && user && (
+            <UserPayslipView userId={user.id} userName={user.name} tenantId={user.tenant_id} />
           )}
 
         </div>
