@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Users, FileText, Settings, LogOut, CheckCircle, XCircle, Plus, X, Download, Clock, AlertCircle,  } from 'lucide-react';
+import { Users, FileText, Settings, LogOut, CheckCircle, XCircle, Plus, X, Clock, AlertCircle, Coffee } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { PaidLeaveManagement } from '../components/PaidLeaveManagement';
 
 // 2026年の日本の祝日（簡易モック用リスト）
 const NATIONAL_HOLIDAYS_2026 = [
@@ -37,10 +38,6 @@ const AdminDashboard = () => {
     };
     fetchProfile();
   }, []);
-
-  // Leave Detail Modal States
-  const [isLeaveDetailModalOpen, setIsLeaveDetailModalOpen] = useState(false);
-  const [selectedLeaveEmployee, setSelectedLeaveEmployee] = useState<any>(null);
 
   // Missed Punch Detail Modal States
   const [isMissedPunchModalOpen, setIsMissedPunchModalOpen] = useState(false);
@@ -99,28 +96,6 @@ ${tenantId || '（エラー：コード取得失敗）'}
     if (time) {
       alert(`打刻時間を「${time}」に修正しました。`);
       setIsMissedPunchModalOpen(false);
-    }
-  };
-
-  // 有給付与基準の計算（法定基準モックアップ）
-  const calculateLegalGrantDays = (joinDateStr: string, type: string, weeklyDays?: number) => {
-    const joinYear = parseInt(joinDateStr.split('-')[0]);
-    const yearsOfService = 2026 - joinYear;
-    
-    if (type === 'パート') {
-      const wDays = weeklyDays || 3;
-      // パートのダミー比例付与
-      if (yearsOfService <= 0) return wDays * 2;
-      return (wDays * 2) + Math.min(yearsOfService, 4); 
-    } else {
-      // 正社員の法定付与テーブル
-      if (yearsOfService <= 0) return 10;
-      if (yearsOfService === 1) return 11;
-      if (yearsOfService === 2) return 12;
-      if (yearsOfService === 3) return 14;
-      if (yearsOfService === 4) return 16;
-      if (yearsOfService === 5) return 18;
-      return 20; // 6年半以上
     }
   };
 
@@ -599,47 +574,6 @@ ${tenantId || '（エラー：コード取得失敗）'}
     alert('設定したルールに基づいて、カレンダーの休日を自動設定しました！');
   };
 
-  const handleDownloadCSV = () => {
-    const headers = ['氏名', '雇用形態', '基準日(付与日)', '付与日数', '取得日数', '取得義務残日数', '代休残日数', '有給取得日一覧'];
-    const rows = employees.map(emp => {
-      const grantedDays = calculateLegalGrantDays(emp.join_date, emp.type, emp.weeklyDays);
-      const takenDatesFormatted = emp.takenDates.map((d: string) => {
-        const [, m, d2] = d.split('-');
-        return `${parseInt(m)}月${parseInt(d2)}日`;
-      });
-      const takenDays = emp.takenDates.length;
-      const hasObligation = grantedDays >= 10;
-      const remainingObligation = hasObligation ? Math.max(0, 5 - takenDays) : 0;
-      const obligationStr = hasObligation ? (remainingObligation === 0 ? '完了(0日)' : `残り${remainingObligation}日`) : '対象外';
-      const daikyuBalance = (emp.daikyuEarned?.length || 0) - (emp.daikyuTaken?.length || 0);
-      
-      return [
-        emp.name, 
-        emp.type, 
-        emp.join_date, 
-        `${grantedDays}日`, 
-        `${takenDays}日`, 
-        obligationStr, 
-        `${daikyuBalance}日`,
-        takenDatesFormatted.join('、') || 'なし'
-      ];
-    });
-
-    const csvContent = "\uFEFF" + [headers, ...rows].map(e => e.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', '有給休暇管理簿_2026年度.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleDownloadPDF = () => {
-    alert('【モックアップ版】\n実際のシステムでは、このボタンを押すと労働基準監督署のフォーマットに準拠したPDFファイル（有給休暇管理簿）が自動生成されてダウンロードされます。\n\n※バックエンド（データベース）構築後に実装されます。');
-  };
-
   const toggleHoliday = (m: number, d: number) => {
     const key = `2026-${m}-${d}`;
     const newSet = new Set(holidays);
@@ -710,10 +644,10 @@ ${tenantId || '（エラー：コード取得失敗）'}
           </button>
           <button 
             onClick={() => setActiveTab('ledger')}
-            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'ledger' ? 'bg-blue-800' : 'hover:bg-blue-800'}`}
+            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'ledger' ? 'bg-amber-600 font-bold' : 'hover:bg-blue-800'}`}
           >
-            <Download className="mr-3 h-5 w-5" />
-            有給休暇管理簿
+            <Coffee className="mr-3 h-5 w-5 text-amber-400" />
+            有給・休暇管理システム
           </button>
             <button 
               onClick={() => setActiveTab('attendance')}
@@ -889,105 +823,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
           )}
 
           {activeTab === 'ledger' && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                  <h2 className="text-lg font-medium">年次有給休暇管理簿</h2>
-                  <p className="text-sm text-gray-500 mt-1">※労働基準法で義務付けられているフォーマットでの出力・管理画面です。</p>
-                </div>
-                <div className="flex space-x-2">
-                  <button onClick={handleDownloadCSV} className="flex items-center bg-gray-100 text-gray-700 border border-gray-300 px-3 py-2 rounded text-sm hover:bg-gray-200 transition">
-                    <Download className="h-4 w-4 mr-2" />
-                    CSVで出力
-                  </button>
-                  <button onClick={handleDownloadPDF} className="flex items-center bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition">
-                    <Download className="h-4 w-4 mr-2" />
-                    PDFで出力
-                  </button>
-                </div>
-              </div>
-              <div className="p-4 overflow-x-auto">
-                <div className="flex items-center space-x-4 mb-4">
-                  <select className="border border-gray-300 rounded-md shadow-sm py-1 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                    <option>2026年度（2026/04〜2027/03）</option>
-                    <option>2025年度（2025/04〜2026/03）</option>
-                  </select>
-                  <input type="text" placeholder="氏名で絞り込み..." className="border border-gray-300 rounded-md shadow-sm py-1 px-3 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
-                </div>
-                <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r">氏名</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r">雇用形態</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r">基準日<br/>(付与日)</th>
-                      <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r">付与日数</th>
-                      <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-r">取得日数</th>
-                      <th className="px-3 py-3 text-center text-xs font-bold text-red-600 uppercase tracking-wider border-r bg-red-50">取得義務<br/>残日数</th>
-                      <th className="px-3 py-3 text-center text-xs font-medium text-green-700 uppercase tracking-wider border-r bg-green-50">代休<br/>残日数</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">取得日一覧</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {employees.map(emp => {
-                      // ダミーの有給計算ロジック（実際は勤続年数や出勤実績から厳密に算出）
-                      const grantedDays = calculateLegalGrantDays(emp.join_date, emp.type, emp.weeklyDays);
-
-                      // ダミーの取得実績
-                      const takenDatesFormatted = emp.takenDates.map((d: string) => {
-                        const [, m, d2] = d.split('-');
-                        return `${parseInt(m)}月${parseInt(d2)}日`;
-                      });
-                      const takenDays = emp.takenDates.length;
-                      
-                      // 法定取得義務（年10日以上付与された人のみ5日間の義務）
-                      const hasObligation = grantedDays >= 10;
-                      const remainingObligation = hasObligation ? Math.max(0, 5 - takenDays) : 0;
-
-                      return (
-                        <tr key={emp.id} className="hover:bg-gray-50">
-                          <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900 border-r">
-                            <div className="flex items-center justify-between">
-                              {emp.name}
-                              <button 
-                                onClick={() => {
-                                  setSelectedLeaveEmployee(emp);
-                                  setIsLeaveDetailModalOpen(true);
-                                }}
-                                className="text-xs bg-white border border-blue-300 text-blue-600 px-2 py-1 rounded hover:bg-blue-50 transition"
-                              >
-                                詳細
-                              </button>
-                            </div>
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 border-r">
-                            {emp.type}
-                            {emp.type === 'パート' && <span className="text-xs ml-1 text-gray-400"><br/>(週{emp.weeklyDays}日)</span>}
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500 border-r">{emp.join_date}</td>
-                          <td className="px-3 py-3 whitespace-nowrap text-sm text-center text-gray-500 border-r">{grantedDays}日</td>
-                          <td className="px-3 py-3 whitespace-nowrap text-sm text-center font-bold text-blue-600 border-r">{takenDays}日</td>
-                          <td className={`px-3 py-3 whitespace-nowrap text-sm text-center font-bold border-r ${hasObligation ? (remainingObligation === 0 ? 'text-gray-400 bg-gray-50' : 'text-red-600 bg-red-50') : 'text-gray-400'}`}>
-                            {hasObligation ? (remainingObligation === 0 ? '完了(0日)' : `残り${remainingObligation}日`) : '対象外'}
-                          </td>
-                          <td className="px-3 py-3 whitespace-nowrap text-sm text-center font-bold text-green-700 border-r bg-green-50">
-                            {(emp.daikyuEarned?.length || 0) - (emp.daikyuTaken?.length || 0)}日
-                          </td>
-                          <td className="px-3 py-3 text-sm text-gray-500">
-                            {takenDatesFormatted.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {takenDatesFormatted.map((d: string) => (
-                                  <span key={d} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs border border-blue-200">{d}</span>
-                                ))}
-                              </div>
-                            ) : '-'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <PaidLeaveManagement tenantId={tenantId} onRefreshEmployees={fetchEmployees} />
           )}
 
           {activeTab === 'attendance' && (
@@ -1650,158 +1486,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
         </div>
       )}
 
-      {/* Leave Detail Modal */}
-      {isLeaveDetailModalOpen && selectedLeaveEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50">
-          <div className="bg-white rounded-lg text-left overflow-hidden shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
-            <div className="bg-blue-900 px-4 py-3 flex justify-between items-center text-white">
-              <h3 className="text-lg font-medium">
-                {selectedLeaveEmployee.name} さんの有給休暇詳細
-              </h3>
-              <button onClick={() => setIsLeaveDetailModalOpen(false)} className="text-white hover:text-gray-200">
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto bg-gray-50">
-              
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                  <p className="text-xs text-gray-500 font-medium mb-1">現在の有給残日数</p>
-                  <p className="text-3xl font-bold text-gray-800">
-                    {selectedLeaveEmployee.paidLeaveBalance + selectedLeaveEmployee.paidLeaveCarryover}<span className="text-sm font-normal text-gray-500 ml-1">日</span>
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">（今年分: {selectedLeaveEmployee.paidLeaveBalance}日 / 繰越分: {selectedLeaveEmployee.paidLeaveCarryover}日）</p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-green-200">
-                  <p className="text-xs text-green-700 font-medium mb-1">現在の代休残日数</p>
-                  <p className="text-3xl font-bold text-green-700">
-                    {(selectedLeaveEmployee.daikyuEarned?.length || 0) - (selectedLeaveEmployee.daikyuTaken?.length || 0)}<span className="text-sm font-normal text-green-600 ml-1">日</span>
-                  </p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                  <p className="text-xs text-gray-500 font-medium mb-1">次回付与予定日</p>
-                  <p className="text-xl font-bold text-blue-600 mt-2">2027年4月1日</p>
-                </div>
-                <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                  <p className="text-xs text-gray-500 font-medium mb-1">次回付与予定日数</p>
-                  <p className="text-xl font-bold text-gray-800 mt-2">
-                    {calculateLegalGrantDays(selectedLeaveEmployee.join_date, selectedLeaveEmployee.type, selectedLeaveEmployee.weeklyDays)}日
-                    {selectedLeaveEmployee.type === 'パート' && <span className="text-xs text-gray-400 block mt-1">※直近の出勤実績により変動します</span>}
-                  </p>
-                </div>
-              </div>
 
-              {/* Timeline */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-                  <h4 className="font-medium text-gray-800">有給休暇 取得・付与履歴</h4>
-                </div>
-                <div className="p-4">
-                  <div className="relative border-l-2 border-gray-200 ml-3 space-y-6 pb-4">
-                    {/* 動的な取得履歴 */}
-                    {selectedLeaveEmployee.takenDates.map((dateStr: string) => {
-                      const [y, m, d] = dateStr.split('-');
-                      return (
-                        <div className="relative pl-6" key={dateStr}>
-                          <div className="absolute w-3 h-3 bg-red-400 rounded-full -left-[7px] top-1.5 border-2 border-white"></div>
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-bold text-gray-800">{y}年{parseInt(m)}月{parseInt(d)}日</p>
-                              <p className="text-sm text-gray-600 mt-1">
-                                <span className="inline-block bg-red-100 text-red-800 text-xs px-2 py-0.5 rounded mr-2 font-medium">取得</span>
-                                有給休暇
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm text-red-600 font-bold">-1 日</p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* 動的な取得履歴 (代休取得) */}
-                    {selectedLeaveEmployee.daikyuTaken?.map((d: any) => {
-                      const [y, m, day] = d.date.split('-');
-                      return (
-                        <div className="relative pl-6" key={d.date + '-taken'}>
-                          <div className="absolute w-3 h-3 bg-green-400 rounded-full -left-[7px] top-1.5 border-2 border-white"></div>
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-bold text-gray-800">{y}年{parseInt(m)}月{parseInt(day)}日</p>
-                              <p className="text-sm text-gray-600 mt-1">
-                                <span className="inline-block bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded mr-2 font-medium">取得</span>
-                                代休
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm text-green-600 font-bold">-1 日</p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* 動的な付与履歴 (代休発生) */}
-                    {selectedLeaveEmployee.daikyuEarned?.map((d: any) => {
-                      const [y, m, day] = d.date.split('-');
-                      return (
-                        <div className="relative pl-6" key={d.date + '-earned'}>
-                          <div className="absolute w-3 h-3 bg-orange-400 rounded-full -left-[7px] top-1.5 border-2 border-white"></div>
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-bold text-gray-800">{y}年{parseInt(m)}月{parseInt(day)}日</p>
-                              <p className="text-sm text-gray-600 mt-1">
-                                <span className="inline-block bg-orange-100 text-orange-800 text-xs px-2 py-0.5 rounded mr-2 font-medium">発生</span>
-                                {d.reason}（代休）
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm text-orange-600 font-bold">+1 日</p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {/* Actual Data Periodic Grant */}
-                    {selectedLeaveEmployee.leaveGrants && selectedLeaveEmployee.leaveGrants.length > 0 ? (
-                      selectedLeaveEmployee.leaveGrants.map((grant: any) => {
-                        const [y, m, d] = grant.grant_date.split('-');
-                        return (
-                          <div className="relative pl-6" key={grant.id}>
-                            <div className="absolute w-3 h-3 bg-blue-500 rounded-full -left-[7px] top-1.5 border-2 border-white"></div>
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <p className="text-sm font-bold text-gray-800">{y}年{parseInt(m)}月{parseInt(d)}日</p>
-                                <p className="text-sm text-gray-600 mt-1">
-                                  <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded mr-2 font-medium">定期付与</span>
-                                  {grant.note || '法定付与'}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm text-blue-600 font-bold">+{grant.granted_days} 日</p>
-                                <p className="text-xs text-gray-500">有効期限: {grant.expiration_date}</p>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-center py-4 text-sm text-gray-500">
-                        自動付与の履歴はまだありません。入社半年後に自動で付与されます。
-                      </div>
-                    )}
-
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Missed Punch Detail Modal */}
       {isMissedPunchModalOpen && selectedMissedPunchRow && (
