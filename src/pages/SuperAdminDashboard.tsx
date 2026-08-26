@@ -47,7 +47,7 @@ export default function SuperAdminDashboard() {
     if (localKey) setGeminiApiKey(localKey);
 
     try {
-      const { data } = await supabase.from('system_settings').select('*').limit(1).maybeSingle();
+      const { data, error } = await supabase.from('system_settings').select('*').limit(1).maybeSingle();
       if (data) {
         setSettingsId(data.id);
         if (data.gemini_api_key) setGeminiApiKey(data.gemini_api_key);
@@ -66,27 +66,47 @@ export default function SuperAdminDashboard() {
           additional_user_price_annual: data.additional_user_price_annual || 5000,
           default_trial_days: data.default_trial_days || 30
         });
+      } else if (error) {
+        console.warn('System settings not ready in DB yet (using defaults):', error.message);
       }
     } catch (e) {
-      console.warn('Fetch system settings note:', e);
+      console.warn('Fetch system settings exception:', e);
     }
   };
 
   const fetchTenants = async () => {
-    const { data, error } = await supabase.from('tenants').select('*').order('created_at', { ascending: false });
-    if (data) {
-      setTenants(data);
-    } else if (error) {
-      console.error('Failed to fetch tenants:', error);
+    try {
+      // まず created_at 順で試行
+      let { data, error } = await supabase.from('tenants').select('*').order('created_at', { ascending: false });
+      
+      // created_at が無い場合はソートなしで再試行
+      if (error) {
+        console.warn('Retrying tenants fetch without created_at sort:', error.message);
+        const retry = await supabase.from('tenants').select('*');
+        data = retry.data;
+        error = retry.error;
+      }
+
+      if (data) {
+        setTenants(data);
+      } else if (error) {
+        console.warn('Failed to fetch tenants:', error.message);
+      }
+    } catch (e) {
+      console.warn('Fetch tenants exception:', e);
     }
   };
 
   const fetchStaff = async () => {
-    const { data, error } = await supabase.from('users').select('*').eq('role', 'superadmin');
-    if (data) {
-      setStaffList(data);
-    } else if (error) {
-      console.error('Failed to fetch staff:', error);
+    try {
+      const { data, error } = await supabase.from('users').select('*').eq('role', 'superadmin');
+      if (data) {
+        setStaffList(data);
+      } else if (error) {
+        console.warn('Failed to fetch staff list:', error.message);
+      }
+    } catch (e) {
+      console.warn('Fetch staff exception:', e);
     }
   };
 
