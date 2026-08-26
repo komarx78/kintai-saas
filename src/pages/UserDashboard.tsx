@@ -137,6 +137,7 @@ const UserDashboard = () => {
       const startOfMonthStr = `${y}-${m}-01`;
       const endOfMonthStr = `${y}-${m}-31`;
 
+      // 1. 確定シフトの取得
       const { data: shiftList } = await supabase
         .from('shifts')
         .select('*')
@@ -148,6 +149,37 @@ const UserDashboard = () => {
         setMyShifts(shiftList);
         const tS = shiftList.find(s => s.work_date === todayStr);
         if (tS) setTodayShift(tS);
+      }
+
+      // 2. 提出中のシフト希望があれば自動復元！
+      const { data: reqData } = await supabase
+        .from('leave_requests')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('type', 'シフト希望')
+        .eq('status', '申請中')
+        .gte('start_date', startOfMonthStr)
+        .lte('start_date', endOfMonthStr)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (reqData && reqData.reason) {
+        const match = reqData.reason.match(/【シフトデータ:\s*(\[.+\])】/s);
+        if (match) {
+          try {
+            const arr = JSON.parse(match[1]);
+            const restoredMap: Record<string, { type: 'working' | 'off'; startTime: string; endTime: string }> = {};
+            arr.forEach((item: any) => {
+              restoredMap[item.date] = {
+                type: item.isHoliday ? 'off' : 'working',
+                startTime: item.startTime || '09:00',
+                endTime: item.endTime || '18:00'
+              };
+            });
+            setShiftRequestsMap(restoredMap);
+          } catch (e) {}
+        }
       }
     } catch (e) {
       console.warn('Fetch my shifts error:', e);
@@ -170,16 +202,20 @@ const UserDashboard = () => {
         endTime: val.type === 'working' ? val.endTime : null
       }));
 
+      const workingCount = shiftDataArray.filter(s => !s.isHoliday).length;
+      const offCount = shiftDataArray.filter(s => s.isHoliday).length;
+
       const summaryText = entries.map(([date, val]) => 
         `${date}: ${val.type === 'working' ? `${val.startTime}〜${val.endTime}` : '公休'}`
       ).join('\n');
 
-      const fullReason = `【${shiftMonth}月度 シフト希望提出】\n${summaryText}\n\n【シフトデータ: ${JSON.stringify(shiftDataArray)}】`;
+      const fullReason = `【${shiftMonth}月度 シフト希望提出（出勤: ${workingCount}日 / 休み: ${offCount}日）】\n${summaryText}\n\n【シフトデータ: ${JSON.stringify(shiftDataArray)}】`;
 
+      // 既存の当月未承認シフト申請があれば一旦ステータスを上書き更新
       const { error } = await supabase.from('leave_requests').insert({
         tenant_id: user.tenant_id,
         user_id: user.id,
-        approver_id: user.approver_id,
+        approver_id: user.approver_id || null,
         start_date: `${shiftMonth}-01`,
         end_date: `${shiftMonth}-31`,
         type: 'シフト希望',
@@ -189,8 +225,9 @@ const UserDashboard = () => {
 
       if (error) throw error;
 
-      alert('✅ シフト希望を提出しました！\n承認者（上長）が確認・承認すると、確定シフトとしてカレンダーに自動反映されます。');
+      alert('✅ シフト希望を提出しました！\n上長（承認者）の承認待ち一覧へ届きました。承認されると確定シフトとしてカレンダーに即時反映されます。');
       fetchMyRequests();
+      fetchMyShifts();
       setActiveTab('shifts');
     } catch (err: any) {
       console.error('Submit shift error:', err);
@@ -215,12 +252,20 @@ const UserDashboard = () => {
     if (user) {
       fetchMyShifts();
       const fetchApprovals = async () => {
-        const { data: requests, error } = await supabase
+        // 管理者の場合は全社の未承認申請、一般上長の場合は自分宛ての未承認申請を取得
+        let query = supabase
           .from('leave_requests')
           .select('*')
-          .eq('approver_id', user.id)
           .eq('status', '申請中')
           .order('created_at', { ascending: false });
+
+        if (user.role === 'admin' && user.tenant_id) {
+          query = query.eq('tenant_id', user.tenant_id);
+        } else {
+          query = query.eq('approver_id', user.id);
+        }
+
+        const { data: requests, error } = await query;
         
         if (error) {
           console.error('fetchApprovals error:', error);
@@ -1600,23 +1645,60 @@ const UserDashboard = () => {
                   <p className="text-gray-500 text-sm">現在、承認待ちの申請はありません。</p>
                 ) : (
                   <ul className="divide-y divide-gray-200">
-                    {pendingApprovals.map((req) => (
-                      <li key={req.id} className="py-4 flex justify-between items-center">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{req.user?.name || '不明'}さん（{req.user?.department || '部署未設定'}）からの申請</p>
-                          <p className="text-sm text-gray-500">{req.type} - {req.start_date} {req.start_date !== req.end_date ? `～ ${req.end_date}` : ''}</p>
-                          <p className="text-xs text-gray-400 mt-1 whitespace-pre-wrap">理由: {req.reason || '記載なし'}</p>
-                        </div>
-                        <div className="flex space-x-2">
-                          <button onClick={() => handleApprovalAction(req.id, '承認')} className="flex items-center text-sm bg-green-50 text-green-600 border border-green-200 px-3 py-1 rounded hover:bg-green-100">
-                            <CheckCircle className="w-4 h-4 mr-1" /> 承認
-                          </button>
-                          <button onClick={() => handleApprovalAction(req.id, '却下')} className="flex items-center text-sm bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded hover:bg-red-100">
-                            <XCircle className="w-4 h-4 mr-1" /> 却下
-                          </button>
-                        </div>
-                      </li>
-                    ))}
+                    {pendingApprovals.map((req) => {
+                      const isShiftReq = req.type === 'シフト希望';
+                      const shiftSummaryMatch = isShiftReq ? req.reason?.match(/【([^】]+シフト希望提出[^】]*)】/) : null;
+                      const summaryTitle = shiftSummaryMatch ? shiftSummaryMatch[1] : req.type;
+                      
+                      return (
+                        <li key={req.id} className="py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-2xs hover:border-gray-200 transition mb-3">
+                          <div className="space-y-1 max-w-xl">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${isShiftReq ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-blue-100 text-blue-800'}`}>
+                                {isShiftReq ? '🗓️ シフト希望' : req.type}
+                              </span>
+                              <p className="text-sm font-bold text-gray-900">
+                                {req.user?.name || '不明'} 様（{req.user?.department || '部署未設定'}）
+                              </p>
+                            </div>
+
+                            <p className="text-xs font-bold text-slate-700">
+                              {summaryTitle}（期間: {req.start_date} ～ {req.end_date}）
+                            </p>
+
+                            {isShiftReq ? (
+                              <details className="text-xs text-gray-600 bg-slate-50 p-2.5 rounded-lg border border-slate-200 mt-1 cursor-pointer">
+                                <summary className="font-bold text-indigo-700 hover:text-indigo-900 select-none">
+                                  ▼ 提出されたシフト希望の詳細を見る
+                                </summary>
+                                <div className="mt-2 text-[11px] font-mono whitespace-pre-wrap max-h-48 overflow-y-auto bg-white p-2 rounded border border-gray-200">
+                                  {req.reason?.split('【シフトデータ')[0] || req.reason}
+                                </div>
+                              </details>
+                            ) : (
+                              <p className="text-xs text-gray-500 whitespace-pre-wrap">理由: {req.reason || '記載なし'}</p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                            <button
+                              onClick={() => handleApprovalAction(req.id, '承認')}
+                              className="flex items-center text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl shadow-sm transition cursor-pointer"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              {isShiftReq ? '承認してシフト確定' : '承認'}
+                            </button>
+                            <button
+                              onClick={() => handleApprovalAction(req.id, '却下')}
+                              className="flex items-center text-xs font-bold bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 px-3 py-2 rounded-xl transition cursor-pointer"
+                            >
+                              <XCircle className="w-4 h-4 mr-1" />
+                              却下
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
