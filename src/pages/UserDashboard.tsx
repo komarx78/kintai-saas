@@ -115,6 +115,19 @@ const UserDashboard = () => {
   const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
 
+  const [myRecentRequests, setMyRecentRequests] = useState<any[]>([]);
+
+  const fetchMyRequests = async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('leave_requests')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(6);
+    if (data) setMyRecentRequests(data);
+  };
+
   useEffect(() => {
     if (user) {
       const fetchApprovals = async () => {
@@ -131,7 +144,6 @@ const UserDashboard = () => {
         }
 
         if (requests && requests.length > 0) {
-          // 手動で applicant（申請者）の情報を取得して結合する（外部キーの曖昧さ回避のため）
           const userIds = [...new Set(requests.map(r => r.user_id))];
           const { data: usersData } = await supabase.from('users').select('id, name, department').in('id', userIds);
           
@@ -162,6 +174,7 @@ const UserDashboard = () => {
           }
         };
         fetchLeaveTypes();
+        fetchMyRequests();
       }
     }
   }, [user, activeTab]);
@@ -835,128 +848,197 @@ const UserDashboard = () => {
           )}
 
           {activeTab === 'requests' && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-medium text-gray-800 mb-6 border-b pb-2">各種申請フォーム</h2>
-              <form className="space-y-6 max-w-lg" onSubmit={handleApply}>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">申請種類</label>
-                  <select 
-                    value={leaveType}
-                    onChange={(e) => setLeaveType(e.target.value)}
-                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
-                  >
-                    {leaveTypes.map(lt => (
-                      <option key={lt.id} value={lt.name}>{lt.name}</option>
-                    ))}
-                    {leaveTypes.length === 0 && (
-                      <>
-                        <option>有給休暇（全休）</option>
-                        <option>有給休暇（午前半休）</option>
-                        <option>有給休暇（午後半休）</option>
-                        <option>代休（全休）</option>
-                        <option>代休（午前半休）</option>
-                        <option>代休（午後半休）</option>
-                        <option>特別休暇（慶弔など）</option>
-                      </>
-                    )}
-                    <option>打刻修正</option>
-                  </select>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Form (2 cols) */}
+              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center space-x-2 border-b pb-4 mb-6">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  <h2 className="text-lg font-bold text-gray-800">各種申請フォーム</h2>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <form className="space-y-6" onSubmit={handleApply}>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">{leaveType === '打刻修正' ? '対象日' : '開始日'}</label>
-                    <input 
-                      type="date" 
-                      required 
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="mt-1 block w-full pl-3 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
-                    />
+                    <label className="block text-sm font-bold text-gray-700 mb-1">申請種類</label>
+                    <select 
+                      value={leaveType}
+                      onChange={(e) => setLeaveType(e.target.value)}
+                      className="block w-full pl-3 pr-10 py-2.5 text-base border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg border bg-white"
+                    >
+                      {leaveTypes.map(lt => (
+                        <option key={lt.id} value={lt.name}>{lt.name}</option>
+                      ))}
+                      {leaveTypes.length === 0 && (
+                        <>
+                          <option>有給休暇（全休）</option>
+                          <option>有給休暇（午前半休）</option>
+                          <option>有給休暇（午後半休）</option>
+                          <option>代休（全休）</option>
+                          <option>代休（午前半休）</option>
+                          <option>代休（午後半休）</option>
+                          <option>特別休暇（慶弔など）</option>
+                        </>
+                      )}
+                      <option>打刻修正</option>
+                    </select>
                   </div>
-                  {leaveType === '打刻修正' ? (
-                    <div className="flex space-x-2">
-                      <div className="w-1/3">
-                        <label className="block text-sm font-medium text-gray-700">区分</label>
-                        <select 
-                          value={punchType}
-                          onChange={(e) => setPunchType(e.target.value)}
-                          className="mt-1 block w-full pl-3 pr-8 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        >
-                          <option>出勤</option>
-                          <option>退勤</option>
-                        </select>
-                      </div>
-                      <div className="w-2/3">
-                        <label className="block text-sm font-medium text-gray-700">正しい打刻時間</label>
-                        <input 
-                          type="time" 
-                          required 
-                          value={punchTime}
-                          onChange={(e) => setPunchTime(e.target.value)}
-                          className="mt-1 block w-full pl-3 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
-                        />
-                      </div>
-                    </div>
-                  ) : (
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">終了日</label>
+                      <label className="block text-sm font-bold text-gray-700 mb-1">{leaveType === '打刻修正' ? '対象日' : '開始日'}</label>
                       <input 
                         type="date" 
                         required 
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        className="mt-1 block w-full pl-3 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
                       />
                     </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">事由・備考</label>
-                  <textarea 
-                    rows={3} 
-                    required 
-                    value={leaveReason}
-                    onChange={(e) => setLeaveReason(e.target.value)}
-                    className="mt-1 block w-full pl-3 pr-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
-                    placeholder="理由を入力してください"
-                  ></textarea>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">添付ファイル（遅延証明書など）</label>
-                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:bg-gray-50 transition cursor-pointer">
-                    <div className="space-y-1 text-center">
-                      <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      <div className="flex text-sm text-gray-600 justify-center">
-                        <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
-                          <span>ファイルを選択</span>
-                          <input id="file-upload" name="file-upload" type="file" accept="image/*,.pdf" className="sr-only" onChange={handleFileUpload} />
-                        </label>
-                        <p className="pl-1">またはドラッグ＆ドロップ</p>
+                    {leaveType === '打刻修正' ? (
+                      <div className="flex space-x-2">
+                        <div className="w-1/3">
+                          <label className="block text-sm font-bold text-gray-700 mb-1">区分</label>
+                          <select 
+                            value={punchType}
+                            onChange={(e) => setPunchType(e.target.value)}
+                            className="block w-full px-2 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white"
+                          >
+                            <option>出勤</option>
+                            <option>退勤</option>
+                          </select>
+                        </div>
+                        <div className="w-2/3">
+                          <label className="block text-sm font-bold text-gray-700 mb-1">正しい打刻時間</label>
+                          <input 
+                            type="time" 
+                            required 
+                            value={punchTime}
+                            onChange={(e) => setPunchTime(e.target.value)}
+                            className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
+                          />
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-500">PNG, JPG, PDF 最大 10MB（画像は自動で圧縮されます）</p>
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">終了日</label>
+                        <input 
+                          type="date" 
+                          required 
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">事由・備考</label>
+                    <textarea 
+                      rows={3} 
+                      required 
+                      value={leaveReason}
+                      onChange={(e) => setLeaveReason(e.target.value)}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
+                      placeholder="理由を入力してください（私用、通院、体調不良など）"
+                    ></textarea>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">添付ファイル（遅延証明書・診断書など）</label>
+                    <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 transition cursor-pointer">
+                      <div className="space-y-1 text-center">
+                        <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                          <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <div className="flex text-sm text-gray-600 justify-center">
+                          <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                            <span>ファイルを選択</span>
+                            <input id="file-upload" name="file-upload" type="file" accept="image/*,.pdf" className="sr-only" onChange={handleFileUpload} />
+                          </label>
+                          <p className="pl-1">またはドラッグ＆ドロップ</p>
+                        </div>
+                        <p className="text-xs text-gray-500">PNG, JPG, PDF 最大 10MB（画像は自動で圧縮されます）</p>
+                      </div>
+                    </div>
+                    {compressedFile && (
+                      <div className="mt-2 text-sm text-green-700 bg-green-50 p-3 rounded-lg border border-green-200 shadow-sm">
+                        <p className="font-medium text-green-800 flex items-center">
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          ファイルの添付・圧縮が完了しました
+                        </p>
+                        <p className="mt-1 ml-5 text-gray-600 text-xs">ファイル名: {compressedFile.name}</p>
+                        <p className="mt-0.5 ml-5 text-xs">サイズ: {compressedFile.originalSize} ➔ <span className="font-bold text-green-800">{compressedFile.compressedSize}</span></p>
+                      </div>
+                    )}
+                  </div>
+
+                  <button 
+                    type="submit" 
+                    disabled={isSubmittingLeave} 
+                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-base font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition cursor-pointer"
+                  >
+                    {isSubmittingLeave ? '送信中...' : '申請を送信'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Right Side Column (Info & Recent History) */}
+              <div className="space-y-6">
+                {/* Leave Balance Quick Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                  <h3 className="text-sm font-bold text-gray-800 border-b pb-2 mb-3">現在の有給・代休残数</h3>
+                  <div className="space-y-2.5">
+                    <div className="flex justify-between items-center bg-blue-50/70 p-2.5 rounded-lg border border-blue-100">
+                      <span className="text-xs font-medium text-blue-900">有給休暇（今年度）</span>
+                      <span className="text-lg font-bold text-blue-700">{user?.paid_leave_balance || 0}<span className="text-xs font-normal ml-0.5">日</span></span>
+                    </div>
+                    <div className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                      <span className="text-xs font-medium text-gray-700">有給休暇（繰越分）</span>
+                      <span className="text-base font-bold text-gray-700">{user?.paid_leave_carryover || 0}<span className="text-xs font-normal ml-0.5">日</span></span>
+                    </div>
+                    <div className="flex justify-between items-center bg-slate-100 p-2.5 rounded-lg border border-slate-200">
+                      <span className="text-xs font-bold text-slate-800">有給合計残数</span>
+                      <span className="text-xl font-bold text-slate-900">
+                        {(user?.paid_leave_balance || 0) + (user?.paid_leave_carryover || 0)}
+                        <span className="text-xs font-normal ml-0.5">日</span>
+                      </span>
                     </div>
                   </div>
-                  {compressedFile && (
-                    <div className="mt-2 text-sm text-green-700 bg-green-50 p-3 rounded border border-green-200 shadow-sm">
-                      <p className="font-medium text-green-800 flex items-center">
-                        <CheckCircle className="w-4 h-4 mr-1" />
-                        ファイルの添付・圧縮が完了しました
-                      </p>
-                      <p className="mt-1 ml-5 text-gray-600">ファイル名: {compressedFile.name}</p>
-                      <p className="mt-1 ml-5">元のサイズ: {compressedFile.originalSize} ➔ <span className="font-bold">{compressedFile.compressedSize}</span></p>
+                </div>
+
+                {/* Recent My Requests Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                  <h3 className="text-sm font-bold text-gray-800 border-b pb-2 mb-3">直近の申請履歴・状況</h3>
+                  {myRecentRequests.length === 0 ? (
+                    <p className="text-xs text-gray-400 py-4 text-center">過去の申請履歴はありません</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {myRecentRequests.map((req) => {
+                        let badgeClass = "bg-yellow-100 text-yellow-800 border-yellow-200";
+                        if (req.status === '承認') badgeClass = "bg-green-100 text-green-800 border-green-200";
+                        else if (req.status === '却下') badgeClass = "bg-red-100 text-red-800 border-red-200";
+
+                        return (
+                          <div key={req.id} className="p-3 rounded-lg border border-gray-100 bg-gray-50/50 hover:bg-gray-50 transition text-xs">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="font-bold text-gray-800">{req.type}</span>
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${badgeClass}`}>
+                                {req.status}
+                              </span>
+                            </div>
+                            <p className="text-gray-500 text-[11px]">
+                              {req.start_date} {req.start_date !== req.end_date ? `～ ${req.end_date}` : ''}
+                            </p>
+                            {req.reason && (
+                              <p className="text-gray-400 text-[11px] mt-1 line-clamp-1 truncate">理由: {req.reason}</p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-
-                <button type="submit" disabled={isSubmittingLeave} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
-                  {isSubmittingLeave ? '送信中...' : '申請を送信'}
-                </button>
-              </form>
+              </div>
             </div>
           )}
 
