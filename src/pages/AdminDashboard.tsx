@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Users, FileText, Settings, LogOut, CheckCircle, XCircle, Plus, X, Download, Clock, AlertCircle,  } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -412,6 +412,96 @@ ${tenantId || '（エラー：コード取得失敗）'}
   const planLimit = 5;
   const monthlyFee = 2000 + (Math.max(0, currentUsers - planLimit) * 500);
 
+  const handleApproveRequest = async (req: any) => {
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .update({ status: '承認' })
+        .eq('id', req.id);
+
+      if (error) {
+        console.error('Error approving request:', error);
+        alert('承認処理に失敗しました: ' + error.message);
+        return;
+      }
+
+      // 打刻修正の場合、attendance_recordsを更新/作成
+      if (req.type === '打刻修正' && req.reason) {
+        const punchTypeMatch = req.reason.match(/【修正区分:\s*([^】]+)】/);
+        const punchTimeMatch = req.reason.match(/【修正時刻:\s*([^】]+)】/);
+        const pType = punchTypeMatch ? punchTypeMatch[1].trim() : '';
+        const pTime = punchTimeMatch ? punchTimeMatch[1].trim() : '';
+
+        if (pType && pTime && tenantId) {
+          const targetDate = req.start_date;
+          const { data: existRec } = await supabase
+            .from('attendance_records')
+            .select('*')
+            .eq('tenant_id', tenantId)
+            .eq('user_id', req.user_id)
+            .eq('date', targetDate)
+            .maybeSingle();
+
+          if (existRec) {
+            const updatePayload: any = {};
+            if (pType === '出勤') {
+              updatePayload.check_in_time = pTime;
+            } else if (pType === '退勤') {
+              updatePayload.check_out_time = pTime;
+              updatePayload.status = '退勤済';
+            }
+            await supabase
+              .from('attendance_records')
+              .update(updatePayload)
+              .eq('id', existRec.id);
+          } else {
+            const insertPayload: any = {
+              tenant_id: tenantId,
+              user_id: req.user_id,
+              date: targetDate,
+              status: pType === '退勤' ? '退勤済' : '勤務中'
+            };
+            if (pType === '出勤') insertPayload.check_in_time = pTime;
+            if (pType === '退勤') insertPayload.check_out_time = pTime;
+
+            await supabase
+              .from('attendance_records')
+              .insert(insertPayload);
+          }
+        }
+      }
+
+      setLeaveRequests(prev => prev.filter(r => r.id !== req.id));
+      await fetchEmployees();
+      alert('申請を承認しました。');
+    } catch (err: any) {
+      console.error('Approve Exception:', err);
+      alert('エラーが発生しました: ' + err.message);
+    }
+  };
+
+  const handleRejectRequest = async (req: any) => {
+    if (!window.confirm('この申請を却下しますか？')) return;
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .update({ status: '却下' })
+        .eq('id', req.id);
+
+      if (error) {
+        console.error('Error rejecting request:', error);
+        alert('却下処理に失敗しました: ' + error.message);
+        return;
+      }
+
+      setLeaveRequests(prev => prev.filter(r => r.id !== req.id));
+      alert('申請を却下しました。');
+    } catch (err: any) {
+      console.error('Reject Exception:', err);
+      alert('エラーが発生しました: ' + err.message);
+    }
+  };
+
   const handleOpenModal = (employee: any = null) => {
     setEditingEmployee(employee);
     setIsModalOpen(true);
@@ -779,11 +869,11 @@ ${tenantId || '（エラー：コード取得失敗）'}
                         <p className="text-xs text-gray-400 mt-1 whitespace-pre-wrap">理由: {req.reason || '記載なし'}</p>
                       </div>
                       <div className="flex space-x-2">
-                        <button onClick={() => alert('承認しました（※デモ動作）')} className="flex items-center text-sm bg-green-50 text-green-600 border border-green-200 px-3 py-1 rounded hover:bg-green-100">
+                        <button onClick={() => handleApproveRequest(req)} className="flex items-center text-sm bg-green-50 text-green-600 border border-green-200 px-3 py-1 rounded hover:bg-green-100 cursor-pointer">
                           <CheckCircle className="w-4 h-4 mr-1" />
                           承認
                         </button>
-                        <button onClick={() => alert('却下しました（※デモ動作）')} className="flex items-center text-sm bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded hover:bg-red-100">
+                        <button onClick={() => handleRejectRequest(req)} className="flex items-center text-sm bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded hover:bg-red-100 cursor-pointer">
                           <XCircle className="w-4 h-4 mr-1" />
                           却下
                         </button>

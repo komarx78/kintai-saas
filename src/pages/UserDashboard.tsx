@@ -168,6 +168,8 @@ const UserDashboard = () => {
 
   const handleApprovalAction = async (requestId: string, status: '承認' | '却下') => {
     try {
+      const targetReq = pendingApprovals.find(r => r.id === requestId);
+
       const { error } = await supabase
         .from('leave_requests')
         .update({ status })
@@ -177,6 +179,51 @@ const UserDashboard = () => {
         console.error('Error updating request status:', error);
         alert('ステータスの更新に失敗しました: ' + error.message);
         return;
+      }
+
+      // 打刻修正の承認ならattendance_recordsを更新
+      if (status === '承認' && targetReq && targetReq.type === '打刻修正' && targetReq.reason) {
+        const punchTypeMatch = targetReq.reason.match(/【修正区分:\s*([^】]+)】/);
+        const punchTimeMatch = targetReq.reason.match(/【修正時刻:\s*([^】]+)】/);
+        const pType = punchTypeMatch ? punchTypeMatch[1].trim() : '';
+        const pTime = punchTimeMatch ? punchTimeMatch[1].trim() : '';
+
+        if (pType && pTime && user?.tenant_id) {
+          const targetDate = targetReq.start_date;
+          const { data: existRec } = await supabase
+            .from('attendance_records')
+            .select('*')
+            .eq('tenant_id', user.tenant_id)
+            .eq('user_id', targetReq.user_id)
+            .eq('date', targetDate)
+            .maybeSingle();
+
+          if (existRec) {
+            const updatePayload: any = {};
+            if (pType === '出勤') updatePayload.check_in_time = pTime;
+            if (pType === '退勤') {
+              updatePayload.check_out_time = pTime;
+              updatePayload.status = '退勤済';
+            }
+            await supabase
+              .from('attendance_records')
+              .update(updatePayload)
+              .eq('id', existRec.id);
+          } else {
+            const insertPayload: any = {
+              tenant_id: user.tenant_id,
+              user_id: targetReq.user_id,
+              date: targetDate,
+              status: pType === '退勤' ? '退勤済' : '勤務中'
+            };
+            if (pType === '出勤') insertPayload.check_in_time = pTime;
+            if (pType === '退勤') insertPayload.check_out_time = pTime;
+
+            await supabase
+              .from('attendance_records')
+              .insert(insertPayload);
+          }
+        }
       }
       
       // Update local state

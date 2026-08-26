@@ -398,6 +398,22 @@ const ShiftCalendarView: React.FC = () => {
           </div>
         </div>
 
+        {/* 凡例 (Legend) */}
+        <div className="flex items-center space-x-6 mb-4 px-4">
+          <div className="flex items-center space-x-2">
+            <div className="w-6 h-4 rounded shadow-sm" style={{backgroundColor: '#94a3b8', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.5) 4px, rgba(255,255,255,0.5) 8px)', border: '1px dashed #fff'}}></div>
+            <span className="text-sm font-bold text-slate-600">従業員からの希望 (未処理)</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-6 h-4 rounded shadow-sm opacity-80" style={{backgroundColor: '#94a3b8', border: '2px dotted #fff'}}></div>
+            <span className="text-sm font-bold text-slate-600">ドラフト (自動割り当て結果・未確定)</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-6 h-4 rounded shadow-sm" style={{backgroundColor: '#94a3b8', border: '1px solid rgba(0,0,0,0.15)'}}></div>
+            <span className="text-sm font-bold text-slate-600">確定済みシフト</span>
+          </div>
+        </div>
+
         <div className="bg-slate-50 rounded-2xl overflow-y-auto relative max-h-[75vh] p-2 sm:p-4">
           {loading ? (
             <div className="h-64 flex justify-center items-center"><div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div></div>
