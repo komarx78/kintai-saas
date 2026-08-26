@@ -14,7 +14,7 @@ DECLARE
   my_approver_id UUID;
   tenant_name VARCHAR;
   -- APIキーは実際に取得したResendのAPIキーに後で置き換えます
-  resend_api_key VARCHAR := 're_UNi2rZ3s_GhwfvdDoLqFVK5zN3nMkNoes';
+  resend_api_key VARCHAR := 'YOUR_RESEND_API_KEY';
   -- 送信元アドレス（Resendで設定したドメイン、またはテスト用のアドレス）
   from_email VARCHAR := 'onboarding@resend.dev';
   -- 本番公開時に、実際のURL（Firebase HostingのURL等）に変更してください
