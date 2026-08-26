@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Users, FileText, Settings, LogOut, CheckCircle, XCircle, Plus, X, Clock, AlertCircle, Coffee } from 'lucide-react';
+import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { PaidLeaveManagement } from '../components/PaidLeaveManagement';
+import { MonthlyAttendanceManagement } from '../components/MonthlyAttendanceManagement';
 
 // 2026年の日本の祝日（簡易モック用リスト）
 const NATIONAL_HOLIDAYS_2026 = [
@@ -38,10 +39,6 @@ const AdminDashboard = () => {
     };
     fetchProfile();
   }, []);
-
-  // Missed Punch Detail Modal States
-  const [isMissedPunchModalOpen, setIsMissedPunchModalOpen] = useState(false);
-  const [selectedMissedPunchRow, setSelectedMissedPunchRow] = useState<any>(null);
 
   // Invite Modal States
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -88,14 +85,6 @@ ${tenantId || '（エラー：コード取得失敗）'}
     } catch (err) {
       console.error('Failed to copy!', err);
       alert('コピーに失敗しました。お手数ですが手動でコピーしてください。');
-    }
-  };
-
-  const handleFixPunch = (type: string, date: string) => {
-    const time = window.prompt(`【${date}】の正しい${type}を入力してください（例: 18:00）:`);
-    if (time) {
-      alert(`打刻時間を「${time}」に修正しました。`);
-      setIsMissedPunchModalOpen(false);
     }
   };
 
@@ -203,7 +192,6 @@ ${tenantId || '（エラー：コード取得失敗）'}
 
   // Dynamic Data States
   const [employees, setEmployees] = useState<any[]>([]);
-  const [attendanceReport, setAttendanceReport] = useState<any[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
 
@@ -294,62 +282,6 @@ ${tenantId || '（エラー：コード取得失敗）'}
     fetchEmployees();
     fetchLeaveTypes();
   }, [tenantId]);
-
-  useEffect(() => {
-    if (tenantId && activeTab === 'attendance' && employees.length > 0) {
-      const fetchAttendance = async () => {
-        // 現在は2026年8月固定（デモ用）
-        const y = 2026; const m = 8;
-        const start = `${y}-${m.toString().padStart(2, '0')}-01`;
-        const end = `${y}-${m.toString().padStart(2, '0')}-31`;
-
-        const { data: records } = await supabase
-          .from('attendance_records')
-          .select('*')
-          .eq('tenant_id', tenantId)
-          .gte('date', start)
-          .lte('date', end);
-
-        if (records) {
-          const report = employees.map(emp => {
-            const empRecords = records.filter(r => r.user_id === emp.id);
-            let days = empRecords.length;
-            let actualMins = 0;
-            let overtimeMins = 0;
-            let missedPunches = 0;
-            const todayStr = new Date().toLocaleDateString('en-CA');
-
-            empRecords.forEach(r => {
-              if (r.check_in_time && r.check_out_time) {
-                const inM = parseInt(r.check_in_time.split(':')[0]) * 60 + parseInt(r.check_in_time.split(':')[1]);
-                const outM = parseInt(r.check_out_time.split(':')[0]) * 60 + parseInt(r.check_out_time.split(':')[1]);
-                const totalM = Math.max(0, outM - inM);
-                let breakM = 0;
-                if (totalM >= 8 * 60) breakM = 60;
-                else if (totalM >= 6 * 60) breakM = 45;
-                const workM = Math.max(0, totalM - breakM);
-                actualMins += workM;
-                overtimeMins += Math.max(0, workM - 8 * 60);
-              } else if (r.date < todayStr || (r.date === todayStr && !r.check_out_time && new Date().getHours() >= 23)) {
-                // 退勤打刻忘れ（過去日付、もしくは本日の23時以降で退勤なし）
-                missedPunches++;
-              }
-            });
-
-            return {
-              emp,
-              days,
-              hours: Math.floor(actualMins / 60),
-              overtime: Math.floor(overtimeMins / 60),
-              missedPunches
-            };
-          });
-          setAttendanceReport(report);
-        }
-      };
-      fetchAttendance();
-    }
-  }, [tenantId, activeTab, employees]);
 
   useEffect(() => {
     if (tenantId) {
@@ -649,13 +581,13 @@ ${tenantId || '（エラー：コード取得失敗）'}
             <Coffee className="mr-3 h-5 w-5 text-amber-400" />
             有給・休暇管理システム
           </button>
-            <button 
-              onClick={() => setActiveTab('attendance')}
-              className={`w-full flex items-center px-4 py-3 text-sm rounded-md transition ${activeTab === 'attendance' ? 'bg-blue-800 text-white' : 'text-blue-100 hover:bg-blue-800'}`}
-            >
-              <Clock className="h-5 w-5 mr-3" />
-              勤怠レポート
-            </button>
+          <button 
+            onClick={() => setActiveTab('attendance')}
+            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'attendance' ? 'bg-blue-800 font-bold' : 'hover:bg-blue-800'}`}
+          >
+            <Calendar className="mr-3 h-5 w-5 text-cyan-400" />
+            月間勤怠・出勤簿管理
+          </button>
           <button 
             onClick={() => setActiveTab('settings')}
             className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'settings' ? 'bg-blue-800' : 'hover:bg-blue-800'}`}
@@ -827,87 +759,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
           )}
 
           {activeTab === 'attendance' && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="p-4 border-b border-gray-200">
-                <h2 className="text-lg font-medium">月間勤怠レポート（残業管理）</h2>
-                <p className="text-sm text-gray-500 mt-1">※従業員ごとの今月の総労働時間と残業時間を一覧表示します。</p>
-              </div>
-              <div className="p-4 border-b border-gray-200 flex space-x-4 bg-gray-50">
-                <select className="block w-48 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border">
-                  <option>2026年8月度</option>
-                  <option>2026年7月度</option>
-                </select>
-                <div className="flex space-x-2 text-sm text-gray-600 items-center">
-                  <span className="flex items-center"><span className="w-3 h-3 rounded-full bg-yellow-400 mr-1"></span>注意(20h超)</span>
-                  <span className="flex items-center ml-2"><span className="w-3 h-3 rounded-full bg-orange-400 mr-1"></span>危険(40h超)</span>
-                  <span className="flex items-center ml-2"><span className="w-3 h-3 rounded-full bg-red-600 mr-1"></span>超過(60h超)</span>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">従業員名</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">雇用形態</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">出勤日数</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">総実働時間</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">総残業時間</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">打刻エラー</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">ステータス</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {attendanceReport.map((row, idx) => {
-                      let statusClass = "text-gray-500 bg-gray-100";
-                      let statusText = "正常";
-                      if (row.overtime > 60) {
-                        statusClass = "text-red-800 bg-red-100 border-red-200";
-                        statusText = "超過";
-                      } else if (row.overtime > 40) {
-                        statusClass = "text-orange-800 bg-orange-100 border-orange-200";
-                        statusText = "危険";
-                      } else if (row.overtime > 20) {
-                        statusClass = "text-yellow-800 bg-yellow-100 border-yellow-200";
-                        statusText = "注意";
-                      }
-                      
-                      return (
-                        <tr key={idx} className={row.overtime > 60 ? 'bg-red-50' : row.overtime > 40 ? 'bg-orange-50' : row.overtime > 20 ? 'bg-yellow-50' : ''}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.emp.name}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{row.emp.type}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{row.days}日</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{row.hours}時間</td>
-                          <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold text-right ${row.overtime > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
-                            {row.overtime}時間
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                            {row.missedPunches > 0 ? (
-                              <button 
-                                onClick={() => {
-                                  setSelectedMissedPunchRow(row);
-                                  setIsMissedPunchModalOpen(true);
-                                }}
-                                className="inline-flex items-center text-red-600 font-bold bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition border border-red-200 cursor-pointer"
-                              >
-                                <AlertCircle className="w-4 h-4 mr-1" />
-                                {row.missedPunches}件
-                              </button>
-                            ) : (
-                              <span className="text-gray-400">-</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                            <span className={`px-2 py-1 rounded text-xs font-medium border ${statusClass}`}>
-                              {statusText}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <MonthlyAttendanceManagement tenantId={tenantId} />
           )}
 
           {activeTab === 'settings' && (
@@ -1487,119 +1339,6 @@ ${tenantId || '（エラー：コード取得失敗）'}
       )}
 
 
-
-      {/* Missed Punch Detail Modal */}
-      {isMissedPunchModalOpen && selectedMissedPunchRow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50">
-          <div className="bg-white rounded-lg text-left overflow-hidden shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh]">
-            <div className="bg-red-600 px-4 py-3 flex justify-between items-center text-white shrink-0">
-              <h3 className="text-lg font-medium flex items-center">
-                <AlertCircle className="w-5 h-5 mr-2" />
-                {selectedMissedPunchRow.emp.name} さんの勤怠表（2026年8月度）
-              </h3>
-              <button onClick={() => setIsMissedPunchModalOpen(false)} className="text-white hover:text-gray-200 transition-colors">
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-            
-            <div className="p-4 bg-red-50 border-b border-red-200 shrink-0">
-              <p className="text-sm text-red-800 font-medium">
-                赤くハイライトされている日に打刻漏れ（エラー）があります。「修正する」ボタンから正しい打刻時間を入力してください。
-              </p>
-            </div>
-
-            <div className="overflow-y-auto flex-1">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">日付</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">出勤時間</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">退勤時間</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">実働時間</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">残業時間</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">備考/操作</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {/* モックデータ: 1ヶ月分をループで生成 */}
-                  {Array.from({ length: 31 }).map((_, i) => {
-                    const day = i + 1;
-                    const date = new Date(2026, 7, day);
-                    const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][date.getDay()];
-                    
-                    // モックエラー設定
-                    let hasError = false;
-                    let errorType = "";
-                    let inTime = "08:55";
-                    let outTime = "18:05";
-                    
-                    // 鈴木一郎などの複数エラー対応
-                    if (day === 5 && selectedMissedPunchRow.missedPunches > 0) {
-                      hasError = true;
-                      errorType = "退勤時間";
-                      outTime = "未打刻";
-                    }
-                    if (day === 12 && selectedMissedPunchRow.missedPunches > 1) {
-                      hasError = true;
-                      errorType = "出勤時間";
-                      inTime = "未打刻";
-                      outTime = "18:30";
-                    }
-
-                    // 土日祝日は空白に
-                    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-                    if (isWeekend) {
-                      inTime = "-";
-                      outTime = "-";
-                    }
-
-                    return (
-                      <tr key={day} className={hasError ? 'bg-red-50' : isWeekend ? 'bg-gray-50' : ''}>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                          {day}日 ({dayOfWeek})
-                        </td>
-                        <td className={`px-4 py-2 whitespace-nowrap text-sm font-medium ${inTime === '未打刻' ? 'text-red-600' : 'text-gray-900'}`}>
-                          {inTime}
-                        </td>
-                        <td className={`px-4 py-2 whitespace-nowrap text-sm font-medium ${outTime === '未打刻' ? 'text-red-600' : 'text-gray-900'}`}>
-                          {outTime}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                          {!hasError && !isWeekend ? '8h' : '-'}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                          {!hasError && !isWeekend && (day % 3 === 0) ? '1h' : '-'}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                          {hasError ? (
-                            <button 
-                              onClick={() => handleFixPunch(errorType, `8月${day}日（${dayOfWeek}）`)}
-                              className="text-sm bg-white text-blue-600 border border-blue-300 px-3 py-1 rounded hover:bg-blue-50 font-medium transition shadow-sm"
-                            >
-                              修正する
-                            </button>
-                          ) : (
-                            isWeekend ? '公休' : ''
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="bg-gray-100 px-4 py-3 flex justify-end border-t shrink-0">
-              <button 
-                onClick={() => setIsMissedPunchModalOpen(false)}
-                className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50 font-medium text-sm transition"
-              >
-                閉じる
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
