@@ -32,7 +32,7 @@ const UserDashboard = () => {
     const fetchUserAndStatus = async () => {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
-        const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).single();
+        const { data: profile } = await supabase.from('users').select('*').eq('id', authUser.id).maybeSingle();
         setUser(profile);
 
         // 今日の打刻データを取得
@@ -42,7 +42,7 @@ const UserDashboard = () => {
           .select('*')
           .eq('user_id', authUser.id)
           .eq('date', today)
-          .single();
+          .maybeSingle();
           
         if (record) {
           setCurrentRecord(record);
@@ -57,7 +57,7 @@ const UserDashboard = () => {
   const [userTakenLeaveDays, setUserTakenLeaveDays] = useState(0);
 
   useEffect(() => {
-    if (user && activeTab === 'attendance') {
+    if (user) {
       const fetchMonthly = async () => {
         const y = viewMonth.getFullYear();
         const m = viewMonth.getMonth() + 1;
@@ -69,13 +69,13 @@ const UserDashboard = () => {
           .select('*')
           .eq('user_id', user.id)
           .gte('date', start)
-          .lte('date', end);
+          .lte('date', end)
+          .order('date', { ascending: false });
           
         if (data) setMonthlyRecords(data);
       };
       
       const fetchLeaveUsage = async () => {
-        // 今年度の取得日数を計算 (簡易的に今年承認されたものを合算)
         const currentYear = new Date().getFullYear();
         const startOfYear = `${currentYear}-01-01`;
         const { data } = await supabase
@@ -100,7 +100,7 @@ const UserDashboard = () => {
       fetchMonthly();
       fetchLeaveUsage();
     }
-  }, [user, activeTab, viewMonth]);
+  }, [user, viewMonth]);
 
   const [compressedFile, setCompressedFile] = useState<{name: string, originalSize: string, compressedSize: string} | null>(null);
 
@@ -382,8 +382,8 @@ const UserDashboard = () => {
             onClick={() => setActiveTab('attendance')}
             className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'attendance' ? 'bg-slate-600' : 'hover:bg-slate-700'}`}
           >
-            <Calendar className="mr-3 h-5 w-5" />
-            勤怠・有給照会
+            <Calendar className="mr-3 h-5 w-5 text-blue-400" />
+            月次勤怠・有給照会
           </button>
 
           <button 
@@ -523,6 +523,82 @@ const UserDashboard = () => {
                       )}
                     </p>
                   </div>
+                </div>
+              </div>
+
+              {/* Monthly Attendance Quick Summary Card */}
+              <div className="md:col-span-2 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-xl shadow-md p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border border-slate-700">
+                <div>
+                  <div className="flex items-center space-x-2 text-indigo-300 text-sm font-semibold mb-1">
+                    <Calendar className="w-4 h-4" />
+                    <span>今月（{viewMonth.getFullYear()}年{viewMonth.getMonth() + 1}月度）の勤怠実績</span>
+                  </div>
+                  <h3 className="text-2xl font-bold text-white tracking-wide">
+                    月次勤怠サマリー
+                  </h3>
+                  <div className="flex flex-wrap gap-4 mt-4">
+                    <div className="bg-white/10 backdrop-blur-sm px-4 py-2.5 rounded-lg border border-white/10">
+                      <span className="text-xs text-indigo-200 block">出勤日数</span>
+                      <span className="text-xl font-bold text-white">
+                        {monthlyRecords.filter(r => r.check_in_time).length}
+                        <span className="text-xs font-normal ml-1">日</span>
+                      </span>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm px-4 py-2.5 rounded-lg border border-white/10">
+                      <span className="text-xs text-indigo-200 block">総実働時間</span>
+                      <span className="text-xl font-bold text-emerald-300">
+                        {(() => {
+                          let mins = 0;
+                          monthlyRecords.forEach(r => {
+                            if (r.check_in_time && r.check_out_time) {
+                              const [inH, inM] = r.check_in_time.split(':').map(Number);
+                              const [outH, outM] = r.check_out_time.split(':').map(Number);
+                              const total = Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
+                              let breakM = total >= 480 ? 60 : (total >= 360 ? 45 : 0);
+                              mins += Math.max(0, total - breakM);
+                            }
+                          });
+                          return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+                        })()}
+                      </span>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm px-4 py-2.5 rounded-lg border border-white/10">
+                      <span className="text-xs text-indigo-200 block">総残業時間</span>
+                      <span className="text-xl font-bold text-amber-300">
+                        {(() => {
+                          let otMins = 0;
+                          monthlyRecords.forEach(r => {
+                            if (r.check_in_time && r.check_out_time) {
+                              const [inH, inM] = r.check_in_time.split(':').map(Number);
+                              const [outH, outM] = r.check_out_time.split(':').map(Number);
+                              const total = Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
+                              let breakM = total >= 480 ? 60 : (total >= 360 ? 45 : 0);
+                              const work = Math.max(0, total - breakM);
+                              otMins += Math.max(0, work - 480);
+                            }
+                          });
+                          return `${Math.floor(otMins / 60)}h ${otMins % 60}m`;
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row md:flex-col gap-2 w-full md:w-auto">
+                  <button 
+                    onClick={() => setActiveTab('attendance')}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-3 rounded-lg shadow-lg hover:shadow-indigo-500/50 transition-all flex items-center justify-center space-x-2 text-sm whitespace-nowrap cursor-pointer"
+                  >
+                    <Calendar className="w-5 h-5" />
+                    <span>月次勤怠明細（カレンダー）を見る ➔</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('requests')}
+                    className="bg-white/15 hover:bg-white/25 text-white font-medium px-4 py-2 rounded-lg transition-all flex items-center justify-center space-x-2 text-xs whitespace-nowrap cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>打刻修正・有給申請を行う</span>
+                  </button>
                 </div>
               </div>
             </div>
