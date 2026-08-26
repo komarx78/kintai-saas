@@ -779,11 +779,21 @@ const UserDashboard = () => {
 
                 <div className="flex flex-col sm:flex-row md:flex-col gap-2 w-full md:w-auto">
                   <button 
-                    onClick={() => setActiveTab('attendance')}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-3 rounded-lg shadow-lg hover:shadow-indigo-500/50 transition-all flex items-center justify-center space-x-2 text-sm whitespace-nowrap cursor-pointer"
+                    onClick={() => {
+                      setActiveTab('shifts');
+                      fetchMyShifts();
+                    }}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-6 py-3 rounded-xl shadow-lg hover:shadow-indigo-500/50 transition-all flex items-center justify-center space-x-2 text-sm whitespace-nowrap cursor-pointer"
                   >
                     <Calendar className="w-5 h-5" />
-                    <span>月次勤怠明細（カレンダー）を見る ➔</span>
+                    <span>🗓️ シフト希望を提出する（カレンダー） ➔</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('attendance')}
+                    className="bg-white/15 hover:bg-white/25 text-white font-bold px-4 py-2.5 rounded-lg transition-all flex items-center justify-center space-x-2 text-xs whitespace-nowrap cursor-pointer"
+                  >
+                    <Calendar className="w-4 h-4 text-blue-300" />
+                    <span>月次勤怠明細を見る</span>
                   </button>
                   <button 
                     onClick={() => setActiveTab('requests')}
@@ -1048,152 +1058,328 @@ const UserDashboard = () => {
           )}
 
           {activeTab === 'shifts' && (
-            <div className="space-y-6">
-              {/* シフト希望提出＆確定シフト表示 ヘッダー */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-4">
+            <div className="space-y-6 animate-in fade-in">
+              {/* シフト希望提出＆確定シフト表示 ヘッダーカード */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 sm:p-6">
+                
+                {/* 最上部タイトル ＆ 月切替 ＆ 提出ボタン */}
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-gray-100 pb-5">
                   <div>
-                    <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
-                      <Calendar className="w-5 h-5 text-indigo-600" />
-                      シフト希望提出 ＆ 確定シフト確認
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="bg-indigo-100 text-indigo-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+                        月間シフト管理
+                      </span>
+                      <span className="text-xs text-gray-500 font-medium">希望提出 ➔ 上長承認 ➔ 確定カレンダー連動</span>
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-black text-gray-900 flex items-center gap-2">
+                      <Calendar className="w-6 h-6 text-indigo-600" />
+                      月間シフトカレンダー（希望提出・確定確認）
                     </h2>
-                    <p className="text-xs text-gray-500 mt-1">
-                      日付を選んで出勤希望や休み希望を入力し、上長へ一括提出できます。承認されるとカレンダーに即時反映されます。
-                    </p>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="month"
-                      value={shiftMonth}
-                      onChange={(e) => {
-                        setShiftMonth(e.target.value);
-                        fetchMyShifts();
-                      }}
-                      className="border border-gray-300 rounded-xl px-3 py-1.5 text-xs font-bold bg-gray-50 focus:bg-white"
-                    />
+                  {/* 月切り替え ＆ 提出ボタン */}
+                  <div className="flex flex-wrap items-center gap-3 self-end lg:self-auto">
+                    <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const [y, m] = shiftMonth.split('-').map(Number);
+                          const prev = new Date(y, m - 2, 1);
+                          const prevStr = `${prev.getFullYear()}-${(prev.getMonth() + 1).toString().padStart(2, '0')}`;
+                          setShiftMonth(prevStr);
+                        }}
+                        className="px-2.5 py-1 text-xs font-bold text-gray-700 hover:bg-white rounded-lg transition cursor-pointer"
+                      >
+                        &larr; 前月
+                      </button>
+                      <input
+                        type="month"
+                        value={shiftMonth}
+                        onChange={(e) => {
+                          setShiftMonth(e.target.value);
+                        }}
+                        className="border-none bg-transparent px-2 py-1 text-xs font-black text-slate-800 text-center focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const [y, m] = shiftMonth.split('-').map(Number);
+                          const next = new Date(y, m, 1);
+                          const nextStr = `${next.getFullYear()}-${(next.getMonth() + 1).toString().padStart(2, '0')}`;
+                          setShiftMonth(nextStr);
+                        }}
+                        className="px-2.5 py-1 text-xs font-bold text-gray-700 hover:bg-white rounded-lg transition cursor-pointer"
+                      >
+                        翌月 &rarr;
+                      </button>
+                    </div>
+
                     <button
+                      type="button"
                       onClick={handleSubmitShiftRequests}
                       disabled={isSubmittingShift}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-xs font-black shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       <CheckCircle className="w-4 h-4" />
-                      {isSubmittingShift ? '提出中...' : 'シフト希望を提出する'}
+                      {isSubmittingShift ? 'シフト提出中...' : 'この希望で上長へ提出する'}
                     </button>
                   </div>
                 </div>
 
-                {/* シフトカレンダーグリッド */}
-                <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                  {(() => {
-                    const [y, m] = shiftMonth.split('-').map(Number);
-                    const daysCount = new Date(y, m, 0).getDate();
-                    const list = [];
-                    for (let d = 1; d <= daysCount; d++) {
-                      const dayStr = d.toString().padStart(2, '0');
-                      const dateStr = `${shiftMonth}-${dayStr}`;
-                      const dayOfWeek = new Date(y, m - 1, d).getDay();
-                      const weekDayName = ['日', '月', '火', '水', '木', '金', '土'][dayOfWeek];
+                {/* クイック一括設定バー（超便利） */}
+                <div className="my-4 p-3 bg-indigo-50/60 border border-indigo-100 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-indigo-950 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                      クイック入力:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const [y, m] = shiftMonth.split('-').map(Number);
+                        const daysCount = new Date(y, m, 0).getDate();
+                        const nextMap: Record<string, { type: 'working' | 'off'; startTime: string; endTime: string }> = {};
+                        for (let d = 1; d <= daysCount; d++) {
+                          const dayOfWeek = new Date(y, m - 1, d).getDay();
+                          const dateStr = `${shiftMonth}-${d.toString().padStart(2, '0')}`;
+                          if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                            nextMap[dateStr] = { type: 'working', startTime: '09:00', endTime: '18:00' };
+                          }
+                        }
+                        setShiftRequestsMap(prev => ({ ...prev, ...nextMap }));
+                      }}
+                      className="bg-white hover:bg-indigo-100 text-indigo-900 border border-indigo-200 px-3 py-1 rounded-lg font-bold transition cursor-pointer"
+                    >
+                      ⚡ 平日を一括出勤（09:00〜18:00）
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const [y, m] = shiftMonth.split('-').map(Number);
+                        const daysCount = new Date(y, m, 0).getDate();
+                        const nextMap: Record<string, { type: 'working' | 'off'; startTime: string; endTime: string }> = {};
+                        for (let d = 1; d <= daysCount; d++) {
+                          const dayOfWeek = new Date(y, m - 1, d).getDay();
+                          const dateStr = `${shiftMonth}-${d.toString().padStart(2, '0')}`;
+                          if (dayOfWeek === 0 || dayOfWeek === 6) {
+                            nextMap[dateStr] = { type: 'off', startTime: '', endTime: '' };
+                          }
+                        }
+                        setShiftRequestsMap(prev => ({ ...prev, ...nextMap }));
+                      }}
+                      className="bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 px-3 py-1 rounded-lg font-bold transition cursor-pointer"
+                    >
+                      🏖️ 土日を一括休み（公休）
+                    </button>
+                  </div>
 
-                      // 確定済みシフト
-                      const confirmed = myShifts.find(s => s.work_date === dateStr);
-                      // 編集中の希望
-                      const req = shiftRequestsMap[dateStr] || { type: 'working', startTime: '09:00', endTime: '18:00' };
-                      const isSelected = !!shiftRequestsMap[dateStr];
+                  <div className="flex items-center gap-3 text-[11px]">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 inline-block" />
+                      確定シフト
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block" />
+                      出勤希望
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-400 inline-block" />
+                      休み希望
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShiftRequestsMap({})}
+                      className="text-gray-400 hover:text-rose-600 underline ml-2 cursor-pointer"
+                    >
+                      入力クリア
+                    </button>
+                  </div>
+                </div>
 
-                      list.push(
-                        <div
-                          key={dateStr}
-                          className={`p-3 rounded-xl border transition flex flex-col justify-between min-h-[110px] ${
-                            confirmed
-                              ? (confirmed.is_holiday ? 'bg-slate-100 border-slate-300 text-slate-600' : 'bg-indigo-50/70 border-indigo-200 text-indigo-950')
-                              : (isSelected ? 'bg-blue-50/50 border-blue-300 shadow-2xs' : 'bg-white border-gray-200 hover:border-gray-300')
-                          }`}
-                        >
-                          <div className="flex justify-between items-center mb-1">
-                            <span className={`text-xs font-black ${dayOfWeek === 0 ? 'text-red-500' : dayOfWeek === 6 ? 'text-blue-500' : 'text-gray-800'}`}>
-                              {m}/{d} ({weekDayName})
-                            </span>
-                            {confirmed ? (
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${confirmed.is_holiday ? 'bg-slate-300 text-slate-700' : 'bg-indigo-600 text-white shadow-2xs'}`}>
-                                {confirmed.is_holiday ? '公休 (確定)' : '確定'}
+                {/* 7列 本格月間カレンダーグリッド */}
+                <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-xs bg-gray-100">
+                  {/* 曜日ヘッダー（日〜土） */}
+                  <div className="grid grid-cols-7 bg-slate-800 text-white text-center text-xs font-bold py-2.5 tracking-wider">
+                    <div className="text-rose-300">日 (Sun)</div>
+                    <div>月 (Mon)</div>
+                    <div>火 (Tue)</div>
+                    <div>水 (Wed)</div>
+                    <div>木 (Thu)</div>
+                    <div>金 (Fri)</div>
+                    <div className="text-cyan-300">土 (Sat)</div>
+                  </div>
+
+                  {/* カレンダー日付セル */}
+                  <div className="grid grid-cols-7 gap-px bg-gray-200">
+                    {(() => {
+                      const [y, m] = shiftMonth.split('-').map(Number);
+                      const daysCount = new Date(y, m, 0).getDate();
+                      const firstDayOfWeek = new Date(y, m - 1, 1).getDay(); // 0: 日 〜 6: 土
+                      const cells = [];
+
+                      // 1. 月初のオフセット空セル
+                      for (let i = 0; i < firstDayOfWeek; i++) {
+                        cells.push(
+                          <div key={`empty-${i}`} className="bg-gray-50/70 min-h-[110px] p-2 select-none" />
+                        );
+                      }
+
+                      // 2. 当月の各日セル
+                      for (let d = 1; d <= daysCount; d++) {
+                        const dayStr = d.toString().padStart(2, '0');
+                        const dateStr = `${shiftMonth}-${dayStr}`;
+                        const dayOfWeek = new Date(y, m - 1, d).getDay();
+                        const isSunday = dayOfWeek === 0;
+                        const isSaturday = dayOfWeek === 6;
+
+                        // 確定シフト
+                        const confirmed = myShifts.find(s => s.work_date === dateStr);
+                        // 編集中の希望
+                        const req = shiftRequestsMap[dateStr];
+
+                        cells.push(
+                          <div
+                            key={dateStr}
+                            className={`min-h-[110px] sm:min-h-[120px] p-2 sm:p-2.5 transition flex flex-col justify-between ${
+                              confirmed
+                                ? (confirmed.is_holiday ? 'bg-slate-100' : 'bg-indigo-50/80')
+                                : (req
+                                    ? (req.type === 'working' ? 'bg-blue-50/90 ring-1 ring-blue-300' : 'bg-rose-50/90 ring-1 ring-rose-300')
+                                    : 'bg-white hover:bg-slate-50/80')
+                            }`}
+                          >
+                            {/* 上部: 日付番号 ＆ ステータスバッジ */}
+                            <div className="flex justify-between items-start">
+                              <span className={`text-xs sm:text-sm font-black ${isSunday ? 'text-rose-600' : isSaturday ? 'text-blue-600' : 'text-slate-800'}`}>
+                                {d}
                               </span>
-                            ) : (
-                              <span className="text-[10px] text-gray-400">未確定</span>
+
+                              {confirmed ? (
+                                <span className={`text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 rounded-md ${
+                                  confirmed.is_holiday ? 'bg-slate-300 text-slate-700' : 'bg-indigo-600 text-white shadow-2xs'
+                                }`}>
+                                  {confirmed.is_holiday ? '公休' : '確定'}
+                                </span>
+                              ) : req ? (
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                                  req.type === 'working' ? 'bg-blue-600 text-white' : 'bg-rose-600 text-white'
+                                }`}>
+                                  {req.type === 'working' ? '出勤希望' : '休み希望'}
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-gray-300">未設定</span>
+                              )}
+                            </div>
+
+                            {/* 中央: 確定シフト内容 または 希望入力フォーム */}
+                            <div className="my-1">
+                              {confirmed ? (
+                                <div className="text-center py-1">
+                                  {confirmed.is_holiday ? (
+                                    <span className="text-xs font-bold text-slate-500 block">🏖️ 公休日</span>
+                                  ) : (
+                                    <div className="text-xs font-mono font-black text-indigo-950 bg-white/90 py-1 px-1 rounded border border-indigo-200 shadow-2xs">
+                                      {confirmed.start_time?.substring(0, 5) || '09:00'} 〜 {confirmed.end_time?.substring(0, 5) || '18:00'}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="space-y-1">
+                                  {/* 出勤・休み 切替ボタン */}
+                                  <div className="grid grid-cols-2 gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => setShiftRequestsMap(prev => ({
+                                        ...prev,
+                                        [dateStr]: { type: 'working', startTime: prev[dateStr]?.startTime || '09:00', endTime: prev[dateStr]?.endTime || '18:00' }
+                                      }))}
+                                      className={`py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                                        req?.type === 'working' ? 'bg-blue-600 text-white shadow-xs' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                                      }`}
+                                    >
+                                      出勤
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setShiftRequestsMap(prev => ({
+                                        ...prev,
+                                        [dateStr]: { type: 'off', startTime: '', endTime: '' }
+                                      }))}
+                                      className={`py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                                        req?.type === 'off' ? 'bg-rose-600 text-white shadow-xs' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                                      }`}
+                                    >
+                                      休み
+                                    </button>
+                                  </div>
+
+                                  {/* 出勤時間入力 */}
+                                  {req?.type === 'working' && (
+                                    <div className="flex items-center gap-0.5 text-[9px] font-mono mt-0.5">
+                                      <input
+                                        type="time"
+                                        value={req.startTime}
+                                        onChange={(e) => setShiftRequestsMap(prev => ({
+                                          ...prev,
+                                          [dateStr]: { ...req, startTime: e.target.value }
+                                        }))}
+                                        className="w-1/2 p-0.5 border border-gray-300 rounded text-center bg-white"
+                                      />
+                                      <span>-</span>
+                                      <input
+                                        type="time"
+                                        value={req.endTime}
+                                        onChange={(e) => setShiftRequestsMap(prev => ({
+                                          ...prev,
+                                          [dateStr]: { ...req, endTime: e.target.value }
+                                        }))}
+                                        className="w-1/2 p-0.5 border border-gray-300 rounded text-center bg-white"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* 下部クリアボタン */}
+                            {!confirmed && req && (
+                              <button
+                                type="button"
+                                onClick={() => setShiftRequestsMap(prev => {
+                                  const copy = { ...prev };
+                                  delete copy[dateStr];
+                                  return copy;
+                                })}
+                                className="text-[9px] text-gray-400 hover:text-rose-500 text-right cursor-pointer"
+                              >
+                                取消
+                              </button>
                             )}
                           </div>
+                        );
+                      }
 
-                          {/* 確定情報または入力フォーム */}
-                          {confirmed ? (
-                            <div className="my-auto text-center">
-                              {confirmed.is_holiday ? (
-                                <span className="text-xs font-bold text-slate-500">お休み（公休）</span>
-                              ) : (
-                                <div className="text-xs font-black font-mono text-indigo-700 bg-white/80 py-1 rounded-lg border border-indigo-100">
-                                  {confirmed.start_time?.substring(0, 5) || '09:00'} 〜 {confirmed.end_time?.substring(0, 5) || '18:00'}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="space-y-1.5 mt-1">
-                              <div className="flex gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setShiftRequestsMap(prev => ({
-                                    ...prev,
-                                    [dateStr]: { type: 'working', startTime: prev[dateStr]?.startTime || '09:00', endTime: prev[dateStr]?.endTime || '18:00' }
-                                  }))}
-                                  className={`flex-1 py-1 rounded text-[10px] font-bold border transition ${
-                                    req.type === 'working' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'
-                                  }`}
-                                >
-                                  出勤希望
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setShiftRequestsMap(prev => ({
-                                    ...prev,
-                                    [dateStr]: { type: 'off', startTime: '', endTime: '' }
-                                  }))}
-                                  className={`flex-1 py-1 rounded text-[10px] font-bold border transition ${
-                                    req.type === 'off' ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-gray-600 border-gray-200'
-                                  }`}
-                                >
-                                  休み希望
-                                </button>
-                              </div>
-
-                              {req.type === 'working' && (
-                                <div className="flex items-center gap-1 text-[10px]">
-                                  <input
-                                    type="time"
-                                    value={req.startTime}
-                                    onChange={(e) => setShiftRequestsMap(prev => ({
-                                      ...prev,
-                                      [dateStr]: { ...req, startTime: e.target.value }
-                                    }))}
-                                    className="w-1/2 p-0.5 border border-gray-200 rounded text-center font-mono"
-                                  />
-                                  <span>〜</span>
-                                  <input
-                                    type="time"
-                                    value={req.endTime}
-                                    onChange={(e) => setShiftRequestsMap(prev => ({
-                                      ...prev,
-                                      [dateStr]: { ...req, endTime: e.target.value }
-                                    }))}
-                                    className="w-1/2 p-0.5 border border-gray-200 rounded text-center font-mono"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }
-                    return list;
-                  })()}
+                      return cells;
+                    })()}
+                  </div>
                 </div>
+
+                {/* 最下部 一括提出ボタン */}
+                <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
+                  <p className="text-xs text-gray-500">
+                    ※提出後も上長が承認するまでは再提出が可能です。
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSubmitShiftRequests}
+                    disabled={isSubmittingShift}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl text-sm font-black shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <CheckCircle className="w-5 h-5" />
+                    {isSubmittingShift ? '提出中...' : 'シフト希望を提出する'}
+                  </button>
+                </div>
+
               </div>
             </div>
           )}
