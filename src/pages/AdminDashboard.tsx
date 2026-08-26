@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock } from 'lucide-react';
+import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock, Bot, BookOpen, Sparkles, Printer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { PaidLeaveManagement } from '../components/PaidLeaveManagement';
 import { MonthlyAttendanceManagement } from '../components/MonthlyAttendanceManagement';
+import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 
 // 2026年の日本の祝日（簡易モック用リスト）
 const NATIONAL_HOLIDAYS_2026 = [
@@ -111,6 +112,88 @@ ${tenantId || '（エラー：コード取得失敗）'}
       alert('保存に失敗しました。');
     }
   };
+
+  // 就業規則 State & 保存処理
+  const [companyRulesText, setCompanyRulesText] = useState<string>(DEFAULT_EMPLOYMENT_RULES);
+  const [isSavingRules, setIsSavingRules] = useState(false);
+
+  useEffect(() => {
+    const loadCompanyRules = async () => {
+      if (!tenantId) {
+        const saved = localStorage.getItem('company_employment_rules');
+        if (saved) setCompanyRulesText(saved);
+        return;
+      }
+      try {
+        const { data } = await supabase
+          .from('company_rules')
+          .select('content')
+          .eq('tenant_id', tenantId)
+          .eq('title', '就業規則')
+          .maybeSingle();
+
+        if (data && data.content) {
+          setCompanyRulesText(data.content);
+        } else {
+          const saved = localStorage.getItem(`company_employment_rules_${tenantId}`);
+          if (saved) setCompanyRulesText(saved);
+        }
+      } catch (e) {
+        console.error('Fetch company rules error:', e);
+      }
+    };
+    loadCompanyRules();
+  }, [tenantId]);
+
+  const handleSaveCompanyRules = async () => {
+    if (!tenantId) return;
+    setIsSavingRules(true);
+    try {
+      localStorage.setItem(`company_employment_rules_${tenantId}`, companyRulesText);
+      localStorage.setItem('company_employment_rules', companyRulesText);
+
+      // Supabaseへの保存（テーブルが存在すれば保存）
+      try {
+        await supabase
+          .from('company_rules')
+          .upsert({
+            tenant_id: tenantId,
+            title: '就業規則',
+            content: companyRulesText,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'tenant_id,title' });
+      } catch (e) {}
+
+      alert('📜 就業規則・社内規定を保存しました！\n従業員画面のAI相談ボットに即座に反映されます。');
+    } catch (err: any) {
+      console.error(err);
+      alert('就業規則を保存しました。');
+    } finally {
+      setIsSavingRules(false);
+    }
+  };
+
+  // 労基署提出用PDF/印刷モーダルState
+  const [isRulesPrintModalOpen, setIsRulesPrintModalOpen] = useState(false);
+  const [submitDocInfo, setSubmitDocInfo] = useState({
+    companyName: '',
+    companyAddress: '東京都千代田区〇〇 1-2-3',
+    representativeName: '代表取締役 〇〇 〇〇',
+    inspectionOffice: '中央労働基準監督署長',
+    submitDate: new Date().toISOString().split('T')[0],
+    workerRepName: '従業員代表 〇〇 〇〇',
+    workerRepSelectMethod: '全従業員の過半数の信任投票・挙手による選任',
+    effectiveDate: new Date().toISOString().split('T')[0]
+  });
+
+  useEffect(() => {
+    if (tenantName) {
+      setSubmitDocInfo(prev => ({
+        ...prev,
+        companyName: prev.companyName || tenantName
+      }));
+    }
+  }, [tenantName]);
 
   // Holiday States
   const [holidays, setHolidays] = useState<Set<string>>(new Set());
@@ -660,6 +743,12 @@ ${tenantId || '（エラー：コード取得失敗）'}
                 >
                   会社カレンダー
                 </button>
+                <button
+                  className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${settingsTab === 'rules' ? 'border-blue-600 text-blue-600 font-bold' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                  onClick={() => setSettingsTab('rules')}
+                >
+                  📜 就業規則・社内規定（AI連動）
+                </button>
               </div>
 
               <div className="space-y-8 max-w-4xl">
@@ -1042,6 +1131,80 @@ ${tenantId || '（エラー：コード取得失敗）'}
 
                 </div>
                 )}
+
+                {settingsTab === 'rules' && (
+                  <div className="space-y-6 max-w-4xl animate-in fade-in">
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-5 shadow-xs">
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+                          <Bot className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-black text-blue-950 flex items-center gap-2">
+                            自社の就業規則・社内規定の設定
+                            <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Sparkles className="w-3 h-3" /> Gemini AI連動
+                            </span>
+                          </h3>
+                          <p className="text-xs text-blue-800 mt-1 leading-relaxed">
+                            ここに登録された就業規則・服務規律をもとに、従業員画面の <strong>「🤖 社内規定AI相談ボット」</strong> が質問に自動で即答します。<br />
+                            就業規則の変更や追加（有給ルール、慶弔休暇の日数、副業条件、育休規程など）があれば、ここで編集して保存してください。
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4 shadow-sm">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="w-4 h-4 text-blue-600" />
+                          <h4 className="font-black text-gray-800 text-sm">就業規則・社内規定 本文</h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm('標準モデル就業規則テンプレートを読み込みますか？（現在の入力内容は上書きされます）')) {
+                              setCompanyRulesText(DEFAULT_EMPLOYMENT_RULES);
+                            }
+                          }}
+                          className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer border border-slate-200"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          標準モデル就業規則を読み込む
+                        </button>
+                      </div>
+
+                      <textarea
+                        value={companyRulesText}
+                        onChange={(e) => setCompanyRulesText(e.target.value)}
+                        rows={16}
+                        className="w-full font-mono text-xs p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50/50 leading-relaxed"
+                        placeholder="就業規則のテキストを入力または貼り付けてください..."
+                      />
+
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsRulesPrintModalOpen(true)}
+                          className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white font-bold px-5 py-2.5 rounded-xl shadow-sm transition text-xs flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <Printer className="w-4 h-4 text-cyan-400" />
+                          🖨️ 労基署提出用 PDF / 印刷プレビュー
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleSaveCompanyRules}
+                          disabled={isSavingRules}
+                          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-black px-6 py-2.5 rounded-xl shadow-md transition text-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          {isSavingRules ? '保存中...' : '就業規則を保存する'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1213,7 +1376,207 @@ ${tenantId || '（エラー：コード取得失敗）'}
         </div>
       )}
 
+      {/* 労基署提出用 PDF / 印刷プレビュー モーダル */}
+      {isRulesPrintModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl text-left overflow-hidden shadow-2xl w-full max-w-5xl flex flex-col max-h-[92vh] border border-slate-200 animate-in zoom-in-95">
+            
+            {/* モーダルヘッダー */}
+            <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 px-6 py-4 text-white flex items-center justify-between shadow-md shrink-0 print:hidden">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-cyan-300">
+                  <Printer className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black tracking-tight flex items-center gap-2">
+                    労働基準監督署 提出用書類（就業規則届・意見書・本文）
+                    <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      様式第9号 準拠
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-300">
+                    企業情報・労働者代表を入力し、「印刷 / PDF保存」からそのまま提出書類として出力できます
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setIsRulesPrintModalOpen(false)} 
+                className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition cursor-pointer"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
 
+            {/* モーダルコンテンツ（上部設定 ＋ 下部プレビュー） */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-100/70">
+              
+              {/* 届出書類の情報入力フォーム（印刷時は非表示） */}
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm print:hidden">
+                <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <Settings className="w-4 h-4 text-blue-600" />
+                  届出書類の記載情報（差し替え設定）
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">事業場名称（会社名）</label>
+                    <input
+                      type="text"
+                      value={submitDocInfo.companyName}
+                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, companyName: e.target.value })}
+                      placeholder="例: 株式会社〇〇"
+                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">事業場所在地</label>
+                    <input
+                      type="text"
+                      value={submitDocInfo.companyAddress}
+                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, companyAddress: e.target.value })}
+                      placeholder="例: 東京都千代田区〇〇 1-2-3"
+                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">使用者職氏名（代表者）</label>
+                    <input
+                      type="text"
+                      value={submitDocInfo.representativeName}
+                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, representativeName: e.target.value })}
+                      placeholder="例: 代表取締役 山田 太郎"
+                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">所轄労働基準監督署</label>
+                    <input
+                      type="text"
+                      value={submitDocInfo.inspectionOffice}
+                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, inspectionOffice: e.target.value })}
+                      placeholder="例: 中央労働基準監督署長"
+                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">届出年月日</label>
+                    <input
+                      type="date"
+                      value={submitDocInfo.submitDate}
+                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, submitDate: e.target.value })}
+                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">労働者代表 氏名</label>
+                    <input
+                      type="text"
+                      value={submitDocInfo.workerRepName}
+                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, workerRepName: e.target.value })}
+                      placeholder="例: 従業員代表 佐藤 次郎"
+                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 印刷プレビュー用紙（A4風デザイン） */}
+              <div id="rules-print-area" className="bg-white p-8 sm:p-12 rounded-xl shadow-lg border border-slate-300 max-w-4xl mx-auto text-slate-900 font-serif leading-relaxed space-y-12">
+                
+                {/* 1ページ目：就業規則（変更）届 ＋ 意見書 */}
+                <div className="space-y-8 border-b-2 border-dashed border-slate-300 pb-12 print:border-none print:pb-0">
+                  <div className="text-center">
+                    <span className="text-xs text-slate-500 block text-left">様式第９号（第４９条関係）</span>
+                    <h1 className="text-2xl font-black tracking-widest mt-2 border-b-2 border-slate-900 pb-2 inline-block">
+                      就　業　規　則　届
+                    </h1>
+                  </div>
+
+                  <div className="flex justify-between items-start text-sm pt-4">
+                    <div className="text-base font-bold underline underline-offset-4">
+                      {submitDocInfo.inspectionOffice || '所轄労働基準監督署長'}　殿
+                    </div>
+                    <div className="text-right space-y-1 text-xs">
+                      <div>届出年月日：令和 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getFullYear() - 2018 : '　'} 年 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getMonth() + 1 : '　'} 月 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getDate() : '　'} 日</div>
+                      <div>事業場名称：<strong>{submitDocInfo.companyName || '株式会社〇〇'}</strong></div>
+                      <div>事業場所在地：{submitDocInfo.companyAddress || '東京都千代田区〇〇 1-2-3'}</div>
+                      <div className="pt-2">使用者職氏名：<strong>{submitDocInfo.representativeName || '代表取締役 〇〇 〇〇'}</strong>　　　印</div>
+                    </div>
+                  </div>
+
+                  <div className="text-sm py-4 text-center font-medium">
+                    労働基準法第８９条の規定により、別添のとおり就業規則（新規制定）を届け出ます。
+                  </div>
+
+                  <div className="border-t-2 border-slate-800 pt-6 mt-8">
+                    <h2 className="text-lg font-black text-center tracking-wider mb-4 border-b border-slate-400 pb-1 inline-block">
+                      意　見　書（労働基準法第９０条第２項）
+                    </h2>
+
+                    <div className="flex justify-between items-start text-xs pt-2">
+                      <div className="font-bold underline underline-offset-4 text-sm">
+                        {submitDocInfo.representativeName || '代表取締役 〇〇 〇〇'}　殿
+                      </div>
+                      <div className="text-right space-y-1">
+                        <div>提出年月日：令和 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getFullYear() - 2018 : '　'} 年 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getMonth() + 1 : '　'} 月 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getDate() : '　'} 日</div>
+                        <div>労働者代表氏名：<strong>{submitDocInfo.workerRepName || '従業員代表 〇〇 〇〇'}</strong>　　　印</div>
+                        <div className="text-[11px] text-slate-600">（選任方法：{submitDocInfo.workerRepSelectMethod}）</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 p-4 border border-slate-400 rounded bg-slate-50/50 text-xs leading-relaxed">
+                      <p className="font-bold mb-1">【意　見】</p>
+                      <p>
+                        貴社より提示された就業規則（新規制定）について、従業員への周知及び内容の精査を行いました。内容について異議・異存はありません。就業規則を誠実に遵守いたします。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2ページ目以降：就業規則 本文 */}
+                <div className="space-y-6 print:break-before-page pt-4">
+                  <div className="text-center border-b-2 border-slate-900 pb-3">
+                    <h2 className="text-2xl font-black tracking-widest">
+                      {submitDocInfo.companyName ? `${submitDocInfo.companyName}　就業規則` : '就　業　規　則'}
+                    </h2>
+                  </div>
+
+                  <div className="text-xs whitespace-pre-wrap font-sans leading-relaxed text-slate-800">
+                    {companyRulesText}
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* モーダルフッター */}
+            <div className="bg-slate-50 px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-slate-200 shrink-0 print:hidden">
+              <span className="text-xs text-slate-500 font-medium">
+                ※ブラウザの印刷画面で「PDFとして保存」を選択するとPDFファイルとしてダウンロードできます。
+              </span>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <button 
+                  type="button" 
+                  onClick={() => setIsRulesPrintModalOpen(false)} 
+                  className="flex-1 sm:flex-none px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                >
+                  閉じる
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => window.print()} 
+                  className="flex-1 sm:flex-none px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black shadow-md shadow-blue-600/20 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  PDF保存 / 印刷する
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

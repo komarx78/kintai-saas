@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Clock, Calendar, LogOut, FileText, CheckCircle, UserCheck, XCircle, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
+import { Clock, Calendar, LogOut, FileText, CheckCircle, UserCheck, XCircle, ChevronLeft, ChevronRight, Settings, Bot } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { RulesAiAssistant } from '../components/RulesAiAssistant';
 
 const UserDashboard = () => {
   const navigate = useNavigate();
@@ -414,6 +415,14 @@ const UserDashboard = () => {
             部下からの申請承認
             <span className="ml-auto bg-red-500 text-xs py-1 px-2 rounded-full">{pendingApprovals.length}</span>
           </button>
+
+          <button 
+            onClick={() => setActiveTab('rules_ai')}
+            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'rules_ai' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 font-bold text-white shadow-sm' : 'hover:bg-slate-700 text-blue-200'}`}
+          >
+            <Bot className="mr-3 h-5 w-5 text-cyan-300 animate-pulse" />
+            社内規定AI相談
+          </button>
           
           {user?.role === 'admin' && (
             <button 
@@ -611,6 +620,13 @@ const UserDashboard = () => {
                   >
                     <FileText className="w-4 h-4" />
                     <span>打刻修正・有給申請を行う</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('rules_ai')}
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold px-4 py-2 rounded-lg transition-all flex items-center justify-center space-x-2 text-xs whitespace-nowrap cursor-pointer shadow-md"
+                  >
+                    <Bot className="w-4 h-4 text-cyan-300" />
+                    <span>社内規定・有給ルールをAIに聞く</span>
                   </button>
                 </div>
               </div>
@@ -1073,6 +1089,10 @@ const UserDashboard = () => {
                 )}
               </div>
             </div>
+          )}
+
+          {activeTab === 'rules_ai' && (
+            <RulesAiAssistant tenantId={user?.tenant_id} userName={user?.name} />
           )}
 
         </div>
