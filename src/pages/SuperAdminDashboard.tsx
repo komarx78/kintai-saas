@@ -41,6 +41,15 @@ export default function SuperAdminDashboard() {
     fetchStaff();
   }, []);
 
+  useEffect(() => {
+    const titles: Record<string, string> = {
+      billing: 'プラン＆価格管理 | 特権管理者運用本部',
+      ai_settings: '✨ AIプラットフォーム設定 | 特権管理者運用本部',
+      staff: '運営スタッフ管理 | 特権管理者運用本部'
+    };
+    document.title = titles[activeTab] || '特権管理者運用本部 | スマート勤怠';
+  }, [activeTab]);
+
   const fetchSystemSettings = async () => {
     // ローカルストレージフォールバック
     const localKey = localStorage.getItem('platform_gemini_api_key') || localStorage.getItem('gemini_api_key_custom') || '';

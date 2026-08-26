@@ -59,6 +59,18 @@ const AdminDashboard = () => {
     additional_user_price: 200, additional_user_price_annual: 2400
   });
 
+  // ブラウザタブのタイトルを動的に更新
+  useEffect(() => {
+    const titles: Record<string, string> = {
+      employees: '従業員管理 | 企業管理ダッシュボード',
+      attendance: '月間勤怠・出勤簿管理 | 企業管理ダッシュボード',
+      ledger: '有給・休暇管理 | 企業管理ダッシュボード',
+      payslips: 'Web給与明細管理 | 企業管理ダッシュボード',
+      settings: '会社・就業規則設定 | 企業管理ダッシュボード'
+    };
+    document.title = titles[activeTab] || '企業管理ダッシュボード | スマート勤怠';
+  }, [activeTab]);
+
   const inviteMessage = `お疲れ様です！
 勤怠・有給管理システムへの初期登録をお願いいたします。
 
