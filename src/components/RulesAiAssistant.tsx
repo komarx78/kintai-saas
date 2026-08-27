@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabase';
 import { askEmploymentRulesAI, type ChatMessage } from '../lib/gemini';
 import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 import { 
@@ -26,32 +25,13 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
   const [showFullRules, setShowFullRules] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 就業規則 & テナントAPIキーの取得（DBまたはLocalStorage）
+  // 就業規則 & テナントAPIキーの取得
   useEffect(() => {
-    const fetchRules = async () => {
-      // 1. ローカルストレージフォールバック即時設定
+    const fetchRules = () => {
       const saved = localStorage.getItem(`company_employment_rules_${tenantId}`) || localStorage.getItem('company_employment_rules');
       if (saved) setCompanyRules(saved);
       const savedKey = localStorage.getItem(`gemini_api_key_${tenantId}`) || localStorage.getItem('gemini_api_key_custom');
       if (savedKey) setTenantApiKey(savedKey);
-
-      if (!tenantId) return;
-
-      try {
-        const { data, error } = await supabase
-          .from('company_rules')
-          .select('content, gemini_api_key')
-          .eq('tenant_id', tenantId)
-          .eq('title', '就業規則')
-          .maybeSingle();
-
-        if (data && !error && data.content) {
-          setCompanyRules(data.content);
-          if (data.gemini_api_key) setTenantApiKey(data.gemini_api_key);
-        }
-      } catch (e) {
-        // テーブル未作成時もデフォルト値で自動稼働
-      }
     };
     fetchRules();
   }, [tenantId]);

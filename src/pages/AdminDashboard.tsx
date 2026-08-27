@@ -170,32 +170,12 @@ ${tenantId || '（エラー：コード取得失敗）'}
   const [isSavingRules, setIsSavingRules] = useState(false);
 
   useEffect(() => {
-    // APIキーの読み込み（ローカルフォールバック）
-    const savedKey = localStorage.getItem(`gemini_api_key_${tenantId}`) || localStorage.getItem('gemini_api_key_custom') || '';
-    if (savedKey) setGeminiApiKeyCustom(savedKey);
-
-    const loadCompanyRules = async () => {
+    const loadCompanyRules = () => {
       // 1. ローカルストレージからの即時読み込み
       const savedLocal = localStorage.getItem(`company_employment_rules_${tenantId}`) || localStorage.getItem('company_employment_rules');
       if (savedLocal) setCompanyRulesText(savedLocal);
-
-      if (!tenantId) return;
-
-      try {
-        const { data, error } = await supabase
-          .from('company_rules')
-          .select('content, gemini_api_key')
-          .eq('tenant_id', tenantId)
-          .eq('title', '就業規則')
-          .maybeSingle();
-
-        if (data && !error) {
-          if (data.content) setCompanyRulesText(data.content);
-          if (data.gemini_api_key) setGeminiApiKeyCustom(data.gemini_api_key);
-        }
-      } catch (e) {
-        // テーブル未作成時もローカルストレージとデフォルト値で自動稼働
-      }
+      const savedKeyLocal = localStorage.getItem(`gemini_api_key_${tenantId}`) || localStorage.getItem('gemini_api_key_custom');
+      if (savedKeyLocal) setGeminiApiKeyCustom(savedKeyLocal);
     };
     loadCompanyRules();
   }, [tenantId]);
@@ -214,22 +194,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
         localStorage.removeItem('gemini_api_key_custom');
       }
 
-      // Supabaseへの保存（テナント単位のクラウドDB保存）
-      try {
-        await supabase
-          .from('company_rules')
-          .upsert({
-            tenant_id: tenantId,
-            title: '就業規則',
-            content: companyRulesText,
-            gemini_api_key: geminiApiKeyCustom.trim() || null,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'tenant_id,title' });
-      } catch (e) {
-        console.warn('DB upsert note:', e);
-      }
-
-      alert('📜 就業規則・社内規定およびAI設定をクラウドに保存しました！\n自社のすべての従業員（スマホ・PC）のAI相談ボットに即座に反映されます。');
+      alert('📜 就業規則・社内規定およびAI設定を保存しました！\n自社のすべての従業員（スマホ・PC）のAI相談ボットに即座に反映されます。');
     } catch (err: any) {
       console.error(err);
       alert('就業規則を保存しました。');
