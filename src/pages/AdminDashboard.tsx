@@ -175,28 +175,26 @@ ${tenantId || '（エラー：コード取得失敗）'}
     if (savedKey) setGeminiApiKeyCustom(savedKey);
 
     const loadCompanyRules = async () => {
-      if (!tenantId) {
-        const saved = localStorage.getItem('company_employment_rules');
-        if (saved) setCompanyRulesText(saved);
-        return;
-      }
+      // 1. ローカルストレージからの即時読み込み
+      const savedLocal = localStorage.getItem(`company_employment_rules_${tenantId}`) || localStorage.getItem('company_employment_rules');
+      if (savedLocal) setCompanyRulesText(savedLocal);
+
+      if (!tenantId) return;
+
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('company_rules')
           .select('content, gemini_api_key')
           .eq('tenant_id', tenantId)
           .eq('title', '就業規則')
           .maybeSingle();
 
-        if (data) {
+        if (data && !error) {
           if (data.content) setCompanyRulesText(data.content);
           if (data.gemini_api_key) setGeminiApiKeyCustom(data.gemini_api_key);
-        } else {
-          const saved = localStorage.getItem(`company_employment_rules_${tenantId}`);
-          if (saved) setCompanyRulesText(saved);
         }
       } catch (e) {
-        console.error('Fetch company rules error:', e);
+        // テーブル未作成時もローカルストレージとデフォルト値で自動稼働
       }
     };
     loadCompanyRules();
