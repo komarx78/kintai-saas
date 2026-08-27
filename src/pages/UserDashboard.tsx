@@ -211,7 +211,17 @@ const UserDashboard = () => {
 
       const fullReason = `【${shiftMonth}月度 シフト希望提出（出勤: ${workingCount}日 / 休み: ${offCount}日）】\n${summaryText}\n\n【シフトデータ: ${JSON.stringify(shiftDataArray)}】`;
 
-      // 既存の当月未承認シフト申請があれば一旦ステータスを上書き更新
+      // 既存の当月未承認シフト申請があれば古いものを更新（重複防止）
+      await supabase
+        .from('leave_requests')
+        .update({ status: '取下' })
+        .eq('user_id', user.id)
+        .eq('type', 'シフト希望')
+        .eq('status', '申請中')
+        .gte('start_date', `${shiftMonth}-01`)
+        .lte('start_date', `${shiftMonth}-31`);
+
+      // 最新のシフト希望を新規申請
       const { error } = await supabase.from('leave_requests').insert({
         tenant_id: user.tenant_id,
         user_id: user.id,
@@ -375,14 +385,15 @@ const UserDashboard = () => {
           if (shiftDataMatch) {
             const shiftList = JSON.parse(shiftDataMatch[1]);
             for (const item of shiftList) {
+              const isHoli = Boolean(item.isHoliday);
               await supabase.from('shifts').upsert({
                 tenant_id: targetReq.tenant_id || user?.tenant_id,
                 user_id: targetReq.user_id,
                 work_date: item.date,
-                start_time: item.isHoliday ? null : (item.startTime ? `${item.startTime}:00` : '09:00:00'),
-                end_time: item.isHoliday ? null : (item.endTime ? `${item.endTime}:00` : '18:00:00'),
-                is_holiday: item.isHoliday || false,
-                color: item.isHoliday ? '#94a3b8' : '#3b82f6'
+                start_time: isHoli ? '00:00:00' : (item.startTime ? `${item.startTime}:00` : '09:00:00'),
+                end_time: isHoli ? '00:00:00' : (item.endTime ? `${item.endTime}:00` : '18:00:00'),
+                break_minutes: isHoli ? 0 : 60,
+                color: isHoli ? '#94a3b8' : '#3b82f6'
               }, { onConflict: 'user_id,work_date' });
             }
           }

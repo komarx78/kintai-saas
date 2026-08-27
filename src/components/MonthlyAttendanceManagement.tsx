@@ -126,20 +126,26 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         if (match) {
           try {
             const shiftArr = JSON.parse(match[1]);
-            const upsertRows = shiftArr.map((item: any) => ({
-              tenant_id: req.tenant_id || tenantId,
-              user_id: req.user_id,
-              work_date: item.date,
-              start_time: item.startTime,
-              end_time: item.endTime,
-              is_holiday: item.isHoliday ?? false
-            }));
+            const upsertRows = shiftArr.map((item: any) => {
+              const isHoli = Boolean(item.isHoliday);
+              return {
+                tenant_id: req.tenant_id || tenantId,
+                user_id: req.user_id,
+                work_date: item.date,
+                start_time: isHoli ? '00:00:00' : (item.startTime || '09:00:00'),
+                end_time: isHoli ? '00:00:00' : (item.endTime || '18:00:00'),
+                break_minutes: isHoli ? 0 : 60
+              };
+            });
 
+            // shiftsテーブルへ投入（start_time/end_timeのNOT NULL制約に対応）
             const { error: shiftErr } = await supabase
               .from('shifts')
               .upsert(upsertRows, { onConflict: 'user_id,work_date' });
 
-            if (shiftErr) console.warn('Shifts upsert notice:', shiftErr);
+            if (shiftErr) {
+              console.warn('Shifts upsert notice:', shiftErr);
+            }
           } catch (pe) {
             console.error('Parse shift data error:', pe);
           }
@@ -710,51 +716,57 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
 
           {/* 申請カード一覧 */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
-            {allPendingRequests.map(req => (
-              <div key={req.id} className="bg-white/95 border border-amber-200/80 rounded-xl p-3 shadow-2xs flex flex-col justify-between gap-2">
-                <div>
-                  <div className="flex items-center justify-between gap-1.5">
+            {allPendingRequests.map(req => {
+              const isShift = req.type === 'シフト希望';
+              const shiftTitleMatch = isShift ? req.reason?.match(/【([^】]+シフト希望提出[^】]*)】/) : null;
+              const displayText = isShift ? (shiftTitleMatch ? shiftTitleMatch[1] : '月間シフト希望提出') : (req.reason || '（理由なし）');
+
+              return (
+                <div key={req.id} className="bg-white/95 border border-amber-200/80 rounded-xl p-3 shadow-2xs flex flex-col justify-between gap-2">
+                  <div>
+                    <div className="flex items-center justify-between gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedUserId(req.user_id);
+                          setViewMode('individual');
+                        }}
+                        className="font-black text-xs text-slate-900 hover:text-blue-600 underline cursor-pointer"
+                        title="このスタッフの出勤簿を開く"
+                      >
+                        {req.user?.name || '従業員'}
+                      </button>
+                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${isShift ? 'bg-indigo-100 text-indigo-900 border-indigo-300' : 'bg-amber-100 text-amber-900 border-amber-300'}`}>
+                        {req.type}
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-bold text-slate-500 mt-0.5">
+                      対象期間: {req.start_date} {req.end_date && req.end_date !== req.start_date ? `〜 ${req.end_date}` : ''}
+                    </div>
+                    <div className={`text-xs mt-1 ${isShift ? 'font-bold text-indigo-950 bg-indigo-50/70 p-1.5 rounded-lg border border-indigo-100' : 'text-slate-700 line-clamp-2'}`}>
+                      {displayText}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-1.5 pt-1.5 border-t border-slate-100">
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedUserId(req.user_id);
-                        setViewMode('individual');
-                      }}
-                      className="font-black text-xs text-slate-900 hover:text-blue-600 underline cursor-pointer"
-                      title="このスタッフの出勤簿を開く"
+                      onClick={() => handleApproveRequest(req)}
+                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black rounded-lg shadow-2xs transition cursor-pointer"
                     >
-                      {req.user?.name || '従業員'}
+                      ✓ 承認
                     </button>
-                    <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black px-1.5 py-0.5 rounded">
-                      {req.type}
-                    </span>
-                  </div>
-                  <div className="text-[11px] font-bold text-slate-500 mt-0.5">
-                    対象日: {req.start_date} {req.end_date && req.end_date !== req.start_date ? `〜 ${req.end_date}` : ''}
-                  </div>
-                  <div className="text-xs text-slate-700 mt-1 line-clamp-2">
-                    {req.reason || '（理由なし）'}
+                    <button
+                      type="button"
+                      onClick={() => handleRejectRequest(req)}
+                      className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold rounded-lg transition cursor-pointer"
+                    >
+                      ✗ 却下
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-end gap-1.5 pt-1.5 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => handleApproveRequest(req)}
-                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black rounded-lg shadow-2xs transition cursor-pointer"
-                  >
-                    ✓ 承認
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRejectRequest(req)}
-                    className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-bold rounded-lg transition cursor-pointer"
-                  >
-                    ✗ 却下
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
