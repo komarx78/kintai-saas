@@ -120,6 +120,32 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
 
       if (error) throw error;
 
+      // シフト希望申請の場合、shifts テーブルへ確定シフトを一括自動投入！
+      if (req.type === 'シフト希望') {
+        const match = req.reason?.match(/【シフトデータ:\s*(\[.+\])】/s);
+        if (match) {
+          try {
+            const shiftArr = JSON.parse(match[1]);
+            const upsertRows = shiftArr.map((item: any) => ({
+              tenant_id: req.tenant_id || tenantId,
+              user_id: req.user_id,
+              work_date: item.date,
+              start_time: item.startTime,
+              end_time: item.endTime,
+              is_holiday: item.isHoliday ?? false
+            }));
+
+            const { error: shiftErr } = await supabase
+              .from('shifts')
+              .upsert(upsertRows, { onConflict: 'user_id,work_date' });
+
+            if (shiftErr) console.warn('Shifts upsert notice:', shiftErr);
+          } catch (pe) {
+            console.error('Parse shift data error:', pe);
+          }
+        }
+      }
+
       // 打刻修正申請の場合、attendance_records に打刻時刻を自動反映
       if (req.type === '打刻修正' && req.start_date) {
         const reasonText = req.reason || '';
@@ -167,7 +193,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         }
       }
 
-      showToast(`🎉 ${req.type}申請を承認し、出勤簿に反映しました！`);
+      showToast(`🎉 ${req.type}申請を承認し、反映しました！`);
       await fetchData();
       if (onRefreshRequests) await onRefreshRequests();
     } catch (err: any) {
@@ -341,6 +367,25 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     const userRecords = attendanceRecords.filter(r => r.user_id === selectedUserId);
     const userLeaves = leaveRequests.filter(r => r.user_id === selectedUserId);
 
+    // シフト希望（月間一括申請）のパース
+    const monthlyShiftReq = userLeaves.find(l => l.status === '申請中' && l.type === 'シフト希望');
+    let shiftDataMap: Record<string, { isHoliday: boolean; startTime: string | null; endTime: string | null }> = {};
+    if (monthlyShiftReq && monthlyShiftReq.reason) {
+      const match = monthlyShiftReq.reason.match(/【シフトデータ:\s*(\[.+\])】/s);
+      if (match) {
+        try {
+          const arr = JSON.parse(match[1]);
+          arr.forEach((item: any) => {
+            shiftDataMap[item.date] = {
+              isHoliday: item.isHoliday ?? false,
+              startTime: item.startTime,
+              endTime: item.endTime
+            };
+          });
+        } catch (e) {}
+      }
+    }
+
     const rows = [];
     for (let day = 1; day <= daysInMonth; day++) {
       const dateObj = new Date(year, month, day);
@@ -350,9 +395,23 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
 
       const record = userRecords.find(r => r.date === dateStr);
       
-      // 当日の申請データを取得
-      const dayPendingRequests = userLeaves.filter(l => l.status === '申請中' && l.start_date <= dateStr && (l.end_date ? l.end_date >= dateStr : l.start_date >= dateStr));
-      const dayApprovedLeave = userLeaves.find(l => l.status === '承認' && l.start_date <= dateStr && (l.end_date ? l.end_date >= dateStr : l.start_date >= dateStr));
+      // 当日の通常申請（シフト希望以外）を取得
+      const dayPendingRequests = userLeaves.filter(l => 
+        l.status === '申請中' && 
+        l.type !== 'シフト希望' && 
+        l.start_date <= dateStr && 
+        (l.end_date ? l.end_date >= dateStr : l.start_date >= dateStr)
+      );
+
+      // 当日のシフト希望データ
+      const dayShiftData = shiftDataMap[dateStr] || null;
+
+      const dayApprovedLeave = userLeaves.find(l => 
+        l.status === '承認' && 
+        l.type !== 'シフト希望' && 
+        l.start_date <= dateStr && 
+        (l.end_date ? l.end_date >= dateStr : l.start_date >= dateStr)
+      );
 
       let actualStr = '-';
       let overtimeStr = '-';
@@ -389,6 +448,8 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         record,
         approvedLeave: dayApprovedLeave,
         pendingRequests: dayPendingRequests,
+        dayShiftData,
+        monthlyShiftReq,
         checkIn: record?.check_in_time || '-',
         checkOut: record?.check_out_time || '-',
         actualStr,
@@ -878,6 +939,58 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                 )}
               </div>
 
+              {/* 選択中従業員の月間シフト希望一括申請カード（申請中がある場合のみ表示） */}
+              {(() => {
+                const shiftReq = selectedUserRows[0]?.monthlyShiftReq;
+                if (!shiftReq) return null;
+                const matchSummary = shiftReq.reason?.match(/【([^】]+シフト希望提出[^】]*)】/);
+                const summaryTitle = matchSummary ? matchSummary[1] : '月度 シフト希望提出';
+
+                return (
+                  <div className="bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-5 shadow-md border border-indigo-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-in slide-in-from-top-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="bg-amber-400 text-slate-950 text-[11px] font-black px-2.5 py-0.5 rounded-full shadow-2xs">
+                          🗓️ シフト希望 申請中
+                        </span>
+                        <span className="text-xs text-indigo-200">
+                          {selectedUser?.name} さんからの月間シフト提出
+                        </span>
+                      </div>
+                      <h4 className="text-base font-black text-white">
+                        {summaryTitle}（{shiftReq.start_date} 〜 {shiftReq.end_date}）
+                      </h4>
+                      <details className="text-xs text-indigo-200 mt-1 cursor-pointer">
+                        <summary className="font-bold text-amber-300 hover:text-amber-200 select-none">
+                          ▼ 提出されたシフト希望の内訳を展開
+                        </summary>
+                        <div className="mt-2 text-[11px] font-mono whitespace-pre-wrap max-h-40 overflow-y-auto bg-slate-950/80 p-3 rounded-xl border border-indigo-800 text-indigo-100">
+                          {shiftReq.reason?.split('【シフトデータ')[0] || shiftReq.reason}
+                        </div>
+                      </details>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end md:self-auto shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleApproveRequest(shiftReq)}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white font-black px-5 py-2.5 rounded-xl shadow-lg transition flex items-center gap-1.5 text-xs cursor-pointer"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        このシフトを承認・確定する
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRejectRequest(shiftReq)}
+                        className="bg-white/10 hover:bg-rose-500/20 text-rose-300 border border-rose-400/30 font-bold px-3 py-2.5 rounded-xl transition text-xs cursor-pointer"
+                      >
+                        却下
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* 1日〜末日 タイムカードテーブル */}
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
@@ -907,7 +1020,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                       {selectedUserRows.map(row => {
                         let dateColorClass = "text-slate-900";
                         let rowBgClass = "hover:bg-blue-50/20";
-                        const hasPending = row.pendingRequests && row.pendingRequests.length > 0;
+                        const hasPending = (row.pendingRequests && row.pendingRequests.length > 0) || !!row.dayShiftData;
 
                         if (hasPending) {
                           rowBgClass = "bg-amber-50/60 hover:bg-amber-100/60 border-l-4 border-l-amber-500";
@@ -954,7 +1067,23 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                                   </div>
                                 )}
 
-                                {/* 申請中の各種申請（打刻修正・有給など） */}
+                                {/* 当日のシフト希望（スマート1行表示） */}
+                                {row.dayShiftData && (
+                                  <div className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg text-indigo-900 shadow-2xs font-bold">
+                                    <span className="bg-amber-400 text-slate-900 text-[10px] font-black px-1.5 py-0.2 rounded">
+                                      申請中
+                                    </span>
+                                    <span>
+                                      {row.dayShiftData.isHoliday ? (
+                                        '公休希望（休み）'
+                                      ) : (
+                                        `出勤希望: ${row.dayShiftData.startTime || '09:00'}〜${row.dayShiftData.endTime || '18:00'}`
+                                      )}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* 申請中の通常申請（打刻修正・有給など） */}
                                 {row.pendingRequests?.map((pReq: any) => (
                                   <div key={pReq.id} className="flex flex-wrap items-center gap-2 bg-white/90 border border-amber-300 p-1.5 rounded-lg shadow-2xs">
                                     <span className="bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded">
