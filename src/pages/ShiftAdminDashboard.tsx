@@ -27,10 +27,35 @@ const ShiftAdminDashboard: React.FC = () => {
   const [isSavingRule, setIsSavingRule] = useState(false);
   const [isSavingLock, setIsSavingLock] = useState(false);
   const [isSavingAutoLock, setIsSavingAutoLock] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
 
+  // 1. シフトデータの完全リセット（初期化）
+  const handleResetAllShiftData = async () => {
+    if (!window.confirm('確定シフト・ドラフトシフト・希望シフトをすべて削除し、完全にリセットします。よろしいですか？')) return;
+    setIsResetting(true);
+    try {
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
+      if (!tenantId) return;
+
+      // advanced_shifts と advanced_shift_requests を全削除
+      await supabase.from('advanced_shifts').delete().eq('tenant_id', tenantId);
+      await supabase.from('advanced_shift_requests').delete().eq('tenant_id', tenantId);
+
+      alert('🗑️ シフトデータ（確定・ドラフト・希望）を完全にクリアしました！');
+      setGenerationResult(null);
+      await fetchStats();
+    } catch (err: any) {
+      console.error('Reset error:', err);
+      alert('リセットに失敗しました: ' + err.message);
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  // 2. 9:00〜18:00（各1名）専用のダミーデータ一括投入
   const handleSeedDummyData = async () => {
-    if (!window.confirm('テスト用のダミーデータ（ダミー従業員5名、役割、時給、必要枠、今週のシフト希望）を一括投入します。よろしいですか？')) return;
+    if (!window.confirm('既存のシフトをクリアし、【9:00〜18:00（各1名）】の必要枠・ダミー従業員・シフト希望を一括投入します。よろしいですか？')) return;
     setIsSeeding(true);
     try {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
@@ -38,6 +63,10 @@ const ShiftAdminDashboard: React.FC = () => {
         alert('テナントIDが取得できませんでした。');
         return;
       }
+
+      // 既存シフト＆希望をクリア
+      await supabase.from('advanced_shifts').delete().eq('tenant_id', tenantId);
+      await supabase.from('advanced_shift_requests').delete().eq('tenant_id', tenantId);
 
       // 1. 役割（ロール）マスタ作成
       const rolesToInsert = [
@@ -47,60 +76,25 @@ const ShiftAdminDashboard: React.FC = () => {
       ];
       await supabase.from('shift_roles').upsert(rolesToInsert, { onConflict: 'tenant_id,name' });
 
-      // 2. 必要人数枠マスタ作成（平日＆土日）
+      // 2. 必要人数枠マスタ作成（平日＆土日 すべて 9:00〜18:00 各1名）
       const reqsToInsert: any[] = [];
-      // 平日 (月〜金: 1〜5)
-      [1, 2, 3, 4, 5].forEach(dow => {
+      // 0:日, 1:月, 2:火, 3:水, 4:木, 5:金, 6:土
+      [0, 1, 2, 3, 4, 5, 6].forEach(dow => {
         reqsToInsert.push({
           tenant_id: tenantId,
           day_of_week: dow,
           role: 'ホール',
           start_time: '09:00:00',
-          end_time: '15:00:00',
-          required_count: 2
-        });
-        reqsToInsert.push({
-          tenant_id: tenantId,
-          day_of_week: dow,
-          role: 'ホール',
-          start_time: '17:00:00',
-          end_time: '22:00:00',
-          required_count: 2
+          end_time: '18:00:00',
+          required_count: 1
         });
         reqsToInsert.push({
           tenant_id: tenantId,
           day_of_week: dow,
           role: 'キッチン',
           start_time: '09:00:00',
-          end_time: '15:00:00',
-          required_count: 2
-        });
-        reqsToInsert.push({
-          tenant_id: tenantId,
-          day_of_week: dow,
-          role: 'キッチン',
-          start_time: '17:00:00',
-          end_time: '22:00:00',
-          required_count: 2
-        });
-      });
-      // 土日 (土: 6, 日: 7)
-      [6, 7].forEach(dow => {
-        reqsToInsert.push({
-          tenant_id: tenantId,
-          day_of_week: dow,
-          role: 'ホール',
-          start_time: '10:00:00',
-          end_time: '21:00:00',
-          required_count: 2
-        });
-        reqsToInsert.push({
-          tenant_id: tenantId,
-          day_of_week: dow,
-          role: 'キッチン',
-          start_time: '10:00:00',
-          end_time: '21:00:00',
-          required_count: 2
+          end_time: '18:00:00',
+          required_count: 1
         });
       });
 
@@ -109,11 +103,11 @@ const ShiftAdminDashboard: React.FC = () => {
 
       // 3. ダミー従業員5名の登録（users）
       const dummyStaffs = [
-        { name: '佐藤 花子 (テスト)', email: `dummy.sato.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'part-time', wage: 1150, roles: ['ホール', 'キッチン'] },
+        { name: '佐藤 花子 (テスト)', email: `dummy.sato.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'part-time', wage: 1150, roles: ['ホール'] },
         { name: '鈴木 一郎 (テスト)', email: `dummy.suzuki.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'full-time', wage: 1200, roles: ['キッチン'] },
         { name: '田中 太郎 (テスト)', email: `dummy.tanaka.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'part-time', wage: 1100, roles: ['ホール'] },
         { name: '高橋 美咲 (テスト)', email: `dummy.takahashi.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'part-time', wage: 1100, roles: ['ホール'] },
-        { name: '伊藤 健太 (テスト)', email: `dummy.ito.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'full-time', wage: 1300, roles: ['キッチン', 'リーダー'] }
+        { name: '伊藤 健太 (テスト)', email: `dummy.ito.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'full-time', wage: 1300, roles: ['キッチン'] }
       ];
 
       const createdUserIds: { id: string; name: string; roles: string[]; wage: number }[] = [];
@@ -154,26 +148,20 @@ const ShiftAdminDashboard: React.FC = () => {
         }
       }
 
-      // 4. 今週分のシフト希望を一括投入（advanced_shift_requests）
-      const startDate = format(weekStart, 'yyyy-MM-dd');
-      const endDate = format(weekEnd, 'yyyy-MM-dd');
-
-      await supabase.from('advanced_shift_requests').delete().eq('tenant_id', tenantId).gte('target_date', startDate).lte('target_date', endDate);
-
+      // 4. 今週分のシフト希望（全員 09:00〜18:00 で提出）
       const requestsToInsert: any[] = [];
 
       for (let i = 0; i < 7; i++) {
         const d = addDays(weekStart, i);
         const dStr = format(d, 'yyyy-MM-dd');
 
-        createdUserIds.forEach((userItem, idx) => {
-          const isLunch = (i + idx) % 2 === 0;
+        createdUserIds.forEach((userItem) => {
           requestsToInsert.push({
             tenant_id: tenantId,
             user_id: userItem.id,
             target_date: dStr,
-            available_start_time: isLunch ? '09:00:00' : '17:00:00',
-            available_end_time: isLunch ? '15:00:00' : '22:00:00',
+            available_start_time: '09:00:00',
+            available_end_time: '18:00:00',
             preferred_role: userItem.roles[0] || 'ホール',
             status: 'submitted'
           });
@@ -182,7 +170,8 @@ const ShiftAdminDashboard: React.FC = () => {
 
       await supabase.from('advanced_shift_requests').insert(requestsToInsert);
 
-      alert('🎉 テスト用ダミーデータ（従業員5名・時給・必要人数枠・今週のシフト希望）を一括投入しました！\n「シフトを自動生成する」ボタンを押すと、AIが最適なシフトを一瞬で自動作成します。');
+      alert('🎉 【9:00〜18:00（各1名）】のデータセットを一括投入しました！\n「シフトを自動生成する (AI)」ボタンを押すと、ホール1名・キッチン1名がピッタリ配置されます。');
+      setGenerationResult(null);
       await fetchStats();
     } catch (err: any) {
       console.error('Seed dummy data error:', err);
@@ -412,13 +401,22 @@ const ShiftAdminDashboard: React.FC = () => {
           </div>
           <div className="flex flex-wrap items-center gap-2.5">
             <button 
+              onClick={handleResetAllShiftData} 
+              disabled={isResetting}
+              className="bg-rose-500 hover:bg-rose-600 text-white shadow-lg px-3.5 py-2 rounded-xl flex items-center transition font-bold text-sm cursor-pointer disabled:opacity-50"
+              title="確定シフト・ドラフト・希望を全削除して初期化します"
+            >
+              {isResetting ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full mr-2"></div> : <span className="mr-1.5">🗑️</span>}
+              全リセット
+            </button>
+            <button 
               onClick={handleSeedDummyData} 
               disabled={isSeeding}
               className="bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-lg px-4 py-2 rounded-xl flex items-center transition font-black text-sm cursor-pointer disabled:opacity-50"
-              title="従業員5名・時給・必要枠・今週のシフト希望を一瞬で自動セットアップします"
+              title="【9:00〜18:00（各1名）】の必要枠・ダミー従業員・今週のシフト希望を一瞬で自動セットアップします"
             >
               {isSeeding ? <div className="animate-spin w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full mr-2"></div> : <span className="mr-1.5">🪄</span>}
-              ダミーデータ投入
+              9-18時データ投入
             </button>
             <button 
               onClick={handlePublishDrafts} 
