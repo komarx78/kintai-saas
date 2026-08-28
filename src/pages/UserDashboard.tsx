@@ -137,7 +137,7 @@ const UserDashboard = () => {
       const startOfMonthStr = `${y}-${m}-01`;
       const endOfMonthStr = `${y}-${m}-31`;
 
-      // 1. 確定シフトの取得
+      // 1. 確定シフトテーブル（shifts）の取得
       const { data: shiftList } = await supabase
         .from('shifts')
         .select('*')
@@ -145,13 +145,49 @@ const UserDashboard = () => {
         .gte('work_date', startOfMonthStr)
         .lte('work_date', endOfMonthStr);
 
-      if (shiftList) {
-        setMyShifts(shiftList);
-        const tS = shiftList.find(s => s.work_date === todayStr);
-        if (tS) setTodayShift(tS);
+      let finalShifts = shiftList || [];
+
+      // 2. 承認済みのシフト希望申請（leave_requests）からも確定シフトを自動復元！
+      const { data: approvedReq } = await supabase
+        .from('leave_requests')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('type', 'シフト希望')
+        .eq('status', '承認')
+        .gte('start_date', startOfMonthStr)
+        .lte('start_date', endOfMonthStr)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (approvedReq && approvedReq.reason) {
+        const match = approvedReq.reason.match(/【シフトデータ:\s*(\[.+\])】/s);
+        if (match) {
+          try {
+            const arr = JSON.parse(match[1]);
+            const approvedShifts = arr.map((item: any) => ({
+              id: `appr-${item.date}`,
+              tenant_id: user.tenant_id,
+              user_id: user.id,
+              work_date: item.date,
+              start_time: item.isHoliday ? null : (item.startTime ? `${item.startTime}:00` : '09:00:00'),
+              end_time: item.isHoliday ? null : (item.endTime ? `${item.endTime}:00` : '18:00:00'),
+              is_holiday: item.isHoliday ?? false
+            }));
+
+            // shiftsテーブルが空の場合は承認データから即時確定反映
+            if (finalShifts.length === 0) {
+              finalShifts = approvedShifts;
+            }
+          } catch (e) {}
+        }
       }
 
-      // 2. 提出中のシフト希望があれば自動復元！
+      setMyShifts(finalShifts);
+      const tS = finalShifts.find(s => s.work_date === todayStr);
+      if (tS) setTodayShift(tS);
+
+      // 3. 提出中（申請中）のシフト希望があれば自動復元！
       const { data: reqData } = await supabase
         .from('leave_requests')
         .select('*')
@@ -297,6 +333,10 @@ const UserDashboard = () => {
       };
       fetchApprovals();
 
+      if (activeTab === 'shifts' || activeTab === 'home') {
+        fetchMyShifts();
+      }
+
       if (activeTab === 'requests') {
         const fetchLeaveTypes = async () => {
           const { data } = await supabase
@@ -316,7 +356,7 @@ const UserDashboard = () => {
         fetchMyRequests();
       }
     }
-  }, [user, activeTab]);
+  }, [user, activeTab, shiftMonth]);
 
   const handleApprovalAction = async (requestId: string, status: '承認' | '却下') => {
     try {
@@ -1181,6 +1221,64 @@ const UserDashboard = () => {
                     </button>
                   </div>
                 </div>
+
+                {/* シフトステータスバナー（確定済み・申請中インジケーター） */}
+                {(() => {
+                  const confirmedCount = myShifts.length;
+                  const confirmedWorkCount = myShifts.filter(s => !s.is_holiday).length;
+                  const confirmedHoliCount = myShifts.filter(s => s.is_holiday).length;
+                  const pendingReq = myRecentRequests.find(r => r.type === 'シフト希望' && r.status === '申請中' && r.start_date?.startsWith(shiftMonth));
+
+                  if (confirmedCount > 0) {
+                    return (
+                      <div className="my-3 bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-indigo-500/15 border-2 border-emerald-400 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-black shadow-sm shrink-0">
+                            ✓
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                                確定済み
+                              </span>
+                              <h4 className="text-sm font-black text-slate-900">
+                                {shiftMonth}月度のシフトが確定しています
+                              </h4>
+                            </div>
+                            <p className="text-xs text-slate-600 mt-0.5">
+                              出勤: <strong className="text-indigo-700 font-bold">{confirmedWorkCount}日</strong> / 公休: <strong className="text-slate-700 font-bold">{confirmedHoliCount}日</strong> （※カレンダー内の「確定」バッジが確定シフトです）
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (pendingReq) {
+                    return (
+                      <div className="my-3 bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex items-center gap-3 shadow-xs">
+                        <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shadow-sm shrink-0">
+                          ⏳
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="bg-amber-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                              申請中（承認待ち）
+                            </span>
+                            <h4 className="text-sm font-black text-amber-950">
+                              {shiftMonth}月度のシフト希望を提出中です
+                            </h4>
+                          </div>
+                          <p className="text-xs text-amber-800 mt-0.5">
+                            上長（承認者）の承認をお待ちください。承認されると自動的に確定シフトへ切り替わります。
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return null;
+                })()}
 
                 {/* クイック一括設定バー（管理者の会社カレンダー設定に完全連動） */}
                 <div className="my-4 p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
