@@ -57,7 +57,7 @@ const ShiftAdminDashboard: React.FC = () => {
       const uniqueIds = [...new Set((reqData || []).map(r => r.user_id))];
       setSubmittedUserIds(uniqueIds);
 
-      const { data: settingsData } = await supabase.from('shift_settings').select('monthly_labor_budget, shift_period, submission_deadline_rule, is_submission_locked, auto_lock_day, auto_lock_days').eq('tenant_id', tenantId).maybeSingle();
+      const { data: settingsData } = await supabase.from('shift_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
       if (settingsData) {
         setRequiredLaborCost(settingsData.monthly_labor_budget);
         if (settingsData.shift_period) {
