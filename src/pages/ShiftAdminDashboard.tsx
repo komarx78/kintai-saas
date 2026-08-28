@@ -27,6 +27,170 @@ const ShiftAdminDashboard: React.FC = () => {
   const [isSavingRule, setIsSavingRule] = useState(false);
   const [isSavingLock, setIsSavingLock] = useState(false);
   const [isSavingAutoLock, setIsSavingAutoLock] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  const handleSeedDummyData = async () => {
+    if (!window.confirm('テスト用のダミーデータ（ダミー従業員5名、役割、時給、必要枠、今週のシフト希望）を一括投入します。よろしいですか？')) return;
+    setIsSeeding(true);
+    try {
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
+      if (!tenantId) {
+        alert('テナントIDが取得できませんでした。');
+        return;
+      }
+
+      // 1. 役割（ロール）マスタ作成
+      const rolesToInsert = [
+        { tenant_id: tenantId, name: 'ホール', color: '#4F46E5', display_order: 1 },
+        { tenant_id: tenantId, name: 'キッチン', color: '#EA580C', display_order: 2 },
+        { tenant_id: tenantId, name: 'リーダー', color: '#10B981', display_order: 3 }
+      ];
+      await supabase.from('shift_roles').upsert(rolesToInsert, { onConflict: 'tenant_id,name' });
+
+      // 2. 必要人数枠マスタ作成（平日＆土日）
+      const reqsToInsert: any[] = [];
+      // 平日 (月〜金: 1〜5)
+      [1, 2, 3, 4, 5].forEach(dow => {
+        reqsToInsert.push({
+          tenant_id: tenantId,
+          day_of_week: dow,
+          role: 'ホール',
+          start_time: '09:00:00',
+          end_time: '15:00:00',
+          required_count: 2
+        });
+        reqsToInsert.push({
+          tenant_id: tenantId,
+          day_of_week: dow,
+          role: 'ホール',
+          start_time: '17:00:00',
+          end_time: '22:00:00',
+          required_count: 2
+        });
+        reqsToInsert.push({
+          tenant_id: tenantId,
+          day_of_week: dow,
+          role: 'キッチン',
+          start_time: '09:00:00',
+          end_time: '15:00:00',
+          required_count: 2
+        });
+        reqsToInsert.push({
+          tenant_id: tenantId,
+          day_of_week: dow,
+          role: 'キッチン',
+          start_time: '17:00:00',
+          end_time: '22:00:00',
+          required_count: 2
+        });
+      });
+      // 土日 (土: 6, 日: 7)
+      [6, 7].forEach(dow => {
+        reqsToInsert.push({
+          tenant_id: tenantId,
+          day_of_week: dow,
+          role: 'ホール',
+          start_time: '10:00:00',
+          end_time: '21:00:00',
+          required_count: 2
+        });
+        reqsToInsert.push({
+          tenant_id: tenantId,
+          day_of_week: dow,
+          role: 'キッチン',
+          start_time: '10:00:00',
+          end_time: '21:00:00',
+          required_count: 2
+        });
+      });
+
+      await supabase.from('advanced_shift_requirements').delete().eq('tenant_id', tenantId).is('target_date', null);
+      await supabase.from('advanced_shift_requirements').insert(reqsToInsert);
+
+      // 3. ダミー従業員5名の登録（users）
+      const dummyStaffs = [
+        { name: '佐藤 花子 (テスト)', email: `dummy.sato.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'part-time', wage: 1150, roles: ['ホール', 'キッチン'] },
+        { name: '鈴木 一郎 (テスト)', email: `dummy.suzuki.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'full-time', wage: 1200, roles: ['キッチン'] },
+        { name: '田中 太郎 (テスト)', email: `dummy.tanaka.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'part-time', wage: 1100, roles: ['ホール'] },
+        { name: '高橋 美咲 (テスト)', email: `dummy.takahashi.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'part-time', wage: 1100, roles: ['ホール'] },
+        { name: '伊藤 健太 (テスト)', email: `dummy.ito.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'full-time', wage: 1300, roles: ['キッチン', 'リーダー'] }
+      ];
+
+      const createdUserIds: { id: string; name: string; roles: string[]; wage: number }[] = [];
+
+      for (const staff of dummyStaffs) {
+        const { data: existUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('name', staff.name)
+          .maybeSingle();
+
+        let uid = existUser?.id;
+        if (!uid) {
+          const { data: newUser } = await supabase
+            .from('users')
+            .insert({
+              tenant_id: tenantId,
+              name: staff.name,
+              email: staff.email,
+              role: staff.role,
+              employment_type: staff.employment_type
+            })
+            .select('id')
+            .single();
+          if (newUser) uid = newUser.id;
+        }
+
+        if (uid) {
+          createdUserIds.push({ id: uid, name: staff.name, roles: staff.roles, wage: staff.wage });
+          // 時給設定
+          await supabase.from('shift_employee_settings').upsert({
+            tenant_id: tenantId,
+            user_id: uid,
+            hourly_wage: staff.wage,
+            roles: staff.roles
+          }, { onConflict: 'tenant_id,user_id' });
+        }
+      }
+
+      // 4. 今週分のシフト希望を一括投入（advanced_shift_requests）
+      const startDate = format(weekStart, 'yyyy-MM-dd');
+      const endDate = format(weekEnd, 'yyyy-MM-dd');
+
+      await supabase.from('advanced_shift_requests').delete().eq('tenant_id', tenantId).gte('target_date', startDate).lte('target_date', endDate);
+
+      const requestsToInsert: any[] = [];
+
+      for (let i = 0; i < 7; i++) {
+        const d = addDays(weekStart, i);
+        const dStr = format(d, 'yyyy-MM-dd');
+
+        createdUserIds.forEach((userItem, idx) => {
+          const isLunch = (i + idx) % 2 === 0;
+          requestsToInsert.push({
+            tenant_id: tenantId,
+            user_id: userItem.id,
+            target_date: dStr,
+            available_start_time: isLunch ? '09:00:00' : '17:00:00',
+            available_end_time: isLunch ? '15:00:00' : '22:00:00',
+            preferred_role: userItem.roles[0] || 'ホール',
+            status: 'submitted'
+          });
+        });
+      }
+
+      await supabase.from('advanced_shift_requests').insert(requestsToInsert);
+
+      alert('🎉 テスト用ダミーデータ（従業員5名・時給・必要人数枠・今週のシフト希望）を一括投入しました！\n「シフトを自動生成する」ボタンを押すと、AIが最適なシフトを一瞬で自動作成します。');
+      await fetchStats();
+    } catch (err: any) {
+      console.error('Seed dummy data error:', err);
+      alert('ダミーデータの投入に失敗しました: ' + err.message);
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   const currentDate = new Date();
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -247,25 +411,34 @@ const ShiftAdminDashboard: React.FC = () => {
               シフト管理ダッシュボード
             </h1>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button 
+              onClick={handleSeedDummyData} 
+              disabled={isSeeding}
+              className="bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-lg px-4 py-2 rounded-xl flex items-center transition font-black text-sm cursor-pointer disabled:opacity-50"
+              title="従業員5名・時給・必要枠・今週のシフト希望を一瞬で自動セットアップします"
+            >
+              {isSeeding ? <div className="animate-spin w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full mr-2"></div> : <span className="mr-1.5">🪄</span>}
+              ダミーデータ投入
+            </button>
             <button 
               onClick={handlePublishDrafts} 
               disabled={isPublishing}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg px-4 py-2 rounded-xl flex items-center transition font-bold text-sm disabled:opacity-50"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg px-4 py-2 rounded-xl flex items-center transition font-bold text-sm disabled:opacity-50 cursor-pointer"
             >
               {isPublishing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full mr-2"></div> : <Send className="w-4 h-4 mr-2" />}
               下書きシフトを確定する（Publish）
             </button>
-            <button onClick={() => navigate('/shift/admin/employees')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm">
+            <button onClick={() => navigate('/shift/admin/employees')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm cursor-pointer">
               <Users className="w-4 h-4 mr-2" />人員マスタ
             </button>
-            <button onClick={() => navigate('/shift/admin/patterns')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm">
+            <button onClick={() => navigate('/shift/admin/patterns')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm cursor-pointer">
               <ClipboardList className="w-4 h-4 mr-2" />必要枠設定
             </button>
-            <button onClick={() => navigate('/shift/admin/monthly')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm">
+            <button onClick={() => navigate('/shift/admin/monthly')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm cursor-pointer">
               <Calendar className="w-4 h-4 mr-2" />月間シフト状況
             </button>
-            <button onClick={() => navigate('/shift/admin/settings')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm">
+            <button onClick={() => navigate('/shift/admin/settings')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm cursor-pointer">
               <Settings className="w-4 h-4 mr-2" />詳細設定
             </button>
           </div>
@@ -339,22 +512,40 @@ const ShiftAdminDashboard: React.FC = () => {
                   <CheckCircle className="w-5 h-5 mr-2 text-emerald-300" />
                   {generationResult.added}件のシフトを自動生成しました！
                 </p>
-                <div className="mt-4">
-                  <button onClick={() => navigate('/shift/admin/calendar')} className="w-full bg-white text-indigo-700 font-bold py-3 rounded-xl shadow-lg hover:bg-indigo-50 transition text-sm flex items-center justify-center">
-                    📅 シフトカレンダーを開く
+                <div className="mt-4 flex gap-2">
+                  <button onClick={() => navigate('/shift/admin/calendar')} className="flex-1 bg-white text-indigo-700 font-black py-3 rounded-xl shadow-lg hover:bg-indigo-50 transition text-sm flex items-center justify-center cursor-pointer">
+                    📅 シフトカレンダーで確認
+                  </button>
+                  <button onClick={() => setGenerationResult(null)} className="px-4 bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-xl transition text-sm cursor-pointer">
+                    再生成
                   </button>
                 </div>
+              </div>
+            ) : submissionRate === 0 ? (
+              <div className="space-y-3">
+                <button 
+                  onClick={handleSeedDummyData}
+                  disabled={isSeeding}
+                  className="w-full bg-amber-400 text-slate-950 font-black py-3.5 rounded-xl shadow-lg hover:bg-amber-300 hover:scale-[1.02] transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
+                >
+                  {isSeeding ? (
+                    <><div className="animate-spin w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full mr-3"></div>ダミーデータ投入中...</>
+                  ) : (
+                    <><span>🪄</span><span className="ml-2">テスト用ダミーデータを投入して試す</span></>
+                  )}
+                </button>
+                <p className="text-[11px] text-indigo-200 text-center">※ダミー従業員5名・時給・必要枠・今週の希望が一瞬でセットされます</p>
               </div>
             ) : (
               <button 
                 onClick={handleGenerate} 
-                disabled={isGenerating || submissionRate === 0}
-                className="w-full bg-white text-indigo-700 font-black py-4 rounded-xl shadow-lg hover:bg-indigo-50 hover:scale-[1.02] transition-all flex items-center justify-center disabled:opacity-50 disabled:hover:scale-100"
+                disabled={isGenerating}
+                className="w-full bg-white text-indigo-700 font-black py-4 rounded-xl shadow-lg hover:bg-indigo-50 hover:scale-[1.02] transition-all flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:hover:scale-100"
               >
                 {isGenerating ? (
-                  <><div className="animate-spin w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full mr-3"></div>生成中...</>
+                  <><div className="animate-spin w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full mr-3"></div>AIがシフトを自動割り当て中...</>
                 ) : (
-                  <>シフトを自動生成する</>
+                  <>⚡ シフトを自動生成する (AI)</>
                 )}
               </button>
             )}
