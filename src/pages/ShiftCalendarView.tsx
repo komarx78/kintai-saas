@@ -217,7 +217,7 @@ const ShiftCalendarView: React.FC = () => {
       const startStr = format(startDate, 'yyyy-MM-dd');
       const endStr = format(endDate, 'yyyy-MM-dd');
 
-      const { data: settingsData } = await supabase.from('shift_settings').select('auto_generation_mode').eq('tenant_id', tenantIdData).single();
+      const { data: settingsData } = await supabase.from('shift_settings').select('auto_generation_mode').eq('tenant_id', tenantIdData).maybeSingle();
       const mode = settingsData?.auto_generation_mode || 'equal';
       const { data: empSettings } = await supabase.from('shift_employee_settings').select('*').eq('tenant_id', tenantIdData);
 
@@ -234,8 +234,7 @@ const ShiftCalendarView: React.FC = () => {
 
       for (const targetDay of datesToProcess) {
         const targetDateStr = format(targetDay, 'yyyy-MM-dd');
-        let dbDow = targetDay.getDay();
-        if (dbDow === 0) dbDow = 7;
+        const dbDow = targetDay.getDay(); // 0: 日 〜 6: 土
 
         const generated = generateAutoShift(
           requirements || [], 

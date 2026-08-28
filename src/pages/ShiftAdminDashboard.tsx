@@ -367,8 +367,7 @@ const ShiftAdminDashboard: React.FC = () => {
       for (let i = 0; i < 7; i++) {
         const targetDay = addDays(weekStart, i);
         const targetDateStr = format(targetDay, 'yyyy-MM-dd');
-        let dbDow = targetDay.getDay();
-        if (dbDow === 0) dbDow = 7;
+        const dbDow = targetDay.getDay(); // 0: 日 〜 6: 土
 
         const generated = generateAutoShift(reqs || [], requests || [], existingShifts || [], empSettings || [], targetDateStr, dbDow, mode);
         for(const shift of generated) {

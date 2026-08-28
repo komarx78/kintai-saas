@@ -83,7 +83,7 @@ export function calculateLaborCost(advanced_shifts: AdvancedShift[], user_wage_s
 export function generateAutoShift(
   requirements: ShiftRequirement[],
   requests: ShiftRequest[],
-  existingShifts: AdvancedShift[], // eslint-disable-line
+  existingShifts: AdvancedShift[],
   employeeSettings: ShiftEmployeeSetting[],
   targetDateStr: string,
   targetDayOfWeek: number,
@@ -91,16 +91,21 @@ export function generateAutoShift(
 ): Partial<AdvancedShift>[] {
   const generatedShifts: Partial<AdvancedShift>[] = [];
   
-  // Create a mutable copy of requirements that we can split
-  const dayReqs = requirements
-    .filter(r => r.day_of_week === targetDayOfWeek || r.target_date === targetDateStr)
-    .map(r => ({ ...r }));
+  // 1. 当日の対象必要枠を取得 (特定日 or 曜日)
+  const dayReqs = requirements.filter(r => 
+    (r.target_date === targetDateStr) || 
+    (!r.target_date && r.day_of_week === targetDayOfWeek)
+  );
 
-  const dayRequests = requests.filter(r => r.target_date === targetDateStr);
-  // console.log(existingShifts.length); // use it ...
+  if (dayReqs.length === 0) return [];
+
+  // 2. 当日のシフト希望を取得
+  const dayRequests = [...requests.filter(r => r.target_date === targetDateStr)];
+  if (dayRequests.length === 0) return [];
 
   const empMap = new Map(employeeSettings.map(e => [e.user_id, e]));
 
+  // モードに応じたソート（ベテラン優先、スコア優先、またはシャッフル）
   dayRequests.sort((a, b) => {
     const empA = empMap.get(a.user_id);
     const empB = empMap.get(b.user_id);
@@ -112,92 +117,99 @@ export function generateAutoShift(
     if (mode === 'veteran') {
       const dateA = empA.hire_date ? new Date(empA.hire_date).getTime() : Date.now();
       const dateB = empB.hire_date ? new Date(empB.hire_date).getTime() : Date.now();
-      if (dateA !== dateB) return dateA - dateB;
+      return dateA - dateB;
     } else if (mode === 'priority') {
-      if (empA.priority_score !== empB.priority_score) {
-        return empB.priority_score - empA.priority_score;
-      }
+      return (empB.priority_score || 0) - (empA.priority_score || 0);
     } else {
-      return Math.random() - 0.5; 
+      return 0.5 - Math.random(); 
     }
-    return 0;
   });
 
-  // Process requirements. We use a while loop because we might push split requirements to the end of the array.
-  let reqIndex = 0;
-  while (reqIndex < dayReqs.length) {
-    const req = dayReqs[reqIndex];
-    reqIndex++;
+  // ロールごとにスロット管理
+  const roles = [...new Set(dayReqs.map(r => r.role))];
 
-    const reqStartStr = req.start_time.substring(0,5);
-    const reqEndStr = req.end_time.substring(0,5);
-    
-    let needed = req.required_count;
-    if (needed <= 0) continue;
+  for (const role of roles) {
+    const roleReqs = dayReqs.filter(r => r.role === role);
 
-    for (const userReq of dayRequests) {
-      if (needed <= 0) break;
-      
-      if (!userReq.available_start_time || !userReq.available_end_time) continue;
+    // 0:00〜24:00 の各1時間ごとの必要枠配列 (0〜23時)
+    const neededSlots = new Array(24).fill(0);
+    roleReqs.forEach(req => {
+      if (!req.start_time || !req.end_time) return;
+      const [sh] = req.start_time.split(':').map(Number);
+      const [eh, em] = req.end_time.split(':').map(Number);
+      const endHour = em > 0 ? eh : eh - 1;
+      for (let h = sh; h <= endHour && h < 24; h++) {
+        neededSlots[h] += (req.required_count || 1);
+      }
+    });
 
-      const isAlreadyAssigned = generatedShifts.some(s => s.user_id === userReq.user_id) || existingShifts.some(s => s.user_id === userReq.user_id && s.target_date === targetDateStr);
-      if (isAlreadyAssigned) continue;
+    // 既に確定配置されているシフト分をスロットから差し引く
+    existingShifts.forEach(shift => {
+      if (shift.target_date !== targetDateStr || shift.role !== role) return;
+      const [sh] = shift.start_time.split(':').map(Number);
+      const [eh, em] = shift.end_time.split(':').map(Number);
+      const endHour = em > 0 ? eh : eh - 1;
+      for (let h = sh; h <= endHour && h < 24; h++) {
+        if (neededSlots[h] > 0) neededSlots[h]--;
+      }
+    });
 
-      const empSet = empMap.get(userReq.user_id);
-      if (empSet && empSet.default_role && empSet.default_role !== req.role) {
-        continue;
+    // 候補者を順番にマッチング
+    for (const req of dayRequests) {
+      if (!req.available_start_time || !req.available_end_time) continue;
+
+      // 既に本日シフト割り当て済みかチェック
+      const isAssignedToday = generatedShifts.some(s => s.user_id === req.user_id && s.target_date === targetDateStr) ||
+                             existingShifts.some(s => s.user_id === req.user_id && s.target_date === targetDateStr);
+      if (isAssignedToday) continue;
+
+      const empSet = empMap.get(req.user_id);
+      if (empSet && empSet.default_role && empSet.default_role !== role) {
+        continue; // 担当可能ロールでない場合はスキップ
       }
 
-      const reqStartMins = parseInt(reqStartStr.split(':')[0]) * 60 + parseInt(reqStartStr.split(':')[1]);
-      const reqEndMins = parseInt(reqEndStr.split(':')[0]) * 60 + parseInt(reqEndStr.split(':')[1]);
-      
-      const availStartStr = userReq.available_start_time.substring(0,5);
-      const availEndStr = userReq.available_end_time.substring(0,5);
-      const availStartMins = parseInt(availStartStr.split(':')[0]) * 60 + parseInt(availStartStr.split(':')[1]);
-      const availEndMins = parseInt(availEndStr.split(':')[0]) * 60 + parseInt(availEndStr.split(':')[1]);
+      const [availSh, availSm] = req.available_start_time.split(':').map(Number);
+      const [availEh, availEm] = req.available_end_time.split(':').map(Number);
 
-      const overlapStart = Math.max(reqStartMins, availStartMins);
-      const overlapEnd = Math.min(reqEndMins, availEndMins);
+      const reqStartHour = availSh;
+      const reqEndHour = availEm > 0 ? availEh : availEh - 1;
 
-      // Only assign if they overlap by at least 1 hour (60 mins) to prevent weird 10-minute shifts
-      if (overlapStart < overlapEnd && (overlapEnd - overlapStart) >= 60) {
-        const finalStartStr = `${Math.floor(overlapStart / 60).toString().padStart(2, '0')}:${(overlapStart % 60).toString().padStart(2, '0')}`;
-        const finalEndStr = `${Math.floor(overlapEnd / 60).toString().padStart(2, '0')}:${(overlapEnd % 60).toString().padStart(2, '0')}`;
-        
-        generatedShifts.push({
-          user_id: userReq.user_id,
-          target_date: targetDateStr,
-          start_time: finalStartStr,
-          end_time: finalEndStr,
-          role: req.role,
-          status: 'draft'
-        });
-        needed--;
+      // このスタッフの希望時間内で「まだ枠が不足している時間帯」を探す
+      let bestStartHour: number | null = null;
+      let bestEndHour: number | null = null;
 
-        // If the requirement wasn't completely filled, split the remaining times into new requirements!
-        if (overlapStart > reqStartMins) {
-          dayReqs.push({
-            ...req,
-            start_time: reqStartStr,
-            end_time: finalStartStr,
-            required_count: 1 // Only 1 count was fulfilled by this person, so we only split 1 count off
-          });
+      for (let h = reqStartHour; h <= reqEndHour && h < 24; h++) {
+        if (neededSlots[h] > 0) {
+          if (bestStartHour === null) bestStartHour = h;
+          bestEndHour = h;
         }
-        if (overlapEnd < reqEndMins) {
-          dayReqs.push({
-            ...req,
-            start_time: finalEndStr,
-            end_time: reqEndStr,
-            required_count: 1
+      }
+
+      // 枠不足の時間帯があり、かつ1時間以上配置可能な場合
+      if (bestStartHour !== null && bestEndHour !== null) {
+        // スタッフの希望開始・終了時間を活かしたシフト時間を設定
+        const startH = Math.max(availSh, bestStartHour);
+        const endH = Math.min(availEh, bestEndHour + 1);
+
+        if (endH > startH) {
+          const finalStartStr = `${startH.toString().padStart(2, '0')}:${(startH === availSh ? availSm : 0).toString().padStart(2, '0')}`;
+          const finalEndStr = `${endH.toString().padStart(2, '0')}:${(endH === availEh ? availEm : 0).toString().padStart(2, '0')}`;
+
+          generatedShifts.push({
+            user_id: req.user_id,
+            target_date: targetDateStr,
+            start_time: finalStartStr,
+            end_time: finalEndStr,
+            role: role,
+            status: 'draft'
           });
-        }
-        
-        // If there were MORE required counts (e.g. needed 2 people for 9-18), we still need 1 more person for the WHOLE 9-18 period!
-        if (req.required_count > 1) {
-            dayReqs.push({
-                ...req,
-                required_count: req.required_count - 1
-            });
+
+          // 割り当てた時間帯のスロットを消費（過剰配置を絶対に防止！）
+          for (let h = startH; h < endH && h < 24; h++) {
+            if (neededSlots[h] > 0) {
+              neededSlots[h]--;
+            }
+          }
         }
       }
     }
