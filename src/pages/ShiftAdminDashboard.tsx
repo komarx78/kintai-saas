@@ -57,7 +57,7 @@ const ShiftAdminDashboard: React.FC = () => {
       const uniqueIds = [...new Set((reqData || []).map(r => r.user_id))];
       setSubmittedUserIds(uniqueIds);
 
-      const { data: settingsData } = await supabase.from('shift_settings').select('monthly_labor_budget, shift_period, submission_deadline_rule, is_submission_locked, auto_lock_day, auto_lock_days').eq('tenant_id', tenantId).single();
+      const { data: settingsData } = await supabase.from('shift_settings').select('monthly_labor_budget, shift_period, submission_deadline_rule, is_submission_locked, auto_lock_day, auto_lock_days').eq('tenant_id', tenantId).maybeSingle();
       if (settingsData) {
         setRequiredLaborCost(settingsData.monthly_labor_budget);
         if (settingsData.shift_period) {
@@ -187,7 +187,7 @@ const ShiftAdminDashboard: React.FC = () => {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
       
       let newShiftsCount = 0;
-      const { data: settingsData } = await supabase.from('shift_settings').select('auto_generation_mode').eq('tenant_id', tenantId).single();
+      const { data: settingsData } = await supabase.from('shift_settings').select('auto_generation_mode').eq('tenant_id', tenantId).maybeSingle();
       const mode = settingsData?.auto_generation_mode || 'equal';
       const { data: empSettings } = await supabase.from('shift_employee_settings').select('*').eq('tenant_id', tenantId);
       

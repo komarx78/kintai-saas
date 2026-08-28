@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Settings, Save, ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -32,7 +32,7 @@ const ShiftSettings: React.FC = () => {
       const { data: rolesData } = await supabase.from('shift_roles').select('*').eq('tenant_id', tenantId).order('display_order');
       if (rolesData) setRoles(rolesData);
 
-      const { data: settingsData } = await supabase.from('shift_settings').select('*').eq('tenant_id', tenantId).single();
+      const { data: settingsData } = await supabase.from('shift_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
       if (settingsData) { setBudget(settingsData.monthly_labor_budget); setAutoGenMode(settingsData.auto_generation_mode || 'equal'); }
 
     } catch (error) {
