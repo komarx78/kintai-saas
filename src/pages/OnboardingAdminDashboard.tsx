@@ -11,7 +11,7 @@ import {
   Printer, ArrowLeft, LogOut, Loader2, X, ChevronRight, 
   HelpCircle, Building2, Check, UserCheck, Edit3, UserMinus, 
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
-  FolderOpen, Settings
+  FolderOpen, Settings, Clock
 } from 'lucide-react';
 
 interface EmployeeOnboardingData {
@@ -27,6 +27,9 @@ interface EmployeeOnboardingData {
   department?: string;
   contract_type: 'indefinite' | 'fixed_term';
   trial_period_months?: number;
+  start_time?: string;
+  end_time?: string;
+  break_time_minutes?: number;
   salary_type?: 'monthly' | 'hourly' | 'daily';
   base_salary: number;
   hourly_wage: number;
@@ -80,6 +83,15 @@ interface DepartmentMaster {
   display_order: number;
 }
 
+interface WorkSchedulePattern {
+  id: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+  break_minutes: number;
+  target_department?: string;
+}
+
 export default function OnboardingAdminDashboard() {
   const navigate = useNavigate();
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -87,6 +99,7 @@ export default function OnboardingAdminDashboard() {
   const [employees, setEmployees] = useState<EmployeeOnboardingData[]>([]);
   const [submissions, setSubmissions] = useState<DocumentSubmission[]>([]);
   const [departments, setDepartments] = useState<DepartmentMaster[]>([]);
+  const [schedulePatterns, setSchedulePatterns] = useState<WorkSchedulePattern[]>([]);
   
   const [currentView, setCurrentView] = useState<'employees' | 'submissions'>('employees');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'onboarding' | 'retired'>('all');
@@ -218,7 +231,7 @@ export default function OnboardingAdminDashboard() {
       const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantIdData).maybeSingle();
       setTenantInfo(tData);
 
-      // マスタ一覧取得
+      // 部署マスタ取得
       const { data: deptData } = await supabase
         .from('department_masters')
         .select('*')
@@ -226,7 +239,34 @@ export default function OnboardingAdminDashboard() {
         .order('display_order', { ascending: true });
       setDepartments(deptData || []);
 
+      // 就業時間パターンマスタ取得
+      const { data: patData } = await supabase
+        .from('work_schedule_patterns')
+        .select('*')
+        .eq('tenant_id', tenantIdData)
+        .order('display_order', { ascending: true });
 
+      const patterns: WorkSchedulePattern[] = (patData && patData.length > 0) ? patData : [
+        { id: '1', name: '標準勤務（本社・営業）', start_time: '09:00', end_time: '18:00', break_minutes: 60, target_department: '営業部' },
+        { id: '2', name: '店舗早番（08:00〜17:00）', start_time: '08:00', end_time: '17:00', break_minutes: 60, target_department: '店舗運営部' },
+        { id: '3', name: '店舗遅番（12:00〜21:00）', start_time: '12:00', end_time: '21:00', break_minutes: 60, target_department: '店舗運営部' },
+        { id: '4', name: '育児・時短勤務', start_time: '09:30', end_time: '16:30', break_minutes: 60, target_department: '' }
+      ];
+      setSchedulePatterns(patterns);
+
+      // ウィザードの初期休日と時間帯を全社設定から反映
+      const defaultHolText = tData?.work_calendar_settings?.holiday_text_summary || '完全週休2日制（土日・祝日）';
+      const defaultStartTime = tData?.work_calendar_settings?.standard_start_time || '09:00';
+      const defaultEndTime = tData?.work_calendar_settings?.standard_end_time || '18:00';
+      const defaultBreak = tData?.work_calendar_settings?.standard_break_minutes || 60;
+
+      setWizardData(prev => ({
+        ...prev,
+        holidays_text: defaultHolText,
+        start_time: defaultStartTime,
+        end_time: defaultEndTime,
+        break_time_minutes: defaultBreak
+      }));
 
       // ユーザー一覧取得
       const { data: uData } = await supabase
@@ -268,7 +308,10 @@ export default function OnboardingAdminDashboard() {
           department: u.department || '営業部',
           contract_type: onb?.contract_type || 'indefinite',
           trial_period_months: onb?.trial_period_months ?? 3,
-          holidays_text: onb?.holidays_text || '完全週休2日制（土日・祝日）',
+          start_time: onb?.start_time || defaultStartTime,
+          end_time: onb?.end_time || defaultEndTime,
+          break_time_minutes: onb?.break_time_minutes || defaultBreak,
+          holidays_text: onb?.holidays_text || defaultHolText,
           salary_type: pay?.salary_type || onb?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly'),
           base_salary: pay?.base_salary || onb?.base_salary || 250000,
           hourly_wage: pay?.hourly_wage || onb?.hourly_wage || 1150,
@@ -324,7 +367,21 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
-
+  // 部署変更時に就業時間パターンを自動セット
+  const handleDepartmentChange = (deptName: string) => {
+    const matchedPattern = schedulePatterns.find(p => p.target_department === deptName);
+    if (matchedPattern) {
+      setWizardData(prev => ({
+        ...prev,
+        department: deptName,
+        start_time: matchedPattern.start_time,
+        end_time: matchedPattern.end_time,
+        break_time_minutes: matchedPattern.break_minutes
+      }));
+    } else {
+      setWizardData(prev => ({ ...prev, department: deptName }));
+    }
+  };
 
   // 画像圧縮アップロード（手動代行入力用）
   const handleProxyFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -597,7 +654,7 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
-  // 従業員情報編集保存
+  // 従業員情報編集保存（個人別就業時間の上書き反映）
   const handleSaveEditedEmployee = async (data: EmployeeOnboardingData) => {
     if (!tenantId || !data) return;
     setIsSaving(true);
@@ -653,6 +710,9 @@ export default function OnboardingAdminDashboard() {
           join_date: data.join_date,
           contract_type: data.contract_type,
           trial_period_months: data.trial_period_months,
+          start_time: data.start_time,
+          end_time: data.end_time,
+          break_time_minutes: data.break_time_minutes,
           holidays_text: data.holidays_text,
           salary_type: data.salary_type,
           base_salary: data.base_salary,
@@ -665,7 +725,7 @@ export default function OnboardingAdminDashboard() {
           updated_at: new Date().toISOString()
         }, { onConflict: 'tenant_id,user_id' });
 
-      alert('✨ 従業員・労務情報の修正を保存しました！\n勤怠・シフト・給与の全システムに即座に反映されました。');
+      alert('✨ 従業員・労務情報の修正を保存しました！\n勤怠・シフト・給与・雇用契約書に個人別就業時間が即座に反映されました。');
       setEditModal({ isOpen: false, data: null });
       await fetchData();
     } catch (err: any) {
@@ -854,7 +914,7 @@ export default function OnboardingAdminDashboard() {
               <Building2 className="w-4 h-4 text-slate-400" />
             </div>
             <div className="text-2xl font-black text-slate-600">{departments.length}部署</div>
-            <div className="mt-2 text-[11px] text-slate-400">マスタ管理中</div>
+            <div className="mt-2 text-[11px] text-slate-400">就業パターン {schedulePatterns.length}種</div>
           </div>
 
           <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-md shadow-blue-100 flex flex-col justify-between">
@@ -919,7 +979,7 @@ export default function OnboardingAdminDashboard() {
                   <FileText className="w-5 h-5 text-blue-600" />
                   従業員 入退社・労務書面台帳
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">雇用契約書・通勤届・口座届のエビデンス閲覧、修正、退職処理</p>
+                <p className="text-xs text-slate-400 mt-0.5">雇用契約書・通勤届・口座届のエビデンス閲覧、就業時間個別設定、退職処理</p>
               </div>
 
               <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold">
@@ -960,7 +1020,7 @@ export default function OnboardingAdminDashboard() {
                   <thead>
                     <tr className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                       <th className="py-3 px-4">氏名 / 所属</th>
-                      <th className="py-3 px-3">雇用形態</th>
+                      <th className="py-3 px-3">雇用形態 / 就業時間</th>
                       <th className="py-3 px-3">入社日 / 退職日</th>
                       <th className="py-3 px-3">給与設定</th>
                       <th className="py-3 px-3">口座・通勤費</th>
@@ -998,6 +1058,10 @@ export default function OnboardingAdminDashboard() {
                             }`}>
                               {isHourly ? 'パート・アルバイト' : '正社員（無期）'}
                             </span>
+                            <div className="text-[10px] text-slate-500 font-bold mt-1 flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-indigo-500" />
+                              {emp.start_time || '09:00'} 〜 {emp.end_time || '18:00'}
+                            </div>
                           </td>
 
                           <td className="py-3.5 px-3 font-medium text-slate-700">
@@ -1041,7 +1105,7 @@ export default function OnboardingAdminDashboard() {
                               <button
                                 onClick={() => setEditModal({ isOpen: true, data: { ...emp } })}
                                 className="bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs p-1.5 rounded-lg border border-slate-200 transition cursor-pointer"
-                                title="従業員・給与・労働条件の修正"
+                                title="従業員・就業時間・給与の修正"
                               >
                                 <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
                               </button>
@@ -1250,8 +1314,8 @@ export default function OnboardingAdminDashboard() {
               {cabinetModal.activeDoc === 'contract' && (
                 <OfficialLaborContractDoc data={{
                   companyName: tenantInfo?.name || '株式会社KAP',
-                  companyAddress: '東京都千代田区〇〇 1-2-3',
-                  representativeName: '代表取締役 〇〇 〇〇',
+                  companyAddress: tenantInfo?.address || '東京都千代田区大手町 1-2-3',
+                  representativeName: tenantInfo?.representative_name || '代表取締役 〇〇 〇〇',
                   employeeName: cabinetModal.employee.name,
                   employeeAddress: '東京都新宿区〇〇 1-1',
                   joinDate: cabinetModal.employee.join_date,
@@ -1259,9 +1323,9 @@ export default function OnboardingAdminDashboard() {
                   trialPeriodMonths: cabinetModal.employee.trial_period_months ?? 3,
                   workLocation: '本社 および 会社が指定する就業場所',
                   jobDescription: `${cabinetModal.employee.department || '営業部'}における業務全般`,
-                  startTime: '09:00',
-                  endTime: '18:00',
-                  breakTimeMinutes: 60,
+                  startTime: cabinetModal.employee.start_time || '09:00',
+                  endTime: cabinetModal.employee.end_time || '18:00',
+                  breakTimeMinutes: cabinetModal.employee.break_time_minutes || 60,
                   overtimeWork: 'あり（業務の都合により命じる場合がある）',
                   holidaysText: cabinetModal.employee.holidays_text || '完全週休2日制（土・日）、国民の祝日',
                   paidLeaveGrantDays: 10,
@@ -1329,7 +1393,7 @@ export default function OnboardingAdminDashboard() {
         </div>
       )}
 
-      {/* ✏️ 従業員・労務情報 修正モーダル */}
+      {/* ✏️ 従業員・労務情報 修正モーダル（個人別就業時間の上書き対応） */}
       {editModal.isOpen && editModal.data && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 my-8">
@@ -1345,7 +1409,7 @@ export default function OnboardingAdminDashboard() {
 
             <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 text-xs">
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                <h4 className="font-bold text-slate-700">基本情報</h4>
+                <h4 className="font-bold text-slate-700">基本情報 ＆ 就業時間帯</h4>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-1">氏名</label>
@@ -1369,10 +1433,23 @@ export default function OnboardingAdminDashboard() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署（マスタ選択）</label>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署</label>
                     <select
                       value={editModal.data.department || ''}
-                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, department: e.target.value } })}
+                      onChange={e => {
+                        const dName = e.target.value;
+                        const pat = schedulePatterns.find(p => p.target_department === dName);
+                        setEditModal({
+                          ...editModal,
+                          data: {
+                            ...editModal.data!,
+                            department: dName,
+                            start_time: pat ? pat.start_time : editModal.data!.start_time,
+                            end_time: pat ? pat.end_time : editModal.data!.end_time,
+                            break_time_minutes: pat ? pat.break_minutes : editModal.data!.break_time_minutes
+                          }
+                        });
+                      }}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                     >
                       {departments.map(d => (
@@ -1401,6 +1478,69 @@ export default function OnboardingAdminDashboard() {
                   </div>
                 </div>
 
+                {/* ⏰ 個人別 就業時間帯の個別上書き設定 */}
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                      個人別 所定就業時間 ＆ 休憩規定
+                    </label>
+                    <select
+                      onChange={e => {
+                        const pat = schedulePatterns.find(p => p.id === e.target.value);
+                        if (pat) {
+                          setEditModal({
+                            ...editModal,
+                            data: {
+                              ...editModal.data!,
+                              start_time: pat.start_time,
+                              end_time: pat.end_time,
+                              break_time_minutes: pat.break_minutes
+                            }
+                          });
+                        }
+                      }}
+                      className="bg-slate-50 border border-slate-300 rounded px-2 py-0.5 text-[10px]"
+                    >
+                      <option value="">パターンから読込...</option>
+                      {schedulePatterns.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.start_time}〜{p.end_time})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">始業時刻</span>
+                      <input
+                        type="time"
+                        value={editModal.data.start_time || '09:00'}
+                        onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, start_time: e.target.value } })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 font-bold text-xs"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">終業時刻</span>
+                      <input
+                        type="time"
+                        value={editModal.data.end_time || '18:00'}
+                        onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, end_time: e.target.value } })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 font-bold text-xs"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">休憩時間(分)</span>
+                      <input
+                        type="number"
+                        value={editModal.data.break_time_minutes || 60}
+                        onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, break_time_minutes: parseInt(e.target.value, 10) || 60 } })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 font-bold text-xs"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[9px] text-slate-400">※ 時短勤務や個別契約の場合でも、ここで個別に自由に時間を調整・保存できます。</p>
+                </div>
+
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-1">休日規定（会社マスタ連動）</label>
                   <input
@@ -1410,7 +1550,6 @@ export default function OnboardingAdminDashboard() {
                     placeholder="例: 完全週休2日制（土日・祝日）、年末年始休暇"
                     className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">※ 全社マスタ設定（カレンダー）で設定した会社休日がデフォルト反映されます。</p>
                 </div>
               </div>
 
@@ -1601,7 +1740,7 @@ export default function OnboardingAdminDashboard() {
         </div>
       )}
 
-      {/* 新規入社ウィザード モーダル */}
+      {/* 新規入社ウィザード モーダル（就業時間パターン自動セット ＆ 個別調整） */}
       {wizardOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 my-8 animate-in fade-in zoom-in duration-200">
@@ -1678,10 +1817,10 @@ export default function OnboardingAdminDashboard() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署（マスタ選択）</label>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署（時間帯自動連動）</label>
                     <select
                       value={wizardData.department}
-                      onChange={e => setWizardData({ ...wizardData, department: e.target.value })}
+                      onChange={e => handleDepartmentChange(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
                     >
                       {departments.map(d => (
@@ -1695,25 +1834,64 @@ export default function OnboardingAdminDashboard() {
 
             {wizardStep === 2 && (
               <div className="space-y-4 text-xs">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">始業時刻</label>
-                    <input
-                      type="time"
-                      value={wizardData.start_time}
-                      onChange={e => setWizardData({ ...wizardData, start_time: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold"
-                    />
+                {/* ⏰ パターン選択 ＆ 個別時間調整 */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                      <Clock className="w-4 h-4 text-indigo-600" />
+                      所定就業時間帯（パターン選択 ＆ 個別調整）
+                    </label>
+                    <select
+                      onChange={e => {
+                        const pat = schedulePatterns.find(p => p.id === e.target.value);
+                        if (pat) {
+                          setWizardData(prev => ({
+                            ...prev,
+                            start_time: pat.start_time,
+                            end_time: pat.end_time,
+                            break_time_minutes: pat.break_minutes
+                          }));
+                        }
+                      }}
+                      className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-700"
+                    >
+                      <option value="">就業パターンから一発読込...</option>
+                      {schedulePatterns.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.start_time}〜{p.end_time})</option>
+                      ))}
+                    </select>
                   </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">終業時刻</label>
-                    <input
-                      type="time"
-                      value={wizardData.end_time}
-                      onChange={e => setWizardData({ ...wizardData, end_time: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold"
-                    />
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[10px] text-slate-500 block mb-1">始業時刻</label>
+                      <input
+                        type="time"
+                        value={wizardData.start_time}
+                        onChange={e => setWizardData({ ...wizardData, start_time: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 block mb-1">終業時刻</label>
+                      <input
+                        type="time"
+                        value={wizardData.end_time}
+                        onChange={e => setWizardData({ ...wizardData, end_time: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 block mb-1">休憩時間 (分)</label>
+                      <input
+                        type="number"
+                        value={wizardData.break_time_minutes}
+                        onChange={e => setWizardData({ ...wizardData, break_time_minutes: parseInt(e.target.value, 10) || 60 })}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                      />
+                    </div>
                   </div>
+                  <p className="text-[10px] text-slate-400">※ 部署に設定された時間帯が初期入力されます。時短勤務等で個人ごとに異なる場合はここで自由に調整してください。</p>
                 </div>
 
                 <div>
@@ -1793,6 +1971,7 @@ export default function OnboardingAdminDashboard() {
                   <div className="grid grid-cols-2 gap-2 text-slate-700 pt-2 border-t border-emerald-200/60">
                     <div>氏名: <span className="font-bold">{wizardData.name}</span></div>
                     <div>部署: <span className="font-bold">{wizardData.department}</span></div>
+                    <div>就業時間: <span className="font-bold text-indigo-700">{wizardData.start_time} 〜 {wizardData.end_time}</span></div>
                     <div>入社日: <span className="font-bold">{wizardData.join_date}</span></div>
                     <div>給与: <span className="font-bold">{wizardData.salary_type === 'hourly' ? `時給 ¥${wizardData.hourly_wage}` : `月給 ¥${wizardData.base_salary.toLocaleString()}`}</span></div>
                   </div>
@@ -1800,9 +1979,9 @@ export default function OnboardingAdminDashboard() {
 
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5 text-[11px] text-slate-600">
                   <div className="font-bold text-slate-800 mb-1">⚡ 同期されるシステム:</div>
-                  <div>✅ <b>勤怠管理システム</b>: 従業員アカウントが即座に作成され、打刻・有給管理が可能になります。</div>
-                  <div>✅ <b>シフト管理システム</b>: シフト希望提出・AIオート生成の対象枠に自動配置されます。</div>
-                  <div>✅ <b>給与計算システム</b>: 基本給・時給・通勤手当・口座情報が給与マスタへ即座にセットされます。</div>
+                  <div>✅ <b>勤怠管理システム</b>: 従業員アカウントが作成され、個別の就業時間で打刻・有給管理が行われます。</div>
+                  <div>✅ <b>シフト管理システム</b>: 部署の就業枠に自動配置されます。</div>
+                  <div>✅ <b>給与計算システム</b>: 基本給・通勤手当・口座情報が給与マスタへ即座にセットされます。</div>
                 </div>
               </div>
             )}

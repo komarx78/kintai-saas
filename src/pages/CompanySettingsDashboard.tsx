@@ -16,6 +16,16 @@ interface DepartmentMaster {
   display_order: number;
 }
 
+export interface WorkSchedulePattern {
+  id: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+  break_minutes: number;
+  target_department?: string;
+  display_order: number;
+}
+
 export default function CompanySettingsDashboard() {
   const navigate = useNavigate();
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -36,7 +46,15 @@ export default function CompanySettingsDashboard() {
   const [departments, setDepartments] = useState<DepartmentMaster[]>([]);
   const [newDeptName, setNewDeptName] = useState('');
 
-  // 3. カレンダー・休日・就業時間State
+  // 3. 就業時間パターンマスタState
+  const [schedulePatterns, setSchedulePatterns] = useState<WorkSchedulePattern[]>([]);
+  const [newPatternName, setNewPatternName] = useState('');
+  const [newPatternStartTime, setNewPatternStartTime] = useState('09:00');
+  const [newPatternEndTime, setNewPatternEndTime] = useState('18:00');
+  const [newPatternBreakMinutes, setNewPatternBreakMinutes] = useState(60);
+  const [newPatternDept, setNewPatternDept] = useState('');
+
+  // 4. カレンダー・休日・就業時間State
   const [calendarSettings, setCalendarSettings] = useState({
     fixed_holidays: [0, 6], // 0:日, 6:土
     national_holidays_enabled: true,
@@ -56,7 +74,7 @@ export default function CompanySettingsDashboard() {
   const [newCustomHolidayDate, setNewCustomHolidayDate] = useState('');
   const [newCustomHolidayName, setNewCustomHolidayName] = useState('');
 
-  // 4. 給与・労務設定State
+  // 5. 給与・労務設定State
   const [payrollSettings, setPayrollSettings] = useState({
     closing_day: 31,
     payment_day: 25,
@@ -70,7 +88,7 @@ export default function CompanySettingsDashboard() {
     commuting_allowance_limit: 150000
   });
 
-  // 5. 就業規則・AI State
+  // 6. 就業規則・AI State
   const [employmentRulesText, setEmploymentRulesText] = useState(DEFAULT_EMPLOYMENT_RULES);
   const [geminiApiKey, setGeminiApiKey] = useState('');
 
@@ -103,17 +121,17 @@ export default function CompanySettingsDashboard() {
         });
 
         if (tData.work_calendar_settings) {
-          setCalendarSettings({
-            ...calendarSettings,
+          setCalendarSettings(prev => ({
+            ...prev,
             ...tData.work_calendar_settings
-          });
+          }));
         }
 
         if (tData.payroll_common_settings) {
-          setPayrollSettings({
-            ...payrollSettings,
+          setPayrollSettings(prev => ({
+            ...prev,
             ...tData.payroll_common_settings
-          });
+          }));
         }
 
         if (tData.employment_rules_text) {
@@ -130,8 +148,26 @@ export default function CompanySettingsDashboard() {
         .select('*')
         .eq('tenant_id', tenantIdData)
         .order('display_order', { ascending: true });
-
       setDepartments(deptData || []);
+
+      // 就業時間パターンマスタ取得
+      const { data: patData } = await supabase
+        .from('work_schedule_patterns')
+        .select('*')
+        .eq('tenant_id', tenantIdData)
+        .order('display_order', { ascending: true });
+      
+      if (patData && patData.length > 0) {
+        setSchedulePatterns(patData);
+      } else {
+        // デフォルト初期表示用
+        setSchedulePatterns([
+          { id: '1', name: '標準勤務（本社・営業）', start_time: '09:00', end_time: '18:00', break_minutes: 60, target_department: '営業部', display_order: 1 },
+          { id: '2', name: '店舗早番（08:00〜17:00）', start_time: '08:00', end_time: '17:00', break_minutes: 60, target_department: '店舗運営部', display_order: 2 },
+          { id: '3', name: '店舗遅番（12:00〜21:00）', start_time: '12:00', end_time: '21:00', break_minutes: 60, target_department: '店舗運営部', display_order: 3 },
+          { id: '4', name: '育児・時短勤務', start_time: '09:30', end_time: '16:30', break_minutes: 60, target_department: '', display_order: 4 }
+        ]);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -139,7 +175,7 @@ export default function CompanySettingsDashboard() {
     }
   };
 
-  // 全社設定の一括保存
+  // 全社設定の一括保存（updated_atエラー完全防止）
   const handleSaveAllSettings = async () => {
     if (!tenantId) return;
     setIsSaving(true);
@@ -157,25 +193,27 @@ export default function CompanySettingsDashboard() {
         holiday_text_summary: holSummary
       };
 
+      // update ペイロード作成（安全なカラムのみ送信）
+      const updatePayload: Record<string, any> = {
+        name: basicInfo.name,
+        address: basicInfo.address,
+        representative_name: basicInfo.representative_name,
+        phone_number: basicInfo.phone_number,
+        corporate_number: basicInfo.corporate_number,
+        work_calendar_settings: updatedCalendar,
+        payroll_common_settings: payrollSettings,
+        employment_rules_text: employmentRulesText,
+        gemini_api_key: geminiApiKey
+      };
+
       const { error } = await supabase
         .from('tenants')
-        .update({
-          name: basicInfo.name,
-          address: basicInfo.address,
-          representative_name: basicInfo.representative_name,
-          phone_number: basicInfo.phone_number,
-          corporate_number: basicInfo.corporate_number,
-          work_calendar_settings: updatedCalendar,
-          payroll_common_settings: payrollSettings,
-          employment_rules_text: employmentRulesText,
-          gemini_api_key: geminiApiKey,
-          updated_at: new Date().toISOString()
-        })
+        .update(updatePayload)
         .eq('id', tenantId);
 
       if (error) throw error;
 
-      // ローカルストレージにもバックアップ保存（AI相談ボット等のオフラインキャッシュ用）
+      // ローカルストレージにもバックアップ保存
       localStorage.setItem(`company_employment_rules_${tenantId}`, employmentRulesText);
       localStorage.setItem('company_employment_rules', employmentRulesText);
       if (geminiApiKey) {
@@ -186,7 +224,7 @@ export default function CompanySettingsDashboard() {
       alert('🏛️ 全社共通マスタ設定を保存しました！\n「勤怠」「シフト」「給与」「入退社・契約書」の全システムに即座に反映されました。');
       await fetchData();
     } catch (err: any) {
-      console.error(err);
+      console.error('Save company settings error:', err);
       alert('保存に失敗しました: ' + err.message);
     } finally {
       setIsSaving(false);
@@ -216,6 +254,47 @@ export default function CompanySettingsDashboard() {
       await supabase.from('department_masters').delete().eq('id', id);
       await fetchData();
     } catch (e) {
+      alert('削除に失敗しました。');
+    }
+  };
+
+  // 就業時間パターン追加
+  const handleAddSchedulePattern = async () => {
+    if (!tenantId || !newPatternName.trim()) {
+      alert('勤務パターン名を入力してください。');
+      return;
+    }
+
+    try {
+      await supabase.from('work_schedule_patterns').insert({
+        tenant_id: tenantId,
+        name: newPatternName.trim(),
+        start_time: newPatternStartTime,
+        end_time: newPatternEndTime,
+        break_minutes: newPatternBreakMinutes,
+        target_department: newPatternDept,
+        display_order: schedulePatterns.length + 1
+      });
+
+      setNewPatternName('');
+      setNewPatternStartTime('09:00');
+      setNewPatternEndTime('18:00');
+      setNewPatternBreakMinutes(60);
+      setNewPatternDept('');
+      await fetchData();
+    } catch (e: any) {
+      console.error(e);
+      alert('就業時間パターンの追加に失敗しました: ' + e.message);
+    }
+  };
+
+  // 就業時間パターン削除
+  const handleDeleteSchedulePattern = async (id: string) => {
+    if (!confirm('この就業時間パターンを削除しますか？')) return;
+    try {
+      await supabase.from('work_schedule_patterns').delete().eq('id', id);
+      await fetchData();
+    } catch (e: any) {
       alert('削除に失敗しました。');
     }
   };
@@ -303,7 +382,7 @@ export default function CompanySettingsDashboard() {
               会社・全社労務マスタ 一元管理センター
             </h2>
             <p className="text-xs text-indigo-100 mt-1 leading-relaxed">
-              ここで設定した会社情報、部署、年間休日カレンダー、締め日は、<strong>「勤怠」「シフト」「給与」「入退社・契約書」の全4システムへ100%自動連動</strong>されます。二重管理の心配はありません。
+              ここで設定した会社情報、部署、就業時間パターン、年間休日カレンダー、締め日は、<strong>「勤怠」「シフト」「給与」「入退社・契約書」の全4システムへ100%自動連動</strong>されます。
             </p>
           </div>
         </div>
@@ -336,8 +415,8 @@ export default function CompanySettingsDashboard() {
               activeTab === 'calendar' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <Calendar className="w-4 h-4" />
-            3. 年間休日・就業時間
+            <Clock className="w-4 h-4" />
+            3. 就業時間パターン ＆ 年間休日
           </button>
 
           <button
@@ -465,59 +544,126 @@ export default function CompanySettingsDashboard() {
           </div>
         )}
 
-        {/* 3. 年間休日・就業時間 タブ */}
+        {/* 3. 就業時間パターン ＆ 年間休日 タブ */}
         {activeTab === 'calendar' && (
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6 animate-in fade-in duration-200">
             <div>
               <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-indigo-600" />
-                年間休日カレンダー ＆ 所定労働時間設定
+                <Clock className="w-5 h-5 text-indigo-600" />
+                就業時間パターンマスタ ＆ 年間休日カレンダー設定
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">勤怠カレンダーの休日判定、シフト公休、雇用契約書の「休日条項」に100%連動します。</p>
+              <p className="text-xs text-slate-400 mt-0.5">部署ごとの就業時間帯（早番・遅番・時短等）の登録、および勤怠・雇用契約書の休日条項に連動します。</p>
             </div>
 
-            {/* 所定労働時間 */}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-              <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-indigo-600" />
-                所定労働時間・休憩規定
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            {/* ⏰ 部署別・複数就業時間パターンマスタ */}
+            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-[10px] text-slate-500 block mb-1">標準始業時刻</label>
+                  <h4 className="font-black text-slate-800 text-sm flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-indigo-600" />
+                    就業時間パターン一覧（部署紐付け）
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    会社内の就業時間帯を複数登録できます。入社手続き時に部署を選ぶと該当パターンが初期セットされ、個人ごとの時間上書きも可能です。
+                  </p>
+                </div>
+              </div>
+
+              {/* パターン追加フォーム */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] text-slate-500 block mb-0.5">パターン名（例: 本社標準 / 店舗早番）</label>
                   <input
-                    type="time"
-                    value={calendarSettings.standard_start_time}
-                    onChange={e => setCalendarSettings({ ...calendarSettings, standard_start_time: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    type="text"
+                    placeholder="パターン名"
+                    value={newPatternName}
+                    onChange={e => setNewPatternName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-500 block mb-1">標準終業時刻</label>
-                  <input
-                    type="time"
-                    value={calendarSettings.standard_end_time}
-                    onChange={e => setCalendarSettings({ ...calendarSettings, standard_end_time: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                  />
+                  <label className="text-[10px] text-slate-500 block mb-0.5">始業 〜 終業</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="time"
+                      value={newPatternStartTime}
+                      onChange={e => setNewPatternStartTime(e.target.value)}
+                      className="bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs"
+                    />
+                    <span>〜</span>
+                    <input
+                      type="time"
+                      value={newPatternEndTime}
+                      onChange={e => setNewPatternEndTime(e.target.value)}
+                      className="bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs"
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="text-[10px] text-slate-500 block mb-1">休憩時間 (分)</label>
-                  <input
-                    type="number"
-                    value={calendarSettings.standard_break_minutes}
-                    onChange={e => setCalendarSettings({ ...calendarSettings, standard_break_minutes: parseInt(e.target.value, 10) || 60 })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                  />
+                  <label className="text-[10px] text-slate-500 block mb-0.5">休憩(分) / 適用部署</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      value={newPatternBreakMinutes}
+                      onChange={e => setNewPatternBreakMinutes(parseInt(e.target.value, 10) || 60)}
+                      className="w-14 bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs"
+                    />
+                    <select
+                      value={newPatternDept}
+                      onChange={e => setNewPatternDept(e.target.value)}
+                      className="flex-1 bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs"
+                    >
+                      <option value="">共通（全社）</option>
+                      {departments.map(d => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={handleAddSchedulePattern}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 rounded-lg text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> パターン追加
+                  </button>
+                </div>
+              </div>
+
+              {/* パターン一覧リスト */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-xs">
+                {schedulePatterns.map(pat => (
+                  <div key={pat.id} className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between shadow-xs">
+                    <div>
+                      <div className="font-black text-slate-800 flex items-center gap-1.5">
+                        {pat.name}
+                        {pat.target_department && (
+                          <span className="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-1.5 py-0.2 rounded border border-indigo-200">
+                            {pat.target_department}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-600 mt-0.5">
+                        ⏰ {pat.start_time} 〜 {pat.end_time}（休憩 {pat.break_minutes}分）
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteSchedulePattern(pat.id)}
+                      className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                      title="削除"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* 固定休日・祝日 */}
+            {/* 固定休日・祝日カレンダー */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-4 text-xs">
               <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
                 <Calendar className="w-4 h-4 text-indigo-600" />
-                会社休日の一括設定ルール
+                会社休日の一括設定ルール（カレンダー連動）
               </h4>
 
               <div>
