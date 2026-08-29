@@ -465,7 +465,7 @@ export default function CompanySettingsDashboard() {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
       {/* Header */}
-      <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+      <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs print:hidden">
         <div className="flex items-center space-x-3">
           <button
             onClick={() => navigate('/portal')}
@@ -512,7 +512,7 @@ export default function CompanySettingsDashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6 print:hidden">
         
         {/* 保存成功トースト */}
         {saveSuccessMsg && (
@@ -1177,8 +1177,8 @@ export default function CompanySettingsDashboard() {
 
       {/* 📄 年間営業カレンダー A4印刷 / PDF出力 モーダル */}
       {calendarPrintModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto print:static print:p-0 print:m-0 print:bg-white print:overflow-visible print:z-auto">
+          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-100 my-8 print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:w-full">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4 print:hidden">
               <div>
                 <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
@@ -1193,9 +1193,11 @@ export default function CompanySettingsDashboard() {
             </div>
 
             {/* プレビュー本体 */}
-            <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 print:border-none print:p-0 max-h-[70vh] overflow-y-auto">
+            <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 print:border-none print:p-0 print:bg-white print:max-h-none print:overflow-visible max-h-[70vh] overflow-y-auto">
               <OfficialCompanyCalendarDoc data={{
                 companyName: basicInfo.name,
+                companyAddress: basicInfo.address,
+                companyPhone: basicInfo.phone_number,
                 year: calendarSettings.year || 2026,
                 annualHolidaysCount: computedHolidaysSet.size,
                 holidaysSet: computedHolidaysSet,
