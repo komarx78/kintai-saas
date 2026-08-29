@@ -972,23 +972,18 @@ export default function EmployeeOnboardingWelcome() {
                                   <button
                                     key={idx}
                                     type="button"
-                                    onClick={() => {
-                                      setCommutingData(prev => {
-                                        const newSegs = [...prev.segments];
-                                        if (newSegs.length > 0) {
-                                          newSegs[newSegs.length - 1] = {
-                                            ...newSegs[newSegs.length - 1],
-                                            toStation: s.formalStationName,
-                                            lineName: s.lineName,
-                                            transportType: s.type
-                                          };
-                                        }
-                                        return {
-                                          ...prev,
-                                          destinationStation: s.formalStationName,
-                                          segments: newSegs
-                                        };
-                                      });
+                                    onClick={async () => {
+                                      const origin = commutingData.originStation || '花山稲荷（バス停）';
+                                      const newDest = s.formalStationName;
+                                      
+                                      // 実運賃・複数乗り継ぎルートを即時自動生成
+                                      const generatedSegs = await generateMultiRouteWithAi(origin, newDest);
+
+                                      setCommutingData(prev => ({
+                                        ...prev,
+                                        destinationStation: newDest,
+                                        segments: generatedSegs.length > 0 ? generatedSegs : prev.segments
+                                      }));
                                     }}
                                     className={`${colorClass} border px-2 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer text-[10px]`}
                                     title={`${s.region} ${s.formalStationName} (${s.lineName})`}
