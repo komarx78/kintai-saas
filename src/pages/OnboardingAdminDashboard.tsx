@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AppSwitcher from '../components/AppSwitcher';
 import { OfficialLaborContractDoc, type LaborContractData } from '../components/OfficialLaborContractDoc';
+import { compressImageFile } from '../lib/imageCompressor';
 import { 
   UserPlus, Users, FileText, CheckCircle2, 
   Printer, ArrowLeft, LogOut, Loader2, X, ChevronRight, 
-  HelpCircle, Building2, Check, UserCheck, Edit3, UserMinus, RotateCcw, Save
+  HelpCircle, Building2, Check, UserCheck, Edit3, UserMinus, 
+  RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train
 } from 'lucide-react';
 
 interface EmployeeOnboardingData {
@@ -54,16 +56,33 @@ interface EmployeeOnboardingData {
   };
 }
 
+interface DocumentSubmission {
+  id: string;
+  user_id: string;
+  user_name?: string;
+  document_type: string;
+  title: string;
+  data: any;
+  attachment_data?: string;
+  attachment_filename?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  admin_comment?: string;
+  created_at: string;
+}
+
 export default function OnboardingAdminDashboard() {
   const navigate = useNavigate();
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [employees, setEmployees] = useState<EmployeeOnboardingData[]>([]);
+  const [submissions, setSubmissions] = useState<DocumentSubmission[]>([]);
+  const [currentView, setCurrentView] = useState<'employees' | 'submissions'>('employees');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'onboarding' | 'retired'>('all');
+  const [submissionFilter, setSubmissionFilter] = useState<'all' | 'pending' | 'approved'>('pending');
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // ウィザードモーダルState
+  // 新規入社ウィザードState
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [wizardData, setWizardData] = useState({
@@ -123,7 +142,37 @@ export default function OnboardingAdminDashboard() {
     needSeparationNotice: true
   });
 
-  // 書類プレビューモーダルState
+  // 管理者による書類代行入力モーダルState
+  const [proxyInputModal, setProxyInputModal] = useState({
+    isOpen: false,
+    selectedUserId: '',
+    docType: 'bank_passbook', // 'bank_passbook', 'commuting_pass', 'my_number'
+    bankName: '',
+    branchName: '',
+    accountType: 'ordinary',
+    accountNumber: '',
+    accountHolder: '',
+    originStation: '',
+    destinationStation: '',
+    commutingAmount: 15000,
+    myNumber: '',
+    attachmentData: '',
+    attachmentFilename: '',
+    fileSizeInfo: ''
+  });
+
+  // 書類・写真プレビューモーダルState
+  const [attachmentPreviewModal, setAttachmentPreviewModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    imageSrc: string;
+  }>({
+    isOpen: false,
+    title: '',
+    imageSrc: ''
+  });
+
+  // 労働条件通知書プレビューモーダルState
   const [contractPreviewModal, setContractPreviewModal] = useState<{
     isOpen: boolean;
     data: LaborContractData | null;
@@ -176,6 +225,7 @@ export default function OnboardingAdminDashboard() {
 
       const onbMap = new Map((onbData || []).map((o: any) => [o.user_id, o]));
       const payMap = new Map((payData || []).map((p: any) => [p.user_id, p]));
+      const userMap = new Map((uData || []).map((u: any) => [u.id, u.name]));
 
       const combined: EmployeeOnboardingData[] = (uData || []).map((u: any) => {
         const onb: any = onbMap.get(u.id);
@@ -228,10 +278,204 @@ export default function OnboardingAdminDashboard() {
       });
 
       setEmployees(combined);
+
+      // 書類提出・申請リスト取得
+      const { data: subData } = await supabase
+        .from('employee_document_submissions')
+        .select('*')
+        .eq('tenant_id', tenantIdData)
+        .order('created_at', { ascending: false });
+
+      const formattedSubmissions: DocumentSubmission[] = (subData || []).map((s: any) => ({
+        ...s,
+        user_name: userMap.get(s.user_id) || '従業員'
+      }));
+
+      setSubmissions(formattedSubmissions);
     } catch (e) {
       console.error('Fetch onboarding error:', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 画像圧縮アップロード（手動代行入力用）
+  const handleProxyFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const compressed = await compressImageFile(file, { maxWidth: 1200, maxHeight: 1200, quality: 0.75 });
+      const origKb = Math.round(compressed.originalSize / 1024);
+      const compKb = Math.round(compressed.compressedSize / 1024);
+
+      setProxyInputModal(prev => ({
+        ...prev,
+        attachmentData: compressed.base64,
+        attachmentFilename: compressed.fileName,
+        fileSizeInfo: `軽量化完了: ${origKb}KB ➔ ${compKb}KB`
+      }));
+    } catch (err: any) {
+      alert('ファイルの圧縮・読み込みに失敗しました: ' + err.message);
+    }
+  };
+
+  // 管理者による書類・申請の手動代行保存（即座にマスタ反映）
+  const handleSaveProxyInput = async () => {
+    if (!tenantId || !proxyInputModal.selectedUserId) {
+      alert('対象の従業員を選択してください。');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const uId = proxyInputModal.selectedUserId;
+
+      if (proxyInputModal.docType === 'bank_passbook') {
+        // 給与マスタの口座情報を即時更新
+        await supabase
+          .from('employee_payroll_profiles')
+          .upsert({
+            tenant_id: tenantId,
+            user_id: uId,
+            bank_name: proxyInputModal.bankName,
+            branch_name: proxyInputModal.branchName,
+            account_type: proxyInputModal.accountType,
+            account_number: proxyInputModal.accountNumber,
+            account_holder: proxyInputModal.accountHolder
+          }, { onConflict: 'tenant_id,user_id' });
+
+        // 提出レコードも作成（保存用）
+        await supabase
+          .from('employee_document_submissions')
+          .insert({
+            tenant_id: tenantId,
+            user_id: uId,
+            document_type: 'bank_passbook',
+            title: '給与振込口座（管理者代行入力）',
+            data: {
+              bank_name: proxyInputModal.bankName,
+              branch_name: proxyInputModal.branchName,
+              account_number: proxyInputModal.accountNumber,
+              account_holder: proxyInputModal.accountHolder
+            },
+            attachment_data: proxyInputModal.attachmentData || null,
+            attachment_filename: proxyInputModal.attachmentFilename || '',
+            status: 'approved'
+          });
+      } else if (proxyInputModal.docType === 'commuting_pass') {
+        // 給与マスタの通勤手当を即時更新
+        await supabase
+          .from('employee_payroll_profiles')
+          .upsert({
+            tenant_id: tenantId,
+            user_id: uId,
+            commuting_allowance: proxyInputModal.commutingAmount
+          }, { onConflict: 'tenant_id,user_id' });
+
+        await supabase
+          .from('employee_document_submissions')
+          .insert({
+            tenant_id: tenantId,
+            user_id: uId,
+            document_type: 'commuting_pass',
+            title: '通勤交通費（管理者代行入力）',
+            data: {
+              origin_station: proxyInputModal.originStation,
+              destination_station: proxyInputModal.destinationStation,
+              one_month_pass_amount: proxyInputModal.commutingAmount
+            },
+            attachment_data: proxyInputModal.attachmentData || null,
+            attachment_filename: proxyInputModal.attachmentFilename || '',
+            status: 'approved'
+          });
+      }
+
+      alert('✨ 管理者による代行登録が完了し、給与・労務マスタへ即座に反映されました！');
+      setProxyInputModal({
+        isOpen: false,
+        selectedUserId: '',
+        docType: 'bank_passbook',
+        bankName: '',
+        branchName: '',
+        accountType: 'ordinary',
+        accountNumber: '',
+        accountHolder: '',
+        originStation: '',
+        destinationStation: '',
+        commutingAmount: 15000,
+        myNumber: '',
+        attachmentData: '',
+        attachmentFilename: '',
+        fileSizeInfo: ''
+      });
+      await fetchData();
+    } catch (err: any) {
+      console.error(err);
+      alert('代行登録に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 提出書類のワンクリック承認 ＆ 給与・労務マスタ自動反映処理
+  const handleApproveSubmission = async (sub: DocumentSubmission) => {
+    if (!tenantId) return;
+    setIsSaving(true);
+    try {
+      const uId = sub.user_id;
+
+      // 1. 書類種別に応じてマスタへ自動反映
+      if (sub.document_type === 'bank_passbook') {
+        const d = sub.data;
+        await supabase
+          .from('employee_payroll_profiles')
+          .upsert({
+            tenant_id: tenantId,
+            user_id: uId,
+            bank_name: d.bank_name,
+            branch_name: d.branch_name,
+            account_type: d.account_type,
+            account_number: d.account_number,
+            account_holder: d.account_holder
+          }, { onConflict: 'tenant_id,user_id' });
+      } else if (sub.document_type === 'commuting_pass') {
+        const d = sub.data;
+        const amount = d.one_month_pass_amount || 0;
+        await supabase
+          .from('employee_payroll_profiles')
+          .upsert({
+            tenant_id: tenantId,
+            user_id: uId,
+            commuting_allowance: amount
+          }, { onConflict: 'tenant_id,user_id' });
+      } else if (sub.document_type === 'dependents_form') {
+        const d = sub.data;
+        await supabase
+          .from('employee_payroll_profiles')
+          .upsert({
+            tenant_id: tenantId,
+            user_id: uId,
+            dependents_count: d.dependents_count || 0
+          }, { onConflict: 'tenant_id,user_id' });
+      }
+
+      // 2. 申請ステータスを approved に更新
+      await supabase
+        .from('employee_document_submissions')
+        .update({
+          status: 'approved',
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', sub.id);
+
+      alert(`✅ 「${sub.title}」を承認しました！\n給与計算マスタおよび労務台帳に即座に反映されました。`);
+      await fetchData();
+    } catch (err: any) {
+      console.error(err);
+      alert('承認処理に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -264,7 +508,6 @@ export default function OnboardingAdminDashboard() {
       if (uErr) throw uErr;
       const newUserId = newUser.id;
 
-      // shift_employee_settings 同期
       await supabase.from('shift_employee_settings').upsert({
         tenant_id: tenantId,
         user_id: newUserId,
@@ -275,7 +518,6 @@ export default function OnboardingAdminDashboard() {
         base_wage: wizardData.salary_type === 'hourly' ? wizardData.hourly_wage : 1150
       }, { onConflict: 'user_id' });
 
-      // employee_payroll_profiles 同期
       await supabase.from('employee_payroll_profiles').upsert({
         tenant_id: tenantId,
         user_id: newUserId,
@@ -297,7 +539,6 @@ export default function OnboardingAdminDashboard() {
         account_holder: wizardData.account_holder || wizardData.name
       }, { onConflict: 'tenant_id,user_id' });
 
-      // employee_onboarding_profiles 同期
       await supabase.from('employee_onboarding_profiles').upsert({
         tenant_id: tenantId,
         user_id: newUserId,
@@ -334,12 +575,11 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
-  // 従業員・労務情報の編集保存（全マスタ一括更新）
+  // 従業員情報編集保存
   const handleSaveEditedEmployee = async (data: EmployeeOnboardingData) => {
     if (!tenantId || !data) return;
     setIsSaving(true);
     try {
-      // 1. users テーブル更新
       await supabase
         .from('users')
         .update({
@@ -350,7 +590,6 @@ export default function OnboardingAdminDashboard() {
         })
         .eq('id', data.user_id);
 
-      // 2. employee_payroll_profiles 更新
       await supabase
         .from('employee_payroll_profiles')
         .upsert({
@@ -374,7 +613,6 @@ export default function OnboardingAdminDashboard() {
           account_holder: data.account_holder
         }, { onConflict: 'tenant_id,user_id' });
 
-      // 3. shift_employee_settings 更新
       await supabase
         .from('shift_employee_settings')
         .upsert({
@@ -384,7 +622,6 @@ export default function OnboardingAdminDashboard() {
           base_wage: data.salary_type === 'hourly' ? data.hourly_wage : 1150
         }, { onConflict: 'user_id' });
 
-      // 4. employee_onboarding_profiles 更新
       await supabase
         .from('employee_onboarding_profiles')
         .upsert({
@@ -416,14 +653,13 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
-  // 退職処理の確定実行
+  // 退職確定実行
   const handleConfirmRetirement = async () => {
     if (!tenantId || !retireModal.data) return;
     setIsSaving(true);
     try {
       const uId = retireModal.data.user_id;
 
-      // 1. employee_onboarding_profiles のステータスを retired に更新
       await supabase
         .from('employee_onboarding_profiles')
         .upsert({
@@ -436,7 +672,6 @@ export default function OnboardingAdminDashboard() {
           updated_at: new Date().toISOString()
         }, { onConflict: 'tenant_id,user_id' });
 
-      // 2. users の勤怠アクセスを無効化
       await supabase
         .from('users')
         .update({
@@ -445,7 +680,7 @@ export default function OnboardingAdminDashboard() {
         })
         .eq('id', uId);
 
-      alert(`🚪 ${retireModal.data.name} さんの退職処理を完了しました。\n退職者台帳へ移動し、アクセス権限を停止しました。`);
+      alert(`🚪 ${retireModal.data.name} さんの退職処理を完了しました。`);
       setRetireModal({ isOpen: false, data: null, retirementDate: '', retirementReason: '', needSeparationNotice: true });
       await fetchData();
     } catch (err: any) {
@@ -456,9 +691,9 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
-  // 在職復帰（再雇用・退職取消）
+  // 在職復帰
   const handleRehire = async (emp: EmployeeOnboardingData) => {
-    if (!confirm(`${emp.name} さんを在職中（アクティブ）に戻しますか？\n勤怠・シフトのアクセス権限も再有効化されます。`)) return;
+    if (!confirm(`${emp.name} さんを在職中に戻しますか？`)) return;
 
     setIsSaving(true);
     try {
@@ -492,7 +727,7 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
-  // 労働条件通知書のプレビューを開く
+  // 労働条件通知書プレビュー
   const handleOpenContractPreview = (emp: EmployeeOnboardingData) => {
     const contractData: LaborContractData = {
       companyName: tenantInfo?.name || '株式会社KAP',
@@ -536,45 +771,19 @@ export default function OnboardingAdminDashboard() {
     });
   };
 
-  // チェックリストの更新
-  const handleToggleChecklist = async (emp: EmployeeOnboardingData, docKey: string) => {
-    if (!tenantId) return;
-    const currentChecklist = emp.documents_checklist || {
-      id_copy: false,
-      my_number: false,
-      pension_handbook: false,
-      employment_insurance_card: false,
-      withholding_tax_slip: false,
-      bank_account_copy: false,
-      labor_contract_signed: false
-    };
-
-    const updatedChecklist = {
-      ...currentChecklist,
-      [docKey]: !(currentChecklist as any)[docKey]
-    };
-
-    try {
-      await supabase
-        .from('employee_onboarding_profiles')
-        .upsert({
-          tenant_id: tenantId,
-          user_id: emp.user_id,
-          documents_checklist: updatedChecklist,
-          join_date: emp.join_date
-        }, { onConflict: 'tenant_id,user_id' });
-
-      setEmployees(prev => prev.map(e => e.user_id === emp.user_id ? { ...e, documents_checklist: updatedChecklist } : e));
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   const filteredEmployees = employees.filter(e => {
     if (activeFilter === 'all') return true;
     if (activeFilter === 'active') return e.status === 'active';
     if (activeFilter === 'onboarding') return e.status === 'onboarding';
     if (activeFilter === 'retired') return e.status === 'retired';
+    return true;
+  });
+
+  const pendingSubmissionsCount = submissions.filter(s => s.status === 'pending').length;
+  const filteredSubmissions = submissions.filter(s => {
+    if (submissionFilter === 'all') return true;
+    if (submissionFilter === 'pending') return s.status === 'pending';
+    if (submissionFilter === 'approved') return s.status === 'approved';
     return true;
   });
 
@@ -646,11 +855,11 @@ export default function OnboardingAdminDashboard() {
 
           <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs">
             <div className="flex items-center justify-between text-slate-500 mb-2">
-              <span className="text-xs font-bold">入社手続き中</span>
-              <UserPlus className="w-4 h-4 text-amber-500" />
+              <span className="text-xs font-bold">未審査の提出書類</span>
+              <Inbox className="w-4 h-4 text-amber-500" />
             </div>
-            <div className="text-2xl font-black text-amber-600">{onboardingCount}名</div>
-            <div className="mt-2 text-[11px] text-slate-400">書類回収・届出待ち</div>
+            <div className="text-2xl font-black text-amber-600">{pendingSubmissionsCount}件</div>
+            <div className="mt-2 text-[11px] text-slate-400">入社手続き中 {onboardingCount}名</div>
           </div>
 
           <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs">
@@ -677,229 +886,554 @@ export default function OnboardingAdminDashboard() {
           </div>
         </div>
 
-        {/* 従業員入退社リスト */}
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-600" />
-                従業員 入退社・労務書類台帳
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">労働条件通知書の出力・情報修正・退職処理・各マスタへの自動同期</p>
+        {/* メインビュー切り替え（従業員台帳 vs 提出書類審査） */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2 bg-slate-200/80 p-1 rounded-2xl border border-slate-300/60 text-xs font-bold">
+            <button
+              onClick={() => setCurrentView('employees')}
+              className={`px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                currentView === 'employees' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              従業員台帳 ＆ 契約書管理
+            </button>
+
+            <button
+              onClick={() => setCurrentView('submissions')}
+              className={`px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 relative ${
+                currentView === 'submissions' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Inbox className="w-4 h-4" />
+              提出書類・各種申請 審査
+              {pendingSubmissionsCount > 0 && (
+                <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                  {pendingSubmissionsCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* PCが触れない方向け：手動代行入力ボタン */}
+          <button
+            onClick={() => setProxyInputModal(prev => ({ ...prev, isOpen: true }))}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Upload className="w-4 h-4" />
+            紙書類の手動代行登録（PC苦手な方用）
+          </button>
+        </div>
+
+        {/* 1. 従業員台帳ビュー */}
+        {currentView === 'employees' && (
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden animate-in fade-in duration-200">
+            <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  従業員 入退社・労務書類台帳
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">労働条件通知書の出力・情報修正・退職処理・各マスタへの自動同期</p>
+              </div>
+
+              {/* フィルタータブ */}
+              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                <button
+                  onClick={() => setActiveFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${activeFilter === 'all' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
+                >
+                  全員 ({employees.length})
+                </button>
+                <button
+                  onClick={() => setActiveFilter('active')}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${activeFilter === 'active' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
+                >
+                  在職中 ({activeCount})
+                </button>
+                <button
+                  onClick={() => setActiveFilter('retired')}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${activeFilter === 'retired' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
+                >
+                  退職済 ({retiredCount})
+                </button>
+              </div>
             </div>
 
-            {/* フィルタータブ */}
-            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+            {loading ? (
+              <div className="py-20 flex flex-col items-center justify-center text-slate-400">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-2" />
+                <span className="text-xs">台帳を読み込み中...</span>
+              </div>
+            ) : filteredEmployees.length === 0 ? (
+              <div className="py-16 text-center text-slate-400">
+                <Users className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                <p className="font-bold text-slate-600 text-sm">該当する従業員データがありません</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[950px]">
+                  <thead>
+                    <tr className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                      <th className="py-3 px-4">氏名 / 所属</th>
+                      <th className="py-3 px-3">雇用形態</th>
+                      <th className="py-3 px-3">入社日 / 退職日</th>
+                      <th className="py-3 px-3">給与設定</th>
+                      <th className="py-3 px-3">口座・通勤費</th>
+                      <th className="py-3 px-3 text-center">状態</th>
+                      <th className="py-3 px-4 text-center">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {filteredEmployees.map(emp => {
+                      const isHourly = emp.salary_type === 'hourly' || emp.employment_type === 'part-time';
+                      const isRetired = emp.status === 'retired';
+
+                      return (
+                        <tr key={emp.user_id} className={`hover:bg-slate-50/80 transition ${isRetired ? 'bg-slate-50/50 opacity-75' : ''}`}>
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs ${
+                                isRetired ? 'bg-slate-200 text-slate-600' : 'bg-blue-50 text-blue-700'
+                              }`}>
+                                {emp.name.substring(0, 1)}
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                                  {emp.name}
+                                  {isRetired && <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-bold">退職</span>}
+                                </div>
+                                <div className="text-[10px] text-slate-400">{emp.department || '本社'}</div>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-3">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                              isHourly ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+                            }`}>
+                              {isHourly ? 'パート・アルバイト' : '正社員（無期）'}
+                            </span>
+                          </td>
+
+                          <td className="py-3.5 px-3 font-medium text-slate-700">
+                            <div>{emp.join_date}</div>
+                            {emp.retirement_date && (
+                              <div className="text-[10px] text-rose-500 font-bold">退: {emp.retirement_date}</div>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-3 font-bold text-slate-800">
+                            {isHourly ? (
+                              <span>時給 ¥{emp.hourly_wage?.toLocaleString()}</span>
+                            ) : (
+                              <span>月給 ¥{emp.base_salary?.toLocaleString()}</span>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-3 text-slate-600 text-[11px]">
+                            <div>口座: {emp.bank_name ? `${emp.bank_name} (${emp.account_number?.substring(0, 4)}***)` : <span className="text-slate-400">未登録</span>}</div>
+                            <div className="text-blue-600 font-bold text-[10px]">通勤: ¥{emp.commuting_allowance?.toLocaleString() || 0}</div>
+                          </td>
+
+                          <td className="py-3.5 px-3 text-center">
+                            {isRetired ? (
+                              <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-200">
+                                退職済
+                              </span>
+                            ) : (
+                              <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 inline-flex items-center gap-0.5">
+                                <Check className="w-3 h-3" /> 在職中
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => handleOpenContractPreview(emp)}
+                                className="bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs p-1.5 rounded-lg border border-blue-200 transition cursor-pointer"
+                                title="労働条件通知書・雇用契約書のA4出力"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                onClick={() => setEditModal({ isOpen: true, data: { ...emp } })}
+                                className="bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs p-1.5 rounded-lg border border-slate-200 transition cursor-pointer"
+                                title="従業員・給与・労働条件の修正"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+                              </button>
+
+                              {isRetired ? (
+                                <button
+                                  onClick={() => handleRehire(emp)}
+                                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs p-1.5 rounded-lg border border-emerald-200 transition cursor-pointer"
+                                  title="在職中へ復帰"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => setRetireModal({
+                                    isOpen: true,
+                                    data: emp,
+                                    retirementDate: new Date().toISOString().split('T')[0],
+                                    retirementReason: '自己都合退職',
+                                    needSeparationNotice: true
+                                  })}
+                                  className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs p-1.5 rounded-lg border border-rose-200 transition cursor-pointer"
+                                  title="退職手続き"
+                                >
+                                  <UserMinus className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 2. 提出書類・申請審査ビュー */}
+        {currentView === 'submissions' && (
+          <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden animate-in fade-in duration-200">
+            <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <Inbox className="w-5 h-5 text-blue-600" />
+                  従業員からの提出書類 ＆ 各種申請審査
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">通帳写真や通勤費申請を確認し、承認すると給与マスタへ即座に自動反映されます</p>
+              </div>
+
+              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+                <button
+                  onClick={() => setSubmissionFilter('pending')}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${submissionFilter === 'pending' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
+                >
+                  未審査のみ ({pendingSubmissionsCount})
+                </button>
+                <button
+                  onClick={() => setSubmissionFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${submissionFilter === 'all' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
+                >
+                  全履歴 ({submissions.length})
+                </button>
+              </div>
+            </div>
+
+            {filteredSubmissions.length === 0 ? (
+              <div className="py-16 text-center text-slate-400">
+                <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-400 mb-3" />
+                <p className="font-bold text-slate-600 text-sm">未審査の書類・申請はありません</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 text-xs">
+                {filteredSubmissions.map(sub => {
+                  const isPending = sub.status === 'pending';
+                  const d = sub.data || {};
+
+                  return (
+                    <div key={sub.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/50 transition">
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-slate-800 text-sm">{sub.user_name} 殿</span>
+                          <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200">
+                            {sub.title}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            提出: {new Date(sub.created_at).toLocaleString('ja-JP')}
+                          </span>
+                        </div>
+
+                        {/* 申請内容の要約 */}
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-700">
+                          {sub.document_type === 'bank_passbook' && (
+                            <>
+                              <div>銀行名: <span className="font-bold">{d.bank_name} {d.branch_name}</span></div>
+                              <div>口座: <span className="font-bold">{d.account_type === 'ordinary' ? '普通' : '当座'} {d.account_number}</span> ({d.account_holder})</div>
+                            </>
+                          )}
+                          {sub.document_type === 'commuting_pass' && (
+                            <>
+                              <div>経路: <span className="font-bold">{d.origin_station} 〜 {d.destination_station}</span></div>
+                              <div>1ヶ月定期代: <span className="font-black text-indigo-700">¥{d.one_month_pass_amount?.toLocaleString()}</span></div>
+                            </>
+                          )}
+                          {sub.document_type === 'dependents_form' && (
+                            <div>扶養親族等の数: <span className="font-bold">{d.dependents_count}名</span></div>
+                          )}
+                          {sub.document_type === 'my_number' && (
+                            <div>マイナンバー: <span className="font-bold tracking-widest">{d.my_number ? '************' : '書類添付済'}</span></div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 添付画像プレビュー ＆ 承認アクション */}
+                      <div className="flex items-center gap-3">
+                        {sub.attachment_data && (
+                          <button
+                            onClick={() => setAttachmentPreviewModal({
+                              isOpen: true,
+                              title: `${sub.user_name} 殿の添付書類 (${sub.title})`,
+                              imageSrc: sub.attachment_data!
+                            })}
+                            className="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                          >
+                            <Eye className="w-4 h-4 text-blue-600" />
+                            添付写真を確認
+                          </button>
+                        )}
+
+                        {isPending ? (
+                          <button
+                            onClick={() => handleApproveSubmission(sub)}
+                            disabled={isSaving}
+                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-4 h-4" />}
+                            承認してマスタ反映
+                          </button>
+                        ) : (
+                          <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-3 py-1.5 rounded-xl border border-emerald-200 flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5" /> 承認済（マスタ反映済）
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+      </main>
+
+      {/* ➕ 管理者による手動代行入力モーダル */}
+      {proxyInputModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                <Upload className="w-5 h-5 text-emerald-600" />
+                紙書類の手動代行登録（PC操作が苦手な従業員用）
+              </h3>
+              <button onClick={() => setProxyInputModal(prev => ({ ...prev, isOpen: false }))} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">対象の従業員 <span className="text-rose-500">*</span></label>
+                <select
+                  value={proxyInputModal.selectedUserId}
+                  onChange={e => {
+                    const uId = e.target.value;
+                    const targetEmp = employees.find(emp => emp.user_id === uId);
+                    setProxyInputModal(prev => ({
+                      ...prev,
+                      selectedUserId: uId,
+                      bankName: targetEmp?.bank_name || '',
+                      branchName: targetEmp?.branch_name || '',
+                      accountNumber: targetEmp?.account_number || '',
+                      accountHolder: targetEmp?.account_holder || targetEmp?.name || '',
+                      commutingAmount: targetEmp?.commuting_allowance || 15000
+                    }));
+                  }}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                >
+                  <option value="">従業員を選択してください</option>
+                  {employees.filter(e => e.status !== 'retired').map(e => (
+                    <option key={e.user_id} value={e.user_id}>{e.name} ({e.department || '本社'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">登録する書類種別</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setProxyInputModal(prev => ({ ...prev, docType: 'bank_passbook' }))}
+                    className={`py-2 px-3 rounded-xl font-bold border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                      proxyInputModal.docType === 'bank_passbook' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    通帳・口座情報
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProxyInputModal(prev => ({ ...prev, docType: 'commuting_pass' }))}
+                    className={`py-2 px-3 rounded-xl font-bold border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                      proxyInputModal.docType === 'commuting_pass' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <Train className="w-4 h-4" />
+                    通勤費・経路
+                  </button>
+                </div>
+              </div>
+
+              {proxyInputModal.docType === 'bank_passbook' && (
+                <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="銀行名"
+                      value={proxyInputModal.bankName}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, bankName: e.target.value }))}
+                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                    <input
+                      type="text"
+                      placeholder="支店名"
+                      value={proxyInputModal.branchName}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, branchName: e.target.value }))}
+                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                    <input
+                      type="text"
+                      placeholder="口座番号"
+                      value={proxyInputModal.accountNumber}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, accountNumber: e.target.value }))}
+                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                    <input
+                      type="text"
+                      placeholder="名義人 (カナ)"
+                      value={proxyInputModal.accountHolder}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, accountHolder: e.target.value }))}
+                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {proxyInputModal.docType === 'commuting_pass' && (
+                <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="出発駅 (自宅)"
+                      value={proxyInputModal.originStation}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, originStation: e.target.value }))}
+                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                    <input
+                      type="text"
+                      placeholder="到着駅 (会社)"
+                      value={proxyInputModal.destinationStation}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, destinationStation: e.target.value }))}
+                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">1ヶ月定期代（円）</label>
+                    <input
+                      type="number"
+                      value={proxyInputModal.commutingAmount}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, commutingAmount: parseInt(e.target.value, 10) || 0 }))}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* 書類写真のアップロード（自動軽量化） */}
+              <div className="bg-slate-50 p-3 rounded-2xl border-2 border-dashed border-slate-300 text-center space-y-1.5">
+                <label className="block cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleProxyFileUpload}
+                    className="hidden"
+                  />
+                  <div className="flex flex-col items-center justify-center gap-1 py-1">
+                    <Upload className="w-5 h-5 text-emerald-600" />
+                    <span className="text-xs font-bold text-slate-700">紙のコピー写真を撮影・選択</span>
+                    <span className="text-[9px] text-slate-400">※ 写真は自動で最適なサイズに軽量化（圧縮）されます</span>
+                  </div>
+                </label>
+
+                {proxyInputModal.attachmentData && (
+                  <div className="p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-left">
+                    <div className="flex items-center gap-2">
+                      <img src={proxyInputModal.attachmentData} alt="プレビュー" className="w-8 h-8 object-cover rounded border border-slate-200" />
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-800">{proxyInputModal.attachmentFilename}</div>
+                        <div className="text-[9px] text-emerald-600 font-bold">{proxyInputModal.fileSizeInfo}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setProxyInputModal(prev => ({ ...prev, attachmentData: '', attachmentFilename: '', fileSizeInfo: '' }))}
+                      className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100">
               <button
-                onClick={() => setActiveFilter('all')}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${activeFilter === 'all' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
+                onClick={() => setProxyInputModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
               >
-                全員 ({employees.length})
+                キャンセル
               </button>
               <button
-                onClick={() => setActiveFilter('active')}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${activeFilter === 'active' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
+                onClick={handleSaveProxyInput}
+                disabled={isSaving || !proxyInputModal.selectedUserId}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                在職中 ({activeCount})
-              </button>
-              <button
-                onClick={() => setActiveFilter('retired')}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${activeFilter === 'retired' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
-              >
-                退職済 ({retiredCount})
+                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-4 h-4" />}
+                代行登録しマスタへ即時反映
               </button>
             </div>
           </div>
-
-          {loading ? (
-            <div className="py-20 flex flex-col items-center justify-center text-slate-400">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-2" />
-              <span className="text-xs">従業員台帳を読み込み中...</span>
-            </div>
-          ) : filteredEmployees.length === 0 ? (
-            <div className="py-16 text-center text-slate-400">
-              <Users className="w-12 h-12 mx-auto text-slate-300 mb-3" />
-              <p className="font-bold text-slate-600 text-sm">該当する従業員データがありません</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[950px]">
-                <thead>
-                  <tr className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                    <th className="py-3 px-4">氏名 / 所属</th>
-                    <th className="py-3 px-3">雇用形態</th>
-                    <th className="py-3 px-3">入社日 / 退職日</th>
-                    <th className="py-3 px-3">給与設定</th>
-                    <th className="py-3 px-4">必要書類回収状況</th>
-                    <th className="py-3 px-3 text-center">状態</th>
-                    <th className="py-3 px-4 text-center">操作・手続き</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {filteredEmployees.map(emp => {
-                    const isHourly = emp.salary_type === 'hourly' || emp.employment_type === 'part-time';
-                    const isRetired = emp.status === 'retired';
-                    const docs = emp.documents_checklist || {
-                      id_copy: false,
-                      my_number: false,
-                      pension_handbook: false,
-                      employment_insurance_card: false,
-                      withholding_tax_slip: false,
-                      bank_account_copy: false,
-                      labor_contract_signed: false
-                    };
-
-                    return (
-                      <tr key={emp.user_id} className={`hover:bg-slate-50/80 transition ${isRetired ? 'bg-slate-50/50 opacity-75' : ''}`}>
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs ${
-                              isRetired ? 'bg-slate-200 text-slate-600' : 'bg-blue-50 text-blue-700'
-                            }`}>
-                              {emp.name.substring(0, 1)}
-                            </div>
-                            <div>
-                              <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                                {emp.name}
-                                {isRetired && <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-bold">退職</span>}
-                              </div>
-                              <div className="text-[10px] text-slate-400">{emp.department || '本社'}</div>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="py-3.5 px-3">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
-                            isHourly ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'
-                          }`}>
-                            {isHourly ? 'パート・アルバイト' : '正社員（無期）'}
-                          </span>
-                        </td>
-
-                        <td className="py-3.5 px-3 font-medium text-slate-700">
-                          <div>{emp.join_date}</div>
-                          {emp.retirement_date && (
-                            <div className="text-[10px] text-rose-500 font-bold">退: {emp.retirement_date}</div>
-                          )}
-                        </td>
-
-                        <td className="py-3.5 px-3 font-bold text-slate-800">
-                          {isHourly ? (
-                            <span>時給 ¥{emp.hourly_wage?.toLocaleString()}</span>
-                          ) : (
-                            <span>月給 ¥{emp.base_salary?.toLocaleString()}</span>
-                          )}
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <div className="flex flex-wrap gap-1 text-[10px]">
-                            <button
-                              onClick={() => handleToggleChecklist(emp, 'labor_contract_signed')}
-                              className={`px-1.5 py-0.5 rounded border transition cursor-pointer ${
-                                docs.labor_contract_signed ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold' : 'bg-slate-50 text-slate-400 border-slate-200'
-                              }`}
-                              title="雇用契約書・署名回収"
-                            >
-                              {docs.labor_contract_signed ? '☑' : '☐'} 契約書
-                            </button>
-                            <button
-                              onClick={() => handleToggleChecklist(emp, 'my_number')}
-                              className={`px-1.5 py-0.5 rounded border transition cursor-pointer ${
-                                docs.my_number ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold' : 'bg-slate-50 text-slate-400 border-slate-200'
-                              }`}
-                              title="マイナンバー確認"
-                            >
-                              {docs.my_number ? '☑' : '☐'} マイナ
-                            </button>
-                            <button
-                              onClick={() => handleToggleChecklist(emp, 'pension_handbook')}
-                              className={`px-1.5 py-0.5 rounded border transition cursor-pointer ${
-                                docs.pension_handbook ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold' : 'bg-slate-50 text-slate-400 border-slate-200'
-                              }`}
-                              title="年金手帳・基礎年金番号"
-                            >
-                              {docs.pension_handbook ? '☑' : '☐'} 年金
-                            </button>
-                            <button
-                              onClick={() => handleToggleChecklist(emp, 'bank_account_copy')}
-                              className={`px-1.5 py-0.5 rounded border transition cursor-pointer ${
-                                docs.bank_account_copy ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold' : 'bg-slate-50 text-slate-400 border-slate-200'
-                              }`}
-                              title="口座情報"
-                            >
-                              {docs.bank_account_copy ? '☑' : '☐'} 口座
-                            </button>
-                          </div>
-                        </td>
-
-                        <td className="py-3.5 px-3 text-center">
-                          {isRetired ? (
-                            <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-200">
-                              退職済
-                            </span>
-                          ) : (
-                            <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 inline-flex items-center gap-0.5">
-                              <Check className="w-3 h-3" /> 在職中
-                            </span>
-                          )}
-                        </td>
-
-                        <td className="py-3.5 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {/* 契約書印刷 */}
-                            <button
-                              onClick={() => handleOpenContractPreview(emp)}
-                              className="bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs p-1.5 rounded-lg border border-blue-200 transition cursor-pointer"
-                              title="労働条件通知書・雇用契約書のA4出力"
-                            >
-                              <Printer className="w-3.5 h-3.5" />
-                            </button>
-
-                            {/* 編集・修正 */}
-                            <button
-                              onClick={() => setEditModal({ isOpen: true, data: { ...emp } })}
-                              className="bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs p-1.5 rounded-lg border border-slate-200 transition cursor-pointer"
-                              title="従業員・給与・労働条件の修正"
-                            >
-                              <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
-                            </button>
-
-                            {/* 退職処理 / 復帰 */}
-                            {isRetired ? (
-                              <button
-                                onClick={() => handleRehire(emp)}
-                                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs p-1.5 rounded-lg border border-emerald-200 transition cursor-pointer"
-                                title="在職中へ復帰"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" />
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => setRetireModal({
-                                  isOpen: true,
-                                  data: emp,
-                                  retirementDate: new Date().toISOString().split('T')[0],
-                                  retirementReason: '自己都合退職',
-                                  needSeparationNotice: true
-                                })}
-                                className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs p-1.5 rounded-lg border border-rose-200 transition cursor-pointer"
-                                title="退職手続き"
-                              >
-                                <UserMinus className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
+      )}
 
-      </main>
+      {/* 添付書類・写真プレビューモーダル */}
+      {attachmentPreviewModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <Eye className="w-4 h-4 text-blue-600" />
+                {attachmentPreviewModal.title}
+              </h3>
+              <button onClick={() => setAttachmentPreviewModal({ isOpen: false, title: '', imageSrc: '' })} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto flex items-center justify-center bg-slate-900 rounded-2xl p-4">
+              <img src={attachmentPreviewModal.imageSrc} alt="提出書類写真" className="max-w-full h-auto rounded-lg shadow-md" />
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setAttachmentPreviewModal({ isOpen: false, title: '', imageSrc: '' })}
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ✏️ 従業員・労務情報 修正モーダル */}
       {editModal.isOpen && editModal.data && (
@@ -916,7 +1450,6 @@ export default function OnboardingAdminDashboard() {
             </div>
 
             <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 text-xs">
-              {/* 基本情報 */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                 <h4 className="font-bold text-slate-700">基本情報</h4>
                 <div className="grid grid-cols-2 gap-3">
@@ -972,7 +1505,6 @@ export default function OnboardingAdminDashboard() {
                 </div>
               </div>
 
-              {/* 給与・手当 */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                 <h4 className="font-bold text-slate-700">給与・諸手当</h4>
                 <div className="grid grid-cols-2 gap-3">
@@ -1030,7 +1562,6 @@ export default function OnboardingAdminDashboard() {
                 </div>
               </div>
 
-              {/* 銀行口座 */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
                 <h4 className="font-bold text-slate-700">振込口座情報</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1112,7 +1643,7 @@ export default function OnboardingAdminDashboard() {
               <div className="bg-rose-50 p-4 rounded-2xl border border-rose-200 text-rose-800 space-y-1">
                 <div className="font-bold">⚠️ 退職処理に伴う影響</div>
                 <p className="text-[11px] text-rose-700 leading-relaxed">
-                  退職処理を実行すると、本ユーザーの勤怠打刻・シフト希望提出の権限が無効化され、退職者台帳へ移行します。（過去の出勤簿・給与データは保管されます）
+                  退職処理を実行すると、本ユーザーの勤怠打刻・シフト希望提出の権限が無効化され、退職者台帳へ移行します。
                 </p>
               </div>
 
@@ -1138,18 +1669,6 @@ export default function OnboardingAdminDashboard() {
                   <option value="定年退職">定年退職</option>
                   <option value="会社都合退職">会社都合退職</option>
                 </select>
-              </div>
-
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={retireModal.needSeparationNotice}
-                    onChange={e => setRetireModal({ ...retireModal, needSeparationNotice: e.target.checked })}
-                    className="rounded text-rose-600"
-                  />
-                  <span className="font-bold text-slate-700">雇用保険被保険者 離職票の交付を希望する</span>
-                </label>
               </div>
             </div>
 
@@ -1190,7 +1709,6 @@ export default function OnboardingAdminDashboard() {
               </button>
             </div>
 
-            {/* ステップナビゲーション */}
             <div className="flex items-center justify-between mb-6 bg-slate-50 p-2 rounded-2xl border border-slate-200 text-xs font-bold">
               <span className={`px-3 py-1 rounded-xl transition ${wizardStep === 1 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
                 1. 基本情報
@@ -1209,7 +1727,6 @@ export default function OnboardingAdminDashboard() {
               </span>
             </div>
 
-            {/* ウィザード Step 1: 基本情報 */}
             {wizardStep === 1 && (
               <div className="space-y-4 text-xs">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1265,7 +1782,6 @@ export default function OnboardingAdminDashboard() {
               </div>
             )}
 
-            {/* ウィザード Step 2: 労働時間・休日 */}
             {wizardStep === 2 && (
               <div className="space-y-4 text-xs">
                 <div className="grid grid-cols-2 gap-3">
@@ -1301,7 +1817,6 @@ export default function OnboardingAdminDashboard() {
               </div>
             )}
 
-            {/* ウィザード Step 3: 給与・社保・口座 */}
             {wizardStep === 3 && (
               <div className="space-y-4 text-xs max-h-[60vh] overflow-y-auto pr-1">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
@@ -1352,37 +1867,9 @@ export default function OnboardingAdminDashboard() {
                     />
                   </div>
                 </div>
-
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
-                  <span className="font-bold text-slate-700 block">振込先銀行口座</span>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    <input
-                      type="text"
-                      placeholder="銀行名"
-                      value={wizardData.bank_name}
-                      onChange={e => setWizardData({ ...wizardData, bank_name: e.target.value })}
-                      className="bg-white border border-slate-300 rounded-lg px-2 py-1"
-                    />
-                    <input
-                      type="text"
-                      placeholder="支店名"
-                      value={wizardData.branch_name}
-                      onChange={e => setWizardData({ ...wizardData, branch_name: e.target.value })}
-                      className="bg-white border border-slate-300 rounded-lg px-2 py-1"
-                    />
-                    <input
-                      type="text"
-                      placeholder="口座番号"
-                      value={wizardData.account_number}
-                      onChange={e => setWizardData({ ...wizardData, account_number: e.target.value })}
-                      className="bg-white border border-slate-300 rounded-lg px-2 py-1"
-                    />
-                  </div>
-                </div>
               </div>
             )}
 
-            {/* ウィザード Step 4: 完了 ＆ 全同期 */}
             {wizardStep === 4 && (
               <div className="space-y-4 text-xs">
                 <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 space-y-2">
@@ -1407,7 +1894,6 @@ export default function OnboardingAdminDashboard() {
               </div>
             )}
 
-            {/* フッターナビゲーション */}
             <div className="mt-6 flex justify-between gap-2 pt-4 border-t border-slate-100">
               {wizardStep > 1 ? (
                 <button
@@ -1478,7 +1964,7 @@ export default function OnboardingAdminDashboard() {
         </div>
       )}
 
-      {/* 零細企業向け 労務手続きToDoガイド モーダル */}
+      {/* 労務手続きToDoガイド モーダル */}
       {guideModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-100 my-8">
@@ -1493,7 +1979,6 @@ export default function OnboardingAdminDashboard() {
             </div>
 
             <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 text-xs leading-relaxed text-slate-700">
-              {/* 入社時の手続き */}
               <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-200">
                 <h4 className="font-black text-blue-900 text-sm mb-2 flex items-center gap-1.5">
                   <UserPlus className="w-4 h-4 text-blue-600" />
@@ -1506,16 +1991,15 @@ export default function OnboardingAdminDashboard() {
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-blue-100">
                     <div className="font-bold text-slate-800">② 健康保険・厚生年金 資格取得届【事実発生から5日以内】</div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">提出先: 管轄の年金事務所（または日本年金機構）。週所定労働時間が週30時間以上（正社員等）の場合に提出します。</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">提出先: 年金事務所。週所定労働時間が週30時間以上（正社員等）の場合に提出します。</p>
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-blue-100">
                     <div className="font-bold text-slate-800">③ 雇用保険被保険者 資格取得届【翌月10日まで】</div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">提出先: 管轄のハローワーク。週20時間以上かつ31日以上雇用の見込みがあるパート・正社員全員が対象です。</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">提出先: ハローワーク。週20時間以上かつ31日以上雇用の見込みがあるパート・正社員全員が対象です。</p>
                   </div>
                 </div>
               </div>
 
-              {/* 退社時の手続き */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <h4 className="font-black text-slate-900 text-sm mb-2 flex items-center gap-1.5">
                   <Building2 className="w-4 h-4 text-slate-600" />
@@ -1524,15 +2008,11 @@ export default function OnboardingAdminDashboard() {
                 <div className="space-y-2">
                   <div className="bg-white p-3 rounded-xl border border-slate-200">
                     <div className="font-bold text-slate-800">① 健康保険・厚生年金 資格喪失届【退職日から5日以内】</div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">提出先: 年金事務所。健康保険被保険者証（保険証）を回収して添付します。</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">提出先: 年金事務所。保険証を回収して添付します。</p>
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-slate-200">
                     <div className="font-bold text-slate-800">② 雇用保険被保険者 資格喪失届 ＆ 離職票【退職日の翌日から10日以内】</div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">提出先: ハローワーク。退職者が失業給付を受けるために離職票が必要な場合は交付します。</p>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-slate-200">
-                    <div className="font-bold text-slate-800">③ 給与所得の源泉徴収票の交付【退職後1ヶ月以内】</div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">退職者本人へその年の最終給与確定後に交付します（転職先への提出用）。</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">提出先: ハローワーク。失業給付用離職票を交付します。</p>
                   </div>
                 </div>
               </div>

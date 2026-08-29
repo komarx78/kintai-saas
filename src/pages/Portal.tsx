@@ -91,9 +91,11 @@ export default function Portal() {
     {
       id: 'onboarding',
       title: '入退社・労務手続き',
-      description: '入社・退職の書類作成、労働条件通知書（雇用契約書）の自動生成、全マスタ即時同期を行います。',
+      description: (role === 'admin' || role === 'superadmin') 
+        ? '入社・退職の書類作成、労働条件通知書（雇用契約書）の自動生成、全マスタ即時同期を行います。'
+        : '給与振込口座・通帳写真、通勤費、マイナンバー、扶養控除申告書の提出を行います。',
       icon: <UserCheck className="w-7 h-7 text-white drop-shadow-md" />,
-      path: '/onboarding/admin',
+      path: (role === 'admin' || role === 'superadmin') ? '/onboarding/admin' : '/onboarding/my',
       color: 'bg-gradient-to-br from-cyan-600 via-blue-600 to-indigo-700 shadow-md ring-1 ring-white/40',
       hoverColor: 'hover:border-cyan-300 hover:shadow-[0_15px_30px_-10px_rgba(6,182,212,0.3)]',
     }
@@ -108,23 +110,26 @@ export default function Portal() {
             <div className="absolute inset-0 bg-gradient-to-tr from-white/40 to-transparent opacity-60"></div>
             <LayoutDashboard className="w-6 h-6 text-white relative z-10 drop-shadow-md" />
           </div>
-          <h1 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-600 tracking-tight">
-            KAP Base
-          </h1>
+          <div>
+            <h1 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 tracking-tight">
+              KAP Base
+            </h1>
+            <p className="text-xs text-gray-500 font-medium">統合ポータルダッシュボード</p>
+          </div>
         </div>
         
-        <div className="flex items-center space-x-6">
-          <div className="text-sm">
-            <span className="text-gray-500 mr-2">ようこそ、</span>
-            <span className="font-bold text-gray-800">{name}</span>
-            <span className="text-gray-500 ml-1">さん</span>
-            {role === 'admin' && (
-              <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                管理者
-              </span>
-            )}
+        <div className="flex items-center space-x-4">
+          <div className="hidden sm:flex items-center space-x-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
+            <span className="text-xs text-gray-500 font-medium">ログイン中:</span>
+            <span className="text-xs font-bold text-gray-700">{name}</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+              role === 'superadmin' ? 'bg-purple-100 text-purple-700' :
+              role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
+            }`}>
+              {role === 'superadmin' ? '総管理者' : role === 'admin' ? '管理者' : '従業員'}
+            </span>
           </div>
-          <div className="w-px h-6 bg-gray-200"></div>
+
           <button 
             onClick={handleLogout}
             className="flex items-center text-sm font-medium text-gray-500 hover:text-red-600 transition-colors"
@@ -152,7 +157,7 @@ export default function Portal() {
             if (app.id === 'kintai') return userData?.has_kintai_access;
             if (app.id === 'shift') return userData?.has_shift_access;
             if (app.id === 'payroll') return userData?.has_kintai_access !== false;
-            if (app.id === 'onboarding') return role === 'admin';
+            if (app.id === 'onboarding') return true;
             return false;
           }).map((app, index) => (
             <button
