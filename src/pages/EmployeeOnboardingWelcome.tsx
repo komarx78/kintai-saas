@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { compressImageFile } from '../lib/imageCompressor';
@@ -61,6 +61,10 @@ export default function EmployeeOnboardingWelcome() {
     { region: '大阪府大阪市淀川区', regionLabel: '大阪淀川', formalStationName: '新大阪駅', lineName: '新幹線 / JR線 / 御堂筋線', type: 'jr', description: 'ターミナル' },
     { region: '大阪府大阪市淀川区', regionLabel: '大阪淀川', formalStationName: '新大阪駅東口', lineName: '大阪シティバス', type: 'bus', description: '路線バス停' }
   ]);
+
+  // 429 API連打防止用 デバウンスタイマーRef
+  const originTimerRef = useRef<any>(null);
+  const destTimerRef = useRef<any>(null);
 
   // 1. 本人基本情報 ＆ 住民票写真
   const [basicData, setBasicData] = useState({
@@ -202,7 +206,7 @@ export default function EmployeeOnboardingWelcome() {
       }));
 
       const total = calculateTotalCommuteAmounts(generatedSegments);
-      alert(`✨ Gemini 3.5 Flash が乗り継ぎ ${generatedSegments.length} 区間を自動生成しました！\n合計1ヶ月定期代: ¥${total.totalOneMonthPass.toLocaleString()}\n（${total.isTaxFree ? '全額非課税' : `非課税枠超過: ¥${total.taxableExcessAmount.toLocaleString()}`}）`);
+      alert(`✨ AIが最適乗り継ぎ ${generatedSegments.length} 区間を自動生成しました！\n合計1ヶ月定期代: ¥${total.totalOneMonthPass.toLocaleString()}\n（${total.isTaxFree ? '全額非課税' : `非課税枠超過: ¥${total.taxableExcessAmount.toLocaleString()}`}）`);
     } catch (err: any) {
       alert('AI乗り継ぎ生成に失敗しました: ' + err.message);
     } finally {
@@ -849,7 +853,7 @@ export default function EmployeeOnboardingWelcome() {
                           type="text"
                           placeholder="例: 〇〇バス停 / 北大塚"
                           value={commutingData.originStation}
-                          onChange={async e => {
+                          onChange={e => {
                             const val = e.target.value;
                             setCommutingData(prev => {
                               const newSegs = [...prev.segments];
@@ -863,10 +867,14 @@ export default function EmployeeOnboardingWelcome() {
                               };
                             });
 
-                            if (val.length >= 2) {
-                              const res = await resolveStationSuggestions(val, basicData.address);
-                              if (res.regionHint) setOriginRegionHint(res.regionHint);
-                              if (res.suggestions.length > 0) setOriginSuggestions(res.suggestions);
+                            // デバウンス（400ms）でAPI連打・429を完全防止
+                            if (originTimerRef.current) clearTimeout(originTimerRef.current);
+                            if (val.trim().length >= 1) {
+                              originTimerRef.current = setTimeout(async () => {
+                                const res = await resolveStationSuggestions(val, basicData.address);
+                                if (res.regionHint) setOriginRegionHint(res.regionHint);
+                                if (res.suggestions.length > 0) setOriginSuggestions(res.suggestions);
+                              }, 400);
                             }
                           }}
                           className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-bold"
@@ -876,7 +884,7 @@ export default function EmployeeOnboardingWelcome() {
                         {originSuggestions.length > 0 && (
                           <div className="mt-1.5 space-y-1.5 bg-slate-900/95 p-2 rounded-xl border border-cyan-500/30 text-[10px]">
                             <div className="text-cyan-400 font-bold flex items-center justify-between">
-                              <span className="flex items-center gap-1">📍 推定地区: <strong className="text-white">{originRegionHint || '東京都豊島区'}</strong></span>
+                              <span className="flex items-center gap-1">📍 推定地区: <strong className="text-white">{originRegionHint || '滋賀県・京都府・東京都ほか'}</strong></span>
                               <span className="text-[9px] text-slate-400">タップで適用</span>
                             </div>
                             <div className="flex flex-wrap gap-1">
@@ -925,9 +933,9 @@ export default function EmployeeOnboardingWelcome() {
                         <label className="text-[10px] text-slate-400 block mb-0.5">降車地（会社最寄）</label>
                         <input
                           type="text"
-                          placeholder="例: 新大阪 / 大手町駅"
+                          placeholder="例: 新大阪 / 草津駅 / 大手町駅"
                           value={commutingData.destinationStation}
-                          onChange={async e => {
+                          onChange={e => {
                             const val = e.target.value;
                             setCommutingData(prev => {
                               const newSegs = [...prev.segments];
@@ -941,11 +949,15 @@ export default function EmployeeOnboardingWelcome() {
                               };
                             });
 
-                            if (val.length >= 2) {
-                              const compAddr = tenantInfo?.address || '東京都千代田区';
-                              const res = await resolveStationSuggestions(val, compAddr);
-                              if (res.regionHint) setDestRegionHint(res.regionHint);
-                              if (res.suggestions.length > 0) setDestSuggestions(res.suggestions);
+                            // デバウンス（400ms）でAPI連打・429を完全防止
+                            if (destTimerRef.current) clearTimeout(destTimerRef.current);
+                            if (val.trim().length >= 1) {
+                              destTimerRef.current = setTimeout(async () => {
+                                const compAddr = tenantInfo?.address || '滋賀県・東京都千代田区';
+                                const res = await resolveStationSuggestions(val, compAddr);
+                                if (res.regionHint) setDestRegionHint(res.regionHint);
+                                if (res.suggestions.length > 0) setDestSuggestions(res.suggestions);
+                              }, 400);
                             }
                           }}
                           className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-bold"
