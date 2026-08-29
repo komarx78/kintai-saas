@@ -610,14 +610,14 @@ export default function EmployeeOnboardingWelcome() {
       {isOcrProcessing && (
         <div className="bg-indigo-600 text-white text-xs font-bold px-4 py-2 flex items-center justify-center gap-2 animate-pulse">
           <Loader2 className="w-4 h-4 animate-spin" />
-          🤖 Gemini 3.5 Flash が写真から文字を自動解析中...
+          🤖 AIが写真から文字を自動解析中...
         </div>
       )}
 
       {isAiRouting && (
         <div className="bg-cyan-600 text-white text-xs font-bold px-4 py-2 flex items-center justify-center gap-2 animate-pulse">
           <Loader2 className="w-4 h-4 animate-spin" />
-          🤖 Gemini 3.5 Flash が最適乗り継ぎルートを自動生成中...
+          🤖 AIが最適乗り継ぎルートを自動生成中...
         </div>
       )}
 
@@ -632,7 +632,7 @@ export default function EmployeeOnboardingWelcome() {
       {/* フォーム本体 */}
       <main className="flex-1 max-w-lg w-full mx-auto p-4 space-y-4">
         
-        {/* Step 1: 基本情報 ＆ 住民票の添付（Gemini 3.5 Flash 自動入力） */}
+        {/* Step 1: 基本情報 ＆ 住民票の添付（AI自動入力） */}
         {currentStep === 1 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
@@ -640,7 +640,7 @@ export default function EmployeeOnboardingWelcome() {
                 <Home className="w-4 h-4 text-indigo-400" />
                 1. あなたの基本情報 ＆ 住民票添付
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">住民票の写真を添付すると、Gemini 3.5 Flash が氏名や住所を自動入力します。</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">住民票の写真を添付すると、AIが氏名や住所を自動入力します。</p>
             </div>
 
             {/* 🏠 住民票の写し 添付枠 */}
@@ -657,7 +657,7 @@ export default function EmployeeOnboardingWelcome() {
                     <Sparkles className="w-5 h-5 text-indigo-300" />
                   </div>
                   <span className="text-xs font-black text-white flex items-center gap-1">
-                    📷 住民票の写しを撮影 ➔ Gemini 3.5 Flash で自動入力
+                    📷 住民票の写しを撮影 ➔ AIで自動入力
                   </span>
                   <span className="text-[10px] text-indigo-300">
                     ※ 写真を撮るだけで氏名・住所・生年月日・世帯主が自動でセットされます
@@ -838,7 +838,7 @@ export default function EmployeeOnboardingWelcome() {
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-black text-cyan-300 flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5" />
-                        Gemini 3.5 Flash で最適乗り継ぎを一発自動生成
+                        AI で最適乗り継ぎを一発自動生成
                       </span>
                     </div>
 
@@ -1234,7 +1234,7 @@ export default function EmployeeOnboardingWelcome() {
           </div>
         )}
 
-        {/* Step 3: 給与振込口座 ＋ 通帳写真撮影（Gemini 3.5 Flash 自動入力） */}
+        {/* Step 3: 給与振込口座 ＋ 通帳写真撮影（AI自動入力） */}
         {currentStep === 3 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
@@ -1242,7 +1242,7 @@ export default function EmployeeOnboardingWelcome() {
                 <CreditCard className="w-4 h-4 text-emerald-400" />
                 3. 給与振込口座の登録 ＆ 通帳原本撮影
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">通帳の写真を撮影すると、Gemini 3.5 Flash が口座情報を自動入力します。</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">通帳の写真を撮影すると、AIが口座情報を自動入力します。</p>
             </div>
 
             {/* 通帳写真撮影アップロード */}
@@ -1259,7 +1259,7 @@ export default function EmployeeOnboardingWelcome() {
                     <Sparkles className="w-5 h-5 text-emerald-300" />
                   </div>
                   <span className="text-xs font-black text-white flex items-center gap-1">
-                    📷 通帳またはカードを撮影 ➔ Gemini 3.5 Flash で自動入力
+                    📷 通帳またはカードを撮影 ➔ AIで自動入力
                   </span>
                   <span className="text-[10px] text-emerald-300">
                     ※ 銀行名・支店名・口座番号・名義人が自動でセットされます
