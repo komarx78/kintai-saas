@@ -48,15 +48,18 @@ export default function EmployeeOnboardingWelcome() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
 
-  // 📍 地区推測 ＆ 正式駅名サジェスト State
-  const [originRegionHint, setOriginRegionHint] = useState<string>('東京都豊島区');
+  // 📍 地区推測 ＆ 正式駅名・路線バス停サジェスト State（全国マルチ地域対応）
+  const [originRegionHint, setOriginRegionHint] = useState<string>('京都府・大阪府・東京都ほか');
   const [originSuggestions, setOriginSuggestions] = useState<StationSuggestion[]>([
-    { region: '東京都豊島区', formalStationName: '大塚駅', lineName: 'JR山手線', type: 'jr', description: 'JR山手線 最寄駅' },
-    { region: '東京都豊島区', formalStationName: '大塚駅前', lineName: '都電荒川線', type: 'private_rail', description: '都電停留場' }
+    { region: '京都府京都市山科区', regionLabel: '京都山科', formalStationName: '大塚（バス停）', lineName: '京阪バス', type: 'bus', description: '山科区大塚' },
+    { region: '大阪府高槻市', regionLabel: '大阪高槻', formalStationName: '大塚（バス停）', lineName: '高槻市営バス', type: 'bus', description: '高槻市大塚町' },
+    { region: '東京都豊島区', regionLabel: '東京豊島', formalStationName: '大塚駅', lineName: 'JR山手線', type: 'jr', description: '豊島区大塚' },
+    { region: '東京都豊島区', regionLabel: '東京豊島', formalStationName: '北大塚一丁目', lineName: '都営バス', type: 'bus', description: '都営バス停' }
   ]);
   const [destRegionHint, setDestRegionHint] = useState<string>('大阪府大阪市淀川区');
   const [destSuggestions, setDestSuggestions] = useState<StationSuggestion[]>([
-    { region: '大阪府大阪市淀川区', formalStationName: '新大阪駅', lineName: '東海道・山陽新幹線 / JR京都線 / 御堂筋線', type: 'jr', description: 'ターミナル' }
+    { region: '大阪府大阪市淀川区', regionLabel: '大阪淀川', formalStationName: '新大阪駅', lineName: '新幹線 / JR線 / 御堂筋線', type: 'jr', description: 'ターミナル' },
+    { region: '大阪府大阪市淀川区', regionLabel: '大阪淀川', formalStationName: '新大阪駅東口', lineName: '大阪シティバス', type: 'bus', description: '路線バス停' }
   ]);
 
   // 1. 本人基本情報 ＆ 住民票写真
@@ -869,42 +872,58 @@ export default function EmployeeOnboardingWelcome() {
                           className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-bold"
                         />
 
-                        {/* 📍 乗車地の地区推測 ＆ 正式駅名サジェストチップ */}
+                        {/* 📍 乗車地の地区推測 ＆ 正式駅名・路線バス停サジェストチップ */}
                         {originSuggestions.length > 0 && (
-                          <div className="mt-1.5 space-y-1 bg-slate-900/90 p-2 rounded-xl border border-cyan-500/30 text-[10px]">
-                            <div className="text-cyan-400 font-bold flex items-center gap-1">
-                              <span>📍 推定地区:</span>
-                              <span className="text-white">{originRegionHint || '東京都豊島区'}</span>
+                          <div className="mt-1.5 space-y-1.5 bg-slate-900/95 p-2 rounded-xl border border-cyan-500/30 text-[10px]">
+                            <div className="text-cyan-400 font-bold flex items-center justify-between">
+                              <span className="flex items-center gap-1">📍 推定地区: <strong className="text-white">{originRegionHint || '東京都豊島区'}</strong></span>
+                              <span className="text-[9px] text-slate-400">タップで適用</span>
                             </div>
-                            <div className="flex flex-wrap gap-1 pt-0.5">
-                              {originSuggestions.map((s, idx) => (
-                                <button
-                                  key={idx}
-                                  type="button"
-                                  onClick={() => {
-                                    setCommutingData(prev => {
-                                      const newSegs = [...prev.segments];
-                                      if (newSegs.length > 0) {
-                                        newSegs[0] = {
-                                          ...newSegs[0],
-                                          fromStation: s.formalStationName,
-                                          lineName: s.lineName,
-                                          transportType: s.type
+                            <div className="flex flex-wrap gap-1">
+                              {originSuggestions.map((s, idx) => {
+                                const isBus = s.type === 'bus';
+                                const icon = isBus ? '🚌' : s.type === 'subway' ? '🚇' : s.type === 'private_rail' ? '🚋' : '🚆';
+                                const colorClass = isBus 
+                                  ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40'
+                                  : s.type === 'subway'
+                                  ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border-blue-500/40'
+                                  : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40';
+
+                                return (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => {
+                                      setCommutingData(prev => {
+                                        const newSegs = [...prev.segments];
+                                        if (newSegs.length > 0) {
+                                          newSegs[0] = {
+                                            ...newSegs[0],
+                                            fromStation: s.formalStationName,
+                                            lineName: s.lineName,
+                                            transportType: s.type,
+                                            oneWayFare: isBus ? 220 : newSegs[0].oneWayFare || 210,
+                                            oneMonthPassAmount: isBus ? 9640 : newSegs[0].oneMonthPassAmount || 6180,
+                                            sixMonthPassAmount: isBus ? 52050 : newSegs[0].sixMonthPassAmount || 33370
+                                          };
+                                        }
+                                        return {
+                                          ...prev,
+                                          originStation: s.formalStationName,
+                                          segments: newSegs
                                         };
-                                      }
-                                      return {
-                                        ...prev,
-                                        originStation: s.formalStationName,
-                                        segments: newSegs
-                                      };
-                                    });
-                                  }}
-                                  className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 px-2 py-0.5 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer text-[9px]"
-                                  title={`${s.region} ${s.formalStationName} (${s.lineName})`}
-                                >
-                                  ✨ {s.formalStationName} <span className="text-[8px] opacity-70">({s.lineName.slice(0, 8)})</span>
-                                </button>
-                              ))}
+                                      });
+                                    }}
+                                    className={`${colorClass} border px-2 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer text-[10px]`}
+                                    title={`${s.region} ${s.formalStationName} (${s.lineName})`}
+                                  >
+                                    <span className="bg-black/30 px-1 py-0.2 rounded text-[8px] font-black">{s.regionLabel || '地区'}</span>
+                                    <span>{icon}</span>
+                                    <span>{s.formalStationName}</span>
+                                    <span className="text-[8px] opacity-70">({s.lineName.slice(0, 10)})</span>
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -940,42 +959,55 @@ export default function EmployeeOnboardingWelcome() {
                           className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-bold"
                         />
 
-                        {/* 📍 降車地の地区推測 ＆ 正式駅名サジェストチップ */}
+                        {/* 📍 降車地の地区推測 ＆ 正式駅名・路線バス停サジェストチップ */}
                         {destSuggestions.length > 0 && (
-                          <div className="mt-1.5 space-y-1 bg-slate-900/90 p-2 rounded-xl border border-cyan-500/30 text-[10px]">
-                            <div className="text-cyan-400 font-bold flex items-center gap-1">
-                              <span>📍 推定地区:</span>
-                              <span className="text-white">{destRegionHint || '大阪府大阪市淀川区'}</span>
+                          <div className="mt-1.5 space-y-1.5 bg-slate-900/95 p-2 rounded-xl border border-cyan-500/30 text-[10px]">
+                            <div className="text-cyan-400 font-bold flex items-center justify-between">
+                              <span className="flex items-center gap-1">📍 推定地区: <strong className="text-white">{destRegionHint || '大阪府大阪市淀川区'}</strong></span>
+                              <span className="text-[9px] text-slate-400">タップで適用</span>
                             </div>
-                            <div className="flex flex-wrap gap-1 pt-0.5">
-                              {destSuggestions.map((s, idx) => (
-                                <button
-                                  key={idx}
-                                  type="button"
-                                  onClick={() => {
-                                    setCommutingData(prev => {
-                                      const newSegs = [...prev.segments];
-                                      if (newSegs.length > 0) {
-                                        newSegs[newSegs.length - 1] = {
-                                          ...newSegs[newSegs.length - 1],
-                                          toStation: s.formalStationName,
-                                          lineName: s.lineName,
-                                          transportType: s.type
+                            <div className="flex flex-wrap gap-1">
+                              {destSuggestions.map((s, idx) => {
+                                const isBus = s.type === 'bus';
+                                const icon = isBus ? '🚌' : s.type === 'subway' ? '🚇' : s.type === 'private_rail' ? '🚋' : '🚆';
+                                const colorClass = isBus 
+                                  ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40'
+                                  : s.type === 'subway'
+                                  ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border-blue-500/40'
+                                  : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40';
+
+                                return (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => {
+                                      setCommutingData(prev => {
+                                        const newSegs = [...prev.segments];
+                                        if (newSegs.length > 0) {
+                                          newSegs[newSegs.length - 1] = {
+                                            ...newSegs[newSegs.length - 1],
+                                            toStation: s.formalStationName,
+                                            lineName: s.lineName,
+                                            transportType: s.type
+                                          };
+                                        }
+                                        return {
+                                          ...prev,
+                                          destinationStation: s.formalStationName,
+                                          segments: newSegs
                                         };
-                                      }
-                                      return {
-                                        ...prev,
-                                        destinationStation: s.formalStationName,
-                                        segments: newSegs
-                                      };
-                                    });
-                                  }}
-                                  className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 px-2 py-0.5 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer text-[9px]"
-                                  title={`${s.region} ${s.formalStationName} (${s.lineName})`}
-                                >
-                                  ✨ {s.formalStationName} <span className="text-[8px] opacity-70">({s.lineName.slice(0, 8)})</span>
-                                </button>
-                              ))}
+                                      });
+                                    }}
+                                    className={`${colorClass} border px-2 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer text-[10px]`}
+                                    title={`${s.region} ${s.formalStationName} (${s.lineName})`}
+                                  >
+                                    <span className="bg-black/30 px-1 py-0.2 rounded text-[8px] font-black">{s.regionLabel || '地区'}</span>
+                                    <span>{icon}</span>
+                                    <span>{s.formalStationName}</span>
+                                    <span className="text-[8px] opacity-70">({s.lineName.slice(0, 10)})</span>
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
                         )}
