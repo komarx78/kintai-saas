@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut } from 'lucide-react';
+import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck } from 'lucide-react';
 
 type UserData = {
   name: string;
@@ -65,7 +65,7 @@ export default function Portal() {
       id: 'kintai',
       title: '勤怠・有給管理',
       description: '日々の打刻、労働時間の集計、有給休暇の申請・承認を行います。',
-      icon: <Clock className="w-8 h-8 text-white drop-shadow-md" />,
+      icon: <Clock className="w-7 h-7 text-white drop-shadow-md" />,
       path: (role === 'admin' || role === 'superadmin') ? '/kintai/admin' : '/kintai/user',
       color: 'bg-gradient-to-br from-blue-500 via-blue-400 to-cyan-400 shadow-md ring-1 ring-white/40',
       hoverColor: 'hover:border-blue-300 hover:shadow-[0_15px_30px_-10px_rgba(59,130,246,0.3)]',
@@ -74,7 +74,7 @@ export default function Portal() {
       id: 'shift',
       title: 'シフト管理',
       description: 'シフトの作成、パターンの設定、自分のシフトの確認を行います。',
-      icon: <CalendarDays className="w-8 h-8 text-white drop-shadow-md" />,
+      icon: <CalendarDays className="w-7 h-7 text-white drop-shadow-md" />,
       path: (role === 'admin' || role === 'superadmin') ? '/shift/admin' : '/shift/user',
       color: 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-md ring-1 ring-white/40',
       hoverColor: 'hover:border-indigo-300 hover:shadow-[0_15px_30px_-10px_rgba(99,102,241,0.3)]',
@@ -83,10 +83,19 @@ export default function Portal() {
       id: 'payroll',
       title: '給与計算・明細',
       description: '勤怠打刻から給与を自動試算、割増手当・社保・税金控除、Web明細の発行を行います。',
-      icon: <DollarSign className="w-8 h-8 text-white drop-shadow-md" />,
+      icon: <DollarSign className="w-7 h-7 text-white drop-shadow-md" />,
       path: (role === 'admin' || role === 'superadmin') ? '/payroll/admin' : '/payroll/user',
       color: 'bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 shadow-md ring-1 ring-white/40',
       hoverColor: 'hover:border-emerald-300 hover:shadow-[0_15px_30px_-10px_rgba(16,185,129,0.3)]',
+    },
+    {
+      id: 'onboarding',
+      title: '入退社・労務手続き',
+      description: '入社・退職の書類作成、労働条件通知書（雇用契約書）の自動生成、全マスタ即時同期を行います。',
+      icon: <UserCheck className="w-7 h-7 text-white drop-shadow-md" />,
+      path: '/onboarding/admin',
+      color: 'bg-gradient-to-br from-cyan-600 via-blue-600 to-indigo-700 shadow-md ring-1 ring-white/40',
+      hoverColor: 'hover:border-cyan-300 hover:shadow-[0_15px_30px_-10px_rgba(6,182,212,0.3)]',
     }
   ];
 
@@ -127,7 +136,7 @@ export default function Portal() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 w-full max-w-6xl mx-auto px-6 py-12">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-6 py-12">
         <div className="mb-10 text-center animate-fade-in-up">
           <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-3">
             利用するアプリケーションを選択してください
@@ -137,12 +146,13 @@ export default function Portal() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
           {apps.filter(app => {
             if (role === 'superadmin') return true;
             if (app.id === 'kintai') return userData?.has_kintai_access;
             if (app.id === 'shift') return userData?.has_shift_access;
             if (app.id === 'payroll') return userData?.has_kintai_access !== false;
+            if (app.id === 'onboarding') return role === 'admin';
             return false;
           }).map((app, index) => (
             <button

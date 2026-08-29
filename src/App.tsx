@@ -16,6 +16,7 @@ import ShiftRequestsView from './pages/ShiftRequestsView';
 import UserDashboard from './pages/UserDashboard';
 import PayrollAdminDashboard from './pages/PayrollAdminDashboard';
 import PayrollUserDashboard from './pages/PayrollUserDashboard';
+import OnboardingAdminDashboard from './pages/OnboardingAdminDashboard';
 import TrialEnded from './pages/TrialEnded';
 import { supabase } from './lib/supabase';
 
@@ -166,6 +167,11 @@ function App() {
         <Route path="/payroll/user/*" element={
           <PrivateRoute>
             <PayrollUserDashboard />
+          </PrivateRoute>
+        } />
+        <Route path="/onboarding/admin/*" element={
+          <PrivateRoute requiredRole="admin">
+            <OnboardingAdminDashboard />
           </PrivateRoute>
         } />
         {/* 旧URLや未定義ルートへのアクセス対策リダイレクト */}
