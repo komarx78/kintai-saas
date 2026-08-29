@@ -1,9 +1,9 @@
-﻿import { useState, useRef, useEffect } from 'react';
-import { Grid, Clock, CalendarDays, LayoutDashboard } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Grid, Clock, CalendarDays, LayoutDashboard, DollarSign } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 type AppSwitcherProps = {
-  currentApp: 'kintai' | 'shift' | 'portal';
+  currentApp: 'kintai' | 'shift' | 'payroll' | 'portal';
   role: 'admin' | 'user';
 };
 
@@ -47,6 +47,14 @@ export default function AppSwitcher({ currentApp, role }: AppSwitcherProps) {
       path: (role === 'admin' || role === ('superadmin' as any)) ? '/shift/admin' : '/shift/user',
       description: 'シフトの作成と確認',
       iconBg: 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-sm ring-1 ring-white/30'
+    },
+    {
+      id: 'payroll',
+      name: '給与計算・明細',
+      icon: <DollarSign className="w-4 h-4 text-white drop-shadow-sm" />,
+      path: (role === 'admin' || role === ('superadmin' as any)) ? '/payroll/admin' : '/payroll/user',
+      description: '給与の自動試算と明細',
+      iconBg: 'bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 shadow-sm ring-1 ring-white/30'
     }
   ];
 

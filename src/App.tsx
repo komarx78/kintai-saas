@@ -14,6 +14,8 @@ import ShiftCalendarView from './pages/ShiftCalendarView';
 import ShiftMonthlyView from './pages/ShiftMonthlyView';
 import ShiftRequestsView from './pages/ShiftRequestsView';
 import UserDashboard from './pages/UserDashboard';
+import PayrollAdminDashboard from './pages/PayrollAdminDashboard';
+import PayrollUserDashboard from './pages/PayrollUserDashboard';
 import TrialEnded from './pages/TrialEnded';
 import { supabase } from './lib/supabase';
 
@@ -154,6 +156,16 @@ function App() {
         <Route path="/shift/user" element={
           <PrivateRoute>
             <ShiftEmployeeRequest />
+          </PrivateRoute>
+        } />
+        <Route path="/payroll/admin/*" element={
+          <PrivateRoute requiredRole="admin">
+            <PayrollAdminDashboard />
+          </PrivateRoute>
+        } />
+        <Route path="/payroll/user/*" element={
+          <PrivateRoute>
+            <PayrollUserDashboard />
           </PrivateRoute>
         } />
         {/* 旧URLや未定義ルートへのアクセス対策リダイレクト */}
