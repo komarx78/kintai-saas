@@ -5,6 +5,7 @@ import AppSwitcher from '../components/AppSwitcher';
 import { OfficialLaborContractDoc } from '../components/OfficialLaborContractDoc';
 import { OfficialCommutingPassDoc } from '../components/OfficialCommutingPassDoc';
 import { OfficialBankPassbookDoc } from '../components/OfficialBankPassbookDoc';
+import { OfficialTaxExemptionDoc } from '../components/OfficialTaxExemptionDoc';
 import { compressImageFile } from '../lib/imageCompressor';
 import { 
   UserPlus, Users, FileText, CheckCircle2, 
@@ -156,7 +157,7 @@ export default function OnboardingAdminDashboard() {
   const [cabinetModal, setCabinetModal] = useState<{
     isOpen: boolean;
     employee: EmployeeOnboardingData | null;
-    activeDoc: 'contract' | 'commuting' | 'bank' | 'identity';
+    activeDoc: 'contract' | 'commuting' | 'bank' | 'tax' | 'identity';
   }>({
     isOpen: false,
     employee: null,
@@ -1322,6 +1323,16 @@ export default function OnboardingAdminDashboard() {
                 <CreditCard className="w-4 h-4" />
                 3. 給与振込口座 登録届出書
               </button>
+
+              <button
+                onClick={() => setCabinetModal(prev => ({ ...prev, activeDoc: 'tax' }))}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  cabinetModal.activeDoc === 'tax' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                4. 扶養控除等申告書
+              </button>
             </div>
 
             {/* 書面本体 */}
@@ -1371,8 +1382,7 @@ export default function OnboardingAdminDashboard() {
                   department: cabinetModal.employee.department || '営業部',
                   originStation: '自宅最寄駅',
                   destinationStation: '会社最寄駅',
-                  viaRoute: '最短・経済的ルート',
-                  transportMode: 'train',
+                  transportMode: 'train_bus',
                   oneMonthPassAmount: cabinetModal.employee.commuting_allowance,
                   attachmentImage: submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'commuting_pass')?.attachment_data,
                   appliedDate: cabinetModal.employee.join_date
@@ -1391,6 +1401,18 @@ export default function OnboardingAdminDashboard() {
                   accountHolder: cabinetModal.employee.account_holder || cabinetModal.employee.name,
                   attachmentImage: submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'bank_passbook')?.attachment_data,
                   appliedDate: cabinetModal.employee.join_date
+                }} />
+              )}
+
+              {cabinetModal.activeDoc === 'tax' && (
+                <OfficialTaxExemptionDoc data={{
+                  companyName: tenantInfo?.name || '株式会社KAP',
+                  companyAddress: tenantInfo?.address,
+                  employeeName: cabinetModal.employee.name,
+                  employeeAddress: '東京都新宿区西新宿 2-8-1',
+                  appliedDate: cabinetModal.employee.join_date,
+                  hasSpouse: false,
+                  dependents: []
                 }} />
               )}
             </div>

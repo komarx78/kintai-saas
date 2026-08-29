@@ -5,8 +5,17 @@ import { compressImageFile } from '../lib/imageCompressor';
 import { 
   UserCheck, CreditCard, Train, ShieldCheck, 
   Upload, Trash2, CheckCircle2, ChevronRight, ChevronLeft, 
-  Loader2, Home, Lock
+  Loader2, Home, Lock, Plus, FileText
 } from 'lucide-react';
+
+interface DependentItem {
+  name: string;
+  relation: string;
+  birthDate: string;
+  isLivingTogether: boolean;
+  incomeEstimate: number;
+  isUnder16: boolean;
+}
 
 export default function EmployeeOnboardingWelcome() {
   const navigate = useNavigate();
@@ -26,12 +35,29 @@ export default function EmployeeOnboardingWelcome() {
     postalCode: '',
     address: '',
     phoneNumber: '',
+    householderName: '',
+    householderRelation: '本人',
     emergencyContactName: '',
     emergencyContactRelation: '親',
     emergencyContactPhone: ''
   });
 
-  // 2. 給与振込口座情報
+  // 2. 通勤交通費 支給申請書
+  const [commutingData, setCommutingData] = useState({
+    transportMode: 'train_bus' as 'train_bus' | 'car_bike' | 'walk_bicycle',
+    originStation: '',
+    viaStation: '',
+    destinationStation: '',
+    transitLines: 'JR中央線 / 東京メトロ丸ノ内線',
+    oneWayFare: 0,
+    oneMonthPassAmount: 12000,
+    carDistanceKm: 0,
+    passPhoto: '',
+    passFileName: '',
+    passSizeInfo: ''
+  });
+
+  // 3. 給与振込口座情報
   const [bankData, setBankData] = useState({
     bankName: '',
     branchName: '',
@@ -43,25 +69,40 @@ export default function EmployeeOnboardingWelcome() {
     passbookSizeInfo: ''
   });
 
-  // 3. 通勤交通費
-  const [commutingData, setCommutingData] = useState({
-    originStation: '',
-    destinationStation: '',
-    transitLine: 'JR線 / 地下鉄',
-    oneMonthPassAmount: 12000,
-    passPhoto: '',
-    passFileName: '',
-    passSizeInfo: ''
+  // 4. 扶養控除等（異動）申告書
+  const [taxData, setTaxData] = useState({
+    hasSpouse: false,
+    spouseName: '',
+    spouseIncomeEstimate: 0,
+    dependents: [] as DependentItem[],
+    isDisability: false,
+    isSingleParent: false,
+    isWidow: false,
+    isWorkingStudent: false
   });
 
-  // 4. マイナンバー ＆ 扶養情報
-  const [myNumberData, setMyNumberData] = useState({
+  // 新規扶養親族追加用一時State
+  const [newDep, setNewDep] = useState<DependentItem>({
+    name: '',
+    relation: '子',
+    birthDate: '2015-05-01',
+    isLivingTogether: true,
+    incomeEstimate: 0,
+    isUnder16: false
+  });
+
+  // 5. マイナンバー・年金・雇用保険・前職源泉
+  const [officialDocsData, setOfficialDocsData] = useState({
     myNumber: '',
-    cardPhoto: '',
-    cardFileName: '',
-    cardSizeInfo: '',
-    dependentsCount: 0,
-    hasSpouse: false
+    myNumberCardPhoto: '',
+    myNumberCardFileName: '',
+    pensionNumber: '',
+    pensionPhoto: '',
+    pensionFileName: '',
+    employmentInsuranceNumber: '',
+    employmentInsurancePhoto: '',
+    withholdingSlipPhoto: '',
+    withholdingSlipFileName: ''
   });
 
   useEffect(() => {
@@ -89,10 +130,10 @@ export default function EmployeeOnboardingWelcome() {
     }
   };
 
-  // 画像のスマホ撮影・圧縮アップロード処理
+  // 写真のスマホ撮影・圧縮アップロード汎用ハンドラ
   const handlePhotoUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
-    type: 'passbook' | 'pass' | 'card'
+    field: string
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -101,33 +142,72 @@ export default function EmployeeOnboardingWelcome() {
       const compressed = await compressImageFile(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.75 });
       const origKb = Math.round(compressed.originalSize / 1024);
       const compKb = Math.round(compressed.compressedSize / 1024);
-      const sizeStr = `${origKb}KB ➔ ${compKb}KB に自動軽量化`;
+      const sizeStr = `${origKb}KB ➔ ${compKb}KB に軽量化`;
 
-      if (type === 'passbook') {
+      if (field === 'passbook') {
         setBankData(prev => ({
           ...prev,
           passbookPhoto: compressed.base64,
           passbookFileName: compressed.fileName,
           passbookSizeInfo: sizeStr
         }));
-      } else if (type === 'pass') {
+      } else if (field === 'pass') {
         setCommutingData(prev => ({
           ...prev,
           passPhoto: compressed.base64,
           passFileName: compressed.fileName,
           passSizeInfo: sizeStr
         }));
-      } else if (type === 'card') {
-        setMyNumberData(prev => ({
+      } else if (field === 'mynumber') {
+        setOfficialDocsData(prev => ({
           ...prev,
-          cardPhoto: compressed.base64,
-          cardFileName: compressed.fileName,
-          cardSizeInfo: sizeStr
+          myNumberCardPhoto: compressed.base64,
+          myNumberCardFileName: compressed.fileName
+        }));
+      } else if (field === 'pension') {
+        setOfficialDocsData(prev => ({
+          ...prev,
+          pensionPhoto: compressed.base64,
+          pensionFileName: compressed.fileName
+        }));
+      } else if (field === 'withholding') {
+        setOfficialDocsData(prev => ({
+          ...prev,
+          withholdingSlipPhoto: compressed.base64,
+          withholdingSlipFileName: compressed.fileName
         }));
       }
     } catch (err: any) {
-      alert('写真の読み込み・圧縮に失敗しました: ' + err.message);
+      alert('写真の読み込みに失敗しました: ' + err.message);
     }
+  };
+
+  // 扶養親族の追加
+  const handleAddDependent = () => {
+    if (!newDep.name.trim()) {
+      alert('扶養親族の氏名を入力してください。');
+      return;
+    }
+    setTaxData(prev => ({
+      ...prev,
+      dependents: [...prev.dependents, newDep]
+    }));
+    setNewDep({
+      name: '',
+      relation: '子',
+      birthDate: '2015-05-01',
+      isLivingTogether: true,
+      incomeEstimate: 0,
+      isUnder16: false
+    });
+  };
+
+  // 扶養親族の削除
+  const handleDeleteDependent = (idx: number) => {
+    setTaxData(prev => ({
+      ...prev,
+      dependents: prev.dependents.filter((_, i) => i !== idx)
+    }));
   };
 
   // 全入力データの送信（管理者審査へ）
@@ -144,7 +224,31 @@ export default function EmployeeOnboardingWelcome() {
       const userId = user?.id || `anon_${Date.now()}`;
       const effectiveTenantId = tenantId || (await supabase.rpc('get_user_tenant_id')).data;
 
-      // 1. 口座届出の送信
+      // 1. 通勤交通費 支給申請書の送信
+      if (commutingData.originStation || commutingData.transportMode === 'car_bike') {
+        await supabase.from('employee_document_submissions').insert({
+          tenant_id: effectiveTenantId,
+          user_id: userId,
+          document_type: 'commuting_pass',
+          title: '通勤交通費 支給申請書',
+          data: {
+            name: basicData.name,
+            transport_mode: commutingData.transportMode,
+            origin_station: commutingData.originStation,
+            via_station: commutingData.viaStation,
+            destination_station: commutingData.destinationStation,
+            transit_lines: commutingData.transitLines,
+            one_way_fare: commutingData.oneWayFare,
+            one_month_pass_amount: commutingData.oneMonthPassAmount,
+            car_distance_km: commutingData.carDistanceKm
+          },
+          attachment_data: commutingData.passPhoto || null,
+          attachment_filename: commutingData.passFileName || '',
+          status: 'pending'
+        });
+      }
+
+      // 2. 給与振込口座届出書の送信
       if (bankData.bankName) {
         await supabase.from('employee_document_submissions').insert({
           tenant_id: effectiveTenantId,
@@ -165,41 +269,46 @@ export default function EmployeeOnboardingWelcome() {
         });
       }
 
-      // 2. 通勤交通費申請の送信
-      if (commutingData.originStation) {
-        await supabase.from('employee_document_submissions').insert({
-          tenant_id: effectiveTenantId,
-          user_id: userId,
-          document_type: 'commuting_pass',
-          title: '通勤交通費 支給申請書',
-          data: {
-            name: basicData.name,
-            origin_station: commutingData.originStation,
-            destination_station: commutingData.destinationStation,
-            transit_line: commutingData.transitLine,
-            one_month_pass_amount: commutingData.oneMonthPassAmount
-          },
-          attachment_data: commutingData.passPhoto || null,
-          attachment_filename: commutingData.passFileName || '',
-          status: 'pending'
-        });
-      }
+      // 3. 扶養控除等申告書の送信
+      await supabase.from('employee_document_submissions').insert({
+        tenant_id: effectiveTenantId,
+        user_id: userId,
+        document_type: 'dependents_form',
+        title: '給与所得者の扶養控除等（異動）申告書',
+        data: {
+          name: basicData.name,
+          name_kana: basicData.nameKana,
+          address: basicData.address,
+          householder_name: basicData.householderName || basicData.name,
+          householder_relation: basicData.householderRelation,
+          has_spouse: taxData.hasSpouse,
+          spouse_name: taxData.spouseName,
+          spouse_income_estimate: taxData.spouseIncomeEstimate,
+          dependents: taxData.dependents,
+          dependents_count: taxData.dependents.filter(d => !d.isUnder16).length + (taxData.hasSpouse ? 1 : 0),
+          is_disability: taxData.isDisability,
+          is_single_parent: taxData.isSingleParent,
+          is_widow: taxData.isWidow,
+          is_working_student: taxData.isWorkingStudent
+        },
+        status: 'pending'
+      });
 
-      // 3. マイナンバー・扶養控除の送信
-      if (myNumberData.myNumber || myNumberData.cardPhoto) {
+      // 4. マイナンバー ＆ 年金・雇用保険届出の送信
+      if (officialDocsData.myNumber || officialDocsData.pensionNumber) {
         await supabase.from('employee_document_submissions').insert({
           tenant_id: effectiveTenantId,
           user_id: userId,
           document_type: 'my_number',
-          title: 'マイナンバー（個人番号）届出書',
+          title: '個人番号（マイナンバー）・社会保険等届出書',
           data: {
             name: basicData.name,
-            my_number: myNumberData.myNumber,
-            dependents_count: myNumberData.dependentsCount,
-            has_spouse: myNumberData.hasSpouse
+            my_number: officialDocsData.myNumber,
+            pension_number: officialDocsData.pensionNumber,
+            employment_insurance_number: officialDocsData.employmentInsuranceNumber
           },
-          attachment_data: myNumberData.cardPhoto || null,
-          attachment_filename: myNumberData.cardFileName || '',
+          attachment_data: officialDocsData.myNumberCardPhoto || officialDocsData.pensionPhoto || null,
+          attachment_filename: officialDocsData.myNumberCardFileName || '',
           status: 'pending'
         });
       }
@@ -215,7 +324,7 @@ export default function EmployeeOnboardingWelcome() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
         <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
       </div>
     );
@@ -223,23 +332,24 @@ export default function EmployeeOnboardingWelcome() {
 
   if (isCompleted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 text-white flex items-center justify-center p-4">
         <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 max-w-md w-full text-center space-y-5 animate-in zoom-in-95 duration-200">
           <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto ring-8 ring-emerald-500/10">
             <CheckCircle2 className="w-10 h-10" />
           </div>
           <div>
-            <h2 className="text-xl font-black">入社手続きの送信が完了しました！</h2>
+            <h2 className="text-xl font-black">公的入社書類の提出が完了しました！</h2>
             <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-              ご入力いただいた書類・写真は、会社人事部へ安全に暗号化送信されました。管理者の確認が完了次第、手続き完了となります。
+              ご入力いただいた法定書類および証憑写真は、人事部へ安全に暗号化送信されました。管理者の確認が完了次第、給与・社会保険の手続きが完了となります。
             </p>
           </div>
 
           <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-left text-xs space-y-2 text-slate-300">
-            <div className="font-bold text-white mb-1">📋 提出された書類:</div>
-            <div>✅ 給与振込口座届出書 兼 通帳確認</div>
-            <div>✅ 通勤交通費支給申請書</div>
-            <div>✅ マイナンバー・扶養控除申告</div>
+            <div className="font-bold text-white mb-1">📋 提出された公式書類:</div>
+            <div>✅ 1. 通勤交通費 支給申請書（経路・定期代明細）</div>
+            <div>✅ 2. 給与振込口座 登録届出書 兼 通帳確認</div>
+            <div>✅ 3. 給与所得者の扶養控除等（異動）申告書</div>
+            <div>✅ 4. マイナンバー ＆ 年金・雇用保険届出</div>
           </div>
 
           <button
@@ -262,25 +372,27 @@ export default function EmployeeOnboardingWelcome() {
             <UserCheck className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-xs font-black text-white">新入社員 入社手続きフォーム</div>
+            <div className="text-xs font-black text-white">公式 入社手続き・公的書類提出フォーム</div>
             <div className="text-[10px] text-indigo-400 font-bold">{tenantInfo?.name || '株式会社KAP'}</div>
           </div>
         </div>
         <div className="text-[10px] bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700 font-bold">
-          Step {currentStep} / 4
+          Step {currentStep} / 5
         </div>
       </header>
 
       {/* ステップインジケーター */}
-      <div className="bg-slate-900 border-b border-slate-800 px-4 py-2">
-        <div className="flex items-center justify-between max-w-lg mx-auto text-[10px] font-bold text-slate-400">
-          <span className={currentStep === 1 ? 'text-indigo-400 font-black' : ''}>1. 基本情報</span>
+      <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 overflow-x-auto">
+        <div className="flex items-center justify-between max-w-lg mx-auto text-[10px] font-bold text-slate-400 min-w-[320px]">
+          <span className={currentStep === 1 ? 'text-indigo-400 font-black' : ''}>1.基本情報</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
-          <span className={currentStep === 2 ? 'text-indigo-400 font-black' : ''}>2. 振込口座</span>
+          <span className={currentStep === 2 ? 'text-indigo-400 font-black' : ''}>2.通勤申請</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
-          <span className={currentStep === 3 ? 'text-indigo-400 font-black' : ''}>3. 通勤費</span>
+          <span className={currentStep === 3 ? 'text-indigo-400 font-black' : ''}>3.振込口座</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
-          <span className={currentStep === 4 ? 'text-indigo-400 font-black' : ''}>4. 個人番号</span>
+          <span className={currentStep === 4 ? 'text-indigo-400 font-black' : ''}>4.扶養申告</span>
+          <ChevronRight className="w-3 h-3 text-slate-600" />
+          <span className={currentStep === 5 ? 'text-indigo-400 font-black' : ''}>5.個人番号</span>
         </div>
       </div>
 
@@ -293,9 +405,9 @@ export default function EmployeeOnboardingWelcome() {
             <div>
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <Home className="w-4 h-4 text-indigo-400" />
-                1. あなたの基本情報を入力してください
+                1. あなたの基本情報 ＆ 住民票住所
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">雇用契約および社会保険の登録に使用いたします。</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">雇用契約書甲欄および社会保険登録に使用いたします。</p>
             </div>
 
             <div className="space-y-3 text-xs">
@@ -354,6 +466,34 @@ export default function EmployeeOnboardingWelcome() {
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-0.5">世帯主氏名</label>
+                  <input
+                    type="text"
+                    placeholder="例: 佐藤 健一"
+                    value={basicData.householderName}
+                    onChange={e => setBasicData({ ...basicData, householderName: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-0.5">世帯主との続柄</label>
+                  <select
+                    value={basicData.householderRelation}
+                    onChange={e => setBasicData({ ...basicData, householderRelation: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
+                  >
+                    <option value="本人">本人</option>
+                    <option value="夫">夫</option>
+                    <option value="妻">妻</option>
+                    <option value="父">父</option>
+                    <option value="母">母</option>
+                    <option value="子">子</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="pt-2 border-t border-slate-800 space-y-2">
                 <span className="text-[11px] font-bold text-indigo-300 block">緊急連絡先（ご家族等）</span>
                 <div className="grid grid-cols-2 gap-2">
@@ -377,13 +517,189 @@ export default function EmployeeOnboardingWelcome() {
           </div>
         )}
 
-        {/* Step 2: 給与振込口座 ＋ 通帳写真撮影 */}
+        {/* Step 2: 正式な通勤交通費 支給申請書 */}
         {currentStep === 2 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                <Train className="w-4 h-4 text-cyan-400" />
+                2. 通勤交通費 支給申請書（正式経路・定期代）
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">就業規則および通勤手当規程に基づき、正式な経路と金額を申請してください。</p>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-[11px] font-bold text-slate-300 block mb-1">通勤区分・手段</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCommutingData(prev => ({ ...prev, transportMode: 'train_bus' }))}
+                    className={`py-2 px-2 rounded-xl font-bold text-[11px] border transition cursor-pointer ${
+                      commutingData.transportMode === 'train_bus' ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300' : 'bg-slate-800 border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    電車・バス
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommutingData(prev => ({ ...prev, transportMode: 'car_bike' }))}
+                    className={`py-2 px-2 rounded-xl font-bold text-[11px] border transition cursor-pointer ${
+                      commutingData.transportMode === 'car_bike' ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300' : 'bg-slate-800 border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    マイカー・バイク
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCommutingData(prev => ({ ...prev, transportMode: 'walk_bicycle' }))}
+                    className={`py-2 px-2 rounded-xl font-bold text-[11px] border transition cursor-pointer ${
+                      commutingData.transportMode === 'walk_bicycle' ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300' : 'bg-slate-800 border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    徒歩・自転車
+                  </button>
+                </div>
+              </div>
+
+              {commutingData.transportMode === 'train_bus' && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-0.5">乗車駅（自宅最寄） <span className="text-rose-400">*</span></label>
+                      <input
+                        type="text"
+                        placeholder="例: 中野駅"
+                        value={commutingData.originStation}
+                        onChange={e => setCommutingData({ ...commutingData, originStation: e.target.value })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-bold text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-0.5">降車駅（会社最寄） <span className="text-rose-400">*</span></label>
+                      <input
+                        type="text"
+                        placeholder="例: 大手町駅"
+                        value={commutingData.destinationStation}
+                        onChange={e => setCommutingData({ ...commutingData, destinationStation: e.target.value })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-bold text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">経由駅・乗換駅（直通の場合は空欄）</label>
+                    <input
+                      type="text"
+                      placeholder="例: 新宿駅（JR ➔ 丸ノ内線へ乗換）"
+                      value={commutingData.viaStation}
+                      onChange={e => setCommutingData({ ...commutingData, viaStation: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">利用路線名</label>
+                    <input
+                      type="text"
+                      placeholder="例: JR中央線快速、東京メトロ丸ノ内線"
+                      value={commutingData.transitLines}
+                      onChange={e => setCommutingData({ ...commutingData, transitLines: e.target.value })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-0.5">1ヶ月通勤定期代（円） <span className="text-rose-400">*</span></label>
+                      <input
+                        type="number"
+                        placeholder="12000"
+                        value={commutingData.oneMonthPassAmount}
+                        onChange={e => setCommutingData({ ...commutingData, oneMonthPassAmount: parseInt(e.target.value, 10) || 0 })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-black text-cyan-400 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-0.5">片道運賃（円）</label>
+                      <input
+                        type="number"
+                        placeholder="220"
+                        value={commutingData.oneWayFare}
+                        onChange={e => setCommutingData({ ...commutingData, oneWayFare: parseInt(e.target.value, 10) || 0 })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {commutingData.transportMode === 'car_bike' && (
+                <div className="space-y-3 bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700">
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">片道通勤距離（km）</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="15.5"
+                      value={commutingData.carDistanceKm}
+                      onChange={e => setCommutingData({ ...commutingData, carDistanceKm: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-bold text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-0.5">申請手当月額（円）</label>
+                    <input
+                      type="number"
+                      value={commutingData.oneMonthPassAmount}
+                      onChange={e => setCommutingData({ ...commutingData, oneMonthPassAmount: parseInt(e.target.value, 10) || 0 })}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-black text-cyan-400 text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* 定期券または運賃証明の写真添付 */}
+              <div className="bg-slate-800/80 p-3.5 rounded-2xl border-2 border-dashed border-slate-700 text-center space-y-2">
+                <label className="block cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => handlePhotoUpload(e, 'pass')}
+                    className="hidden"
+                  />
+                  <div className="flex flex-col items-center justify-center gap-1.5 py-1">
+                    <div className="w-9 h-9 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+                      <Upload className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-bold text-white">定期券 または 乗換アプリ検索結果の写真を添付</span>
+                    <span className="text-[9px] text-slate-400">※ 写真を添付すると会社承認がよりスムーズになります</span>
+                  </div>
+                </label>
+
+                {commutingData.passPhoto && (
+                  <div className="p-2 bg-slate-900 rounded-xl border border-slate-700 flex items-center justify-between text-left">
+                    <span className="text-[11px] font-bold text-cyan-400">📷 定期券・運賃写真を添付済</span>
+                    <button
+                      onClick={() => setCommutingData({ ...commutingData, passPhoto: '', passFileName: '' })}
+                      className="p-1 text-slate-400 hover:text-rose-400"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: 給与振込口座 ＋ 通帳写真撮影 */}
+        {currentStep === 3 && (
+          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
+            <div>
+              <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-emerald-400" />
-                2. 給与振込口座の登録 ＆ 通帳撮影
+                3. 給与振込口座の登録 ＆ 通帳原本撮影
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">給与が振り込まれるご本人名義の口座情報を入力してください。</p>
             </div>
@@ -391,7 +707,7 @@ export default function EmployeeOnboardingWelcome() {
             <div className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-slate-400 block mb-0.5">銀行名</label>
+                  <label className="text-[10px] text-slate-400 block mb-0.5">金融機関名（銀行名）</label>
                   <input
                     type="text"
                     placeholder="例: 三井住友銀行"
@@ -414,7 +730,7 @@ export default function EmployeeOnboardingWelcome() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-slate-400 block mb-0.5">口座種別</label>
+                  <label className="text-[10px] text-slate-400 block mb-0.5">預金種目</label>
                   <select
                     value={bankData.accountType}
                     onChange={e => setBankData({ ...bankData, accountType: e.target.value })}
@@ -453,31 +769,24 @@ export default function EmployeeOnboardingWelcome() {
                   <input
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     onChange={e => handlePhotoUpload(e, 'passbook')}
                     className="hidden"
                   />
-                  <div className="flex flex-col items-center justify-center gap-1.5 py-2">
+                  <div className="flex flex-col items-center justify-center gap-1.5 py-1">
                     <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
                       <Upload className="w-5 h-5" />
                     </div>
                     <span className="text-xs font-bold text-white">通帳の見開き面 または キャッシュカードを撮影</span>
-                    <span className="text-[10px] text-slate-400">※ スマホで写真を撮るだけで自動的に軽量化されます</span>
+                    <span className="text-[9px] text-slate-400">※ スマホで写真を撮るだけで自動的に軽量化されます</span>
                   </div>
                 </label>
 
                 {bankData.passbookPhoto && (
                   <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-700 flex items-center justify-between text-left">
-                    <div className="flex items-center gap-2.5">
-                      <img src={bankData.passbookPhoto} alt="通帳プレビュー" className="w-10 h-10 object-cover rounded-lg border border-slate-600" />
-                      <div>
-                        <div className="text-[11px] font-bold text-emerald-400">📷 通帳写真を添付しました</div>
-                        <div className="text-[9px] text-slate-400">{bankData.passbookSizeInfo}</div>
-                      </div>
-                    </div>
+                    <span className="text-[11px] font-bold text-emerald-400">📷 通帳写真を添付済</span>
                     <button
-                      onClick={() => setBankData({ ...bankData, passbookPhoto: '', passbookFileName: '', passbookSizeInfo: '' })}
-                      className="p-1.5 text-slate-400 hover:text-rose-400 cursor-pointer"
+                      onClick={() => setBankData({ ...bankData, passbookPhoto: '', passbookFileName: '' })}
+                      className="p-1 text-slate-400 hover:text-rose-400"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -488,100 +797,163 @@ export default function EmployeeOnboardingWelcome() {
           </div>
         )}
 
-        {/* Step 3: 通勤交通費申請 ＋ 定期券写真撮影 */}
-        {currentStep === 3 && (
-          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
-            <div>
-              <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                <Train className="w-4 h-4 text-cyan-400" />
-                3. 通勤経路 ＆ 通勤手当の申請
-              </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">自宅から勤務先までの通勤経路と1ヶ月の定期代を入力してください。</p>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-slate-400 block mb-0.5">自宅最寄駅 <span className="text-rose-400">*</span></label>
-                  <input
-                    type="text"
-                    placeholder="例: 中野駅"
-                    value={commutingData.originStation}
-                    onChange={e => setCommutingData({ ...commutingData, originStation: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-bold text-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-400 block mb-0.5">会社最寄駅 <span className="text-rose-400">*</span></label>
-                  <input
-                    type="text"
-                    placeholder="例: 大手町駅"
-                    value={commutingData.destinationStation}
-                    onChange={e => setCommutingData({ ...commutingData, destinationStation: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-bold text-white"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] text-slate-400 block mb-0.5">1ヶ月の通勤定期代（円） <span className="text-rose-400">*</span></label>
-                <input
-                  type="number"
-                  placeholder="12000"
-                  value={commutingData.oneMonthPassAmount}
-                  onChange={e => setCommutingData({ ...commutingData, oneMonthPassAmount: parseInt(e.target.value, 10) || 0 })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-bold text-cyan-400 text-sm"
-                />
-              </div>
-
-              {/* 定期券または乗換アプリ画面の写真撮影 */}
-              <div className="bg-slate-800/80 p-4 rounded-2xl border-2 border-dashed border-slate-700 text-center space-y-2">
-                <label className="block cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={e => handlePhotoUpload(e, 'pass')}
-                    className="hidden"
-                  />
-                  <div className="flex flex-col items-center justify-center gap-1.5 py-2">
-                    <div className="w-10 h-10 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
-                      <Upload className="w-5 h-5" />
-                    </div>
-                    <span className="text-xs font-bold text-white">定期券 または 乗換検索結果の画面スクショを添付</span>
-                  </div>
-                </label>
-
-                {commutingData.passPhoto && (
-                  <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-700 flex items-center justify-between text-left">
-                    <div className="flex items-center gap-2.5">
-                      <img src={commutingData.passPhoto} alt="定期券プレビュー" className="w-10 h-10 object-cover rounded-lg border border-slate-600" />
-                      <div>
-                        <div className="text-[11px] font-bold text-cyan-400">📷 定期券・経路画面を添付しました</div>
-                        <div className="text-[9px] text-slate-400">{commutingData.passSizeInfo}</div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setCommutingData({ ...commutingData, passPhoto: '', passFileName: '', passSizeInfo: '' })}
-                      className="p-1.5 text-slate-400 hover:text-rose-400 cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Step 4: マイナンバー ＆ 扶養情報 */}
+        {/* Step 4: 国税庁準拠 扶養控除等（異動）申告書 */}
         {currentStep === 4 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-purple-400" />
-                4. マイナンバー ＆ 扶養親族の確認
+                <FileText className="w-4 h-4 text-amber-400" />
+                4. 給与所得者の扶養控除等（異動）申告書
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">源泉徴収票および雇用保険の手続きに安全に利用されます。</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">所得税の源泉徴収税額（甲欄）および年末調整に必須の公的申告です。</p>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {/* 配偶者控除の有無 */}
+              <div className="bg-slate-800/70 p-3.5 rounded-2xl border border-slate-700 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-white">源泉控除対象配偶者（夫・妻）</span>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={taxData.hasSpouse}
+                      onChange={e => setTaxData({ ...taxData, hasSpouse: e.target.checked })}
+                      className="rounded text-indigo-500"
+                    />
+                    <span className="font-bold text-xs text-amber-400">{taxData.hasSpouse ? 'あり' : 'なし'}</span>
+                  </label>
+                </div>
+
+                {taxData.hasSpouse && (
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700">
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-0.5">配偶者の氏名</label>
+                      <input
+                        type="text"
+                        placeholder="例: 佐藤 花子"
+                        value={taxData.spouseName}
+                        onChange={e => setTaxData({ ...taxData, spouseName: e.target.value })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-400 block mb-0.5">本年所得の見積額 (円)</label>
+                      <input
+                        type="number"
+                        placeholder="480000"
+                        value={taxData.spouseIncomeEstimate}
+                        onChange={e => setTaxData({ ...taxData, spouseIncomeEstimate: parseInt(e.target.value, 10) || 0 })}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold text-white"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 扶養親族一覧 ＆ 追加フォーム */}
+              <div className="bg-slate-800/70 p-3.5 rounded-2xl border border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-white">控除対象 扶養親族（お子様・ご両親等）</span>
+                  <span className="text-[10px] bg-slate-700 px-2 py-0.5 rounded text-amber-300 font-bold">
+                    登録数: {taxData.dependents.length}名
+                  </span>
+                </div>
+
+                {taxData.dependents.map((dep, idx) => (
+                  <div key={idx} className="bg-slate-900 p-2.5 rounded-xl border border-slate-700 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-white text-xs">{dep.name}（{dep.relation}）</div>
+                      <div className="text-[10px] text-slate-400">生年: {dep.birthDate} / {dep.isLivingTogether ? '同居' : '別居'}</div>
+                    </div>
+                    <button onClick={() => handleDeleteDependent(idx)} className="p-1 text-slate-400 hover:text-rose-400">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+
+                {/* 扶養親族追加エリア */}
+                <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-700 space-y-2">
+                  <span className="text-[10px] font-bold text-slate-400 block">＋ 扶養親族を追加</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="氏名（例: 佐藤 陸）"
+                      value={newDep.name}
+                      onChange={e => setNewDep({ ...newDep, name: e.target.value })}
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
+                    />
+                    <select
+                      value={newDep.relation}
+                      onChange={e => setNewDep({ ...newDep, relation: e.target.value })}
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold"
+                    >
+                      <option value="子">子</option>
+                      <option value="父">父</option>
+                      <option value="母">母</option>
+                      <option value="祖父">祖父</option>
+                      <option value="祖母">祖母</option>
+                      <option value="兄弟姉妹">兄弟姉妹</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={newDep.birthDate}
+                      onChange={e => {
+                        const bDate = e.target.value;
+                        const age = new Date().getFullYear() - new Date(bDate).getFullYear();
+                        setNewDep({ ...newDep, birthDate: bDate, isUnder16: age < 16 });
+                      }}
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddDependent}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-lg text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> 扶養に追加
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 障害者・ひとり親控除 */}
+              <div className="bg-slate-800/70 p-3.5 rounded-2xl border border-slate-700 space-y-2">
+                <span className="font-bold text-white block">特別控除の該当（該当する場合のみチェック）</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex items-center gap-2 bg-slate-900 p-2 rounded-xl border border-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={taxData.isDisability}
+                      onChange={e => setTaxData({ ...taxData, isDisability: e.target.checked })}
+                      className="rounded text-indigo-500"
+                    />
+                    <span className="text-[11px] text-slate-300">障害者控除</span>
+                  </label>
+                  <label className="flex items-center gap-2 bg-slate-900 p-2 rounded-xl border border-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={taxData.isSingleParent}
+                      onChange={e => setTaxData({ ...taxData, isSingleParent: e.target.checked })}
+                      className="rounded text-indigo-500"
+                    />
+                    <span className="text-[11px] text-slate-300">ひとり親控除</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 5: マイナンバー・社会保険・雇用保険・前職源泉 */}
+        {currentStep === 5 && (
+          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
+            <div>
+              <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-purple-400" />
+                5. マイナンバー ＆ 年金・雇用保険・前職源泉
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">公的手続き（社会保険加入・雇用保険・源泉徴収）に必要な番号・書類です。</p>
             </div>
 
             <div className="space-y-3 text-xs">
@@ -592,8 +964,8 @@ export default function EmployeeOnboardingWelcome() {
                     type="password"
                     maxLength={12}
                     placeholder="123456789012"
-                    value={myNumberData.myNumber}
-                    onChange={e => setMyNumberData({ ...myNumberData, myNumber: e.target.value.replace(/\D/g, '') })}
+                    value={officialDocsData.myNumber}
+                    onChange={e => setOfficialDocsData({ ...officialDocsData, myNumber: e.target.value.replace(/\D/g, '') })}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 font-mono text-white text-sm tracking-widest"
                   />
                   <Lock className="w-4 h-4 text-slate-500 absolute right-3 top-3" />
@@ -601,55 +973,64 @@ export default function EmployeeOnboardingWelcome() {
               </div>
 
               {/* マイナンバーカード写真 */}
-              <div className="bg-slate-800/80 p-3.5 rounded-2xl border-2 border-dashed border-slate-700 text-center space-y-2">
+              <div className="bg-slate-800/80 p-3 rounded-2xl border-2 border-dashed border-slate-700 text-center">
                 <label className="block cursor-pointer">
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={e => handlePhotoUpload(e, 'card')}
+                    onChange={e => handlePhotoUpload(e, 'mynumber')}
                     className="hidden"
                   />
-                  <div className="flex flex-col items-center justify-center gap-1 py-1">
-                    <Upload className="w-5 h-5 text-purple-400" />
-                    <span className="text-xs font-bold text-white">マイナンバーカード（通知カード）写真</span>
+                  <div className="flex items-center justify-center gap-2 py-1">
+                    <Upload className="w-4 h-4 text-purple-400" />
+                    <span className="text-[11px] font-bold text-white">マイナンバーカード（通知カード）写真を添付</span>
                   </div>
                 </label>
-
-                {myNumberData.cardPhoto && (
-                  <div className="p-2 bg-slate-900 rounded-xl border border-slate-700 flex items-center justify-between text-left">
-                    <span className="text-[11px] font-bold text-purple-400">📷 個人番号カード写真を添付済</span>
-                    <button
-                      onClick={() => setMyNumberData({ ...myNumberData, cardPhoto: '', cardFileName: '', cardSizeInfo: '' })}
-                      className="p-1 text-slate-400 hover:text-rose-400"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                {officialDocsData.myNumberCardPhoto && (
+                  <span className="text-[10px] text-purple-400 font-bold block mt-1">📷 カード写真を添付済</span>
                 )}
               </div>
 
-              <div className="pt-2 border-t border-slate-800 space-y-2">
-                <span className="text-[11px] font-bold text-slate-300 block">税法上の扶養親族</span>
-                <div className="flex items-center justify-between bg-slate-800 p-3 rounded-xl border border-slate-700">
-                  <span className="text-slate-300">扶養親族等の人数</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setMyNumberData(prev => ({ ...prev, dependentsCount: Math.max(0, prev.dependentsCount - 1) }))}
-                      className="w-7 h-7 rounded-lg bg-slate-700 text-white font-bold flex items-center justify-center cursor-pointer"
-                    >
-                      -
-                    </button>
-                    <span className="font-black text-white w-6 text-center">{myNumberData.dependentsCount}名</span>
-                    <button
-                      type="button"
-                      onClick={() => setMyNumberData(prev => ({ ...prev, dependentsCount: prev.dependentsCount + 1 }))}
-                      className="w-7 h-7 rounded-lg bg-slate-700 text-white font-bold flex items-center justify-center cursor-pointer"
-                    >
-                      +
-                    </button>
-                  </div>
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-0.5">基礎年金番号（10桁）</label>
+                  <input
+                    type="text"
+                    placeholder="1234-567890"
+                    value={officialDocsData.pensionNumber}
+                    onChange={e => setOfficialDocsData({ ...officialDocsData, pensionNumber: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-mono text-white"
+                  />
                 </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-0.5">雇用保険被保険者番号</label>
+                  <input
+                    type="text"
+                    placeholder="1234-567890-1"
+                    value={officialDocsData.employmentInsuranceNumber}
+                    onChange={e => setOfficialDocsData({ ...officialDocsData, employmentInsuranceNumber: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-mono text-white"
+                  />
+                </div>
+              </div>
+
+              {/* 前職の源泉徴収票 */}
+              <div className="bg-slate-800/80 p-3 rounded-2xl border-2 border-dashed border-slate-700 text-center">
+                <label className="block cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => handlePhotoUpload(e, 'withholding')}
+                    className="hidden"
+                  />
+                  <div className="flex items-center justify-center gap-2 py-1">
+                    <Upload className="w-4 h-4 text-amber-400" />
+                    <span className="text-[11px] font-bold text-white">前職の源泉徴収票（当年転職者のみ）</span>
+                  </div>
+                </label>
+                {officialDocsData.withholdingSlipPhoto && (
+                  <span className="text-[10px] text-amber-400 font-bold block mt-1">📷 源泉徴収票を添付済</span>
+                )}
               </div>
             </div>
           </div>
@@ -670,7 +1051,7 @@ export default function EmployeeOnboardingWelcome() {
             </button>
           ) : <div />}
 
-          {currentStep < 4 ? (
+          {currentStep < 5 ? (
             <button
               onClick={() => {
                 if (currentStep === 1 && !basicData.name.trim()) {
@@ -688,10 +1069,10 @@ export default function EmployeeOnboardingWelcome() {
             <button
               onClick={handleSubmitAll}
               disabled={isSubmitting}
-              className="flex-1 max-w-[240px] ml-auto py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-xs rounded-2xl shadow-lg transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="flex-1 max-w-[260px] ml-auto py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-xs rounded-2xl shadow-lg transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              入社書類をすべて送信する
+              公的入社書類をすべて送信する
             </button>
           )}
         </div>
