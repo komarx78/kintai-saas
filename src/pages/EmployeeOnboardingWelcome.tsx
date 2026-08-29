@@ -14,6 +14,10 @@ import {
   parseResidentCertificateImage, 
   parseBankPassbookImage 
 } from '../lib/geminiOcr';
+import {
+  resolveStationSuggestions,
+  type StationSuggestion
+} from '../lib/geminiStationResolver';
 import { 
   UserCheck, CreditCard, Train, ShieldCheck, 
   Upload, Trash2, CheckCircle2, ChevronRight, ChevronLeft, 
@@ -44,6 +48,17 @@ export default function EmployeeOnboardingWelcome() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
 
+  // 📍 地区推測 ＆ 正式駅名サジェスト State
+  const [originRegionHint, setOriginRegionHint] = useState<string>('東京都豊島区');
+  const [originSuggestions, setOriginSuggestions] = useState<StationSuggestion[]>([
+    { region: '東京都豊島区', formalStationName: '大塚駅', lineName: 'JR山手線', type: 'jr', description: 'JR山手線 最寄駅' },
+    { region: '東京都豊島区', formalStationName: '大塚駅前', lineName: '都電荒川線', type: 'private_rail', description: '都電停留場' }
+  ]);
+  const [destRegionHint, setDestRegionHint] = useState<string>('大阪府大阪市淀川区');
+  const [destSuggestions, setDestSuggestions] = useState<StationSuggestion[]>([
+    { region: '大阪府大阪市淀川区', formalStationName: '新大阪駅', lineName: '東海道・山陽新幹線 / JR京都線 / 御堂筋線', type: 'jr', description: 'ターミナル' }
+  ]);
+
   // 1. 本人基本情報 ＆ 住民票写真
   const [basicData, setBasicData] = useState({
     name: '',
@@ -66,29 +81,19 @@ export default function EmployeeOnboardingWelcome() {
   // 2. 通勤交通費 支給申請書（複数乗り継ぎ対応）
   const [commutingData, setCommutingData] = useState({
     transportMode: 'train_bus' as 'train_bus' | 'car_bike' | 'walk_bicycle',
-    originStation: '',
+    originStation: '北大塚',
     viaStation: '',
-    destinationStation: '',
+    destinationStation: '新大阪',
     segments: [
       {
         id: 'seg_1',
-        transportType: 'bus' as const,
-        fromStation: '〇〇バス停',
-        toStation: '中野駅',
-        lineName: '都営バス[渋66]',
-        oneWayFare: 220,
-        oneMonthPassAmount: 9640,
-        sixMonthPassAmount: 52050
-      },
-      {
-        id: 'seg_2',
         transportType: 'jr' as const,
-        fromStation: '中野駅',
-        toStation: '新宿駅',
-        lineName: 'JR中央線快速',
-        oneWayFare: 170,
-        oneMonthPassAmount: 5120,
-        sixMonthPassAmount: 27640
+        fromStation: '北大塚',
+        toStation: '新大阪',
+        lineName: 'JR線 最短連絡ルート',
+        oneWayFare: 290,
+        oneMonthPassAmount: 10440,
+        sixMonthPassAmount: 56370
       }
     ] as CommuteRouteSegment[],
     carDistanceKm: 8.5,
@@ -839,21 +844,141 @@ export default function EmployeeOnboardingWelcome() {
                         <label className="text-[10px] text-slate-400 block mb-0.5">乗車地（自宅最寄）</label>
                         <input
                           type="text"
-                          placeholder="例: 〇〇バス停 / 中野駅"
+                          placeholder="例: 〇〇バス停 / 北大塚"
                           value={commutingData.originStation}
-                          onChange={e => setCommutingData({ ...commutingData, originStation: e.target.value })}
+                          onChange={async e => {
+                            const val = e.target.value;
+                            setCommutingData(prev => {
+                              const newSegs = [...prev.segments];
+                              if (newSegs.length > 0) {
+                                newSegs[0] = { ...newSegs[0], fromStation: val };
+                              }
+                              return {
+                                ...prev,
+                                originStation: val,
+                                segments: newSegs
+                              };
+                            });
+
+                            if (val.length >= 2) {
+                              const res = await resolveStationSuggestions(val, basicData.address);
+                              if (res.regionHint) setOriginRegionHint(res.regionHint);
+                              if (res.suggestions.length > 0) setOriginSuggestions(res.suggestions);
+                            }
+                          }}
                           className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-bold"
                         />
+
+                        {/* 📍 乗車地の地区推測 ＆ 正式駅名サジェストチップ */}
+                        {originSuggestions.length > 0 && (
+                          <div className="mt-1.5 space-y-1 bg-slate-900/90 p-2 rounded-xl border border-cyan-500/30 text-[10px]">
+                            <div className="text-cyan-400 font-bold flex items-center gap-1">
+                              <span>📍 推定地区:</span>
+                              <span className="text-white">{originRegionHint || '東京都豊島区'}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1 pt-0.5">
+                              {originSuggestions.map((s, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => {
+                                    setCommutingData(prev => {
+                                      const newSegs = [...prev.segments];
+                                      if (newSegs.length > 0) {
+                                        newSegs[0] = {
+                                          ...newSegs[0],
+                                          fromStation: s.formalStationName,
+                                          lineName: s.lineName,
+                                          transportType: s.type
+                                        };
+                                      }
+                                      return {
+                                        ...prev,
+                                        originStation: s.formalStationName,
+                                        segments: newSegs
+                                      };
+                                    });
+                                  }}
+                                  className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 px-2 py-0.5 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer text-[9px]"
+                                  title={`${s.region} ${s.formalStationName} (${s.lineName})`}
+                                >
+                                  ✨ {s.formalStationName} <span className="text-[8px] opacity-70">({s.lineName.slice(0, 8)})</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
+
                       <div>
                         <label className="text-[10px] text-slate-400 block mb-0.5">降車地（会社最寄）</label>
                         <input
                           type="text"
-                          placeholder="例: 大手町駅 / 都庁前駅"
+                          placeholder="例: 新大阪 / 大手町駅"
                           value={commutingData.destinationStation}
-                          onChange={e => setCommutingData({ ...commutingData, destinationStation: e.target.value })}
+                          onChange={async e => {
+                            const val = e.target.value;
+                            setCommutingData(prev => {
+                              const newSegs = [...prev.segments];
+                              if (newSegs.length > 0) {
+                                newSegs[newSegs.length - 1] = { ...newSegs[newSegs.length - 1], toStation: val };
+                              }
+                              return {
+                                ...prev,
+                                destinationStation: val,
+                                segments: newSegs
+                              };
+                            });
+
+                            if (val.length >= 2) {
+                              const compAddr = tenantInfo?.address || '東京都千代田区';
+                              const res = await resolveStationSuggestions(val, compAddr);
+                              if (res.regionHint) setDestRegionHint(res.regionHint);
+                              if (res.suggestions.length > 0) setDestSuggestions(res.suggestions);
+                            }
+                          }}
                           className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-bold"
                         />
+
+                        {/* 📍 降車地の地区推測 ＆ 正式駅名サジェストチップ */}
+                        {destSuggestions.length > 0 && (
+                          <div className="mt-1.5 space-y-1 bg-slate-900/90 p-2 rounded-xl border border-cyan-500/30 text-[10px]">
+                            <div className="text-cyan-400 font-bold flex items-center gap-1">
+                              <span>📍 推定地区:</span>
+                              <span className="text-white">{destRegionHint || '大阪府大阪市淀川区'}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1 pt-0.5">
+                              {destSuggestions.map((s, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => {
+                                    setCommutingData(prev => {
+                                      const newSegs = [...prev.segments];
+                                      if (newSegs.length > 0) {
+                                        newSegs[newSegs.length - 1] = {
+                                          ...newSegs[newSegs.length - 1],
+                                          toStation: s.formalStationName,
+                                          lineName: s.lineName,
+                                          transportType: s.type
+                                        };
+                                      }
+                                      return {
+                                        ...prev,
+                                        destinationStation: s.formalStationName,
+                                        segments: newSegs
+                                      };
+                                    });
+                                  }}
+                                  className="bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-500/40 px-2 py-0.5 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer text-[9px]"
+                                  title={`${s.region} ${s.formalStationName} (${s.lineName})`}
+                                >
+                                  ✨ {s.formalStationName} <span className="text-[8px] opacity-70">({s.lineName.slice(0, 8)})</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
