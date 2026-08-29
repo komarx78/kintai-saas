@@ -6,28 +6,40 @@ interface TaxExemptionDocProps {
     companyName: string;
     companyAddress?: string;
     corporateNumber?: string;
+    taxOfficeName?: string;
     employeeName: string;
     employeeNameKana?: string;
     employeeAddress: string;
+    postalCode?: string;
     myNumber?: string;
     birthDate?: string;
     householderName?: string;
     householderRelation?: string;
     hasSpouse?: boolean;
     spouseName?: string;
+    spouseNameKana?: string;
+    spouseMyNumber?: string;
+    spouseBirthDate?: string;
     spouseIncomeEstimate?: number;
+    spouseIsLivingTogether?: boolean;
     dependents?: Array<{
       name: string;
+      nameKana?: string;
+      myNumber?: string;
       relation: string;
       birthDate: string;
       isLivingTogether?: boolean;
       incomeEstimate?: number;
       isUnder16?: boolean;
+      isSpecific?: boolean;
+      isElderly?: boolean;
     }>;
     isDisability?: boolean;
+    isDisabilitySpecial?: boolean;
     isSingleParent?: boolean;
     isWidow?: boolean;
     isWorkingStudent?: boolean;
+    disabilityDetails?: string;
     appliedDate: string;
   };
 }
@@ -37,210 +49,276 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
   const under16Dependents = (data.dependents || []).filter(d => d.isUnder16);
   const regularDependents = (data.dependents || []).filter(d => !d.isUnder16);
 
+  // 4行分の空行補完
+  const paddedRegular = [...regularDependents];
+  while (paddedRegular.length < 4) {
+    paddedRegular.push({
+      name: '',
+      relation: '',
+      birthDate: '',
+      incomeEstimate: undefined,
+      isUnder16: false
+    });
+  }
+
+  // 2行分の16歳未満空行補完
+  const paddedUnder16 = [...under16Dependents];
+  while (paddedUnder16.length < 2) {
+    paddedUnder16.push({
+      name: '',
+      relation: '',
+      birthDate: '',
+      incomeEstimate: undefined,
+      isUnder16: true
+    });
+  }
+
   return (
-    <div className="bg-white text-slate-900 font-sans p-6 max-w-[840px] mx-auto border border-slate-300 print:border-none print:p-0 print:m-0 print:max-w-none print:w-full print:text-black">
+    <div className="bg-white text-black font-sans p-4 sm:p-6 max-w-[920px] mx-auto border-2 border-black print:border-none print:p-0 print:m-0 print:max-w-none print:w-full select-text text-[10px] leading-tight">
       {/* 印刷用スタイル */}
       <style>{`
         @media print {
           @page {
             size: A4 portrait;
-            margin: 8mm 10mm;
+            margin: 6mm 8mm;
           }
           body {
             print-color-adjust: exact;
             -webkit-print-color-adjust: exact;
+            background: white !important;
           }
         }
       `}</style>
 
-      {/* 表題部 */}
-      <div className="border-b-2 border-slate-900 pb-2 mb-3 flex items-end justify-between">
-        <div>
-          <div className="text-[10px] font-black text-slate-500 tracking-widest uppercase">
-            所得税法第194条・国税庁公式準拠様式
+      {/* 最上部：タイトル ＆ 所轄税務署 */}
+      <div className="flex items-center justify-between mb-1">
+        <div className="w-1/4 border border-black p-1 text-[8px] space-y-0.5">
+          <div className="flex justify-between border-b border-black pb-0.5">
+            <span>所轄税務署長等</span>
+            <span className="font-bold">{data.taxOfficeName || '〇〇'} 税務署長</span>
           </div>
-          <h1 className="text-xl font-black text-slate-950 tracking-tight">
-            令和{year - 2018}年分 給与所得者の扶養控除等（異動）申告書
-          </h1>
-          <p className="text-[10px] text-slate-500 mt-0.5">
-            （主たる給与の支払者へ提出 / 源泉徴収税額表の甲欄適用申告）
-          </p>
+          <div className="flex justify-between pt-0.5">
+            <span>市区町村長</span>
+            <span className="font-bold">〇〇 市区長</span>
+          </div>
         </div>
 
-        <div className="text-right border border-slate-300 p-1 rounded text-[10px]">
-          <div className="text-[8px] text-slate-400 font-bold">給与支払者（会社）受付印</div>
-          <div className="w-16 h-10 flex items-center justify-center font-bold text-slate-300 text-xs">
-            受付印
+        <div className="text-center flex-1">
+          <h1 className="text-lg sm:text-xl font-black tracking-wider inline-block border-b-2 border-black pb-0.5">
+            令和{year - 2018}年分　給与所得者の扶養控除等（異動）申告書
+          </h1>
+        </div>
+
+        <div className="w-1/4 text-right flex items-center justify-end gap-2">
+          <div className="border border-black p-1 text-[8px] text-center">
+            従たる給与についての扶養控除等申告書の提出<br />
+            <span className="text-[7px]">（提出している場合は○印を付けてください）</span>
+          </div>
+          <div className="w-7 h-7 rounded-full border-2 border-black flex items-center justify-center font-black text-sm">
+            扶
           </div>
         </div>
       </div>
 
-      {/* 会社情報 ＆ 本人情報 テーブル */}
-      <div className="border border-slate-900 text-xs mb-3">
-        <div className="grid grid-cols-12 border-b border-slate-300 bg-slate-50 font-bold text-[10px]">
-          <div className="col-span-6 p-1.5 border-r border-slate-300">給与の支払者（会社）の名称・所在地</div>
-          <div className="col-span-6 p-1.5">給与所得者（あなた）の氏名・住所</div>
-        </div>
-
-        <div className="grid grid-cols-12 text-xs">
-          <div className="col-span-6 p-2 border-r border-slate-300 space-y-1">
-            <div className="text-[10px] text-slate-500">法人名 / 屋号:</div>
-            <div className="font-black text-sm">{data.companyName}</div>
-            <div className="text-[10px] text-slate-500">所在地: {data.companyAddress || '本社所在地'}</div>
-            <div className="text-[10px] text-slate-400">法人番号: {data.corporateNumber || '未登録'}</div>
+      {/* 会社情報 ＆ 本人情報（国税庁公式グリッド） */}
+      <div className="border-2 border-black mb-1">
+        <div className="grid grid-cols-12 border-b border-black">
+          {/* 会社情報 */}
+          <div className="col-span-6 border-r border-black p-1 space-y-0.5">
+            <div className="flex items-center">
+              <span className="w-24 text-[8px] text-slate-700">給与の支払者の名称(氏名)</span>
+              <span className="font-black text-xs">{data.companyName}</span>
+            </div>
+            <div className="flex items-center">
+              <span className="w-24 text-[8px] text-slate-700">給与の支払者の法人番号</span>
+              <span className="font-mono font-bold text-[9px]">{data.corporateNumber || '―'}</span>
+            </div>
+            <div className="flex items-center">
+              <span className="w-24 text-[8px] text-slate-700">給与の支払者の所在地</span>
+              <span className="text-[9px] truncate">{data.companyAddress || '本社所在地'}</span>
+            </div>
           </div>
 
-          <div className="col-span-6 p-2 space-y-1">
+          {/* 本人情報 */}
+          <div className="col-span-6 p-1 space-y-0.5">
             <div className="flex justify-between items-start">
-              <div>
-                <div className="text-[9px] text-slate-400">フリガナ: {data.employeeNameKana || '―'}</div>
-                <div className="font-black text-base">{data.employeeName}</div>
+              <div className="flex-1">
+                <div className="text-[7px] text-slate-500">（フリガナ）{data.employeeNameKana || '―'}</div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[8px] text-slate-700">あなたの氏名:</span>
+                  <span className="font-black text-sm">{data.employeeName}</span>
+                </div>
               </div>
-              <div className="text-right text-[10px]">
-                <div className="text-slate-400">世帯主: <span className="font-bold text-slate-800">{data.householderName || data.employeeName}</span></div>
-                <div className="text-slate-400">続柄: <span className="font-bold text-slate-800">{data.householderRelation || '本人'}</span></div>
+              <div className="text-right text-[8px] border-l border-black pl-1.5 space-y-0.5">
+                <div>あなたの生年月日: <span className="font-bold">{data.birthDate || '平成10年4月1日'}</span></div>
+                <div>世帯主の氏名: <span className="font-bold">{data.householderName || data.employeeName}</span></div>
+                <div>あなたとの続柄: <span className="font-bold">{data.householderRelation || '本人'}</span></div>
               </div>
             </div>
-            <div className="text-[10px] text-slate-600">住所: {data.employeeAddress}</div>
-            <div className="text-[10px] text-slate-500">マイナンバー: <span className="font-mono tracking-widest">{data.myNumber ? '************' : '届出済'}</span></div>
+
+            <div className="flex items-center justify-between border-t border-slate-200 pt-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[8px] text-slate-700">あなたの個人番号:</span>
+                <span className="font-mono tracking-widest text-[9px]">{data.myNumber ? '************' : '届出済'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[8px]">配偶者の有無:</span>
+                <span className="font-bold">{data.hasSpouse ? '【 有 】' : '【 無 】'}</span>
+              </div>
+            </div>
+            <div className="text-[8px]">
+              あなたの住所又は居所: <span className="font-bold">{data.employeeAddress}</span>
+            </div>
           </div>
         </div>
+      </div>
+
+      <div className="text-[7px] text-slate-600 mb-1">
+        以下の各欄に記載する親族がなく、かつ、あなた自身が障害者、寡婦、ひとり親又は勤労学生のいずれにも該当しない場合には、上記の各欄を記載して給与の支払者に提出してください。
       </div>
 
       {/* A. 源泉控除対象配偶者 */}
-      <div className="border border-slate-900 text-xs mb-3">
-        <div className="bg-slate-100 p-1 font-bold text-[10px] border-b border-slate-300 flex justify-between">
-          <span>A. 源泉控除対象配偶者（あなたの合計所得が900万円以下かつ配偶者の所得が95万円以下）</span>
+      <div className="border-2 border-black mb-1">
+        <div className="bg-slate-100 px-1 py-0.5 font-bold text-[8px] border-b border-black flex justify-between">
+          <span>A. 源泉控除対象配偶者（あなたの所得が900万円以下かつ配偶者の所得が95万円以下）</span>
           <span>{data.hasSpouse ? '【該当あり】' : '【該当なし】'}</span>
         </div>
 
-        {data.hasSpouse ? (
-          <div className="p-2 grid grid-cols-4 gap-2 text-xs">
-            <div>
-              <span className="text-[9px] text-slate-500 block">配偶者の氏名</span>
-              <span className="font-bold">{data.spouseName || '―'}</span>
-            </div>
-            <div>
-              <span className="text-[9px] text-slate-500 block">続柄</span>
-              <span className="font-bold">妻 / 夫</span>
-            </div>
-            <div>
-              <span className="text-[9px] text-slate-500 block">生年月日</span>
-              <span className="font-bold">登録済</span>
-            </div>
-            <div>
-              <span className="text-[9px] text-slate-500 block">本年中の所得の見積額</span>
-              <span className="font-bold">¥{data.spouseIncomeEstimate?.toLocaleString() || 0}</span>
-            </div>
-          </div>
-        ) : (
-          <div className="p-2 text-center text-slate-400 text-xs font-bold">該当する配偶者はいません</div>
-        )}
+        <table className="w-full text-left text-[8px] border-collapse">
+          <thead>
+            <tr className="bg-slate-50 border-b border-black text-[7px] text-center">
+              <th className="p-1 border-r border-black w-24">氏名（フリガナ）</th>
+              <th className="p-1 border-r border-black w-20">個人番号</th>
+              <th className="p-1 border-r border-black w-14">生年月日</th>
+              <th className="p-1 border-r border-black w-20">令和8年中所得の見積額</th>
+              <th className="p-1 border-r border-black w-12">非居住者</th>
+              <th className="p-1">住所又は居所</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="p-1 border-r border-black font-bold">
+                {data.hasSpouse ? (data.spouseName || '配偶者氏名') : '―'}
+              </td>
+              <td className="p-1 border-r border-black text-center font-mono">
+                {data.hasSpouse ? '************' : '―'}
+              </td>
+              <td className="p-1 border-r border-black text-center">
+                {data.hasSpouse ? (data.spouseBirthDate || '登録済') : '―'}
+              </td>
+              <td className="p-1 border-r border-black text-right font-bold">
+                {data.hasSpouse ? `¥${data.spouseIncomeEstimate?.toLocaleString() || 0}` : '―'}
+              </td>
+              <td className="p-1 border-r border-black text-center">
+                {data.hasSpouse ? '□' : '―'}
+              </td>
+              <td className="p-1 truncate">
+                {data.hasSpouse ? (data.spouseIsLivingTogether !== false ? '同居' : '別居') : '―'}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {/* B. 控除対象扶養親族（16歳以上） */}
-      <div className="border border-slate-900 text-xs mb-3">
-        <div className="bg-slate-100 p-1 font-bold text-[10px] border-b border-slate-300 flex justify-between">
-          <span>B. 控除対象扶養親族（平成23年1月1日以前に生まれた方・所得48万円以下）</span>
-          <span>該当: {regularDependents.length}名</span>
+      <div className="border-2 border-black mb-1">
+        <div className="bg-slate-100 px-1 py-0.5 font-bold text-[8px] border-b border-black flex justify-between">
+          <span>B. 主たる給与から控除を受ける 控除対象扶養親族（16歳以上 / 平成23年1月1日以前生）</span>
+          <span>該当人数: {regularDependents.length}名</span>
         </div>
 
-        {regularDependents.length > 0 ? (
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-[9px] border-b border-slate-300 text-slate-600">
-                <th className="p-1.5">氏名</th>
-                <th className="p-1.5">続柄</th>
-                <th className="p-1.5">生年月日</th>
-                <th className="p-1.5">同居区分</th>
-                <th className="p-1.5 text-right">所得見積額</th>
+        <table className="w-full text-left text-[8px] border-collapse">
+          <thead>
+            <tr className="bg-slate-50 border-b border-black text-[7px] text-center">
+              <th className="p-1 border-r border-black w-24">氏名（フリガナ）</th>
+              <th className="p-1 border-r border-black w-12">続柄</th>
+              <th className="p-1 border-r border-black w-14">生年月日</th>
+              <th className="p-1 border-r border-black w-20">区分（特定・老人）</th>
+              <th className="p-1 border-r border-black w-20">令和8年中所得見積額</th>
+              <th className="p-1 border-r border-black w-12">非居住者</th>
+              <th className="p-1">住所又は居所</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-black">
+            {paddedRegular.map((dep, idx) => (
+              <tr key={idx} className="h-6">
+                <td className="p-1 border-r border-black font-bold">{dep.name || ' '}</td>
+                <td className="p-1 border-r border-black text-center">{dep.relation}</td>
+                <td className="p-1 border-r border-black text-center">{dep.birthDate}</td>
+                <td className="p-1 border-r border-black text-center text-[7px]">
+                  {dep.name ? (dep.isSpecific ? '特定扶養' : dep.isElderly ? '老人扶養' : '一般扶養') : ''}
+                </td>
+                <td className="p-1 border-r border-black text-right font-bold">
+                  {dep.name ? `¥${(dep.incomeEstimate || 0).toLocaleString()}` : ''}
+                </td>
+                <td className="p-1 border-r border-black text-center">{dep.name ? '□' : ''}</td>
+                <td className="p-1">{dep.name ? (dep.isLivingTogether !== false ? '同居' : '別居') : ''}</td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {regularDependents.map((dep, idx) => (
-                <tr key={idx}>
-                  <td className="p-1.5 font-bold">{dep.name}</td>
-                  <td className="p-1.5">{dep.relation}</td>
-                  <td className="p-1.5">{dep.birthDate}</td>
-                  <td className="p-1.5">{dep.isLivingTogether ? '同居' : '別居'}</td>
-                  <td className="p-1.5 text-right">¥{dep.incomeEstimate?.toLocaleString() || 0}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="p-2 text-center text-slate-400 text-xs font-bold">該当する控除対象扶養親族はいません</div>
-        )}
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      {/* C. 障害者・寡婦・ひとり親・勤労学生控除 */}
-      <div className="border border-slate-900 text-xs mb-3">
-        <div className="bg-slate-100 p-1 font-bold text-[10px] border-b border-slate-300">
+      {/* C. 障害者、寡婦、ひとり親又は勤労学生 */}
+      <div className="border-2 border-black mb-1">
+        <div className="bg-slate-100 px-1 py-0.5 font-bold text-[8px] border-b border-black">
           C. 障害者、寡婦、ひとり親又は勤労学生
         </div>
-        <div className="p-2 grid grid-cols-4 gap-2 text-xs text-center font-bold">
-          <div className={`p-1.5 rounded border ${data.isDisability ? 'bg-indigo-50 border-indigo-400 text-indigo-800' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-            障害者控除: {data.isDisability ? '該当' : '非該当'}
+        <div className="p-1.5 grid grid-cols-4 gap-2 text-[8px]">
+          <div className={`p-1 border rounded ${data.isDisability ? 'bg-slate-100 border-black font-black' : 'border-slate-300 text-slate-400'}`}>
+            [ {data.isDisability ? '✓' : ' '} ] 障害者（特別障害者）
           </div>
-          <div className={`p-1.5 rounded border ${data.isSingleParent ? 'bg-indigo-50 border-indigo-400 text-indigo-800' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-            ひとり親控除: {data.isSingleParent ? '該当' : '非該当'}
+          <div className={`p-1 border rounded ${data.isWidow ? 'bg-slate-100 border-black font-black' : 'border-slate-300 text-slate-400'}`}>
+            [ {data.isWidow ? '✓' : ' '} ] 寡婦控除
           </div>
-          <div className={`p-1.5 rounded border ${data.isWidow ? 'bg-indigo-50 border-indigo-400 text-indigo-800' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-            寡婦控除: {data.isWidow ? '該当' : '非該当'}
+          <div className={`p-1 border rounded ${data.isSingleParent ? 'bg-slate-100 border-black font-black' : 'border-slate-300 text-slate-400'}`}>
+            [ {data.isSingleParent ? '✓' : ' '} ] ひとり親控除
           </div>
-          <div className={`p-1.5 rounded border ${data.isWorkingStudent ? 'bg-indigo-50 border-indigo-400 text-indigo-800' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
-            勤労学生控除: {data.isWorkingStudent ? '該当' : '非該当'}
+          <div className={`p-1 border rounded ${data.isWorkingStudent ? 'bg-slate-100 border-black font-black' : 'border-slate-300 text-slate-400'}`}>
+            [ {data.isWorkingStudent ? '✓' : ' '} ] 勤労学生控除
           </div>
         </div>
       </div>
 
       {/* 住民税に関する事項（16歳未満の年少扶養親族） */}
-      <div className="border border-slate-900 text-xs mb-4">
-        <div className="bg-slate-100 p-1 font-bold text-[10px] border-b border-slate-300 flex justify-between">
-          <span>16歳未満の扶養親族（住民税に関する事項 / 平成23年1月2日以後に生まれた方）</span>
-          <span>該当: {under16Dependents.length}名</span>
+      <div className="border-2 border-black mb-2">
+        <div className="bg-slate-100 px-1 py-0.5 font-bold text-[8px] border-b border-black flex justify-between">
+          <span>○ 住民税に関する事項（16歳未満の扶養親族 / 平成23年1月2日以後に生まれた方）</span>
+          <span>該当人数: {under16Dependents.length}名</span>
         </div>
 
-        {under16Dependents.length > 0 ? (
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-[9px] border-b border-slate-300 text-slate-600">
-                <th className="p-1.5">氏名</th>
-                <th className="p-1.5">続柄</th>
-                <th className="p-1.5">生年月日</th>
-                <th className="p-1.5">同居区分</th>
+        <table className="w-full text-left text-[8px] border-collapse">
+          <thead>
+            <tr className="bg-slate-50 border-b border-black text-[7px] text-center">
+              <th className="p-1 border-r border-black w-28">氏名（フリガナ）</th>
+              <th className="p-1 border-r border-black w-14">あなたとの続柄</th>
+              <th className="p-1 border-r border-black w-16">生年月日</th>
+              <th className="p-1 border-r border-black w-24">令和8年中所得見積額</th>
+              <th className="p-1">住所又は居所</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-black">
+            {paddedUnder16.map((dep, idx) => (
+              <tr key={idx} className="h-5">
+                <td className="p-1 border-r border-black font-bold">{dep.name || ' '}</td>
+                <td className="p-1 border-r border-black text-center">{dep.relation}</td>
+                <td className="p-1 border-r border-black text-center">{dep.birthDate}</td>
+                <td className="p-1 border-r border-black text-right">{dep.name ? '¥0' : ''}</td>
+                <td className="p-1">{dep.name ? (dep.isLivingTogether !== false ? '同居' : '別居') : ''}</td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {under16Dependents.map((dep, idx) => (
-                <tr key={idx}>
-                  <td className="p-1.5 font-bold">{dep.name}</td>
-                  <td className="p-1.5">{dep.relation}</td>
-                  <td className="p-1.5">{dep.birthDate}</td>
-                  <td className="p-1.5">{dep.isLivingTogether ? '同居' : '別居'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="p-2 text-center text-slate-400 text-xs font-bold">16歳未満の扶養親族はいません</div>
-        )}
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      {/* 申告誓約署名枠 */}
-      <div className="border border-slate-300 p-3 bg-slate-50 rounded text-xs space-y-2">
-        <p className="text-[10px] text-slate-600 leading-relaxed">
-          私は、所得税法第194条第1項から第3項までの規定に基づき、上記のとおり申告いたします。また、本申告書に記載した事項は事実に相違ありません。
-        </p>
-        <div className="flex justify-between items-end pt-1">
-          <div className="text-[10px] text-slate-500">
-            提出日: <span className="font-bold text-slate-800">{data.appliedDate}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] text-slate-500">申告者（従業員氏名）:</span>
-            <span className="font-black text-sm border-b border-slate-900 px-3 pb-0.5">{data.employeeName}</span>
-            <span className="text-[10px] text-slate-400">（電子申告済）</span>
-          </div>
+      {/* 提出誓約フッター */}
+      <div className="border border-black p-1.5 flex justify-between items-center text-[8px]">
+        <div>
+          申告年月日: <span className="font-bold">{data.appliedDate}</span>
+        </div>
+        <div>
+          申告者氏名: <span className="font-black text-xs border-b border-black px-2">{data.employeeName}</span>
+          <span className="text-[7px] text-slate-500 ml-1">（電子申告済・本人確認完了）</span>
         </div>
       </div>
     </div>

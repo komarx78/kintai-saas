@@ -1404,17 +1404,32 @@ export default function OnboardingAdminDashboard() {
                 }} />
               )}
 
-              {cabinetModal.activeDoc === 'tax' && (
-                <OfficialTaxExemptionDoc data={{
-                  companyName: tenantInfo?.name || '株式会社KAP',
-                  companyAddress: tenantInfo?.address,
-                  employeeName: cabinetModal.employee.name,
-                  employeeAddress: '東京都新宿区西新宿 2-8-1',
-                  appliedDate: cabinetModal.employee.join_date,
-                  hasSpouse: false,
-                  dependents: []
-                }} />
-              )}
+              {cabinetModal.activeDoc === 'tax' && (() => {
+                const subTax = submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'dependents_form');
+                const tData = subTax?.data || {};
+
+                return (
+                  <OfficialTaxExemptionDoc data={{
+                    year: tData.year || 2026,
+                    companyName: tenantInfo?.name || '株式会社KAP',
+                    companyAddress: tenantInfo?.address,
+                    employeeName: cabinetModal.employee.name,
+                    employeeNameKana: tData.name_kana,
+                    employeeAddress: tData.address || '東京都新宿区西新宿 2-8-1',
+                    householderName: tData.householder_name || cabinetModal.employee.name,
+                    householderRelation: tData.householder_relation || '本人',
+                    hasSpouse: tData.has_spouse || false,
+                    spouseName: tData.spouse_name,
+                    spouseIncomeEstimate: tData.spouse_income_estimate,
+                    dependents: tData.dependents || [],
+                    isDisability: tData.is_disability,
+                    isSingleParent: tData.is_single_parent,
+                    isWidow: tData.is_widow,
+                    isWorkingStudent: tData.is_working_student,
+                    appliedDate: cabinetModal.employee.join_date
+                  }} />
+                );
+              })()}
             </div>
 
             <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100 print:hidden">
