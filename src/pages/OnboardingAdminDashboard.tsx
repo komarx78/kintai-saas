@@ -6,7 +6,7 @@ import { OfficialLaborContractDoc, type LaborContractData } from '../components/
 import { 
   UserPlus, Users, FileText, CheckCircle2, 
   Printer, ArrowLeft, LogOut, Loader2, X, ChevronRight, 
-  HelpCircle, Building2, Check, UserCheck
+  HelpCircle, Building2, Check, UserCheck, Edit3, UserMinus, RotateCcw, Save
 } from 'lucide-react';
 
 interface EmployeeOnboardingData {
@@ -17,16 +17,27 @@ interface EmployeeOnboardingData {
   status: 'onboarding' | 'active' | 'offboarding' | 'retired';
   join_date: string;
   retirement_date?: string;
+  retirement_reason?: string;
   employment_type: 'full-time' | 'part-time' | 'contract';
   department?: string;
   contract_type: 'indefinite' | 'fixed_term';
+  trial_period_months?: number;
+  salary_type?: 'monthly' | 'hourly' | 'daily';
   base_salary: number;
   hourly_wage: number;
   position_allowance: number;
+  qualification_allowance?: number;
+  housing_allowance?: number;
+  family_allowance?: number;
   commuting_allowance: number;
   health_insurance_joined: boolean;
   pension_insurance_joined: boolean;
   employment_insurance_joined: boolean;
+  bank_name?: string;
+  branch_name?: string;
+  account_type?: 'ordinary' | 'current';
+  account_number?: string;
+  account_holder?: string;
   documents_checklist?: {
     id_copy: boolean;
     my_number: boolean;
@@ -62,16 +73,15 @@ export default function OnboardingAdminDashboard() {
     birth_date: '1995-01-01',
     address: '',
     join_date: new Date().toISOString().split('T')[0],
-    employment_type: 'full-time', // 'full-time', 'part-time'
+    employment_type: 'full-time',
     department: '営業部',
-    role_title: '一般社員',
-    contract_type: 'indefinite', // 'indefinite', 'fixed_term'
+    contract_type: 'indefinite',
     trial_period_months: 3,
     start_time: '09:00',
     end_time: '18:00',
     break_time_minutes: 60,
     holidays_text: '完全週休2日制（土日・祝日）、年末年始休暇',
-    salary_type: 'monthly', // 'monthly', 'hourly'
+    salary_type: 'monthly',
     base_salary: 250000,
     hourly_wage: 1150,
     position_allowance: 0,
@@ -87,6 +97,30 @@ export default function OnboardingAdminDashboard() {
     account_type: 'ordinary',
     account_number: '',
     account_holder: ''
+  });
+
+  // 編集・修正モーダルState
+  const [editModal, setEditModal] = useState<{
+    isOpen: boolean;
+    data: EmployeeOnboardingData | null;
+  }>({
+    isOpen: false,
+    data: null
+  });
+
+  // 退職処理モーダルState
+  const [retireModal, setRetireModal] = useState<{
+    isOpen: boolean;
+    data: EmployeeOnboardingData | null;
+    retirementDate: string;
+    retirementReason: string;
+    needSeparationNotice: boolean;
+  }>({
+    isOpen: false,
+    data: null,
+    retirementDate: new Date().toISOString().split('T')[0],
+    retirementReason: '自己都合退職',
+    needSeparationNotice: true
   });
 
   // 書類プレビューモーダルState
@@ -152,19 +186,30 @@ export default function OnboardingAdminDashboard() {
           name: u.name || '従業員',
           email: u.email,
           role: u.role,
-          status: onb?.status || 'active',
+          status: onb?.status || (u.is_active === false ? 'retired' : 'active'),
           join_date: onb?.join_date || u.join_date || '2026-04-01',
           retirement_date: onb?.retirement_date,
+          retirement_reason: onb?.retirement_reason,
           employment_type: u.employment_type || 'full-time',
           department: u.department || '本社',
           contract_type: onb?.contract_type || 'indefinite',
+          trial_period_months: onb?.trial_period_months ?? 3,
+          salary_type: pay?.salary_type || onb?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly'),
           base_salary: pay?.base_salary || onb?.base_salary || 250000,
           hourly_wage: pay?.hourly_wage || onb?.hourly_wage || 1150,
           position_allowance: pay?.position_allowance || 0,
+          qualification_allowance: pay?.qualification_allowance || 0,
+          housing_allowance: pay?.housing_allowance || 0,
+          family_allowance: pay?.family_allowance || 0,
           commuting_allowance: pay?.commuting_allowance || 15000,
           health_insurance_joined: pay?.health_insurance_enabled ?? true,
           pension_insurance_joined: pay?.pension_insurance_enabled ?? true,
           employment_insurance_joined: pay?.employment_insurance_enabled ?? true,
+          bank_name: pay?.bank_name || '',
+          branch_name: pay?.branch_name || '',
+          account_type: pay?.account_type || 'ordinary',
+          account_number: pay?.account_number || '',
+          account_holder: pay?.account_holder || '',
           documents_checklist: onb?.documents_checklist || {
             id_copy: true,
             my_number: false,
@@ -190,7 +235,7 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
-  // 入社ウィザード完了 ＆ 3大マスタ一括同期処理
+  // 新規入社ウィザード完了 ＆ 3大マスタ一括同期処理
   const handleCompleteOnboardingWizard = async () => {
     if (!tenantId || !wizardData.name) {
       alert('氏名を入力してください。');
@@ -199,7 +244,6 @@ export default function OnboardingAdminDashboard() {
 
     setIsSaving(true);
     try {
-      // 1. users テーブルへ追加（または更新）
       const tempEmail = wizardData.email || `emp_${Date.now()}@sample.local`;
       const { data: newUser, error: uErr } = await supabase
         .from('users')
@@ -220,7 +264,7 @@ export default function OnboardingAdminDashboard() {
       if (uErr) throw uErr;
       const newUserId = newUser.id;
 
-      // 2. shift_employee_settings テーブルへ追加（シフトマスタ同期）
+      // shift_employee_settings 同期
       await supabase.from('shift_employee_settings').upsert({
         tenant_id: tenantId,
         user_id: newUserId,
@@ -231,7 +275,7 @@ export default function OnboardingAdminDashboard() {
         base_wage: wizardData.salary_type === 'hourly' ? wizardData.hourly_wage : 1150
       }, { onConflict: 'user_id' });
 
-      // 3. employee_payroll_profiles テーブルへ追加（給与マスタ同期）
+      // employee_payroll_profiles 同期
       await supabase.from('employee_payroll_profiles').upsert({
         tenant_id: tenantId,
         user_id: newUserId,
@@ -253,7 +297,7 @@ export default function OnboardingAdminDashboard() {
         account_holder: wizardData.account_holder || wizardData.name
       }, { onConflict: 'tenant_id,user_id' });
 
-      // 4. employee_onboarding_profiles テーブルへ詳細保存
+      // employee_onboarding_profiles 同期
       await supabase.from('employee_onboarding_profiles').upsert({
         tenant_id: tenantId,
         user_id: newUserId,
@@ -290,6 +334,164 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
+  // 従業員・労務情報の編集保存（全マスタ一括更新）
+  const handleSaveEditedEmployee = async (data: EmployeeOnboardingData) => {
+    if (!tenantId || !data) return;
+    setIsSaving(true);
+    try {
+      // 1. users テーブル更新
+      await supabase
+        .from('users')
+        .update({
+          name: data.name,
+          department: data.department,
+          employment_type: data.employment_type,
+          join_date: data.join_date
+        })
+        .eq('id', data.user_id);
+
+      // 2. employee_payroll_profiles 更新
+      await supabase
+        .from('employee_payroll_profiles')
+        .upsert({
+          tenant_id: tenantId,
+          user_id: data.user_id,
+          salary_type: data.salary_type,
+          base_salary: data.base_salary,
+          hourly_wage: data.hourly_wage,
+          position_allowance: data.position_allowance,
+          qualification_allowance: data.qualification_allowance || 0,
+          housing_allowance: data.housing_allowance || 0,
+          family_allowance: data.family_allowance || 0,
+          commuting_allowance: data.commuting_allowance,
+          health_insurance_enabled: data.health_insurance_joined,
+          pension_insurance_enabled: data.pension_insurance_joined,
+          employment_insurance_enabled: data.employment_insurance_joined,
+          bank_name: data.bank_name,
+          branch_name: data.branch_name,
+          account_type: data.account_type,
+          account_number: data.account_number,
+          account_holder: data.account_holder
+        }, { onConflict: 'tenant_id,user_id' });
+
+      // 3. shift_employee_settings 更新
+      await supabase
+        .from('shift_employee_settings')
+        .upsert({
+          tenant_id: tenantId,
+          user_id: data.user_id,
+          hire_date: data.join_date,
+          base_wage: data.salary_type === 'hourly' ? data.hourly_wage : 1150
+        }, { onConflict: 'user_id' });
+
+      // 4. employee_onboarding_profiles 更新
+      await supabase
+        .from('employee_onboarding_profiles')
+        .upsert({
+          tenant_id: tenantId,
+          user_id: data.user_id,
+          status: data.status,
+          join_date: data.join_date,
+          contract_type: data.contract_type,
+          trial_period_months: data.trial_period_months,
+          salary_type: data.salary_type,
+          base_salary: data.base_salary,
+          hourly_wage: data.hourly_wage,
+          position_allowance: data.position_allowance,
+          commuting_allowance: data.commuting_allowance,
+          health_insurance_joined: data.health_insurance_joined,
+          pension_insurance_joined: data.pension_insurance_joined,
+          employment_insurance_joined: data.employment_insurance_joined,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'tenant_id,user_id' });
+
+      alert('✨ 従業員・労務情報の修正を保存しました！\n勤怠・シフト・給与の全システムに即座に反映されました。');
+      setEditModal({ isOpen: false, data: null });
+      await fetchData();
+    } catch (err: any) {
+      console.error('Save edit error:', err);
+      alert('保存に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 退職処理の確定実行
+  const handleConfirmRetirement = async () => {
+    if (!tenantId || !retireModal.data) return;
+    setIsSaving(true);
+    try {
+      const uId = retireModal.data.user_id;
+
+      // 1. employee_onboarding_profiles のステータスを retired に更新
+      await supabase
+        .from('employee_onboarding_profiles')
+        .upsert({
+          tenant_id: tenantId,
+          user_id: uId,
+          status: 'retired',
+          join_date: retireModal.data.join_date,
+          retirement_date: retireModal.retirementDate,
+          retirement_reason: retireModal.retirementReason,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'tenant_id,user_id' });
+
+      // 2. users の勤怠アクセスを無効化
+      await supabase
+        .from('users')
+        .update({
+          has_kintai_access: false,
+          has_shift_access: false
+        })
+        .eq('id', uId);
+
+      alert(`🚪 ${retireModal.data.name} さんの退職処理を完了しました。\n退職者台帳へ移動し、アクセス権限を停止しました。`);
+      setRetireModal({ isOpen: false, data: null, retirementDate: '', retirementReason: '', needSeparationNotice: true });
+      await fetchData();
+    } catch (err: any) {
+      console.error('Retire error:', err);
+      alert('退職処理に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 在職復帰（再雇用・退職取消）
+  const handleRehire = async (emp: EmployeeOnboardingData) => {
+    if (!confirm(`${emp.name} さんを在職中（アクティブ）に戻しますか？\n勤怠・シフトのアクセス権限も再有効化されます。`)) return;
+
+    setIsSaving(true);
+    try {
+      await supabase
+        .from('employee_onboarding_profiles')
+        .upsert({
+          tenant_id: tenantId,
+          user_id: emp.user_id,
+          status: 'active',
+          join_date: emp.join_date,
+          retirement_date: null,
+          retirement_reason: '',
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'tenant_id,user_id' });
+
+      await supabase
+        .from('users')
+        .update({
+          has_kintai_access: true,
+          has_shift_access: true
+        })
+        .eq('id', emp.user_id);
+
+      alert(`🎉 ${emp.name} さんを在職中に復帰させました！`);
+      await fetchData();
+    } catch (err: any) {
+      console.error('Rehire error:', err);
+      alert('復帰処理に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // 労働条件通知書のプレビューを開く
   const handleOpenContractPreview = (emp: EmployeeOnboardingData) => {
     const contractData: LaborContractData = {
@@ -300,7 +502,7 @@ export default function OnboardingAdminDashboard() {
       employeeAddress: '東京都新宿区〇〇 1-1',
       joinDate: emp.join_date,
       contractType: emp.contract_type || 'indefinite',
-      trialPeriodMonths: 3,
+      trialPeriodMonths: emp.trial_period_months ?? 3,
       workLocation: '本社 および 会社が指定する就業場所',
       jobDescription: `${emp.department}における業務全般`,
       startTime: '09:00',
@@ -309,13 +511,13 @@ export default function OnboardingAdminDashboard() {
       overtimeWork: 'あり（業務の都合により命じる場合がある）',
       holidaysText: '完全週休2日制（土・日）、国民の祝日、年末年始休暇',
       paidLeaveGrantDays: 10,
-      salaryType: (emp.employment_type === 'part-time') ? 'hourly' : 'monthly',
+      salaryType: (emp.salary_type || (emp.employment_type === 'part-time' ? 'hourly' : 'monthly')),
       baseSalary: emp.base_salary,
       hourlyWage: emp.hourly_wage,
       positionAllowance: emp.position_allowance,
-      qualificationAllowance: 0,
-      housingAllowance: 0,
-      familyAllowance: 0,
+      qualificationAllowance: emp.qualification_allowance || 0,
+      housingAllowance: emp.housing_allowance || 0,
+      familyAllowance: emp.family_allowance || 0,
       commutingAllowance: emp.commuting_allowance,
       fixedOvertimeHours: 0,
       fixedOvertimeAllowance: 0,
@@ -418,7 +620,7 @@ export default function OnboardingAdminDashboard() {
             <HelpCircle className="w-4 h-4 text-blue-600" />
             労務手続きガイド
           </button>
-          <AppSwitcher currentApp="portal" role="admin" />
+          <AppSwitcher currentApp="onboarding" role="admin" />
           <button
             onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}
             className="p-2 rounded-full hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition cursor-pointer"
@@ -483,7 +685,7 @@ export default function OnboardingAdminDashboard() {
                 <FileText className="w-5 h-5 text-blue-600" />
                 従業員 入退社・労務書類台帳
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">労働条件通知書の出力・必要書類回収の進捗・各システムへの同期状態</p>
+              <p className="text-xs text-slate-400 mt-0.5">労働条件通知書の出力・情報修正・退職処理・各マスタへの自動同期</p>
             </div>
 
             {/* フィルタータブ */}
@@ -526,16 +728,17 @@ export default function OnboardingAdminDashboard() {
                   <tr className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                     <th className="py-3 px-4">氏名 / 所属</th>
                     <th className="py-3 px-3">雇用形態</th>
-                    <th className="py-3 px-3">入社年月日</th>
+                    <th className="py-3 px-3">入社日 / 退職日</th>
                     <th className="py-3 px-3">給与設定</th>
                     <th className="py-3 px-4">必要書類回収状況</th>
-                    <th className="py-3 px-3 text-center">マスタ連動</th>
-                    <th className="py-3 px-4 text-center">書類・操作</th>
+                    <th className="py-3 px-3 text-center">状態</th>
+                    <th className="py-3 px-4 text-center">操作・手続き</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredEmployees.map(emp => {
-                    const isHourly = emp.employment_type === 'part-time';
+                    const isHourly = emp.salary_type === 'hourly' || emp.employment_type === 'part-time';
+                    const isRetired = emp.status === 'retired';
                     const docs = emp.documents_checklist || {
                       id_copy: false,
                       my_number: false,
@@ -547,14 +750,19 @@ export default function OnboardingAdminDashboard() {
                     };
 
                     return (
-                      <tr key={emp.user_id} className="hover:bg-slate-50/80 transition">
+                      <tr key={emp.user_id} className={`hover:bg-slate-50/80 transition ${isRetired ? 'bg-slate-50/50 opacity-75' : ''}`}>
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-700 font-bold flex items-center justify-center text-xs">
+                            <div className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs ${
+                              isRetired ? 'bg-slate-200 text-slate-600' : 'bg-blue-50 text-blue-700'
+                            }`}>
                               {emp.name.substring(0, 1)}
                             </div>
                             <div>
-                              <div className="font-bold text-slate-800">{emp.name}</div>
+                              <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                                {emp.name}
+                                {isRetired && <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-bold">退職</span>}
+                              </div>
                               <div className="text-[10px] text-slate-400">{emp.department || '本社'}</div>
                             </div>
                           </div>
@@ -569,7 +777,10 @@ export default function OnboardingAdminDashboard() {
                         </td>
 
                         <td className="py-3.5 px-3 font-medium text-slate-700">
-                          {emp.join_date}
+                          <div>{emp.join_date}</div>
+                          {emp.retirement_date && (
+                            <div className="text-[10px] text-rose-500 font-bold">退: {emp.retirement_date}</div>
+                          )}
                         </td>
 
                         <td className="py-3.5 px-3 font-bold text-slate-800">
@@ -622,19 +833,62 @@ export default function OnboardingAdminDashboard() {
                         </td>
 
                         <td className="py-3.5 px-3 text-center">
-                          <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 inline-flex items-center gap-0.5">
-                            <Check className="w-3 h-3" /> 勤怠・シフト・給与
-                          </span>
+                          {isRetired ? (
+                            <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-200">
+                              退職済
+                            </span>
+                          ) : (
+                            <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 inline-flex items-center gap-0.5">
+                              <Check className="w-3 h-3" /> 在職中
+                            </span>
+                          )}
                         </td>
 
                         <td className="py-3.5 px-4 text-center">
-                          <button
-                            onClick={() => handleOpenContractPreview(emp)}
-                            className="bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs px-2.5 py-1.5 rounded-lg border border-blue-200 transition flex items-center gap-1 mx-auto cursor-pointer"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                            契約書を出力
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* 契約書印刷 */}
+                            <button
+                              onClick={() => handleOpenContractPreview(emp)}
+                              className="bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs p-1.5 rounded-lg border border-blue-200 transition cursor-pointer"
+                              title="労働条件通知書・雇用契約書のA4出力"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* 編集・修正 */}
+                            <button
+                              onClick={() => setEditModal({ isOpen: true, data: { ...emp } })}
+                              className="bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs p-1.5 rounded-lg border border-slate-200 transition cursor-pointer"
+                              title="従業員・給与・労働条件の修正"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+                            </button>
+
+                            {/* 退職処理 / 復帰 */}
+                            {isRetired ? (
+                              <button
+                                onClick={() => handleRehire(emp)}
+                                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs p-1.5 rounded-lg border border-emerald-200 transition cursor-pointer"
+                                title="在職中へ復帰"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setRetireModal({
+                                  isOpen: true,
+                                  data: emp,
+                                  retirementDate: new Date().toISOString().split('T')[0],
+                                  retirementReason: '自己都合退職',
+                                  needSeparationNotice: true
+                                })}
+                                className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs p-1.5 rounded-lg border border-rose-200 transition cursor-pointer"
+                                title="退職手続き"
+                              >
+                                <UserMinus className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -646,6 +900,278 @@ export default function OnboardingAdminDashboard() {
         </div>
 
       </main>
+
+      {/* ✏️ 従業員・労務情報 修正モーダル */}
+      {editModal.isOpen && editModal.data && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-indigo-600" />
+                従業員・労務情報の修正（{editModal.data.name} 殿）
+              </h3>
+              <button onClick={() => setEditModal({ isOpen: false, data: null })} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 text-xs">
+              {/* 基本情報 */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <h4 className="font-bold text-slate-700">基本情報</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">氏名</label>
+                    <input
+                      type="text"
+                      value={editModal.data.name}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, name: e.target.value } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">入社年月日</label>
+                    <input
+                      type="date"
+                      value={editModal.data.join_date}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, join_date: e.target.value } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">所属部署</label>
+                    <input
+                      type="text"
+                      value={editModal.data.department || ''}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, department: e.target.value } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">雇用形態</label>
+                    <select
+                      value={editModal.data.employment_type}
+                      onChange={e => setEditModal({
+                        ...editModal,
+                        data: {
+                          ...editModal.data!,
+                          employment_type: e.target.value as any,
+                          salary_type: e.target.value === 'part-time' ? 'hourly' : 'monthly'
+                        }
+                      })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    >
+                      <option value="full-time">正社員（無期雇用）</option>
+                      <option value="part-time">パート・アルバイト（時給制）</option>
+                      <option value="contract">契約社員（有期雇用）</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* 給与・手当 */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <h4 className="font-bold text-slate-700">給与・諸手当</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">給与形態</label>
+                    <select
+                      value={editModal.data.salary_type || 'monthly'}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, salary_type: e.target.value as any } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    >
+                      <option value="monthly">月給制</option>
+                      <option value="hourly">時給制</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      {editModal.data.salary_type === 'hourly' ? '時給単価 (円)' : '基本給 (円)'}
+                    </label>
+                    <input
+                      type="number"
+                      value={editModal.data.salary_type === 'hourly' ? editModal.data.hourly_wage : editModal.data.base_salary}
+                      onChange={e => {
+                        const val = parseInt(e.target.value, 10) || 0;
+                        setEditModal({
+                          ...editModal,
+                          data: editModal.data!.salary_type === 'hourly'
+                            ? { ...editModal.data!, hourly_wage: val }
+                            : { ...editModal.data!, base_salary: val }
+                        });
+                      }}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">役職手当</label>
+                    <input
+                      type="number"
+                      value={editModal.data.position_allowance}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, position_allowance: parseInt(e.target.value, 10) || 0 } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">通勤手当</label>
+                    <input
+                      type="number"
+                      value={editModal.data.commuting_allowance}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, commuting_allowance: parseInt(e.target.value, 10) || 0 } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 銀行口座 */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                <h4 className="font-bold text-slate-700">振込口座情報</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">銀行名</label>
+                    <input
+                      type="text"
+                      value={editModal.data.bank_name || ''}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, bank_name: e.target.value } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">支店名</label>
+                    <input
+                      type="text"
+                      value={editModal.data.branch_name || ''}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, branch_name: e.target.value } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">口座番号</label>
+                    <input
+                      type="text"
+                      value={editModal.data.account_number || ''}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, account_number: e.target.value } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">口座名義人</label>
+                    <input
+                      type="text"
+                      value={editModal.data.account_holder || ''}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, account_holder: e.target.value } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setEditModal({ isOpen: false, data: null })}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => handleSaveEditedEmployee(editModal.data!)}
+                disabled={isSaving}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-4 h-4" />}
+                修正内容を全同期保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🚪 退職手続き モーダル */}
+      {retireModal.isOpen && retireModal.data && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <h3 className="font-bold text-slate-800 text-base flex items-center gap-2 text-rose-600">
+                <UserMinus className="w-5 h-5 text-rose-600" />
+                退職手続き（{retireModal.data.name} 殿）
+              </h3>
+              <button onClick={() => setRetireModal({ ...retireModal, isOpen: false })} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="bg-rose-50 p-4 rounded-2xl border border-rose-200 text-rose-800 space-y-1">
+                <div className="font-bold">⚠️ 退職処理に伴う影響</div>
+                <p className="text-[11px] text-rose-700 leading-relaxed">
+                  退職処理を実行すると、本ユーザーの勤怠打刻・シフト希望提出の権限が無効化され、退職者台帳へ移行します。（過去の出勤簿・給与データは保管されます）
+                </p>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">退職年月日 <span className="text-rose-500">*</span></label>
+                <input
+                  type="date"
+                  value={retireModal.retirementDate}
+                  onChange={e => setRetireModal({ ...retireModal, retirementDate: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">退職事由</label>
+                <select
+                  value={retireModal.retirementReason}
+                  onChange={e => setRetireModal({ ...retireModal, retirementReason: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                >
+                  <option value="自己都合退職">自己都合退職（転職・一身上の都合等）</option>
+                  <option value="契約期間満了">契約期間満了（有期雇用の満了）</option>
+                  <option value="定年退職">定年退職</option>
+                  <option value="会社都合退職">会社都合退職</option>
+                </select>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={retireModal.needSeparationNotice}
+                    onChange={e => setRetireModal({ ...retireModal, needSeparationNotice: e.target.checked })}
+                    className="rounded text-rose-600"
+                  />
+                  <span className="font-bold text-slate-700">雇用保険被保険者 離職票の交付を希望する</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setRetireModal({ ...retireModal, isOpen: false })}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleConfirmRetirement}
+                disabled={isSaving}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-4 h-4" />}
+                退職を確定実行
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 新規入社ウィザード モーダル */}
       {wizardOpen && (
