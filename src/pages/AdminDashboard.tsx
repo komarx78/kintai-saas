@@ -1242,7 +1242,24 @@ ${tenantId || '（エラー：コード取得失敗）'}
 
                 {settingsTab === 'basic' && (
                 <div className="space-y-4 max-w-lg">
-                  <h3 className="text-md font-medium text-gray-800 border-b pb-2">基本設定</h3>
+                  {/* 全社マスタへのジャンプバナー */}
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-center justify-between gap-3 shadow-xs">
+                    <div>
+                      <div className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                        <Building2 className="w-4 h-4 text-indigo-600" />
+                        会社情報・部署・年間休日・就業規則の設定
+                      </div>
+                      <p className="text-[11px] text-indigo-700 mt-0.5">全社共通マスタ設定センターにて一元管理されています。</p>
+                    </div>
+                    <button
+                      onClick={() => navigate('/settings/company')}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg whitespace-nowrap transition cursor-pointer"
+                    >
+                      設定を開く
+                    </button>
+                  </div>
+
+                  <h3 className="text-md font-medium text-gray-800 border-b pb-2">勤怠システム固有設定</h3>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">会社名（テナント名）</label>
                     <input 

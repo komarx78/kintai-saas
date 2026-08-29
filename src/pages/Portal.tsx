@@ -98,7 +98,16 @@ export default function Portal() {
       path: (role === 'admin' || role === 'superadmin') ? '/onboarding/admin' : '/onboarding/my',
       color: 'bg-gradient-to-br from-cyan-600 via-blue-600 to-indigo-700 shadow-md ring-1 ring-white/40',
       hoverColor: 'hover:border-cyan-300 hover:shadow-[0_15px_30px_-10px_rgba(6,182,212,0.3)]',
-    }
+    },
+    ...(role === 'admin' || role === 'superadmin' ? [{
+      id: 'settings',
+      title: '会社・全社マスタ設定',
+      description: '企業基本情報、配属部署、年間休日カレンダー、就業時間、給与締め日、就業規則（AI連動）を一元管理します。',
+      icon: <Building2 className="w-7 h-7 text-white drop-shadow-md" />,
+      path: '/settings/company',
+      color: 'bg-gradient-to-br from-indigo-600 via-purple-600 to-slate-800 shadow-md ring-1 ring-white/40',
+      hoverColor: 'hover:border-purple-300 hover:shadow-[0_15px_30px_-10px_rgba(147,51,234,0.3)]',
+    }] : [])
   ];
 
   return (
@@ -161,13 +170,14 @@ export default function Portal() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
           {apps.filter(app => {
             if (role === 'superadmin') return true;
             if (app.id === 'kintai') return userData?.has_kintai_access;
             if (app.id === 'shift') return userData?.has_shift_access;
             if (app.id === 'payroll') return userData?.has_kintai_access !== false;
             if (app.id === 'onboarding') return true;
+            if (app.id === 'settings') return role === 'admin';
             return false;
           }).map((app, index) => (
             <button
