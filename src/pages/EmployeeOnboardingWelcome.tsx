@@ -893,26 +893,18 @@ export default function EmployeeOnboardingWelcome() {
                                   <button
                                     key={idx}
                                     type="button"
-                                    onClick={() => {
-                                      setCommutingData(prev => {
-                                        const newSegs = [...prev.segments];
-                                        if (newSegs.length > 0) {
-                                          newSegs[0] = {
-                                            ...newSegs[0],
-                                            fromStation: s.formalStationName,
-                                            lineName: s.lineName,
-                                            transportType: s.type,
-                                            oneWayFare: isBus ? 220 : newSegs[0].oneWayFare || 210,
-                                            oneMonthPassAmount: isBus ? 9640 : newSegs[0].oneMonthPassAmount || 6180,
-                                            sixMonthPassAmount: isBus ? 52050 : newSegs[0].sixMonthPassAmount || 33370
-                                          };
-                                        }
-                                        return {
-                                          ...prev,
-                                          originStation: s.formalStationName,
-                                          segments: newSegs
-                                        };
-                                      });
+                                    onClick={async () => {
+                                      const newOrigin = s.formalStationName;
+                                      const dest = commutingData.destinationStation || '新大阪駅';
+                                      
+                                      // 実運賃・複数乗り継ぎルートを即時自動生成
+                                      const generatedSegs = await generateMultiRouteWithAi(newOrigin, dest);
+
+                                      setCommutingData(prev => ({
+                                        ...prev,
+                                        originStation: newOrigin,
+                                        segments: generatedSegs.length > 0 ? generatedSegs : prev.segments
+                                      }));
                                     }}
                                     className={`${colorClass} border px-2 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer text-[10px]`}
                                     title={`${s.region} ${s.formalStationName} (${s.lineName})`}
