@@ -1222,8 +1222,15 @@ export default function OnboardingAdminDashboard() {
                           )}
                           {sub.document_type === 'commuting_pass' && (
                             <>
-                              <div>経路: <span className="font-bold">{d.origin_station} 〜 {d.destination_station}</span></div>
-                              <div>1ヶ月定期代: <span className="font-black text-indigo-700">¥{d.one_month_pass_amount?.toLocaleString()}</span></div>
+                              <div className="sm:col-span-2">
+                                経路: <span className="font-bold">
+                                  {d.segments && d.segments.length > 0
+                                    ? d.segments.map((s: any) => `${s.fromStation}➔${s.toStation}(${s.lineName})`).join(' ＋ ')
+                                    : `${d.origin_station || ''} 〜 ${d.destination_station || ''}`}
+                                </span>
+                              </div>
+                              <div>1ヶ月定期代合計: <span className="font-black text-indigo-700">¥{d.one_month_pass_amount?.toLocaleString()}</span></div>
+                              <div>非課税判定: <span className="font-bold text-emerald-600">{d.is_tax_free !== false ? '全額非課税' : '一部課税あり'}</span></div>
                             </>
                           )}
                           {sub.document_type === 'dependents_form' && (
@@ -1440,19 +1447,27 @@ export default function OnboardingAdminDashboard() {
                 }} />
               )}
 
-              {cabinetModal.activeDoc === 'commuting' && (
-                <OfficialCommutingPassDoc data={{
-                  companyName: tenantInfo?.name || '株式会社KAP',
-                  employeeName: cabinetModal.employee.name,
-                  department: cabinetModal.employee.department || '営業部',
-                  originStation: '自宅最寄駅',
-                  destinationStation: '会社最寄駅',
-                  transportMode: 'train_bus',
-                  oneMonthPassAmount: cabinetModal.employee.commuting_allowance,
-                  attachmentImage: submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'commuting_pass')?.attachment_data,
-                  appliedDate: cabinetModal.employee.join_date
-                }} />
-              )}
+              {cabinetModal.activeDoc === 'commuting' && (() => {
+                const subComm = submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'commuting_pass');
+                const cData = subComm?.data || {};
+
+                return (
+                  <OfficialCommutingPassDoc data={{
+                    companyName: tenantInfo?.name || '株式会社KAP',
+                    employeeName: cabinetModal.employee.name,
+                    department: cabinetModal.employee.department || '営業部',
+                    transportMode: cData.transport_mode || 'train_bus',
+                    originStation: cData.origin_station || '自宅最寄',
+                    destinationStation: cData.destination_station || '会社最寄',
+                    segments: cData.segments || [],
+                    carDistanceKm: cData.car_distance_km,
+                    oneMonthPassAmount: cData.one_month_pass_amount || cabinetModal.employee.commuting_allowance || 0,
+                    sixMonthPassAmount: cData.six_month_pass_amount,
+                    attachmentImage: subComm?.attachment_data,
+                    appliedDate: cabinetModal.employee.join_date
+                  }} />
+                );
+              })()}
 
               {cabinetModal.activeDoc === 'bank' && (
                 <OfficialBankPassbookDoc data={{

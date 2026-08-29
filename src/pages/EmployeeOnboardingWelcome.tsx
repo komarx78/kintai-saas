@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { compressImageFile } from '../lib/imageCompressor';
 import { 
-  estimateTrainRoute, 
+  type CommuteRouteSegment,
+  calculateTotalCommuteAmounts,
+  estimateSingleSegment,
+  generateMultiRouteWithAi,
   calculateCommutingDistanceKm, 
   getTaxFreeCarAllowance 
 } from '../lib/commutingCalculator';
@@ -35,6 +38,7 @@ export default function EmployeeOnboardingWelcome() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
+  const [isAiRouting, setIsAiRouting] = useState(false);
   const [ocrSuccessMsg, setOcrSuccessMsg] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -59,21 +63,38 @@ export default function EmployeeOnboardingWelcome() {
     residentCertificateSizeInfo: ''
   });
 
-  // 2. 通勤交通費 支給申請書
+  // 2. 通勤交通費 支給申請書（複数乗り継ぎ対応）
   const [commutingData, setCommutingData] = useState({
     transportMode: 'train_bus' as 'train_bus' | 'car_bike' | 'walk_bicycle',
     originStation: '',
     viaStation: '',
     destinationStation: '',
-    transitLines: '東京メトロ東西線',
-    oneWayFare: 210,
-    oneMonthPassAmount: 7550,
-    sixMonthPassAmount: 40770,
+    segments: [
+      {
+        id: 'seg_1',
+        transportType: 'bus' as const,
+        fromStation: '〇〇バス停',
+        toStation: '中野駅',
+        lineName: '都営バス[渋66]',
+        oneWayFare: 220,
+        oneMonthPassAmount: 9640,
+        sixMonthPassAmount: 52050
+      },
+      {
+        id: 'seg_2',
+        transportType: 'jr' as const,
+        fromStation: '中野駅',
+        toStation: '新宿駅',
+        lineName: 'JR中央線快速',
+        oneWayFare: 170,
+        oneMonthPassAmount: 5120,
+        sixMonthPassAmount: 27640
+      }
+    ] as CommuteRouteSegment[],
     carDistanceKm: 8.5,
     passPhoto: '',
     passFileName: '',
     passSizeInfo: '',
-    isAutoCalculated: false,
     routeDetailNote: ''
   });
 
@@ -152,23 +173,70 @@ export default function EmployeeOnboardingWelcome() {
     }
   };
 
-  // 🤖 電車・バスの定期代・路線を自動計算
-  const handleAutoCalculateTrainRoute = () => {
+  // 🤖 Gemini 3.5 Flash で複数乗り継ぎを一発自動生成
+  const handleAutoGenerateMultiRoute = async () => {
     if (!commutingData.originStation.trim() || !commutingData.destinationStation.trim()) {
       alert('乗車駅/バス停 と 降車駅を入力してください。');
       return;
     }
-    const result = estimateTrainRoute(commutingData.originStation, commutingData.destinationStation);
+
+    setIsAiRouting(true);
+    try {
+      const generatedSegments = await generateMultiRouteWithAi(
+        commutingData.originStation,
+        commutingData.destinationStation,
+        commutingData.viaStation
+      );
+
+      setCommutingData(prev => ({
+        ...prev,
+        segments: generatedSegments
+      }));
+
+      const total = calculateTotalCommuteAmounts(generatedSegments);
+      alert(`✨ Gemini 3.5 Flash が乗り継ぎ ${generatedSegments.length} 区間を自動生成しました！\n合計1ヶ月定期代: ¥${total.totalOneMonthPass.toLocaleString()}\n（${total.isTaxFree ? '全額非課税' : `非課税枠超過: ¥${total.taxableExcessAmount.toLocaleString()}`}）`);
+    } catch (err: any) {
+      alert('AI乗り継ぎ生成に失敗しました: ' + err.message);
+    } finally {
+      setIsAiRouting(false);
+    }
+  };
+
+  // 乗り継ぎ区間の追加
+  const handleAddSegment = () => {
+    const lastSeg = commutingData.segments[commutingData.segments.length - 1];
+    const fromStation = lastSeg ? lastSeg.toStation : (commutingData.originStation || '乗換駅');
+    const newSeg = estimateSingleSegment(fromStation, commutingData.destinationStation || '会社最寄駅', 'subway');
+    
     setCommutingData(prev => ({
       ...prev,
-      transitLines: result.transitLines,
-      oneWayFare: result.oneWayFare,
-      oneMonthPassAmount: result.oneMonthPassAmount,
-      sixMonthPassAmount: result.sixMonthPassAmount,
-      isAutoCalculated: true,
-      routeDetailNote: result.transportType === 'bus' ? '※ 路線バス運賃・定期代を反映' : '※ 電車連絡ルート定期代を反映'
+      segments: [...prev.segments, newSeg]
     }));
-    alert(`✨ 経路・定期代を自動算出しました！\n利用路線: ${result.transitLines}\n片道運賃: ¥${result.oneWayFare.toLocaleString()}\n1ヶ月定期代: ¥${result.oneMonthPassAmount.toLocaleString()}`);
+  };
+
+  // 乗り継ぎ区間の削除
+  const handleDeleteSegment = (id: string) => {
+    if (commutingData.segments.length <= 1) {
+      alert('少なくとも1つの区間が必要です。');
+      return;
+    }
+    setCommutingData(prev => ({
+      ...prev,
+      segments: prev.segments.filter(s => s.id !== id)
+    }));
+  };
+
+  // 区間データの更新
+  const handleUpdateSegment = (id: string, field: keyof CommuteRouteSegment, value: any) => {
+    setCommutingData(prev => ({
+      ...prev,
+      segments: prev.segments.map(s => {
+        if (s.id === id) {
+          return { ...s, [field]: value };
+        }
+        return s;
+      })
+    }));
   };
 
   // 🗺️ 自宅住所〜会社所在地から片道通勤距離（km）＆非課税手当を自動計算
@@ -185,14 +253,12 @@ export default function EmployeeOnboardingWelcome() {
     setCommutingData(prev => ({
       ...prev,
       carDistanceKm: result.distanceKm,
-      oneMonthPassAmount: allowance,
-      isAutoCalculated: true,
       routeDetailNote: result.detail
     }));
     alert(`🗺️ 住所から通勤距離を自動計算しました！\n${result.detail}\n国税庁基準マイカー手当: ¥${allowance.toLocaleString()} /月`);
   };
 
-  // 写真のスマホ撮影・圧縮アップロード ＆ AI自動読み取り（OCR）
+  // 写真のスマホ撮影・圧縮アップロード ＆ AI自動読み取り（Gemini 3.5 Flash OCR）
   const handlePhotoUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     field: string
@@ -214,20 +280,20 @@ export default function EmployeeOnboardingWelcome() {
           residentCertificateSizeInfo: sizeStr
         }));
 
-        // 🤖 住民票のAI自動読み取りを実行
+        // 🤖 住民票のGemini 3.5 Flash AI自動読み取りを実行
         setIsOcrProcessing(true);
         try {
           const parsed = await parseResidentCertificateImage(compressed.base64);
           setBasicData(prev => ({
             ...prev,
-            name: prev.name || parsed.name,
-            nameKana: prev.nameKana || parsed.nameKana,
-            birthDate: parsed.birthDate,
-            address: parsed.address,
-            householderName: parsed.householderName,
-            householderRelation: parsed.householderRelation
+            name: parsed.name || prev.name,
+            nameKana: parsed.nameKana || prev.nameKana,
+            birthDate: parsed.birthDate || prev.birthDate,
+            address: parsed.address || prev.address,
+            householderName: parsed.householderName || prev.householderName,
+            householderRelation: parsed.householderRelation || prev.householderRelation
           }));
-          setOcrSuccessMsg('🤖 住民票から氏名・住所・生年月日・世帯主を自動入力しました！');
+          setOcrSuccessMsg('🤖 Gemini 3.5 Flash が住民票から氏名・住所・生年月日・世帯主を自動入力しました！');
           setTimeout(() => setOcrSuccessMsg(null), 4000);
         } finally {
           setIsOcrProcessing(false);
@@ -240,19 +306,19 @@ export default function EmployeeOnboardingWelcome() {
           passbookSizeInfo: sizeStr
         }));
 
-        // 🤖 通帳のAI自動読み取りを実行
+        // 🤖 通帳のGemini 3.5 Flash AI自動読み取りを実行
         setIsOcrProcessing(true);
         try {
           const parsed = await parseBankPassbookImage(compressed.base64);
           setBankData(prev => ({
             ...prev,
-            bankName: parsed.bankName,
-            branchName: parsed.branchName,
-            accountType: parsed.accountType,
-            accountNumber: parsed.accountNumber,
-            accountHolder: parsed.accountHolder
+            bankName: parsed.bankName || prev.bankName,
+            branchName: parsed.branchName || prev.branchName,
+            accountType: parsed.accountType || prev.accountType,
+            accountNumber: parsed.accountNumber || prev.accountNumber,
+            accountHolder: parsed.accountHolder || prev.accountHolder
           }));
-          setOcrSuccessMsg('🤖 通帳写真から銀行名・支店名・口座番号・名義人を自動入力しました！');
+          setOcrSuccessMsg('🤖 Gemini 3.5 Flash が通帳写真から銀行名・支店名・口座番号・名義人を自動入力しました！');
           setTimeout(() => setOcrSuccessMsg(null), 4000);
         } finally {
           setIsOcrProcessing(false);
@@ -351,31 +417,34 @@ export default function EmployeeOnboardingWelcome() {
         });
       }
 
-      // 2. 通勤交通費 支給申請書の送信
-      if (commutingData.originStation || commutingData.transportMode === 'car_bike' || commutingData.transportMode === 'walk_bicycle') {
-        await supabase.from('employee_document_submissions').insert({
-          tenant_id: effectiveTenantId,
-          user_id: userId,
-          document_type: 'commuting_pass',
-          title: '通勤交通費 支給申請書',
-          data: {
-            name: basicData.name,
-            transport_mode: commutingData.transportMode,
-            origin_station: commutingData.originStation,
-            via_station: commutingData.viaStation,
-            destination_station: commutingData.destinationStation,
-            transit_lines: commutingData.transitLines,
-            one_way_fare: commutingData.oneWayFare,
-            one_month_pass_amount: commutingData.transportMode === 'walk_bicycle' ? 0 : commutingData.oneMonthPassAmount,
-            six_month_pass_amount: commutingData.sixMonthPassAmount,
-            car_distance_km: commutingData.carDistanceKm,
-            route_detail_note: commutingData.routeDetailNote
-          },
-          attachment_data: commutingData.transportMode === 'walk_bicycle' ? null : (commutingData.passPhoto || null),
-          attachment_filename: commutingData.passFileName || '',
-          status: 'pending'
-        });
-      }
+      // 2. 通勤交通費 支給申請書の送信（複数乗り継ぎ区間・合計定期代）
+      const totalCommute = calculateTotalCommuteAmounts(commutingData.segments);
+      const isCar = commutingData.transportMode === 'car_bike';
+      const isWalk = commutingData.transportMode === 'walk_bicycle';
+      const finalMonthlyAllowance = isWalk ? 0 : isCar ? getTaxFreeCarAllowance(commutingData.carDistanceKm) : totalCommute.totalOneMonthPass;
+
+      await supabase.from('employee_document_submissions').insert({
+        tenant_id: effectiveTenantId,
+        user_id: userId,
+        document_type: 'commuting_pass',
+        title: '通勤交通費 支給申請書（複数乗り継ぎ対応）',
+        data: {
+          name: basicData.name,
+          transport_mode: commutingData.transportMode,
+          origin_station: commutingData.originStation || (commutingData.segments[0]?.fromStation || ''),
+          via_station: commutingData.viaStation || '',
+          destination_station: commutingData.destinationStation || (commutingData.segments[commutingData.segments.length - 1]?.toStation || ''),
+          segments: commutingData.segments,
+          one_month_pass_amount: finalMonthlyAllowance,
+          six_month_pass_amount: isWalk || isCar ? 0 : totalCommute.totalSixMonthPass,
+          car_distance_km: commutingData.carDistanceKm,
+          route_detail_note: commutingData.routeDetailNote,
+          is_tax_free: isCar || isWalk ? true : totalCommute.isTaxFree
+        },
+        attachment_data: isWalk ? null : (commutingData.passPhoto || null),
+        attachment_filename: commutingData.passFileName || '',
+        status: 'pending'
+      });
 
       // 3. 給与振込口座届出書の送信
       if (bankData.bankName) {
@@ -452,6 +521,8 @@ export default function EmployeeOnboardingWelcome() {
     }
   };
 
+  const commuteTotals = calculateTotalCommuteAmounts(commutingData.segments);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
@@ -470,14 +541,14 @@ export default function EmployeeOnboardingWelcome() {
           <div>
             <h2 className="text-xl font-black">公的入社書類の提出が完了しました！</h2>
             <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-              ご入力いただいた法定書類および住民票・通帳・定期券写真は、人事部へ安全に暗号化送信されました。管理者の確認が完了次第、給与・社会保険の手続きが完了となります。
+              ご入力いただいた法定書類および住民票・通帳・通勤乗り継ぎ申請は、人事部へ安全に暗号化送信されました。管理者の確認が完了次第、給与・社会保険の手続きが完了となります。
             </p>
           </div>
 
           <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-left text-xs space-y-2 text-slate-300">
             <div className="font-bold text-white mb-1">📋 提出された公式書類:</div>
             <div>✅ 1. 本人基本情報 ＆ 住民票原本</div>
-            <div>✅ 2. 通勤交通費 支給申請書（AI自動計算経路）</div>
+            <div>✅ 2. 通勤交通費 支給申請書（複数乗り継ぎ {commutingData.segments.length} 区間）</div>
             <div>✅ 3. 給与振込口座 登録届出書 兼 通帳確認</div>
             <div>✅ 4. 令和8年分 扶養控除等（異動）申告書</div>
             <div>✅ 5. マイナンバー ＆ 年金・雇用保険届出</div>
@@ -517,7 +588,7 @@ export default function EmployeeOnboardingWelcome() {
         <div className="flex items-center justify-between max-w-lg mx-auto text-[10px] font-bold text-slate-400 min-w-[320px]">
           <span className={currentStep === 1 ? 'text-indigo-400 font-black' : ''}>1.基本・住民票</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
-          <span className={currentStep === 2 ? 'text-indigo-400 font-black' : ''}>2.通勤・AI計算</span>
+          <span className={currentStep === 2 ? 'text-indigo-400 font-black' : ''}>2.通勤・乗り継ぎ</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
           <span className={currentStep === 3 ? 'text-indigo-400 font-black' : ''}>3.口座・通帳</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
@@ -527,11 +598,18 @@ export default function EmployeeOnboardingWelcome() {
         </div>
       </div>
 
-      {/* OCR解析中ローディング表示 */}
+      {/* OCR / AI 処理中ローディング表示 */}
       {isOcrProcessing && (
         <div className="bg-indigo-600 text-white text-xs font-bold px-4 py-2 flex items-center justify-center gap-2 animate-pulse">
           <Loader2 className="w-4 h-4 animate-spin" />
-          🤖 AIが写真から文字を自動解析・入力中...
+          🤖 Gemini 3.5 Flash が写真から文字を自動解析中...
+        </div>
+      )}
+
+      {isAiRouting && (
+        <div className="bg-cyan-600 text-white text-xs font-bold px-4 py-2 flex items-center justify-center gap-2 animate-pulse">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          🤖 Gemini 3.5 Flash が最適乗り継ぎルートを自動生成中...
         </div>
       )}
 
@@ -546,7 +624,7 @@ export default function EmployeeOnboardingWelcome() {
       {/* フォーム本体 */}
       <main className="flex-1 max-w-lg w-full mx-auto p-4 space-y-4">
         
-        {/* Step 1: 基本情報 ＆ 住民票の添付（AI自動入力対応） */}
+        {/* Step 1: 基本情報 ＆ 住民票の添付（Gemini 3.5 Flash 自動入力） */}
         {currentStep === 1 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
@@ -554,10 +632,10 @@ export default function EmployeeOnboardingWelcome() {
                 <Home className="w-4 h-4 text-indigo-400" />
                 1. あなたの基本情報 ＆ 住民票添付
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">住民票の写真を添付すると、氏名や住所が自動入力されます。</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">住民票の写真を添付すると、Gemini 3.5 Flash が氏名や住所を自動入力します。</p>
             </div>
 
-            {/* 🏠 住民票の写し 添付枠（AI自動読み取り機能付き） */}
+            {/* 🏠 住民票の写し 添付枠 */}
             <div className="bg-gradient-to-br from-indigo-950/60 to-slate-900 p-4 rounded-2xl border-2 border-dashed border-indigo-500/40 text-center space-y-2">
               <label className="block cursor-pointer">
                 <input
@@ -571,7 +649,7 @@ export default function EmployeeOnboardingWelcome() {
                     <Sparkles className="w-5 h-5 text-indigo-300" />
                   </div>
                   <span className="text-xs font-black text-white flex items-center gap-1">
-                    📷 住民票の写しを撮影 ➔ AIで自動入力
+                    📷 住民票の写しを撮影 ➔ Gemini 3.5 Flash で自動入力
                   </span>
                   <span className="text-[10px] text-indigo-300">
                     ※ 写真を撮るだけで氏名・住所・生年月日・世帯主が自動でセットされます
@@ -699,15 +777,15 @@ export default function EmployeeOnboardingWelcome() {
           </div>
         )}
 
-        {/* Step 2: 正式な通勤交通費 支給申請書 ＆ バス対応・住所根拠明示 */}
+        {/* Step 2: 複数乗り継ぎ（バス・私鉄・JR・地下鉄）対応 通勤交通費 支給申請書 */}
         {currentStep === 2 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <Train className="w-4 h-4 text-cyan-400" />
-                2. 通勤交通費 支給申請書（電車・バス自動計算）
+                2. 通勤交通費 支給申請書（複数乗り継ぎ対応）
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">駅名・バス停名や住所から、定期代や通勤距離を自動算出できます。</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">バス・私鉄・JR・地下鉄の複数乗り継ぎ区間を自由に登録・集計できます。</p>
             </div>
 
             <div className="space-y-3 text-xs">
@@ -744,73 +822,163 @@ export default function EmployeeOnboardingWelcome() {
                 </div>
               </div>
 
-              {/* 電車・路線バス通勤 */}
+              {/* 1. 電車・路線バス（複数乗り継ぎ） */}
               {commutingData.transportMode === 'train_bus' && (
                 <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-0.5">乗車駅 / バス停 <span className="text-rose-400">*</span></label>
-                      <input
-                        type="text"
-                        placeholder="例: 中野駅 / 〇〇バス停"
-                        value={commutingData.originStation}
-                        onChange={e => setCommutingData({ ...commutingData, originStation: e.target.value })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-bold text-white"
-                      />
+                  {/* AI乗り継ぎ一括生成入力 */}
+                  <div className="bg-gradient-to-br from-cyan-950/40 to-slate-900 p-3.5 rounded-2xl border border-cyan-500/30 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black text-cyan-300 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Gemini 3.5 Flash で最適乗り継ぎを一発自動生成
+                      </span>
                     </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-0.5">降車駅 / バス停 <span className="text-rose-400">*</span></label>
-                      <input
-                        type="text"
-                        placeholder="例: 大手町駅"
-                        value={commutingData.destinationStation}
-                        onChange={e => setCommutingData({ ...commutingData, destinationStation: e.target.value })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-bold text-white"
-                      />
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-0.5">乗車地（自宅最寄）</label>
+                        <input
+                          type="text"
+                          placeholder="例: 〇〇バス停 / 中野駅"
+                          value={commutingData.originStation}
+                          onChange={e => setCommutingData({ ...commutingData, originStation: e.target.value })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-0.5">降車地（会社最寄）</label>
+                        <input
+                          type="text"
+                          placeholder="例: 大手町駅 / 都庁前駅"
+                          value={commutingData.destinationStation}
+                          onChange={e => setCommutingData({ ...commutingData, destinationStation: e.target.value })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-white font-bold"
+                        />
+                      </div>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAutoGenerateMultiRoute}
+                      disabled={isAiRouting}
+                      className="w-full py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-black rounded-xl shadow transition flex items-center justify-center gap-1.5 cursor-pointer text-xs disabled:opacity-50"
+                    >
+                      {isAiRouting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-cyan-200" />}
+                      🤖 最適乗り継ぎ区間・定期代を一括自動算出
+                    </button>
                   </div>
 
-                  {/* 🤖 電車・バス 定期代自動計算ボタン */}
-                  <button
-                    type="button"
-                    onClick={handleAutoCalculateTrainRoute}
-                    className="w-full py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-black rounded-xl shadow transition flex items-center justify-center gap-1.5 cursor-pointer text-xs"
-                  >
-                    <Sparkles className="w-4 h-4 text-cyan-200" />
-                    🤖 最適路線・電車/バス定期代を自動算出
-                  </button>
+                  {/* 乗り継ぎ区間リスト */}
+                  <div className="space-y-3 pt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white text-xs">🚆 登録された乗り継ぎ区間 ({commutingData.segments.length}区間)</span>
+                      <button
+                        type="button"
+                        onClick={handleAddSegment}
+                        className="bg-indigo-600/80 hover:bg-indigo-600 text-white text-[11px] font-bold px-3 py-1 rounded-xl transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> ＋ 乗り継ぎ区間を追加
+                      </button>
+                    </div>
 
-                  <div>
-                    <label className="text-[10px] text-slate-400 block mb-0.5">利用路線・乗換経路</label>
-                    <input
-                      type="text"
-                      placeholder="例: 東京メトロ東西線 / 都営バス"
-                      value={commutingData.transitLines}
-                      onChange={e => setCommutingData({ ...commutingData, transitLines: e.target.value })}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
-                    />
+                    {commutingData.segments.map((seg, idx) => {
+                      return (
+                        <div key={seg.id} className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="bg-slate-700 text-slate-200 px-2 py-0.5 rounded text-[10px] font-black">
+                                第{idx + 1}区間
+                              </span>
+                              <select
+                                value={seg.transportType}
+                                onChange={e => handleUpdateSegment(seg.id, 'transportType', e.target.value)}
+                                className="bg-slate-900 border border-slate-700 text-cyan-300 text-[10px] font-bold rounded-lg px-2 py-0.5"
+                              >
+                                <option value="bus">🚌 路線バス</option>
+                                <option value="jr">🚆 JR線</option>
+                                <option value="subway">🚇 地下鉄</option>
+                                <option value="private_rail">🚋 私鉄</option>
+                                <option value="other">その他</option>
+                              </select>
+                            </div>
+                            {commutingData.segments.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSegment(seg.id)}
+                                className="text-slate-400 hover:text-rose-400 p-1"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-slate-400 block mb-0.5">乗車駅 / バス停</label>
+                              <input
+                                type="text"
+                                value={seg.fromStation}
+                                onChange={e => handleUpdateSegment(seg.id, 'fromStation', e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white font-bold"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-slate-400 block mb-0.5">降車駅 / バス停</label>
+                              <input
+                                type="text"
+                                value={seg.toStation}
+                                onChange={e => handleUpdateSegment(seg.id, 'toStation', e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white font-bold"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] text-slate-400 block mb-0.5">利用路線名</label>
+                            <input
+                              type="text"
+                              value={seg.lineName}
+                              onChange={e => handleUpdateSegment(seg.id, 'lineName', e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-slate-300"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-slate-400 block mb-0.5">1ヶ月定期代（円）</label>
+                              <input
+                                type="number"
+                                value={seg.oneMonthPassAmount}
+                                onChange={e => handleUpdateSegment(seg.id, 'oneMonthPassAmount', parseInt(e.target.value, 10) || 0)}
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-black text-cyan-400 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-slate-400 block mb-0.5">片道運賃（円）</label>
+                              <input
+                                type="number"
+                                value={seg.oneWayFare}
+                                onChange={e => handleUpdateSegment(seg.id, 'oneWayFare', parseInt(e.target.value, 10) || 0)}
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-0.5">1ヶ月通勤定期代（円） <span className="text-rose-400">*</span></label>
-                      <input
-                        type="number"
-                        placeholder="7550"
-                        value={commutingData.oneMonthPassAmount}
-                        onChange={e => setCommutingData({ ...commutingData, oneMonthPassAmount: parseInt(e.target.value, 10) || 0 })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-black text-cyan-400 text-sm"
-                      />
+                  {/* 💰 乗り継ぎ合計金額ボックス */}
+                  <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-4 rounded-2xl border-2 border-indigo-500/40 space-y-1 text-center">
+                    <span className="text-[10px] text-slate-400 font-bold block">
+                      全{commutingData.segments.length}区間 合計支給額（1ヶ月定期代）
+                    </span>
+                    <div className="text-2xl font-black text-cyan-400 tracking-tight">
+                      ¥{commuteTotals.totalOneMonthPass.toLocaleString()}
+                      <span className="text-xs text-slate-300 font-normal ml-1">/月</span>
                     </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-0.5">片道運賃（円）</label>
-                      <input
-                        type="number"
-                        placeholder="210"
-                        value={commutingData.oneWayFare}
-                        onChange={e => setCommutingData({ ...commutingData, oneWayFare: parseInt(e.target.value, 10) || 0 })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
-                      />
+                    <div className="text-[10px] font-bold text-emerald-400 pt-1">
+                      {commuteTotals.isTaxFree ? '✅ 国税庁通勤非課税枠（15万円以内）: 全額所得税非課税' : `⚠️ 15万円超過分（¥${commuteTotals.taxableExcessAmount.toLocaleString()}）は課税対象`}
                     </div>
                   </div>
 
@@ -846,10 +1014,9 @@ export default function EmployeeOnboardingWelcome() {
                 </>
               )}
 
-              {/* マイカー・バイク通勤 */}
+              {/* 2. マイカー・バイク通勤 */}
               {commutingData.transportMode === 'car_bike' && (
                 <div className="space-y-3 bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700">
-                  {/* 🗺️ 住所から通勤距離自動計算ボタン */}
                   <button
                     type="button"
                     onClick={handleAutoCalculateCarDistance}
@@ -859,7 +1026,6 @@ export default function EmployeeOnboardingWelcome() {
                     🗺️ 自宅〜会社住所から片道距離・手当を自動計算
                   </button>
 
-                  {/* 計算根拠の明示ボックス */}
                   <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-700 text-[10px] space-y-1">
                     <div className="text-slate-400">【計算対象の住所区間】</div>
                     <div className="text-slate-300">🏡 出発地: <span className="font-bold text-white">{basicData.address || '（Step 1 の現住所）'}</span></div>
@@ -880,16 +1046,12 @@ export default function EmployeeOnboardingWelcome() {
                     </div>
                     <div>
                       <label className="text-[10px] text-slate-400 block mb-0.5">国税庁基準マイカー手当（月額）</label>
-                      <input
-                        type="number"
-                        value={commutingData.oneMonthPassAmount}
-                        onChange={e => setCommutingData({ ...commutingData, oneMonthPassAmount: parseInt(e.target.value, 10) || 0 })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-black text-cyan-400 text-sm"
-                      />
+                      <div className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 font-black text-cyan-400 text-sm">
+                        ¥{getTaxFreeCarAllowance(commutingData.carDistanceKm).toLocaleString()}
+                      </div>
                     </div>
                   </div>
 
-                  {/* 任意写真添付 */}
                   <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700 text-center">
                     <label className="block cursor-pointer">
                       <input
@@ -910,7 +1072,7 @@ export default function EmployeeOnboardingWelcome() {
                 </div>
               )}
 
-              {/* 徒歩・自転車通勤（添付枠不要） */}
+              {/* 3. 徒歩・自転車通勤 */}
               {commutingData.transportMode === 'walk_bicycle' && (
                 <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 text-center space-y-2">
                   <Check className="w-8 h-8 text-emerald-400 mx-auto" />
@@ -923,7 +1085,7 @@ export default function EmployeeOnboardingWelcome() {
           </div>
         )}
 
-        {/* Step 3: 給与振込口座 ＋ 通帳写真撮影（AI自動読み取り対応） */}
+        {/* Step 3: 給与振込口座 ＋ 通帳写真撮影（Gemini 3.5 Flash 自動入力） */}
         {currentStep === 3 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
@@ -931,10 +1093,10 @@ export default function EmployeeOnboardingWelcome() {
                 <CreditCard className="w-4 h-4 text-emerald-400" />
                 3. 給与振込口座の登録 ＆ 通帳原本撮影
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">通帳の写真を撮影すると、口座情報がAIで自動入力されます。</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">通帳の写真を撮影すると、Gemini 3.5 Flash が口座情報を自動入力します。</p>
             </div>
 
-            {/* 通帳写真撮影アップロード（AI自動読み取り機能付き） */}
+            {/* 通帳写真撮影アップロード */}
             <div className="bg-gradient-to-br from-emerald-950/60 to-slate-900 p-4 rounded-2xl border-2 border-dashed border-emerald-500/40 text-center space-y-2">
               <label className="block cursor-pointer">
                 <input
@@ -948,7 +1110,7 @@ export default function EmployeeOnboardingWelcome() {
                     <Sparkles className="w-5 h-5 text-emerald-300" />
                   </div>
                   <span className="text-xs font-black text-white flex items-center gap-1">
-                    📷 通帳またはカードを撮影 ➔ AIで自動入力
+                    📷 通帳またはカードを撮影 ➔ Gemini 3.5 Flash で自動入力
                   </span>
                   <span className="text-[10px] text-emerald-300">
                     ※ 銀行名・支店名・口座番号・名義人が自動でセットされます
