@@ -2,13 +2,16 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AppSwitcher from '../components/AppSwitcher';
-import { OfficialLaborContractDoc, type LaborContractData } from '../components/OfficialLaborContractDoc';
+import { OfficialLaborContractDoc } from '../components/OfficialLaborContractDoc';
+import { OfficialCommutingPassDoc } from '../components/OfficialCommutingPassDoc';
+import { OfficialBankPassbookDoc } from '../components/OfficialBankPassbookDoc';
 import { compressImageFile } from '../lib/imageCompressor';
 import { 
   UserPlus, Users, FileText, CheckCircle2, 
   Printer, ArrowLeft, LogOut, Loader2, X, ChevronRight, 
   HelpCircle, Building2, Check, UserCheck, Edit3, UserMinus, 
-  RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train
+  RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
+  FolderOpen, Settings
 } from 'lucide-react';
 
 interface EmployeeOnboardingData {
@@ -40,6 +43,7 @@ interface EmployeeOnboardingData {
   account_type?: 'ordinary' | 'current';
   account_number?: string;
   account_holder?: string;
+  holidays_text?: string;
   documents_checklist?: {
     id_copy: boolean;
     my_number: boolean;
@@ -70,12 +74,20 @@ interface DocumentSubmission {
   created_at: string;
 }
 
+interface DepartmentMaster {
+  id: string;
+  name: string;
+  display_order: number;
+}
+
 export default function OnboardingAdminDashboard() {
   const navigate = useNavigate();
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [employees, setEmployees] = useState<EmployeeOnboardingData[]>([]);
   const [submissions, setSubmissions] = useState<DocumentSubmission[]>([]);
+  const [departments, setDepartments] = useState<DepartmentMaster[]>([]);
+  
   const [currentView, setCurrentView] = useState<'employees' | 'submissions'>('employees');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'onboarding' | 'retired'>('all');
   const [submissionFilter, setSubmissionFilter] = useState<'all' | 'pending' | 'approved'>('pending');
@@ -99,7 +111,7 @@ export default function OnboardingAdminDashboard() {
     start_time: '09:00',
     end_time: '18:00',
     break_time_minutes: 60,
-    holidays_text: '完全週休2日制（土日・祝日）、年末年始休暇',
+    holidays_text: '完全週休2日制（土日・祝日）',
     salary_type: 'monthly',
     base_salary: 250000,
     hourly_wage: 1150,
@@ -127,6 +139,17 @@ export default function OnboardingAdminDashboard() {
     data: null
   });
 
+  // 労務書面キャビネット（証憑アーカイブ）モーダルState
+  const [cabinetModal, setCabinetModal] = useState<{
+    isOpen: boolean;
+    employee: EmployeeOnboardingData | null;
+    activeDoc: 'contract' | 'commuting' | 'bank' | 'identity';
+  }>({
+    isOpen: false,
+    employee: null,
+    activeDoc: 'contract'
+  });
+
   // 退職処理モーダルState
   const [retireModal, setRetireModal] = useState<{
     isOpen: boolean;
@@ -146,7 +169,7 @@ export default function OnboardingAdminDashboard() {
   const [proxyInputModal, setProxyInputModal] = useState({
     isOpen: false,
     selectedUserId: '',
-    docType: 'bank_passbook', // 'bank_passbook', 'commuting_pass', 'my_number'
+    docType: 'bank_passbook',
     bankName: '',
     branchName: '',
     accountType: 'ordinary',
@@ -172,15 +195,6 @@ export default function OnboardingAdminDashboard() {
     imageSrc: ''
   });
 
-  // 労働条件通知書プレビューモーダルState
-  const [contractPreviewModal, setContractPreviewModal] = useState<{
-    isOpen: boolean;
-    data: LaborContractData | null;
-  }>({
-    isOpen: false,
-    data: null
-  });
-
   // 労務手続きガイドモーダルState
   const [guideModalOpen, setGuideModalOpen] = useState(false);
 
@@ -203,6 +217,16 @@ export default function OnboardingAdminDashboard() {
 
       const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantIdData).maybeSingle();
       setTenantInfo(tData);
+
+      // マスタ一覧取得
+      const { data: deptData } = await supabase
+        .from('department_masters')
+        .select('*')
+        .eq('tenant_id', tenantIdData)
+        .order('display_order', { ascending: true });
+      setDepartments(deptData || []);
+
+
 
       // ユーザー一覧取得
       const { data: uData } = await supabase
@@ -241,9 +265,10 @@ export default function OnboardingAdminDashboard() {
           retirement_date: onb?.retirement_date,
           retirement_reason: onb?.retirement_reason,
           employment_type: u.employment_type || 'full-time',
-          department: u.department || '本社',
+          department: u.department || '営業部',
           contract_type: onb?.contract_type || 'indefinite',
           trial_period_months: onb?.trial_period_months ?? 3,
+          holidays_text: onb?.holidays_text || '完全週休2日制（土日・祝日）',
           salary_type: pay?.salary_type || onb?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly'),
           base_salary: pay?.base_salary || onb?.base_salary || 250000,
           hourly_wage: pay?.hourly_wage || onb?.hourly_wage || 1150,
@@ -299,6 +324,8 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
+
+
   // 画像圧縮アップロード（手動代行入力用）
   const handleProxyFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -320,7 +347,7 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
-  // 管理者による書類・申請の手動代行保存（即座にマスタ反映）
+  // 管理者による書類・申請の手動代行保存
   const handleSaveProxyInput = async () => {
     if (!tenantId || !proxyInputModal.selectedUserId) {
       alert('対象の従業員を選択してください。');
@@ -332,7 +359,6 @@ export default function OnboardingAdminDashboard() {
       const uId = proxyInputModal.selectedUserId;
 
       if (proxyInputModal.docType === 'bank_passbook') {
-        // 給与マスタの口座情報を即時更新
         await supabase
           .from('employee_payroll_profiles')
           .upsert({
@@ -345,7 +371,6 @@ export default function OnboardingAdminDashboard() {
             account_holder: proxyInputModal.accountHolder
           }, { onConflict: 'tenant_id,user_id' });
 
-        // 提出レコードも作成（保存用）
         await supabase
           .from('employee_document_submissions')
           .insert({
@@ -364,7 +389,6 @@ export default function OnboardingAdminDashboard() {
             status: 'approved'
           });
       } else if (proxyInputModal.docType === 'commuting_pass') {
-        // 給与マスタの通勤手当を即時更新
         await supabase
           .from('employee_payroll_profiles')
           .upsert({
@@ -418,14 +442,13 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
-  // 提出書類のワンクリック承認 ＆ 給与・労務マスタ自動反映処理
+  // 提出書類のワンクリック承認
   const handleApproveSubmission = async (sub: DocumentSubmission) => {
     if (!tenantId) return;
     setIsSaving(true);
     try {
       const uId = sub.user_id;
 
-      // 1. 書類種別に応じてマスタへ自動反映
       if (sub.document_type === 'bank_passbook') {
         const d = sub.data;
         await supabase
@@ -460,7 +483,6 @@ export default function OnboardingAdminDashboard() {
           }, { onConflict: 'tenant_id,user_id' });
       }
 
-      // 2. 申請ステータスを approved に更新
       await supabase
         .from('employee_document_submissions')
         .update({
@@ -479,7 +501,7 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
-  // 新規入社ウィザード完了 ＆ 3大マスタ一括同期処理
+  // 新規入社ウィザード完了
   const handleCompleteOnboardingWizard = async () => {
     if (!tenantId || !wizardData.name) {
       alert('氏名を入力してください。');
@@ -631,6 +653,7 @@ export default function OnboardingAdminDashboard() {
           join_date: data.join_date,
           contract_type: data.contract_type,
           trial_period_months: data.trial_period_months,
+          holidays_text: data.holidays_text,
           salary_type: data.salary_type,
           base_salary: data.base_salary,
           hourly_wage: data.hourly_wage,
@@ -727,50 +750,6 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
-  // 労働条件通知書プレビュー
-  const handleOpenContractPreview = (emp: EmployeeOnboardingData) => {
-    const contractData: LaborContractData = {
-      companyName: tenantInfo?.name || '株式会社KAP',
-      companyAddress: '東京都千代田区〇〇 1-2-3',
-      representativeName: '代表取締役 〇〇 〇〇',
-      employeeName: emp.name,
-      employeeAddress: '東京都新宿区〇〇 1-1',
-      joinDate: emp.join_date,
-      contractType: emp.contract_type || 'indefinite',
-      trialPeriodMonths: emp.trial_period_months ?? 3,
-      workLocation: '本社 および 会社が指定する就業場所',
-      jobDescription: `${emp.department}における業務全般`,
-      startTime: '09:00',
-      endTime: '18:00',
-      breakTimeMinutes: 60,
-      overtimeWork: 'あり（業務の都合により命じる場合がある）',
-      holidaysText: '完全週休2日制（土・日）、国民の祝日、年末年始休暇',
-      paidLeaveGrantDays: 10,
-      salaryType: (emp.salary_type || (emp.employment_type === 'part-time' ? 'hourly' : 'monthly')),
-      baseSalary: emp.base_salary,
-      hourlyWage: emp.hourly_wage,
-      positionAllowance: emp.position_allowance,
-      qualificationAllowance: emp.qualification_allowance || 0,
-      housingAllowance: emp.housing_allowance || 0,
-      familyAllowance: emp.family_allowance || 0,
-      commutingAllowance: emp.commuting_allowance,
-      fixedOvertimeHours: 0,
-      fixedOvertimeAllowance: 0,
-      bonusPolicy: 'あり（会社の業績および本人の勤務成績を勘案して支給）',
-      raisePolicy: 'あり（原則として年1回査定）',
-      retirementAllowance: 'なし',
-      healthInsuranceJoined: emp.health_insurance_joined,
-      pensionInsuranceJoined: emp.pension_insurance_joined,
-      employmentInsuranceJoined: emp.employment_insurance_joined,
-      workersCompJoined: true
-    };
-
-    setContractPreviewModal({
-      isOpen: true,
-      data: contractData
-    });
-  };
-
   const filteredEmployees = employees.filter(e => {
     if (activeFilter === 'all') return true;
     if (activeFilter === 'active') return e.status === 'active';
@@ -823,6 +802,13 @@ export default function OnboardingAdminDashboard() {
 
         <div className="flex items-center space-x-3">
           <button
+            onClick={() => navigate('/settings/company')}
+            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-3.5 py-2 rounded-xl transition border border-indigo-200 flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <Settings className="w-4 h-4 text-indigo-600" />
+            会社・全社マスタ設定
+          </button>
+          <button
             onClick={() => setGuideModalOpen(true)}
             className="bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs px-3 py-2 rounded-xl transition border border-slate-200 flex items-center gap-1.5 cursor-pointer"
           >
@@ -864,11 +850,11 @@ export default function OnboardingAdminDashboard() {
 
           <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs">
             <div className="flex items-center justify-between text-slate-500 mb-2">
-              <span className="text-xs font-bold">退職者・OB</span>
+              <span className="text-xs font-bold">登録部署数</span>
               <Building2 className="w-4 h-4 text-slate-400" />
             </div>
-            <div className="text-2xl font-black text-slate-600">{retiredCount}名</div>
-            <div className="mt-2 text-[11px] text-slate-400">過去の在籍記録保存</div>
+            <div className="text-2xl font-black text-slate-600">{departments.length}部署</div>
+            <div className="mt-2 text-[11px] text-slate-400">マスタ管理中</div>
           </div>
 
           <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-md shadow-blue-100 flex flex-col justify-between">
@@ -886,7 +872,7 @@ export default function OnboardingAdminDashboard() {
           </div>
         </div>
 
-        {/* メインビュー切り替え（従業員台帳 vs 提出書類審査） */}
+        {/* メインビュー切り替え */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2 bg-slate-200/80 p-1 rounded-2xl border border-slate-300/60 text-xs font-bold">
             <button
@@ -896,7 +882,7 @@ export default function OnboardingAdminDashboard() {
               }`}
             >
               <Users className="w-4 h-4" />
-              従業員台帳 ＆ 契約書管理
+              従業員台帳 ＆ 労務書面証憑
             </button>
 
             <button
@@ -915,7 +901,6 @@ export default function OnboardingAdminDashboard() {
             </button>
           </div>
 
-          {/* PCが触れない方向け：手動代行入力ボタン */}
           <button
             onClick={() => setProxyInputModal(prev => ({ ...prev, isOpen: true }))}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
@@ -932,12 +917,11 @@ export default function OnboardingAdminDashboard() {
               <div>
                 <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
                   <FileText className="w-5 h-5 text-blue-600" />
-                  従業員 入退社・労務書類台帳
+                  従業員 入退社・労務書面台帳
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">労働条件通知書の出力・情報修正・退職処理・各マスタへの自動同期</p>
+                <p className="text-xs text-slate-400 mt-0.5">雇用契約書・通勤届・口座届のエビデンス閲覧、修正、退職処理</p>
               </div>
 
-              {/* フィルタータブ */}
               <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold">
                 <button
                   onClick={() => setActiveFilter('all')}
@@ -972,7 +956,7 @@ export default function OnboardingAdminDashboard() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[950px]">
+                <table className="w-full text-left border-collapse min-w-[980px]">
                   <thead>
                     <tr className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                       <th className="py-3 px-4">氏名 / 所属</th>
@@ -980,7 +964,7 @@ export default function OnboardingAdminDashboard() {
                       <th className="py-3 px-3">入社日 / 退職日</th>
                       <th className="py-3 px-3">給与設定</th>
                       <th className="py-3 px-3">口座・通勤費</th>
-                      <th className="py-3 px-3 text-center">状態</th>
+                      <th className="py-3 px-3 text-center">労務書面証憑</th>
                       <th className="py-3 px-4 text-center">操作</th>
                     </tr>
                   </thead>
@@ -1003,7 +987,7 @@ export default function OnboardingAdminDashboard() {
                                   {emp.name}
                                   {isRetired && <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-bold">退職</span>}
                                 </div>
-                                <div className="text-[10px] text-slate-400">{emp.department || '本社'}</div>
+                                <div className="text-[10px] text-slate-400">{emp.department || '営業部'}</div>
                               </div>
                             </div>
                           </td>
@@ -1032,32 +1016,28 @@ export default function OnboardingAdminDashboard() {
                           </td>
 
                           <td className="py-3.5 px-3 text-slate-600 text-[11px]">
-                            <div>口座: {emp.bank_name ? `${emp.bank_name} (${emp.account_number?.substring(0, 4)}***)` : <span className="text-slate-400">未登録</span>}</div>
+                            <div>口座: {emp.bank_name ? `${emp.bank_name}` : <span className="text-slate-400">未登録</span>}</div>
                             <div className="text-blue-600 font-bold text-[10px]">通勤: ¥{emp.commuting_allowance?.toLocaleString() || 0}</div>
                           </td>
 
+                          {/* 📁 労務書面キャビネット ボタン */}
                           <td className="py-3.5 px-3 text-center">
-                            {isRetired ? (
-                              <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-200">
-                                退職済
-                              </span>
-                            ) : (
-                              <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 inline-flex items-center gap-0.5">
-                                <Check className="w-3 h-3" /> 在職中
-                              </span>
-                            )}
+                            <button
+                              onClick={() => setCabinetModal({
+                                isOpen: true,
+                                employee: emp,
+                                activeDoc: 'contract'
+                              })}
+                              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-2.5 py-1.5 rounded-xl border border-indigo-200 transition flex items-center gap-1 mx-auto cursor-pointer"
+                              title="労働条件通知書・通勤届・口座届をまとめて閲覧"
+                            >
+                              <FolderOpen className="w-3.5 h-3.5" />
+                              書面・証憑 (3)
+                            </button>
                           </td>
 
                           <td className="py-3.5 px-4 text-center">
                             <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                onClick={() => handleOpenContractPreview(emp)}
-                                className="bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs p-1.5 rounded-lg border border-blue-200 transition cursor-pointer"
-                                title="労働条件通知書・雇用契約書のA4出力"
-                              >
-                                <Printer className="w-3.5 h-3.5" />
-                              </button>
-
                               <button
                                 onClick={() => setEditModal({ isOpen: true, data: { ...emp } })}
                                 className="bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs p-1.5 rounded-lg border border-slate-200 transition cursor-pointer"
@@ -1101,7 +1081,7 @@ export default function OnboardingAdminDashboard() {
           </div>
         )}
 
-        {/* 2. 提出書類・申請審査ビュー */}
+        {/* 2. 提出書類審査ビュー */}
         {currentView === 'submissions' && (
           <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden animate-in fade-in duration-200">
             <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1153,7 +1133,6 @@ export default function OnboardingAdminDashboard() {
                           </span>
                         </div>
 
-                        {/* 申請内容の要約 */}
                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-700">
                           {sub.document_type === 'bank_passbook' && (
                             <>
@@ -1176,7 +1155,6 @@ export default function OnboardingAdminDashboard() {
                         </div>
                       </div>
 
-                      {/* 添付画像プレビュー ＆ 承認アクション */}
                       <div className="flex items-center gap-3">
                         {sub.attachment_data && (
                           <button
@@ -1217,218 +1195,134 @@ export default function OnboardingAdminDashboard() {
 
       </main>
 
-      {/* ➕ 管理者による手動代行入力モーダル */}
-      {proxyInputModal.isOpen && (
+      {/* 📁 労務書面キャビネット（証憑アーカイブ）モーダル */}
+      {cabinetModal.isOpen && cabinetModal.employee && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 my-8">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
-              <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
-                <Upload className="w-5 h-5 text-emerald-600" />
-                紙書類の手動代行登録（PC操作が苦手な従業員用）
-              </h3>
-              <button onClick={() => setProxyInputModal(prev => ({ ...prev, isOpen: false }))} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
+          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4 print:hidden">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <FolderOpen className="w-5 h-5 text-indigo-600" />
+                  労務書面キャビネット（{cabinetModal.employee.name} 殿）
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">入社時に締結した契約書および提出された通勤届・口座届のエビデンス原本</p>
+              </div>
+              <button onClick={() => setCabinetModal({ isOpen: false, employee: null, activeDoc: 'contract' })} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4 text-xs">
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">対象の従業員 <span className="text-rose-500">*</span></label>
-                <select
-                  value={proxyInputModal.selectedUserId}
-                  onChange={e => {
-                    const uId = e.target.value;
-                    const targetEmp = employees.find(emp => emp.user_id === uId);
-                    setProxyInputModal(prev => ({
-                      ...prev,
-                      selectedUserId: uId,
-                      bankName: targetEmp?.bank_name || '',
-                      branchName: targetEmp?.branch_name || '',
-                      accountNumber: targetEmp?.account_number || '',
-                      accountHolder: targetEmp?.account_holder || targetEmp?.name || '',
-                      commutingAmount: targetEmp?.commuting_allowance || 15000
-                    }));
-                  }}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                >
-                  <option value="">従業員を選択してください</option>
-                  {employees.filter(e => e.status !== 'retired').map(e => (
-                    <option key={e.user_id} value={e.user_id}>{e.name} ({e.department || '本社'})</option>
-                  ))}
-                </select>
-              </div>
+            {/* 書面タブ切り替え */}
+            <div className="flex items-center gap-2 mb-6 border-b border-slate-200 pb-3 print:hidden">
+              <button
+                onClick={() => setCabinetModal(prev => ({ ...prev, activeDoc: 'contract' }))}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  cabinetModal.activeDoc === 'contract' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <FileText className="w-4 h-4" />
+                1. 労働条件通知書 兼 雇用契約書
+              </button>
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">登録する書類種別</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setProxyInputModal(prev => ({ ...prev, docType: 'bank_passbook' }))}
-                    className={`py-2 px-3 rounded-xl font-bold border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                      proxyInputModal.docType === 'bank_passbook' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    通帳・口座情報
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProxyInputModal(prev => ({ ...prev, docType: 'commuting_pass' }))}
-                    className={`py-2 px-3 rounded-xl font-bold border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                      proxyInputModal.docType === 'commuting_pass' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600'
-                    }`}
-                  >
-                    <Train className="w-4 h-4" />
-                    通勤費・経路
-                  </button>
-                </div>
-              </div>
+              <button
+                onClick={() => setCabinetModal(prev => ({ ...prev, activeDoc: 'commuting' }))}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  cabinetModal.activeDoc === 'commuting' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <Train className="w-4 h-4" />
+                2. 通勤交通費 申請・承認書
+              </button>
 
-              {proxyInputModal.docType === 'bank_passbook' && (
-                <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      placeholder="銀行名"
-                      value={proxyInputModal.bankName}
-                      onChange={e => setProxyInputModal(prev => ({ ...prev, bankName: e.target.value }))}
-                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                    />
-                    <input
-                      type="text"
-                      placeholder="支店名"
-                      value={proxyInputModal.branchName}
-                      onChange={e => setProxyInputModal(prev => ({ ...prev, branchName: e.target.value }))}
-                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                    />
-                    <input
-                      type="text"
-                      placeholder="口座番号"
-                      value={proxyInputModal.accountNumber}
-                      onChange={e => setProxyInputModal(prev => ({ ...prev, accountNumber: e.target.value }))}
-                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                    />
-                    <input
-                      type="text"
-                      placeholder="名義人 (カナ)"
-                      value={proxyInputModal.accountHolder}
-                      onChange={e => setProxyInputModal(prev => ({ ...prev, accountHolder: e.target.value }))}
-                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                    />
-                  </div>
-                </div>
+              <button
+                onClick={() => setCabinetModal(prev => ({ ...prev, activeDoc: 'bank' }))}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  cabinetModal.activeDoc === 'bank' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <CreditCard className="w-4 h-4" />
+                3. 給与振込口座 登録届出書
+              </button>
+            </div>
+
+            {/* 書面本体 */}
+            <div className="border border-slate-200 rounded-2xl overflow-hidden p-6 bg-slate-50/50 print:border-none print:p-0 max-h-[65vh] overflow-y-auto">
+              {cabinetModal.activeDoc === 'contract' && (
+                <OfficialLaborContractDoc data={{
+                  companyName: tenantInfo?.name || '株式会社KAP',
+                  companyAddress: '東京都千代田区〇〇 1-2-3',
+                  representativeName: '代表取締役 〇〇 〇〇',
+                  employeeName: cabinetModal.employee.name,
+                  employeeAddress: '東京都新宿区〇〇 1-1',
+                  joinDate: cabinetModal.employee.join_date,
+                  contractType: cabinetModal.employee.contract_type || 'indefinite',
+                  trialPeriodMonths: cabinetModal.employee.trial_period_months ?? 3,
+                  workLocation: '本社 および 会社が指定する就業場所',
+                  jobDescription: `${cabinetModal.employee.department || '営業部'}における業務全般`,
+                  startTime: '09:00',
+                  endTime: '18:00',
+                  breakTimeMinutes: 60,
+                  overtimeWork: 'あり（業務の都合により命じる場合がある）',
+                  holidaysText: cabinetModal.employee.holidays_text || '完全週休2日制（土・日）、国民の祝日',
+                  paidLeaveGrantDays: 10,
+                  salaryType: (cabinetModal.employee.salary_type || (cabinetModal.employee.employment_type === 'part-time' ? 'hourly' : 'monthly')),
+                  baseSalary: cabinetModal.employee.base_salary,
+                  hourlyWage: cabinetModal.employee.hourly_wage,
+                  positionAllowance: cabinetModal.employee.position_allowance,
+                  qualificationAllowance: cabinetModal.employee.qualification_allowance || 0,
+                  housingAllowance: cabinetModal.employee.housing_allowance || 0,
+                  familyAllowance: cabinetModal.employee.family_allowance || 0,
+                  commutingAllowance: cabinetModal.employee.commuting_allowance,
+                  fixedOvertimeHours: 0,
+                  fixedOvertimeAllowance: 0,
+                  bonusPolicy: 'あり（会社の業績および本人の勤務成績を勘案して支給）',
+                  raisePolicy: 'あり（原則として年1回査定）',
+                  retirementAllowance: 'なし',
+                  healthInsuranceJoined: cabinetModal.employee.health_insurance_joined,
+                  pensionInsuranceJoined: cabinetModal.employee.pension_insurance_joined,
+                  employmentInsuranceJoined: cabinetModal.employee.employment_insurance_joined,
+                  workersCompJoined: true
+                }} />
               )}
 
-              {proxyInputModal.docType === 'commuting_pass' && (
-                <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      placeholder="出発駅 (自宅)"
-                      value={proxyInputModal.originStation}
-                      onChange={e => setProxyInputModal(prev => ({ ...prev, originStation: e.target.value }))}
-                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                    />
-                    <input
-                      type="text"
-                      placeholder="到着駅 (会社)"
-                      value={proxyInputModal.destinationStation}
-                      onChange={e => setProxyInputModal(prev => ({ ...prev, destinationStation: e.target.value }))}
-                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">1ヶ月定期代（円）</label>
-                    <input
-                      type="number"
-                      value={proxyInputModal.commutingAmount}
-                      onChange={e => setProxyInputModal(prev => ({ ...prev, commutingAmount: parseInt(e.target.value, 10) || 0 }))}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                    />
-                  </div>
-                </div>
+              {cabinetModal.activeDoc === 'commuting' && (
+                <OfficialCommutingPassDoc data={{
+                  companyName: tenantInfo?.name || '株式会社KAP',
+                  employeeName: cabinetModal.employee.name,
+                  department: cabinetModal.employee.department || '営業部',
+                  originStation: '自宅最寄駅',
+                  destinationStation: '会社最寄駅',
+                  viaRoute: '最短・経済的ルート',
+                  transportMode: 'train',
+                  oneMonthPassAmount: cabinetModal.employee.commuting_allowance,
+                  attachmentImage: submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'commuting_pass')?.attachment_data,
+                  appliedDate: cabinetModal.employee.join_date
+                }} />
               )}
 
-              {/* 書類写真のアップロード（自動軽量化） */}
-              <div className="bg-slate-50 p-3 rounded-2xl border-2 border-dashed border-slate-300 text-center space-y-1.5">
-                <label className="block cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={handleProxyFileUpload}
-                    className="hidden"
-                  />
-                  <div className="flex flex-col items-center justify-center gap-1 py-1">
-                    <Upload className="w-5 h-5 text-emerald-600" />
-                    <span className="text-xs font-bold text-slate-700">紙のコピー写真を撮影・選択</span>
-                    <span className="text-[9px] text-slate-400">※ 写真は自動で最適なサイズに軽量化（圧縮）されます</span>
-                  </div>
-                </label>
-
-                {proxyInputModal.attachmentData && (
-                  <div className="p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-left">
-                    <div className="flex items-center gap-2">
-                      <img src={proxyInputModal.attachmentData} alt="プレビュー" className="w-8 h-8 object-cover rounded border border-slate-200" />
-                      <div>
-                        <div className="text-[11px] font-bold text-slate-800">{proxyInputModal.attachmentFilename}</div>
-                        <div className="text-[9px] text-emerald-600 font-bold">{proxyInputModal.fileSizeInfo}</div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setProxyInputModal(prev => ({ ...prev, attachmentData: '', attachmentFilename: '', fileSizeInfo: '' }))}
-                      className="p-1 text-slate-400 hover:text-rose-600 rounded"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-              </div>
+              {cabinetModal.activeDoc === 'bank' && (
+                <OfficialBankPassbookDoc data={{
+                  companyName: tenantInfo?.name || '株式会社KAP',
+                  employeeName: cabinetModal.employee.name,
+                  department: cabinetModal.employee.department || '営業部',
+                  bankName: cabinetModal.employee.bank_name || '未登録',
+                  branchName: cabinetModal.employee.branch_name || '未登録',
+                  accountType: cabinetModal.employee.account_type || 'ordinary',
+                  accountNumber: cabinetModal.employee.account_number || '',
+                  accountHolder: cabinetModal.employee.account_holder || cabinetModal.employee.name,
+                  attachmentImage: submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'bank_passbook')?.attachment_data,
+                  appliedDate: cabinetModal.employee.join_date
+                }} />
+              )}
             </div>
 
-            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100">
-              <button
-                onClick={() => setProxyInputModal(prev => ({ ...prev, isOpen: false }))}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={handleSaveProxyInput}
-                disabled={isSaving || !proxyInputModal.selectedUserId}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-4 h-4" />}
-                代行登録しマスタへ即時反映
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 添付書類・写真プレビューモーダル */}
-      {attachmentPreviewModal.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-100 my-8">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
-              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                <Eye className="w-4 h-4 text-blue-600" />
-                {attachmentPreviewModal.title}
-              </h3>
-              <button onClick={() => setAttachmentPreviewModal({ isOpen: false, title: '', imageSrc: '' })} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="max-h-[70vh] overflow-y-auto flex items-center justify-center bg-slate-900 rounded-2xl p-4">
-              <img src={attachmentPreviewModal.imageSrc} alt="提出書類写真" className="max-w-full h-auto rounded-lg shadow-md" />
-            </div>
-
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={() => setAttachmentPreviewModal({ isOpen: false, title: '', imageSrc: '' })}
-                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
-              >
+            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100 print:hidden">
+              <button onClick={() => setCabinetModal({ isOpen: false, employee: null, activeDoc: 'contract' })} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer">
                 閉じる
+              </button>
+              <button onClick={() => window.print()} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                <Printer className="w-4 h-4" />
+                表示中の書面をA4印刷 / PDF保存
               </button>
             </div>
           </div>
@@ -1475,13 +1369,16 @@ export default function OnboardingAdminDashboard() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">所属部署</label>
-                    <input
-                      type="text"
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署（マスタ選択）</label>
+                    <select
                       value={editModal.data.department || ''}
                       onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, department: e.target.value } })}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                    />
+                    >
+                      {departments.map(d => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-1">雇用形態</label>
@@ -1502,6 +1399,18 @@ export default function OnboardingAdminDashboard() {
                       <option value="contract">契約社員（有期雇用）</option>
                     </select>
                   </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">休日規定（会社マスタ連動）</label>
+                  <input
+                    type="text"
+                    value={editModal.data.holidays_text || ''}
+                    onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, holidays_text: e.target.value } })}
+                    placeholder="例: 完全週休2日制（土日・祝日）、年末年始休暇"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">※ 全社マスタ設定（カレンダー）で設定した会社休日がデフォルト反映されます。</p>
                 </div>
               </div>
 
@@ -1769,14 +1678,16 @@ export default function OnboardingAdminDashboard() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署</label>
-                    <input
-                      type="text"
-                      placeholder="例: 店舗運営部 / 営業部"
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署（マスタ選択）</label>
+                    <select
                       value={wizardData.department}
                       onChange={e => setWizardData({ ...wizardData, department: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                    />
+                    >
+                      {departments.map(d => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>
@@ -1806,13 +1717,15 @@ export default function OnboardingAdminDashboard() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">休日規定</label>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">休日規定（会社マスタ連動）</label>
                   <input
                     type="text"
                     value={wizardData.holidays_text}
                     onChange={e => setWizardData({ ...wizardData, holidays_text: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold"
+                    placeholder="例: 完全週休2日制（土日・祝日）、年末年始休暇"
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">※ 全社マスタ設定（カレンダー）で設定した会社休日がデフォルト反映されます。</p>
                 </div>
               </div>
             )}
@@ -1879,8 +1792,8 @@ export default function OnboardingAdminDashboard() {
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-slate-700 pt-2 border-t border-emerald-200/60">
                     <div>氏名: <span className="font-bold">{wizardData.name}</span></div>
+                    <div>部署: <span className="font-bold">{wizardData.department}</span></div>
                     <div>入社日: <span className="font-bold">{wizardData.join_date}</span></div>
-                    <div>雇用形態: <span className="font-bold">{wizardData.employment_type === 'part-time' ? 'パート' : '正社員'}</span></div>
                     <div>給与: <span className="font-bold">{wizardData.salary_type === 'hourly' ? `時給 ¥${wizardData.hourly_wage}` : `月給 ¥${wizardData.base_salary.toLocaleString()}`}</span></div>
                   </div>
                 </div>
@@ -1933,31 +1846,217 @@ export default function OnboardingAdminDashboard() {
         </div>
       )}
 
-      {/* 労働条件通知書 プレビューモーダル */}
-      {contractPreviewModal.isOpen && contractPreviewModal.data && (
+      {/* ➕ 管理者による手動代行入力モーダル */}
+      {proxyInputModal.isOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-100 my-8">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4 print:hidden">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
               <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
-                <Printer className="w-5 h-5 text-blue-600" />
-                労働条件通知書 兼 雇用契約書（{contractPreviewModal.data.employeeName} 殿）
+                <Upload className="w-5 h-5 text-emerald-600" />
+                紙書類の手動代行登録（PC操作が苦手な従業員用）
               </h3>
-              <button onClick={() => setContractPreviewModal({ isOpen: false, data: null })} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
+              <button onClick={() => setProxyInputModal(prev => ({ ...prev, isOpen: false }))} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="border border-slate-200 rounded-2xl overflow-hidden p-6 bg-slate-50/50 print:border-none print:p-0">
-              <OfficialLaborContractDoc data={contractPreviewModal.data} />
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">対象の従業員 <span className="text-rose-500">*</span></label>
+                <select
+                  value={proxyInputModal.selectedUserId}
+                  onChange={e => {
+                    const uId = e.target.value;
+                    const targetEmp = employees.find(emp => emp.user_id === uId);
+                    setProxyInputModal(prev => ({
+                      ...prev,
+                      selectedUserId: uId,
+                      bankName: targetEmp?.bank_name || '',
+                      branchName: targetEmp?.branch_name || '',
+                      accountNumber: targetEmp?.account_number || '',
+                      accountHolder: targetEmp?.account_holder || targetEmp?.name || '',
+                      commutingAmount: targetEmp?.commuting_allowance || 15000
+                    }));
+                  }}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                >
+                  <option value="">従業員を選択してください</option>
+                  {employees.filter(e => e.status !== 'retired').map(e => (
+                    <option key={e.user_id} value={e.user_id}>{e.name} ({e.department || '営業部'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">登録する書類種別</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setProxyInputModal(prev => ({ ...prev, docType: 'bank_passbook' }))}
+                    className={`py-2 px-3 rounded-xl font-bold border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                      proxyInputModal.docType === 'bank_passbook' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <CreditCard className="w-4 h-4" />
+                    通帳・口座情報
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProxyInputModal(prev => ({ ...prev, docType: 'commuting_pass' }))}
+                    className={`py-2 px-3 rounded-xl font-bold border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                      proxyInputModal.docType === 'commuting_pass' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <Train className="w-4 h-4" />
+                    通勤費・経路
+                  </button>
+                </div>
+              </div>
+
+              {proxyInputModal.docType === 'bank_passbook' && (
+                <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="銀行名"
+                      value={proxyInputModal.bankName}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, bankName: e.target.value }))}
+                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                    <input
+                      type="text"
+                      placeholder="支店名"
+                      value={proxyInputModal.branchName}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, branchName: e.target.value }))}
+                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                    <input
+                      type="text"
+                      placeholder="口座番号"
+                      value={proxyInputModal.accountNumber}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, accountNumber: e.target.value }))}
+                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                    <input
+                      type="text"
+                      placeholder="名義人 (カナ)"
+                      value={proxyInputModal.accountHolder}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, accountHolder: e.target.value }))}
+                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {proxyInputModal.docType === 'commuting_pass' && (
+                <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      placeholder="出発駅 (自宅)"
+                      value={proxyInputModal.originStation}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, originStation: e.target.value }))}
+                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                    <input
+                      type="text"
+                      placeholder="到着駅 (会社)"
+                      value={proxyInputModal.destinationStation}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, destinationStation: e.target.value }))}
+                      className="bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">1ヶ月定期代（円）</label>
+                    <input
+                      type="number"
+                      value={proxyInputModal.commutingAmount}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, commutingAmount: parseInt(e.target.value, 10) || 0 }))}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-slate-50 p-3 rounded-2xl border-2 border-dashed border-slate-300 text-center space-y-1.5">
+                <label className="block cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleProxyFileUpload}
+                    className="hidden"
+                  />
+                  <div className="flex flex-col items-center justify-center gap-1 py-1">
+                    <Upload className="w-5 h-5 text-emerald-600" />
+                    <span className="text-xs font-bold text-slate-700">紙のコピー写真を撮影・選択</span>
+                    <span className="text-[9px] text-slate-400">※ 写真は自動で最適なサイズに軽量化（圧縮）されます</span>
+                  </div>
+                </label>
+
+                {proxyInputModal.attachmentData && (
+                  <div className="p-2 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-left">
+                    <div className="flex items-center gap-2">
+                      <img src={proxyInputModal.attachmentData} alt="プレビュー" className="w-8 h-8 object-cover rounded border border-slate-200" />
+                      <div>
+                        <div className="text-[11px] font-bold text-slate-800">{proxyInputModal.attachmentFilename}</div>
+                        <div className="text-[9px] text-emerald-600 font-bold">{proxyInputModal.fileSizeInfo}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setProxyInputModal(prev => ({ ...prev, attachmentData: '', attachmentFilename: '', fileSizeInfo: '' }))}
+                      className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100 print:hidden">
-              <button onClick={() => setContractPreviewModal({ isOpen: false, data: null })} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer">
-                閉じる
+            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setProxyInputModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                キャンセル
               </button>
-              <button onClick={() => window.print()} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer">
-                <Printer className="w-4 h-4" />
-                A4印刷 / PDF保存
+              <button
+                onClick={handleSaveProxyInput}
+                disabled={isSaving || !proxyInputModal.selectedUserId}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-4 h-4" />}
+                代行登録しマスタへ即時反映
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 添付書類・写真プレビューモーダル */}
+      {attachmentPreviewModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <Eye className="w-4 h-4 text-blue-600" />
+                {attachmentPreviewModal.title}
+              </h3>
+              <button onClick={() => setAttachmentPreviewModal({ isOpen: false, title: '', imageSrc: '' })} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto flex items-center justify-center bg-slate-900 rounded-2xl p-4">
+              <img src={attachmentPreviewModal.imageSrc} alt="提出書類写真" className="max-w-full h-auto rounded-lg shadow-md" />
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setAttachmentPreviewModal({ isOpen: false, title: '', imageSrc: '' })}
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
+              >
+                閉じる
               </button>
             </div>
           </div>
@@ -1987,7 +2086,7 @@ export default function OnboardingAdminDashboard() {
                 <div className="space-y-2">
                   <div className="bg-white p-3 rounded-xl border border-blue-100">
                     <div className="font-bold text-slate-800">① 労働条件通知書（雇用契約書）の交付【入社当日まで・必須】</div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">当システムの「契約書を出力」ボタンからA4印刷し、2部印刷して労使双方で署名捺印のうえ1部ずつ保管します。</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">当システムの「書面・証憑」ボタンからA4印刷し、2部印刷して労使双方で署名捺印のうえ1部ずつ保管します。</p>
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-blue-100">
                     <div className="font-bold text-slate-800">② 健康保険・厚生年金 資格取得届【事実発生から5日以内】</div>

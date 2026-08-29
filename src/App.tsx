@@ -18,6 +18,7 @@ import PayrollAdminDashboard from './pages/PayrollAdminDashboard';
 import PayrollUserDashboard from './pages/PayrollUserDashboard';
 import OnboardingAdminDashboard from './pages/OnboardingAdminDashboard';
 import EmployeeOnboardingSubmission from './pages/EmployeeOnboardingSubmission';
+import CompanySettingsDashboard from './pages/CompanySettingsDashboard';
 import TrialEnded from './pages/TrialEnded';
 import { supabase } from './lib/supabase';
 
@@ -178,6 +179,11 @@ function App() {
         <Route path="/onboarding/my/*" element={
           <PrivateRoute>
             <EmployeeOnboardingSubmission />
+          </PrivateRoute>
+        } />
+        <Route path="/settings/company/*" element={
+          <PrivateRoute requiredRole="admin">
+            <CompanySettingsDashboard />
           </PrivateRoute>
         } />
         {/* 旧URLや未定義ルートへのアクセス対策リダイレクト */}

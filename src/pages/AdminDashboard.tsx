@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock, Bot, BookOpen, Sparkles, Printer, ShieldCheck, DollarSign } from 'lucide-react';
+import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock, Bot, BookOpen, Sparkles, Printer, ShieldCheck, DollarSign, Building2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { PaidLeaveManagement } from '../components/PaidLeaveManagement';
@@ -705,7 +705,15 @@ ${tenantId || '（エラー：コード取得失敗）'}
             className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'settings' ? 'bg-blue-800' : 'hover:bg-blue-800'}`}
           >
             <Settings className="mr-3 h-5 w-5" />
-            会社・システム設定
+            勤怠・休暇ルール設定
+          </button>
+
+          <button 
+            onClick={() => navigate('/settings/company')}
+            className="flex items-center w-full p-2 rounded transition-colors whitespace-nowrap bg-indigo-800/80 hover:bg-indigo-700 text-indigo-100 font-bold mt-1 shadow-xs"
+          >
+            <Building2 className="mr-3 h-5 w-5 text-indigo-300" />
+            会社・全社マスタ設定
           </button>
 
           <button 

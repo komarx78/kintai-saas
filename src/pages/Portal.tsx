@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck } from 'lucide-react';
+import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2 } from 'lucide-react';
 
 type UserData = {
   name: string;
@@ -119,6 +119,16 @@ export default function Portal() {
         </div>
         
         <div className="flex items-center space-x-4">
+          {(role === 'admin' || role === 'superadmin') && (
+            <button
+              onClick={() => navigate('/settings/company')}
+              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-3.5 py-2 rounded-xl transition border border-indigo-200 flex items-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Building2 className="w-4 h-4" />
+              会社・全社マスタ設定
+            </button>
+          )}
+
           <div className="hidden sm:flex items-center space-x-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
             <span className="text-xs text-gray-500 font-medium">ログイン中:</span>
             <span className="text-xs font-bold text-gray-700">{name}</span>
