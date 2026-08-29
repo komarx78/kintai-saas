@@ -11,7 +11,7 @@ import {
   Printer, ArrowLeft, LogOut, Loader2, X, ChevronRight, 
   HelpCircle, Building2, Check, UserCheck, Edit3, UserMinus, 
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
-  FolderOpen, Settings, Clock
+  FolderOpen, Settings, Clock, Smartphone
 } from 'lucide-react';
 
 interface EmployeeOnboardingData {
@@ -961,13 +961,28 @@ export default function OnboardingAdminDashboard() {
             </button>
           </div>
 
-          <button
-            onClick={() => setProxyInputModal(prev => ({ ...prev, isOpen: true }))}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <Upload className="w-4 h-4" />
-            紙書類の手動代行登録（PC苦手な方用）
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/onboarding/welcome`;
+                navigator.clipboard.writeText(url);
+                alert(`📱 新入社員向け【スマホ入社手続きフォームURL】をコピーしました！\nLINEやメールで新入社員に共有してください。\n\nURL: ${url}`);
+              }}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              title="新入社員に送るスマホ手続きURLをコピー"
+            >
+              <Smartphone className="w-4 h-4" />
+              スマホ入社手続きURLをコピー
+            </button>
+
+            <button
+              onClick={() => setProxyInputModal(prev => ({ ...prev, isOpen: true }))}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Upload className="w-4 h-4" />
+              紙書類の手動代行登録（PC苦手な方用）
+            </button>
+          </div>
         </div>
 
         {/* 1. 従業員台帳ビュー */}

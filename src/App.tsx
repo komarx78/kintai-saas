@@ -18,6 +18,7 @@ import PayrollAdminDashboard from './pages/PayrollAdminDashboard';
 import PayrollUserDashboard from './pages/PayrollUserDashboard';
 import OnboardingAdminDashboard from './pages/OnboardingAdminDashboard';
 import EmployeeOnboardingSubmission from './pages/EmployeeOnboardingSubmission';
+import EmployeeOnboardingWelcome from './pages/EmployeeOnboardingWelcome';
 import CompanySettingsDashboard from './pages/CompanySettingsDashboard';
 import TrialEnded from './pages/TrialEnded';
 import { supabase } from './lib/supabase';
@@ -181,6 +182,7 @@ function App() {
             <EmployeeOnboardingSubmission />
           </PrivateRoute>
         } />
+        <Route path="/onboarding/welcome" element={<EmployeeOnboardingWelcome />} />
         <Route path="/settings/company/*" element={
           <PrivateRoute requiredRole="admin">
             <CompanySettingsDashboard />

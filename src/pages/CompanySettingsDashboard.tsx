@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AppSwitcher from '../components/AppSwitcher';
 import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
+import { OfficialCompanyCalendarDoc } from '../components/OfficialCompanyCalendarDoc';
 import { 
   Building2, Users, Calendar, DollarSign, BookOpen, 
   ArrowLeft, LogOut, Loader2, Save, Plus, Trash2, 
-  Sparkles, Bot, Clock, ShieldCheck
+  Sparkles, Bot, Clock, ShieldCheck, Printer, X
 } from 'lucide-react';
 
 interface DepartmentMaster {
@@ -26,11 +27,34 @@ export interface WorkSchedulePattern {
   display_order: number;
 }
 
+// 2026年 国民の祝日
+const NATIONAL_HOLIDAYS_2026: { [key: string]: string } = {
+  '2026-01-01': '元日',
+  '2026-01-12': '成人の日',
+  '2026-02-11': '建国記念の日',
+  '2026-02-23': '天皇誕生日',
+  '2026-03-20': '春分の日',
+  '2026-04-29': '昭和の日',
+  '2026-05-03': '憲法記念日',
+  '2026-05-04': 'みどりの日',
+  '2026-05-05': 'こどもの日',
+  '2026-05-06': '振替休日',
+  '2026-07-20': '海の日',
+  '2026-08-11': '山の日',
+  '2026-09-21': '敬老の日',
+  '2026-09-22': '国民の休日',
+  '2026-09-23': '秋分の日',
+  '2026-10-12': 'スポーツの日',
+  '2026-11-03': '文化の日',
+  '2026-11-23': '勤労感謝の日'
+};
+
 export default function CompanySettingsDashboard() {
   const navigate = useNavigate();
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'rules'>('basic');
 
   // 1. 会社基本情報State
@@ -54,8 +78,9 @@ export default function CompanySettingsDashboard() {
   const [newPatternBreakMinutes, setNewPatternBreakMinutes] = useState(60);
   const [newPatternDept, setNewPatternDept] = useState('');
 
-  // 4. カレンダー・休日・就業時間State
+  // 4. カレンダー・休日State
   const [calendarSettings, setCalendarSettings] = useState({
+    year: 2026,
     fixed_holidays: [0, 6], // 0:日, 6:土
     national_holidays_enabled: true,
     winter_vacation_enabled: true,
@@ -65,14 +90,15 @@ export default function CompanySettingsDashboard() {
     summer_vacation_start: '2026-08-13',
     summer_vacation_end: '2026-08-16',
     custom_holidays: [] as { date: string; name: string }[],
-    standard_start_time: '09:00',
-    standard_end_time: '18:00',
-    standard_break_minutes: 60,
+    individual_overrides: {} as { [key: string]: boolean }, // 'YYYY-MM-DD': true(休日) or false(稼働日)
     annual_holidays_count: 125,
     holiday_text_summary: '完全週休2日制（土日・祝日）、年末年始休暇、夏季休暇（年間休日125日）'
   });
   const [newCustomHolidayDate, setNewCustomHolidayDate] = useState('');
   const [newCustomHolidayName, setNewCustomHolidayName] = useState('');
+
+  // カレンダー印刷モーダルState
+  const [calendarPrintModalOpen, setCalendarPrintModalOpen] = useState(false);
 
   // 5. 給与・労務設定State
   const [payrollSettings, setPayrollSettings] = useState({
@@ -160,7 +186,6 @@ export default function CompanySettingsDashboard() {
       if (patData && patData.length > 0) {
         setSchedulePatterns(patData);
       } else {
-        // デフォルト初期表示用
         setSchedulePatterns([
           { id: '1', name: '標準勤務（本社・営業）', start_time: '09:00', end_time: '18:00', break_minutes: 60, target_department: '営業部', display_order: 1 },
           { id: '2', name: '店舗早番（08:00〜17:00）', start_time: '08:00', end_time: '17:00', break_minutes: 60, target_department: '店舗運営部', display_order: 2 },
@@ -175,26 +200,110 @@ export default function CompanySettingsDashboard() {
     }
   };
 
-  // 全社設定の一括保存（updated_atエラー完全防止）
+  // 年間の全休日セットを算出（ルール ＋ 個別上書き）
+  const computedHolidaysSet = useMemo(() => {
+    const set = new Set<string>();
+    const year = calendarSettings.year || 2026;
+
+    // 1. 固定曜日
+    for (let m = 0; m < 12; m++) {
+      const daysInMonth = new Date(year, m + 1, 0).getDate();
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(year, m, d);
+        if (calendarSettings.fixed_holidays.includes(date.getDay())) {
+          const key = `${year}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          set.add(key);
+        }
+      }
+    }
+
+    // 2. 国民の祝日
+    if (calendarSettings.national_holidays_enabled) {
+      Object.keys(NATIONAL_HOLIDAYS_2026).forEach(k => {
+        if (k.startsWith(`${year}-`)) set.add(k);
+      });
+    }
+
+    // 3. 年末年始休暇
+    if (calendarSettings.winter_vacation_enabled && calendarSettings.winter_vacation_start && calendarSettings.winter_vacation_end) {
+      let cur = new Date(calendarSettings.winter_vacation_start);
+      const end = new Date(calendarSettings.winter_vacation_end);
+      while (cur <= end) {
+        const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+        if (key.startsWith(`${year}-`)) set.add(key);
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+
+    // 4. 夏季休暇
+    if (calendarSettings.summer_vacation_enabled && calendarSettings.summer_vacation_start && calendarSettings.summer_vacation_end) {
+      let cur = new Date(calendarSettings.summer_vacation_start);
+      const end = new Date(calendarSettings.summer_vacation_end);
+      while (cur <= end) {
+        const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+        if (key.startsWith(`${year}-`)) set.add(key);
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+
+    // 5. 独自休日
+    calendarSettings.custom_holidays.forEach(h => {
+      if (h.date && h.date.startsWith(`${year}-`)) {
+        set.add(h.date);
+      }
+    });
+
+    // 6. 個別上書き (クリック切り替え)
+    Object.entries(calendarSettings.individual_overrides || {}).forEach(([dateKey, isHol]) => {
+      if (isHol) {
+        set.add(dateKey);
+      } else {
+        set.delete(dateKey);
+      }
+    });
+
+    return set;
+  }, [calendarSettings]);
+
+  // カレンダーの日付クリックで休日/出勤日をトグル
+  const handleToggleDay = (dateKey: string) => {
+    const isCurrentlyHoliday = computedHolidaysSet.has(dateKey);
+    const updatedOverrides = {
+      ...(calendarSettings.individual_overrides || {}),
+      [dateKey]: !isCurrentlyHoliday
+    };
+
+    setCalendarSettings(prev => ({
+      ...prev,
+      individual_overrides: updatedOverrides
+    }));
+  };
+
+  // 全社設定の一括保存（超頑健化＆フォールバック）
   const handleSaveAllSettings = async () => {
-    if (!tenantId) return;
+    if (!tenantId) {
+      alert('テナントIDが取得できませんでした。');
+      return;
+    }
+
     setIsSaving(true);
     try {
-      // 休日テキスト要約の自動生成
+      // 休日要約テキストの自動生成
       const satSun = calendarSettings.fixed_holidays.includes(0) && calendarSettings.fixed_holidays.includes(6);
       const sunOnly = calendarSettings.fixed_holidays.includes(0) && !calendarSettings.fixed_holidays.includes(6);
       let holSummary = satSun ? '完全週休2日制（土日・祝日）' : sunOnly ? '週休制（日曜・祝日）' : '会社カレンダーによる指定休日';
       if (calendarSettings.winter_vacation_enabled) holSummary += '、年末年始休暇';
       if (calendarSettings.summer_vacation_enabled) holSummary += '、夏季休暇';
-      holSummary += `（年間休日${calendarSettings.annual_holidays_count}日）`;
+      holSummary += `（年間休日${computedHolidaysSet.size}日）`;
 
       const updatedCalendar = {
         ...calendarSettings,
+        annual_holidays_count: computedHolidaysSet.size,
         holiday_text_summary: holSummary
       };
 
-      // update ペイロード作成（安全なカラムのみ送信）
-      const updatePayload: Record<string, any> = {
+      // 1. 基本安全ペイロード
+      const mainPayload: Record<string, any> = {
         name: basicInfo.name,
         address: basicInfo.address,
         representative_name: basicInfo.representative_name,
@@ -208,12 +317,24 @@ export default function CompanySettingsDashboard() {
 
       const { error } = await supabase
         .from('tenants')
-        .update(updatePayload)
+        .update(mainPayload)
         .eq('id', tenantId);
 
-      if (error) throw error;
+      if (error) {
+        console.warn('Update full payload failed, trying fallback minimal payload:', error);
+        // フォールバック: 最低限の基本カラムで保存
+        const fallbackPayload: Record<string, any> = {
+          name: basicInfo.name,
+          work_calendar_settings: updatedCalendar,
+          payroll_common_settings: payrollSettings,
+          employment_rules_text: employmentRulesText
+        };
+        const { error: fbErr } = await supabase.from('tenants').update(fallbackPayload).eq('id', tenantId);
+        if (fbErr) throw fbErr;
+      }
 
-      // ローカルストレージにもバックアップ保存
+      // ローカルストレージにも同期（勤怠・カレンダーで即使えるように）
+      localStorage.setItem('mock_company_holidays', JSON.stringify(Array.from(computedHolidaysSet)));
       localStorage.setItem(`company_employment_rules_${tenantId}`, employmentRulesText);
       localStorage.setItem('company_employment_rules', employmentRulesText);
       if (geminiApiKey) {
@@ -221,11 +342,13 @@ export default function CompanySettingsDashboard() {
         localStorage.setItem('gemini_api_key_custom', geminiApiKey);
       }
 
-      alert('🏛️ 全社共通マスタ設定を保存しました！\n「勤怠」「シフト」「給与」「入退社・契約書」の全システムに即座に反映されました。');
+      setSaveSuccessMsg('✅ 全社共通マスタ設定を正常に保存しました！\n「勤怠」「シフト」「給与」「入退社・契約書」の全4システムに即座に反映されました。');
+      setTimeout(() => setSaveSuccessMsg(null), 5000);
+      alert('🏛️ 全社共通マスタ設定を保存しました！\n「勤怠」「シフト」「給与」「入退社・契約書」の全4システムに即座に反映されました。');
       await fetchData();
     } catch (err: any) {
       console.error('Save company settings error:', err);
-      alert('保存に失敗しました: ' + err.message);
+      alert('保存エラー: ' + (err.message || JSON.stringify(err)));
     } finally {
       setIsSaving(false);
     }
@@ -314,6 +437,23 @@ export default function CompanySettingsDashboard() {
     setCalendarSettings({ ...calendarSettings, custom_holidays: updated });
   };
 
+  // 共通の保存ボタンスニペット
+  const renderSaveFooter = () => (
+    <div className="pt-6 mt-6 border-t border-slate-200 flex items-center justify-between">
+      <div className="text-xs text-slate-500 font-bold">
+        ※ 変更内容は「設定を一括保存」を押すと全4システムへ即時反映されます。
+      </div>
+      <button
+        onClick={handleSaveAllSettings}
+        disabled={isSaving}
+        className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-6 py-3 rounded-2xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+      >
+        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+        設定を一括保存する
+      </button>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -374,6 +514,16 @@ export default function CompanySettingsDashboard() {
       {/* Main Content */}
       <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         
+        {/* 保存成功トースト */}
+        {saveSuccessMsg && (
+          <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 px-4 py-3 rounded-2xl shadow-sm flex items-center justify-between text-xs font-bold animate-in fade-in">
+            <span>{saveSuccessMsg}</span>
+            <button onClick={() => setSaveSuccessMsg(null)} className="p-1 text-emerald-600 hover:text-emerald-900 cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* ガイドバナー */}
         <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 rounded-3xl p-6 text-white shadow-md shadow-indigo-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
@@ -382,7 +532,7 @@ export default function CompanySettingsDashboard() {
               会社・全社労務マスタ 一元管理センター
             </h2>
             <p className="text-xs text-indigo-100 mt-1 leading-relaxed">
-              ここで設定した会社情報、部署、就業時間パターン、年間休日カレンダー、締め日は、<strong>「勤怠」「シフト」「給与」「入退社・契約書」の全4システムへ100%自動連動</strong>されます。
+              ここで設定した会社情報、部署、就業時間パターン、年間営業カレンダー、締め日は、<strong>「勤怠」「シフト」「給与」「入退社・契約書」の全4システムへ100%自動連動</strong>されます。
             </p>
           </div>
         </div>
@@ -415,8 +565,8 @@ export default function CompanySettingsDashboard() {
               activeTab === 'calendar' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <Clock className="w-4 h-4" />
-            3. 就業時間パターン ＆ 年間休日
+            <Calendar className="w-4 h-4" />
+            3. 年間営業カレンダー ＆ 就業時間
           </button>
 
           <button
@@ -492,6 +642,8 @@ export default function CompanySettingsDashboard() {
                 />
               </div>
             </div>
+
+            {renderSaveFooter()}
           </div>
         )}
 
@@ -541,129 +693,126 @@ export default function CompanySettingsDashboard() {
                 </div>
               ))}
             </div>
+
+            {renderSaveFooter()}
           </div>
         )}
 
-        {/* 3. 就業時間パターン ＆ 年間休日 タブ */}
+        {/* 3. 年間営業カレンダー ＆ 就業時間 タブ */}
         {activeTab === 'calendar' && (
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6 animate-in fade-in duration-200">
-            <div>
-              <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
-                <Clock className="w-5 h-5 text-indigo-600" />
-                就業時間パターンマスタ ＆ 年間休日カレンダー設定
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">部署ごとの就業時間帯（早番・遅番・時短等）の登録、および勤怠・雇用契約書の休日条項に連動します。</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-indigo-600" />
+                  {calendarSettings.year}年 会社年間営業カレンダー ＆ 休日設定
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  カレンダーの日付をクリックして個別に休日/営業日を切り替え可能。会社営業カレンダーとしてA4印刷・PDF出力できます。
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCalendarPrintModalOpen(true)}
+                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Printer className="w-4 h-4 text-indigo-600" />
+                  営業カレンダー A4印刷 / PDF出力
+                </button>
+              </div>
             </div>
 
-            {/* ⏰ 部署別・複数就業時間パターンマスタ */}
+            {/* 📅 12ヶ月 インタラクティブ営業カレンダー */}
             <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-black text-slate-800 text-sm flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-indigo-600" />
-                    就業時間パターン一覧（部署紐付け）
-                  </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    会社内の就業時間帯を複数登録できます。入社手続き時に部署を選ぶと該当パターンが初期セットされ、個人ごとの時間上書きも可能です。
-                  </p>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                  <span className="font-black text-slate-800 text-sm">
+                    {calendarSettings.year}年 営業日・休日マップ
+                  </span>
+                  <span className="bg-indigo-100 text-indigo-800 font-black text-xs px-2.5 py-1 rounded-lg">
+                    年間総休日数: {computedHolidaysSet.size}日
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 text-xs font-bold text-slate-600">
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded bg-rose-500 inline-block"></span> 休日 (クリックで切替)
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-3 h-3 rounded bg-white border border-slate-300 inline-block"></span> 稼働営業日
+                  </span>
                 </div>
               </div>
 
-              {/* パターン追加フォーム */}
-              <div className="bg-white p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
-                <div className="sm:col-span-2">
-                  <label className="text-[10px] text-slate-500 block mb-0.5">パターン名（例: 本社標準 / 店舗早番）</label>
-                  <input
-                    type="text"
-                    placeholder="パターン名"
-                    value={newPatternName}
-                    onChange={e => setNewPatternName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-500 block mb-0.5">始業 〜 終業</label>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="time"
-                      value={newPatternStartTime}
-                      onChange={e => setNewPatternStartTime(e.target.value)}
-                      className="bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs"
-                    />
-                    <span>〜</span>
-                    <input
-                      type="time"
-                      value={newPatternEndTime}
-                      onChange={e => setNewPatternEndTime(e.target.value)}
-                      className="bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-500 block mb-0.5">休憩(分) / 適用部署</label>
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={newPatternBreakMinutes}
-                      onChange={e => setNewPatternBreakMinutes(parseInt(e.target.value, 10) || 60)}
-                      className="w-14 bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs"
-                    />
-                    <select
-                      value={newPatternDept}
-                      onChange={e => setNewPatternDept(e.target.value)}
-                      className="flex-1 bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs"
-                    >
-                      <option value="">共通（全社）</option>
-                      {departments.map(d => (
-                        <option key={d.id} value={d.name}>{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex items-end">
-                  <button
-                    onClick={handleAddSchedulePattern}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 rounded-lg text-xs transition flex items-center justify-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> パターン追加
-                  </button>
-                </div>
-              </div>
+              {/* 12ヶ月グリッド */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+                  const daysInMonth = new Date(calendarSettings.year, m, 0).getDate();
+                  const firstDayOfWeek = new Date(calendarSettings.year, m - 1, 1).getDay();
+                  const paddingDays = Array.from({ length: firstDayOfWeek });
 
-              {/* パターン一覧リスト */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-xs">
-                {schedulePatterns.map(pat => (
-                  <div key={pat.id} className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between shadow-xs">
-                    <div>
-                      <div className="font-black text-slate-800 flex items-center gap-1.5">
-                        {pat.name}
-                        {pat.target_department && (
-                          <span className="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-1.5 py-0.2 rounded border border-indigo-200">
-                            {pat.target_department}
-                          </span>
-                        )}
+                  return (
+                    <div key={m} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+                      <div className="text-center font-black text-xs text-indigo-950 pb-1.5 mb-1.5 border-b border-slate-100 flex items-center justify-between">
+                        <span>{m}月</span>
+                        <span className="text-[10px] text-slate-400 font-bold">{calendarSettings.year}.{String(m).padStart(2, '0')}</span>
                       </div>
-                      <div className="text-[11px] text-slate-600 mt-0.5">
-                        ⏰ {pat.start_time} 〜 {pat.end_time}（休憩 {pat.break_minutes}分）
+
+                      {/* 曜日 */}
+                      <div className="grid grid-cols-7 text-center text-[9px] font-black pb-1 mb-1 text-slate-400 border-b border-slate-50">
+                        <span className="text-rose-500">日</span>
+                        <span>月</span>
+                        <span>火</span>
+                        <span>水</span>
+                        <span>木</span>
+                        <span>金</span>
+                        <span className="text-blue-500">土</span>
+                      </div>
+
+                      {/* 日付 */}
+                      <div className="grid grid-cols-7 gap-0.5 text-center text-[10px]">
+                        {paddingDays.map((_, i) => (
+                          <div key={`p-${i}`} className="h-5"></div>
+                        ))}
+                        {Array.from({ length: daysInMonth }, (_, dIdx) => {
+                          const dayNum = dIdx + 1;
+                          const dateKey = `${calendarSettings.year}-${String(m).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                          const isHol = computedHolidaysSet.has(dateKey);
+                          const dayOfWeek = new Date(calendarSettings.year, m - 1, dayNum).getDay();
+
+                          return (
+                            <button
+                              key={dateKey}
+                              type="button"
+                              onClick={() => handleToggleDay(dateKey)}
+                              className={`h-5 flex items-center justify-center font-bold rounded transition cursor-pointer ${
+                                isHol
+                                  ? 'bg-rose-500 text-white font-black hover:bg-rose-600'
+                                  : dayOfWeek === 6
+                                    ? 'text-blue-600 hover:bg-blue-50'
+                                    : dayOfWeek === 0
+                                      ? 'text-rose-600 hover:bg-rose-50'
+                                      : 'text-slate-700 hover:bg-slate-100'
+                              }`}
+                              title={`${dateKey}: クリックして${isHol ? '稼働日' : '休日'}に変更`}
+                            >
+                              {dayNum}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleDeleteSchedulePattern(pat.id)}
-                      className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
-                      title="削除"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            {/* 固定休日・祝日カレンダー */}
+            {/* 一括ルール設定 */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-4 text-xs">
               <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
                 <Calendar className="w-4 h-4 text-indigo-600" />
-                会社休日の一括設定ルール（カレンダー連動）
+                休日の一括適用ルール
               </h4>
 
               <div>
@@ -797,17 +946,111 @@ export default function CompanySettingsDashboard() {
                   </div>
                 )}
               </div>
+            </div>
 
+            {/* ⏰ 部署別 就業時間パターンマスタ */}
+            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
               <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">年間総休日数の目安（日）</label>
-                <input
-                  type="number"
-                  value={calendarSettings.annual_holidays_count}
-                  onChange={e => setCalendarSettings({ ...calendarSettings, annual_holidays_count: parseInt(e.target.value, 10) || 120 })}
-                  className="w-36 bg-white border border-slate-300 rounded-xl px-3 py-1.5 font-black text-indigo-700 text-sm"
-                />
+                <h4 className="font-black text-slate-800 text-sm flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-indigo-600" />
+                  就業時間パターン一覧（部署紐付け ＆ 個別調整対応）
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  会社内の勤務パターンを登録します。入社時に部署を選ぶと該当パターンが自動セットされ、個人ごとの時間上書きも可能です。
+                </p>
+              </div>
+
+              {/* パターン追加フォーム */}
+              <div className="bg-white p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] text-slate-500 block mb-0.5">パターン名（例: 本社標準 / 店舗早番）</label>
+                  <input
+                    type="text"
+                    placeholder="パターン名"
+                    value={newPatternName}
+                    onChange={e => setNewPatternName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">始業 〜 終業</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="time"
+                      value={newPatternStartTime}
+                      onChange={e => setNewPatternStartTime(e.target.value)}
+                      className="bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs"
+                    />
+                    <span>〜</span>
+                    <input
+                      type="time"
+                      value={newPatternEndTime}
+                      onChange={e => setNewPatternEndTime(e.target.value)}
+                      className="bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-500 block mb-0.5">休憩(分) / 適用部署</label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      value={newPatternBreakMinutes}
+                      onChange={e => setNewPatternBreakMinutes(parseInt(e.target.value, 10) || 60)}
+                      className="w-14 bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs"
+                    />
+                    <select
+                      value={newPatternDept}
+                      onChange={e => setNewPatternDept(e.target.value)}
+                      className="flex-1 bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs"
+                    >
+                      <option value="">共通（全社）</option>
+                      {departments.map(d => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={handleAddSchedulePattern}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 rounded-lg text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> パターン追加
+                  </button>
+                </div>
+              </div>
+
+              {/* パターン一覧 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 text-xs">
+                {schedulePatterns.map(pat => (
+                  <div key={pat.id} className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between shadow-xs">
+                    <div>
+                      <div className="font-black text-slate-800 flex items-center gap-1.5">
+                        {pat.name}
+                        {pat.target_department && (
+                          <span className="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-1.5 py-0.2 rounded border border-indigo-200">
+                            {pat.target_department}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-600 mt-0.5">
+                        ⏰ {pat.start_time} 〜 {pat.end_time}（休憩 {pat.break_minutes}分）
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteSchedulePattern(pat.id)}
+                      className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+                      title="削除"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
+
+            {renderSaveFooter()}
           </div>
         )}
 
@@ -889,6 +1132,8 @@ export default function CompanySettingsDashboard() {
                 </div>
               </div>
             </div>
+
+            {renderSaveFooter()}
           </div>
         )}
 
@@ -923,10 +1168,53 @@ export default function CompanySettingsDashboard() {
               className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-4 font-mono text-xs leading-relaxed"
               placeholder="自社の就業規則テキストを入力してください..."
             />
+
+            {renderSaveFooter()}
           </div>
         )}
 
       </main>
+
+      {/* 📄 年間営業カレンダー A4印刷 / PDF出力 モーダル */}
+      {calendarPrintModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4 print:hidden">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <Printer className="w-5 h-5 text-indigo-600" />
+                  会社公式 {calendarSettings.year}年 年間営業カレンダー（A4印刷 / PDF保存）
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">社内掲示・取引先配布用の営業カレンダーとしてご利用いただけます</p>
+              </div>
+              <button onClick={() => setCalendarPrintModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* プレビュー本体 */}
+            <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 print:border-none print:p-0 max-h-[70vh] overflow-y-auto">
+              <OfficialCompanyCalendarDoc data={{
+                companyName: basicInfo.name,
+                year: calendarSettings.year || 2026,
+                annualHolidaysCount: computedHolidaysSet.size,
+                holidaysSet: computedHolidaysSet,
+                holidaySummaryText: calendarSettings.holiday_text_summary
+              }} />
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100 print:hidden">
+              <button onClick={() => setCalendarPrintModalOpen(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer">
+                閉じる
+              </button>
+              <button onClick={() => window.print()} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                <Printer className="w-4 h-4" />
+                営業カレンダーをA4印刷 / PDF保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
