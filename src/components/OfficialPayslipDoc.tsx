@@ -92,6 +92,7 @@ export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip,
   if (payslip.paid_leave_days && payslip.paid_leave_days > 0) attendanceList.push({ label: '有休取得日数', value: `${payslip.paid_leave_days}`, unit: '日' });
 
   // 2. 支給項目
+  // 2. 支給項目
   const earningsList: { label: string; amount: number }[] = [];
   if (payslip.executive_salary && payslip.executive_salary > 0) {
     earningsList.push({ label: '役員報酬', amount: payslip.executive_salary });
@@ -99,13 +100,19 @@ export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip,
     earningsList.push({ label: '基本給', amount: payslip.base_salary });
   }
   if (payslip.position_allowance && payslip.position_allowance > 0) earningsList.push({ label: '役職手当', amount: payslip.position_allowance });
-  if (payslip.overtime_allowance && payslip.overtime_allowance > 0) earningsList.push({ label: '残業手当', amount: payslip.overtime_allowance });
+  if ((payslip as any).qualification_allowance && (payslip as any).qualification_allowance > 0) earningsList.push({ label: '資格・職能手当', amount: (payslip as any).qualification_allowance });
+  if (payslip.overtime_allowance && payslip.overtime_allowance > 0) earningsList.push({ label: '残業割増手当', amount: payslip.overtime_allowance });
+  if ((payslip as any).midnight_allowance && (payslip as any).midnight_allowance > 0) earningsList.push({ label: '深夜割増手当', amount: (payslip as any).midnight_allowance });
+  if ((payslip as any).holiday_allowance && (payslip as any).holiday_allowance > 0) earningsList.push({ label: '休日割増手当', amount: (payslip as any).holiday_allowance });
   if (payslip.commuting_allowance && payslip.commuting_allowance > 0) earningsList.push({ label: '通勤手当', amount: payslip.commuting_allowance });
   if (payslip.housing_allowance && payslip.housing_allowance > 0) earningsList.push({ label: '住宅手当', amount: payslip.housing_allowance });
+  if ((payslip as any).family_allowance && (payslip as any).family_allowance > 0) earningsList.push({ label: '家族・扶養手当', amount: (payslip as any).family_allowance });
   if (payslip.special_allowance && payslip.special_allowance > 0) earningsList.push({ label: '特別手当', amount: payslip.special_allowance });
+  if ((payslip as any).absence_deduction && (payslip as any).absence_deduction > 0) earningsList.push({ label: '欠勤控除', amount: -(payslip as any).absence_deduction });
+  if ((payslip as any).late_early_deduction && (payslip as any).late_early_deduction > 0) earningsList.push({ label: '遅刻早退控除', amount: -(payslip as any).late_early_deduction });
 
   if (earningsList.length === 0) {
-    earningsList.push({ label: '役員報酬', amount: payslip.total_earnings || 169000 });
+    earningsList.push({ label: '基本給', amount: payslip.total_earnings || 250000 });
   }
 
   // 3. 控除項目
