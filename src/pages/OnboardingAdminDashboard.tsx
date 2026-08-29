@@ -1235,18 +1235,83 @@ export default function OnboardingAdminDashboard() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        {/* 📄 令和8年分 扶養控除等申告書のプレビュー・印刷ボタン */}
+                        {sub.document_type === 'dependents_form' && (
+                          <button
+                            onClick={() => {
+                              const emp = employees.find(e => e.user_id === sub.user_id) || {
+                                user_id: sub.user_id,
+                                name: sub.user_name,
+                                role: 'employee',
+                                status: 'active',
+                                join_date: sub.created_at?.split('T')[0] || '2026-04-01',
+                                employment_type: 'full-time',
+                                department: '本社',
+                                base_salary: 250000,
+                                hourly_wage: 1200,
+                                commuting_allowance: 12000,
+                                health_insurance_joined: true,
+                                pension_insurance_joined: true,
+                                employment_insurance_joined: true
+                              };
+                              setCabinetModal({
+                                isOpen: true,
+                                employee: emp as any,
+                                activeDoc: 'tax'
+                              });
+                            }}
+                            className="bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-black text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                          >
+                            <FileText className="w-4 h-4 text-amber-600" />
+                            令和8年分 申告書を表示 / 印刷
+                          </button>
+                        )}
+
+                        {/* 🚆 通勤申請書のプレビュー・印刷ボタン */}
+                        {sub.document_type === 'commuting_pass' && (
+                          <button
+                            onClick={() => {
+                              const emp = employees.find(e => e.user_id === sub.user_id) || {
+                                user_id: sub.user_id,
+                                name: sub.user_name,
+                                role: 'employee',
+                                status: 'active',
+                                join_date: sub.created_at?.split('T')[0] || '2026-04-01',
+                                employment_type: 'full-time',
+                                department: '本社',
+                                base_salary: 250000,
+                                hourly_wage: 1200,
+                                commuting_allowance: sub.data?.one_month_pass_amount || 12000,
+                                health_insurance_joined: true,
+                                pension_insurance_joined: true,
+                                employment_insurance_joined: true
+                              };
+                              setCabinetModal({
+                                isOpen: true,
+                                employee: emp as any,
+                                activeDoc: 'commuting'
+                              });
+                            }}
+                            className="bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 font-bold text-xs px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                          >
+                            <Train className="w-4 h-4 text-blue-600" />
+                            通勤申請書を表示 / 印刷
+                          </button>
+                        )}
+
+                        {/* 📷 提出写真・証憑原本の確認ボタン */}
                         {sub.attachment_data && (
                           <button
                             onClick={() => setAttachmentPreviewModal({
                               isOpen: true,
-                              title: `${sub.user_name} 殿の添付書類 (${sub.title})`,
+                              title: `${sub.user_name} 殿の提出写真 (${sub.title})`,
                               imageSrc: sub.attachment_data!
                             })}
                             className="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
                           >
                             <Eye className="w-4 h-4 text-blue-600" />
-                            添付写真を確認
+                            提出写真原本を確認
                           </button>
                         )}
 
@@ -1254,7 +1319,7 @@ export default function OnboardingAdminDashboard() {
                           <button
                             onClick={() => handleApproveSubmission(sub)}
                             disabled={isSaving}
-                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                           >
                             {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-4 h-4" />}
                             承認してマスタ反映

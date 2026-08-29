@@ -8,9 +8,14 @@ import {
   getTaxFreeCarAllowance 
 } from '../lib/commutingCalculator';
 import { 
+  parseResidentCertificateImage, 
+  parseBankPassbookImage 
+} from '../lib/geminiOcr';
+import { 
   UserCheck, CreditCard, Train, ShieldCheck, 
   Upload, Trash2, CheckCircle2, ChevronRight, ChevronLeft, 
-  Loader2, Home, Lock, Plus, FileText, Sparkles, MapPin, Check
+  Loader2, Home, Lock, Plus, FileText, Sparkles, MapPin, Check,
+  Bot
 } from 'lucide-react';
 
 interface DependentItem {
@@ -29,6 +34,8 @@ export default function EmployeeOnboardingWelcome() {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [isOcrProcessing, setIsOcrProcessing] = useState(false);
+  const [ocrSuccessMsg, setOcrSuccessMsg] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
@@ -66,7 +73,8 @@ export default function EmployeeOnboardingWelcome() {
     passPhoto: '',
     passFileName: '',
     passSizeInfo: '',
-    isAutoCalculated: false
+    isAutoCalculated: false,
+    routeDetailNote: ''
   });
 
   // 3. 給与振込口座情報
@@ -147,7 +155,7 @@ export default function EmployeeOnboardingWelcome() {
   // 🤖 電車・バスの定期代・路線を自動計算
   const handleAutoCalculateTrainRoute = () => {
     if (!commutingData.originStation.trim() || !commutingData.destinationStation.trim()) {
-      alert('出発駅と到着駅を入力してください。');
+      alert('乗車駅/バス停 と 降車駅を入力してください。');
       return;
     }
     const result = estimateTrainRoute(commutingData.originStation, commutingData.destinationStation);
@@ -157,7 +165,8 @@ export default function EmployeeOnboardingWelcome() {
       oneWayFare: result.oneWayFare,
       oneMonthPassAmount: result.oneMonthPassAmount,
       sixMonthPassAmount: result.sixMonthPassAmount,
-      isAutoCalculated: true
+      isAutoCalculated: true,
+      routeDetailNote: result.transportType === 'bus' ? '※ 路線バス運賃・定期代を反映' : '※ 電車連絡ルート定期代を反映'
     }));
     alert(`✨ 経路・定期代を自動算出しました！\n利用路線: ${result.transitLines}\n片道運賃: ¥${result.oneWayFare.toLocaleString()}\n1ヶ月定期代: ¥${result.oneMonthPassAmount.toLocaleString()}`);
   };
@@ -177,12 +186,13 @@ export default function EmployeeOnboardingWelcome() {
       ...prev,
       carDistanceKm: result.distanceKm,
       oneMonthPassAmount: allowance,
-      isAutoCalculated: true
+      isAutoCalculated: true,
+      routeDetailNote: result.detail
     }));
-    alert(`🗺️ 住所から通勤距離を自動計算しました！\n片道通勤距離: ${result.distanceKm} km\n国税庁基準マイカー手当: ¥${allowance.toLocaleString()} /月`);
+    alert(`🗺️ 住所から通勤距離を自動計算しました！\n${result.detail}\n国税庁基準マイカー手当: ¥${allowance.toLocaleString()} /月`);
   };
 
-  // 写真のスマホ撮影・圧縮アップロード汎用ハンドラ
+  // 写真のスマホ撮影・圧縮アップロード ＆ AI自動読み取り（OCR）
   const handlePhotoUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     field: string
@@ -203,6 +213,25 @@ export default function EmployeeOnboardingWelcome() {
           residentCertificateFileName: compressed.fileName,
           residentCertificateSizeInfo: sizeStr
         }));
+
+        // 🤖 住民票のAI自動読み取りを実行
+        setIsOcrProcessing(true);
+        try {
+          const parsed = await parseResidentCertificateImage(compressed.base64);
+          setBasicData(prev => ({
+            ...prev,
+            name: prev.name || parsed.name,
+            nameKana: prev.nameKana || parsed.nameKana,
+            birthDate: parsed.birthDate,
+            address: parsed.address,
+            householderName: parsed.householderName,
+            householderRelation: parsed.householderRelation
+          }));
+          setOcrSuccessMsg('🤖 住民票から氏名・住所・生年月日・世帯主を自動入力しました！');
+          setTimeout(() => setOcrSuccessMsg(null), 4000);
+        } finally {
+          setIsOcrProcessing(false);
+        }
       } else if (field === 'passbook') {
         setBankData(prev => ({
           ...prev,
@@ -210,6 +239,24 @@ export default function EmployeeOnboardingWelcome() {
           passbookFileName: compressed.fileName,
           passbookSizeInfo: sizeStr
         }));
+
+        // 🤖 通帳のAI自動読み取りを実行
+        setIsOcrProcessing(true);
+        try {
+          const parsed = await parseBankPassbookImage(compressed.base64);
+          setBankData(prev => ({
+            ...prev,
+            bankName: parsed.bankName,
+            branchName: parsed.branchName,
+            accountType: parsed.accountType,
+            accountNumber: parsed.accountNumber,
+            accountHolder: parsed.accountHolder
+          }));
+          setOcrSuccessMsg('🤖 通帳写真から銀行名・支店名・口座番号・名義人を自動入力しました！');
+          setTimeout(() => setOcrSuccessMsg(null), 4000);
+        } finally {
+          setIsOcrProcessing(false);
+        }
       } else if (field === 'pass') {
         setCommutingData(prev => ({
           ...prev,
@@ -305,7 +352,7 @@ export default function EmployeeOnboardingWelcome() {
       }
 
       // 2. 通勤交通費 支給申請書の送信
-      if (commutingData.originStation || commutingData.transportMode === 'car_bike') {
+      if (commutingData.originStation || commutingData.transportMode === 'car_bike' || commutingData.transportMode === 'walk_bicycle') {
         await supabase.from('employee_document_submissions').insert({
           tenant_id: effectiveTenantId,
           user_id: userId,
@@ -319,11 +366,12 @@ export default function EmployeeOnboardingWelcome() {
             destination_station: commutingData.destinationStation,
             transit_lines: commutingData.transitLines,
             one_way_fare: commutingData.oneWayFare,
-            one_month_pass_amount: commutingData.oneMonthPassAmount,
+            one_month_pass_amount: commutingData.transportMode === 'walk_bicycle' ? 0 : commutingData.oneMonthPassAmount,
             six_month_pass_amount: commutingData.sixMonthPassAmount,
-            car_distance_km: commutingData.carDistanceKm
+            car_distance_km: commutingData.carDistanceKm,
+            route_detail_note: commutingData.routeDetailNote
           },
-          attachment_data: commutingData.passPhoto || null,
+          attachment_data: commutingData.transportMode === 'walk_bicycle' ? null : (commutingData.passPhoto || null),
           attachment_filename: commutingData.passFileName || '',
           status: 'pending'
         });
@@ -479,10 +527,26 @@ export default function EmployeeOnboardingWelcome() {
         </div>
       </div>
 
+      {/* OCR解析中ローディング表示 */}
+      {isOcrProcessing && (
+        <div className="bg-indigo-600 text-white text-xs font-bold px-4 py-2 flex items-center justify-center gap-2 animate-pulse">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          🤖 AIが写真から文字を自動解析・入力中...
+        </div>
+      )}
+
+      {/* OCR成功トースト */}
+      {ocrSuccessMsg && (
+        <div className="bg-emerald-600 text-white text-xs font-bold px-4 py-2 flex items-center justify-center gap-2 animate-in fade-in">
+          <Bot className="w-4 h-4" />
+          {ocrSuccessMsg}
+        </div>
+      )}
+
       {/* フォーム本体 */}
       <main className="flex-1 max-w-lg w-full mx-auto p-4 space-y-4">
         
-        {/* Step 1: 基本情報 ＆ 住民票の添付 */}
+        {/* Step 1: 基本情報 ＆ 住民票の添付（AI自動入力対応） */}
         {currentStep === 1 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
@@ -490,7 +554,42 @@ export default function EmployeeOnboardingWelcome() {
                 <Home className="w-4 h-4 text-indigo-400" />
                 1. あなたの基本情報 ＆ 住民票添付
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">雇用契約書および社会保険の公的登録に使用いたします。</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">住民票の写真を添付すると、氏名や住所が自動入力されます。</p>
+            </div>
+
+            {/* 🏠 住民票の写し 添付枠（AI自動読み取り機能付き） */}
+            <div className="bg-gradient-to-br from-indigo-950/60 to-slate-900 p-4 rounded-2xl border-2 border-dashed border-indigo-500/40 text-center space-y-2">
+              <label className="block cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={e => handlePhotoUpload(e, 'resident')}
+                  className="hidden"
+                />
+                <div className="flex flex-col items-center justify-center gap-1.5 py-1">
+                  <div className="w-10 h-10 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shadow-inner">
+                    <Sparkles className="w-5 h-5 text-indigo-300" />
+                  </div>
+                  <span className="text-xs font-black text-white flex items-center gap-1">
+                    📷 住民票の写しを撮影 ➔ AIで自動入力
+                  </span>
+                  <span className="text-[10px] text-indigo-300">
+                    ※ 写真を撮るだけで氏名・住所・生年月日・世帯主が自動でセットされます
+                  </span>
+                </div>
+              </label>
+
+              {basicData.residentCertificatePhoto && (
+                <div className="p-2 bg-slate-900 rounded-xl border border-indigo-500/40 flex items-center justify-between text-left">
+                  <span className="text-[11px] font-bold text-indigo-400">📷 住民票の写真を添付・解析済</span>
+                  <button
+                    onClick={() => setBasicData({ ...basicData, residentCertificatePhoto: '', residentCertificateFileName: '' })}
+                    className="p-1 text-slate-400 hover:text-rose-400"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3 text-xs">
@@ -549,37 +648,6 @@ export default function EmployeeOnboardingWelcome() {
                 />
               </div>
 
-              {/* 🏠 住民票の写し 添付枠 */}
-              <div className="bg-slate-800/80 p-3.5 rounded-2xl border-2 border-dashed border-slate-700 text-center space-y-2">
-                <label className="block cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={e => handlePhotoUpload(e, 'resident')}
-                    className="hidden"
-                  />
-                  <div className="flex flex-col items-center justify-center gap-1.5 py-1">
-                    <div className="w-9 h-9 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
-                      <Upload className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-bold text-white">住民票の写し（原本）をスマホ撮影・添付</span>
-                    <span className="text-[9px] text-slate-400">※ 写真を撮るだけで自動的に軽量化されます</span>
-                  </div>
-                </label>
-
-                {basicData.residentCertificatePhoto && (
-                  <div className="p-2 bg-slate-900 rounded-xl border border-slate-700 flex items-center justify-between text-left">
-                    <span className="text-[11px] font-bold text-indigo-400">📷 住民票の写真を添付済</span>
-                    <button
-                      onClick={() => setBasicData({ ...basicData, residentCertificatePhoto: '', residentCertificateFileName: '' })}
-                      className="p-1 text-slate-400 hover:text-rose-400"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <div>
                   <label className="text-[10px] text-slate-400 block mb-0.5">世帯主氏名</label>
@@ -631,15 +699,15 @@ export default function EmployeeOnboardingWelcome() {
           </div>
         )}
 
-        {/* Step 2: 正式な通勤交通費 支給申請書 ＆ AI自動計算 */}
+        {/* Step 2: 正式な通勤交通費 支給申請書 ＆ バス対応・住所根拠明示 */}
         {currentStep === 2 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <Train className="w-4 h-4 text-cyan-400" />
-                2. 通勤交通費 支給申請書（AI自動計算対応）
+                2. 通勤交通費 支給申請書（電車・バス自動計算）
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">乗車駅や住所から、定期代や通勤距離を自動算出できます。</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">駅名・バス停名や住所から、定期代や通勤距離を自動算出できます。</p>
             </div>
 
             <div className="space-y-3 text-xs">
@@ -653,7 +721,7 @@ export default function EmployeeOnboardingWelcome() {
                       commutingData.transportMode === 'train_bus' ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300' : 'bg-slate-800 border-slate-700 text-slate-400'
                     }`}
                   >
-                    電車・バス
+                    電車・路線バス
                   </button>
                   <button
                     type="button"
@@ -676,21 +744,22 @@ export default function EmployeeOnboardingWelcome() {
                 </div>
               </div>
 
+              {/* 電車・路線バス通勤 */}
               {commutingData.transportMode === 'train_bus' && (
                 <>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-0.5">乗車駅（自宅最寄） <span className="text-rose-400">*</span></label>
+                      <label className="text-[10px] text-slate-400 block mb-0.5">乗車駅 / バス停 <span className="text-rose-400">*</span></label>
                       <input
                         type="text"
-                        placeholder="例: 中野駅"
+                        placeholder="例: 中野駅 / 〇〇バス停"
                         value={commutingData.originStation}
                         onChange={e => setCommutingData({ ...commutingData, originStation: e.target.value })}
                         className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-bold text-white"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-slate-400 block mb-0.5">降車駅（会社最寄） <span className="text-rose-400">*</span></label>
+                      <label className="text-[10px] text-slate-400 block mb-0.5">降車駅 / バス停 <span className="text-rose-400">*</span></label>
                       <input
                         type="text"
                         placeholder="例: 大手町駅"
@@ -701,21 +770,21 @@ export default function EmployeeOnboardingWelcome() {
                     </div>
                   </div>
 
-                  {/* 🤖 定期代自動計算ボタン */}
+                  {/* 🤖 電車・バス 定期代自動計算ボタン */}
                   <button
                     type="button"
                     onClick={handleAutoCalculateTrainRoute}
                     className="w-full py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white font-black rounded-xl shadow transition flex items-center justify-center gap-1.5 cursor-pointer text-xs"
                   >
                     <Sparkles className="w-4 h-4 text-cyan-200" />
-                    🤖 最適路線・1ヶ月定期代を自動算出
+                    🤖 最適路線・電車/バス定期代を自動算出
                   </button>
 
                   <div>
                     <label className="text-[10px] text-slate-400 block mb-0.5">利用路線・乗換経路</label>
                     <input
                       type="text"
-                      placeholder="例: 東京メトロ東西線"
+                      placeholder="例: 東京メトロ東西線 / 都営バス"
                       value={commutingData.transitLines}
                       onChange={e => setCommutingData({ ...commutingData, transitLines: e.target.value })}
                       className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold"
@@ -744,9 +813,40 @@ export default function EmployeeOnboardingWelcome() {
                       />
                     </div>
                   </div>
+
+                  {/* 定期券または運賃証明の写真添付 */}
+                  <div className="bg-slate-800/80 p-3.5 rounded-2xl border-2 border-dashed border-slate-700 text-center space-y-2">
+                    <label className="block cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={e => handlePhotoUpload(e, 'pass')}
+                        className="hidden"
+                      />
+                      <div className="flex flex-col items-center justify-center gap-1.5 py-1">
+                        <div className="w-9 h-9 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+                          <Upload className="w-4 h-4" />
+                        </div>
+                        <span className="text-xs font-bold text-white">定期券 または 乗換アプリ検索結果の写真を添付</span>
+                      </div>
+                    </label>
+
+                    {commutingData.passPhoto && (
+                      <div className="p-2 bg-slate-900 rounded-xl border border-slate-700 flex items-center justify-between text-left">
+                        <span className="text-[11px] font-bold text-cyan-400">📷 定期券・運賃写真を添付済</span>
+                        <button
+                          onClick={() => setCommutingData({ ...commutingData, passPhoto: '', passFileName: '' })}
+                          className="p-1 text-slate-400 hover:text-rose-400"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
 
+              {/* マイカー・バイク通勤 */}
               {commutingData.transportMode === 'car_bike' && (
                 <div className="space-y-3 bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700">
                   {/* 🗺️ 住所から通勤距離自動計算ボタン */}
@@ -758,6 +858,13 @@ export default function EmployeeOnboardingWelcome() {
                     <MapPin className="w-4 h-4 text-emerald-200" />
                     🗺️ 自宅〜会社住所から片道距離・手当を自動計算
                   </button>
+
+                  {/* 計算根拠の明示ボックス */}
+                  <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-700 text-[10px] space-y-1">
+                    <div className="text-slate-400">【計算対象の住所区間】</div>
+                    <div className="text-slate-300">🏡 出発地: <span className="font-bold text-white">{basicData.address || '（Step 1 の現住所）'}</span></div>
+                    <div className="text-slate-300">🏢 到着地: <span className="font-bold text-white">{tenantInfo?.address || '東京都千代田区大手町 1-2-3'}（会社所在地）</span></div>
+                  </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -781,43 +888,42 @@ export default function EmployeeOnboardingWelcome() {
                       />
                     </div>
                   </div>
+
+                  {/* 任意写真添付 */}
+                  <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700 text-center">
+                    <label className="block cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={e => handlePhotoUpload(e, 'pass')}
+                        className="hidden"
+                      />
+                      <div className="flex items-center justify-center gap-1.5 py-1">
+                        <Upload className="w-4 h-4 text-cyan-400" />
+                        <span className="text-[11px] font-bold text-white">任意: 運転免許証・任意保険証書の写真を添付</span>
+                      </div>
+                    </label>
+                    {commutingData.passPhoto && (
+                      <span className="text-[10px] text-cyan-400 font-bold block mt-1">📷 車両関連写真を添付済</span>
+                    )}
+                  </div>
                 </div>
               )}
 
-              {/* 定期券または運賃証明の写真添付 */}
-              <div className="bg-slate-800/80 p-3.5 rounded-2xl border-2 border-dashed border-slate-700 text-center space-y-2">
-                <label className="block cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={e => handlePhotoUpload(e, 'pass')}
-                    className="hidden"
-                  />
-                  <div className="flex flex-col items-center justify-center gap-1.5 py-1">
-                    <div className="w-9 h-9 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
-                      <Upload className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-bold text-white">定期券 または 乗換アプリ検索結果の写真を添付</span>
-                  </div>
-                </label>
+              {/* 徒歩・自転車通勤（添付枠不要） */}
+              {commutingData.transportMode === 'walk_bicycle' && (
+                <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 text-center space-y-2">
+                  <Check className="w-8 h-8 text-emerald-400 mx-auto" />
+                  <div className="font-bold text-white text-xs">徒歩・自転車での通勤が選択されました</div>
+                  <p className="text-[10px] text-slate-400">通勤手当支給額: 0円 / 定期券写真等の添付は不要です。</p>
+                </div>
+              )}
 
-                {commutingData.passPhoto && (
-                  <div className="p-2 bg-slate-900 rounded-xl border border-slate-700 flex items-center justify-between text-left">
-                    <span className="text-[11px] font-bold text-cyan-400">📷 定期券・運賃写真を添付済</span>
-                    <button
-                      onClick={() => setCommutingData({ ...commutingData, passPhoto: '', passFileName: '' })}
-                      className="p-1 text-slate-400 hover:text-rose-400"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         )}
 
-        {/* Step 3: 給与振込口座 ＋ 通帳写真撮影 */}
+        {/* Step 3: 給与振込口座 ＋ 通帳写真撮影（AI自動読み取り対応） */}
         {currentStep === 3 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
@@ -825,7 +931,42 @@ export default function EmployeeOnboardingWelcome() {
                 <CreditCard className="w-4 h-4 text-emerald-400" />
                 3. 給与振込口座の登録 ＆ 通帳原本撮影
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">給与が振り込まれるご本人名義の口座情報を入力してください。</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">通帳の写真を撮影すると、口座情報がAIで自動入力されます。</p>
+            </div>
+
+            {/* 通帳写真撮影アップロード（AI自動読み取り機能付き） */}
+            <div className="bg-gradient-to-br from-emerald-950/60 to-slate-900 p-4 rounded-2xl border-2 border-dashed border-emerald-500/40 text-center space-y-2">
+              <label className="block cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={e => handlePhotoUpload(e, 'passbook')}
+                  className="hidden"
+                />
+                <div className="flex flex-col items-center justify-center gap-1.5 py-1">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shadow-inner">
+                    <Sparkles className="w-5 h-5 text-emerald-300" />
+                  </div>
+                  <span className="text-xs font-black text-white flex items-center gap-1">
+                    📷 通帳またはカードを撮影 ➔ AIで自動入力
+                  </span>
+                  <span className="text-[10px] text-emerald-300">
+                    ※ 銀行名・支店名・口座番号・名義人が自動でセットされます
+                  </span>
+                </div>
+              </label>
+
+              {bankData.passbookPhoto && (
+                <div className="p-2 bg-slate-900 rounded-xl border border-emerald-500/40 flex items-center justify-between text-left">
+                  <span className="text-[11px] font-bold text-emerald-400">📷 通帳写真を添付・解析済</span>
+                  <button
+                    onClick={() => setBankData({ ...bankData, passbookPhoto: '', passbookFileName: '' })}
+                    className="p-1 text-slate-400 hover:text-rose-400"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3 text-xs">
@@ -885,37 +1026,6 @@ export default function EmployeeOnboardingWelcome() {
                   onChange={e => setBankData({ ...bankData, accountHolder: e.target.value })}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-bold text-white"
                 />
-              </div>
-
-              {/* 通帳写真撮影アップロード */}
-              <div className="bg-slate-800/80 p-4 rounded-2xl border-2 border-dashed border-slate-700 text-center space-y-2">
-                <label className="block cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={e => handlePhotoUpload(e, 'passbook')}
-                    className="hidden"
-                  />
-                  <div className="flex flex-col items-center justify-center gap-1.5 py-1">
-                    <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                      <Upload className="w-5 h-5" />
-                    </div>
-                    <span className="text-xs font-bold text-white">通帳の見開き面 または キャッシュカードを撮影</span>
-                    <span className="text-[9px] text-slate-400">※ スマホで写真を撮るだけで自動的に軽量化されます</span>
-                  </div>
-                </label>
-
-                {bankData.passbookPhoto && (
-                  <div className="p-2.5 bg-slate-900 rounded-xl border border-slate-700 flex items-center justify-between text-left">
-                    <span className="text-[11px] font-bold text-emerald-400">📷 通帳写真を添付済</span>
-                    <button
-                      onClick={() => setBankData({ ...bankData, passbookPhoto: '', passbookFileName: '' })}
-                      className="p-1 text-slate-400 hover:text-rose-400"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           </div>
