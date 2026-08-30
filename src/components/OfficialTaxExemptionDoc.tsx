@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Printer, Download, Eye, CheckCircle2, Loader2, Sparkles, 
-  RotateCcw, Copy, Check, Type, Grid, MousePointer
-} from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Printer, Download, Eye, CheckCircle2, Loader2, Sparkles, FileText } from 'lucide-react';
+import { TAX_DOC_2026_COORDINATES as DEFAULT_POS } from '../lib/taxDocCoordinates';
 
 interface DependentItem {
   name: string;
@@ -64,26 +62,6 @@ interface TaxExemptionDocProps {
 }
 
 /**
- * 各テキスト項目のレイアウト設定インターフェース
- */
-interface FieldItem {
-  id: string;
-  label: string;
-  category: string;
-  x: number; // 0〜100 (%)
-  y: number; // 0〜100 (%)
-  fontSize: number; // px (基準1000px幅換算)
-  fontWeight?: string;
-  isMono?: boolean;
-  isMyNumber?: boolean;
-  pitch?: number; // マイナンバーマス目ピッチ (%)
-  isCircle?: boolean;
-  isCheck?: boolean;
-  align?: 'left' | 'center' | 'right';
-  val: string;
-}
-
-/**
  * 西暦日付を国税庁公式の和暦（元号・年・月・日）に分解
  */
 function parseJapaneseEraDate(dateStr?: string): { era: string; year: string; month: string; day: string } {
@@ -108,84 +86,10 @@ function parseJapaneseEraDate(dateStr?: string): { era: string; year: string; mo
   return { era: '明', year: String(y - 1867), month: m, day };
 }
 
-// デフォルト初期座標テーブル
-const INITIAL_LAYOUT: Record<string, { x: number; y: number; fontSize: number; pitch?: number }> = {
-  taxOffice: { x: 8.8, y: 9.8, fontSize: 13 },
-  municipality: { x: 7.8, y: 13.8, fontSize: 13 },
-  companyName: { x: 23.5, y: 8.8, fontSize: 15 },
-  corporateNumber: { x: 23.5, y: 11.4, fontSize: 14 },
-  companyAddress: { x: 23.5, y: 14.2, fontSize: 11 },
-  empKana: { x: 44.0, y: 7.5, fontSize: 10 },
-  empName: { x: 44.0, y: 9.5, fontSize: 18 },
-  empMyNumber: { x: 42.8, y: 12.3, fontSize: 14, pitch: 1.82 },
-  empPostal: { x: 50.5, y: 14.0, fontSize: 11 },
-  empAddress: { x: 42.5, y: 15.2, fontSize: 12 },
-  empBirthY: { x: 68.2, y: 7.5, fontSize: 12 },
-  empBirthM: { x: 72.5, y: 7.5, fontSize: 12 },
-  empBirthD: { x: 75.5, y: 7.5, fontSize: 12 },
-  householderName: { x: 67.5, y: 9.8, fontSize: 12 },
-  householderRel: { x: 67.5, y: 12.2, fontSize: 12 },
-  hasSpouseCircle: { x: 74.2, y: 14.8, fontSize: 14 },
-
-  spouseKana: { x: 16.5, y: 20.8, fontSize: 10 },
-  spouseName: { x: 16.5, y: 22.2, fontSize: 14 },
-  spouseMyNumber: { x: 26.5, y: 22.2, fontSize: 12, pitch: 0.98 },
-  spouseRel: { x: 34.5, y: 22.2, fontSize: 12 },
-  spouseBirthY: { x: 40.5, y: 22.2, fontSize: 12 },
-  spouseBirthM: { x: 43.2, y: 22.2, fontSize: 12 },
-  spouseBirthD: { x: 45.8, y: 22.2, fontSize: 12 },
-  spouseIncome: { x: 53.5, y: 22.2, fontSize: 12 },
-  spouseLiving: { x: 58.5, y: 22.2, fontSize: 11 },
-  spouseAddress: { x: 64.0, y: 22.2, fontSize: 11 },
-
-  dep0Kana: { x: 16.5, y: 24.2, fontSize: 10 },
-  dep0Name: { x: 16.5, y: 25.6, fontSize: 14 },
-  dep0MyNumber: { x: 26.5, y: 25.6, fontSize: 12, pitch: 0.98 },
-  dep0Rel: { x: 34.5, y: 25.6, fontSize: 12 },
-  dep0BirthY: { x: 40.5, y: 25.6, fontSize: 12 },
-  dep0BirthM: { x: 43.2, y: 25.6, fontSize: 12 },
-  dep0BirthD: { x: 45.8, y: 25.6, fontSize: 12 },
-  dep0Income: { x: 53.5, y: 25.6, fontSize: 12 },
-  dep0Living: { x: 58.5, y: 25.6, fontSize: 11 },
-  dep0Address: { x: 64.0, y: 25.6, fontSize: 11 },
-
-  specialDisabled: { x: 12.2, y: 38.8, fontSize: 14 },
-  specialWidow: { x: 31.5, y: 38.8, fontSize: 14 },
-  specialSingle: { x: 35.0, y: 38.8, fontSize: 14 },
-  specialStudent: { x: 39.2, y: 38.8, fontSize: 14 },
-  specialDetails: { x: 46.5, y: 39.2, fontSize: 12 },
-
-  u16_0Kana: { x: 16.5, y: 52.5, fontSize: 10 },
-  u16_0Name: { x: 16.5, y: 53.8, fontSize: 14 },
-  u16_0MyNumber: { x: 27.5, y: 53.8, fontSize: 12, pitch: 0.98 },
-  u16_0Rel: { x: 38.5, y: 53.8, fontSize: 12 },
-  u16_0BirthY: { x: 42.5, y: 53.8, fontSize: 12 },
-  u16_0BirthM: { x: 44.8, y: 53.8, fontSize: 12 },
-  u16_0BirthD: { x: 47.2, y: 53.8, fontSize: 12 },
-  u16_0Address: { x: 53.0, y: 53.8, fontSize: 11 },
-  u16_0Income: { x: 74.5, y: 53.8, fontSize: 12 }
-};
-
 export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }) => {
-  const [activeTab, setActiveTab] = useState<'visual_editor' | 'canvas_doc' | 'pdf_view' | 'guide_view'>('visual_editor');
+  const [activeTab, setActiveTab] = useState<'canvas_doc' | 'pdf_view' | 'guide_view'>('canvas_doc');
   const [isRendering, setIsRendering] = useState(true);
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
-  
-  // 🛠️ 販売者用ドラッグ＆ドロップ WYSIWYG デザイナー State
-  const [layoutMap, setLayoutMap] = useState<Record<string, { x: number; y: number; fontSize: number; pitch?: number }>>(() => {
-    try {
-      const saved = localStorage.getItem('taxDocCustomLayout');
-      if (saved) return { ...INITIAL_LAYOUT, ...JSON.parse(saved) };
-    } catch (_) {}
-    return INITIAL_LAYOUT;
-  });
-
-  const [selectedFieldId, setSelectedFieldId] = useState<string | null>('empName');
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number; fieldX: number; fieldY: number } | null>(null);
-  const [copiedCode, setCopiedCode] = useState(false);
-
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const under16Dependents = (data.dependents || []).filter(d => d.isUnder16);
@@ -193,173 +97,17 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
   const empBirth = parseJapaneseEraDate(data.birthDate);
   const spouseBirth = parseJapaneseEraDate(data.spouseBirthDate);
 
-  // フィールドリストの構築
-  const fields: FieldItem[] = [
-    // 🏢 会社
-    { id: 'taxOffice', label: '所轄税務署長', category: 'ヘッダー', val: data.taxOfficeName || '千代田', ...layoutMap.taxOffice },
-    { id: 'municipality', label: '市区町村長', category: 'ヘッダー', val: data.municipalityName || '千代田区', ...layoutMap.municipality },
-    { id: 'companyName', label: '給与支払者の名称', category: '会社情報', val: data.companyName, fontWeight: 'bold', ...layoutMap.companyName },
-    { id: 'corporateNumber', label: '法人番号', category: '会社情報', val: data.corporateNumber || '1010001999999', isMono: true, ...layoutMap.corporateNumber },
-    { id: 'companyAddress', label: '所在地', category: '会社情報', val: data.companyAddress || '本社所在地', ...layoutMap.companyAddress },
+  // 4名分の枠
+  const bRows: Array<DependentItem | null> = [...regularDependents.slice(0, 4)];
+  while (bRows.length < 4) bRows.push(null);
 
-    // 👤 本人
-    { id: 'empKana', label: 'あなたのフリガナ', category: '本人情報', val: data.employeeNameKana || 'テスト', ...layoutMap.empKana },
-    { id: 'empName', label: 'あなたの氏名', category: '本人情報', val: data.employeeName, fontWeight: '900', ...layoutMap.empName },
-    { id: 'empMyNumber', label: 'あなたの個人番号(12桁)', category: '本人情報', val: data.myNumber ? data.myNumber.replace(/[^0-9]/g, '') : '123456789012', isMyNumber: true, isMono: true, ...layoutMap.empMyNumber },
-    { id: 'empPostal', label: '郵便番号', category: '本人情報', val: data.postalCode || '160-0023', ...layoutMap.empPostal },
-    { id: 'empAddress', label: 'あなたの住所', category: '本人情報', val: data.employeeAddress, ...layoutMap.empAddress },
-    { id: 'empBirthY', label: '生年月日(年)', category: '本人情報', val: empBirth.year, ...layoutMap.empBirthY },
-    { id: 'empBirthM', label: '生年月日(月)', category: '本人情報', val: empBirth.month, ...layoutMap.empBirthM },
-    { id: 'empBirthD', label: '生年月日(日)', category: '本人情報', val: empBirth.day, ...layoutMap.empBirthD },
-    { id: 'householderName', label: '世帯主の氏名', category: '本人情報', val: data.householderName || data.employeeName, ...layoutMap.householderName },
-    { id: 'householderRel', label: 'あなたとの続柄', category: '本人情報', val: data.householderRelation || '本人', ...layoutMap.householderRel },
-    { id: 'hasSpouseCircle', label: '配偶者の有無(○印)', category: '本人情報', val: '○', isCircle: true, ...(data.hasSpouse ? layoutMap.hasSpouseCircle : { x: 76.8, y: 14.8, fontSize: 14 }) },
+  // 16歳未満 2名分の枠
+  const u16Rows: Array<DependentItem | null> = [...under16Dependents.slice(0, 2)];
+  while (u16Rows.length < 2) u16Rows.push(null);
 
-    // 👫 配偶者
-    { id: 'spouseKana', label: '配偶者フリガナ', category: '配偶者', val: data.spouseNameKana || '', ...layoutMap.spouseKana },
-    { id: 'spouseName', label: '配偶者氏名', category: '配偶者', val: data.spouseName || (data.hasSpouse ? '配偶者' : ''), fontWeight: 'bold', ...layoutMap.spouseName },
-    { id: 'spouseMyNumber', label: '配偶者マイナンバー', category: '配偶者', val: data.spouseMyNumber ? data.spouseMyNumber.replace(/[^0-9]/g, '') : '************', isMyNumber: true, isMono: true, ...layoutMap.spouseMyNumber },
-    { id: 'spouseRel', label: '配偶者続柄', category: '配偶者', val: data.hasSpouse ? '妻' : '', ...layoutMap.spouseRel },
-    { id: 'spouseBirthY', label: '配偶者生年', category: '配偶者', val: data.hasSpouse ? spouseBirth.year : '', ...layoutMap.spouseBirthY },
-    { id: 'spouseBirthM', label: '配偶者生月', category: '配偶者', val: data.hasSpouse ? spouseBirth.month : '', ...layoutMap.spouseBirthM },
-    { id: 'spouseBirthD', label: '配偶者生日', category: '配偶者', val: data.hasSpouse ? spouseBirth.day : '', ...layoutMap.spouseBirthD },
-    { id: 'spouseIncome', label: '配偶者所得見積', category: '配偶者', val: data.hasSpouse ? `${(data.spouseIncomeEstimate || 0).toLocaleString()} 円` : '', align: 'right', ...layoutMap.spouseIncome },
-    { id: 'spouseLiving', label: '配偶者同居別居', category: '配偶者', val: data.hasSpouse ? (data.spouseIsLivingTogether !== false ? '同居' : '別居') : '', ...layoutMap.spouseLiving },
-    { id: 'spouseAddress', label: '配偶者住所', category: '配偶者', val: data.hasSpouse ? (data.spouseAddress || data.employeeAddress) : '', ...layoutMap.spouseAddress },
-
-    // 👨‍👩‍👧 扶養親族 1人目
-    { id: 'dep0Kana', label: '扶養1 フリガナ', category: '扶養親族', val: regularDependents[0]?.nameKana || '', ...layoutMap.dep0Kana },
-    { id: 'dep0Name', label: '扶養1 氏名', category: '扶養親族', val: regularDependents[0]?.name || '', fontWeight: 'bold', ...layoutMap.dep0Name },
-    { id: 'dep0MyNumber', label: '扶養1 マイナンバー', category: '扶養親族', val: regularDependents[0]?.myNumber || '************', isMyNumber: true, isMono: true, ...layoutMap.dep0MyNumber },
-    { id: 'dep0Rel', label: '扶養1 続柄', category: '扶養親族', val: regularDependents[0]?.relation || '', ...layoutMap.dep0Rel },
-    { id: 'dep0BirthY', label: '扶養1 生年', category: '扶養親族', val: regularDependents[0] ? parseJapaneseEraDate(regularDependents[0].birthDate).year : '', ...layoutMap.dep0BirthY },
-    { id: 'dep0BirthM', label: '扶養1 生月', category: '扶養親族', val: regularDependents[0] ? parseJapaneseEraDate(regularDependents[0].birthDate).month : '', ...layoutMap.dep0BirthM },
-    { id: 'dep0BirthD', label: '扶養1 生日', category: '扶養親族', val: regularDependents[0] ? parseJapaneseEraDate(regularDependents[0].birthDate).day : '', ...layoutMap.dep0BirthD },
-    { id: 'dep0Income', label: '扶養1 所得見積', category: '扶養親族', val: regularDependents[0] ? `${(regularDependents[0].incomeEstimate || 0).toLocaleString()} 円` : '', align: 'right', ...layoutMap.dep0Income },
-    { id: 'dep0Living', label: '扶養1 同居別居', category: '扶養親族', val: regularDependents[0] ? (regularDependents[0].isLivingTogether !== false ? '同居' : '別居') : '', ...layoutMap.dep0Living },
-    { id: 'dep0Address', label: '扶養1 住所', category: '扶養親族', val: regularDependents[0] ? (regularDependents[0].address || data.employeeAddress) : '', ...layoutMap.dep0Address },
-
-    // ♿ 障害者等
-    { id: 'specialDisabled', label: '障害者チェック', category: '障害者等', val: data.isDisability ? '✓' : '', isCheck: true, ...layoutMap.specialDisabled },
-    { id: 'specialWidow', label: '寡婦チェック', category: '障害者等', val: data.isWidow ? '✓' : '', isCheck: true, ...layoutMap.specialWidow },
-    { id: 'specialSingle', label: 'ひとり親チェック', category: '障害者等', val: data.isSingleParent ? '✓' : '', isCheck: true, ...layoutMap.specialSingle },
-    { id: 'specialStudent', label: '勤労学生チェック', category: '障害者等', val: data.isWorkingStudent ? '✓' : '', isCheck: true, ...layoutMap.specialStudent },
-    { id: 'specialDetails', label: '障害者・学生内容', category: '障害者等', val: data.disabilityDetails || (data.isWorkingStudent ? `学校: ${data.workingStudentSchool || '〇〇大学'}` : ''), ...layoutMap.specialDetails },
-
-    // 👶 住民税 16歳未満 1人目
-    { id: 'u16_0Kana', label: '16未満1 フリガナ', category: '住民税', val: under16Dependents[0]?.nameKana || '', ...layoutMap.u16_0Kana },
-    { id: 'u16_0Name', label: '16未満1 氏名', category: '住民税', val: under16Dependents[0]?.name || '', fontWeight: 'bold', ...layoutMap.u16_0Name },
-    { id: 'u16_0MyNumber', label: '16未満1 マイナンバー', category: '住民税', val: under16Dependents[0]?.myNumber || '************', isMyNumber: true, isMono: true, ...layoutMap.u16_0MyNumber },
-    { id: 'u16_0Rel', label: '16未満1 続柄', category: '住民税', val: under16Dependents[0]?.relation || '', ...layoutMap.u16_0Rel },
-    { id: 'u16_0BirthY', label: '16未満1 生年', category: '住民税', val: under16Dependents[0] ? parseJapaneseEraDate(under16Dependents[0].birthDate).year : '', ...layoutMap.u16_0BirthY },
-    { id: 'u16_0BirthM', label: '16未満1 生月', category: '住民税', val: under16Dependents[0] ? parseJapaneseEraDate(under16Dependents[0].birthDate).month : '', ...layoutMap.u16_0BirthM },
-    { id: 'u16_0BirthD', label: '16未満1 生日', category: '住民税', val: under16Dependents[0] ? parseJapaneseEraDate(under16Dependents[0].birthDate).day : '', ...layoutMap.u16_0BirthD },
-    { id: 'u16_0Address', label: '16未満1 住所', category: '住民税', val: under16Dependents[0] ? (under16Dependents[0].address || data.employeeAddress) : '', ...layoutMap.u16_0Address },
-    { id: 'u16_0Income', label: '16未満1 所得', category: '住民税', val: under16Dependents[0] ? '0 円' : '', align: 'right', ...layoutMap.u16_0Income }
-  ];
-
-  // 位置の更新
-  const updateFieldPosition = useCallback((id: string, newX: number, newY: number) => {
-    setLayoutMap(prev => {
-      const updated = {
-        ...prev,
-        [id]: {
-          ...prev[id],
-          x: Math.round(newX * 10) / 10,
-          y: Math.round(newY * 10) / 10
-        }
-      };
-      localStorage.setItem('taxDocCustomLayout', JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
-
-  // フォントサイズの更新
-  const updateFieldFontSize = (id: string, newSize: number) => {
-    setLayoutMap(prev => {
-      const updated = {
-        ...prev,
-        [id]: {
-          ...prev[id],
-          fontSize: Math.max(8, Math.min(32, newSize))
-        }
-      };
-      localStorage.setItem('taxDocCustomLayout', JSON.stringify(updated));
-      return updated;
-    });
-  };
-
-  // マウスドラッグハンドラー
-  const handleMouseDown = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    setSelectedFieldId(id);
-    setIsDragging(true);
-
-    const currentPos = layoutMap[id] || INITIAL_LAYOUT[id];
-    setDragStart({
-      x: e.clientX,
-      y: e.clientY,
-      fieldX: currentPos.x,
-      fieldY: currentPos.y
-    });
-  };
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isDragging || !dragStart || !selectedFieldId || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const deltaX = ((e.clientX - dragStart.x) / rect.width) * 100;
-    const deltaY = ((e.clientY - dragStart.y) / rect.height) * 100;
-
-    const newX = Math.max(0, Math.min(100, dragStart.fieldX + deltaX));
-    const newY = Math.max(0, Math.min(100, dragStart.fieldY + deltaY));
-
-    updateFieldPosition(selectedFieldId, newX, newY);
-  }, [isDragging, dragStart, selectedFieldId, updateFieldPosition]);
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    setDragStart(null);
-  };
-
-  // キーボード微調整（ナッジ）
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!selectedFieldId) return;
-    const step = e.shiftKey ? 1.0 : 0.1;
-    const current = layoutMap[selectedFieldId] || INITIAL_LAYOUT[selectedFieldId];
-
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      updateFieldPosition(selectedFieldId, current.x, current.y - step);
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      updateFieldPosition(selectedFieldId, current.x, current.y + step);
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      updateFieldPosition(selectedFieldId, current.x - step, current.y);
-    } else if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      updateFieldPosition(selectedFieldId, current.x + step, current.y);
-    }
-  };
-
-  // 座標設定のリセット
-  const handleResetLayout = () => {
-    if (confirm('すべての項目の位置・フォントサイズを初期状態にリセットしますか？')) {
-      setLayoutMap(INITIAL_LAYOUT);
-      localStorage.removeItem('taxDocCustomLayout');
-    }
-  };
-
-  // 座標コードのコピー
-  const handleCopyCode = () => {
-    const code = `export const TAX_DOC_2026_COORDINATES = ${JSON.stringify(layoutMap, null, 2)};`;
-    navigator.clipboard.writeText(code);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
-  };
-
-  // Canvas描画（印刷・ダウンロード用）
+  /**
+   * マスター座標テーブルに基づいて国税庁PDF原本に直接精密印字
+   */
   useEffect(() => {
     let isCancelled = false;
 
@@ -396,38 +144,190 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
         const W = canvas.width;
         const H = canvas.height;
+        const POS = DEFAULT_POS;
+
         ctx.fillStyle = '#0f172a';
         ctx.textBaseline = 'middle';
 
-        // 各フィールドの描画
-        fields.forEach(f => {
-          if (!f.val) return;
-          const posX = (f.x / 100) * W;
-          const posY = (f.y / 100) * H;
-          const fPx = Math.round((f.fontSize / 1000) * W * 1.6);
+        // 🏢 給与支払者
+        ctx.font = 'bold 20px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.taxOfficeName || '千代田', W * POS.header.taxOffice.x, H * POS.header.taxOffice.y);
+        ctx.fillText(data.municipalityName || '千代田区', W * POS.header.municipality.x, H * POS.header.municipality.y);
 
-          ctx.font = `${f.fontWeight || 'normal'} ${fPx}px ${f.isMono ? '"Courier New", monospace' : '"Noto Sans JP", sans-serif'}`;
+        ctx.font = 'bold 22px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.companyName, W * POS.header.companyName.x, H * POS.header.companyName.y);
 
-          if (f.isMyNumber) {
-            const pitch = ((f.pitch || 1.82) / 100) * W;
-            for (let i = 0; i < f.val.length; i++) {
-              ctx.fillText(f.val[i], posX + i * pitch, posY);
-            }
-          } else if (f.isCircle) {
-            ctx.strokeStyle = '#2563eb';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(posX, posY, 14, 0, Math.PI * 2);
-            ctx.stroke();
-          } else if (f.isCheck) {
-            ctx.fillStyle = '#2563eb';
-            ctx.fillText(f.val, posX, posY);
-            ctx.fillStyle = '#0f172a';
-          } else {
-            ctx.textAlign = f.align || 'left';
-            ctx.fillText(f.val, posX, posY);
-            ctx.textAlign = 'left';
+        ctx.font = 'bold 20px "Courier New", monospace';
+        ctx.fillText(data.corporateNumber || '1010001999999', W * POS.header.corporateNumber.x, H * POS.header.corporateNumber.y);
+
+        ctx.font = 'bold 16px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.companyAddress || '本社所在地', W * POS.header.companyAddress.x, H * POS.header.companyAddress.y);
+
+        // 👤 申告者本人
+        ctx.font = '14px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.employeeNameKana || 'テスト', W * POS.header.empKana.x, H * POS.header.empKana.y);
+
+        ctx.font = '900 28px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.employeeName, W * POS.header.empName.x, H * POS.header.empName.y);
+
+        // 12桁マイナンバーマス目
+        const myNumStr = data.myNumber ? data.myNumber.replace(/[^0-9]/g, '') : '123456789012';
+        ctx.font = 'bold 20px "Courier New", monospace';
+        const numStartX = W * POS.header.empMyNumberStart.x;
+        const numPitch = W * POS.header.empMyNumberStart.pitch;
+        for (let i = 0; i < 12; i++) {
+          ctx.fillText(myNumStr[i] || '*', numStartX + i * numPitch, H * POS.header.empMyNumberStart.y);
+        }
+
+        // 住所・郵便番号
+        ctx.font = 'bold 16px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.postalCode || '160-0023', W * POS.header.empPostal.x, H * POS.header.empPostal.y);
+        ctx.font = 'bold 17px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.employeeAddress, W * POS.header.empAddress.x, H * POS.header.empAddress.y);
+
+        // 生年月日
+        ctx.font = 'bold 18px "Noto Sans JP", sans-serif';
+        ctx.fillText(empBirth.year, W * POS.header.empBirthY.x, H * POS.header.empBirthY.y);
+        ctx.fillText(empBirth.month, W * POS.header.empBirthM.x, H * POS.header.empBirthM.y);
+        ctx.fillText(empBirth.day, W * POS.header.empBirthD.x, H * POS.header.empBirthD.y);
+
+        // 世帯主・続柄
+        ctx.fillText(data.householderName || data.employeeName, W * POS.header.householderName.x, H * POS.header.householderName.y);
+        ctx.fillText(data.householderRelation || '本人', W * POS.header.householderRel.x, H * POS.header.householderRel.y);
+
+        // 配偶者有無（○印）
+        ctx.strokeStyle = '#2563eb';
+        ctx.lineWidth = 2.5;
+        if (data.hasSpouse) {
+          ctx.beginPath();
+          ctx.arc(W * POS.header.hasSpouseYes.x, H * POS.header.hasSpouseYes.y, 12, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.arc(W * POS.header.hasSpouseNo.x, H * POS.header.hasSpouseNo.y, 12, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Ａ. 源泉控除対象配偶者
+        if (data.hasSpouse && data.spouseName) {
+          ctx.font = '13px "Noto Sans JP", sans-serif';
+          ctx.fillText(data.spouseNameKana || '', W * POS.spouse.kana.x, H * POS.spouse.kana.y);
+
+          ctx.font = 'bold 20px "Noto Sans JP", sans-serif';
+          ctx.fillText(data.spouseName, W * POS.spouse.name.x, H * POS.spouse.name.y);
+
+          const spNumStr = data.spouseMyNumber ? data.spouseMyNumber.replace(/[^0-9]/g, '') : '************';
+          ctx.font = 'bold 16px "Courier New", monospace';
+          const spNumStartX = W * POS.spouse.myNumberStart.x;
+          const spNumPitch = W * POS.spouse.myNumberStart.pitch;
+          for (let i = 0; i < 12; i++) {
+            ctx.fillText(spNumStr[i] || '*', spNumStartX + i * spNumPitch, H * POS.spouse.myNumberStart.y);
           }
+
+          ctx.font = 'bold 18px "Noto Sans JP", sans-serif';
+          ctx.fillText('妻', W * POS.spouse.relation.x, H * POS.spouse.relation.y);
+          ctx.fillText(spouseBirth.year, W * POS.spouse.birthY.x, H * POS.spouse.birthY.y);
+          ctx.fillText(spouseBirth.month, W * POS.spouse.birthM.x, H * POS.spouse.birthM.y);
+          ctx.fillText(spouseBirth.day, W * POS.spouse.birthD.x, H * POS.spouse.birthD.y);
+
+          ctx.textAlign = 'right';
+          ctx.fillText(`${(data.spouseIncomeEstimate || 0).toLocaleString()} 円`, W * POS.spouse.income.x, H * POS.spouse.income.y);
+          ctx.textAlign = 'left';
+
+          ctx.font = '15px "Noto Sans JP", sans-serif';
+          ctx.fillText(data.spouseIsLivingTogether !== false ? '同居' : '別居', W * POS.spouse.livingFact.x, H * POS.spouse.livingFact.y);
+          ctx.fillText(data.spouseAddress || data.employeeAddress, W * POS.spouse.address.x, H * POS.spouse.address.y);
+        }
+
+        // Ｂ. 控除対象扶養親族（1〜4行）
+        bRows.forEach((dep, idx) => {
+          if (!dep) return;
+          const rowConfig = POS.dependents[idx];
+          const bDate = parseJapaneseEraDate(dep.birthDate);
+
+          ctx.font = '13px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.nameKana || '', W * POS.depCols.kanaX, H * rowConfig.kanaY);
+
+          ctx.font = 'bold 19px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.name, W * POS.depCols.nameX, H * rowConfig.rowY);
+
+          const depNumStr = dep.myNumber ? dep.myNumber.replace(/[^0-9]/g, '') : '************';
+          ctx.font = 'bold 16px "Courier New", monospace';
+          const depNumStartX = W * POS.depCols.myNumStartX;
+          const depNumPitch = W * POS.depCols.myNumPitch;
+          for (let i = 0; i < 12; i++) {
+            ctx.fillText(depNumStr[i] || '*', depNumStartX + i * depNumPitch, H * rowConfig.rowY);
+          }
+
+          ctx.font = 'bold 17px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.relation, W * POS.depCols.relationX, H * rowConfig.rowY);
+          ctx.fillText(bDate.year, W * POS.depCols.birthYX, H * rowConfig.rowY);
+          ctx.fillText(bDate.month, W * POS.depCols.birthMX, H * rowConfig.rowY);
+          ctx.fillText(bDate.day, W * POS.depCols.birthDX, H * rowConfig.rowY);
+
+          ctx.fillStyle = '#2563eb';
+          ctx.font = 'bold 18px sans-serif';
+          if (dep.isElderly) ctx.fillText('✓', W * POS.depCols.checkX, H * rowConfig.elderlyCheckY);
+          if (dep.isSpecific) ctx.fillText('✓', W * POS.depCols.checkX, H * rowConfig.specificCheckY);
+          ctx.fillStyle = '#0f172a';
+
+          ctx.textAlign = 'right';
+          ctx.fillText(`${(dep.incomeEstimate || 0).toLocaleString()} 円`, W * POS.depCols.incomeX, H * rowConfig.rowY);
+          ctx.textAlign = 'left';
+
+          ctx.font = '15px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.isLivingTogether !== false ? '同居' : (dep.livingTogetherFact || '別居'), W * POS.depCols.livingFactX, H * rowConfig.rowY);
+          ctx.fillText(dep.address || data.employeeAddress, W * POS.depCols.addressX, H * rowConfig.rowY);
+        });
+
+        // Ｃ. 障害者等
+        ctx.fillStyle = '#2563eb';
+        ctx.font = 'bold 20px sans-serif';
+        if (data.isDisability) ctx.fillText('✓', W * POS.special.checkDisabled.x, H * POS.special.checkDisabled.y);
+        if (data.isWidow) ctx.fillText('✓', W * POS.special.checkWidow.x, H * POS.special.checkWidow.y);
+        if (data.isSingleParent) ctx.fillText('✓', W * POS.special.checkSingleParent.x, H * POS.special.checkSingleParent.y);
+        if (data.isWorkingStudent) ctx.fillText('✓', W * POS.special.checkWorkingStudent.x, H * POS.special.checkWorkingStudent.y);
+
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 16px "Noto Sans JP", sans-serif';
+        if (data.disabilityDetails) {
+          ctx.fillText(data.disabilityDetails, W * POS.special.details.x, H * POS.special.details.y);
+        } else if (data.isWorkingStudent) {
+          ctx.fillText(`学校: ${data.workingStudentSchool || '〇〇大学'}`, W * POS.special.details.x, H * POS.special.details.y);
+        }
+
+        // 住民税に関する事項（16歳未満）
+        u16Rows.forEach((dep, idx) => {
+          if (!dep) return;
+          const uRowConfig = POS.u16[idx];
+          const bDate = parseJapaneseEraDate(dep.birthDate);
+
+          ctx.font = '13px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.nameKana || '', W * POS.u16Cols.kanaX, H * uRowConfig.kanaY);
+
+          ctx.font = 'bold 19px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.name, W * POS.u16Cols.nameX, H * uRowConfig.rowY);
+
+          const uNumStr = dep.myNumber ? dep.myNumber.replace(/[^0-9]/g, '') : '************';
+          ctx.font = 'bold 16px "Courier New", monospace';
+          const uNumStartX = W * POS.u16Cols.myNumStartX;
+          const uNumPitch = W * POS.u16Cols.myNumPitch;
+          for (let i = 0; i < 12; i++) {
+            ctx.fillText(uNumStr[i] || '*', uNumStartX + i * uNumPitch, H * uRowConfig.rowY);
+          }
+
+          ctx.font = 'bold 17px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.relation, W * POS.u16Cols.relationX, H * uRowConfig.rowY);
+          ctx.fillText(bDate.year, W * POS.u16Cols.birthYX, H * uRowConfig.rowY);
+          ctx.fillText(bDate.month, W * POS.u16Cols.birthMX, H * uRowConfig.rowY);
+          ctx.fillText(bDate.day, W * POS.u16Cols.birthDX, H * uRowConfig.rowY);
+
+          ctx.font = '15px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.address || data.employeeAddress, W * POS.u16Cols.addressX, H * uRowConfig.rowY);
+
+          ctx.textAlign = 'right';
+          ctx.fillText('0 円', W * POS.u16Cols.incomeX, H * uRowConfig.rowY);
+          ctx.textAlign = 'left';
         });
 
         const url = canvas.toDataURL('image/png');
@@ -441,12 +341,10 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
     renderCanvas();
     return () => { isCancelled = true; };
-  }, [layoutMap, data]);
-
-  const selectedField = fields.find(f => f.id === selectedFieldId);
+  }, [data]);
 
   return (
-    <div className="w-full bg-slate-100 py-3 print:bg-white print:py-0 select-text font-sans" onKeyDown={handleKeyDown} tabIndex={0}>
+    <div className="w-full bg-slate-100 py-3 print:bg-white print:py-0 select-text font-sans">
       <style>{`
         @media print {
           @page { size: A4 landscape; margin: 0; }
@@ -461,24 +359,13 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         <div className="flex items-center gap-1 bg-white p-1 rounded-xl shadow-xs border border-slate-200">
           <button
             type="button"
-            onClick={() => setActiveTab('visual_editor')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'visual_editor' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <MousePointer className="w-3.5 h-3.5 text-amber-300" />
-            ① マウスで直接動かせるデザイナー（販売者用）
-          </button>
-
-          <button
-            type="button"
             onClick={() => setActiveTab('canvas_doc')}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'canvas_doc' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            ② 印字完成ビュー（提出用プレビュー）
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            ① 令和8年分 扶養控除等申告書（提出用プレビュー）
           </button>
 
           <button
@@ -489,29 +376,30 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
             }`}
           >
             <Eye className="w-3.5 h-3.5" />
-            ③ 原本PDF
+            ② 国税庁原本PDF（2026bun_01）
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('guide_view')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'guide_view' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            ③ 裏面手引き
           </button>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleCopyCode}
+          <a
+            href="/2026bun_01.pdf"
+            download="令和8年分_給与所得者の扶養控除等申告書_国税庁原本.pdf"
             className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-            title="調整した座標コードをクリップボードにコピー"
           >
-            {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-indigo-600" />}
-            {copiedCode ? 'コピー完了！' : '座標コードをコピー'}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleResetLayout}
-            className="px-2.5 py-1.5 bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 rounded-xl text-xs font-bold transition cursor-pointer"
-            title="初期位置に戻す"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
+            <Download className="w-3.5 h-3.5 text-indigo-600" />
+            原本PDF保存
+          </a>
 
           <button
             type="button"
@@ -527,146 +415,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════════════════ */}
-      {/* 🖱️ ① 販売者用 ドラッグ＆ドロップ WYSIWYG デザイナー */}
-      {/* ══════════════════════════════════════════════════════════════════════════════════ */}
-      {activeTab === 'visual_editor' && (
-        <div className="max-w-[1150px] mx-auto space-y-2 no-print">
-          
-          {/* 操作インスペクターパネル */}
-          <div className="bg-slate-900 text-white p-3 rounded-2xl shadow-xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="font-bold text-amber-300">選択中:</span>
-              <span className="font-bold text-white bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
-                {selectedField ? `${selectedField.label} (${selectedField.category})` : '項目をクリックして選択'}
-              </span>
-            </div>
-
-            {selectedField && (
-              <div className="flex items-center gap-4">
-                {/* 座標表示 */}
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400">位置:</span>
-                  <span className="font-mono bg-slate-800 px-2 py-0.5 rounded text-amber-300">
-                    X: {selectedField.x.toFixed(1)}% / Y: {selectedField.y.toFixed(1)}%
-                  </span>
-                </div>
-
-                {/* 文字サイズ変更 */}
-                <div className="flex items-center gap-2">
-                  <Type className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="text-slate-400">文字サイズ:</span>
-                  <input
-                    type="range"
-                    min="8"
-                    max="28"
-                    step="1"
-                    value={selectedField.fontSize}
-                    onChange={e => updateFieldFontSize(selectedField.id, parseInt(e.target.value, 10))}
-                    className="w-24 accent-indigo-500 cursor-pointer"
-                  />
-                  <span className="font-mono font-bold text-indigo-300 w-8">{selectedField.fontSize}px</span>
-                </div>
-
-                {/* マイナンバーマス目ピッチ変更 */}
-                {selectedField.isMyNumber && (
-                  <div className="flex items-center gap-2 border-l border-slate-700 pl-3">
-                    <Grid className="w-3.5 h-3.5 text-slate-400" />
-                    <span className="text-slate-400">マス目間隔:</span>
-                    <input
-                      type="range"
-                      min="0.5"
-                      max="3.0"
-                      step="0.05"
-                      value={selectedField.pitch || 1.82}
-                      onChange={e => {
-                        const val = parseFloat(e.target.value);
-                        setLayoutMap(prev => ({
-                          ...prev,
-                          [selectedField.id]: { ...prev[selectedField.id], pitch: val }
-                        }));
-                      }}
-                      className="w-20 accent-indigo-500 cursor-pointer"
-                    />
-                    <span className="font-mono font-bold text-amber-300 w-10">{(selectedField.pitch || 1.82).toFixed(2)}%</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="text-[11px] text-slate-400">
-              💡 マウスでドラッグ移動 ＆ キーボード（↑ ↓ ← →）で 0.1% 微調整可能
-            </div>
-          </div>
-
-          {/* ドラッグキャンバス（国税庁PDF原本を背景に敷き、文字をドラッグ可能に） */}
-          <div
-            ref={containerRef}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            className="relative w-full aspect-[297/210] bg-white rounded-2xl shadow-2xl border-2 border-indigo-400/50 overflow-hidden select-none cursor-crosshair"
-            style={{
-              backgroundImage: 'url(/2026bun_01.pdf)', // フォールバック
-              backgroundSize: '100% 100%'
-            }}
-          >
-            {/* 原本キャンバス（下敷き） */}
-            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
-
-            {/* ドラッグ可能なテキストボックス群 */}
-            {fields.map(f => {
-              const isSelected = selectedFieldId === f.id;
-              if (!f.val) return null;
-
-              return (
-                <div
-                  key={f.id}
-                  onMouseDown={e => handleMouseDown(f.id, e)}
-                  onClick={() => setSelectedFieldId(f.id)}
-                  style={{
-                    position: 'absolute',
-                    left: `${f.x}%`,
-                    top: `${f.y}%`,
-                    transform: 'translate(0, -50%)',
-                    fontSize: `${(f.fontSize / 1000) * 100}vw`,
-                    maxWidth: '30%',
-                    fontWeight: f.fontWeight || 'normal',
-                    fontFamily: f.isMono ? '"Courier New", monospace' : '"Noto Sans JP", sans-serif',
-                    color: isSelected ? '#1d4ed8' : '#0f172a',
-                    cursor: 'grab'
-                  }}
-                  className={`px-1 py-0.5 rounded transition-shadow leading-none ${
-                    isSelected
-                      ? 'ring-2 ring-indigo-600 bg-indigo-500/20 shadow-lg font-black z-30'
-                      : 'hover:ring-1 hover:ring-indigo-400 hover:bg-indigo-100/30 z-10'
-                  }`}
-                  title={`${f.label} (ドラッグして移動)`}
-                >
-                  {f.isMyNumber ? (
-                    <span className="tracking-widest flex items-center">
-                      {f.val.split('').map((c, i) => (
-                        <span key={i} style={{ display: 'inline-block', width: `${(f.pitch || 1.82) * 10}px`, textAlign: 'center' }}>
-                          {c}
-                        </span>
-                      ))}
-                    </span>
-                  ) : f.isCircle ? (
-                    <span className="w-5 h-5 rounded-full border-2 border-blue-600 inline-block"></span>
-                  ) : (
-                    f.val
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════════════════════════ */}
-      {/* 📄 ② 印字完成ビュー（提出用プレビュー ＆ A4印刷） */}
-      {/* ══════════════════════════════════════════════════════════════════════════════════ */}
+      {/* 📄 ① 印字完成ビュー */}
       {activeTab === 'canvas_doc' && (
         <div className="max-w-[1150px] mx-auto bg-white p-3 rounded-2xl shadow-2xl border border-slate-300 print:p-0 print:border-none print:shadow-none">
           {isRendering && (
@@ -675,6 +424,9 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
               <p className="text-xs font-bold text-slate-600">国税庁公式原本（2026bun_01）に高精細印字中...</p>
             </div>
           )}
+
+          {/* 隠しCanvas */}
+          <canvas ref={canvasRef} className="hidden" />
 
           {canvasUrl && (
             <div className="w-full overflow-x-auto">
@@ -688,9 +440,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════════════════ */}
-      {/* 📄 ③ 国税庁公式 入力用原本PDF インラインプレビュー */}
-      {/* ══════════════════════════════════════════════════════════════════════════════════ */}
+      {/* 📄 ② 国税庁原本PDF */}
       {activeTab === 'pdf_view' && (
         <div className="max-w-[1150px] mx-auto bg-white p-4 rounded-2xl shadow-xl border border-slate-200 space-y-3 no-print">
           <div className="flex items-center justify-between border-b border-slate-200 pb-2">
@@ -720,9 +470,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════════════════ */}
-      {/* 📄 ④ 裏面手引き */}
-      {/* ══════════════════════════════════════════════════════════════════════════════════ */}
+      {/* 📄 ③ 裏面手引き */}
       {activeTab === 'guide_view' && (
         <div className="max-w-[1150px] mx-auto bg-white p-5 rounded-2xl shadow-xl border border-slate-200 font-sans text-xs space-y-4 no-print">
           <div className="border-b border-slate-200 pb-2 flex justify-between items-center">

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Grid, Clock, CalendarDays, LayoutDashboard, DollarSign, UserCheck, Building2 } from 'lucide-react';
+import { Grid, Clock, CalendarDays, LayoutDashboard, DollarSign, UserCheck, Building2, Database } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 type AppSwitcherProps = {
@@ -71,6 +71,13 @@ export default function AppSwitcher({ currentApp, role }: AppSwitcherProps) {
       path: '/settings/company',
       description: '全システム共通の基本設定',
       iconBg: 'bg-gradient-to-br from-indigo-600 to-purple-600 shadow-sm ring-1 ring-white/30'
+    }, {
+      id: 'superadmin',
+      name: '販売者・特権本部',
+      icon: <Database className="w-4 h-4 text-white drop-shadow-sm" />,
+      path: '/super-admin',
+      description: 'テナント監視・帳票マスタ設定',
+      iconBg: 'bg-gradient-to-br from-slate-800 to-slate-950 shadow-sm ring-1 ring-white/30'
     }] : [])
   ];
 
