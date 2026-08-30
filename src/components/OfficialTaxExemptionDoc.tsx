@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '../lib/supabase';
 import { Printer, Download, Eye, CheckCircle2, Loader2, Sparkles, FileText } from 'lucide-react';
 import { TAX_DOC_2026_COORDINATES as DEFAULT_POS } from '../lib/taxDocCoordinates';
 
@@ -141,9 +142,15 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         // 2. 販売者マスター設定（カスタマイズ座標）の読み込み
         let masterMap: Record<string, { x: number; y: number; fontSize: number; pitch?: number }> = {};
         try {
-          const saved = localStorage.getItem('taxDocMasterFields');
-          if (saved) {
-            const parsed = JSON.parse(saved);
+          const { data: sysSettings } = await supabase.from('system_settings').select('tax_doc_coordinates').limit(1).single();
+          let parsed: any[] | null = sysSettings?.tax_doc_coordinates || null;
+          
+          if (!parsed) {
+            const saved = localStorage.getItem('taxDocMasterFields');
+            if (saved) parsed = JSON.parse(saved);
+          }
+
+          if (parsed && Array.isArray(parsed)) {
             parsed.forEach((f: any) => {
               masterMap[f.id] = { x: f.x, y: f.y, fontSize: f.fontSize, pitch: f.pitch };
             });

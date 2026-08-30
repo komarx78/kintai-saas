@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
 import { 
   Save, Copy, Check, 
   Building2, User, Users, Heart, Shield, Baby, FileText, CheckCircle2, Loader2,
@@ -148,30 +149,38 @@ export const TaxDocMasterInspector: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // 項目別マスタ座標State（古い保存データがあっても新項目を自動マージ！）
-  const [fields, setFields] = useState<FieldConfig[]>(() => {
-    try {
-      const saved = localStorage.getItem('taxDocMasterFields');
-      if (saved) {
-        const parsed: FieldConfig[] = JSON.parse(saved);
-        const parsedMap = new Map(parsed.map(f => [f.id, f]));
-        // DEFAULT_TAX_FIELDS をベースにし、saved の値で上書きマージ（不要になった spouseRel 等は自然消滅）
-        return DEFAULT_TAX_FIELDS.map(def => {
-          const custom = parsedMap.get(def.id);
-          if (custom) {
-            return {
-              ...def,
-              x: custom.x,
-              y: custom.y,
-              fontSize: custom.fontSize,
-              pitch: custom.pitch !== undefined ? custom.pitch : def.pitch
-            };
+  const [fields, setFields] = useState<FieldConfig[]>(DEFAULT_TAX_FIELDS);
+
+  useEffect(() => {
+    const fetchMaster = async () => {
+      try {
+        const { data } = await supabase.from('system_settings').select('tax_doc_coordinates').limit(1).single();
+        const saved = data?.tax_doc_coordinates;
+        if (saved && Array.isArray(saved)) {
+          const parsedMap = new Map(saved.map((f) => [f.id, f]));
+          setFields(DEFAULT_TAX_FIELDS.map(def => {
+            const custom = parsedMap.get(def.id);
+            if (custom) return { ...def, x: custom.x, y: custom.y, fontSize: custom.fontSize, pitch: custom.pitch !== undefined ? custom.pitch : def.pitch };
+            return def;
+          }));
+        } else {
+          const localSaved = localStorage.getItem('taxDocMasterFields');
+          if (localSaved) {
+            const parsed = JSON.parse(localSaved);
+            const parsedMap = new Map(parsed.map((f) => [f.id, f]));
+            setFields(DEFAULT_TAX_FIELDS.map(def => {
+              const custom = parsedMap.get(def.id);
+              if (custom) return { ...def, x: custom.x, y: custom.y, fontSize: custom.fontSize, pitch: custom.pitch !== undefined ? custom.pitch : def.pitch };
+              return def;
+            }));
           }
-          return def;
-        });
+        }
+      } catch (err) {
+        console.error(err);
       }
-    } catch (_) {}
-    return DEFAULT_TAX_FIELDS;
-  });
+    };
+    fetchMaster();
+  }, []);
 
   const [bgBlankPdfImage, setBgBlankPdfImage] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(true);
@@ -327,14 +336,24 @@ export const TaxDocMasterInspector: React.FC = () => {
   }, []);
 
   // 全社マスター保存
-  const handleSaveMaster = () => {
+  const handleSaveMaster = async () => {
     setIsSaving(true);
-    localStorage.setItem('taxDocMasterFields', JSON.stringify(fields));
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      const { data: current } = await supabase.from('system_settings').select('id').limit(1).single();
+      if (current) {
+        await supabase.from('system_settings').update({ tax_doc_coordinates: fields }).eq('id', current.id);
+      } else {
+        await supabase.from('system_settings').insert([{ tax_doc_coordinates: fields }]);
+      }
+      localStorage.setItem('taxDocMasterFields', JSON.stringify(fields));
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
-    }, 500);
+    } catch (err) {
+      console.error(err);
+      alert('保存に失敗しました。');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleResetDefaults = () => {
