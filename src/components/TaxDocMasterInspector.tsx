@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Save, Copy, Check, MousePointer,
+  Save, Copy, Check, 
   Building2, User, Users, Heart, Shield, Baby, FileText, CheckCircle2, Loader2,
-  ZoomIn, ZoomOut, Move, RotateCcw
+  ZoomIn, ZoomOut, RotateCcw,
+  ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
+  ChevronsUp, ChevronsDown, ChevronsLeft, ChevronsRight
 } from 'lucide-react';
 
 interface FieldConfig {
@@ -176,24 +178,38 @@ export const TaxDocMasterInspector: React.FC = () => {
     };
   }, [draggingFieldId, updateField]);
 
-  // ⌨️ キーボード矢印キーでの微調整
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!selectedField) return;
-    const step = e.shiftKey ? 1.0 : 0.1;
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      updateField(selectedField.id, 'y', selectedField.y - step);
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      updateField(selectedField.id, 'y', selectedField.y + step);
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      updateField(selectedField.id, 'x', selectedField.x - step);
-    } else if (e.key === 'ArrowRight') {
-      e.preventDefault();
-      updateField(selectedField.id, 'x', selectedField.x + step);
-    }
-  };
+  // ⌨️ 全画面グローバルキーボードリスナー（PCの矢印キーでいつでも動かせる！）
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // input 要素にフォーカスがあるときは除外
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+
+      if (!selectedFieldId) return;
+      const target = fields.find(f => f.id === selectedFieldId);
+      if (!target) return;
+
+      const step = e.shiftKey ? 1.0 : 0.1;
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        updateField(selectedFieldId, 'y', target.y - step);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        updateField(selectedFieldId, 'y', target.y + step);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        updateField(selectedFieldId, 'x', target.x - step);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        updateField(selectedFieldId, 'x', target.x + step);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [selectedFieldId, fields, updateField]);
 
   // 背景用の白紙PDF原本（文字なし）をCanvasから生成
   useEffect(() => {
@@ -271,7 +287,7 @@ export const TaxDocMasterInspector: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-4 font-sans select-none" onKeyDown={handleKeyDown} tabIndex={0}>
+    <div className="space-y-4 font-sans select-none">
       {/* 🧭 ヘッダー ＆ 保存バー */}
       <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -287,7 +303,7 @@ export const TaxDocMasterInspector: React.FC = () => {
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                右側の国税庁用紙の上で文字を直接マウスで掴んでドラッグ移動できます。
+                画面上の大きな十字キーボタン、PCの矢印キー（↑ ↓ ← →）、またはマウスドラッグで位置をミリ単位で動かせます。
               </p>
             </div>
           </div>
@@ -327,11 +343,11 @@ export const TaxDocMasterInspector: React.FC = () => {
         </div>
       </div>
 
-      {/* 2カラム構成：左（項目選択＆サイズ調整） ＋ 右（直接ドラッグ可能な用紙ビュー） */}
+      {/* 2カラム構成：左（項目選択＆十字キーコントローラー） ＋ 右（直接ドラッグ可能な用紙ビュー） */}
       <div className="grid grid-cols-12 gap-4">
         
         {/* ⬅️ 左カラム */}
-        <div className="col-span-12 lg:col-span-4 space-y-3">
+        <div className="col-span-12 lg:col-span-5 space-y-3">
           
           {/* ① セクション選択タブ */}
           <div className="bg-white p-2 rounded-2xl shadow-xs border border-slate-200 grid grid-cols-2 gap-1.5">
@@ -371,7 +387,7 @@ export const TaxDocMasterInspector: React.FC = () => {
               <span className="text-[10px] text-slate-400">右側で直接掴んで移動可能</span>
             </h3>
 
-            <div className="space-y-1 max-h-[220px] overflow-y-auto pr-1">
+            <div className="space-y-1 max-h-[160px] overflow-y-auto pr-1">
               {sectionFields.map(f => {
                 const isSelected = selectedFieldId === f.id;
                 return (
@@ -405,82 +421,192 @@ export const TaxDocMasterInspector: React.FC = () => {
             </div>
           </div>
 
-          {/* ③ 選択中項目のインスペクター（フォントサイズ ＆ ピッチ） */}
+          {/* 🎮 ③ 選択中項目の「十字キーコントローラー ＆ 数値直接入力」パネル */}
           {selectedField && (
-            <div className="bg-slate-900 text-white p-3.5 rounded-2xl shadow-xl border border-slate-800 space-y-2.5">
-              <div className="border-b border-slate-800 pb-1.5 flex items-center justify-between">
+            <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl border border-slate-800 space-y-3">
+              <div className="border-b border-slate-800 pb-2 flex items-center justify-between">
                 <div>
                   <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider">SELECTED ITEM</span>
-                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Move className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                  <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
                     {selectedField.name}
                   </h4>
                 </div>
-                <div className="text-right font-mono text-xs text-amber-300">
-                  X:{selectedField.x.toFixed(1)}% / Y:{selectedField.y.toFixed(1)}%
+                <div className="text-right font-mono text-xs text-amber-300 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
+                  X: <span className="text-indigo-300 font-bold">{selectedField.x.toFixed(1)}%</span> / Y: <span className="text-amber-300 font-bold">{selectedField.y.toFixed(1)}%</span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {/* 文字サイズ (px) */}
+              {/* 十字キー（十字ボタンコントローラー） ＆ 数値直接入力 */}
+              <div className="grid grid-cols-12 gap-3 items-center">
+                
+                {/* 🎮 十字コントローラー */}
+                <div className="col-span-7 bg-slate-800/90 p-3 rounded-2xl border border-slate-700/80 flex flex-col items-center justify-center space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 mb-1">🎮 位置を動かす十字ボタン</span>
+                  
+                  {/* 上ボタン（1.0% / 0.1%） */}
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => updateField(selectedField.id, 'y', selectedField.y - 1.0)}
+                      className="px-2 py-1 bg-slate-700 hover:bg-indigo-600 active:scale-95 rounded text-[10px] font-bold text-slate-200 cursor-pointer flex items-center gap-0.5"
+                      title="上へ大きく移動 (1.0%)"
+                    >
+                      <ChevronsUp className="w-3.5 h-3.5" /> -1%
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateField(selectedField.id, 'y', selectedField.y - 0.1)}
+                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black rounded-lg shadow-md cursor-pointer flex items-center gap-1 text-xs"
+                      title="上へ微調整 (0.1%)"
+                    >
+                      <ArrowUp className="w-4 h-4" /> 上
+                    </button>
+                  </div>
+
+                  {/* 左右ボタン */}
+                  <div className="flex items-center gap-2 my-0.5">
+                    <div className="flex gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => updateField(selectedField.id, 'x', selectedField.x - 1.0)}
+                        className="px-1.5 py-1 bg-slate-700 hover:bg-indigo-600 active:scale-95 rounded text-[10px] font-bold text-slate-200 cursor-pointer"
+                        title="左へ大きく移動 (1.0%)"
+                      >
+                        <ChevronsLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateField(selectedField.id, 'x', selectedField.x - 0.1)}
+                        className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black rounded-lg shadow-md cursor-pointer flex items-center gap-0.5 text-xs"
+                        title="左へ微調整 (0.1%)"
+                      >
+                        <ArrowLeft className="w-4 h-4" /> 左
+                      </button>
+                    </div>
+
+                    <span className="w-6 h-6 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-[9px] text-amber-400 font-mono">
+                      ●
+                    </span>
+
+                    <div className="flex gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => updateField(selectedField.id, 'x', selectedField.x + 0.1)}
+                        className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black rounded-lg shadow-md cursor-pointer flex items-center gap-0.5 text-xs"
+                        title="右へ微調整 (0.1%)"
+                      >
+                        右 <ArrowRight className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateField(selectedField.id, 'x', selectedField.x + 1.0)}
+                        className="px-1.5 py-1 bg-slate-700 hover:bg-indigo-600 active:scale-95 rounded text-[10px] font-bold text-slate-200 cursor-pointer"
+                        title="右へ大きく移動 (1.0%)"
+                      >
+                        <ChevronsRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 下ボタン（0.1% / 1.0%） */}
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => updateField(selectedField.id, 'y', selectedField.y + 0.1)}
+                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black rounded-lg shadow-md cursor-pointer flex items-center gap-1 text-xs"
+                      title="下へ微調整 (0.1%)"
+                    >
+                      <ArrowDown className="w-4 h-4" /> 下
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateField(selectedField.id, 'y', selectedField.y + 1.0)}
+                      className="px-2 py-1 bg-slate-700 hover:bg-indigo-600 active:scale-95 rounded text-[10px] font-bold text-slate-200 cursor-pointer flex items-center gap-0.5"
+                      title="下へ大きく移動 (1.0%)"
+                    >
+                      <ChevronsDown className="w-3.5 h-3.5" /> +1%
+                    </button>
+                  </div>
+                </div>
+
+                {/* 🔢 数値直接入力 ＆ 文字サイズ */}
+                <div className="col-span-5 space-y-2">
+                  {/* 横位置 X */}
+                  <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700">
+                    <label className="block text-[10px] text-slate-400 mb-0.5">横位置 (X %):</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={selectedField.x}
+                      onChange={e => updateField(selectedField.id, 'x', parseFloat(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1 text-xs font-mono font-bold text-indigo-300"
+                    />
+                  </div>
+
+                  {/* 縦位置 Y */}
+                  <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700">
+                    <label className="block text-[10px] text-slate-400 mb-0.5">縦位置 (Y %):</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={selectedField.y}
+                      onChange={e => updateField(selectedField.id, 'y', parseFloat(e.target.value) || 0)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1 text-xs font-mono font-bold text-amber-300"
+                    />
+                  </div>
+
+                  {/* 文字サイズ */}
+                  <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700">
+                    <label className="block text-[10px] text-slate-400 mb-0.5">文字サイズ (px):</label>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="8"
+                        max="36"
+                        value={selectedField.fontSize}
+                        onChange={e => updateField(selectedField.id, 'fontSize', parseInt(e.target.value, 10) || 12)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1 text-xs font-mono font-bold text-emerald-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* マイナンバーマス目ピッチ */}
+              {selectedField.pitch !== undefined && (
                 <div className="bg-slate-800/90 p-2 rounded-xl border border-slate-700/80 space-y-1">
                   <div className="flex justify-between text-[10px]">
-                    <span className="text-slate-400">文字サイズ:</span>
-                    <span className="font-mono font-bold text-emerald-300">{selectedField.fontSize} px</span>
+                    <span className="text-slate-400">12桁マス目間隔 (ピッチ %):</span>
+                    <span className="font-mono font-bold text-cyan-300">{selectedField.pitch.toFixed(2)} %</span>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
-                      onClick={() => updateField(selectedField.id, 'fontSize', Math.max(8, selectedField.fontSize - 1))}
+                      type="button"
+                      onClick={() => updateField(selectedField.id, 'pitch', Math.max(0.5, (selectedField.pitch || 1.82) - 0.02))}
                       className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
                     >-</button>
                     <input
                       type="range"
-                      min="8"
-                      max="32"
-                      step="1"
-                      value={selectedField.fontSize}
-                      onChange={e => updateField(selectedField.id, 'fontSize', parseInt(e.target.value, 10))}
+                      min="0.5"
+                      max="3.0"
+                      step="0.02"
+                      value={selectedField.pitch || 1.82}
+                      onChange={e => updateField(selectedField.id, 'pitch', parseFloat(e.target.value))}
                       className="w-full accent-indigo-500 cursor-pointer"
                     />
                     <button
-                      onClick={() => updateField(selectedField.id, 'fontSize', Math.min(32, selectedField.fontSize + 1))}
+                      type="button"
+                      onClick={() => updateField(selectedField.id, 'pitch', Math.min(3.0, (selectedField.pitch || 1.82) + 0.02))}
                       className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
                     >+</button>
                   </div>
                 </div>
+              )}
 
-                {/* 12桁マイナンバーマス目ピッチ */}
-                {selectedField.pitch !== undefined ? (
-                  <div className="bg-slate-800/90 p-2 rounded-xl border border-slate-700/80 space-y-1">
-                    <div className="flex justify-between text-[10px]">
-                      <span className="text-slate-400">マス目間隔:</span>
-                      <span className="font-mono font-bold text-cyan-300">{selectedField.pitch.toFixed(2)} %</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => updateField(selectedField.id, 'pitch', Math.max(0.5, (selectedField.pitch || 1.82) - 0.02))}
-                        className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
-                      >-</button>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="3.0"
-                        step="0.02"
-                        value={selectedField.pitch || 1.82}
-                        onChange={e => updateField(selectedField.id, 'pitch', parseFloat(e.target.value))}
-                        className="w-full accent-indigo-500 cursor-pointer"
-                      />
-                      <button
-                        onClick={() => updateField(selectedField.id, 'pitch', Math.min(3.0, (selectedField.pitch || 1.82) + 0.02))}
-                        className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
-                      >+</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-slate-800/50 p-2 rounded-xl border border-slate-700/50 flex items-center justify-center text-[10px] text-slate-400">
-                    💡 矢印キー（↑ ↓ ← →）で 0.1% 微調整可能
-                  </div>
-                )}
+              <div className="text-[10px] text-slate-400 bg-slate-950/60 p-2 rounded-xl border border-slate-800/80">
+                💡 PCのキーボードの矢印キー（↑ ↓ ← →）を押しても直接動かせます（Shift+矢印で大きく移動）
               </div>
             </div>
           )}
@@ -488,30 +614,32 @@ export const TaxDocMasterInspector: React.FC = () => {
         </div>
 
         {/* ➡️ 右カラム：白紙原本の上にドラッグ可能なテキストボックスを直接配置 */}
-        <div className="col-span-12 lg:col-span-8 bg-white p-3 rounded-2xl shadow-xl border border-slate-200 space-y-2">
+        <div className="col-span-12 lg:col-span-7 bg-white p-3 rounded-2xl shadow-xl border border-slate-200 space-y-2">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <MousePointer className="w-3.5 h-3.5 text-indigo-600" />
-                国税庁用紙 上での直接ドラッグ＆ドロップ配置
+                <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                国税庁原本（2026bun_01.pdf）リアルタイムプレビュー
               </h3>
               <span className="text-[10px] text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                赤枠 = 選択中（マウスで掴んでドラッグ移動！）
+                赤枠 = 選択中項目
               </span>
             </div>
 
             <div className="flex items-center gap-2 text-xs">
               <button
+                type="button"
                 onClick={() => setPreviewZoom(z => Math.max(70, z - 10))}
-                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold flex items-center gap-1"
+                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold flex items-center gap-1 cursor-pointer"
               >
                 <ZoomOut className="w-3 h-3" />
               </button>
               <span className="font-mono font-bold text-slate-700 text-xs">{previewZoom}%</span>
               <button
+                type="button"
                 onClick={() => setPreviewZoom(z => Math.min(150, z + 10))}
-                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold flex items-center gap-1"
+                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold flex items-center gap-1 cursor-pointer"
               >
                 <ZoomIn className="w-3 h-3" />
               </button>
@@ -579,7 +707,7 @@ export const TaxDocMasterInspector: React.FC = () => {
                           ? 'ring-2 ring-rose-500 bg-rose-500/25 shadow-2xl z-30 font-black scale-105'
                           : 'hover:ring-1 hover:ring-indigo-500 hover:bg-indigo-100/60 z-10 bg-white/40'
                       }`}
-                      title={`${f.name} (マウスで掴んでドラッグ移動)`}
+                      title={`${f.name} (クリックして選択・ドラッグして移動)`}
                     >
                       {f.pitch ? (
                         <span className="flex items-center">
