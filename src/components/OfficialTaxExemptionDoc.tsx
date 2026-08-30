@@ -409,9 +409,8 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
           renderText(uDep.relation || '', getField(`u16_${idx}Rel`));
 
-          // 住民税元号○印
-          if (ubDate.era === '昭') renderCircle(getField(`u16_${idx}EraShowa`));
-          else if (ubDate.era === '平') renderCircle(getField(`u16_${idx}EraHeisei`));
+          // 住民税元号○印（平成・令和）
+          if (ubDate.era === '平') renderCircle(getField(`u16_${idx}EraHeisei`));
           else if (ubDate.era === '令') renderCircle(getField(`u16_${idx}EraReiwa`));
 
           renderText(ubDate.year, getField(`u16_${idx}BirthY`));
@@ -420,8 +419,9 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
           renderText(uDep.address || data.employeeAddress || '', getField(`u16_${idx}Address`), 'left', false);
 
+          // 控除対象外国外親族（○印）
           if (uDep.isNonResident) {
-            renderCheck(getField(`u16_${idx}CheckForeign`));
+            renderCircle(getField(`u16_${idx}CircleForeign`));
           }
 
           renderText(`${(uDep.incomeEstimate || 0).toLocaleString()}`, getField(`u16_${idx}Income`), 'right');

@@ -171,20 +171,19 @@ export const DEFAULT_TAX_FIELDS: TaxDocFieldConfig[] = [
   { id: 'specialStudent', name: '勤労学生チェック（✓）', section: 'special', x: 40.0, y: 46.5, fontSize: 12, example: '✓', description: 'Ｃ欄勤労学生ボックス', isCheck: true },
   { id: 'specialDetails', name: '障害者・学生の内容', section: 'special', x: 46.5, y: 46.5, fontSize: 9, example: '障害者手帳第1種', description: 'Ｃ欄内容記載枠' },
 
-  // ⑥ 住民税（16歳未満 1人目〜2人目）
+  // ⑥ 住民税（16歳未満 1人目〜2人目 原本枠：平成・令和）
   // 1人目
   { id: 'u16_0Kana', name: '住民税1 フリガナ', section: 'resident', x: 16.5, y: 55.5, fontSize: 7, example: 'テスト ジロウ', description: '住民税欄1人目カナ' },
   { id: 'u16_0Name', name: '住民税1 氏名', section: 'resident', x: 16.5, y: 57.0, fontSize: 11, example: 'テスト 次郎', description: '住民税欄1人目氏名' },
   { id: 'u16_0MyNumber', name: '住民税1 マイナンバー', section: 'resident', x: 27.5, y: 57.0, fontSize: 9, pitch: 0.98, example: '************', description: '住民税欄1人目12桁マス目' },
   { id: 'u16_0Rel', name: '住民税1 続柄', section: 'resident', x: 38.5, y: 57.0, fontSize: 10, example: '二男', description: '住民税欄1人目続柄' },
-  { id: 'u16_0EraShowa', name: '住民税1元号 昭（○印）', section: 'resident', x: 41.2, y: 56.5, fontSize: 7, example: '○', description: '住民税1人目「昭」○印', isCircle: true },
-  { id: 'u16_0EraHeisei', name: '住民税1元号 平（○印）', section: 'resident', x: 41.2, y: 57.5, fontSize: 7, example: '○', description: '住民税1人目「平」○印', isCircle: true },
-  { id: 'u16_0EraReiwa', name: '住民税1元号 令（○印）', section: 'resident', x: 41.2, y: 58.5, fontSize: 7, example: '○', description: '住民税1人目「令」○印', isCircle: true },
+  { id: 'u16_0EraHeisei', name: '住民税1元号 平（○印）', section: 'resident', x: 41.2, y: 56.6, fontSize: 7, example: '○', description: '住民税1人目 上段「平」○印', isCircle: true },
+  { id: 'u16_0EraReiwa', name: '住民税1元号 令（○印）', section: 'resident', x: 41.2, y: 57.8, fontSize: 7, example: '○', description: '住民税1人目 下段「令」○印', isCircle: true },
   { id: 'u16_0BirthY', name: '住民税1 生年', section: 'resident', x: 42.5, y: 57.0, fontSize: 10, example: '30', description: '住民税欄1人目生年' },
   { id: 'u16_0BirthM', name: '住民税1 生月', section: 'resident', x: 44.8, y: 57.0, fontSize: 10, example: '8', description: '住民税欄1人目生月' },
   { id: 'u16_0BirthD', name: '住民税1 生日', section: 'resident', x: 47.2, y: 57.0, fontSize: 10, example: '20', description: '住民税欄1人目生日' },
   { id: 'u16_0Address', name: '住民税1 住所', section: 'resident', x: 53.0, y: 57.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄1人目住所' },
-  { id: 'u16_0CheckForeign', name: '住民税1 控除対象外国外（✓）', section: 'resident', x: 72.8, y: 57.0, fontSize: 8, example: '✓', description: '住民税1人目 控除対象外国外親族チェック', isCheck: true },
+  { id: 'u16_0CircleForeign', name: '住民税1 控除対象外国外（○印）', section: 'resident', x: 72.8, y: 57.0, fontSize: 8, example: '○', description: '住民税1人目 控除対象外国外親族○印', isCircle: true },
   { id: 'u16_0Income', name: '住民税1 所得見積額', section: 'resident', x: 74.0, y: 57.0, fontSize: 10, example: '0', description: '住民税欄1人目所得' },
 
   // 2人目
@@ -192,14 +191,13 @@ export const DEFAULT_TAX_FIELDS: TaxDocFieldConfig[] = [
   { id: 'u16_1Name', name: '住民税2 氏名', section: 'resident', x: 16.5, y: 61.0, fontSize: 11, example: 'テスト 幸子', description: '住民税欄2人目氏名' },
   { id: 'u16_1MyNumber', name: '住民税2 マイナンバー', section: 'resident', x: 27.5, y: 61.0, fontSize: 9, pitch: 0.98, example: '************', description: '住民税欄2人目12桁マス目' },
   { id: 'u16_1Rel', name: '住民税2 続柄', section: 'resident', x: 38.5, y: 61.0, fontSize: 10, example: '二女', description: '住民税欄2人目続柄' },
-  { id: 'u16_1EraShowa', name: '住民税2元号 昭（○印）', section: 'resident', x: 41.2, y: 60.5, fontSize: 7, example: '○', description: '住民税2人目「昭」○印', isCircle: true },
-  { id: 'u16_1EraHeisei', name: '住民税2元号 平（○印）', section: 'resident', x: 41.2, y: 61.5, fontSize: 7, example: '○', description: '住民税2人目「平」○印', isCircle: true },
-  { id: 'u16_1EraReiwa', name: '住民税2元号 令（○印）', section: 'resident', x: 41.2, y: 62.5, fontSize: 7, example: '○', description: '住民税2人目「令」○印', isCircle: true },
+  { id: 'u16_1EraHeisei', name: '住民税2元号 平（○印）', section: 'resident', x: 41.2, y: 60.6, fontSize: 7, example: '○', description: '住民税2人目 上段「平」○印', isCircle: true },
+  { id: 'u16_1EraReiwa', name: '住民税2元号 令（○印）', section: 'resident', x: 41.2, y: 61.8, fontSize: 7, example: '○', description: '住民税2人目 下段「令」○印', isCircle: true },
   { id: 'u16_1BirthY', name: '住民税2 生年', section: 'resident', x: 42.5, y: 61.0, fontSize: 10, example: '3', description: '住民税欄2人目生年' },
   { id: 'u16_1BirthM', name: '住民税2 生月', section: 'resident', x: 44.8, y: 61.0, fontSize: 10, example: '12', description: '住民税欄2人目生月' },
   { id: 'u16_1BirthD', name: '住民税2 生日', section: 'resident', x: 47.2, y: 61.0, fontSize: 10, example: '5', description: '住民税欄2人目生日' },
   { id: 'u16_1Address', name: '住民税2 住所', section: 'resident', x: 53.0, y: 61.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄2人目住所' },
-  { id: 'u16_1CheckForeign', name: '住民税2 控除対象外国外（✓）', section: 'resident', x: 72.8, y: 61.0, fontSize: 8, example: '✓', description: '住民税2人目 控除対象外国外親族チェック', isCheck: true },
+  { id: 'u16_1CircleForeign', name: '住民税2 控除対象外国外（○印）', section: 'resident', x: 72.8, y: 61.0, fontSize: 8, example: '○', description: '住民税2人目 控除対象外国外親族○印', isCircle: true },
   { id: 'u16_1Income', name: '住民税2 所得見積額', section: 'resident', x: 74.0, y: 61.0, fontSize: 10, example: '0', description: '住民税欄2人目所得' },
 
   // ⑦ 退職手当等を有する配偶者・扶養親族（最下段新設欄）
