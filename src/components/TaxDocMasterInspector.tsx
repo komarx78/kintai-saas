@@ -866,19 +866,26 @@ export const TaxDocMasterInspector: React.FC = () => {
             <canvas ref={canvasRef} className="hidden" />
 
             {bgBlankPdfImage && (
-              <div className="w-fit min-w-full min-h-full flex items-center justify-center p-2">
+              <div 
+                style={{ 
+                  minWidth: '100%', 
+                  width: previewZoom > 100 ? `${previewZoom}%` : '100%', 
+                  display: 'flex', 
+                  justifyContent: previewZoom > 100 ? 'flex-start' : 'center', 
+                  alignItems: 'flex-start',
+                  padding: '8px'
+                }}
+              >
                 <div 
                   ref={previewContainerRef}
                   style={{ 
-                    width: `${previewZoom}%`, 
-                    minWidth: `${previewZoom}%`,
-                    maxWidth: `${previewZoom}%`,
-                    flexShrink: 0,
+                    width: previewZoom > 100 ? '100%' : `${previewZoom}%`, 
                     position: 'relative',
                     aspectRatio: '297 / 210',
-                    containerType: 'inline-size'
+                    containerType: 'inline-size',
+                    flexShrink: 0
                   }}
-                  className="m-auto shadow-2xl rounded-lg overflow-hidden border-2 border-slate-400/90 bg-white transition-all duration-150 cursor-default"
+                  className="shadow-2xl rounded-lg overflow-hidden border-2 border-slate-400/90 bg-white transition-all duration-150 cursor-default"
                 >
                 {/* 📄 白紙の国税庁原本PDF用紙（背景画像） */}
                 <img
