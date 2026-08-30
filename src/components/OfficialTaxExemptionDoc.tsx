@@ -296,69 +296,72 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           ctx.fillText(data.spouseAddress || data.employeeAddress, W * fSpAddr.x, H * fSpAddr.y);
         }
 
-        // Ｂ. 控除対象扶養親族（1人目）
-        if (regularDependents[0]) {
-          const dep = regularDependents[0];
+        // Ｂ. 控除対象扶養親族（1人目〜4人目 フル対応）
+        regularDependents.slice(0, 4).forEach((dep, idx) => {
+          if (!dep) return;
           const bDate = parseJapaneseEraDate(dep.birthDate);
+          const prefix = `dep${idx}`;
+          const defRowY = 27.5 + idx * 5.0;
+          const defKanaY = 26.0 + idx * 5.0;
 
-          const fDep0Kana = getField('dep0Kana', DEFAULT_POS.depCols.kanaX, DEFAULT_POS.dependents[0].kanaY, 13);
-          ctx.font = `${fDep0Kana.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(dep.nameKana || '', W * fDep0Kana.x, H * fDep0Kana.y);
+          const fKana = getField(`${prefix}Kana`, DEFAULT_POS.depCols.kanaX, defKanaY / 100, 7);
+          ctx.font = `${fKana.size}px "Noto Sans JP", sans-serif`;
+          ctx.fillText(dep.nameKana || '', W * fKana.x, H * fKana.y);
 
-          const fDep0Name = getField('dep0Name', DEFAULT_POS.depCols.nameX, DEFAULT_POS.dependents[0].rowY, 19);
-          ctx.font = `bold ${fDep0Name.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(dep.name, W * fDep0Name.x, H * fDep0Name.y);
+          const fName = getField(`${prefix}Name`, DEFAULT_POS.depCols.nameX, defRowY / 100, 11);
+          ctx.font = `bold ${fName.size}px "Noto Sans JP", sans-serif`;
+          ctx.fillText(dep.name, W * fName.x, H * fName.y);
 
-          const fDep0Num = getField('dep0MyNumber', DEFAULT_POS.depCols.myNumStartX, DEFAULT_POS.dependents[0].rowY, 16, DEFAULT_POS.depCols.myNumPitch);
+          const fNum = getField(`${prefix}MyNumber`, DEFAULT_POS.depCols.myNumStartX, defRowY / 100, 9, DEFAULT_POS.depCols.myNumPitch);
           const depNumStr = dep.myNumber ? dep.myNumber.replace(/[^0-9]/g, '') : '************';
-          ctx.font = `bold ${fDep0Num.size}px "Courier New", monospace`;
-          const depPitch = W * (fDep0Num.pitch || DEFAULT_POS.depCols.myNumPitch);
+          ctx.font = `bold ${fNum.size}px "Courier New", monospace`;
+          const depPitch = W * (fNum.pitch || DEFAULT_POS.depCols.myNumPitch);
           for (let i = 0; i < 12; i++) {
-            ctx.fillText(depNumStr[i] || '*', W * fDep0Num.x + i * depPitch, H * fDep0Num.y);
+            ctx.fillText(depNumStr[i] || '*', W * fNum.x + i * depPitch, H * fNum.y);
           }
 
-          const fDep0Rel = getField('dep0Rel', DEFAULT_POS.depCols.relationX, DEFAULT_POS.dependents[0].rowY, 17);
-          ctx.font = `bold ${fDep0Rel.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(dep.relation, W * fDep0Rel.x, H * fDep0Rel.y);
+          const fRel = getField(`${prefix}Rel`, DEFAULT_POS.depCols.relationX, defRowY / 100, 10);
+          ctx.font = `bold ${fRel.size}px "Noto Sans JP", sans-serif`;
+          ctx.fillText(dep.relation, W * fRel.x, H * fRel.y);
 
-          const fDep0BirthY = getField('dep0BirthY', DEFAULT_POS.depCols.birthYX, DEFAULT_POS.dependents[0].rowY, 17);
-          ctx.fillText(bDate.year, W * fDep0BirthY.x, H * fDep0BirthY.y);
+          const fBirthY = getField(`${prefix}BirthY`, DEFAULT_POS.depCols.birthYX, defRowY / 100, 10);
+          ctx.fillText(bDate.year, W * fBirthY.x, H * fBirthY.y);
 
-          const fDep0BirthM = getField('dep0BirthM', DEFAULT_POS.depCols.birthMX, DEFAULT_POS.dependents[0].rowY, 17);
-          ctx.fillText(bDate.month, W * fDep0BirthM.x, H * fDep0BirthM.y);
+          const fBirthM = getField(`${prefix}BirthM`, DEFAULT_POS.depCols.birthMX, defRowY / 100, 10);
+          ctx.fillText(bDate.month, W * fBirthM.x, H * fBirthM.y);
 
-          const fDep0BirthD = getField('dep0BirthD', DEFAULT_POS.depCols.birthDX, DEFAULT_POS.dependents[0].rowY, 17);
-          ctx.fillText(bDate.day, W * fDep0BirthD.x, H * fDep0BirthD.y);
+          const fBirthD = getField(`${prefix}BirthD`, DEFAULT_POS.depCols.birthDX, defRowY / 100, 10);
+          ctx.fillText(bDate.day, W * fBirthD.x, H * fBirthD.y);
 
-          const fDep0Income = getField('dep0Income', DEFAULT_POS.depCols.incomeX, DEFAULT_POS.dependents[0].rowY, 17);
+          const fIncome = getField(`${prefix}Income`, DEFAULT_POS.depCols.incomeX, defRowY / 100, 10);
           ctx.textAlign = 'right';
-          ctx.fillText(`${(dep.incomeEstimate || 0).toLocaleString()} 円`, W * fDep0Income.x, H * fDep0Income.y);
+          ctx.fillText(`${(dep.incomeEstimate || 0).toLocaleString()} 円`, W * fIncome.x, H * fIncome.y);
           ctx.textAlign = 'left';
 
-          const fDep0Living = getField('dep0Living', DEFAULT_POS.depCols.livingFactX, DEFAULT_POS.dependents[0].rowY, 15);
-          ctx.font = `${fDep0Living.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(dep.isLivingTogether !== false ? '同居' : (dep.livingTogetherFact || '別居'), W * fDep0Living.x, H * fDep0Living.y);
+          const fLiving = getField(`${prefix}Living`, DEFAULT_POS.depCols.livingFactX, defRowY / 100, 9);
+          ctx.font = `${fLiving.size}px "Noto Sans JP", sans-serif`;
+          ctx.fillText(dep.isLivingTogether !== false ? '同居' : (dep.livingTogetherFact || '別居'), W * fLiving.x, H * fLiving.y);
 
-          const fDep0Addr = getField('dep0Address', DEFAULT_POS.depCols.addressX, DEFAULT_POS.dependents[0].rowY, 15);
-          ctx.fillText(dep.address || data.employeeAddress, W * fDep0Addr.x, H * fDep0Addr.y);
-        }
+          const fAddr = getField(`${prefix}Address`, DEFAULT_POS.depCols.addressX, defRowY / 100, 9);
+          ctx.fillText(dep.address || data.employeeAddress, W * fAddr.x, H * fAddr.y);
+        });
 
         // Ｃ. 障害者等
-        const fSpecDis = getField('specialDisabled', DEFAULT_POS.special.checkDisabled.x, DEFAULT_POS.special.checkDisabled.y, 20);
+        const fSpecDis = getField('specialDisabled', DEFAULT_POS.special.checkDisabled.x, DEFAULT_POS.special.checkDisabled.y, 12);
         ctx.fillStyle = '#2563eb';
         ctx.font = `bold ${fSpecDis.size}px sans-serif`;
         if (data.isDisability) ctx.fillText('✓', W * fSpecDis.x, H * fSpecDis.y);
 
-        const fSpecWidow = getField('specialWidow', DEFAULT_POS.special.checkWidow.x, DEFAULT_POS.special.checkWidow.y, 20);
+        const fSpecWidow = getField('specialWidow', DEFAULT_POS.special.checkWidow.x, DEFAULT_POS.special.checkWidow.y, 12);
         if (data.isWidow) ctx.fillText('✓', W * fSpecWidow.x, H * fSpecWidow.y);
 
-        const fSpecSingle = getField('specialSingle', DEFAULT_POS.special.checkSingleParent.x, DEFAULT_POS.special.checkSingleParent.y, 20);
+        const fSpecSingle = getField('specialSingle', DEFAULT_POS.special.checkSingleParent.x, DEFAULT_POS.special.checkSingleParent.y, 12);
         if (data.isSingleParent) ctx.fillText('✓', W * fSpecSingle.x, H * fSpecSingle.y);
 
-        const fSpecStudent = getField('specialStudent', DEFAULT_POS.special.checkWorkingStudent.x, DEFAULT_POS.special.checkWorkingStudent.y, 20);
+        const fSpecStudent = getField('specialStudent', DEFAULT_POS.special.checkWorkingStudent.x, DEFAULT_POS.special.checkWorkingStudent.y, 12);
         if (data.isWorkingStudent) ctx.fillText('✓', W * fSpecStudent.x, H * fSpecStudent.y);
 
-        const fSpecDetails = getField('specialDetails', DEFAULT_POS.special.details.x, DEFAULT_POS.special.details.y, 16);
+        const fSpecDetails = getField('specialDetails', DEFAULT_POS.special.details.x, DEFAULT_POS.special.details.y, 9);
         ctx.fillStyle = '#0f172a';
         ctx.font = `bold ${fSpecDetails.size}px "Noto Sans JP", sans-serif`;
         if (data.disabilityDetails) {
@@ -367,48 +370,51 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           ctx.fillText(`学校: ${data.workingStudentSchool || '〇〇大学'}`, W * fSpecDetails.x, H * fSpecDetails.y);
         }
 
-        // 住民税（16歳未満 1人目）
-        if (under16Dependents[0]) {
-          const uDep = under16Dependents[0];
+        // 住民税（16歳未満 1人目〜4人目 フル対応）
+        under16Dependents.slice(0, 4).forEach((uDep, idx) => {
+          if (!uDep) return;
           const ubDate = parseJapaneseEraDate(uDep.birthDate);
+          const prefix = `u16_${idx}`;
+          const defRowY = 57.0 + idx * 4.0;
+          const defKanaY = 55.5 + idx * 4.0;
 
-          const fU16Kana = getField('u16_0Kana', DEFAULT_POS.u16Cols.kanaX, DEFAULT_POS.u16[0].kanaY, 13);
-          ctx.font = `${fU16Kana.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(uDep.nameKana || '', W * fU16Kana.x, H * fU16Kana.y);
+          const fKana = getField(`${prefix}Kana`, DEFAULT_POS.u16Cols.kanaX, defKanaY / 100, 7);
+          ctx.font = `${fKana.size}px "Noto Sans JP", sans-serif`;
+          ctx.fillText(uDep.nameKana || '', W * fKana.x, H * fKana.y);
 
-          const fU16Name = getField('u16_0Name', DEFAULT_POS.u16Cols.nameX, DEFAULT_POS.u16[0].rowY, 19);
-          ctx.font = `bold ${fU16Name.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(uDep.name, W * fU16Name.x, H * fU16Name.y);
+          const fName = getField(`${prefix}Name`, DEFAULT_POS.u16Cols.nameX, defRowY / 100, 11);
+          ctx.font = `bold ${fName.size}px "Noto Sans JP", sans-serif`;
+          ctx.fillText(uDep.name, W * fName.x, H * fName.y);
 
-          const fU16Num = getField('u16_0MyNumber', DEFAULT_POS.u16Cols.myNumStartX, DEFAULT_POS.u16[0].rowY, 16, DEFAULT_POS.u16Cols.myNumPitch);
+          const fNum = getField(`${prefix}MyNumber`, DEFAULT_POS.u16Cols.myNumStartX, defRowY / 100, 9, DEFAULT_POS.u16Cols.myNumPitch);
           const uNumStr = uDep.myNumber ? uDep.myNumber.replace(/[^0-9]/g, '') : '************';
-          ctx.font = `bold ${fU16Num.size}px "Courier New", monospace`;
-          const uPitch = W * (fU16Num.pitch || DEFAULT_POS.u16Cols.myNumPitch);
+          ctx.font = `bold ${fNum.size}px "Courier New", monospace`;
+          const uPitch = W * (fNum.pitch || DEFAULT_POS.u16Cols.myNumPitch);
           for (let i = 0; i < 12; i++) {
-            ctx.fillText(uNumStr[i] || '*', W * fU16Num.x + i * uPitch, H * fU16Num.y);
+            ctx.fillText(uNumStr[i] || '*', W * fNum.x + i * uPitch, H * fNum.y);
           }
 
-          const fU16Rel = getField('u16_0Rel', DEFAULT_POS.u16Cols.relationX, DEFAULT_POS.u16[0].rowY, 17);
-          ctx.font = `bold ${fU16Rel.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(uDep.relation, W * fU16Rel.x, H * fU16Rel.y);
+          const fRel = getField(`${prefix}Rel`, DEFAULT_POS.u16Cols.relationX, defRowY / 100, 10);
+          ctx.font = `bold ${fRel.size}px "Noto Sans JP", sans-serif`;
+          ctx.fillText(uDep.relation, W * fRel.x, H * fRel.y);
 
-          const fU16BirthY = getField('u16_0BirthY', DEFAULT_POS.u16Cols.birthYX, DEFAULT_POS.u16[0].rowY, 17);
-          ctx.fillText(ubDate.year, W * fU16BirthY.x, H * fU16BirthY.y);
+          const fBirthY = getField(`${prefix}BirthY`, DEFAULT_POS.u16Cols.birthYX, defRowY / 100, 10);
+          ctx.fillText(ubDate.year, W * fBirthY.x, H * fBirthY.y);
 
-          const fU16BirthM = getField('u16_0BirthM', DEFAULT_POS.u16Cols.birthMX, DEFAULT_POS.u16[0].rowY, 17);
-          ctx.fillText(ubDate.month, W * fU16BirthM.x, H * fU16BirthM.y);
+          const fBirthM = getField(`${prefix}BirthM`, DEFAULT_POS.u16Cols.birthMX, defRowY / 100, 10);
+          ctx.fillText(ubDate.month, W * fBirthM.x, H * fBirthM.y);
 
-          const fU16BirthD = getField('u16_0BirthD', DEFAULT_POS.u16Cols.birthDX, DEFAULT_POS.u16[0].rowY, 17);
-          ctx.fillText(ubDate.day, W * fU16BirthD.x, H * fU16BirthD.y);
+          const fBirthD = getField(`${prefix}BirthD`, DEFAULT_POS.u16Cols.birthDX, defRowY / 100, 10);
+          ctx.fillText(ubDate.day, W * fBirthD.x, H * fBirthD.y);
 
-          const fU16Addr = getField('u16_0Address', DEFAULT_POS.u16Cols.addressX, DEFAULT_POS.u16[0].rowY, 15);
-          ctx.fillText(uDep.address || data.employeeAddress, W * fU16Addr.x, H * fU16Addr.y);
+          const fAddr = getField(`${prefix}Address`, DEFAULT_POS.u16Cols.addressX, defRowY / 100, 9);
+          ctx.fillText(uDep.address || data.employeeAddress, W * fAddr.x, H * fAddr.y);
 
-          const fU16Income = getField('u16_0Income', DEFAULT_POS.u16Cols.incomeX, DEFAULT_POS.u16[0].rowY, 17);
+          const fIncome = getField(`${prefix}Income`, DEFAULT_POS.u16Cols.incomeX, defRowY / 100, 10);
           ctx.textAlign = 'right';
-          ctx.fillText('0 円', W * fU16Income.x, H * fU16Income.y);
+          ctx.fillText('0 円', W * fIncome.x, H * fIncome.y);
           ctx.textAlign = 'left';
-        }
+        });
 
         const url = canvas.toDataURL('image/png');
         setCanvasUrl(url);

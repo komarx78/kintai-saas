@@ -19,7 +19,7 @@ export interface FieldConfig {
   description: string;
 }
 
-// 🎯 国税庁原本（2026bun_01.pdf）の枠内にぴったり収まる黄金比率デフォルト値
+// 🎯 国税庁原本（2026bun_01.pdf）の枠内にぴったり収まる黄金比率デフォルト値（扶養親族・住民税 4名フル対応）
 export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   // ① 給与支払者
   { id: 'taxOffice', name: '所轄税務署長', section: 'header', x: 8.5, y: 13.0, fontSize: 10, example: '千代田', description: '左上「税務署長等」枠内' },
@@ -53,17 +53,54 @@ export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   { id: 'spouseLiving', name: '生計を一にする事実', section: 'spouse', x: 58.5, y: 23.8, fontSize: 9, example: '同居', description: 'Ａ欄生計一事実' },
   { id: 'spouseAddress', name: '配偶者住所', section: 'spouse', x: 64.0, y: 23.8, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: 'Ａ欄住所' },
 
-  // ④ Ｂ. 扶養親族（1人目）
-  { id: 'dep0Kana', name: '扶養親族1 フリガナ', section: 'dependent', x: 16.5, y: 26.0, fontSize: 7, example: 'テスト タロウ', description: 'Ｂ欄1行目フリガナ' },
-  { id: 'dep0Name', name: '扶養親族1 氏名', section: 'dependent', x: 16.5, y: 27.5, fontSize: 11, example: 'テスト 太郎', description: 'Ｂ欄1行目氏名' },
-  { id: 'dep0MyNumber', name: '扶養親族1 マイナンバー', section: 'dependent', x: 26.5, y: 27.5, fontSize: 9, pitch: 0.98, example: '************', description: 'Ｂ欄1行目12桁マス目' },
-  { id: 'dep0Rel', name: '扶養親族1 続柄', section: 'dependent', x: 34.5, y: 27.5, fontSize: 10, example: '長男', description: 'Ｂ欄1行目続柄' },
-  { id: 'dep0BirthY', name: '扶養親族1 生年', section: 'dependent', x: 40.5, y: 27.5, fontSize: 10, example: '27', description: 'Ｂ欄1行目生年' },
-  { id: 'dep0BirthM', name: '扶養親族1 生月', section: 'dependent', x: 43.2, y: 27.5, fontSize: 10, example: '5', description: 'Ｂ欄1行目生月' },
-  { id: 'dep0BirthD', name: '扶養親族1 生日', section: 'dependent', x: 45.8, y: 27.5, fontSize: 10, example: '1', description: 'Ｂ欄1行目生日' },
-  { id: 'dep0Income', name: '扶養親族1 所得見積額', section: 'dependent', x: 53.5, y: 27.5, fontSize: 10, example: '0 円', description: 'Ｂ欄1行目所得' },
-  { id: 'dep0Living', name: '扶養親族1 同居別居', section: 'dependent', x: 58.5, y: 27.5, fontSize: 9, example: '同居', description: 'Ｂ欄1行目生計一' },
-  { id: 'dep0Address', name: '扶養親族1 住所', section: 'dependent', x: 64.0, y: 27.5, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: 'Ｂ欄1行目住所' },
+  // ④ Ｂ. 控除対象扶養親族（1人目〜4人目 フル完備）
+  // 1人目
+  { id: 'dep0Kana', name: '扶養1 フリガナ', section: 'dependent', x: 16.5, y: 26.0, fontSize: 7, example: 'テスト タロウ', description: 'Ｂ欄1人目カナ' },
+  { id: 'dep0Name', name: '扶養1 氏名', section: 'dependent', x: 16.5, y: 27.5, fontSize: 11, example: 'テスト 太郎', description: 'Ｂ欄1人目氏名' },
+  { id: 'dep0MyNumber', name: '扶養1 マイナンバー', section: 'dependent', x: 26.5, y: 27.5, fontSize: 9, pitch: 0.98, example: '************', description: 'Ｂ欄1人目12桁マス目' },
+  { id: 'dep0Rel', name: '扶養1 続柄', section: 'dependent', x: 34.5, y: 27.5, fontSize: 10, example: '長男', description: 'Ｂ欄1人目続柄' },
+  { id: 'dep0BirthY', name: '扶養1 生年', section: 'dependent', x: 40.5, y: 27.5, fontSize: 10, example: '27', description: 'Ｂ欄1人目生年' },
+  { id: 'dep0BirthM', name: '扶養1 生月', section: 'dependent', x: 43.2, y: 27.5, fontSize: 10, example: '5', description: 'Ｂ欄1人目生月' },
+  { id: 'dep0BirthD', name: '扶養1 生日', section: 'dependent', x: 45.8, y: 27.5, fontSize: 10, example: '1', description: 'Ｂ欄1人目生日' },
+  { id: 'dep0Income', name: '扶養1 所得見積額', section: 'dependent', x: 53.5, y: 27.5, fontSize: 10, example: '0 円', description: 'Ｂ欄1人目所得' },
+  { id: 'dep0Living', name: '扶養1 同居別居', section: 'dependent', x: 58.5, y: 27.5, fontSize: 9, example: '同居', description: 'Ｂ欄1人目生計一' },
+  { id: 'dep0Address', name: '扶養1 住所', section: 'dependent', x: 64.0, y: 27.5, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: 'Ｂ欄1人目住所' },
+
+  // 2人目
+  { id: 'dep1Kana', name: '扶養2 フリガナ', section: 'dependent', x: 16.5, y: 31.0, fontSize: 7, example: 'テスト ハナエ', description: 'Ｂ欄2人目カナ' },
+  { id: 'dep1Name', name: '扶養2 氏名', section: 'dependent', x: 16.5, y: 32.5, fontSize: 11, example: 'テスト 花江', description: 'Ｂ欄2人目氏名' },
+  { id: 'dep1MyNumber', name: '扶養2 マイナンバー', section: 'dependent', x: 26.5, y: 32.5, fontSize: 9, pitch: 0.98, example: '************', description: 'Ｂ欄2人目12桁マス目' },
+  { id: 'dep1Rel', name: '扶養2 続柄', section: 'dependent', x: 34.5, y: 32.5, fontSize: 10, example: '長女', description: 'Ｂ欄2人目続柄' },
+  { id: 'dep1BirthY', name: '扶養2 生年', section: 'dependent', x: 40.5, y: 32.5, fontSize: 10, example: '29', description: 'Ｂ欄2人目生年' },
+  { id: 'dep1BirthM', name: '扶養2 生月', section: 'dependent', x: 43.2, y: 32.5, fontSize: 10, example: '8', description: 'Ｂ欄2人目生月' },
+  { id: 'dep1BirthD', name: '扶養2 生日', section: 'dependent', x: 45.8, y: 32.5, fontSize: 10, example: '10', description: 'Ｂ欄2人目生日' },
+  { id: 'dep1Income', name: '扶養2 所得見積額', section: 'dependent', x: 53.5, y: 32.5, fontSize: 10, example: '0 円', description: 'Ｂ欄2人目所得' },
+  { id: 'dep1Living', name: '扶養2 同居別居', section: 'dependent', x: 58.5, y: 32.5, fontSize: 9, example: '同居', description: 'Ｂ欄2人目生計一' },
+  { id: 'dep1Address', name: '扶養2 住所', section: 'dependent', x: 64.0, y: 32.5, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: 'Ｂ欄2人目住所' },
+
+  // 3人目
+  { id: 'dep2Kana', name: '扶養3 フリガナ', section: 'dependent', x: 16.5, y: 36.0, fontSize: 7, example: 'テスト サブロウ', description: 'Ｂ欄3人目カナ' },
+  { id: 'dep2Name', name: '扶養3 氏名', section: 'dependent', x: 16.5, y: 37.5, fontSize: 11, example: 'テスト 三郎', description: 'Ｂ欄3人目氏名' },
+  { id: 'dep2MyNumber', name: '扶養3 マイナンバー', section: 'dependent', x: 26.5, y: 37.5, fontSize: 9, pitch: 0.98, example: '************', description: 'Ｂ欄3人目12桁マス目' },
+  { id: 'dep2Rel', name: '扶養3 続柄', section: 'dependent', x: 34.5, y: 37.5, fontSize: 10, example: '三男', description: 'Ｂ欄3人目続柄' },
+  { id: 'dep2BirthY', name: '扶養3 生年', section: 'dependent', x: 40.5, y: 37.5, fontSize: 10, example: '31', description: 'Ｂ欄3人目生年' },
+  { id: 'dep2BirthM', name: '扶養3 生月', section: 'dependent', x: 43.2, y: 37.5, fontSize: 10, example: '11', description: 'Ｂ欄3人目生月' },
+  { id: 'dep2BirthD', name: '扶養3 生日', section: 'dependent', x: 45.8, y: 37.5, fontSize: 10, example: '3', description: 'Ｂ欄3人目生日' },
+  { id: 'dep2Income', name: '扶養3 所得見積額', section: 'dependent', x: 53.5, y: 37.5, fontSize: 10, example: '0 円', description: 'Ｂ欄3人目所得' },
+  { id: 'dep2Living', name: '扶養3 同居別居', section: 'dependent', x: 58.5, y: 37.5, fontSize: 9, example: '同居', description: 'Ｂ欄3人目生計一' },
+  { id: 'dep2Address', name: '扶養3 住所', section: 'dependent', x: 64.0, y: 37.5, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: 'Ｂ欄3人目住所' },
+
+  // 4人目
+  { id: 'dep3Kana', name: '扶養4 フリガナ', section: 'dependent', x: 16.5, y: 41.0, fontSize: 7, example: 'テスト シロウ', description: 'Ｂ欄4人目カナ' },
+  { id: 'dep3Name', name: '扶養4 氏名', section: 'dependent', x: 16.5, y: 42.5, fontSize: 11, example: 'テスト 四郎', description: 'Ｂ欄4人目氏名' },
+  { id: 'dep3MyNumber', name: '扶養4 マイナンバー', section: 'dependent', x: 26.5, y: 42.5, fontSize: 9, pitch: 0.98, example: '************', description: 'Ｂ欄4人目12桁マス目' },
+  { id: 'dep3Rel', name: '扶養4 続柄', section: 'dependent', x: 34.5, y: 42.5, fontSize: 10, example: '四男', description: 'Ｂ欄4人目続柄' },
+  { id: 'dep3BirthY', name: '扶養4 生年', section: 'dependent', x: 40.5, y: 42.5, fontSize: 10, example: '2', description: 'Ｂ欄4人目生年' },
+  { id: 'dep3BirthM', name: '扶養4 生月', section: 'dependent', x: 43.2, y: 42.5, fontSize: 10, example: '2', description: 'Ｂ欄4人目生月' },
+  { id: 'dep3BirthD', name: '扶養4 生日', section: 'dependent', x: 45.8, y: 42.5, fontSize: 10, example: '20', description: 'Ｂ欄4人目生日' },
+  { id: 'dep3Income', name: '扶養4 所得見積額', section: 'dependent', x: 53.5, y: 42.5, fontSize: 10, example: '0 円', description: 'Ｂ欄4人目所得' },
+  { id: 'dep3Living', name: '扶養4 同居別居', section: 'dependent', x: 58.5, y: 42.5, fontSize: 9, example: '同居', description: 'Ｂ欄4人目生計一' },
+  { id: 'dep3Address', name: '扶養4 住所', section: 'dependent', x: 64.0, y: 42.5, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: 'Ｂ欄4人目住所' },
 
   // ⑤ Ｃ. 障害者等
   { id: 'specialDisabled', name: '障害者チェック（✓）', section: 'special', x: 12.5, y: 46.5, fontSize: 12, example: '✓', description: 'Ｃ欄障害者ボックス' },
@@ -72,16 +109,50 @@ export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   { id: 'specialStudent', name: '勤労学生チェック（✓）', section: 'special', x: 40.0, y: 46.5, fontSize: 12, example: '✓', description: 'Ｃ欄勤労学生ボックス' },
   { id: 'specialDetails', name: '障害者・学生の内容', section: 'special', x: 46.5, y: 46.5, fontSize: 9, example: '障害者手帳第1種', description: 'Ｃ欄内容記載枠' },
 
-  // ⑥ 住民税（16歳未満）
-  { id: 'u16_0Kana', name: '16歳未満1 フリガナ', section: 'resident', x: 16.5, y: 55.5, fontSize: 7, example: 'テスト ジロウ', description: '住民税欄1行目カナ' },
-  { id: 'u16_0Name', name: '16歳未満1 氏名', section: 'resident', x: 16.5, y: 57.0, fontSize: 11, example: 'テスト 次郎', description: '住民税欄1行目氏名' },
-  { id: 'u16_0MyNumber', name: '16歳未満1 マイナンバー', section: 'resident', x: 27.5, y: 57.0, fontSize: 9, pitch: 0.98, example: '************', description: '住民税欄12桁マス目' },
-  { id: 'u16_0Rel', name: '16歳未満1 続柄', section: 'resident', x: 38.5, y: 57.0, fontSize: 10, example: '二男', description: '住民税欄続柄' },
-  { id: 'u16_0BirthY', name: '16歳未満1 生年', section: 'resident', x: 42.5, y: 57.0, fontSize: 10, example: '30', description: '住民税欄生年' },
-  { id: 'u16_0BirthM', name: '16歳未満1 生月', section: 'resident', x: 44.8, y: 57.0, fontSize: 10, example: '8', description: '住民税欄生月' },
-  { id: 'u16_0BirthD', name: '16歳未満1 生日', section: 'resident', x: 47.2, y: 57.0, fontSize: 10, example: '20', description: '住民税欄生日' },
-  { id: 'u16_0Address', name: '16歳未満1 住所', section: 'resident', x: 53.0, y: 57.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄住所' },
-  { id: 'u16_0Income', name: '16歳未満1 所得見積額', section: 'resident', x: 74.5, y: 57.0, fontSize: 10, example: '0 円', description: '住民税欄所得' }
+  // ⑥ 住民税（16歳未満 1人目〜4人目 フル完備）
+  // 1人目
+  { id: 'u16_0Kana', name: '住民税1 フリガナ', section: 'resident', x: 16.5, y: 55.5, fontSize: 7, example: 'テスト ジロウ', description: '住民税欄1人目カナ' },
+  { id: 'u16_0Name', name: '住民税1 氏名', section: 'resident', x: 16.5, y: 57.0, fontSize: 11, example: 'テスト 次郎', description: '住民税欄1人目氏名' },
+  { id: 'u16_0MyNumber', name: '住民税1 マイナンバー', section: 'resident', x: 27.5, y: 57.0, fontSize: 9, pitch: 0.98, example: '************', description: '住民税欄1人目12桁マス目' },
+  { id: 'u16_0Rel', name: '住民税1 続柄', section: 'resident', x: 38.5, y: 57.0, fontSize: 10, example: '二男', description: '住民税欄1人目続柄' },
+  { id: 'u16_0BirthY', name: '住民税1 生年', section: 'resident', x: 42.5, y: 57.0, fontSize: 10, example: '30', description: '住民税欄1人目生年' },
+  { id: 'u16_0BirthM', name: '住民税1 生月', section: 'resident', x: 44.8, y: 57.0, fontSize: 10, example: '8', description: '住民税欄1人目生月' },
+  { id: 'u16_0BirthD', name: '住民税1 生日', section: 'resident', x: 47.2, y: 57.0, fontSize: 10, example: '20', description: '住民税欄1人目生日' },
+  { id: 'u16_0Address', name: '住民税1 住所', section: 'resident', x: 53.0, y: 57.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄1人目住所' },
+  { id: 'u16_0Income', name: '住民税1 所得見積額', section: 'resident', x: 74.5, y: 57.0, fontSize: 10, example: '0 円', description: '住民税欄1人目所得' },
+
+  // 2人目
+  { id: 'u16_1Kana', name: '住民税2 フリガナ', section: 'resident', x: 16.5, y: 59.5, fontSize: 7, example: 'テスト サチコ', description: '住民税欄2人目カナ' },
+  { id: 'u16_1Name', name: '住民税2 氏名', section: 'resident', x: 16.5, y: 61.0, fontSize: 11, example: 'テスト 幸子', description: '住民税欄2人目氏名' },
+  { id: 'u16_1MyNumber', name: '住民税2 マイナンバー', section: 'resident', x: 27.5, y: 61.0, fontSize: 9, pitch: 0.98, example: '************', description: '住民税欄2人目12桁マス目' },
+  { id: 'u16_1Rel', name: '住民税2 続柄', section: 'resident', x: 38.5, y: 61.0, fontSize: 10, example: '二女', description: '住民税欄2人目続柄' },
+  { id: 'u16_1BirthY', name: '住民税2 生年', section: 'resident', x: 42.5, y: 61.0, fontSize: 10, example: '3', description: '住民税欄2人目生年' },
+  { id: 'u16_1BirthM', name: '住民税2 生月', section: 'resident', x: 44.8, y: 61.0, fontSize: 10, example: '12', description: '住民税欄2人目生月' },
+  { id: 'u16_1BirthD', name: '住民税2 生日', section: 'resident', x: 47.2, y: 61.0, fontSize: 10, example: '5', description: '住民税欄2人目生日' },
+  { id: 'u16_1Address', name: '住民税2 住所', section: 'resident', x: 53.0, y: 61.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄2人目住所' },
+  { id: 'u16_1Income', name: '住民税2 所得見積額', section: 'resident', x: 74.5, y: 61.0, fontSize: 10, example: '0 円', description: '住民税欄2人目所得' },
+
+  // 3人目
+  { id: 'u16_2Kana', name: '住民税3 フリガナ', section: 'resident', x: 16.5, y: 63.5, fontSize: 7, example: 'テスト ゴロウ', description: '住民税欄3人目カナ' },
+  { id: 'u16_2Name', name: '住民税3 氏名', section: 'resident', x: 16.5, y: 65.0, fontSize: 11, example: 'テスト 五郎', description: '住民税欄3人目氏名' },
+  { id: 'u16_2MyNumber', name: '住民税3 マイナンバー', section: 'resident', x: 27.5, y: 65.0, fontSize: 9, pitch: 0.98, example: '************', description: '住民税欄3人目12桁マス目' },
+  { id: 'u16_2Rel', name: '住民税3 続柄', section: 'resident', x: 38.5, y: 65.0, fontSize: 10, example: '五男', description: '住民税欄3人目続柄' },
+  { id: 'u16_2BirthY', name: '住民税3 生年', section: 'resident', x: 42.5, y: 65.0, fontSize: 10, example: '5', description: '住民税欄3人目生年' },
+  { id: 'u16_2BirthM', name: '住民税3 生月', section: 'resident', x: 44.8, y: 65.0, fontSize: 10, example: '3', description: '住民税欄3人目生月' },
+  { id: 'u16_2BirthD', name: '住民税3 生日', section: 'resident', x: 47.2, y: 65.0, fontSize: 10, example: '14', description: '住民税欄3人目生日' },
+  { id: 'u16_2Address', name: '住民税3 住所', section: 'resident', x: 53.0, y: 65.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄3人目住所' },
+  { id: 'u16_2Income', name: '住民税3 所得見積額', section: 'resident', x: 74.5, y: 65.0, fontSize: 10, example: '0 円', description: '住民税欄3人目所得' },
+
+  // 4人目
+  { id: 'u16_3Kana', name: '住民税4 フリガナ', section: 'resident', x: 16.5, y: 67.5, fontSize: 7, example: 'テスト ロクロウ', description: '住民税欄4人目カナ' },
+  { id: 'u16_3Name', name: '住民税4 氏名', section: 'resident', x: 16.5, y: 69.0, fontSize: 11, example: 'テスト 六郎', description: '住民税欄4人目氏名' },
+  { id: 'u16_3MyNumber', name: '住民税4 マイナンバー', section: 'resident', x: 27.5, y: 69.0, fontSize: 9, pitch: 0.98, example: '************', description: '住民税欄4人目12桁マス目' },
+  { id: 'u16_3Rel', name: '住民税4 続柄', section: 'resident', x: 38.5, y: 69.0, fontSize: 10, example: '六男', description: '住民税欄4人目続柄' },
+  { id: 'u16_3BirthY', name: '住民税4 生年', section: 'resident', x: 42.5, y: 69.0, fontSize: 10, example: '7', description: '住民税欄4人目生年' },
+  { id: 'u16_3BirthM', name: '住民税4 生月', section: 'resident', x: 44.8, y: 69.0, fontSize: 10, example: '1', description: '住民税欄4人目生月' },
+  { id: 'u16_3BirthD', name: '住民税4 生日', section: 'resident', x: 47.2, y: 69.0, fontSize: 10, example: '1', description: '住民税欄4人目生日' },
+  { id: 'u16_3Address', name: '住民税4 住所', section: 'resident', x: 53.0, y: 69.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄4人目住所' },
+  { id: 'u16_3Income', name: '住民税4 所得見積額', section: 'resident', x: 74.5, y: 69.0, fontSize: 10, example: '0 円', description: '住民税欄4人目所得' }
 ];
 
 export const TaxDocMasterInspector: React.FC = () => {
@@ -111,10 +182,12 @@ export const TaxDocMasterInspector: React.FC = () => {
   const [bgBlankPdfImage, setBgBlankPdfImage] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(true);
 
-  // 項目値の更新
+  // 項目値の更新（pitchは0.01%精度、x/yは0.1%精度、fontSizeは1pt精度）
   const updateField = useCallback((id: string, key: keyof FieldConfig, value: number) => {
     setFields(prev => {
-      const updated = prev.map(f => f.id === id ? { ...f, [key]: Math.round(value * 10) / 10 } : f);
+      const precision = key === 'pitch' ? 100 : (key === 'x' || key === 'y') ? 10 : 1;
+      const rounded = Math.round(value * precision) / precision;
+      const updated = prev.map(f => f.id === id ? { ...f, [key]: rounded } : f);
       localStorage.setItem('taxDocMasterFields', JSON.stringify(updated));
       return updated;
     });
@@ -271,7 +344,7 @@ export const TaxDocMasterInspector: React.FC = () => {
   };
 
   const handleResetDefaults = () => {
-    if (confirm('すべての項目の座標・文字サイズを初期マスター値にリセットしますか？')) {
+    if (confirm('すべての項目の座標・文字サイズを黄金比率マスター初期値にリセットしますか？')) {
       setFields(DEFAULT_TAX_FIELDS);
       localStorage.removeItem('taxDocMasterFields');
     }
@@ -281,9 +354,9 @@ export const TaxDocMasterInspector: React.FC = () => {
     { id: 'header', name: '① 給与支払者・会社枠', icon: Building2, count: fields.filter(f => f.section === 'header').length },
     { id: 'employee', name: '② 申告者本人・基本枠', icon: User, count: fields.filter(f => f.section === 'employee').length },
     { id: 'spouse', name: '③ Ａ. 源泉控除対象配偶者', icon: Heart, count: fields.filter(f => f.section === 'spouse').length },
-    { id: 'dependent', name: '④ Ｂ. 控除対象扶養親族', icon: Users, count: fields.filter(f => f.section === 'dependent').length },
+    { id: 'dependent', name: '④ Ｂ. 控除対象扶養親族(1〜4人目)', icon: Users, count: fields.filter(f => f.section === 'dependent').length },
     { id: 'special', name: '⑤ Ｃ. 障害者・寡婦・学生', icon: Shield, count: fields.filter(f => f.section === 'special').length },
-    { id: 'resident', name: '⑥ 住民税（16歳未満親族）', icon: Baby, count: fields.filter(f => f.section === 'resident').length }
+    { id: 'resident', name: '⑥ 住民税 16歳未満親族(1〜4人目)', icon: Baby, count: fields.filter(f => f.section === 'resident').length }
   ];
 
   return (
@@ -299,7 +372,7 @@ export const TaxDocMasterInspector: React.FC = () => {
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 国税庁公的帳票（令和8年分 扶養控除等申告書）マスター項目設定
                 <span className="text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded-md">
-                  販売者・全社一括マスタ
+                  販売者・全社一括マスタ（扶養4名・住民税4名 フル完備）
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
@@ -387,7 +460,7 @@ export const TaxDocMasterInspector: React.FC = () => {
               <span className="text-[10px] text-slate-400">右側で直接掴んで移動可能</span>
             </h3>
 
-            <div className="space-y-1 max-h-[160px] overflow-y-auto pr-1">
+            <div className="space-y-1 max-h-[170px] overflow-y-auto pr-1">
               {sectionFields.map(f => {
                 const isSelected = selectedFieldId === f.id;
                 return (
@@ -589,33 +662,52 @@ export const TaxDocMasterInspector: React.FC = () => {
 
               </div>
 
-              {/* マイナンバーマス目ピッチ */}
+              {/* マイナンバーマス目ピッチ（0.01%精密微調整対応） */}
               {selectedField.pitch !== undefined && (
-                <div className="bg-slate-800/90 p-2 rounded-xl border border-slate-700/80 space-y-1">
+                <div className="bg-slate-800/90 p-2.5 rounded-xl border border-slate-700/80 space-y-1.5">
                   <div className="flex justify-between text-[10px]">
                     <span className="text-slate-400">12桁マス目間隔 (ピッチ %):</span>
-                    <span className="font-mono font-bold text-cyan-300">{selectedField.pitch.toFixed(2)} %</span>
+                    <span className="font-mono font-bold text-cyan-300">{(selectedField.pitch || 1.80).toFixed(2)} %</span>
                   </div>
-                  <div className="flex items-center gap-1">
+                  
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => updateField(selectedField.id, 'pitch', Math.max(0.5, (selectedField.pitch || 1.80) - 0.02))}
-                      className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
-                    >-</button>
+                      onClick={() => updateField(selectedField.id, 'pitch', Math.max(0.3, (selectedField.pitch || 1.80) - 0.01))}
+                      className="px-2 py-1 bg-slate-700 hover:bg-slate-600 active:scale-95 rounded text-white text-xs font-bold cursor-pointer whitespace-nowrap"
+                      title="0.01% 狭くする"
+                    >
+                      -0.01
+                    </button>
+
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.30"
+                      max="3.50"
+                      value={(selectedField.pitch || 1.80).toFixed(2)}
+                      onChange={e => updateField(selectedField.id, 'pitch', parseFloat(e.target.value) || 1.80)}
+                      className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-center text-xs font-mono font-bold text-cyan-300"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => updateField(selectedField.id, 'pitch', Math.min(3.5, (selectedField.pitch || 1.80) + 0.01))}
+                      className="px-2 py-1 bg-slate-700 hover:bg-slate-600 active:scale-95 rounded text-white text-xs font-bold cursor-pointer whitespace-nowrap"
+                      title="0.01% 広くする"
+                    >
+                      +0.01
+                    </button>
+
                     <input
                       type="range"
-                      min="0.5"
-                      max="3.0"
-                      step="0.02"
+                      min="0.50"
+                      max="3.00"
+                      step="0.01"
                       value={selectedField.pitch || 1.80}
                       onChange={e => updateField(selectedField.id, 'pitch', parseFloat(e.target.value))}
-                      className="w-full accent-indigo-500 cursor-pointer"
+                      className="w-full accent-cyan-500 cursor-pointer"
                     />
-                    <button
-                      type="button"
-                      onClick={() => updateField(selectedField.id, 'pitch', Math.min(3.0, (selectedField.pitch || 1.80) + 0.02))}
-                      className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
-                    >+</button>
                   </div>
                 </div>
               )}
