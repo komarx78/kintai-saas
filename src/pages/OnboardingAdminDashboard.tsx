@@ -1349,8 +1349,8 @@ export default function OnboardingAdminDashboard() {
 
       {/* 📁 労務書面キャビネット（証憑アーカイブ）モーダル */}
       {cabinetModal.isOpen && cabinetModal.employee && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto print:static print:p-0 print:m-0 print:bg-white print:overflow-visible">
+          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-100 my-8 print:my-0 print:p-0 print:border-none print:shadow-none print:max-w-none print:w-full">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4 print:hidden">
               <div>
                 <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
@@ -1408,7 +1408,7 @@ export default function OnboardingAdminDashboard() {
             </div>
 
             {/* 書面本体 */}
-            <div className="border border-slate-200 rounded-2xl overflow-hidden p-6 bg-slate-50/50 print:border-none print:p-0 max-h-[65vh] overflow-y-auto">
+            <div className="border border-slate-200 rounded-2xl overflow-hidden p-6 bg-slate-50/50 print:border-none print:p-0 print:bg-white max-h-[65vh] print:max-h-none overflow-y-auto print:overflow-visible">
               {cabinetModal.activeDoc === 'contract' && (
                 <OfficialLaborContractDoc data={{
                   companyName: tenantInfo?.name || '株式会社KAP',

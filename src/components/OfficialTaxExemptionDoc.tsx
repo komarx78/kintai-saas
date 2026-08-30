@@ -444,10 +444,59 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
     <div className="w-full bg-slate-100 py-3 print:bg-white print:py-0 select-text font-sans">
       <style>{`
         @media print {
-          @page { size: A4 landscape; margin: 0; }
-          body { print-color-adjust: exact; -webkit-print-color-adjust: exact; background: white !important; margin: 0 !important; }
-          .no-print { display: none !important; }
-          .print-sheet { width: 100vw !important; height: 100vh !important; margin: 0 !important; border: none !important; }
+          @page {
+            size: A4 landscape;
+            margin: 0mm !important;
+          }
+          
+          /* ページ全体の不要要素（モーダル背景・管理画面・ナビゲーション等）を完全隔離非表示 */
+          body * {
+            visibility: hidden !important;
+          }
+
+          /* 扶養控除等申告書の書類コンテナとその子要素のみを完全可視化 */
+          .printable-tax-root,
+          .printable-tax-root * {
+            visibility: visible !important;
+          }
+
+          /* A4用紙全面（297mm × 210mm）にフルサイズでピタリと収める */
+          .printable-tax-root {
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            z-index: 99999999 !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+
+          .printable-tax-img {
+            width: 100vw !important;
+            height: 100vh !important;
+            object-fit: contain !important;
+            display: block !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          html, body {
+            width: 100% !important;
+            height: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+            overflow: hidden !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
         }
       `}</style>
 
@@ -514,7 +563,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
       {/* 📄 ① 国税庁公式原本 データ直接印字ビュー */}
       {activeTab === 'canvas_doc' && (
-        <div className="max-w-[1150px] mx-auto bg-white p-3 rounded-2xl shadow-2xl border border-slate-300 print:p-0 print:border-none print:shadow-none">
+        <div className="max-w-[1150px] mx-auto bg-white p-3 rounded-2xl shadow-2xl border border-slate-300 print:p-0 print:border-none print:shadow-none printable-tax-root">
           {isRendering && (
             <div className="flex flex-col items-center justify-center py-20 space-y-3">
               <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
@@ -526,11 +575,11 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           <canvas ref={canvasRef} className="hidden" />
 
           {canvasUrl && (
-            <div className="w-full overflow-x-auto">
+            <div className="w-full overflow-x-auto print:overflow-visible">
               <img
                 src={canvasUrl}
                 alt="令和8年分 給与所得者の扶養控除等（異動）申告書"
-                className="w-full h-auto rounded-lg border border-slate-200 print:border-none print:rounded-none print-sheet shadow-sm"
+                className="w-full h-auto rounded-lg border border-slate-200 print:border-none print:rounded-none shadow-sm printable-tax-img"
               />
             </div>
           )}
