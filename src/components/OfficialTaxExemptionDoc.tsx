@@ -270,10 +270,6 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
             ctx.fillText(spNumStr[i] || '*', W * fSpMyNum.x + i * spNumPitch, H * fSpMyNum.y);
           }
 
-          const fSpRel = getField('spouseRel', DEFAULT_POS.spouse.relation.x, DEFAULT_POS.spouse.relation.y, 18);
-          ctx.font = `bold ${fSpRel.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText('妻', W * fSpRel.x, H * fSpRel.y);
-
           const fSpBirthY = getField('spouseBirthY', DEFAULT_POS.spouse.birthY.x, DEFAULT_POS.spouse.birthY.y, 18);
           ctx.fillText(spouseBirth.year, W * fSpBirthY.x, H * fSpBirthY.y);
 
@@ -285,7 +281,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
           const fSpIncome = getField('spouseIncome', DEFAULT_POS.spouse.income.x, DEFAULT_POS.spouse.income.y, 17);
           ctx.textAlign = 'right';
-          ctx.fillText(`${(data.spouseIncomeEstimate || 0).toLocaleString()} 円`, W * fSpIncome.x, H * fSpIncome.y);
+          ctx.fillText(`${(data.spouseIncomeEstimate || 0).toLocaleString()}`, W * fSpIncome.x, H * fSpIncome.y);
           ctx.textAlign = 'left';
 
           const fSpLiving = getField('spouseLiving', DEFAULT_POS.spouse.livingFact.x, DEFAULT_POS.spouse.livingFact.y, 15);
@@ -335,7 +331,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
           const fIncome = getField(`${prefix}Income`, DEFAULT_POS.depCols.incomeX, defRowY / 100, 10);
           ctx.textAlign = 'right';
-          ctx.fillText(`${(dep.incomeEstimate || 0).toLocaleString()} 円`, W * fIncome.x, H * fIncome.y);
+          ctx.fillText(`${(dep.incomeEstimate || 0).toLocaleString()}`, W * fIncome.x, H * fIncome.y);
           ctx.textAlign = 'left';
 
           const fLiving = getField(`${prefix}Living`, DEFAULT_POS.depCols.livingFactX, defRowY / 100, 9);
@@ -412,7 +408,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
           const fIncome = getField(`${prefix}Income`, DEFAULT_POS.u16Cols.incomeX, defRowY / 100, 10);
           ctx.textAlign = 'right';
-          ctx.fillText('0 円', W * fIncome.x, H * fIncome.y);
+          ctx.fillText('0', W * fIncome.x, H * fIncome.y);
           ctx.textAlign = 'left';
         });
 

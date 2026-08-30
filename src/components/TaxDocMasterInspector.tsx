@@ -13,13 +13,13 @@ export interface FieldConfig {
   section: string;
   x: number; // 0〜100 (%)
   y: number; // 0〜100 (%)
-  fontSize: number; // pt 相当（6〜20）
+  fontSize: number; // pt 相当（4〜24）
   pitch?: number; // % (マイナンバー用)
   example: string;
   description: string;
 }
 
-// 🎯 国税庁原本（2026bun_01.pdf）の枠内にぴったり収まる黄金比率デフォルト値（扶養親族・住民税 4名フル対応）
+// 🎯 国税庁原本（2026bun_01.pdf）の枠内にぴったり収まる黄金比率デフォルト値（配偶者続柄削除・円削除・扶養4名住民税4名フル完備）
 export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   // ① 給与支払者
   { id: 'taxOffice', name: '所轄税務署長', section: 'header', x: 8.5, y: 13.0, fontSize: 10, example: '千代田', description: '左上「税務署長等」枠内' },
@@ -41,15 +41,14 @@ export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   { id: 'householderRel', name: 'あなたとの続柄', section: 'employee', x: 74.0, y: 13.0, fontSize: 10, example: '本人', description: '続柄欄' },
   { id: 'hasSpouseYes', name: '配偶者 有（○印）', section: 'employee', x: 74.6, y: 16.2, fontSize: 10, example: '○', description: '「有」の文字を囲む円' },
 
-  // ③ Ａ. 配偶者
+  // ③ Ａ. 配偶者（※続柄は原本にスラッシュがあるため削除）
   { id: 'spouseKana', name: '配偶者フリガナ', section: 'spouse', x: 16.5, y: 22.0, fontSize: 7, example: 'テスト ハナコ', description: 'Ａ欄フリガナ' },
   { id: 'spouseName', name: '配偶者氏名', section: 'spouse', x: 16.5, y: 23.8, fontSize: 11, example: 'テスト 花子', description: 'Ａ欄氏名' },
   { id: 'spouseMyNumber', name: '配偶者マイナンバー', section: 'spouse', x: 26.5, y: 23.8, fontSize: 9, pitch: 0.98, example: '************', description: 'Ａ欄12桁マス目' },
-  { id: 'spouseRel', name: '配偶者続柄', section: 'spouse', x: 34.5, y: 23.8, fontSize: 10, example: '妻', description: 'Ａ欄続柄' },
   { id: 'spouseBirthY', name: '配偶者生年', section: 'spouse', x: 40.5, y: 23.8, fontSize: 10, example: '8', description: 'Ａ欄生年' },
   { id: 'spouseBirthM', name: '配偶者生月', section: 'spouse', x: 43.2, y: 23.8, fontSize: 10, example: '5', description: 'Ａ欄生月' },
   { id: 'spouseBirthD', name: '配偶者生日', section: 'spouse', x: 45.8, y: 23.8, fontSize: 10, example: '15', description: 'Ａ欄生日' },
-  { id: 'spouseIncome', name: '配偶者所得見積額', section: 'spouse', x: 53.5, y: 23.8, fontSize: 10, example: '0 円', description: 'Ａ欄所得見積額' },
+  { id: 'spouseIncome', name: '配偶者所得見積額（数字のみ）', section: 'spouse', x: 53.0, y: 23.8, fontSize: 10, example: '0', description: 'Ａ欄所得見積額（円は用紙印刷済）' },
   { id: 'spouseLiving', name: '生計を一にする事実', section: 'spouse', x: 58.5, y: 23.8, fontSize: 9, example: '同居', description: 'Ａ欄生計一事実' },
   { id: 'spouseAddress', name: '配偶者住所', section: 'spouse', x: 64.0, y: 23.8, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: 'Ａ欄住所' },
 
@@ -62,7 +61,7 @@ export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   { id: 'dep0BirthY', name: '扶養1 生年', section: 'dependent', x: 40.5, y: 27.5, fontSize: 10, example: '27', description: 'Ｂ欄1人目生年' },
   { id: 'dep0BirthM', name: '扶養1 生月', section: 'dependent', x: 43.2, y: 27.5, fontSize: 10, example: '5', description: 'Ｂ欄1人目生月' },
   { id: 'dep0BirthD', name: '扶養1 生日', section: 'dependent', x: 45.8, y: 27.5, fontSize: 10, example: '1', description: 'Ｂ欄1人目生日' },
-  { id: 'dep0Income', name: '扶養1 所得見積額', section: 'dependent', x: 53.5, y: 27.5, fontSize: 10, example: '0 円', description: 'Ｂ欄1人目所得' },
+  { id: 'dep0Income', name: '扶養1 所得見積額', section: 'dependent', x: 53.0, y: 27.5, fontSize: 10, example: '0', description: 'Ｂ欄1人目所得（円は用紙印刷済）' },
   { id: 'dep0Living', name: '扶養1 同居別居', section: 'dependent', x: 58.5, y: 27.5, fontSize: 9, example: '同居', description: 'Ｂ欄1人目生計一' },
   { id: 'dep0Address', name: '扶養1 住所', section: 'dependent', x: 64.0, y: 27.5, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: 'Ｂ欄1人目住所' },
 
@@ -74,7 +73,7 @@ export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   { id: 'dep1BirthY', name: '扶養2 生年', section: 'dependent', x: 40.5, y: 32.5, fontSize: 10, example: '29', description: 'Ｂ欄2人目生年' },
   { id: 'dep1BirthM', name: '扶養2 生月', section: 'dependent', x: 43.2, y: 32.5, fontSize: 10, example: '8', description: 'Ｂ欄2人目生月' },
   { id: 'dep1BirthD', name: '扶養2 生日', section: 'dependent', x: 45.8, y: 32.5, fontSize: 10, example: '10', description: 'Ｂ欄2人目生日' },
-  { id: 'dep1Income', name: '扶養2 所得見積額', section: 'dependent', x: 53.5, y: 32.5, fontSize: 10, example: '0 円', description: 'Ｂ欄2人目所得' },
+  { id: 'dep1Income', name: '扶養2 所得見積額', section: 'dependent', x: 53.0, y: 32.5, fontSize: 10, example: '0', description: 'Ｂ欄2人目所得（円は用紙印刷済）' },
   { id: 'dep1Living', name: '扶養2 同居別居', section: 'dependent', x: 58.5, y: 32.5, fontSize: 9, example: '同居', description: 'Ｂ欄2人目生計一' },
   { id: 'dep1Address', name: '扶養2 住所', section: 'dependent', x: 64.0, y: 32.5, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: 'Ｂ欄2人目住所' },
 
@@ -86,7 +85,7 @@ export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   { id: 'dep2BirthY', name: '扶養3 生年', section: 'dependent', x: 40.5, y: 37.5, fontSize: 10, example: '31', description: 'Ｂ欄3人目生年' },
   { id: 'dep2BirthM', name: '扶養3 生月', section: 'dependent', x: 43.2, y: 37.5, fontSize: 10, example: '11', description: 'Ｂ欄3人目生月' },
   { id: 'dep2BirthD', name: '扶養3 生日', section: 'dependent', x: 45.8, y: 37.5, fontSize: 10, example: '3', description: 'Ｂ欄3人目生日' },
-  { id: 'dep2Income', name: '扶養3 所得見積額', section: 'dependent', x: 53.5, y: 37.5, fontSize: 10, example: '0 円', description: 'Ｂ欄3人目所得' },
+  { id: 'dep2Income', name: '扶養3 所得見積額', section: 'dependent', x: 53.0, y: 37.5, fontSize: 10, example: '0', description: 'Ｂ欄3人目所得（円は用紙印刷済）' },
   { id: 'dep2Living', name: '扶養3 同居別居', section: 'dependent', x: 58.5, y: 37.5, fontSize: 9, example: '同居', description: 'Ｂ欄3人目生計一' },
   { id: 'dep2Address', name: '扶養3 住所', section: 'dependent', x: 64.0, y: 37.5, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: 'Ｂ欄3人目住所' },
 
@@ -98,7 +97,7 @@ export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   { id: 'dep3BirthY', name: '扶養4 生年', section: 'dependent', x: 40.5, y: 42.5, fontSize: 10, example: '2', description: 'Ｂ欄4人目生年' },
   { id: 'dep3BirthM', name: '扶養4 生月', section: 'dependent', x: 43.2, y: 42.5, fontSize: 10, example: '2', description: 'Ｂ欄4人目生月' },
   { id: 'dep3BirthD', name: '扶養4 生日', section: 'dependent', x: 45.8, y: 42.5, fontSize: 10, example: '20', description: 'Ｂ欄4人目生日' },
-  { id: 'dep3Income', name: '扶養4 所得見積額', section: 'dependent', x: 53.5, y: 42.5, fontSize: 10, example: '0 円', description: 'Ｂ欄4人目所得' },
+  { id: 'dep3Income', name: '扶養4 所得見積額', section: 'dependent', x: 53.0, y: 42.5, fontSize: 10, example: '0', description: 'Ｂ欄4人目所得（円は用紙印刷済）' },
   { id: 'dep3Living', name: '扶養4 同居別居', section: 'dependent', x: 58.5, y: 42.5, fontSize: 9, example: '同居', description: 'Ｂ欄4人目生計一' },
   { id: 'dep3Address', name: '扶養4 住所', section: 'dependent', x: 64.0, y: 42.5, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: 'Ｂ欄4人目住所' },
 
@@ -119,7 +118,7 @@ export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   { id: 'u16_0BirthM', name: '住民税1 生月', section: 'resident', x: 44.8, y: 57.0, fontSize: 10, example: '8', description: '住民税欄1人目生月' },
   { id: 'u16_0BirthD', name: '住民税1 生日', section: 'resident', x: 47.2, y: 57.0, fontSize: 10, example: '20', description: '住民税欄1人目生日' },
   { id: 'u16_0Address', name: '住民税1 住所', section: 'resident', x: 53.0, y: 57.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄1人目住所' },
-  { id: 'u16_0Income', name: '住民税1 所得見積額', section: 'resident', x: 74.5, y: 57.0, fontSize: 10, example: '0 円', description: '住民税欄1人目所得' },
+  { id: 'u16_0Income', name: '住民税1 所得見積額', section: 'resident', x: 74.0, y: 57.0, fontSize: 10, example: '0', description: '住民税欄1人目所得（円は用紙印刷済）' },
 
   // 2人目
   { id: 'u16_1Kana', name: '住民税2 フリガナ', section: 'resident', x: 16.5, y: 59.5, fontSize: 7, example: 'テスト サチコ', description: '住民税欄2人目カナ' },
@@ -130,7 +129,7 @@ export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   { id: 'u16_1BirthM', name: '住民税2 生月', section: 'resident', x: 44.8, y: 61.0, fontSize: 10, example: '12', description: '住民税欄2人目生月' },
   { id: 'u16_1BirthD', name: '住民税2 生日', section: 'resident', x: 47.2, y: 61.0, fontSize: 10, example: '5', description: '住民税欄2人目生日' },
   { id: 'u16_1Address', name: '住民税2 住所', section: 'resident', x: 53.0, y: 61.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄2人目住所' },
-  { id: 'u16_1Income', name: '住民税2 所得見積額', section: 'resident', x: 74.5, y: 61.0, fontSize: 10, example: '0 円', description: '住民税欄2人目所得' },
+  { id: 'u16_1Income', name: '住民税2 所得見積額', section: 'resident', x: 74.0, y: 61.0, fontSize: 10, example: '0', description: '住民税欄2人目所得（円は用紙印刷済）' },
 
   // 3人目
   { id: 'u16_2Kana', name: '住民税3 フリガナ', section: 'resident', x: 16.5, y: 63.5, fontSize: 7, example: 'テスト ゴロウ', description: '住民税欄3人目カナ' },
@@ -141,7 +140,7 @@ export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   { id: 'u16_2BirthM', name: '住民税3 生月', section: 'resident', x: 44.8, y: 65.0, fontSize: 10, example: '3', description: '住民税欄3人目生月' },
   { id: 'u16_2BirthD', name: '住民税3 生日', section: 'resident', x: 47.2, y: 65.0, fontSize: 10, example: '14', description: '住民税欄3人目生日' },
   { id: 'u16_2Address', name: '住民税3 住所', section: 'resident', x: 53.0, y: 65.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄3人目住所' },
-  { id: 'u16_2Income', name: '住民税3 所得見積額', section: 'resident', x: 74.5, y: 65.0, fontSize: 10, example: '0 円', description: '住民税欄3人目所得' },
+  { id: 'u16_2Income', name: '住民税3 所得見積額', section: 'resident', x: 74.0, y: 65.0, fontSize: 10, example: '0', description: '住民税欄3人目所得（円は用紙印刷済）' },
 
   // 4人目
   { id: 'u16_3Kana', name: '住民税4 フリガナ', section: 'resident', x: 16.5, y: 67.5, fontSize: 7, example: 'テスト ロクロウ', description: '住民税欄4人目カナ' },
@@ -152,7 +151,7 @@ export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   { id: 'u16_3BirthM', name: '住民税4 生月', section: 'resident', x: 44.8, y: 69.0, fontSize: 10, example: '1', description: '住民税欄4人目生月' },
   { id: 'u16_3BirthD', name: '住民税4 生日', section: 'resident', x: 47.2, y: 69.0, fontSize: 10, example: '1', description: '住民税欄4人目生日' },
   { id: 'u16_3Address', name: '住民税4 住所', section: 'resident', x: 53.0, y: 69.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄4人目住所' },
-  { id: 'u16_3Income', name: '住民税4 所得見積額', section: 'resident', x: 74.5, y: 69.0, fontSize: 10, example: '0 円', description: '住民税欄4人目所得' }
+  { id: 'u16_3Income', name: '住民税4 所得見積額', section: 'resident', x: 74.0, y: 69.0, fontSize: 10, example: '0', description: '住民税欄4人目所得（円は用紙印刷済）' }
 ];
 
 export const TaxDocMasterInspector: React.FC = () => {
@@ -170,11 +169,28 @@ export const TaxDocMasterInspector: React.FC = () => {
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // 項目別マスタ座標State
+  // 項目別マスタ座標State（古い保存データがあっても新項目を自動マージ！）
   const [fields, setFields] = useState<FieldConfig[]>(() => {
     try {
       const saved = localStorage.getItem('taxDocMasterFields');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: FieldConfig[] = JSON.parse(saved);
+        const parsedMap = new Map(parsed.map(f => [f.id, f]));
+        // DEFAULT_TAX_FIELDS をベースにし、saved の値で上書きマージ（不要になった spouseRel 等は自然消滅）
+        return DEFAULT_TAX_FIELDS.map(def => {
+          const custom = parsedMap.get(def.id);
+          if (custom) {
+            return {
+              ...def,
+              x: custom.x,
+              y: custom.y,
+              fontSize: custom.fontSize,
+              pitch: custom.pitch !== undefined ? custom.pitch : def.pitch
+            };
+          }
+          return def;
+        });
+      }
     } catch (_) {}
     return DEFAULT_TAX_FIELDS;
   });
