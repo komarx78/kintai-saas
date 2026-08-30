@@ -558,16 +558,31 @@ export const TaxDocMasterInspector: React.FC = () => {
 
                   {/* 文字サイズ */}
                   <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700">
-                    <label className="block text-[10px] text-slate-400 mb-0.5">文字サイズ (pt相当):</label>
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
+                      <span>文字サイズ:</span>
+                      <span className="font-mono font-bold text-emerald-300">{selectedField.fontSize} pt</span>
+                    </div>
                     <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => updateField(selectedField.id, 'fontSize', Math.max(4, selectedField.fontSize - 1))}
+                        className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 active:scale-95 rounded text-white text-xs font-bold cursor-pointer"
+                        title="文字を小さく (-1)"
+                      >-</button>
                       <input
                         type="number"
                         min="4"
                         max="24"
                         value={selectedField.fontSize}
                         onChange={e => updateField(selectedField.id, 'fontSize', parseInt(e.target.value, 10) || 4)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1 text-xs font-mono font-bold text-emerald-300"
+                        className="w-12 bg-slate-900 border border-slate-700 rounded p-1 text-center text-xs font-mono font-bold text-emerald-300"
                       />
+                      <button
+                        type="button"
+                        onClick={() => updateField(selectedField.id, 'fontSize', Math.min(24, selectedField.fontSize + 1))}
+                        className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 active:scale-95 rounded text-white text-xs font-bold cursor-pointer"
+                        title="文字を大きく (+1)"
+                      >+</button>
                     </div>
                   </div>
                 </div>
@@ -663,7 +678,8 @@ export const TaxDocMasterInspector: React.FC = () => {
                 style={{ 
                   width: `${previewZoom}%`, 
                   position: 'relative',
-                  aspectRatio: '297 / 210'
+                  aspectRatio: '297 / 210',
+                  containerType: 'inline-size'
                 }}
                 className="shadow-2xl rounded-lg overflow-hidden border-2 border-slate-400/80 bg-white"
               >
@@ -675,13 +691,10 @@ export const TaxDocMasterInspector: React.FC = () => {
                   draggable={false}
                 />
 
-                {/* 🎯 原本用紙の上で直接ドラッグ可能な全フィールドボックス（厳密なパーセンテージ計算） */}
+                {/* 🎯 原本用紙の上で直接ドラッグ可能な全フィールドボックス（cqwによる厳密コンテナ連動） */}
                 {fields.map(f => {
                   const isSelected = selectedFieldId === f.id;
                   const isDraggingThis = draggingFieldId === f.id;
-
-                  // プレビューコンテナの幅に対する厳密なフォントサイズ比率（A4用紙比率 297mm 基準）
-                  const fontPercent = (f.fontSize / 1000) * 100;
 
                   return (
                     <div
@@ -697,8 +710,7 @@ export const TaxDocMasterInspector: React.FC = () => {
                         left: `${f.x}%`,
                         top: `${f.y}%`,
                         transform: 'translate(0, -50%)',
-                        fontSize: `calc(${fontPercent} * (100% / 100))`,
-                        fontSizeAdjust: 'none',
+                        fontSize: `${f.fontSize * 0.115}cqw`,
                         color: isSelected ? '#b91c1c' : '#0f172a',
                         fontWeight: 'bold',
                         cursor: isDraggingThis ? 'grabbing' : 'grab',
@@ -721,7 +733,7 @@ export const TaxDocMasterInspector: React.FC = () => {
                               key={idx} 
                               style={{ 
                                 display: 'inline-block', 
-                                width: `calc(${f.pitch || 1.80}% * 10)`, 
+                                width: `${(f.pitch || 1.80)}cqw`, 
                                 textAlign: 'center' 
                               }}
                             >
@@ -730,7 +742,7 @@ export const TaxDocMasterInspector: React.FC = () => {
                           ))}
                         </span>
                       ) : f.example === '○' ? (
-                        <span className="w-3.5 h-3.5 rounded-full border-2 border-blue-600 inline-block"></span>
+                        <span className="w-[1.4cqw] h-[1.4cqw] rounded-full border-2 border-blue-600 inline-block"></span>
                       ) : f.example === '✓' ? (
                         <span className="text-blue-600 font-black">✓</span>
                       ) : (
