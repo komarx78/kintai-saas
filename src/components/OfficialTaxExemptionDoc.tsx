@@ -136,18 +136,25 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         await page.render({ canvasContext: ctx, viewport }).promise;
         if (isCancelled) return;
 
+        // フォントのロード完了を確実に待機（Canvasの文字ズレ・代替フォント化を完全防止）
+        if (document.fonts) {
+          await document.fonts.ready;
+        }
+
         const W = canvas.width;
         const H = canvas.height;
 
-        // 2. 販売者マスター設定（カスタマイズ座標）の読み込み
+        // 2. 販売者マスター設定（カスタマイズ座標）の読み込み（localStorage優先で即時反映）
         let masterMap: Record<string, { x: number; y: number; fontSize: number; pitch?: number }> = {};
         try {
-          const { data: sysSettings } = await supabase.from('system_settings').select('tax_doc_coordinates').limit(1).single();
-          let parsed: any[] | null = sysSettings?.tax_doc_coordinates || null;
-          
+          // まずローカルストレージの最新編集を確認
+          const saved = localStorage.getItem('taxDocMasterFields');
+          let parsed: any[] | null = saved ? JSON.parse(saved) : null;
+
+          // なければSupabase全社マスタを確認
           if (!parsed) {
-            const saved = localStorage.getItem('taxDocMasterFields');
-            if (saved) parsed = JSON.parse(saved);
+            const { data: sysSettings } = await supabase.from('system_settings').select('tax_doc_coordinates').limit(1).single();
+            parsed = sysSettings?.tax_doc_coordinates || null;
           }
 
           if (parsed && Array.isArray(parsed)) {
