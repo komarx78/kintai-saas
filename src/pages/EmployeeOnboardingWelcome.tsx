@@ -27,6 +27,7 @@ import {
 
 interface DependentItem {
   name: string;
+  nameKana?: string;
   relation: string;
   birthDate: string;
   isLivingTogether: boolean;
@@ -126,6 +127,8 @@ export default function EmployeeOnboardingWelcome() {
   const [taxData, setTaxData] = useState({
     hasSpouse: false,
     spouseName: '',
+    spouseNameKana: '',
+    spouseBirthDate: '1996-05-15',
     spouseIncomeEstimate: 0,
     dependents: [] as DependentItem[],
     isDisability: false,
@@ -137,6 +140,7 @@ export default function EmployeeOnboardingWelcome() {
   // 新規扶養親族追加用一時State
   const [newDep, setNewDep] = useState<DependentItem>({
     name: '',
+    nameKana: '',
     relation: '子',
     birthDate: '2015-05-01',
     isLivingTogether: true,
@@ -1377,26 +1381,49 @@ export default function EmployeeOnboardingWelcome() {
                 </div>
 
                 {taxData.hasSpouse && (
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700">
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-0.5">配偶者の氏名</label>
-                      <input
-                        type="text"
-                        placeholder="例: 佐藤 花子"
-                        value={taxData.spouseName}
-                        onChange={e => setTaxData({ ...taxData, spouseName: e.target.value })}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold text-white"
-                      />
+                  <div className="space-y-2 pt-2 border-t border-slate-700">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-0.5">配偶者の氏名</label>
+                        <input
+                          type="text"
+                          placeholder="例: 佐藤 花子"
+                          value={taxData.spouseName}
+                          onChange={e => setTaxData({ ...taxData, spouseName: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-0.5">フリガナ</label>
+                        <input
+                          type="text"
+                          placeholder="例: サトウ ハナコ"
+                          value={taxData.spouseNameKana}
+                          onChange={e => setTaxData({ ...taxData, spouseNameKana: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 block mb-0.5">本年所得の見積額 (円)</label>
-                      <input
-                        type="number"
-                        placeholder="480000"
-                        value={taxData.spouseIncomeEstimate}
-                        onChange={e => setTaxData({ ...taxData, spouseIncomeEstimate: parseInt(e.target.value, 10) || 0 })}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold text-white"
-                      />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-0.5">配偶者の生年月日</label>
+                        <input
+                          type="date"
+                          value={taxData.spouseBirthDate}
+                          onChange={e => setTaxData({ ...taxData, spouseBirthDate: e.target.value })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 block mb-0.5">本年所得の見積額 (円)</label>
+                        <input
+                          type="number"
+                          placeholder="480000"
+                          value={taxData.spouseIncomeEstimate}
+                          onChange={e => setTaxData({ ...taxData, spouseIncomeEstimate: parseInt(e.target.value, 10) || 0 })}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold text-white"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1414,8 +1441,11 @@ export default function EmployeeOnboardingWelcome() {
                 {taxData.dependents.map((dep, idx) => (
                   <div key={idx} className="bg-slate-900 p-2.5 rounded-xl border border-slate-700 flex items-center justify-between">
                     <div>
-                      <div className="font-bold text-white text-xs">{dep.name}（{dep.relation}）</div>
-                      <div className="text-[10px] text-slate-400">生年: {dep.birthDate} / {dep.isLivingTogether ? '同居' : '別居'}</div>
+                      <div className="font-bold text-white text-xs">{dep.name} {dep.nameKana ? `(${dep.nameKana})` : ''}（{dep.relation}）</div>
+                      <div className="text-[10px] text-slate-400">
+                        生年: {dep.birthDate} / {dep.isLivingTogether ? '同居' : '別居'}
+                        {dep.isUnder16 ? '【16歳未満】' : dep.isSpecific ? '【特定扶養】' : dep.isElderly ? '【老人扶養】' : ''}
+                      </div>
                     </div>
                     <button onClick={() => handleDeleteDependent(idx)} className="p-1 text-slate-400 hover:text-rose-400">
                       <Trash2 className="w-3.5 h-3.5" />
@@ -1426,12 +1456,19 @@ export default function EmployeeOnboardingWelcome() {
                 {/* 扶養親族追加エリア */}
                 <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-700 space-y-2">
                   <span className="text-[10px] font-bold text-slate-400 block">＋ 扶養親族を追加</span>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <input
                       type="text"
                       placeholder="氏名（例: 佐藤 陸）"
                       value={newDep.name}
                       onChange={e => setNewDep({ ...newDep, name: e.target.value })}
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
+                    />
+                    <input
+                      type="text"
+                      placeholder="フリガナ（例: サトウ リク）"
+                      value={newDep.nameKana}
+                      onChange={e => setNewDep({ ...newDep, nameKana: e.target.value })}
                       className="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
                     />
                     <select
@@ -1456,7 +1493,7 @@ export default function EmployeeOnboardingWelcome() {
                         const age = new Date().getFullYear() - new Date(bDate).getFullYear();
                         setNewDep({ ...newDep, birthDate: bDate, isUnder16: age < 16, isSpecific: age >= 19 && age < 23, isElderly: age >= 70 });
                       }}
-                      className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white"
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold"
                     />
                     <button
                       type="button"

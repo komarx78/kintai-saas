@@ -1487,20 +1487,31 @@ export default function OnboardingAdminDashboard() {
               {cabinetModal.activeDoc === 'tax' && (() => {
                 const subTax = submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'dependents_form');
                 const tData = subTax?.data || {};
+                const subResident = submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'resident_certificate');
+                const rData = subResident?.data || {};
 
                 return (
                   <OfficialTaxExemptionDoc data={{
                     year: tData.year || 2026,
                     companyName: tenantInfo?.name || '株式会社KAP',
-                    companyAddress: tenantInfo?.address,
+                    companyAddress: tenantInfo?.address || '東京都千代田区大手町 1-2-3',
+                    corporateNumber: tenantInfo?.corporate_number || '1010001999999',
+                    taxOfficeName: tenantInfo?.tax_office_name || '千代田',
+                    municipalityName: tenantInfo?.municipality_name || '千代田区',
                     employeeName: cabinetModal.employee.name,
-                    employeeNameKana: tData.name_kana,
-                    employeeAddress: tData.address || '東京都新宿区西新宿 2-8-1',
-                    householderName: tData.householder_name || cabinetModal.employee.name,
-                    householderRelation: tData.householder_relation || '本人',
+                    employeeNameKana: tData.name_kana || rData.name_kana || '',
+                    employeeAddress: tData.address || rData.address || '東京都新宿区西新宿 2-8-1',
+                    postalCode: tData.postal_code || rData.postal_code || '160-0023',
+                    myNumber: tData.my_number || '',
+                    birthDate: tData.birth_date || rData.birth_date || '1995-04-01',
+                    householderName: tData.householder_name || rData.householder_name || cabinetModal.employee.name,
+                    householderRelation: tData.householder_relation || rData.householder_relation || '本人',
                     hasSpouse: tData.has_spouse || false,
                     spouseName: tData.spouse_name,
+                    spouseNameKana: tData.spouse_name_kana,
+                    spouseBirthDate: tData.spouse_birth_date || '1996-05-15',
                     spouseIncomeEstimate: tData.spouse_income_estimate,
+                    spouseIsLivingTogether: tData.spouse_is_living_together !== false,
                     dependents: tData.dependents || [],
                     isDisability: tData.is_disability,
                     isSingleParent: tData.is_single_parent,
