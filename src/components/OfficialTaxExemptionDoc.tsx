@@ -194,8 +194,28 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           }
         };
 
+        // ○印描画ヘルパー
+        const renderCircle = (f: ReturnType<typeof getField>) => {
+          ctx.strokeStyle = '#2563eb';
+          ctx.lineWidth = Math.max(2, Math.round(W * 0.0008));
+          const radius = (1.4 / 100 * W) * 0.5;
+          ctx.beginPath();
+          ctx.arc(W * f.x + radius, H * f.y, radius, 0, Math.PI * 2);
+          ctx.stroke();
+        };
+
+        // ✓チェック描画ヘルパー
+        const renderCheck = (f: ReturnType<typeof getField>) => {
+          ctx.fillStyle = '#2563eb';
+          ctx.font = `bold ${f.fontSizePx}px sans-serif`;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('✓', W * f.x, H * f.y);
+        };
+
         // 通常テキスト印字
         const renderText = (text: string, f: ReturnType<typeof getField>, align: 'left' | 'right' | 'center' = 'left', isBold: boolean = true, fontFamily: string = '"Noto Sans JP", sans-serif') => {
+          ctx.fillStyle = '#0f172a';
           ctx.font = `${isBold ? 'bold ' : ''}${f.fontSizePx}px ${fontFamily}`;
           ctx.textAlign = align;
           ctx.textBaseline = 'middle';
@@ -226,7 +246,14 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         renderText(data.postalCode || '160-0023', getField('empPostal'));
         renderText(data.employeeAddress || '京都市山科区大塚西浦町3-57', getField('empAddress'));
 
-        // 生年月日
+        // 本人生年月日 元号○印
+        if (empBirth.era === '明') renderCircle(getField('empEraMeiji'));
+        else if (empBirth.era === '大') renderCircle(getField('empEraTaisho'));
+        else if (empBirth.era === '昭') renderCircle(getField('empEraShowa'));
+        else if (empBirth.era === '平') renderCircle(getField('empEraHeisei'));
+        else if (empBirth.era === '令') renderCircle(getField('empEraReiwa'));
+
+        // 本人生年月日
         renderText(empBirth.year, getField('empBirthY'));
         renderText(empBirth.month, getField('empBirthM'));
         renderText(empBirth.day, getField('empBirthD'));
@@ -237,13 +264,14 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
         // 配偶者有無（○印）
         if (data.hasSpouse) {
-          const fSpCircle = getField('hasSpouseYes');
-          ctx.strokeStyle = '#2563eb';
-          ctx.lineWidth = Math.max(2, Math.round(W * 0.0008));
-          const radius = (1.4 / 100 * W) * 0.5;
-          ctx.beginPath();
-          ctx.arc(W * fSpCircle.x + radius, H * fSpCircle.y, radius, 0, Math.PI * 2);
-          ctx.stroke();
+          renderCircle(getField('hasSpouseYes'));
+        } else {
+          renderCircle(getField('hasSpouseNo'));
+        }
+
+        // 従たる給与についての申告書提出（○印）
+        if (data.isSecondarySalary) {
+          renderCircle(getField('secondarySalaryCircle'));
         }
 
         // Ａ. 源泉控除対象配偶者
@@ -254,11 +282,29 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           const spNumStr = data.spouseMyNumber ? data.spouseMyNumber.replace(/[^0-9]/g, '') : '************';
           renderPitchText(spNumStr, getField('spouseMyNumber'));
 
+          // 配偶者元号○印
+          if (spouseBirth.era === '昭') renderCircle(getField('spouseEraShowa'));
+          else if (spouseBirth.era === '平') renderCircle(getField('spouseEraHeisei'));
+          else if (spouseBirth.era === '令') renderCircle(getField('spouseEraReiwa'));
+
           renderText(spouseBirth.year, getField('spouseBirthY'));
           renderText(spouseBirth.month, getField('spouseBirthM'));
           renderText(spouseBirth.day, getField('spouseBirthD'));
 
+          // 老人控除対象配偶者（昭和32年1月1日以前生まれ）
+          if (data.spouseBirthDate) {
+            const spDate = new Date(data.spouseBirthDate);
+            if (!isNaN(spDate.getTime()) && spDate < new Date('1957-01-02')) {
+              renderCircle(getField('spouseElderlyCheck'));
+            }
+          }
+
           renderText(`${(data.spouseIncomeEstimate || 0).toLocaleString()}`, getField('spouseIncome'), 'right');
+
+          if (data.spouseIsNonResident) {
+            renderCircle(getField('spouseNonResidentCircle'));
+          }
+
           renderText(data.spouseIsLivingTogether !== false ? '同居' : '別居', getField('spouseLiving'), 'left', false);
           renderText(data.spouseAddress || data.employeeAddress || '', getField('spouseAddress'), 'left', false);
         }
@@ -275,23 +321,66 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           renderPitchText(depNumStr, getField(`dep${idx}MyNumber`));
 
           renderText(dep.relation || '', getField(`dep${idx}Rel`));
+
+          // 扶養元号○印
+          if (bDate.era === '昭') renderCircle(getField(`dep${idx}EraShowa`));
+          else if (bDate.era === '平') renderCircle(getField(`dep${idx}EraHeisei`));
+          else if (bDate.era === '令') renderCircle(getField(`dep${idx}EraReiwa`));
+
           renderText(bDate.year, getField(`dep${idx}BirthY`));
           renderText(bDate.month, getField(`dep${idx}BirthM`));
           renderText(bDate.day, getField(`dep${idx}BirthD`));
 
+          // 老人扶養親族チェック
+          if (dep.isElderly) {
+            if (dep.isLivingTogether !== false) {
+              renderCheck(getField(`dep${idx}CheckElderlyLiving`));
+            } else {
+              renderCheck(getField(`dep${idx}CheckElderlyOther`));
+            }
+          }
+
+          // 特定扶養親族チェック
+          if (dep.isSpecific) {
+            renderCheck(getField(`dep${idx}CheckSpecific`));
+          }
+
           renderText(`${(dep.incomeEstimate || 0).toLocaleString()}`, getField(`dep${idx}Income`), 'right');
+
+          // 非居住者チェック
+          if (dep.isNonResident) {
+            if (dep.nonResidentReason === '16_30_70') renderCheck(getField(`dep${idx}CheckNonResAge`));
+            else if (dep.nonResidentReason === 'study_abroad') renderCheck(getField(`dep${idx}CheckNonResStudy`));
+            else if (dep.nonResidentReason === 'disabled') renderCheck(getField(`dep${idx}CheckNonResDisability`));
+            else if (dep.nonResidentReason === 'payment_380k') renderCheck(getField(`dep${idx}CheckNonResPay`));
+            else renderCheck(getField(`dep${idx}CheckNonResAge`));
+          }
+
           renderText(dep.isLivingTogether !== false ? '同居' : (dep.livingTogetherFact || '別居'), getField(`dep${idx}Living`), 'left', false);
           renderText(dep.address || data.employeeAddress || '', getField(`dep${idx}Address`), 'left', false);
         });
 
         // Ｃ. 障害者等
-        ctx.fillStyle = '#2563eb';
-        if (data.isDisability) renderText('✓', getField('specialDisabled'), 'left', true, 'sans-serif');
-        if (data.isWidow) renderText('✓', getField('specialWidow'), 'left', true, 'sans-serif');
-        if (data.isSingleParent) renderText('✓', getField('specialSingle'), 'left', true, 'sans-serif');
-        if (data.isWorkingStudent) renderText('✓', getField('specialStudent'), 'left', true, 'sans-serif');
+        if (data.isDisability) {
+          renderCheck(getField('specialDisabled'));
+          if (data.disabilityTarget === 'self') {
+            if (data.disabilityType === 'special') renderCheck(getField('specialDisSpecialSelf'));
+            else renderCheck(getField('specialDisGeneralSelf'));
+          } else if (data.disabilityTarget === 'spouse') {
+            if (data.disabilityType === 'living_special') renderCheck(getField('specialDisLivingSpecialSpouse'));
+            else if (data.disabilityType === 'special') renderCheck(getField('specialDisSpecialSpouse'));
+            else renderCheck(getField('specialDisGeneralSpouse'));
+          } else if (data.disabilityTarget === 'dependent' && data.disabilityCount) {
+            if (data.disabilityType === 'living_special') renderText(String(data.disabilityCount), getField('specialDisLivingSpecialDepCount'));
+            else if (data.disabilityType === 'special') renderText(String(data.disabilityCount), getField('specialDisSpecialDepCount'));
+            else renderText(String(data.disabilityCount), getField('specialDisGeneralDepCount'));
+          }
+        }
 
-        ctx.fillStyle = '#0f172a';
+        if (data.isWidow) renderCheck(getField('specialWidow'));
+        if (data.isSingleParent) renderCheck(getField('specialSingle'));
+        if (data.isWorkingStudent) renderCheck(getField('specialStudent'));
+
         if (data.disabilityDetails) {
           renderText(data.disabilityDetails, getField('specialDetails'));
         } else if (data.isWorkingStudent) {
@@ -310,11 +399,22 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           renderPitchText(uNumStr, getField(`u16_${idx}MyNumber`));
 
           renderText(uDep.relation || '', getField(`u16_${idx}Rel`));
+
+          // 住民税元号○印
+          if (ubDate.era === '昭') renderCircle(getField(`u16_${idx}EraShowa`));
+          else if (ubDate.era === '平') renderCircle(getField(`u16_${idx}EraHeisei`));
+          else if (ubDate.era === '令') renderCircle(getField(`u16_${idx}EraReiwa`));
+
           renderText(ubDate.year, getField(`u16_${idx}BirthY`));
           renderText(ubDate.month, getField(`u16_${idx}BirthM`));
           renderText(ubDate.day, getField(`u16_${idx}BirthD`));
 
           renderText(uDep.address || data.employeeAddress || '', getField(`u16_${idx}Address`), 'left', false);
+
+          if (uDep.isNonResident) {
+            renderCheck(getField(`u16_${idx}CheckForeign`));
+          }
+
           renderText(`${(uDep.incomeEstimate || 0).toLocaleString()}`, getField(`u16_${idx}Income`), 'right');
         });
 

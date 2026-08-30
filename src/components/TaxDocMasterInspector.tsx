@@ -14,7 +14,7 @@ export type FieldConfig = TaxDocFieldConfig;
 
 
 export const TaxDocMasterInspector: React.FC = () => {
-  const [selectedSection, setSelectedSection] = useState<'header' | 'employee' | 'spouse' | 'dependent' | 'special' | 'resident'>('header');
+  const [selectedSection, setSelectedSection] = useState<'header' | 'employee' | 'spouse' | 'dependent' | 'special' | 'resident' | 'retirement'>('header');
   const [selectedFieldId, setSelectedFieldId] = useState<string>('companyName');
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -281,11 +281,12 @@ export const TaxDocMasterInspector: React.FC = () => {
 
   const sections = [
     { id: 'header', name: '① 給与支払者・会社枠', icon: Building2, count: fields.filter(f => f.section === 'header').length },
-    { id: 'employee', name: '② 申告者本人・基本枠', icon: User, count: fields.filter(f => f.section === 'employee').length },
+    { id: 'employee', name: '② 申告者本人・元号・配偶者有無', icon: User, count: fields.filter(f => f.section === 'employee').length },
     { id: 'spouse', name: '③ Ａ. 源泉控除対象配偶者', icon: Heart, count: fields.filter(f => f.section === 'spouse').length },
     { id: 'dependent', name: '④ Ｂ. 控除対象扶養親族(1〜4人目)', icon: Users, count: fields.filter(f => f.section === 'dependent').length },
     { id: 'special', name: '⑤ Ｃ. 障害者・寡婦・学生', icon: Shield, count: fields.filter(f => f.section === 'special').length },
-    { id: 'resident', name: '⑥ 住民税 16歳未満親族(1〜2人目)', icon: Baby, count: fields.filter(f => f.section === 'resident').length }
+    { id: 'resident', name: '⑥ 住民税 16歳未満親族(1〜2人目)', icon: Baby, count: fields.filter(f => f.section === 'resident').length },
+    { id: 'retirement', name: '⑦ 退職手当等を有する配偶者・扶養親族', icon: FileText, count: fields.filter(f => f.section === 'retirement').length }
   ];
 
   return (
@@ -825,10 +826,10 @@ export const TaxDocMasterInspector: React.FC = () => {
                             </span>
                           ))}
                         </span>
-                      ) : f.example === '○' ? (
-                        <span className="w-[1.4cqw] h-[1.4cqw] rounded-full border-2 border-blue-600 inline-block"></span>
-                      ) : f.example === '✓' ? (
-                        <span className="text-blue-600 font-black">✓</span>
+                      ) : f.isCircle || f.example === '○' ? (
+                        <span className="w-[1.4cqw] h-[1.4cqw] rounded-full border-2 border-blue-600 inline-block bg-blue-500/10"></span>
+                      ) : f.isCheck || f.example === '✓' ? (
+                        <span className="text-blue-600 font-black text-[1.3cqw] leading-none">✓</span>
                       ) : (
                         f.example
                       )}
