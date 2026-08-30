@@ -44,6 +44,7 @@ interface TaxExemptionDocProps {
     spouseBirthDate?: string;
     spouseIncomeEstimate?: number;
     spouseIsLivingTogether?: boolean;
+    spouseLivingTogetherFact?: string;
     spouseIsNonResident?: boolean;
     spouseAddress?: string;
     spouseChangeDateReason?: string;
@@ -283,9 +284,10 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           renderPitchText(spNumStr, getField('spouseMyNumber'));
 
           // 配偶者元号○印
-          if (spouseBirth.era === '昭') renderCircle(getField('spouseEraShowa'));
+          if (spouseBirth.era === '明') renderCircle(getField('spouseEraMeiji'));
+          else if (spouseBirth.era === '大') renderCircle(getField('spouseEraTaisho'));
+          else if (spouseBirth.era === '昭') renderCircle(getField('spouseEraShowa'));
           else if (spouseBirth.era === '平') renderCircle(getField('spouseEraHeisei'));
-          else if (spouseBirth.era === '令') renderCircle(getField('spouseEraReiwa'));
 
           renderText(spouseBirth.year, getField('spouseBirthY'));
           renderText(spouseBirth.month, getField('spouseBirthM'));
@@ -305,7 +307,10 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
             renderCircle(getField('spouseNonResidentCircle'));
           }
 
-          renderText(data.spouseIsLivingTogether !== false ? '同居' : '別居', getField('spouseLiving'), 'left', false);
+          // 生計を一にする事実（同居時は空欄、別居時のみ記載）
+          if (data.spouseIsLivingTogether === false) {
+            renderText(data.spouseLivingTogetherFact || '別居', getField('spouseLiving'), 'left', false);
+          }
           renderText(data.spouseAddress || data.employeeAddress || '', getField('spouseAddress'), 'left', false);
         }
 
@@ -322,16 +327,17 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
           renderText(dep.relation || '', getField(`dep${idx}Rel`));
 
-          // 扶養元号○印
-          if (bDate.era === '昭') renderCircle(getField(`dep${idx}EraShowa`));
+          // 扶養元号○印（明・大・昭・平）
+          if (bDate.era === '明') renderCircle(getField(`dep${idx}EraMeiji`));
+          else if (bDate.era === '大') renderCircle(getField(`dep${idx}EraTaisho`));
+          else if (bDate.era === '昭') renderCircle(getField(`dep${idx}EraShowa`));
           else if (bDate.era === '平') renderCircle(getField(`dep${idx}EraHeisei`));
-          else if (bDate.era === '令') renderCircle(getField(`dep${idx}EraReiwa`));
 
           renderText(bDate.year, getField(`dep${idx}BirthY`));
           renderText(bDate.month, getField(`dep${idx}BirthM`));
           renderText(bDate.day, getField(`dep${idx}BirthD`));
 
-          // 老人扶養親族チェック
+          // 老人扶養親族チェック（同居老親等 / その他）
           if (dep.isElderly) {
             if (dep.isLivingTogether !== false) {
               renderCheck(getField(`dep${idx}CheckElderlyLiving`));
@@ -356,7 +362,10 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
             else renderCheck(getField(`dep${idx}CheckNonResAge`));
           }
 
-          renderText(dep.isLivingTogether !== false ? '同居' : (dep.livingTogetherFact || '別居'), getField(`dep${idx}Living`), 'left', false);
+          // 生計を一にする事実（同居時は空欄、別居時のみ記載）
+          if (dep.isLivingTogether === false) {
+            renderText(dep.livingTogetherFact || '別居', getField(`dep${idx}Living`), 'left', false);
+          }
           renderText(dep.address || data.employeeAddress || '', getField(`dep${idx}Address`), 'left', false);
         });
 
