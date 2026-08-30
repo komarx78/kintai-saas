@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Save, Copy, Check, MousePointer,
   Building2, User, Users, Heart, Shield, Baby, FileText, CheckCircle2, Loader2,
-  ZoomIn, ZoomOut, Move
+  ZoomIn, ZoomOut, Move, RotateCcw
 } from 'lucide-react';
 
 interface FieldConfig {
@@ -17,6 +17,70 @@ interface FieldConfig {
   description: string;
 }
 
+const DEFAULT_FIELDS: FieldConfig[] = [
+  // ① 給与支払者
+  { id: 'taxOffice', name: '所轄税務署長', section: 'header', x: 8.8, y: 9.8, fontSize: 18, example: '千代田', description: '左上「税務署長等」枠内' },
+  { id: 'municipality', name: '市区町村長', section: 'header', x: 7.8, y: 13.8, fontSize: 18, example: '千代田区', description: '「市区町村長」枠内' },
+  { id: 'companyName', name: '給与支払者の名称（会社名）', section: 'header', x: 23.5, y: 8.8, fontSize: 22, example: '株式会社KAP', description: '給与支払者 1段目' },
+  { id: 'corporateNumber', name: '法人番号（13桁）', section: 'header', x: 23.5, y: 11.4, fontSize: 20, example: '1010001999999', description: '給与支払者 2段目' },
+  { id: 'companyAddress', name: '所在地（住所）', section: 'header', x: 23.5, y: 14.2, fontSize: 16, example: '滋賀県大津市坂本3丁目21-16', description: '給与支払者 3段目' },
+
+  // ② 申告者本人
+  { id: 'empKana', name: 'あなたのフリガナ', section: 'employee', x: 44.0, y: 7.5, fontSize: 14, example: 'テスト', description: '「（フリガナ）」行' },
+  { id: 'empName', name: 'あなたの氏名', section: 'employee', x: 44.0, y: 9.5, fontSize: 28, example: '駒井 秀一朗', description: '「あなたの氏名」枠内' },
+  { id: 'empMyNumber', name: 'あなたの個人番号（12桁マス目）', section: 'employee', x: 42.8, y: 12.3, fontSize: 20, pitch: 1.82, example: '123456789012', description: '12マスの四角枠' },
+  { id: 'empPostal', name: 'あなたの郵便番号', section: 'employee', x: 50.5, y: 14.0, fontSize: 16, example: '160-0023', description: '住所欄の〒右側' },
+  { id: 'empAddress', name: 'あなたの住所', section: 'employee', x: 42.5, y: 15.2, fontSize: 17, example: '京都市山科区大塚西浦町3-57', description: 'あなたの住所又は居所' },
+  { id: 'empBirthY', name: '生年月日（年）', section: 'employee', x: 68.2, y: 7.5, fontSize: 18, example: '7', description: '生年月日の「年」枠' },
+  { id: 'empBirthM', name: '生年月日（月）', section: 'employee', x: 72.5, y: 7.5, fontSize: 18, example: '4', description: '生年月日の「月」枠' },
+  { id: 'empBirthD', name: '生年月日（日）', section: 'employee', x: 75.5, y: 7.5, fontSize: 18, example: '1', description: '生年月日の「日」枠' },
+  { id: 'householderName', name: '世帯主の氏名', section: 'employee', x: 67.5, y: 9.8, fontSize: 18, example: 'テスト テスト', description: '世帯主欄' },
+  { id: 'householderRel', name: 'あなたとの続柄', section: 'employee', x: 67.5, y: 12.2, fontSize: 18, example: '本人', description: '続柄欄' },
+  { id: 'hasSpouseYes', name: '配偶者 有（○印）', section: 'employee', x: 74.2, y: 14.8, fontSize: 18, example: '○', description: '「有」の文字を囲む円' },
+
+  // ③ Ａ. 配偶者
+  { id: 'spouseKana', name: '配偶者フリガナ', section: 'spouse', x: 16.5, y: 20.8, fontSize: 13, example: 'テスト ハナコ', description: 'Ａ欄フリガナ' },
+  { id: 'spouseName', name: '配偶者氏名', section: 'spouse', x: 16.5, y: 22.2, fontSize: 20, example: 'テスト 花子', description: 'Ａ欄氏名' },
+  { id: 'spouseMyNumber', name: '配偶者マイナンバー', section: 'spouse', x: 26.5, y: 22.2, fontSize: 16, pitch: 0.98, example: '************', description: 'Ａ欄12桁マス目' },
+  { id: 'spouseRel', name: '配偶者続柄', section: 'spouse', x: 34.5, y: 22.2, fontSize: 18, example: '妻', description: 'Ａ欄続柄' },
+  { id: 'spouseBirthY', name: '配偶者生年', section: 'spouse', x: 40.5, y: 22.2, fontSize: 18, example: '8', description: 'Ａ欄生年' },
+  { id: 'spouseBirthM', name: '配偶者生月', section: 'spouse', x: 43.2, y: 22.2, fontSize: 18, example: '5', description: 'Ａ欄生月' },
+  { id: 'spouseBirthD', name: '配偶者生日', section: 'spouse', x: 45.8, y: 22.2, fontSize: 18, example: '15', description: 'Ａ欄生日' },
+  { id: 'spouseIncome', name: '配偶者所得見積額', section: 'spouse', x: 53.5, y: 22.2, fontSize: 17, example: '0 円', description: 'Ａ欄所得見積額' },
+  { id: 'spouseLiving', name: '生計を一にする事実', section: 'spouse', x: 58.5, y: 22.2, fontSize: 15, example: '同居', description: 'Ａ欄生計一事実' },
+  { id: 'spouseAddress', name: '配偶者住所', section: 'spouse', x: 64.0, y: 22.2, fontSize: 15, example: '京都市山科区大塚西浦町3-57', description: 'Ａ欄住所' },
+
+  // ④ Ｂ. 扶養親族（1人目）
+  { id: 'dep0Kana', name: '扶養親族1 フリガナ', section: 'dependent', x: 16.5, y: 24.2, fontSize: 13, example: 'テスト タロウ', description: 'Ｂ欄1行目フリガナ' },
+  { id: 'dep0Name', name: '扶養親族1 氏名', section: 'dependent', x: 16.5, y: 25.6, fontSize: 19, example: 'テスト タロウ', description: 'Ｂ欄1行目氏名' },
+  { id: 'dep0MyNumber', name: '扶養親族1 マイナンバー', section: 'dependent', x: 26.5, y: 25.6, fontSize: 16, pitch: 0.98, example: '************', description: 'Ｂ欄1行目12桁マス目' },
+  { id: 'dep0Rel', name: '扶養親族1 続柄', section: 'dependent', x: 34.5, y: 25.6, fontSize: 17, example: '長男', description: 'Ｂ欄1行目続柄' },
+  { id: 'dep0BirthY', name: '扶養親族1 生年', section: 'dependent', x: 40.5, y: 25.6, fontSize: 17, example: '27', description: 'Ｂ欄1行目生年' },
+  { id: 'dep0BirthM', name: '扶養親族1 生月', section: 'dependent', x: 43.2, y: 25.6, fontSize: 17, example: '5', description: 'Ｂ欄1行目生月' },
+  { id: 'dep0BirthD', name: '扶養親族1 生日', section: 'dependent', x: 45.8, y: 25.6, fontSize: 17, example: '1', description: 'Ｂ欄1行目生日' },
+  { id: 'dep0Income', name: '扶養親族1 所得見積額', section: 'dependent', x: 53.5, y: 25.6, fontSize: 17, example: '0 円', description: 'Ｂ欄1行目所得' },
+  { id: 'dep0Living', name: '扶養親族1 同居別居', section: 'dependent', x: 58.5, y: 25.6, fontSize: 15, example: '同居', description: 'Ｂ欄1行目生計一' },
+  { id: 'dep0Address', name: '扶養親族1 住所', section: 'dependent', x: 64.0, y: 25.6, fontSize: 15, example: '京都市山科区大塚西浦町3-57', description: 'Ｂ欄1行目住所' },
+
+  // ⑤ Ｃ. 障害者等
+  { id: 'specialDisabled', name: '障害者チェック（✓）', section: 'special', x: 12.2, y: 38.8, fontSize: 20, example: '✓', description: 'Ｃ欄障害者ボックス' },
+  { id: 'specialWidow', name: '寡婦チェック（✓）', section: 'special', x: 31.5, y: 38.8, fontSize: 20, example: '✓', description: 'Ｃ欄寡婦ボックス' },
+  { id: 'specialSingle', name: 'ひとり親チェック（✓）', section: 'special', x: 35.0, y: 38.8, fontSize: 20, example: '✓', description: 'Ｃ欄ひとり親ボックス' },
+  { id: 'specialStudent', name: '勤労学生チェック（✓）', section: 'special', x: 39.2, y: 38.8, fontSize: 20, example: '✓', description: 'Ｃ欄勤労学生ボックス' },
+  { id: 'specialDetails', name: '障害者・学生の内容', section: 'special', x: 46.5, y: 39.2, fontSize: 16, example: '障害者手帳第1種', description: 'Ｃ欄内容記載枠' },
+
+  // ⑥ 住民税（16歳未満）
+  { id: 'u16_0Kana', name: '16歳未満1 フリガナ', section: 'resident', x: 16.5, y: 52.5, fontSize: 13, example: 'テスト ジロウ', description: '住民税欄1行目カナ' },
+  { id: 'u16_0Name', name: '16歳未満1 氏名', section: 'resident', x: 16.5, y: 53.8, fontSize: 19, example: 'テスト 次郎', description: '住民税欄1行目氏名' },
+  { id: 'u16_0MyNumber', name: '16歳未満1 マイナンバー', section: 'resident', x: 27.5, y: 53.8, fontSize: 16, pitch: 0.98, example: '************', description: '住民税欄12桁マス目' },
+  { id: 'u16_0Rel', name: '16歳未満1 続柄', section: 'resident', x: 38.5, y: 53.8, fontSize: 17, example: '二男', description: '住民税欄続柄' },
+  { id: 'u16_0BirthY', name: '16歳未満1 生年', section: 'resident', x: 42.5, y: 53.8, fontSize: 17, example: '30', description: '住民税欄生年' },
+  { id: 'u16_0BirthM', name: '16歳未満1 生月', section: 'resident', x: 44.8, y: 53.8, fontSize: 17, example: '8', description: '住民税欄生月' },
+  { id: 'u16_0BirthD', name: '16歳未満1 生日', section: 'resident', x: 47.2, y: 53.8, fontSize: 17, example: '20', description: '住民税欄生日' },
+  { id: 'u16_0Address', name: '16歳未満1 住所', section: 'resident', x: 53.0, y: 53.8, fontSize: 15, example: '京都市山科区大塚西浦町3-57', description: '住民税欄住所' },
+  { id: 'u16_0Income', name: '16歳未満1 所得見積額', section: 'resident', x: 74.5, y: 53.8, fontSize: 17, example: '0 円', description: '住民税欄所得' }
+];
+
 export const TaxDocMasterInspector: React.FC = () => {
   const [selectedSection, setSelectedSection] = useState<'header' | 'employee' | 'spouse' | 'dependent' | 'special' | 'resident'>('header');
   const [selectedFieldId, setSelectedFieldId] = useState<string>('companyName');
@@ -25,85 +89,23 @@ export const TaxDocMasterInspector: React.FC = () => {
   const [copiedCode, setCopiedCode] = useState(false);
   const [previewZoom, setPreviewZoom] = useState<number>(100);
 
-  // ドラッグ＆ドロップ State
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
+  // ドラッグ中 State
+  const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
+  const dragStartRef = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
 
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // 項目別マスタ座標State（初期値）
+  // 項目別マスタ座標State
   const [fields, setFields] = useState<FieldConfig[]>(() => {
     try {
       const saved = localStorage.getItem('taxDocMasterFields');
       if (saved) return JSON.parse(saved);
     } catch (_) {}
-    return [
-      // ① 給与支払者
-      { id: 'taxOffice', name: '所轄税務署長', section: 'header', x: 8.8, y: 9.8, fontSize: 18, example: '千代田', description: '左上「税務署長等」枠内' },
-      { id: 'municipality', name: '市区町村長', section: 'header', x: 7.8, y: 13.8, fontSize: 18, example: '千代田区', description: '「市区町村長」枠内' },
-      { id: 'companyName', name: '給与支払者の名称（会社名）', section: 'header', x: 23.5, y: 8.8, fontSize: 22, example: '株式会社KAP', description: '給与支払者 1段目' },
-      { id: 'corporateNumber', name: '法人番号（13桁）', section: 'header', x: 23.5, y: 11.4, fontSize: 20, example: '1010001999999', description: '給与支払者 2段目' },
-      { id: 'companyAddress', name: '所在地（住所）', section: 'header', x: 23.5, y: 14.2, fontSize: 16, example: '滋賀県大津市坂本3丁目21-16', description: '給与支払者 3段目' },
-
-      // ② 申告者本人
-      { id: 'empKana', name: 'あなたのフリガナ', section: 'employee', x: 44.0, y: 7.5, fontSize: 14, example: 'テスト', description: '「（フリガナ）」行' },
-      { id: 'empName', name: 'あなたの氏名', section: 'employee', x: 44.0, y: 9.5, fontSize: 28, example: '駒井 秀一朗', description: '「あなたの氏名」枠内' },
-      { id: 'empMyNumber', name: 'あなたの個人番号（12桁マス目）', section: 'employee', x: 42.8, y: 12.3, fontSize: 20, pitch: 1.82, example: '123456789012', description: '12マスの四角枠' },
-      { id: 'empPostal', name: 'あなたの郵便番号', section: 'employee', x: 50.5, y: 14.0, fontSize: 16, example: '160-0023', description: '住所欄の〒右側' },
-      { id: 'empAddress', name: 'あなたの住所', section: 'employee', x: 42.5, y: 15.2, fontSize: 17, example: '京都市山科区大塚西浦町3-57', description: 'あなたの住所又は居所' },
-      { id: 'empBirthY', name: '生年月日（年）', section: 'employee', x: 68.2, y: 7.5, fontSize: 18, example: '7', description: '生年月日の「年」枠' },
-      { id: 'empBirthM', name: '生年月日（月）', section: 'employee', x: 72.5, y: 7.5, fontSize: 18, example: '4', description: '生年月日の「月」枠' },
-      { id: 'empBirthD', name: '生年月日（日）', section: 'employee', x: 75.5, y: 7.5, fontSize: 18, example: '1', description: '生年月日の「日」枠' },
-      { id: 'householderName', name: '世帯主の氏名', section: 'employee', x: 67.5, y: 9.8, fontSize: 18, example: 'テスト テスト', description: '世帯主欄' },
-      { id: 'householderRel', name: 'あなたとの続柄', section: 'employee', x: 67.5, y: 12.2, fontSize: 18, example: '本人', description: '続柄欄' },
-      { id: 'hasSpouseYes', name: '配偶者 有（○印）', section: 'employee', x: 74.2, y: 14.8, fontSize: 18, example: '○', description: '「有」の文字を囲む円' },
-
-      // ③ Ａ. 配偶者
-      { id: 'spouseKana', name: '配偶者フリガナ', section: 'spouse', x: 16.5, y: 20.8, fontSize: 13, example: 'テスト ハナコ', description: 'Ａ欄フリガナ' },
-      { id: 'spouseName', name: '配偶者氏名', section: 'spouse', x: 16.5, y: 22.2, fontSize: 20, example: 'テスト 花子', description: 'Ａ欄氏名' },
-      { id: 'spouseMyNumber', name: '配偶者マイナンバー', section: 'spouse', x: 26.5, y: 22.2, fontSize: 16, pitch: 0.98, example: '************', description: 'Ａ欄12桁マス目' },
-      { id: 'spouseRel', name: '配偶者続柄', section: 'spouse', x: 34.5, y: 22.2, fontSize: 18, example: '妻', description: 'Ａ欄続柄' },
-      { id: 'spouseBirthY', name: '配偶者生年', section: 'spouse', x: 40.5, y: 22.2, fontSize: 18, example: '8', description: 'Ａ欄生年' },
-      { id: 'spouseBirthM', name: '配偶者生月', section: 'spouse', x: 43.2, y: 22.2, fontSize: 18, example: '5', description: 'Ａ欄生月' },
-      { id: 'spouseBirthD', name: '配偶者生日', section: 'spouse', x: 45.8, y: 22.2, fontSize: 18, example: '15', description: 'Ａ欄生日' },
-      { id: 'spouseIncome', name: '配偶者所得見積額', section: 'spouse', x: 53.5, y: 22.2, fontSize: 17, example: '0 円', description: 'Ａ欄所得見積額' },
-      { id: 'spouseLiving', name: '生計を一にする事実', section: 'spouse', x: 58.5, y: 22.2, fontSize: 15, example: '同居', description: 'Ａ欄生計一事実' },
-      { id: 'spouseAddress', name: '配偶者住所', section: 'spouse', x: 64.0, y: 22.2, fontSize: 15, example: '京都市山科区大塚西浦町3-57', description: 'Ａ欄住所' },
-
-      // ④ Ｂ. 扶養親族（1人目）
-      { id: 'dep0Kana', name: '扶養親族1 フリガナ', section: 'dependent', x: 16.5, y: 24.2, fontSize: 13, example: 'テスト タロウ', description: 'Ｂ欄1行目フリガナ' },
-      { id: 'dep0Name', name: '扶養親族1 氏名', section: 'dependent', x: 16.5, y: 25.6, fontSize: 19, example: 'テスト タロウ', description: 'Ｂ欄1行目氏名' },
-      { id: 'dep0MyNumber', name: '扶養親族1 マイナンバー', section: 'dependent', x: 26.5, y: 25.6, fontSize: 16, pitch: 0.98, example: '************', description: 'Ｂ欄1行目12桁マス目' },
-      { id: 'dep0Rel', name: '扶養親族1 続柄', section: 'dependent', x: 34.5, y: 25.6, fontSize: 17, example: '長男', description: 'Ｂ欄1行目続柄' },
-      { id: 'dep0BirthY', name: '扶養親族1 生年', section: 'dependent', x: 40.5, y: 25.6, fontSize: 17, example: '27', description: 'Ｂ欄1行目生年' },
-      { id: 'dep0BirthM', name: '扶養親族1 生月', section: 'dependent', x: 43.2, y: 25.6, fontSize: 17, example: '5', description: 'Ｂ欄1行目生月' },
-      { id: 'dep0BirthD', name: '扶養親族1 生日', section: 'dependent', x: 45.8, y: 25.6, fontSize: 17, example: '1', description: 'Ｂ欄1行目生日' },
-      { id: 'dep0Income', name: '扶養親族1 所得見積額', section: 'dependent', x: 53.5, y: 25.6, fontSize: 17, example: '0 円', description: 'Ｂ欄1行目所得' },
-      { id: 'dep0Living', name: '扶養親族1 同居別居', section: 'dependent', x: 58.5, y: 25.6, fontSize: 15, example: '同居', description: 'Ｂ欄1行目生計一' },
-      { id: 'dep0Address', name: '扶養親族1 住所', section: 'dependent', x: 64.0, y: 25.6, fontSize: 15, example: '京都市山科区大塚西浦町3-57', description: 'Ｂ欄1行目住所' },
-
-      // ⑤ Ｃ. 障害者等
-      { id: 'specialDisabled', name: '障害者チェック（✓）', section: 'special', x: 12.2, y: 38.8, fontSize: 20, example: '✓', description: 'Ｃ欄障害者ボックス' },
-      { id: 'specialWidow', name: '寡婦チェック（✓）', section: 'special', x: 31.5, y: 38.8, fontSize: 20, example: '✓', description: 'Ｃ欄寡婦ボックス' },
-      { id: 'specialSingle', name: 'ひとり親チェック（✓）', section: 'special', x: 35.0, y: 38.8, fontSize: 20, example: '✓', description: 'Ｃ欄ひとり親ボックス' },
-      { id: 'specialStudent', name: '勤労学生チェック（✓）', section: 'special', x: 39.2, y: 38.8, fontSize: 20, example: '✓', description: 'Ｃ欄勤労学生ボックス' },
-      { id: 'specialDetails', name: '障害者・学生の内容', section: 'special', x: 46.5, y: 39.2, fontSize: 16, example: '障害者手帳第1種', description: 'Ｃ欄内容記載枠' },
-
-      // ⑥ 住民税（16歳未満）
-      { id: 'u16_0Kana', name: '16歳未満1 フリガナ', section: 'resident', x: 16.5, y: 52.5, fontSize: 13, example: 'テスト ジロウ', description: '住民税欄1行目カナ' },
-      { id: 'u16_0Name', name: '16歳未満1 氏名', section: 'resident', x: 16.5, y: 53.8, fontSize: 19, example: 'テスト 次郎', description: '住民税欄1行目氏名' },
-      { id: 'u16_0MyNumber', name: '16歳未満1 マイナンバー', section: 'resident', x: 27.5, y: 53.8, fontSize: 16, pitch: 0.98, example: '************', description: '住民税欄12桁マス目' },
-      { id: 'u16_0Rel', name: '16歳未満1 続柄', section: 'resident', x: 38.5, y: 53.8, fontSize: 17, example: '二男', description: '住民税欄続柄' },
-      { id: 'u16_0BirthY', name: '16歳未満1 生年', section: 'resident', x: 42.5, y: 53.8, fontSize: 17, example: '30', description: '住民税欄生年' },
-      { id: 'u16_0BirthM', name: '16歳未満1 生月', section: 'resident', x: 44.8, y: 53.8, fontSize: 17, example: '8', description: '住民税欄生月' },
-      { id: 'u16_0BirthD', name: '16歳未満1 生日', section: 'resident', x: 47.2, y: 53.8, fontSize: 17, example: '20', description: '住民税欄生日' },
-      { id: 'u16_0Address', name: '16歳未満1 住所', section: 'resident', x: 53.0, y: 53.8, fontSize: 15, example: '京都市山科区大塚西浦町3-57', description: '住民税欄住所' },
-      { id: 'u16_0Income', name: '16歳未満1 所得見積額', section: 'resident', x: 74.5, y: 53.8, fontSize: 17, example: '0 円', description: '住民税欄所得' }
-    ];
+    return DEFAULT_FIELDS;
   });
 
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [bgBlankPdfImage, setBgBlankPdfImage] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(true);
 
   // 項目値の更新
@@ -118,46 +120,61 @@ export const TaxDocMasterInspector: React.FC = () => {
   const selectedField = fields.find(f => f.id === selectedFieldId);
   const sectionFields = fields.filter(f => f.section === selectedSection);
 
-  // 🖱️ 原本プレビュー上でのドラッグ開始
+  // 🖱️ ドラッグ開始 (MouseDown on Item)
   const handleStartDrag = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     setSelectedFieldId(id);
+    setDraggingFieldId(id);
+
     const target = fields.find(f => f.id === id);
     if (!target) return;
 
-    const fSection = target.section;
-    if (fSection !== selectedSection) {
-      setSelectedSection(fSection as any);
+    if (target.section !== selectedSection) {
+      setSelectedSection(target.section as any);
     }
 
-    setIsDragging(true);
-    setDragStart({
+    dragStartRef.current = {
       mouseX: e.clientX,
       mouseY: e.clientY,
       startX: target.x,
       startY: target.y
-    });
+    };
   };
 
-  // 🖱️ ドラッグ中の移動計算
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isDragging || !dragStart || !selectedFieldId || !previewContainerRef.current) return;
-    const rect = previewContainerRef.current.getBoundingClientRect();
-    const deltaX = ((e.clientX - dragStart.mouseX) / rect.width) * 100;
-    const deltaY = ((e.clientY - dragStart.mouseY) / rect.height) * 100;
+  // 🖱️ グローバル（Window全体）マウス移動リスナー
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!draggingFieldId || !dragStartRef.current || !previewContainerRef.current) return;
+      
+      const rect = previewContainerRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
 
-    const newX = Math.max(0, Math.min(100, dragStart.startX + deltaX));
-    const newY = Math.max(0, Math.min(100, dragStart.startY + deltaY));
+      const deltaX = ((e.clientX - dragStartRef.current.mouseX) / rect.width) * 100;
+      const deltaY = ((e.clientY - dragStartRef.current.mouseY) / rect.height) * 100;
 
-    updateField(selectedFieldId, 'x', newX);
-    updateField(selectedFieldId, 'y', newY);
-  }, [isDragging, dragStart, selectedFieldId, updateField]);
+      const newX = Math.max(0, Math.min(100, dragStartRef.current.startX + deltaX));
+      const newY = Math.max(0, Math.min(100, dragStartRef.current.startY + deltaY));
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    setDragStart(null);
-  };
+      updateField(draggingFieldId, 'x', newX);
+      updateField(draggingFieldId, 'y', newY);
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (draggingFieldId) {
+        setDraggingFieldId(null);
+        dragStartRef.current = null;
+      }
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [draggingFieldId, updateField]);
 
   // ⌨️ キーボード矢印キーでの微調整
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -178,11 +195,11 @@ export const TaxDocMasterInspector: React.FC = () => {
     }
   };
 
-  // リアルタイム Canvas レンダリング（背景PDF原本）
+  // 背景用の白紙PDF原本（文字なし）をCanvasから生成
   useEffect(() => {
     let isCancelled = false;
 
-    const render = async () => {
+    const renderBlankPdf = async () => {
       setIsRendering(true);
       try {
         // @ts-ignore
@@ -209,12 +226,12 @@ export const TaxDocMasterInspector: React.FC = () => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // 原本描画
+        // 文字は一切描画せず、純粋な国税庁原本用紙だけをレンダリング
         await page.render({ canvasContext: ctx, viewport }).promise;
         if (isCancelled) return;
 
         const url = canvas.toDataURL('image/png');
-        setPreviewImage(url);
+        setBgBlankPdfImage(url);
         setIsRendering(false);
       } catch (e) {
         console.error(e);
@@ -222,7 +239,7 @@ export const TaxDocMasterInspector: React.FC = () => {
       }
     };
 
-    render();
+    renderBlankPdf();
     return () => { isCancelled = true; };
   }, []);
 
@@ -234,7 +251,14 @@ export const TaxDocMasterInspector: React.FC = () => {
       setIsSaving(false);
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
-    }, 600);
+    }, 500);
+  };
+
+  const handleResetDefaults = () => {
+    if (confirm('すべての項目の座標・文字サイズを初期マスター値にリセットしますか？')) {
+      setFields(DEFAULT_FIELDS);
+      localStorage.removeItem('taxDocMasterFields');
+    }
   };
 
   const sections = [
@@ -263,13 +287,22 @@ export const TaxDocMasterInspector: React.FC = () => {
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                右側の原本用紙の上で文字を直接マウスドラッグして移動、または矢印キー（↑ ↓ ← →）で0.1%単位で位置合わせできます。
+                右側の国税庁用紙の上で文字を直接マウスで掴んでドラッグ移動できます。
               </p>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleResetDefaults}
+            className="px-3 py-2 bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+            title="初期配置に戻す"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            初期リセット
+          </button>
+
           <button
             onClick={() => {
               const code = `export const TAX_DOC_FIELDS = ${JSON.stringify(fields, null, 2)};`;
@@ -280,7 +313,7 @@ export const TaxDocMasterInspector: React.FC = () => {
             className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
           >
             {copiedCode ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-indigo-400" />}
-            {copiedCode ? 'コピー完了！' : 'TypeScriptコードをコピー'}
+            {copiedCode ? 'コピー完了！' : 'TypeScriptコード'}
           </button>
 
           <button
@@ -294,10 +327,10 @@ export const TaxDocMasterInspector: React.FC = () => {
         </div>
       </div>
 
-      {/* 2カラム構成：左（セクション＆項目インスペクター） ＋ 右（直接ドラッグ可能な原本プレビュー） */}
+      {/* 2カラム構成：左（項目選択＆サイズ調整） ＋ 右（直接ドラッグ可能な用紙ビュー） */}
       <div className="grid grid-cols-12 gap-4">
         
-        {/* ⬅️ 左カラム：セクション選択 ＆ 項目リスト ＆ 数値インスペクター */}
+        {/* ⬅️ 左カラム */}
         <div className="col-span-12 lg:col-span-4 space-y-3">
           
           {/* ① セクション選択タブ */}
@@ -454,17 +487,17 @@ export const TaxDocMasterInspector: React.FC = () => {
 
         </div>
 
-        {/* ➡️ 右カラム：原本PDFの上で直接掴んで動かせる WYSIWYG プレビュー */}
+        {/* ➡️ 右カラム：白紙原本の上にドラッグ可能なテキストボックスを直接配置 */}
         <div className="col-span-12 lg:col-span-8 bg-white p-3 rounded-2xl shadow-xl border border-slate-200 space-y-2">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <MousePointer className="w-3.5 h-3.5 text-indigo-600" />
-                原本PDF上でのダイレクト・ドラッグ＆ドロップ調整
+                国税庁用紙 上での直接ドラッグ＆ドロップ配置
               </h3>
               <span className="text-[10px] text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                赤枠 = 選択中（ドラッグ可能）
+                赤枠 = 選択中（マウスで掴んでドラッグ移動！）
               </span>
             </div>
 
@@ -485,48 +518,46 @@ export const TaxDocMasterInspector: React.FC = () => {
             </div>
           </div>
 
-          <div 
-            className="w-full bg-slate-100 rounded-xl overflow-auto p-2 border border-slate-200 max-h-[700px] select-none"
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-          >
+          <div className="w-full bg-slate-200/70 rounded-xl overflow-auto p-3 border border-slate-200 max-h-[720px] select-none flex justify-center">
             {isRendering && (
               <div className="flex flex-col items-center justify-center py-20 space-y-2">
                 <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
-                <p className="text-xs font-bold text-slate-500">原本PDFをレンダリング中...</p>
+                <p className="text-xs font-bold text-slate-500">国税庁原本用紙を読み込み中...</p>
               </div>
             )}
 
             {/* 隠しCanvas */}
             <canvas ref={canvasRef} className="hidden" />
 
-            {previewImage && (
+            {bgBlankPdfImage && (
               <div 
                 ref={previewContainerRef}
                 style={{ 
                   width: `${previewZoom}%`, 
-                  margin: '0 auto', 
                   position: 'relative',
                   aspectRatio: '297 / 210'
                 }}
-                className="shadow-md rounded-lg overflow-hidden border border-slate-300 cursor-crosshair bg-white"
+                className="shadow-2xl rounded-lg overflow-hidden border-2 border-slate-400/80 bg-white"
               >
-                {/* 下敷き原本PDF画像 */}
+                {/* 📄 白紙の国税庁原本PDF用紙（背景画像） */}
                 <img
-                  src={previewImage}
-                  alt="国税庁原本用紙"
-                  className="w-full h-full object-contain pointer-events-none"
+                  src={bgBlankPdfImage}
+                  alt="国税庁原本用紙（白紙）"
+                  className="w-full h-full object-contain pointer-events-none select-none"
                   draggable={false}
                 />
 
                 {/* 🎯 原本用紙の上で直接ドラッグ可能な全フィールドボックス */}
                 {fields.map(f => {
                   const isSelected = selectedFieldId === f.id;
+                  const isDraggingThis = draggingFieldId === f.id;
+
                   return (
                     <div
                       key={f.id}
                       onMouseDown={e => handleStartDrag(f.id, e)}
-                      onClick={() => {
+                      onClick={e => {
+                        e.stopPropagation();
                         setSelectedFieldId(f.id);
                         if (f.section !== selectedSection) setSelectedSection(f.section as any);
                       }}
@@ -536,17 +567,19 @@ export const TaxDocMasterInspector: React.FC = () => {
                         top: `${f.y}%`,
                         transform: 'translate(0, -50%)',
                         fontSize: `${(f.fontSize / 1000) * 100 * (previewZoom / 100)}vw`,
-                        color: isSelected ? '#dc2626' : '#0f172a',
+                        color: isSelected ? '#b91c1c' : '#0f172a',
                         fontWeight: 'bold',
-                        cursor: isSelected ? 'grabbing' : 'grab',
-                        whiteSpace: 'nowrap'
+                        cursor: isDraggingThis ? 'grabbing' : 'grab',
+                        userSelect: 'none',
+                        whiteSpace: 'nowrap',
+                        pointerEvents: 'auto'
                       }}
                       className={`px-1 py-0.5 rounded leading-none transition-shadow ${
                         isSelected
-                          ? 'ring-2 ring-rose-500 bg-rose-500/20 shadow-xl z-30 font-black'
-                          : 'hover:ring-1 hover:ring-indigo-400 hover:bg-indigo-100/40 z-10'
+                          ? 'ring-2 ring-rose-500 bg-rose-500/25 shadow-2xl z-30 font-black scale-105'
+                          : 'hover:ring-1 hover:ring-indigo-500 hover:bg-indigo-100/60 z-10 bg-white/40'
                       }`}
-                      title={`${f.name} (クリックして選択・ドラッグして移動)`}
+                      title={`${f.name} (マウスで掴んでドラッグ移動)`}
                     >
                       {f.pitch ? (
                         <span className="flex items-center">
