@@ -200,9 +200,14 @@ export const DEFAULT_TAX_FIELDS: TaxDocFieldConfig[] = [
   { id: 'u16_1CircleForeign', name: '住民税2 控除対象外国外（○印）', section: 'resident', x: 72.8, y: 61.0, fontSize: 8, example: '○', description: '住民税2人目 控除対象外国外親族○印', isCircle: true },
   { id: 'u16_1Income', name: '住民税2 所得見積額', section: 'resident', x: 74.0, y: 61.0, fontSize: 10, example: '0', description: '住民税欄2人目所得' },
 
-  // ⑦ 退職手当等を有する配偶者・扶養親族（最下段新設欄）
-  { id: 'retSpouseCheck', name: '退職手当 配偶者（✓）', section: 'retirement', x: 58.5, y: 66.5, fontSize: 8, example: '✓', description: '最下段 配偶者チェックボックス', isCheck: true },
-  { id: 'retDepCheck', name: '退職手当 扶養親族（✓）', section: 'retirement', x: 58.5, y: 68.0, fontSize: 8, example: '✓', description: '最下段 扶養親族チェックボックス', isCheck: true }
+  // ⑦ 退職手当等を有する配偶者・扶養親族（最下段枠）
+  { id: 'retCheckNonResSpouse', name: '最下段 非居住 配偶者（✓）', section: 'retirement', x: 50.8, y: 66.8, fontSize: 8, example: '✓', description: '最下段 非居住者 配偶者ボックス', isCheck: true },
+  { id: 'retCheckNonResAge', name: '最下段 非居住 30未満/70上（✓）', section: 'retirement', x: 50.8, y: 68.0, fontSize: 8, example: '✓', description: '最下段 非居住者 30歳未満又は70歳以上ボックス', isCheck: true },
+  { id: 'retCheckNonResStudy', name: '最下段 非居住 留学（✓）', section: 'retirement', x: 67.5, y: 68.0, fontSize: 8, example: '✓', description: '最下段 非居住者 留学ボックス', isCheck: true },
+  { id: 'retCheckNonResDisability', name: '最下段 非居住 障害者（✓）', section: 'retirement', x: 50.8, y: 69.2, fontSize: 8, example: '✓', description: '最下段 非居住者 障害者ボックス', isCheck: true },
+  { id: 'retCheckNonResPay', name: '最下段 非居住 38万円（✓）', section: 'retirement', x: 67.5, y: 69.2, fontSize: 8, example: '✓', description: '最下段 非居住者 38万円以上の支払ボックス', isCheck: true },
+  { id: 'retCheckDisGeneral', name: '最下段 障害者 一般（✓）', section: 'retirement', x: 95.8, y: 67.2, fontSize: 8, example: '✓', description: '最下段 障害者区分 一般ボックス', isCheck: true },
+  { id: 'retCheckDisSpecial', name: '最下段 障害者 特別（✓）', section: 'retirement', x: 95.8, y: 68.8, fontSize: 8, example: '✓', description: '最下段 障害者区分 特別ボックス', isCheck: true }
 ];
 
 export const TAX_DOC_DEFAULT_MAP = new Map<string, TaxDocFieldConfig>(
