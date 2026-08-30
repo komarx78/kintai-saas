@@ -145,6 +145,14 @@ export const TaxDocMasterInspector: React.FC = () => {
   const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
   const dragStartRef = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
 
+  // 🖐️ 手のひらパン（書類全体のドラッグスクロール）State
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const isPanningRef = useRef(false);
+  const panStartRef = useRef<{ startX: number; startY: number; scrollLeft: number; scrollTop: number }>({
+    startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0
+  });
+  const [isPanning, setIsPanning] = useState(false);
+
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -199,6 +207,20 @@ export const TaxDocMasterInspector: React.FC = () => {
   const selectedField = fields.find(f => f.id === selectedFieldId);
   const sectionFields = fields.filter(f => f.section === selectedSection);
 
+  // 🖐️ 手のひらパン開始 (背景や用紙のMouseDown)
+  const handlePanMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0 || draggingFieldId) return;
+    if (!scrollContainerRef.current) return;
+    isPanningRef.current = true;
+    setIsPanning(true);
+    panStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      scrollLeft: scrollContainerRef.current.scrollLeft,
+      scrollTop: scrollContainerRef.current.scrollTop
+    };
+  };
+
   // 🖱️ ドラッグ開始 (MouseDown on Item)
   const handleStartDrag = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -224,25 +246,39 @@ export const TaxDocMasterInspector: React.FC = () => {
   // 🖱️ グローバル（Window全体）マウス移動リスナー
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
-      if (!draggingFieldId || !dragStartRef.current || !previewContainerRef.current) return;
-      
-      const rect = previewContainerRef.current.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
+      // 1. 項目ドラッグ処理
+      if (draggingFieldId && dragStartRef.current && previewContainerRef.current) {
+        const rect = previewContainerRef.current.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          const deltaX = ((e.clientX - dragStartRef.current.mouseX) / rect.width) * 100;
+          const deltaY = ((e.clientY - dragStartRef.current.mouseY) / rect.height) * 100;
 
-      const deltaX = ((e.clientX - dragStartRef.current.mouseX) / rect.width) * 100;
-      const deltaY = ((e.clientY - dragStartRef.current.mouseY) / rect.height) * 100;
+          const newX = Math.max(0, Math.min(100, dragStartRef.current.startX + deltaX));
+          const newY = Math.max(0, Math.min(100, dragStartRef.current.startY + deltaY));
 
-      const newX = Math.max(0, Math.min(100, dragStartRef.current.startX + deltaX));
-      const newY = Math.max(0, Math.min(100, dragStartRef.current.startY + deltaY));
+          updateField(draggingFieldId, 'x', newX);
+          updateField(draggingFieldId, 'y', newY);
+        }
+        return;
+      }
 
-      updateField(draggingFieldId, 'x', newX);
-      updateField(draggingFieldId, 'y', newY);
+      // 2. 用紙・背景パン（手のひらスクロール移動）処理
+      if (isPanningRef.current && scrollContainerRef.current) {
+        const dx = e.clientX - panStartRef.current.startX;
+        const dy = e.clientY - panStartRef.current.startY;
+        scrollContainerRef.current.scrollLeft = panStartRef.current.scrollLeft - dx;
+        scrollContainerRef.current.scrollTop = panStartRef.current.scrollTop - dy;
+      }
     };
 
     const handleGlobalMouseUp = () => {
       if (draggingFieldId) {
         setDraggingFieldId(null);
         dragStartRef.current = null;
+      }
+      if (isPanningRef.current) {
+        isPanningRef.current = false;
+        setIsPanning(false);
       }
     };
 
@@ -810,7 +846,15 @@ export const TaxDocMasterInspector: React.FC = () => {
             </div>
           </div>
 
-          <div className="w-full bg-slate-200/70 rounded-xl overflow-auto p-4 border border-slate-200 max-h-[750px] min-h-[480px] select-none">
+          <div 
+            ref={scrollContainerRef}
+            onMouseDown={handlePanMouseDown}
+            className={`w-full bg-slate-200/80 rounded-xl overflow-auto p-4 border border-slate-300 max-h-[750px] min-h-[500px] select-none ${
+              isPanning ? 'cursor-grabbing' : 'cursor-grab'
+            }`}
+            style={{ scrollBehavior: 'auto' }}
+            title="マウスドラッグで用紙全体を自由にスクロール移動できます"
+          >
             {isRendering && (
               <div className="flex flex-col items-center justify-center py-20 space-y-2">
                 <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
@@ -822,7 +866,7 @@ export const TaxDocMasterInspector: React.FC = () => {
             <canvas ref={canvasRef} className="hidden" />
 
             {bgBlankPdfImage && (
-              <div className="min-w-full w-max flex justify-center items-start">
+              <div className="w-fit min-w-full min-h-full flex items-center justify-center p-2">
                 <div 
                   ref={previewContainerRef}
                   style={{ 
@@ -834,7 +878,7 @@ export const TaxDocMasterInspector: React.FC = () => {
                     aspectRatio: '297 / 210',
                     containerType: 'inline-size'
                   }}
-                  className="shadow-2xl rounded-lg overflow-hidden border-2 border-slate-400/80 bg-white transition-all duration-150"
+                  className="m-auto shadow-2xl rounded-lg overflow-hidden border-2 border-slate-400/90 bg-white transition-all duration-150 cursor-default"
                 >
                 {/* 📄 白紙の国税庁原本PDF用紙（背景画像） */}
                 <img
