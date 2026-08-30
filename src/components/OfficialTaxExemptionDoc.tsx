@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Printer, Download, Eye, CheckCircle2, Loader2, Sparkles, FileText } from 'lucide-react';
-import { DEFAULT_TAX_FIELDS, TAX_DOC_DEFAULT_MAP } from '../lib/taxDocCoordinates';
+import { TAX_DOC_DEFAULT_MAP } from '../lib/taxDocCoordinates';
 
 interface DependentItem {
   name: string;

@@ -8,7 +8,7 @@ import {
   ChevronsUp, ChevronsDown, ChevronsLeft, ChevronsRight
 } from 'lucide-react';
 
-import { DEFAULT_TAX_FIELDS, TaxDocFieldConfig } from '../lib/taxDocCoordinates';
+import { DEFAULT_TAX_FIELDS, type TaxDocFieldConfig } from '../lib/taxDocCoordinates';
 
 export type FieldConfig = TaxDocFieldConfig;
 
