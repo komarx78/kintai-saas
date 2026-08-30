@@ -26,7 +26,7 @@ export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   { id: 'taxOffice', name: '所轄税務署長', section: 'header', x: 8.5, y: 13.0, fontSize: 10, example: '千代田', description: '左上「税務署長等」枠内' },
   { id: 'municipality', name: '市区町村長', section: 'header', x: 8.5, y: 17.2, fontSize: 10, example: '千代田区', description: '「市区町村長」枠内' },
   { id: 'companyName', name: '給与支払者の名称（会社名）', section: 'header', x: 23.5, y: 11.5, fontSize: 11, example: '株式会社KAP', description: '給与支払者 1段目' },
-  { id: 'corporateNumber', name: '法人番号（13桁）', section: 'header', x: 23.5, y: 14.8, fontSize: 10, example: '1010001999999', description: '給与支払者 2段目' },
+  { id: 'corporateNumber', name: '法人番号（13桁）', section: 'header', x: 23.5, y: 14.8, fontSize: 10, pitch: 1.02, example: '1010001999999', description: '給与支払者 2段目' },
   { id: 'companyAddress', name: '所在地（住所）', section: 'header', x: 23.5, y: 17.5, fontSize: 9, example: '滋賀県大津市坂本3丁目21-16', description: '給与支払者 3段目' },
 
   // ② 申告者本人
@@ -675,18 +675,33 @@ export const TaxDocMasterInspector: React.FC = () => {
 
               </div>
 
-              {/* マイナンバーマス目ピッチ（0.01%精密微調整対応） */}
-              {selectedField.pitch !== undefined && (
+              {/* 数字・マス目間隔（ピッチ % / 0.01%精密微調整対応） */}
+              {selectedField.pitch !== undefined ? (
                 <div className="bg-slate-800/90 p-2.5 rounded-xl border border-slate-700/80 space-y-1.5">
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-slate-400">12桁マス目間隔 (ピッチ %):</span>
-                    <span className="font-mono font-bold text-cyan-300">{(selectedField.pitch || 1.80).toFixed(2)} %</span>
+                  <div className="flex justify-between items-center text-[10px]">
+                    <span className="text-slate-300 font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                      数字・マス目文字間隔 (ピッチ %):
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-cyan-300">{(selectedField.pitch || 1.00).toFixed(2)} %</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFields(prev => prev.map(f => f.id === selectedField.id ? { ...f, pitch: undefined } : f));
+                        }}
+                        className="text-[9px] text-slate-400 hover:text-rose-400 underline cursor-pointer"
+                        title="文字間隔を通常に戻す"
+                      >
+                        通常に戻す
+                      </button>
+                    </div>
                   </div>
                   
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => updateField(selectedField.id, 'pitch', Math.max(0.3, (selectedField.pitch || 1.80) - 0.01))}
+                      onClick={() => updateField(selectedField.id, 'pitch', Math.max(0.2, (selectedField.pitch || 1.00) - 0.01))}
                       className="px-2 py-1 bg-slate-700 hover:bg-slate-600 active:scale-95 rounded text-white text-xs font-bold cursor-pointer whitespace-nowrap"
                       title="0.01% 狭くする"
                     >
@@ -696,16 +711,16 @@ export const TaxDocMasterInspector: React.FC = () => {
                     <input
                       type="number"
                       step="0.01"
-                      min="0.30"
-                      max="3.50"
-                      value={(selectedField.pitch || 1.80).toFixed(2)}
-                      onChange={e => updateField(selectedField.id, 'pitch', parseFloat(e.target.value) || 1.80)}
+                      min="0.20"
+                      max="5.00"
+                      value={(selectedField.pitch || 1.00).toFixed(2)}
+                      onChange={e => updateField(selectedField.id, 'pitch', parseFloat(e.target.value) || 1.00)}
                       className="w-16 bg-slate-900 border border-slate-700 rounded p-1 text-center text-xs font-mono font-bold text-cyan-300"
                     />
 
                     <button
                       type="button"
-                      onClick={() => updateField(selectedField.id, 'pitch', Math.min(3.5, (selectedField.pitch || 1.80) + 0.01))}
+                      onClick={() => updateField(selectedField.id, 'pitch', Math.min(5.0, (selectedField.pitch || 1.00) + 0.01))}
                       className="px-2 py-1 bg-slate-700 hover:bg-slate-600 active:scale-95 rounded text-white text-xs font-bold cursor-pointer whitespace-nowrap"
                       title="0.01% 広くする"
                     >
@@ -714,14 +729,24 @@ export const TaxDocMasterInspector: React.FC = () => {
 
                     <input
                       type="range"
-                      min="0.50"
-                      max="3.00"
+                      min="0.30"
+                      max="3.50"
                       step="0.01"
-                      value={selectedField.pitch || 1.80}
+                      value={selectedField.pitch || 1.00}
                       onChange={e => updateField(selectedField.id, 'pitch', parseFloat(e.target.value))}
                       className="w-full accent-cyan-500 cursor-pointer"
                     />
                   </div>
+                </div>
+              ) : (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => updateField(selectedField.id, 'pitch', 1.00)}
+                    className="text-[10px] text-slate-400 hover:text-cyan-300 hover:bg-slate-800/80 px-2.5 py-1 rounded-lg border border-dashed border-slate-700 cursor-pointer transition flex items-center gap-1"
+                  >
+                    <span>＋</span> この項目の数字・文字間隔（ピッチ）を有効にする
+                  </button>
                 </div>
               )}
 

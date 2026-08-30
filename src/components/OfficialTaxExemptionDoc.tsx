@@ -191,9 +191,17 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         ctx.font = `bold ${fCompany.size}px "Noto Sans JP", sans-serif`;
         ctx.fillText(data.companyName, W * fCompany.x, H * fCompany.y);
 
-        const fCorpNum = getField('corporateNumber', DEFAULT_POS.header.corporateNumber.x, DEFAULT_POS.header.corporateNumber.y, 20);
+        const fCorpNum = getField('corporateNumber', DEFAULT_POS.header.corporateNumber.x, DEFAULT_POS.header.corporateNumber.y, 20, 0.0102);
+        const corpNumStr = (data.corporateNumber || '1010001999999').replace(/[^0-9]/g, '');
         ctx.font = `bold ${fCorpNum.size}px "Courier New", monospace`;
-        ctx.fillText(data.corporateNumber || '1010001999999', W * fCorpNum.x, H * fCorpNum.y);
+        if (fCorpNum.pitch) {
+          const corpPitch = W * fCorpNum.pitch;
+          for (let i = 0; i < corpNumStr.length; i++) {
+            ctx.fillText(corpNumStr[i], W * fCorpNum.x + i * corpPitch, H * fCorpNum.y);
+          }
+        } else {
+          ctx.fillText(corpNumStr, W * fCorpNum.x, H * fCorpNum.y);
+        }
 
         const fCompAddr = getField('companyAddress', DEFAULT_POS.header.companyAddress.x, DEFAULT_POS.header.companyAddress.y, 16);
         ctx.font = `bold ${fCompAddr.size}px "Noto Sans JP", sans-serif`;
