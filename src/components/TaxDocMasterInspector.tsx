@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Save, Copy, Check, 
-  Building2, User, Users, Heart, Shield, Baby, FileText, CheckCircle2, Loader2
+  Save, Copy, Check, MousePointer,
+  Building2, User, Users, Heart, Shield, Baby, FileText, CheckCircle2, Loader2,
+  ZoomIn, ZoomOut, Move
 } from 'lucide-react';
 
 interface FieldConfig {
@@ -17,7 +18,6 @@ interface FieldConfig {
 }
 
 export const TaxDocMasterInspector: React.FC = () => {
-  // セクション定義
   const [selectedSection, setSelectedSection] = useState<'header' | 'employee' | 'spouse' | 'dependent' | 'special' | 'resident'>('header');
   const [selectedFieldId, setSelectedFieldId] = useState<string>('companyName');
   const [isSaving, setIsSaving] = useState(false);
@@ -25,8 +25,19 @@ export const TaxDocMasterInspector: React.FC = () => {
   const [copiedCode, setCopiedCode] = useState(false);
   const [previewZoom, setPreviewZoom] = useState<number>(100);
 
-  // 項目別マスタ座標State
+  // ドラッグ＆ドロップ State
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
+
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // 項目別マスタ座標State（初期値）
   const [fields, setFields] = useState<FieldConfig[]>(() => {
+    try {
+      const saved = localStorage.getItem('taxDocMasterFields');
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
     return [
       // ① 給与支払者
       { id: 'taxOffice', name: '所轄税務署長', section: 'header', x: 8.8, y: 9.8, fontSize: 18, example: '千代田', description: '左上「税務署長等」枠内' },
@@ -94,17 +105,80 @@ export const TaxDocMasterInspector: React.FC = () => {
 
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(true);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // 項目値の更新
-  const updateField = (id: string, key: keyof FieldConfig, value: number) => {
-    setFields(prev => prev.map(f => f.id === id ? { ...f, [key]: value } : f));
-  };
+  const updateField = useCallback((id: string, key: keyof FieldConfig, value: number) => {
+    setFields(prev => {
+      const updated = prev.map(f => f.id === id ? { ...f, [key]: Math.round(value * 10) / 10 } : f);
+      localStorage.setItem('taxDocMasterFields', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
 
   const selectedField = fields.find(f => f.id === selectedFieldId);
   const sectionFields = fields.filter(f => f.section === selectedSection);
 
-  // リアルタイム Canvas レンダリング（プレビュー）
+  // 🖱️ 原本プレビュー上でのドラッグ開始
+  const handleStartDrag = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedFieldId(id);
+    const target = fields.find(f => f.id === id);
+    if (!target) return;
+
+    const fSection = target.section;
+    if (fSection !== selectedSection) {
+      setSelectedSection(fSection as any);
+    }
+
+    setIsDragging(true);
+    setDragStart({
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startX: target.x,
+      startY: target.y
+    });
+  };
+
+  // 🖱️ ドラッグ中の移動計算
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging || !dragStart || !selectedFieldId || !previewContainerRef.current) return;
+    const rect = previewContainerRef.current.getBoundingClientRect();
+    const deltaX = ((e.clientX - dragStart.mouseX) / rect.width) * 100;
+    const deltaY = ((e.clientY - dragStart.mouseY) / rect.height) * 100;
+
+    const newX = Math.max(0, Math.min(100, dragStart.startX + deltaX));
+    const newY = Math.max(0, Math.min(100, dragStart.startY + deltaY));
+
+    updateField(selectedFieldId, 'x', newX);
+    updateField(selectedFieldId, 'y', newY);
+  }, [isDragging, dragStart, selectedFieldId, updateField]);
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    setDragStart(null);
+  };
+
+  // ⌨️ キーボード矢印キーでの微調整
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!selectedField) return;
+    const step = e.shiftKey ? 1.0 : 0.1;
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      updateField(selectedField.id, 'y', selectedField.y - step);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      updateField(selectedField.id, 'y', selectedField.y + step);
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      updateField(selectedField.id, 'x', selectedField.x - step);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      updateField(selectedField.id, 'x', selectedField.x + step);
+    }
+  };
+
+  // リアルタイム Canvas レンダリング（背景PDF原本）
   useEffect(() => {
     let isCancelled = false;
 
@@ -139,47 +213,6 @@ export const TaxDocMasterInspector: React.FC = () => {
         await page.render({ canvasContext: ctx, viewport }).promise;
         if (isCancelled) return;
 
-        const W = canvas.width;
-        const H = canvas.height;
-        ctx.fillStyle = '#0f172a';
-        ctx.textBaseline = 'middle';
-
-        // 各フィールドの描画
-        fields.forEach(f => {
-          const posX = (f.x / 100) * W;
-          const posY = (f.y / 100) * H;
-          const fPx = Math.round((f.fontSize / 1000) * W * 1.6);
-
-          ctx.font = `bold ${fPx}px "Noto Sans JP", sans-serif`;
-
-          // 選択中項目のハイライト枠
-          if (f.id === selectedFieldId) {
-            ctx.strokeStyle = '#dc2626';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(posX - 4, posY - fPx / 2 - 2, 120, fPx + 4);
-          }
-
-          if (f.pitch) {
-            // マイナンバーマス目
-            const pitch = (f.pitch / 100) * W;
-            for (let i = 0; i < f.example.length; i++) {
-              ctx.fillText(f.example[i], posX + i * pitch, posY);
-            }
-          } else if (f.example === '○') {
-            ctx.strokeStyle = '#2563eb';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(posX, posY, 12, 0, Math.PI * 2);
-            ctx.stroke();
-          } else if (f.example === '✓') {
-            ctx.fillStyle = '#2563eb';
-            ctx.fillText('✓', posX, posY);
-            ctx.fillStyle = '#0f172a';
-          } else {
-            ctx.fillText(f.example, posX, posY);
-          }
-        });
-
         const url = canvas.toDataURL('image/png');
         setPreviewImage(url);
         setIsRendering(false);
@@ -191,7 +224,7 @@ export const TaxDocMasterInspector: React.FC = () => {
 
     render();
     return () => { isCancelled = true; };
-  }, [fields, selectedFieldId]);
+  }, []);
 
   // 全社マスター保存
   const handleSaveMaster = () => {
@@ -214,7 +247,7 @@ export const TaxDocMasterInspector: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 font-sans select-none" onKeyDown={handleKeyDown} tabIndex={0}>
       {/* 🧭 ヘッダー ＆ 保存バー */}
       <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -230,7 +263,7 @@ export const TaxDocMasterInspector: React.FC = () => {
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                国税庁原本PDF（2026bun_01.pdf）の各マス目に対する文字の着地位置（X/Y %）とフォントサイズを項目ごとにひとつずつ精密定義します。
+                右側の原本用紙の上で文字を直接マウスドラッグして移動、または矢印キー（↑ ↓ ← →）で0.1%単位で位置合わせできます。
               </p>
             </div>
           </div>
@@ -261,11 +294,11 @@ export const TaxDocMasterInspector: React.FC = () => {
         </div>
       </div>
 
-      {/* 2カラム構成：左（セクション＆項目インスペクター） ＋ 右（リアルタイム原本プレビュー） */}
+      {/* 2カラム構成：左（セクション＆項目インスペクター） ＋ 右（直接ドラッグ可能な原本プレビュー） */}
       <div className="grid grid-cols-12 gap-4">
         
-        {/* ⬅️ 左カラム：セクション選択 ＆ 項目リスト ＆ 精密数値設定 */}
-        <div className="col-span-12 lg:col-span-5 space-y-3">
+        {/* ⬅️ 左カラム：セクション選択 ＆ 項目リスト ＆ 数値インスペクター */}
+        <div className="col-span-12 lg:col-span-4 space-y-3">
           
           {/* ① セクション選択タブ */}
           <div className="bg-white p-2 rounded-2xl shadow-xs border border-slate-200 grid grid-cols-2 gap-1.5">
@@ -280,14 +313,14 @@ export const TaxDocMasterInspector: React.FC = () => {
                     const first = fields.find(f => f.section === s.id);
                     if (first) setSelectedFieldId(first.id);
                   }}
-                  className={`p-2.5 rounded-xl text-left transition flex items-center justify-between cursor-pointer ${
+                  className={`p-2 rounded-xl text-left transition flex items-center justify-between cursor-pointer ${
                     isSelected
                       ? 'bg-indigo-600 text-white shadow-xs font-bold'
                       : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/60'
                   }`}
                 >
-                  <div className="flex items-center gap-2 truncate">
-                    <Icon className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-indigo-600'}`} />
+                  <div className="flex items-center gap-1.5 truncate">
+                    <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-indigo-600'}`} />
                     <span className="text-xs truncate">{s.name}</span>
                   </div>
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-600'}`}>
@@ -299,39 +332,38 @@ export const TaxDocMasterInspector: React.FC = () => {
           </div>
 
           {/* ② 選択中セクションの項目一覧リスト */}
-          <div className="bg-white p-3 rounded-2xl shadow-xs border border-slate-200 space-y-2">
-            <h3 className="text-xs font-bold text-slate-800 border-b border-slate-100 pb-2 flex items-center justify-between">
-              <span>設定する項目を選択（全{sectionFields.length}項目）</span>
-              <span className="text-[11px] text-slate-400">クリックして右側の詳細数値を設定</span>
+          <div className="bg-white p-3 rounded-2xl shadow-xs border border-slate-200 space-y-1.5">
+            <h3 className="text-xs font-bold text-slate-800 border-b border-slate-100 pb-1.5 flex items-center justify-between">
+              <span>設定する項目を選択</span>
+              <span className="text-[10px] text-slate-400">右側で直接掴んで移動可能</span>
             </h3>
 
-            <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
+            <div className="space-y-1 max-h-[220px] overflow-y-auto pr-1">
               {sectionFields.map(f => {
                 const isSelected = selectedFieldId === f.id;
                 return (
                   <div
                     key={f.id}
                     onClick={() => setSelectedFieldId(f.id)}
-                    className={`p-2.5 rounded-xl transition cursor-pointer border flex items-center justify-between ${
+                    className={`p-2 rounded-xl transition cursor-pointer border flex items-center justify-between ${
                       isSelected
-                        ? 'bg-indigo-50/80 border-indigo-500 shadow-xs'
+                        ? 'bg-indigo-50/90 border-indigo-500 shadow-xs'
                         : 'bg-slate-50/50 hover:bg-slate-100/80 border-slate-200'
                     }`}
                   >
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-indigo-600 ring-2 ring-indigo-300' : 'bg-slate-300'}`}></span>
                         <span className="text-xs font-bold text-slate-900">{f.name}</span>
                       </div>
-                      <p className="text-[11px] text-slate-500 mt-0.5 ml-4">
+                      <p className="text-[10px] text-slate-500 mt-0.5 ml-3.5">
                         例: <span className="font-mono text-slate-700 bg-white px-1 rounded border border-slate-200">{f.example}</span>
-                        <span className="ml-2 text-slate-400">({f.description})</span>
                       </p>
                     </div>
 
-                    <div className="text-right font-mono text-[11px]">
+                    <div className="text-right font-mono text-[10px]">
                       <span className="text-indigo-600 font-bold">X:{f.x.toFixed(1)}%</span>
-                      <span className="text-slate-400 mx-1">/</span>
+                      <span className="text-slate-400 mx-0.5">/</span>
                       <span className="text-amber-600 font-bold">Y:{f.y.toFixed(1)}%</span>
                     </div>
                   </div>
@@ -340,84 +372,33 @@ export const TaxDocMasterInspector: React.FC = () => {
             </div>
           </div>
 
-          {/* ③ 選択中項目の精密設定インスペクター */}
+          {/* ③ 選択中項目のインスペクター（フォントサイズ ＆ ピッチ） */}
           {selectedField && (
-            <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl border border-slate-800 space-y-3 animate-in fade-in duration-150">
-              <div className="border-b border-slate-800 pb-2 flex items-center justify-between">
+            <div className="bg-slate-900 text-white p-3.5 rounded-2xl shadow-xl border border-slate-800 space-y-2.5">
+              <div className="border-b border-slate-800 pb-1.5 flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">SELECTED ITEM</span>
-                  <h4 className="text-sm font-bold text-white">{selectedField.name}</h4>
+                  <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider">SELECTED ITEM</span>
+                  <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Move className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                    {selectedField.name}
+                  </h4>
                 </div>
-                <span className="text-xs font-mono bg-slate-800 text-amber-300 px-2.5 py-1 rounded-lg border border-slate-700">
-                  {selectedField.id}
-                </span>
+                <div className="text-right font-mono text-xs text-amber-300">
+                  X:{selectedField.x.toFixed(1)}% / Y:{selectedField.y.toFixed(1)}%
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                {/* X位置 (%) */}
-                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/80 space-y-1.5">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400">横位置 (X軸 %):</span>
-                    <span className="font-mono font-bold text-indigo-300">{selectedField.x.toFixed(1)} %</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => updateField(selectedField.id, 'x', Math.max(0, selectedField.x - 0.1))}
-                      className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
-                    >◀ -0.1</button>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="0.1"
-                      value={selectedField.x}
-                      onChange={e => updateField(selectedField.id, 'x', parseFloat(e.target.value))}
-                      className="w-full accent-indigo-500 cursor-pointer"
-                    />
-                    <button
-                      onClick={() => updateField(selectedField.id, 'x', Math.min(100, selectedField.x + 0.1))}
-                      className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
-                    >+0.1 ▶</button>
-                  </div>
-                </div>
-
-                {/* Y位置 (%) */}
-                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/80 space-y-1.5">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400">縦位置 (Y軸 %):</span>
-                    <span className="font-mono font-bold text-amber-300">{selectedField.y.toFixed(1)} %</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => updateField(selectedField.id, 'y', Math.max(0, selectedField.y - 0.1))}
-                      className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
-                    >▲ -0.1</button>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="0.1"
-                      value={selectedField.y}
-                      onChange={e => updateField(selectedField.id, 'y', parseFloat(e.target.value))}
-                      className="w-full accent-indigo-500 cursor-pointer"
-                    />
-                    <button
-                      onClick={() => updateField(selectedField.id, 'y', Math.min(100, selectedField.y + 0.1))}
-                      className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
-                    >+0.1 ▼</button>
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-2 gap-2 text-xs">
                 {/* 文字サイズ (px) */}
-                <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/80 space-y-1.5">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400">文字の大きさ (px):</span>
+                <div className="bg-slate-800/90 p-2 rounded-xl border border-slate-700/80 space-y-1">
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-slate-400">文字サイズ:</span>
                     <span className="font-mono font-bold text-emerald-300">{selectedField.fontSize} px</span>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => updateField(selectedField.id, 'fontSize', Math.max(8, selectedField.fontSize - 1))}
-                      className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
+                      className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
                     >-</button>
                     <input
                       type="range"
@@ -430,22 +411,22 @@ export const TaxDocMasterInspector: React.FC = () => {
                     />
                     <button
                       onClick={() => updateField(selectedField.id, 'fontSize', Math.min(32, selectedField.fontSize + 1))}
-                      className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
+                      className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
                     >+</button>
                   </div>
                 </div>
 
-                {/* 12桁マイナンバーマス目ピッチ (該当項目のみ) */}
-                {selectedField.pitch !== undefined && (
-                  <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/80 space-y-1.5">
-                    <div className="flex justify-between text-[11px]">
-                      <span className="text-slate-400">マス目間隔 (ピッチ %):</span>
+                {/* 12桁マイナンバーマス目ピッチ */}
+                {selectedField.pitch !== undefined ? (
+                  <div className="bg-slate-800/90 p-2 rounded-xl border border-slate-700/80 space-y-1">
+                    <div className="flex justify-between text-[10px]">
+                      <span className="text-slate-400">マス目間隔:</span>
                       <span className="font-mono font-bold text-cyan-300">{selectedField.pitch.toFixed(2)} %</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => updateField(selectedField.id, 'pitch', Math.max(0.5, (selectedField.pitch || 1.82) - 0.02))}
-                        className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
+                        className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
                       >-</button>
                       <input
                         type="range"
@@ -458,9 +439,13 @@ export const TaxDocMasterInspector: React.FC = () => {
                       />
                       <button
                         onClick={() => updateField(selectedField.id, 'pitch', Math.min(3.0, (selectedField.pitch || 1.82) + 0.02))}
-                        className="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
+                        className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 text-xs font-bold cursor-pointer"
                       >+</button>
                     </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-800/50 p-2 rounded-xl border border-slate-700/50 flex items-center justify-center text-[10px] text-slate-400">
+                    💡 矢印キー（↑ ↓ ← →）で 0.1% 微調整可能
                   </div>
                 )}
               </div>
@@ -469,36 +454,46 @@ export const TaxDocMasterInspector: React.FC = () => {
 
         </div>
 
-        {/* ➡️ 右カラム：国税庁PDF原本へのリアルタイム印字プレビュー */}
-        <div className="col-span-12 lg:col-span-7 bg-white p-3 rounded-2xl shadow-xl border border-slate-200 space-y-2">
+        {/* ➡️ 右カラム：原本PDFの上で直接掴んで動かせる WYSIWYG プレビュー */}
+        <div className="col-span-12 lg:col-span-8 bg-white p-3 rounded-2xl shadow-xl border border-slate-200 space-y-2">
           <div className="flex items-center justify-between border-b border-slate-100 pb-2">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              <h3 className="text-xs font-bold text-slate-800">原本リアルタイム印字プレビュー（2026bun_01.pdf）</h3>
-              <span className="text-[11px] text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                赤枠 = 現在選択中の項目
+              <h3 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <MousePointer className="w-3.5 h-3.5 text-indigo-600" />
+                原本PDF上でのダイレクト・ドラッグ＆ドロップ調整
+              </h3>
+              <span className="text-[10px] text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                赤枠 = 選択中（ドラッグ可能）
               </span>
             </div>
 
             <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-400 text-[11px]">ズーム:</span>
               <button
                 onClick={() => setPreviewZoom(z => Math.max(70, z - 10))}
-                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold"
-              >-</button>
-              <span className="font-mono font-bold text-slate-700">{previewZoom}%</span>
+                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold flex items-center gap-1"
+              >
+                <ZoomOut className="w-3 h-3" />
+              </button>
+              <span className="font-mono font-bold text-slate-700 text-xs">{previewZoom}%</span>
               <button
                 onClick={() => setPreviewZoom(z => Math.min(150, z + 10))}
-                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold"
-              >+</button>
+                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold flex items-center gap-1"
+              >
+                <ZoomIn className="w-3 h-3" />
+              </button>
             </div>
           </div>
 
-          <div className="w-full bg-slate-100 rounded-xl overflow-auto p-2 border border-slate-200 max-h-[680px]">
+          <div 
+            className="w-full bg-slate-100 rounded-xl overflow-auto p-2 border border-slate-200 max-h-[700px] select-none"
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+          >
             {isRendering && (
               <div className="flex flex-col items-center justify-center py-20 space-y-2">
                 <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
-                <p className="text-xs font-bold text-slate-500">原本PDFプレビューを生成中...</p>
+                <p className="text-xs font-bold text-slate-500">原本PDFをレンダリング中...</p>
               </div>
             )}
 
@@ -506,12 +501,71 @@ export const TaxDocMasterInspector: React.FC = () => {
             <canvas ref={canvasRef} className="hidden" />
 
             {previewImage && (
-              <div style={{ width: `${previewZoom}%`, margin: '0 auto', transition: 'width 0.15s ease' }}>
+              <div 
+                ref={previewContainerRef}
+                style={{ 
+                  width: `${previewZoom}%`, 
+                  margin: '0 auto', 
+                  position: 'relative',
+                  aspectRatio: '297 / 210'
+                }}
+                className="shadow-md rounded-lg overflow-hidden border border-slate-300 cursor-crosshair bg-white"
+              >
+                {/* 下敷き原本PDF画像 */}
                 <img
                   src={previewImage}
-                  alt="原本印字プレビュー"
-                  className="w-full h-auto rounded shadow-sm border border-slate-300"
+                  alt="国税庁原本用紙"
+                  className="w-full h-full object-contain pointer-events-none"
+                  draggable={false}
                 />
+
+                {/* 🎯 原本用紙の上で直接ドラッグ可能な全フィールドボックス */}
+                {fields.map(f => {
+                  const isSelected = selectedFieldId === f.id;
+                  return (
+                    <div
+                      key={f.id}
+                      onMouseDown={e => handleStartDrag(f.id, e)}
+                      onClick={() => {
+                        setSelectedFieldId(f.id);
+                        if (f.section !== selectedSection) setSelectedSection(f.section as any);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: `${f.x}%`,
+                        top: `${f.y}%`,
+                        transform: 'translate(0, -50%)',
+                        fontSize: `${(f.fontSize / 1000) * 100 * (previewZoom / 100)}vw`,
+                        color: isSelected ? '#dc2626' : '#0f172a',
+                        fontWeight: 'bold',
+                        cursor: isSelected ? 'grabbing' : 'grab',
+                        whiteSpace: 'nowrap'
+                      }}
+                      className={`px-1 py-0.5 rounded leading-none transition-shadow ${
+                        isSelected
+                          ? 'ring-2 ring-rose-500 bg-rose-500/20 shadow-xl z-30 font-black'
+                          : 'hover:ring-1 hover:ring-indigo-400 hover:bg-indigo-100/40 z-10'
+                      }`}
+                      title={`${f.name} (クリックして選択・ドラッグして移動)`}
+                    >
+                      {f.pitch ? (
+                        <span className="flex items-center">
+                          {f.example.split('').map((c, idx) => (
+                            <span key={idx} style={{ display: 'inline-block', width: `${(f.pitch || 1.82) * 8}px`, textAlign: 'center' }}>
+                              {c}
+                            </span>
+                          ))}
+                        </span>
+                      ) : f.example === '○' ? (
+                        <span className="w-4 h-4 rounded-full border-2 border-blue-600 inline-block"></span>
+                      ) : f.example === '✓' ? (
+                        <span className="text-blue-600 font-black">✓</span>
+                      ) : (
+                        f.example
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
