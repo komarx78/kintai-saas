@@ -129,29 +129,7 @@ export const DEFAULT_TAX_FIELDS: FieldConfig[] = [
   { id: 'u16_1BirthM', name: '住民税2 生月', section: 'resident', x: 44.8, y: 61.0, fontSize: 10, example: '12', description: '住民税欄2人目生月' },
   { id: 'u16_1BirthD', name: '住民税2 生日', section: 'resident', x: 47.2, y: 61.0, fontSize: 10, example: '5', description: '住民税欄2人目生日' },
   { id: 'u16_1Address', name: '住民税2 住所', section: 'resident', x: 53.0, y: 61.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄2人目住所' },
-  { id: 'u16_1Income', name: '住民税2 所得見積額', section: 'resident', x: 74.0, y: 61.0, fontSize: 10, example: '0', description: '住民税欄2人目所得（円は用紙印刷済）' },
-
-  // 3人目
-  { id: 'u16_2Kana', name: '住民税3 フリガナ', section: 'resident', x: 16.5, y: 63.5, fontSize: 7, example: 'テスト ゴロウ', description: '住民税欄3人目カナ' },
-  { id: 'u16_2Name', name: '住民税3 氏名', section: 'resident', x: 16.5, y: 65.0, fontSize: 11, example: 'テスト 五郎', description: '住民税欄3人目氏名' },
-  { id: 'u16_2MyNumber', name: '住民税3 マイナンバー', section: 'resident', x: 27.5, y: 65.0, fontSize: 9, pitch: 0.98, example: '************', description: '住民税欄3人目12桁マス目' },
-  { id: 'u16_2Rel', name: '住民税3 続柄', section: 'resident', x: 38.5, y: 65.0, fontSize: 10, example: '五男', description: '住民税欄3人目続柄' },
-  { id: 'u16_2BirthY', name: '住民税3 生年', section: 'resident', x: 42.5, y: 65.0, fontSize: 10, example: '5', description: '住民税欄3人目生年' },
-  { id: 'u16_2BirthM', name: '住民税3 生月', section: 'resident', x: 44.8, y: 65.0, fontSize: 10, example: '3', description: '住民税欄3人目生月' },
-  { id: 'u16_2BirthD', name: '住民税3 生日', section: 'resident', x: 47.2, y: 65.0, fontSize: 10, example: '14', description: '住民税欄3人目生日' },
-  { id: 'u16_2Address', name: '住民税3 住所', section: 'resident', x: 53.0, y: 65.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄3人目住所' },
-  { id: 'u16_2Income', name: '住民税3 所得見積額', section: 'resident', x: 74.0, y: 65.0, fontSize: 10, example: '0', description: '住民税欄3人目所得（円は用紙印刷済）' },
-
-  // 4人目
-  { id: 'u16_3Kana', name: '住民税4 フリガナ', section: 'resident', x: 16.5, y: 67.5, fontSize: 7, example: 'テスト ロクロウ', description: '住民税欄4人目カナ' },
-  { id: 'u16_3Name', name: '住民税4 氏名', section: 'resident', x: 16.5, y: 69.0, fontSize: 11, example: 'テスト 六郎', description: '住民税欄4人目氏名' },
-  { id: 'u16_3MyNumber', name: '住民税4 マイナンバー', section: 'resident', x: 27.5, y: 69.0, fontSize: 9, pitch: 0.98, example: '************', description: '住民税欄4人目12桁マス目' },
-  { id: 'u16_3Rel', name: '住民税4 続柄', section: 'resident', x: 38.5, y: 69.0, fontSize: 10, example: '六男', description: '住民税欄4人目続柄' },
-  { id: 'u16_3BirthY', name: '住民税4 生年', section: 'resident', x: 42.5, y: 69.0, fontSize: 10, example: '7', description: '住民税欄4人目生年' },
-  { id: 'u16_3BirthM', name: '住民税4 生月', section: 'resident', x: 44.8, y: 69.0, fontSize: 10, example: '1', description: '住民税欄4人目生月' },
-  { id: 'u16_3BirthD', name: '住民税4 生日', section: 'resident', x: 47.2, y: 69.0, fontSize: 10, example: '1', description: '住民税欄4人目生日' },
-  { id: 'u16_3Address', name: '住民税4 住所', section: 'resident', x: 53.0, y: 69.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: '住民税欄4人目住所' },
-  { id: 'u16_3Income', name: '住民税4 所得見積額', section: 'resident', x: 74.0, y: 69.0, fontSize: 10, example: '0', description: '住民税欄4人目所得（円は用紙印刷済）' }
+  { id: 'u16_1Income', name: '住民税2 所得見積額', section: 'resident', x: 74.0, y: 61.0, fontSize: 10, example: '0', description: '住民税欄2人目所得（円は用紙印刷済）' }
 ];
 
 export const TaxDocMasterInspector: React.FC = () => {
@@ -372,7 +350,7 @@ export const TaxDocMasterInspector: React.FC = () => {
     { id: 'spouse', name: '③ Ａ. 源泉控除対象配偶者', icon: Heart, count: fields.filter(f => f.section === 'spouse').length },
     { id: 'dependent', name: '④ Ｂ. 控除対象扶養親族(1〜4人目)', icon: Users, count: fields.filter(f => f.section === 'dependent').length },
     { id: 'special', name: '⑤ Ｃ. 障害者・寡婦・学生', icon: Shield, count: fields.filter(f => f.section === 'special').length },
-    { id: 'resident', name: '⑥ 住民税 16歳未満親族(1〜4人目)', icon: Baby, count: fields.filter(f => f.section === 'resident').length }
+    { id: 'resident', name: '⑥ 住民税 16歳未満親族(1〜2人目)', icon: Baby, count: fields.filter(f => f.section === 'resident').length }
   ];
 
   return (

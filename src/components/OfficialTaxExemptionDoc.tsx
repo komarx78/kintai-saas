@@ -366,8 +366,8 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           ctx.fillText(`学校: ${data.workingStudentSchool || '〇〇大学'}`, W * fSpecDetails.x, H * fSpecDetails.y);
         }
 
-        // 住民税（16歳未満 1人目〜4人目 フル対応）
-        under16Dependents.slice(0, 4).forEach((uDep, idx) => {
+        // 住民税（16歳未満 1人目〜2人目 原本枠準拠）
+        under16Dependents.slice(0, 2).forEach((uDep, idx) => {
           if (!uDep) return;
           const ubDate = parseJapaneseEraDate(uDep.birthDate);
           const prefix = `u16_${idx}`;
