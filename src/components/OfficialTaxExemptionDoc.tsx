@@ -150,20 +150,20 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           }
         } catch (_) {}
 
-        // フォールバック関数
+        // フォールバック関数（マスター設定と100%同一のフォントサイズ比率）
         const getField = (id: string, defX: number, defY: number, defSize: number, defPitch?: number) => {
           if (masterMap[id]) {
             return {
               x: masterMap[id].x / 100,
               y: masterMap[id].y / 100,
-              size: Math.round((masterMap[id].fontSize / 1000) * W * 1.6),
+              size: Math.max(10, Math.round((masterMap[id].fontSize / 1000) * W * 1.05)),
               pitch: masterMap[id].pitch ? masterMap[id].pitch / 100 : defPitch
             };
           }
           return {
             x: defX,
             y: defY,
-            size: Math.round((defSize / 1000) * W * 1.6),
+            size: Math.max(10, Math.round((defSize / 1000) * W * 1.05)),
             pitch: defPitch
           };
         };
