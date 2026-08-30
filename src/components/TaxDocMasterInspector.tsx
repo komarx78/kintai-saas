@@ -747,26 +747,45 @@ export const TaxDocMasterInspector: React.FC = () => {
               </span>
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-1.5 text-xs bg-slate-100 p-1 rounded-lg border border-slate-200">
               <button
                 type="button"
-                onClick={() => setPreviewZoom(z => Math.max(70, z - 10))}
-                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold flex items-center gap-1 cursor-pointer"
+                onClick={() => setPreviewZoom(z => Math.max(50, z - 10))}
+                className="p-1 bg-white hover:bg-slate-200 active:scale-95 rounded text-slate-700 font-bold flex items-center gap-1 cursor-pointer transition shadow-xs"
+                title="縮小 (-10%)"
               >
-                <ZoomOut className="w-3 h-3" />
+                <ZoomOut className="w-3.5 h-3.5" />
               </button>
-              <span className="font-mono font-bold text-slate-700 text-xs">{previewZoom}%</span>
               <button
                 type="button"
-                onClick={() => setPreviewZoom(z => Math.min(150, z + 10))}
-                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 font-bold flex items-center gap-1 cursor-pointer"
+                onClick={() => setPreviewZoom(100)}
+                className="px-2 py-0.5 bg-white hover:bg-slate-200 active:scale-95 rounded text-slate-700 font-mono font-bold text-xs cursor-pointer transition shadow-xs"
+                title="クリックで100%（等倍）にリセット"
               >
-                <ZoomIn className="w-3 h-3" />
+                {previewZoom}%
               </button>
+              <button
+                type="button"
+                onClick={() => setPreviewZoom(z => Math.min(250, z + 10))}
+                className="p-1 bg-white hover:bg-slate-200 active:scale-95 rounded text-slate-700 font-bold flex items-center gap-1 cursor-pointer transition shadow-xs"
+                title="拡大 (+10%)"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+              {previewZoom !== 100 && (
+                <button
+                  type="button"
+                  onClick={() => setPreviewZoom(100)}
+                  className="p-1 bg-white hover:bg-indigo-50 text-indigo-600 active:scale-95 rounded font-bold cursor-pointer transition shadow-xs text-[10px] flex items-center gap-0.5"
+                  title="等倍に戻す"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="w-full bg-slate-200/70 rounded-xl overflow-auto p-3 border border-slate-200 max-h-[720px] select-none flex justify-center">
+          <div className="w-full bg-slate-200/70 rounded-xl overflow-auto p-4 border border-slate-200 max-h-[750px] min-h-[480px] select-none">
             {isRendering && (
               <div className="flex flex-col items-center justify-center py-20 space-y-2">
                 <Loader2 className="w-6 h-6 text-indigo-600 animate-spin" />
@@ -778,16 +797,20 @@ export const TaxDocMasterInspector: React.FC = () => {
             <canvas ref={canvasRef} className="hidden" />
 
             {bgBlankPdfImage && (
-              <div 
-                ref={previewContainerRef}
-                style={{ 
-                  width: `${previewZoom}%`, 
-                  position: 'relative',
-                  aspectRatio: '297 / 210',
-                  containerType: 'inline-size'
-                }}
-                className="shadow-2xl rounded-lg overflow-hidden border-2 border-slate-400/80 bg-white"
-              >
+              <div className="min-w-full w-max flex justify-center items-start">
+                <div 
+                  ref={previewContainerRef}
+                  style={{ 
+                    width: `${previewZoom}%`, 
+                    minWidth: `${previewZoom}%`,
+                    maxWidth: `${previewZoom}%`,
+                    flexShrink: 0,
+                    position: 'relative',
+                    aspectRatio: '297 / 210',
+                    containerType: 'inline-size'
+                  }}
+                  className="shadow-2xl rounded-lg overflow-hidden border-2 border-slate-400/80 bg-white transition-all duration-150"
+                >
                 {/* 📄 白紙の国税庁原本PDF用紙（背景画像） */}
                 <img
                   src={bgBlankPdfImage}
@@ -856,6 +879,7 @@ export const TaxDocMasterInspector: React.FC = () => {
                     </div>
                   );
                 })}
+                </div>
               </div>
             )}
           </div>
