@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Printer, Download, Eye, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { TAX_DOC_2026_COORDINATES as POS } from '../lib/taxDocCoordinates';
 
 interface DependentItem {
   name: string;
@@ -193,63 +194,63 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
         // 所轄税務署長等 ＆ 市区町村長
-        ctx.font = 'bold 24px "Noto Sans JP", sans-serif';
-        ctx.fillText(data.taxOfficeName || '千代田', W * 0.105, H * 0.142);
-        ctx.fillText(data.municipalityName || '千代田区', W * 0.095, H * 0.208);
+        ctx.font = 'bold 22px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.taxOfficeName || '千代田', W * POS.header.taxOffice.x, H * POS.header.taxOffice.y);
+        ctx.fillText(data.municipalityName || '千代田区', W * POS.header.municipality.x, H * POS.header.municipality.y);
 
         // 給与の支払者（会社名・法人番号・所在地）
-        ctx.font = 'bold 28px "Noto Sans JP", sans-serif';
-        ctx.fillText(data.companyName, W * 0.245, H * 0.145);
+        ctx.font = 'bold 26px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.companyName, W * POS.header.companyName.x, H * POS.header.companyName.y);
 
-        ctx.font = 'bold 26px "Courier New", monospace';
-        ctx.fillText(data.corporateNumber || '1010001999999', W * 0.245, H * 0.182);
+        ctx.font = 'bold 24px "Courier New", monospace';
+        ctx.fillText(data.corporateNumber || '1010001999999', W * POS.header.corporateNumber.x, H * POS.header.corporateNumber.y);
 
-        ctx.font = 'bold 21px "Noto Sans JP", sans-serif';
-        ctx.fillText(data.companyAddress || '本社所在地', W * 0.245, H * 0.215);
+        ctx.font = 'bold 18px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.companyAddress || '本社所在地', W * POS.header.companyAddress.x, H * POS.header.companyAddress.y);
 
         // 申告者本人（フリガナ・氏名）
-        ctx.font = '18px "Noto Sans JP", sans-serif';
-        ctx.fillText(data.employeeNameKana || 'テスト', W * 0.445, H * 0.126);
+        ctx.font = '16px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.employeeNameKana || 'テスト', W * POS.header.empKana.x, H * POS.header.empKana.y);
 
-        ctx.font = '900 36px "Noto Sans JP", sans-serif';
-        ctx.fillText(data.employeeName, W * 0.445, H * 0.155);
+        ctx.font = '900 32px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.employeeName, W * POS.header.empName.x, H * POS.header.empName.y);
 
         // あなたの個人番号（12桁マス目印字）
         const myNumStr = data.myNumber ? data.myNumber.replace(/[^0-9]/g, '') : '123456789012';
-        ctx.font = 'bold 26px "Courier New", monospace';
-        const numStartX = W * 0.440;
-        const numPitch = W * 0.0181;
+        ctx.font = 'bold 23px "Courier New", monospace';
+        const numStartX = W * POS.header.empMyNumberStart.x;
+        const numPitch = W * POS.header.empMyNumberStart.pitch;
         for (let i = 0; i < 12; i++) {
           const char = myNumStr[i] || '*';
-          ctx.fillText(char, numStartX + i * numPitch, H * 0.188);
+          ctx.fillText(char, numStartX + i * numPitch, H * POS.header.empMyNumberStart.y);
         }
 
         // あなたの住所（郵便番号 ＆ 住所本体）
-        ctx.font = 'bold 20px "Noto Sans JP", sans-serif';
-        ctx.fillText(data.postalCode || '160-0023', W * 0.490, H * 0.213);
-        ctx.font = 'bold 22px "Noto Sans JP", sans-serif';
-        ctx.fillText(data.employeeAddress, W * 0.435, H * 0.228);
+        ctx.font = 'bold 18px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.postalCode || '160-0023', W * POS.header.empPostal.x, H * POS.header.empPostal.y);
+        ctx.font = 'bold 19px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.employeeAddress, W * POS.header.empAddress.x, H * POS.header.empAddress.y);
 
         // 生年月日（年・月・日）
-        ctx.font = 'bold 22px "Noto Sans JP", sans-serif';
-        ctx.fillText(empBirth.year, W * 0.725, H * 0.130);
-        ctx.fillText(empBirth.month, W * 0.778, H * 0.130);
-        ctx.fillText(empBirth.day, W * 0.812, H * 0.130);
+        ctx.font = 'bold 20px "Noto Sans JP", sans-serif';
+        ctx.fillText(empBirth.year, W * POS.header.empBirthY.x, H * POS.header.empBirthY.y);
+        ctx.fillText(empBirth.month, W * POS.header.empBirthM.x, H * POS.header.empBirthM.y);
+        ctx.fillText(empBirth.day, W * POS.header.empBirthD.x, H * POS.header.empBirthD.y);
 
         // 世帯主の氏名 ＆ あなたとの続柄
-        ctx.fillText(data.householderName || data.employeeName, W * 0.715, H * 0.160);
-        ctx.fillText(data.householderRelation || '本人', W * 0.715, H * 0.188);
+        ctx.fillText(data.householderName || data.employeeName, W * POS.header.householderName.x, H * POS.header.householderName.y);
+        ctx.fillText(data.householderRelation || '本人', W * POS.header.householderRel.x, H * POS.header.householderRel.y);
 
         // 配偶者の有無（○印を描画）
         ctx.strokeStyle = '#2563eb';
-        ctx.lineWidth = 3.5;
+        ctx.lineWidth = 3;
         if (data.hasSpouse) {
           ctx.beginPath();
-          ctx.arc(W * 0.778, H * 0.220, 16, 0, Math.PI * 2);
+          ctx.arc(W * POS.header.hasSpouseYes.x, H * POS.header.hasSpouseYes.y, 14, 0, Math.PI * 2);
           ctx.stroke();
         } else {
           ctx.beginPath();
-          ctx.arc(W * 0.808, H * 0.220, 16, 0, Math.PI * 2);
+          ctx.arc(W * POS.header.hasSpouseNo.x, H * POS.header.hasSpouseNo.y, 14, 0, Math.PI * 2);
           ctx.stroke();
         }
 
@@ -257,160 +258,152 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         // ② Ａ. 源泉控除対象配偶者
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         if (data.hasSpouse && data.spouseName) {
-          ctx.font = '16px "Noto Sans JP", sans-serif';
-          ctx.fillText(data.spouseNameKana || '', W * 0.165, H * 0.332);
+          ctx.font = '14px "Noto Sans JP", sans-serif';
+          ctx.fillText(data.spouseNameKana || '', W * POS.spouse.kana.x, H * POS.spouse.kana.y);
 
-          ctx.font = 'bold 26px "Noto Sans JP", sans-serif';
-          ctx.fillText(data.spouseName, W * 0.165, H * 0.352);
+          ctx.font = 'bold 23px "Noto Sans JP", sans-serif';
+          ctx.fillText(data.spouseName, W * POS.spouse.name.x, H * POS.spouse.name.y);
 
           // 配偶者マイナンバー（マス目ピッチ）
           const spNumStr = data.spouseMyNumber ? data.spouseMyNumber.replace(/[^0-9]/g, '') : '************';
-          ctx.font = 'bold 20px "Courier New", monospace';
-          const spNumStartX = W * 0.270;
-          const spNumPitch = W * 0.0108;
+          ctx.font = 'bold 18px "Courier New", monospace';
+          const spNumStartX = W * POS.spouse.myNumberStart.x;
+          const spNumPitch = W * POS.spouse.myNumberStart.pitch;
           for (let i = 0; i < 12; i++) {
-            ctx.fillText(spNumStr[i] || '*', spNumStartX + i * spNumPitch, H * 0.342);
+            ctx.fillText(spNumStr[i] || '*', spNumStartX + i * spNumPitch, H * POS.spouse.myNumberStart.y);
           }
 
           // 続柄
-          ctx.font = 'bold 22px "Noto Sans JP", sans-serif';
-          ctx.fillText('妻', W * 0.352, H * 0.342);
+          ctx.font = 'bold 20px "Noto Sans JP", sans-serif';
+          ctx.fillText('妻', W * POS.spouse.relation.x, H * POS.spouse.relation.y);
 
           // 生年月日
-          ctx.fillText(spouseBirth.year, W * 0.415, H * 0.342);
-          ctx.fillText(spouseBirth.month, W * 0.446, H * 0.342);
-          ctx.fillText(spouseBirth.day, W * 0.473, H * 0.342);
+          ctx.fillText(spouseBirth.year, W * POS.spouse.birthY.x, H * POS.spouse.birthY.y);
+          ctx.fillText(spouseBirth.month, W * POS.spouse.birthM.x, H * POS.spouse.birthM.y);
+          ctx.fillText(spouseBirth.day, W * POS.spouse.birthD.x, H * POS.spouse.birthD.y);
 
           // 令和8年中所得見積額
           ctx.textAlign = 'right';
-          ctx.fillText(`${(data.spouseIncomeEstimate || 0).toLocaleString()} 円`, W * 0.575, H * 0.342);
+          ctx.fillText(`${(data.spouseIncomeEstimate || 0).toLocaleString()} 円`, W * POS.spouse.income.x, H * POS.spouse.income.y);
           ctx.textAlign = 'left';
 
           // 生計一 ＆ 住所
-          ctx.font = '19px "Noto Sans JP", sans-serif';
-          ctx.fillText(data.spouseIsLivingTogether !== false ? '同居' : '別居', W * 0.618, H * 0.342);
-          ctx.fillText(data.spouseAddress || data.employeeAddress, W * 0.678, H * 0.342);
+          ctx.font = '17px "Noto Sans JP", sans-serif';
+          ctx.fillText(data.spouseIsLivingTogether !== false ? '同居' : '別居', W * POS.spouse.livingFact.x, H * POS.spouse.livingFact.y);
+          ctx.fillText(data.spouseAddress || data.employeeAddress, W * POS.spouse.address.x, H * POS.spouse.address.y);
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // ③ Ｂ. 控除対象扶養親族（16歳以上） 4行
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        const bRowY = [0.388, 0.435, 0.482, 0.530];
-        const bKanaRowY = [0.375, 0.422, 0.469, 0.517];
-
         bRows.forEach((dep, idx) => {
           if (!dep) return;
-          const y = H * bRowY[idx];
-          const yk = H * bKanaRowY[idx];
+          const rowConfig = POS.dependents[idx];
           const bDate = parseJapaneseEraDate(dep.birthDate);
 
-          ctx.font = '15px "Noto Sans JP", sans-serif';
-          ctx.fillText(dep.nameKana || '', W * 0.165, yk);
+          ctx.font = '14px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.nameKana || '', W * POS.depCols.kanaX, H * rowConfig.kanaY);
 
-          ctx.font = 'bold 24px "Noto Sans JP", sans-serif';
-          ctx.fillText(dep.name, W * 0.165, y);
+          ctx.font = 'bold 22px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.name, W * POS.depCols.nameX, H * rowConfig.rowY);
 
           // マイナンバー
           const depNumStr = dep.myNumber ? dep.myNumber.replace(/[^0-9]/g, '') : '************';
-          ctx.font = 'bold 20px "Courier New", monospace';
-          const depNumStartX = W * 0.270;
-          const depNumPitch = W * 0.0108;
+          ctx.font = 'bold 18px "Courier New", monospace';
+          const depNumStartX = W * POS.depCols.myNumStartX;
+          const depNumPitch = W * POS.depCols.myNumPitch;
           for (let i = 0; i < 12; i++) {
-            ctx.fillText(depNumStr[i] || '*', depNumStartX + i * depNumPitch, y);
+            ctx.fillText(depNumStr[i] || '*', depNumStartX + i * depNumPitch, H * rowConfig.rowY);
           }
 
           // 続柄
-          ctx.font = 'bold 22px "Noto Sans JP", sans-serif';
-          ctx.fillText(dep.relation, W * 0.352, y);
+          ctx.font = 'bold 20px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.relation, W * POS.depCols.relationX, H * rowConfig.rowY);
 
           // 生年月日
-          ctx.fillText(bDate.year, W * 0.415, y);
-          ctx.fillText(bDate.month, W * 0.446, y);
-          ctx.fillText(bDate.day, W * 0.473, y);
+          ctx.fillText(bDate.year, W * POS.depCols.birthYX, H * rowConfig.rowY);
+          ctx.fillText(bDate.month, W * POS.depCols.birthMX, H * rowConfig.rowY);
+          ctx.fillText(bDate.day, W * POS.depCols.birthDX, H * rowConfig.rowY);
 
           // 老人扶養 / 特定扶養チェック（✓）
           ctx.fillStyle = '#2563eb';
-          ctx.font = 'bold 22px sans-serif';
+          ctx.font = 'bold 20px sans-serif';
           if (dep.isElderly) {
-            ctx.fillText('✓', W * 0.498, y - H * 0.010);
+            ctx.fillText('✓', W * POS.depCols.checkX, H * rowConfig.elderlyCheckY);
           }
           if (dep.isSpecific) {
-            ctx.fillText('✓', W * 0.498, y + H * 0.010);
+            ctx.fillText('✓', W * POS.depCols.checkX, H * rowConfig.specificCheckY);
           }
           ctx.fillStyle = '#0f172a';
 
           // 所得見積額
           ctx.textAlign = 'right';
-          ctx.fillText(`${(dep.incomeEstimate || 0).toLocaleString()} 円`, W * 0.575, y);
+          ctx.fillText(`${(dep.incomeEstimate || 0).toLocaleString()} 円`, W * POS.depCols.incomeX, H * rowConfig.rowY);
           ctx.textAlign = 'left';
 
           // 生計一 ＆ 住所
-          ctx.font = '19px "Noto Sans JP", sans-serif';
-          ctx.fillText(dep.isLivingTogether !== false ? '同居' : (dep.livingTogetherFact || '別居'), W * 0.618, y);
-          ctx.fillText(dep.address || data.employeeAddress, W * 0.678, y);
+          ctx.font = '17px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.isLivingTogether !== false ? '同居' : (dep.livingTogetherFact || '別居'), W * POS.depCols.livingFactX, H * rowConfig.rowY);
+          ctx.fillText(dep.address || data.employeeAddress, W * POS.depCols.addressX, H * rowConfig.rowY);
         });
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // ④ Ｃ. 障害者、寡婦、ひとり親又は勤労学生
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         ctx.fillStyle = '#2563eb';
-        ctx.font = 'bold 24px sans-serif';
-        if (data.isDisability) ctx.fillText('✓', W * 0.125, H * 0.568);
-        if (data.isWidow) ctx.fillText('✓', W * 0.322, H * 0.568);
-        if (data.isSingleParent) ctx.fillText('✓', W * 0.358, H * 0.568);
-        if (data.isWorkingStudent) ctx.fillText('✓', W * 0.402, H * 0.568);
+        ctx.font = 'bold 22px sans-serif';
+        if (data.isDisability) ctx.fillText('✓', W * POS.special.checkDisabled.x, H * POS.special.checkDisabled.y);
+        if (data.isWidow) ctx.fillText('✓', W * POS.special.checkWidow.x, H * POS.special.checkWidow.y);
+        if (data.isSingleParent) ctx.fillText('✓', W * POS.special.checkSingleParent.x, H * POS.special.checkSingleParent.y);
+        if (data.isWorkingStudent) ctx.fillText('✓', W * POS.special.checkWorkingStudent.x, H * POS.special.checkWorkingStudent.y);
 
         ctx.fillStyle = '#0f172a';
-        ctx.font = 'bold 20px "Noto Sans JP", sans-serif';
+        ctx.font = 'bold 18px "Noto Sans JP", sans-serif';
         if (data.disabilityDetails) {
-          ctx.fillText(data.disabilityDetails, W * 0.480, H * 0.572);
+          ctx.fillText(data.disabilityDetails, W * POS.special.details.x, H * POS.special.details.y);
         } else if (data.isWorkingStudent) {
-          ctx.fillText(`学校: ${data.workingStudentSchool || '〇〇大学'}`, W * 0.480, H * 0.572);
+          ctx.fillText(`学校: ${data.workingStudentSchool || '〇〇大学'}`, W * POS.special.details.x, H * POS.special.details.y);
         }
 
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         // ⑤ 住民税に関する事項（16歳未満の年少扶養親族 2名分）
         // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        const u16RowY = [0.730, 0.772];
-        const u16KanaRowY = [0.718, 0.760];
-
         u16Rows.forEach((dep, idx) => {
           if (!dep) return;
-          const y = H * u16RowY[idx];
-          const yk = H * u16KanaRowY[idx];
+          const uRowConfig = POS.u16[idx];
           const bDate = parseJapaneseEraDate(dep.birthDate);
 
-          ctx.font = '15px "Noto Sans JP", sans-serif';
-          ctx.fillText(dep.nameKana || '', W * 0.165, yk);
+          ctx.font = '14px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.nameKana || '', W * POS.u16Cols.kanaX, H * uRowConfig.kanaY);
 
-          ctx.font = 'bold 24px "Noto Sans JP", sans-serif';
-          ctx.fillText(dep.name, W * 0.165, y);
+          ctx.font = 'bold 22px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.name, W * POS.u16Cols.nameX, H * uRowConfig.rowY);
 
           // マイナンバー
           const uNumStr = dep.myNumber ? dep.myNumber.replace(/[^0-9]/g, '') : '************';
-          ctx.font = 'bold 20px "Courier New", monospace';
-          const uNumStartX = W * 0.280;
-          const uNumPitch = W * 0.0108;
+          ctx.font = 'bold 18px "Courier New", monospace';
+          const uNumStartX = W * POS.u16Cols.myNumStartX;
+          const uNumPitch = W * POS.u16Cols.myNumPitch;
           for (let i = 0; i < 12; i++) {
-            ctx.fillText(uNumStr[i] || '*', uNumStartX + i * uNumPitch, y);
+            ctx.fillText(uNumStr[i] || '*', uNumStartX + i * uNumPitch, H * uRowConfig.rowY);
           }
 
           // 続柄
-          ctx.font = 'bold 22px "Noto Sans JP", sans-serif';
-          ctx.fillText(dep.relation, W * 0.395, y);
+          ctx.font = 'bold 20px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.relation, W * POS.u16Cols.relationX, H * uRowConfig.rowY);
 
           // 生年月日
-          ctx.fillText(bDate.year, W * 0.435, y);
-          ctx.fillText(bDate.month, W * 0.460, y);
-          ctx.fillText(bDate.day, W * 0.485, y);
+          ctx.fillText(bDate.year, W * POS.u16Cols.birthYX, H * uRowConfig.rowY);
+          ctx.fillText(bDate.month, W * POS.u16Cols.birthMX, H * uRowConfig.rowY);
+          ctx.fillText(bDate.day, W * POS.u16Cols.birthDX, H * uRowConfig.rowY);
 
           // 住所
-          ctx.font = '19px "Noto Sans JP", sans-serif';
-          ctx.fillText(dep.address || data.employeeAddress, W * 0.542, y);
+          ctx.font = '17px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.address || data.employeeAddress, W * POS.u16Cols.addressX, H * uRowConfig.rowY);
 
           // 所得見積額
           ctx.textAlign = 'right';
-          ctx.fillText('0 円', W * 0.765, y);
+          ctx.fillText('0 円', W * POS.u16Cols.incomeX, H * uRowConfig.rowY);
           ctx.textAlign = 'left';
         });
 
