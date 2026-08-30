@@ -562,10 +562,10 @@ export const TaxDocMasterInspector: React.FC = () => {
                     <div className="flex items-center gap-1">
                       <input
                         type="number"
-                        min="8"
+                        min="4"
                         max="36"
                         value={selectedField.fontSize}
-                        onChange={e => updateField(selectedField.id, 'fontSize', parseInt(e.target.value, 10) || 12)}
+                        onChange={e => updateField(selectedField.id, 'fontSize', parseInt(e.target.value, 10) || 4)}
                         className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1 text-xs font-mono font-bold text-emerald-300"
                       />
                     </div>
