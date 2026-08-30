@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Printer, Download, Eye, CheckCircle2, Loader2, Sparkles, FileText } from 'lucide-react';
-import { TAX_DOC_2026_COORDINATES as DEFAULT_POS } from '../lib/taxDocCoordinates';
+import { DEFAULT_TAX_FIELDS, TAX_DOC_DEFAULT_MAP } from '../lib/taxDocCoordinates';
 
 interface DependentItem {
   name: string;
@@ -157,274 +157,158 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           }
         } catch (_) {}
 
-        // フォールバック関数（マスター設定と100%同一のフォントサイズ比率）
-        const getField = (id: string, defX: number, defY: number, defSize: number, defPitch?: number) => {
-          if (masterMap[id]) {
-            return {
-              x: masterMap[id].x / 100,
-              y: masterMap[id].y / 100,
-              size: Math.max(10, Math.round((masterMap[id].fontSize / 1000) * W * 1.05)),
-              pitch: masterMap[id].pitch ? masterMap[id].pitch / 100 : defPitch
-            };
-          }
+        // フォールバック関数（マスター設定・プレビューと100%同一の計算式）
+        const getField = (id: string) => {
+          const custom = masterMap[id];
+          const def = TAX_DOC_DEFAULT_MAP.get(id);
+          const x = custom ? custom.x : (def ? def.x : 0);
+          const y = custom ? custom.y : (def ? def.y : 0);
+          const fontSize = custom ? custom.fontSize : (def ? def.fontSize : 10);
+          const pitch = custom && custom.pitch !== undefined ? custom.pitch : (def ? def.pitch : undefined);
+
           return {
-            x: defX,
-            y: defY,
-            size: Math.max(10, Math.round((defSize / 1000) * W * 1.05)),
-            pitch: defPitch
+            x: x / 100, // 0.0〜1.0 (CanvasのW, Hに対する比率)
+            y: y / 100,
+            fontSizePt: fontSize,
+            fontSizePx: Math.max(10, Math.round((fontSize * 0.115 / 100) * W)), // マスター画面の fontSize * 0.115 cqw と完全同一！
+            pitch: pitch ? pitch / 100 : undefined
           };
         };
 
+        // マス目数字（マイナンバー・法人番号など）をマスタープレビューと100%同じ中央寄せピッチで印字
+        const renderPitchText = (text: string, f: ReturnType<typeof getField>, fontStyle: string = '"Courier New", monospace') => {
+          ctx.font = `bold ${f.fontSizePx}px ${fontStyle}`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const pitchPx = (f.pitch || 0.018) * W;
+          for (let i = 0; i < text.length; i++) {
+            const cx = W * f.x + i * pitchPx + pitchPx * 0.5;
+            ctx.fillText(text[i], cx, H * f.y);
+          }
+        };
+
+        // 通常テキスト印字
+        const renderText = (text: string, f: ReturnType<typeof getField>, align: 'left' | 'right' | 'center' = 'left', isBold: boolean = true, fontFamily: string = '"Noto Sans JP", sans-serif') => {
+          ctx.font = `${isBold ? 'bold ' : ''}${f.fontSizePx}px ${fontFamily}`;
+          ctx.textAlign = align;
+          ctx.textBaseline = 'middle';
+          ctx.fillText(text, W * f.x, H * f.y);
+        };
+
         ctx.fillStyle = '#0f172a';
-        ctx.textBaseline = 'middle';
 
         // 🏢 給与支払者
-        const fTaxOffice = getField('taxOffice', DEFAULT_POS.header.taxOffice.x, DEFAULT_POS.header.taxOffice.y, 18);
-        ctx.font = `bold ${fTaxOffice.size}px "Noto Sans JP", sans-serif`;
-        ctx.fillText(data.taxOfficeName || '千代田', W * fTaxOffice.x, H * fTaxOffice.y);
-
-        const fMunicipality = getField('municipality', DEFAULT_POS.header.municipality.x, DEFAULT_POS.header.municipality.y, 18);
-        ctx.font = `bold ${fMunicipality.size}px "Noto Sans JP", sans-serif`;
-        ctx.fillText(data.municipalityName || '千代田区', W * fMunicipality.x, H * fMunicipality.y);
-
-        const fCompany = getField('companyName', DEFAULT_POS.header.companyName.x, DEFAULT_POS.header.companyName.y, 22);
-        ctx.font = `bold ${fCompany.size}px "Noto Sans JP", sans-serif`;
-        ctx.fillText(data.companyName, W * fCompany.x, H * fCompany.y);
-
-        const fCorpNum = getField('corporateNumber', DEFAULT_POS.header.corporateNumber.x, DEFAULT_POS.header.corporateNumber.y, 20, 0.0102);
-        const corpNumStr = (data.corporateNumber || '1010001999999').replace(/[^0-9]/g, '');
-        ctx.font = `bold ${fCorpNum.size}px "Courier New", monospace`;
-        if (fCorpNum.pitch) {
-          const corpPitch = W * fCorpNum.pitch;
-          for (let i = 0; i < corpNumStr.length; i++) {
-            ctx.fillText(corpNumStr[i], W * fCorpNum.x + i * corpPitch, H * fCorpNum.y);
-          }
-        } else {
-          ctx.fillText(corpNumStr, W * fCorpNum.x, H * fCorpNum.y);
-        }
-
-        const fCompAddr = getField('companyAddress', DEFAULT_POS.header.companyAddress.x, DEFAULT_POS.header.companyAddress.y, 16);
-        ctx.font = `bold ${fCompAddr.size}px "Noto Sans JP", sans-serif`;
-        ctx.fillText(data.companyAddress || '本社所在地', W * fCompAddr.x, H * fCompAddr.y);
+        renderText(data.taxOfficeName || '千代田', getField('taxOffice'));
+        renderText(data.municipalityName || '千代田区', getField('municipality'));
+        renderText(data.companyName || '株式会社KAP', getField('companyName'));
+        
+        const corpNumStr = (data.corporateNumber || '1010001999999').replace(/[^0-9]/g, '').padEnd(13, ' ').slice(0, 13);
+        renderPitchText(corpNumStr, getField('corporateNumber'));
+        
+        renderText(data.companyAddress || '本社所在地', getField('companyAddress'));
 
         // 👤 申告者本人
-        const fEmpKana = getField('empKana', DEFAULT_POS.header.empKana.x, DEFAULT_POS.header.empKana.y, 14);
-        ctx.font = `${fEmpKana.size}px "Noto Sans JP", sans-serif`;
-        ctx.fillText(data.employeeNameKana || 'テスト', W * fEmpKana.x, H * fEmpKana.y);
-
-        const fEmpName = getField('empName', DEFAULT_POS.header.empName.x, DEFAULT_POS.header.empName.y, 28);
-        ctx.font = `900 ${fEmpName.size}px "Noto Sans JP", sans-serif`;
-        ctx.fillText(data.employeeName, W * fEmpName.x, H * fEmpName.y);
+        renderText(data.employeeNameKana || 'テスト タロウ', getField('empKana'), 'left', false);
+        renderText(data.employeeName || '駒井 秀一朗', getField('empName'), 'left', true);
 
         // 12桁マイナンバーマス目
-        const fMyNum = getField('empMyNumber', DEFAULT_POS.header.empMyNumberStart.x, DEFAULT_POS.header.empMyNumberStart.y, 20, DEFAULT_POS.header.empMyNumberStart.pitch);
         const myNumStr = data.myNumber ? data.myNumber.replace(/[^0-9]/g, '') : '123456789012';
-        ctx.font = `bold ${fMyNum.size}px "Courier New", monospace`;
-        const numPitch = W * (fMyNum.pitch || DEFAULT_POS.header.empMyNumberStart.pitch);
-        for (let i = 0; i < 12; i++) {
-          ctx.fillText(myNumStr[i] || '*', W * fMyNum.x + i * numPitch, H * fMyNum.y);
-        }
+        renderPitchText(myNumStr, getField('empMyNumber'));
 
         // 住所・郵便番号
-        const fPostal = getField('empPostal', DEFAULT_POS.header.empPostal.x, DEFAULT_POS.header.empPostal.y, 16);
-        ctx.font = `bold ${fPostal.size}px "Noto Sans JP", sans-serif`;
-        ctx.fillText(data.postalCode || '160-0023', W * fPostal.x, H * fPostal.y);
-
-        const fAddress = getField('empAddress', DEFAULT_POS.header.empAddress.x, DEFAULT_POS.header.empAddress.y, 17);
-        ctx.font = `bold ${fAddress.size}px "Noto Sans JP", sans-serif`;
-        ctx.fillText(data.employeeAddress, W * fAddress.x, H * fAddress.y);
+        renderText(data.postalCode || '160-0023', getField('empPostal'));
+        renderText(data.employeeAddress || '京都市山科区大塚西浦町3-57', getField('empAddress'));
 
         // 生年月日
-        const fBirthY = getField('empBirthY', DEFAULT_POS.header.empBirthY.x, DEFAULT_POS.header.empBirthY.y, 18);
-        ctx.font = `bold ${fBirthY.size}px "Noto Sans JP", sans-serif`;
-        ctx.fillText(empBirth.year, W * fBirthY.x, H * fBirthY.y);
-
-        const fBirthM = getField('empBirthM', DEFAULT_POS.header.empBirthM.x, DEFAULT_POS.header.empBirthM.y, 18);
-        ctx.fillText(empBirth.month, W * fBirthM.x, H * fBirthM.y);
-
-        const fBirthD = getField('empBirthD', DEFAULT_POS.header.empBirthD.x, DEFAULT_POS.header.empBirthD.y, 18);
-        ctx.fillText(empBirth.day, W * fBirthD.x, H * fBirthD.y);
+        renderText(empBirth.year, getField('empBirthY'));
+        renderText(empBirth.month, getField('empBirthM'));
+        renderText(empBirth.day, getField('empBirthD'));
 
         // 世帯主・続柄
-        const fHouseName = getField('householderName', DEFAULT_POS.header.householderName.x, DEFAULT_POS.header.householderName.y, 18);
-        ctx.fillText(data.householderName || data.employeeName, W * fHouseName.x, H * fHouseName.y);
-
-        const fHouseRel = getField('householderRel', DEFAULT_POS.header.householderRel.x, DEFAULT_POS.header.householderRel.y, 18);
-        ctx.fillText(data.householderRelation || '本人', W * fHouseRel.x, H * fHouseRel.y);
+        renderText(data.householderName || data.employeeName || '駒井 秀一朗', getField('householderName'));
+        renderText(data.householderRelation || '本人', getField('householderRel'));
 
         // 配偶者有無（○印）
-        const fSpouseCircle = getField('hasSpouseYes', DEFAULT_POS.header.hasSpouseYes.x, DEFAULT_POS.header.hasSpouseYes.y, 18);
-        ctx.strokeStyle = '#2563eb';
-        ctx.lineWidth = 2.5;
         if (data.hasSpouse) {
+          const fSpCircle = getField('hasSpouseYes');
+          ctx.strokeStyle = '#2563eb';
+          ctx.lineWidth = Math.max(2, Math.round(W * 0.0008));
+          const radius = (1.4 / 100 * W) * 0.5;
           ctx.beginPath();
-          ctx.arc(W * fSpouseCircle.x, H * fSpouseCircle.y, 12, 0, Math.PI * 2);
-          ctx.stroke();
-        } else {
-          const fSpouseNo = getField('hasSpouseNo', DEFAULT_POS.header.hasSpouseNo.x, DEFAULT_POS.header.hasSpouseNo.y, 18);
-          ctx.beginPath();
-          ctx.arc(W * fSpouseNo.x, H * fSpouseNo.y, 12, 0, Math.PI * 2);
+          ctx.arc(W * fSpCircle.x + radius, H * fSpCircle.y, radius, 0, Math.PI * 2);
           ctx.stroke();
         }
 
         // Ａ. 源泉控除対象配偶者
         if (data.hasSpouse && data.spouseName) {
-          const fSpKana = getField('spouseKana', DEFAULT_POS.spouse.kana.x, DEFAULT_POS.spouse.kana.y, 13);
-          ctx.font = `${fSpKana.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(data.spouseNameKana || '', W * fSpKana.x, H * fSpKana.y);
-
-          const fSpName = getField('spouseName', DEFAULT_POS.spouse.name.x, DEFAULT_POS.spouse.name.y, 20);
-          ctx.font = `bold ${fSpName.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(data.spouseName, W * fSpName.x, H * fSpName.y);
-
-          const fSpMyNum = getField('spouseMyNumber', DEFAULT_POS.spouse.myNumberStart.x, DEFAULT_POS.spouse.myNumberStart.y, 16, DEFAULT_POS.spouse.myNumberStart.pitch);
+          renderText(data.spouseNameKana || '', getField('spouseKana'), 'left', false);
+          renderText(data.spouseName, getField('spouseName'));
+          
           const spNumStr = data.spouseMyNumber ? data.spouseMyNumber.replace(/[^0-9]/g, '') : '************';
-          ctx.font = `bold ${fSpMyNum.size}px "Courier New", monospace`;
-          const spNumPitch = W * (fSpMyNum.pitch || DEFAULT_POS.spouse.myNumberStart.pitch);
-          for (let i = 0; i < 12; i++) {
-            ctx.fillText(spNumStr[i] || '*', W * fSpMyNum.x + i * spNumPitch, H * fSpMyNum.y);
-          }
+          renderPitchText(spNumStr, getField('spouseMyNumber'));
 
-          const fSpBirthY = getField('spouseBirthY', DEFAULT_POS.spouse.birthY.x, DEFAULT_POS.spouse.birthY.y, 18);
-          ctx.fillText(spouseBirth.year, W * fSpBirthY.x, H * fSpBirthY.y);
+          renderText(spouseBirth.year, getField('spouseBirthY'));
+          renderText(spouseBirth.month, getField('spouseBirthM'));
+          renderText(spouseBirth.day, getField('spouseBirthD'));
 
-          const fSpBirthM = getField('spouseBirthM', DEFAULT_POS.spouse.birthM.x, DEFAULT_POS.spouse.birthM.y, 18);
-          ctx.fillText(spouseBirth.month, W * fSpBirthM.x, H * fSpBirthM.y);
-
-          const fSpBirthD = getField('spouseBirthD', DEFAULT_POS.spouse.birthD.x, DEFAULT_POS.spouse.birthD.y, 18);
-          ctx.fillText(spouseBirth.day, W * fSpBirthD.x, H * fSpBirthD.y);
-
-          const fSpIncome = getField('spouseIncome', DEFAULT_POS.spouse.income.x, DEFAULT_POS.spouse.income.y, 17);
-          ctx.textAlign = 'right';
-          ctx.fillText(`${(data.spouseIncomeEstimate || 0).toLocaleString()}`, W * fSpIncome.x, H * fSpIncome.y);
-          ctx.textAlign = 'left';
-
-          const fSpLiving = getField('spouseLiving', DEFAULT_POS.spouse.livingFact.x, DEFAULT_POS.spouse.livingFact.y, 15);
-          ctx.font = `${fSpLiving.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(data.spouseIsLivingTogether !== false ? '同居' : '別居', W * fSpLiving.x, H * fSpLiving.y);
-
-          const fSpAddr = getField('spouseAddress', DEFAULT_POS.spouse.address.x, DEFAULT_POS.spouse.address.y, 15);
-          ctx.fillText(data.spouseAddress || data.employeeAddress, W * fSpAddr.x, H * fSpAddr.y);
+          renderText(`${(data.spouseIncomeEstimate || 0).toLocaleString()}`, getField('spouseIncome'), 'right');
+          renderText(data.spouseIsLivingTogether !== false ? '同居' : '別居', getField('spouseLiving'), 'left', false);
+          renderText(data.spouseAddress || data.employeeAddress || '', getField('spouseAddress'), 'left', false);
         }
 
         // Ｂ. 控除対象扶養親族（1人目〜4人目 フル対応）
         regularDependents.slice(0, 4).forEach((dep, idx) => {
           if (!dep) return;
           const bDate = parseJapaneseEraDate(dep.birthDate);
-          const prefix = `dep${idx}`;
-          const defRowY = 27.5 + idx * 5.0;
-          const defKanaY = 26.0 + idx * 5.0;
+          
+          renderText(dep.nameKana || '', getField(`dep${idx}Kana`), 'left', false);
+          renderText(dep.name, getField(`dep${idx}Name`));
 
-          const fKana = getField(`${prefix}Kana`, DEFAULT_POS.depCols.kanaX, defKanaY / 100, 7);
-          ctx.font = `${fKana.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(dep.nameKana || '', W * fKana.x, H * fKana.y);
-
-          const fName = getField(`${prefix}Name`, DEFAULT_POS.depCols.nameX, defRowY / 100, 11);
-          ctx.font = `bold ${fName.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(dep.name, W * fName.x, H * fName.y);
-
-          const fNum = getField(`${prefix}MyNumber`, DEFAULT_POS.depCols.myNumStartX, defRowY / 100, 9, DEFAULT_POS.depCols.myNumPitch);
           const depNumStr = dep.myNumber ? dep.myNumber.replace(/[^0-9]/g, '') : '************';
-          ctx.font = `bold ${fNum.size}px "Courier New", monospace`;
-          const depPitch = W * (fNum.pitch || DEFAULT_POS.depCols.myNumPitch);
-          for (let i = 0; i < 12; i++) {
-            ctx.fillText(depNumStr[i] || '*', W * fNum.x + i * depPitch, H * fNum.y);
-          }
+          renderPitchText(depNumStr, getField(`dep${idx}MyNumber`));
 
-          const fRel = getField(`${prefix}Rel`, DEFAULT_POS.depCols.relationX, defRowY / 100, 10);
-          ctx.font = `bold ${fRel.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(dep.relation, W * fRel.x, H * fRel.y);
+          renderText(dep.relation || '', getField(`dep${idx}Rel`));
+          renderText(bDate.year, getField(`dep${idx}BirthY`));
+          renderText(bDate.month, getField(`dep${idx}BirthM`));
+          renderText(bDate.day, getField(`dep${idx}BirthD`));
 
-          const fBirthY = getField(`${prefix}BirthY`, DEFAULT_POS.depCols.birthYX, defRowY / 100, 10);
-          ctx.fillText(bDate.year, W * fBirthY.x, H * fBirthY.y);
-
-          const fBirthM = getField(`${prefix}BirthM`, DEFAULT_POS.depCols.birthMX, defRowY / 100, 10);
-          ctx.fillText(bDate.month, W * fBirthM.x, H * fBirthM.y);
-
-          const fBirthD = getField(`${prefix}BirthD`, DEFAULT_POS.depCols.birthDX, defRowY / 100, 10);
-          ctx.fillText(bDate.day, W * fBirthD.x, H * fBirthD.y);
-
-          const fIncome = getField(`${prefix}Income`, DEFAULT_POS.depCols.incomeX, defRowY / 100, 10);
-          ctx.textAlign = 'right';
-          ctx.fillText(`${(dep.incomeEstimate || 0).toLocaleString()}`, W * fIncome.x, H * fIncome.y);
-          ctx.textAlign = 'left';
-
-          const fLiving = getField(`${prefix}Living`, DEFAULT_POS.depCols.livingFactX, defRowY / 100, 9);
-          ctx.font = `${fLiving.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(dep.isLivingTogether !== false ? '同居' : (dep.livingTogetherFact || '別居'), W * fLiving.x, H * fLiving.y);
-
-          const fAddr = getField(`${prefix}Address`, DEFAULT_POS.depCols.addressX, defRowY / 100, 9);
-          ctx.fillText(dep.address || data.employeeAddress, W * fAddr.x, H * fAddr.y);
+          renderText(`${(dep.incomeEstimate || 0).toLocaleString()}`, getField(`dep${idx}Income`), 'right');
+          renderText(dep.isLivingTogether !== false ? '同居' : (dep.livingTogetherFact || '別居'), getField(`dep${idx}Living`), 'left', false);
+          renderText(dep.address || data.employeeAddress || '', getField(`dep${idx}Address`), 'left', false);
         });
 
         // Ｃ. 障害者等
-        const fSpecDis = getField('specialDisabled', DEFAULT_POS.special.checkDisabled.x, DEFAULT_POS.special.checkDisabled.y, 12);
         ctx.fillStyle = '#2563eb';
-        ctx.font = `bold ${fSpecDis.size}px sans-serif`;
-        if (data.isDisability) ctx.fillText('✓', W * fSpecDis.x, H * fSpecDis.y);
+        if (data.isDisability) renderText('✓', getField('specialDisabled'), 'left', true, 'sans-serif');
+        if (data.isWidow) renderText('✓', getField('specialWidow'), 'left', true, 'sans-serif');
+        if (data.isSingleParent) renderText('✓', getField('specialSingle'), 'left', true, 'sans-serif');
+        if (data.isWorkingStudent) renderText('✓', getField('specialStudent'), 'left', true, 'sans-serif');
 
-        const fSpecWidow = getField('specialWidow', DEFAULT_POS.special.checkWidow.x, DEFAULT_POS.special.checkWidow.y, 12);
-        if (data.isWidow) ctx.fillText('✓', W * fSpecWidow.x, H * fSpecWidow.y);
-
-        const fSpecSingle = getField('specialSingle', DEFAULT_POS.special.checkSingleParent.x, DEFAULT_POS.special.checkSingleParent.y, 12);
-        if (data.isSingleParent) ctx.fillText('✓', W * fSpecSingle.x, H * fSpecSingle.y);
-
-        const fSpecStudent = getField('specialStudent', DEFAULT_POS.special.checkWorkingStudent.x, DEFAULT_POS.special.checkWorkingStudent.y, 12);
-        if (data.isWorkingStudent) ctx.fillText('✓', W * fSpecStudent.x, H * fSpecStudent.y);
-
-        const fSpecDetails = getField('specialDetails', DEFAULT_POS.special.details.x, DEFAULT_POS.special.details.y, 9);
         ctx.fillStyle = '#0f172a';
-        ctx.font = `bold ${fSpecDetails.size}px "Noto Sans JP", sans-serif`;
         if (data.disabilityDetails) {
-          ctx.fillText(data.disabilityDetails, W * fSpecDetails.x, H * fSpecDetails.y);
+          renderText(data.disabilityDetails, getField('specialDetails'));
         } else if (data.isWorkingStudent) {
-          ctx.fillText(`学校: ${data.workingStudentSchool || '〇〇大学'}`, W * fSpecDetails.x, H * fSpecDetails.y);
+          renderText(`学校: ${data.workingStudentSchool || '〇〇大学'}`, getField('specialDetails'));
         }
 
         // 住民税（16歳未満 1人目〜2人目 原本枠準拠）
         under16Dependents.slice(0, 2).forEach((uDep, idx) => {
           if (!uDep) return;
           const ubDate = parseJapaneseEraDate(uDep.birthDate);
-          const prefix = `u16_${idx}`;
-          const defRowY = 57.0 + idx * 4.0;
-          const defKanaY = 55.5 + idx * 4.0;
 
-          const fKana = getField(`${prefix}Kana`, DEFAULT_POS.u16Cols.kanaX, defKanaY / 100, 7);
-          ctx.font = `${fKana.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(uDep.nameKana || '', W * fKana.x, H * fKana.y);
+          renderText(uDep.nameKana || '', getField(`u16_${idx}Kana`), 'left', false);
+          renderText(uDep.name, getField(`u16_${idx}Name`));
 
-          const fName = getField(`${prefix}Name`, DEFAULT_POS.u16Cols.nameX, defRowY / 100, 11);
-          ctx.font = `bold ${fName.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(uDep.name, W * fName.x, H * fName.y);
-
-          const fNum = getField(`${prefix}MyNumber`, DEFAULT_POS.u16Cols.myNumStartX, defRowY / 100, 9, DEFAULT_POS.u16Cols.myNumPitch);
           const uNumStr = uDep.myNumber ? uDep.myNumber.replace(/[^0-9]/g, '') : '************';
-          ctx.font = `bold ${fNum.size}px "Courier New", monospace`;
-          const uPitch = W * (fNum.pitch || DEFAULT_POS.u16Cols.myNumPitch);
-          for (let i = 0; i < 12; i++) {
-            ctx.fillText(uNumStr[i] || '*', W * fNum.x + i * uPitch, H * fNum.y);
-          }
+          renderPitchText(uNumStr, getField(`u16_${idx}MyNumber`));
 
-          const fRel = getField(`${prefix}Rel`, DEFAULT_POS.u16Cols.relationX, defRowY / 100, 10);
-          ctx.font = `bold ${fRel.size}px "Noto Sans JP", sans-serif`;
-          ctx.fillText(uDep.relation, W * fRel.x, H * fRel.y);
+          renderText(uDep.relation || '', getField(`u16_${idx}Rel`));
+          renderText(ubDate.year, getField(`u16_${idx}BirthY`));
+          renderText(ubDate.month, getField(`u16_${idx}BirthM`));
+          renderText(ubDate.day, getField(`u16_${idx}BirthD`));
 
-          const fBirthY = getField(`${prefix}BirthY`, DEFAULT_POS.u16Cols.birthYX, defRowY / 100, 10);
-          ctx.fillText(ubDate.year, W * fBirthY.x, H * fBirthY.y);
-
-          const fBirthM = getField(`${prefix}BirthM`, DEFAULT_POS.u16Cols.birthMX, defRowY / 100, 10);
-          ctx.fillText(ubDate.month, W * fBirthM.x, H * fBirthM.y);
-
-          const fBirthD = getField(`${prefix}BirthD`, DEFAULT_POS.u16Cols.birthDX, defRowY / 100, 10);
-          ctx.fillText(ubDate.day, W * fBirthD.x, H * fBirthD.y);
-
-          const fAddr = getField(`${prefix}Address`, DEFAULT_POS.u16Cols.addressX, defRowY / 100, 9);
-          ctx.fillText(uDep.address || data.employeeAddress, W * fAddr.x, H * fAddr.y);
-
-          const fIncome = getField(`${prefix}Income`, DEFAULT_POS.u16Cols.incomeX, defRowY / 100, 10);
-          ctx.textAlign = 'right';
-          ctx.fillText('0', W * fIncome.x, H * fIncome.y);
-          ctx.textAlign = 'left';
+          renderText(uDep.address || data.employeeAddress || '', getField(`u16_${idx}Address`), 'left', false);
+          renderText(`${(uDep.incomeEstimate || 0).toLocaleString()}`, getField(`u16_${idx}Income`), 'right');
         });
 
         const url = canvas.toDataURL('image/png');
