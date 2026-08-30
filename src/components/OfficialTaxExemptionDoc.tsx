@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Printer, Download, Eye, FileText, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Printer, Download, Eye, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 
 interface DependentItem {
   name: string;
@@ -113,95 +113,372 @@ function parseJapaneseEraDate(dateStr?: string): { era: string; year: string; mo
 }
 
 export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }) => {
-  const [activeTab, setActiveTab] = useState<'form_view' | 'pdf_view' | 'guide_view'>('form_view');
-  const year = data.year || 2026;
-  const reiwaYear = year - 2018;
+  const [activeTab, setActiveTab] = useState<'canvas_doc' | 'pdf_view' | 'guide_view'>('canvas_doc');
+  const [isRendering, setIsRendering] = useState(true);
+  const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const under16Dependents = (data.dependents || []).filter(d => d.isUnder16);
   const regularDependents = (data.dependents || []).filter(d => !d.isUnder16);
 
-  // B欄: 4名分の枠を確保
+  // 4名分の枠
   const bRows: Array<DependentItem | null> = [...regularDependents.slice(0, 4)];
-  while (bRows.length < 4) {
-    bRows.push(null);
-  }
+  while (bRows.length < 4) bRows.push(null);
 
-  // 住民税16歳未満: 2名分の枠を確保
+  // 16歳未満 2名分の枠
   const u16Rows: Array<DependentItem | null> = [...under16Dependents.slice(0, 2)];
-  while (u16Rows.length < 2) {
-    u16Rows.push(null);
-  }
+  while (u16Rows.length < 2) u16Rows.push(null);
 
   const empBirth = parseJapaneseEraDate(data.birthDate);
   const spouseBirth = parseJapaneseEraDate(data.spouseBirthDate);
 
+  /**
+   * PDF.js を動的ロードして国税庁公式PDF原本（/2026bun_01.pdf）をキャンバスに描画し、
+   * その上に直接データを完全な位置精度で印字する！
+   */
+  useEffect(() => {
+    let isCancelled = false;
+
+    const renderPdfWithData = async () => {
+      setIsRendering(true);
+      try {
+        // PDF.js ライブラリをCDNからロード
+        // @ts-ignore
+        if (!window.pdfjsLib) {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          document.head.appendChild(script);
+          await new Promise(resolve => {
+            script.onload = resolve;
+          });
+        }
+
+        // @ts-ignore
+        const pdfjsLib = window.pdfjsLib;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // 国税庁公式PDFをロード
+        const loadingTask = pdfjsLib.getDocument('/2026bun_01.pdf');
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(1);
+
+        // 高解像度レンダリング（2.0倍スケール = 約2400px幅）
+        const scale = 2.0;
+        const viewport = page.getViewport({ scale });
+
+        const canvas = canvasRef.current || document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) return;
+
+        // 1. 国税庁PDF原本の下敷きを描画
+        const renderContext = {
+          canvasContext: ctx,
+          viewport: viewport
+        };
+        await page.render(renderContext).promise;
+
+        if (isCancelled) return;
+
+        // 2. 原本の上にデータを精密オーバーレイ印字！
+        const W = canvas.width;
+        const H = canvas.height;
+
+        ctx.fillStyle = '#0f172a'; // くっきりした濃紺/黒インク
+        ctx.textBaseline = 'middle';
+
+        // 🏢 給与支払者
+        ctx.font = 'bold 22px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.taxOfficeName || '千代田', W * 0.115, H * 0.178);
+        ctx.fillText(data.municipalityName || '千代田区', W * 0.095, H * 0.265);
+
+        ctx.font = 'bold 25px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.companyName, W * 0.295, H * 0.180);
+
+        ctx.font = 'bold 24px "Courier New", monospace';
+        ctx.fillText(data.corporateNumber || '1010001999999', W * 0.295, H * 0.220);
+
+        ctx.font = 'bold 19px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.companyAddress || '本社所在地', W * 0.295, H * 0.258);
+
+        // 👤 あなたの情報
+        ctx.font = '16px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.employeeNameKana || 'テスト', W * 0.535, H * 0.156);
+
+        ctx.font = '900 32px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.employeeName, W * 0.535, H * 0.184);
+
+        // 個人番号（12桁マス目印字）
+        const myNumStr = data.myNumber ? data.myNumber.replace(/[^0-9]/g, '') : '123456789012';
+        ctx.font = 'bold 24px "Courier New", monospace';
+        const numStartX = W * 0.538;
+        const numSpacing = W * 0.0215;
+        for (let i = 0; i < 12; i++) {
+          const char = myNumStr[i] || '*';
+          ctx.fillText(char, numStartX + i * numSpacing, H * 0.222);
+        }
+
+        // 住所 ＆ 郵便番号
+        ctx.font = 'bold 18px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.postalCode || '160-0023', W * 0.590, H * 0.255);
+        ctx.font = 'bold 20px "Noto Sans JP", sans-serif';
+        ctx.fillText(data.employeeAddress, W * 0.490, H * 0.272);
+
+        // 生年月日
+        ctx.font = 'bold 20px "Noto Sans JP", sans-serif';
+        ctx.fillText(empBirth.year, W * 0.775, H * 0.160);
+        ctx.fillText(empBirth.month, W * 0.835, H * 0.160);
+        ctx.fillText(empBirth.day, W * 0.885, H * 0.160);
+
+        // 世帯主 ＆ 続柄 ＆ 配偶者
+        ctx.fillText(data.householderName || data.employeeName, W * 0.770, H * 0.192);
+        ctx.fillText(data.householderRelation || '本人', W * 0.770, H * 0.228);
+
+        // 配偶者の有無（○印を描画）
+        ctx.strokeStyle = '#2563eb';
+        ctx.lineWidth = 3;
+        if (data.hasSpouse) {
+          ctx.beginPath();
+          ctx.arc(W * 0.762, H * 0.262, 14, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.arc(W * 0.792, H * 0.262, 14, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // Ａ. 源泉控除対象配偶者
+        // ─────────────────────────────────────────────────────────────────
+        if (data.hasSpouse && data.spouseName) {
+          ctx.font = '15px "Noto Sans JP", sans-serif';
+          ctx.fillText(data.spouseNameKana || '', W * 0.185, H * 0.345);
+
+          ctx.font = 'bold 24px "Noto Sans JP", sans-serif';
+          ctx.fillText(data.spouseName, W * 0.185, H * 0.362);
+
+          // 配偶者マイナンバー
+          const spNumStr = data.spouseMyNumber ? data.spouseMyNumber.replace(/[^0-9]/g, '') : '************';
+          ctx.font = 'bold 18px "Courier New", monospace';
+          ctx.fillText(spNumStr, W * 0.285, H * 0.360);
+
+          ctx.font = 'bold 20px "Noto Sans JP", sans-serif';
+          ctx.fillText('妻', W * 0.365, H * 0.360);
+
+          // 生年月日
+          ctx.fillText(spouseBirth.year, W * 0.440, H * 0.360);
+          ctx.fillText(spouseBirth.month, W * 0.478, H * 0.360);
+          ctx.fillText(spouseBirth.day, W * 0.512, H * 0.360);
+
+          // 所得見積額
+          ctx.textAlign = 'right';
+          ctx.fillText(`${(data.spouseIncomeEstimate || 0).toLocaleString()} 円`, W * 0.582, H * 0.360);
+          ctx.textAlign = 'left';
+
+          // 生計一事実 ＆ 住所
+          ctx.font = '18px "Noto Sans JP", sans-serif';
+          ctx.fillText(data.spouseIsLivingTogether !== false ? '同居' : '別居', W * 0.615, H * 0.360);
+          ctx.fillText(data.spouseAddress || data.employeeAddress, W * 0.685, H * 0.360);
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // Ｂ. 控除対象扶養親族（1〜4行）
+        // ─────────────────────────────────────────────────────────────────
+        const bYOffsets = [0.445, 0.505, 0.565, 0.625];
+        const bKanaYOffsets = [0.425, 0.485, 0.545, 0.605];
+
+        bRows.forEach((dep, idx) => {
+          if (!dep) return;
+          const y = H * bYOffsets[idx];
+          const yk = H * bKanaYOffsets[idx];
+          const bDate = parseJapaneseEraDate(dep.birthDate);
+
+          ctx.font = '14px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.nameKana || '', W * 0.185, yk);
+
+          ctx.font = 'bold 22px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.name, W * 0.185, y);
+
+          // マイナンバー
+          ctx.font = 'bold 18px "Courier New", monospace';
+          ctx.fillText(dep.myNumber || '************', W * 0.285, y);
+
+          // 続柄
+          ctx.font = 'bold 20px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.relation, W * 0.365, y);
+
+          // 生年月日
+          ctx.fillText(bDate.year, W * 0.440, y);
+          ctx.fillText(bDate.month, W * 0.478, y);
+          ctx.fillText(bDate.day, W * 0.512, y);
+
+          // チェックボックス（老人・特定扶養）
+          ctx.fillStyle = '#2563eb';
+          if (dep.isElderly) {
+            ctx.font = 'bold 20px sans-serif';
+            ctx.fillText('✓', W * 0.536, y - H * 0.012);
+          }
+          if (dep.isSpecific) {
+            ctx.font = 'bold 20px sans-serif';
+            ctx.fillText('✓', W * 0.536, y + H * 0.010);
+          }
+          ctx.fillStyle = '#0f172a';
+
+          // 所得見積額
+          ctx.textAlign = 'right';
+          ctx.fillText(`${(dep.incomeEstimate || 0).toLocaleString()} 円`, W * 0.582, y);
+          ctx.textAlign = 'left';
+
+          // 生計一 ＆ 住所
+          ctx.font = '17px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.isLivingTogether !== false ? '同居' : '別居', W * 0.615, y);
+          ctx.fillText(dep.address || data.employeeAddress, W * 0.685, y);
+        });
+
+        // ─────────────────────────────────────────────────────────────────
+        // Ｃ. 障害者、寡婦、ひとり親又は勤労学生
+        // ─────────────────────────────────────────────────────────────────
+        ctx.fillStyle = '#2563eb';
+        ctx.font = 'bold 22px sans-serif';
+        if (data.isDisability) ctx.fillText('✓', W * 0.142, H * 0.678);
+        if (data.isWidow) ctx.fillText('✓', W * 0.368, H * 0.678);
+        if (data.isSingleParent) ctx.fillText('✓', W * 0.408, H * 0.678);
+        if (data.isWorkingStudent) ctx.fillText('✓', W * 0.458, H * 0.678);
+
+        ctx.fillStyle = '#0f172a';
+        ctx.font = 'bold 18px "Noto Sans JP", sans-serif';
+        if (data.disabilityDetails) {
+          ctx.fillText(data.disabilityDetails, W * 0.530, H * 0.682);
+        } else if (data.isWorkingStudent) {
+          ctx.fillText(`学校: ${data.workingStudentSchool || '〇〇大学'}`, W * 0.530, H * 0.682);
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // 住民税に関する事項（16歳未満の扶養親族 2名分）
+        // ─────────────────────────────────────────────────────────────────
+        const u16YOffsets = [0.865, 0.910];
+        const u16KanaYOffsets = [0.848, 0.892];
+
+        u16Rows.forEach((dep, idx) => {
+          if (!dep) return;
+          const y = H * u16YOffsets[idx];
+          const yk = H * u16KanaYOffsets[idx];
+          const bDate = parseJapaneseEraDate(dep.birthDate);
+
+          ctx.font = '14px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.nameKana || '', W * 0.185, yk);
+
+          ctx.font = 'bold 22px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.name, W * 0.185, y);
+
+          ctx.font = 'bold 18px "Courier New", monospace';
+          ctx.fillText(dep.myNumber || '************', W * 0.285, y);
+
+          ctx.font = 'bold 20px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.relation, W * 0.365, y);
+
+          ctx.fillText(bDate.year, W * 0.440, y);
+          ctx.fillText(bDate.month, W * 0.478, y);
+          ctx.fillText(bDate.day, W * 0.512, y);
+
+          ctx.font = '17px "Noto Sans JP", sans-serif';
+          ctx.fillText(dep.address || data.employeeAddress, W * 0.560, y);
+
+          ctx.textAlign = 'right';
+          ctx.fillText('0 円', W * 0.780, y);
+          ctx.textAlign = 'left';
+        });
+
+        // 画像URLを生成してセット
+        const url = canvas.toDataURL('image/png');
+        setCanvasUrl(url);
+        setIsRendering(false);
+      } catch (err) {
+        console.error('PDF Canvas Render Error:', err);
+        setIsRendering(false);
+      }
+    };
+
+    renderPdfWithData();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [data]);
+
   return (
     <div className="w-full bg-slate-200/60 py-3 print:bg-white print:py-0 select-text font-sans">
-      {/* 🖨️ 印刷用CSS設定（A4横向き印刷・国税庁公式寸法に完全合致） */}
+      {/* 🖨️ 印刷用CSS設定（A4横向き・国税庁原本に完全準拠） */}
       <style>{`
         @media print {
           @page {
             size: A4 landscape;
-            margin: 3mm 4mm;
+            margin: 0;
           }
           body {
             print-color-adjust: exact;
             -webkit-print-color-adjust: exact;
             background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
           .no-print {
             display: none !important;
           }
-          .tax-doc-sheet {
-            box-shadow: none !important;
-            border: none !important;
+          .print-full-sheet {
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: none !important;
             margin: 0 !important;
             padding: 0 !important;
-            width: 100% !important;
-            max-width: none !important;
+            box-shadow: none !important;
+            border: none !important;
+            object-fit: contain !important;
           }
         }
       `}</style>
 
-      {/* 🧭 画面操作ツールバー（PDF原本ダウンロード・印刷・タブ切替） */}
-      <div className="max-w-[1080px] mx-auto mb-3 flex flex-wrap items-center justify-between gap-2 px-3 no-print">
+      {/* 🧭 画面操作ツールバー（国税庁原本印字ビュー・PDFダウンロード・印刷） */}
+      <div className="max-w-[1120px] mx-auto mb-3 flex flex-wrap items-center justify-between gap-2 px-3 no-print">
         <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl shadow-xs border border-slate-200">
           <button
             type="button"
-            onClick={() => setActiveTab('form_view')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'form_view'
+            onClick={() => setActiveTab('canvas_doc')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'canvas_doc'
                 ? 'bg-indigo-600 text-white shadow-xs'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
-            ① 申告書 本紙（データ印字済・そのまま提出可能）
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            ① 国税庁公式原本 データ直接印字ビュー（そのまま提出可能）
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('pdf_view')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'pdf_view'
                 ? 'bg-indigo-600 text-white shadow-xs'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             <Eye className="w-3.5 h-3.5" />
-            ② 国税庁原本PDF（2026bun_01 プレビュー）
+            ② 入力用PDF原本（2026bun_01）
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('guide_view')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'guide_view'
                 ? 'bg-indigo-600 text-white shadow-xs'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            ③ 裏面手引き（控除要件・記入注意）
+            ③ 裏面手引き（控除要件）
           </button>
         </div>
 
@@ -213,14 +490,14 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
             title="国税庁公式の入力用原本PDFをダウンロード"
           >
             <Download className="w-3.5 h-3.5 text-indigo-600" />
-            国税庁原本PDFをダウンロード
+            原本PDF保存
           </a>
 
           <button
             type="button"
             onClick={() => {
-              setActiveTab('form_view');
-              setTimeout(() => window.print(), 100);
+              setActiveTab('canvas_doc');
+              setTimeout(() => window.print(), 150);
             }}
             className="px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-xs font-black shadow-sm transition flex items-center gap-1.5 cursor-pointer"
           >
@@ -231,418 +508,38 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════════════════════ */}
-      {/* 📄 ① 申告書 本紙（国税庁公式様式 2026bun_01 完全再現・そのまま提出可能な資料） */}
+      {/* 📄 ① 国税庁公式原本 データ直接印字ビュー（マス目に文字が直接入った本物の申告書） */}
       {/* ══════════════════════════════════════════════════════════════════════════════════ */}
-      {activeTab === 'form_view' && (
-        <div className="tax-doc-sheet bg-white text-black max-w-[1080px] mx-auto p-3.5 border border-slate-300 shadow-2xl print:shadow-none print:border-none print:p-0 leading-tight text-[8.5px] font-serif">
-          
-          {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-          {/* 最上部：タイトル ＆ 右上『扶』丸印 */}
-          {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-          <div className="relative mb-1">
-            <div className="text-center pb-0.5">
-              <h1 className="text-[17px] font-black tracking-widest inline-block border-b-2 border-black pb-0.5 px-6 font-sans">
-                令和{reiwaYear}年分　給与所得者の扶養控除等（異動）申告書
-              </h1>
+      {activeTab === 'canvas_doc' && (
+        <div className="max-w-[1120px] mx-auto bg-white p-3 rounded-2xl shadow-2xl border border-slate-300 print:p-0 print:border-none print:shadow-none">
+          {isRendering && (
+            <div className="flex flex-col items-center justify-center py-20 space-y-3">
+              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+              <p className="text-xs font-bold text-slate-600">国税庁公式原本（2026bun_01）に文字を精密印字中...</p>
             </div>
-            {/* 右上「扶」の丸印 */}
-            <div className="absolute right-0 top-0 w-8 h-8 rounded-full border-2 border-black flex items-center justify-center font-black text-base font-sans bg-white shadow-xs">
-              扶
+          )}
+
+          {/* 隠しCanvas */}
+          <canvas ref={canvasRef} className="hidden" />
+
+          {/* 印字済みの高精細画像（画面表示 ＆ A4印刷） */}
+          {canvasUrl && (
+            <div className="w-full overflow-x-auto">
+              <img
+                src={canvasUrl}
+                alt="令和8年分 給与所得者の扶養控除等（異動）申告書"
+                className="w-full h-auto rounded-lg border border-slate-200 print:border-none print:rounded-none print-full-sheet shadow-sm"
+              />
             </div>
-          </div>
-
-          {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-          {/* 上段テーブル：所轄税務署・給与支払者・申告者本人 情報グリッド */}
-          {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-          <div className="border border-black grid grid-cols-12 mb-0.5 text-[8px]">
-            {/* 左端：所轄税務署長等 / 市区町村長 */}
-            <div className="col-span-2 border-r border-black flex flex-col justify-between p-1 bg-slate-50/60">
-              <div className="border-b border-black pb-1">
-                <div className="text-[7px] text-slate-600">所轄税務署長等</div>
-                <div className="font-bold text-right pt-0.5">{data.taxOfficeName || '　　'} 税務署長</div>
-              </div>
-              <div className="pt-0.5">
-                <div className="text-[7px] text-slate-600">市区町村長</div>
-                <div className="font-bold text-right pt-0.5">{data.municipalityName || '　　'} 市区町村長</div>
-              </div>
-            </div>
-
-            {/* 中左：給与の支払者（会社情報） */}
-            <div className="col-span-4 border-r border-black p-1 space-y-0.5">
-              <div className="text-[6.5px] text-slate-500 italic leading-none">※この申告書の提出を受けた給与の支払者が記載してください。</div>
-              <div className="grid grid-cols-12 gap-1 items-center">
-                <span className="col-span-4 text-[7.5px] text-slate-700">給与の支払者の名称（氏名）</span>
-                <span className="col-span-8 font-bold text-[10px] truncate font-sans">{data.companyName}</span>
-              </div>
-              <div className="grid grid-cols-12 gap-1 items-center border-t border-slate-200 pt-0.5">
-                <span className="col-span-4 text-[7.5px] text-slate-700">給与の支払者の法人（個人）番号</span>
-                <span className="col-span-8 font-mono font-bold tracking-wider text-[9px]">{data.corporateNumber || '―'}</span>
-              </div>
-              <div className="grid grid-cols-12 gap-1 items-center border-t border-slate-200 pt-0.5">
-                <span className="col-span-4 text-[7.5px] text-slate-700">給与の支払者の所在地（住所）</span>
-                <span className="col-span-8 text-[7.5px] truncate">{data.companyAddress || '本社所在地'}</span>
-              </div>
-            </div>
-
-            {/* 中右：あなたの情報（氏名・個人番号・住所） */}
-            <div className="col-span-4 border-r border-black p-1 space-y-0.5">
-              <div>
-                <div className="text-[7px] text-slate-500 leading-none">（フリガナ）{data.employeeNameKana || '　'}</div>
-                <div className="flex items-baseline justify-between pt-0.5">
-                  <span className="text-[7.5px] text-slate-700">あなたの氏名</span>
-                  <span className="font-black text-sm pr-4 font-sans tracking-wide">{data.employeeName}</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between border-t border-slate-200 pt-0.5">
-                <span className="text-[7.5px] text-slate-700">あなたの個人番号</span>
-                <span className="font-mono tracking-widest font-bold text-[9px] pr-2 bg-slate-50 px-1 rounded">
-                  {data.myNumber ? data.myNumber.slice(0, 12) : '届出済（法定保管）'}
-                </span>
-              </div>
-              <div className="border-t border-slate-200 pt-0.5">
-                <div className="text-[7px] text-slate-500 leading-none">あなたの住所又は居所（郵便番号 〒 {data.postalCode || '　　-　　'}）</div>
-                <div className="font-bold truncate text-[8px] pt-0.5">{data.employeeAddress}</div>
-              </div>
-            </div>
-
-            {/* 右端：生年月日・世帯主・配偶者・従たる給与 */}
-            <div className="col-span-2 p-1 flex flex-col justify-between bg-slate-50/40 text-[7.5px]">
-              <div className="space-y-0.5">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-600">あなたの生年月日</span>
-                  <span className="font-bold font-sans">{empBirth.era}{empBirth.year}年{empBirth.month}月{empBirth.day}日</span>
-                </div>
-                <div className="flex justify-between items-center border-t border-slate-200 pt-0.5">
-                  <span className="text-slate-600">世帯主の氏名</span>
-                  <span className="font-bold truncate max-w-[70px] font-sans">{data.householderName || data.employeeName}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-600">あなたとの続柄</span>
-                  <span className="font-bold font-sans">{data.householderRelation || '本人'}</span>
-                </div>
-                <div className="flex justify-between items-center border-t border-slate-200 pt-0.5">
-                  <span className="text-slate-600">配偶者の有無</span>
-                  <span className="font-bold font-sans text-indigo-900">{data.hasSpouse ? '【 有 】' : '【 無 】'}</span>
-                </div>
-              </div>
-
-              <div className="border-t border-black pt-0.5 text-[6.5px] text-center text-slate-600">
-                従たる給与の提出: {data.isSecondarySalary ? '【 ○ 提出あり 】' : '【 提出なし 】'}
-              </div>
-            </div>
-          </div>
-
-          {/* 注意書き */}
-          <div className="text-[6.5px] text-slate-600 px-0.5 mb-0.5 leading-none">
-            以下の各欄に記載する親族がなく、かつ、あなた自身が障害者、寡婦、ひとり親又は勤労学生のいずれにも該当しない場合には、上記の各欄を記載して給与の支払者に提出してください。
-          </div>
-
-          {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-          {/* 中段：主たる給与から控除を受ける（A配偶者・B扶養親族・C障害者・D他の所得者） */}
-          {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-          <div className="border border-black flex mb-0.5">
-            {/* 左側縦書き見出し */}
-            <div className="w-4.5 border-r border-black bg-slate-100 flex items-center justify-center p-0.5 text-center font-bold text-[7.5px] leading-tight font-sans">
-              主たる給与から控除を受ける
-            </div>
-
-            {/* 右側：各控除テーブル */}
-            <div className="flex-1">
-              
-              {/* ───────────────────────────────────────────────────────────── */}
-              {/* Ａ. 源泉控除対象配偶者 */}
-              {/* ───────────────────────────────────────────────────────────── */}
-              <table className="w-full border-collapse text-[7.5px]">
-                <thead>
-                  <tr className="bg-slate-100/70 border-b border-black text-center text-[7px]">
-                    <th className="border-r border-black w-8 py-0.5">区分等</th>
-                    <th className="border-r border-black w-28 py-0.5">（フリガナ）<br />氏　　名</th>
-                    <th className="border-r border-black w-24 py-0.5">個　人　番　号</th>
-                    <th className="border-r border-black w-14 py-0.5">あなたとの<br />続　柄</th>
-                    <th className="border-r border-black w-24 py-0.5">生　年　月　日</th>
-                    <th className="border-r border-black w-20 py-0.5">令和８年中の<br />所得の見積額</th>
-                    <th className="border-r border-black w-14 py-0.5">非居住者である親族</th>
-                    <th className="border-r border-black py-0.5">生計を一にする事実</th>
-                    <th className="border-r border-black w-36 py-0.5">住　所　又　は　居　所</th>
-                    <th className="w-16 py-0.5">異動月日及び事由</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="h-6 border-b border-black">
-                    <td className="border-r border-black text-center font-bold bg-slate-50">
-                      Ａ<br /><span className="text-[6px] font-normal leading-none font-sans">源泉控除対象配偶者</span>
-                    </td>
-                    <td className="border-r border-black px-1">
-                      {data.hasSpouse && data.spouseName ? (
-                        <div>
-                          <div className="text-[6px] text-slate-500">（{data.spouseNameKana || '　'}）</div>
-                          <div className="font-bold text-[8.5px] font-sans">{data.spouseName}</div>
-                        </div>
-                      ) : <span className="text-slate-300">―</span>}
-                    </td>
-                    <td className="border-r border-black text-center font-mono text-[7.5px]">
-                      {data.hasSpouse ? (data.spouseMyNumber ? data.spouseMyNumber : '************') : '―'}
-                    </td>
-                    <td className="border-r border-black text-center font-bold font-sans">
-                      {data.hasSpouse ? '妻' : '―'}
-                    </td>
-                    <td className="border-r border-black text-center text-[7px] font-sans">
-                      {data.hasSpouse && data.spouseBirthDate ? (
-                        <span>{spouseBirth.era}{spouseBirth.year}年{spouseBirth.month}月{spouseBirth.day}日</span>
-                      ) : '―'}
-                    </td>
-                    <td className="border-r border-black text-right px-1 font-bold font-sans">
-                      {data.hasSpouse && data.spouseIncomeEstimate !== undefined ? (
-                        <span>{data.spouseIncomeEstimate.toLocaleString()} 円</span>
-                      ) : '―'}
-                    </td>
-                    <td className="border-r border-black text-center">
-                      {data.hasSpouse && data.spouseIsNonResident ? '○' : ''}
-                    </td>
-                    <td className="border-r border-black text-center text-[6.5px]">
-                      {data.hasSpouse ? (data.spouseIsLivingTogether !== false ? '同居' : '別居送金') : ''}
-                    </td>
-                    <td className="border-r border-black px-1 text-[7px] truncate max-w-[140px]">
-                      {data.hasSpouse ? (data.spouseAddress || data.employeeAddress) : ''}
-                    </td>
-                    <td className="text-center text-[6.5px] text-slate-400">
-                      {data.spouseChangeDateReason || ''}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {/* ───────────────────────────────────────────────────────────── */}
-              {/* Ｂ. 控除対象扶養親族（16歳以上 / 平23.1.1以前生） */}
-              {/* ───────────────────────────────────────────────────────────── */}
-              <table className="w-full border-collapse text-[7.5px]">
-                <thead>
-                  <tr className="bg-slate-100/70 border-b border-black text-center text-[7px]">
-                    <th className="border-r border-black w-8 py-0.5">区分等</th>
-                    <th className="border-r border-black w-28 py-0.5">（フリガナ）<br />氏　　名</th>
-                    <th className="border-r border-black w-24 py-0.5">個　人　番　号</th>
-                    <th className="border-r border-black w-14 py-0.5">あなたとの<br />続　柄</th>
-                    <th className="border-r border-black w-24 py-0.5">生　年　月　日</th>
-                    <th className="border-r border-black w-24 py-0.5">老人扶養親族 / 特定親族</th>
-                    <th className="border-r border-black w-20 py-0.5">令和８年中の<br />所得の見積額</th>
-                    <th className="border-r border-black w-20 py-0.5">非居住者である親族</th>
-                    <th className="border-r border-black py-0.5">生計を一にする事実</th>
-                    <th className="border-r border-black w-36 py-0.5">住　所　又　は　居　所</th>
-                    <th className="w-16 py-0.5">異動月日及び事由</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-black">
-                  {bRows.map((dep, idx) => {
-                    const bDate = dep ? parseJapaneseEraDate(dep.birthDate) : null;
-                    return (
-                      <tr key={idx} className="h-5.5">
-                        {idx === 0 && (
-                          <td rowSpan={4} className="border-r border-black text-center font-bold bg-slate-50 w-8">
-                            Ｂ<br /><span className="text-[6px] font-normal leading-none font-sans">控除対象<br />扶養親族<br />(16歳以上)</span>
-                          </td>
-                        )}
-                        <td className="border-r border-black px-1">
-                          {dep ? (
-                            <div>
-                              <div className="text-[6px] text-slate-500">（{dep.nameKana || '　'}）</div>
-                              <div className="font-bold text-[8px] font-sans">{dep.name}</div>
-                            </div>
-                          ) : ''}
-                        </td>
-                        <td className="border-r border-black text-center font-mono text-[7.5px]">
-                          {dep ? (dep.myNumber ? dep.myNumber : '************') : ''}
-                        </td>
-                        <td className="border-r border-black text-center font-bold font-sans">
-                          {dep?.relation || ''}
-                        </td>
-                        <td className="border-r border-black text-center text-[7px] font-sans">
-                          {bDate ? `${bDate.era}${bDate.year}年${bDate.month}月${bDate.day}日` : ''}
-                        </td>
-                        <td className="border-r border-black px-0.5 text-[6.5px] space-y-0.2">
-                          <div className="flex items-center gap-1">
-                            <span>{dep?.isElderly ? '☑' : '□'} 同居老親</span>
-                            <span>{dep?.isElderly ? '□' : '□'} その他</span>
-                          </div>
-                          <div className="flex items-center gap-1 border-t border-slate-200 pt-0.2">
-                            <span>{dep?.isSpecific ? '☑' : '□'} 特定扶養</span>
-                            <span>□ 特定親族</span>
-                          </div>
-                        </td>
-                        <td className="border-r border-black text-right px-1 font-bold font-sans">
-                          {dep && dep.incomeEstimate !== undefined ? `${dep.incomeEstimate.toLocaleString()} 円` : ''}
-                        </td>
-                        <td className="border-r border-black text-[6px] px-0.5 leading-none">
-                          <div>{dep?.nonResidentReason === '16_30_70' ? '☑' : '□'} 16-30/70以上</div>
-                          <div>{dep?.nonResidentReason === 'study_abroad' ? '☑' : '□'} 留学</div>
-                          <div>{dep?.nonResidentReason === 'disabled' ? '☑' : '□'} 障害者</div>
-                        </td>
-                        <td className="border-r border-black text-center text-[6.5px]">
-                          {dep ? (dep.isLivingTogether !== false ? '同居' : (dep.livingTogetherFact || '別居送金')) : ''}
-                        </td>
-                        <td className="border-r border-black px-1 text-[7px] truncate max-w-[140px]">
-                          {dep ? (dep.address || data.employeeAddress) : ''}
-                        </td>
-                        <td className="text-center text-[6.5px] text-slate-400">
-                          {dep?.changeDateReason || ''}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-
-              {/* ───────────────────────────────────────────────────────────── */}
-              {/* Ｃ. 障害者、寡婦、ひとり親又は勤労学生 */}
-              {/* ───────────────────────────────────────────────────────────── */}
-              <div className="border-t border-black grid grid-cols-12 text-[7px]">
-                <div className="col-span-1 border-r border-black bg-slate-50 flex items-center justify-center font-bold text-center p-0.5">
-                  Ｃ<br />障害者等
-                </div>
-                
-                <div className="col-span-5 border-r border-black p-1 space-y-0.5">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <span>{data.isDisability ? '☑' : '□'} 障害者</span>
-                    <span>{data.isWidow ? '☑' : '□'} 寡婦</span>
-                    <span>{data.isSingleParent ? '☑' : '□'} ひとり親</span>
-                    <span>{data.isWorkingStudent ? '☑' : '□'} 勤労学生</span>
-                  </div>
-                  <div className="border-t border-slate-200 pt-0.5 text-[6px] grid grid-cols-3 gap-0.5 text-slate-700">
-                    <div>一般: ({data.isDisability && data.disabilityType === 'general' ? 1 : 0})人</div>
-                    <div>特別: ({data.isDisability && data.disabilityType === 'special' ? 1 : 0})人</div>
-                    <div>同居特別: ({data.isDisability && data.disabilityType === 'living_special' ? 1 : 0})人</div>
-                  </div>
-                </div>
-
-                <div className="col-span-4 border-r border-black p-1">
-                  <div className="text-[6px] text-slate-500 leading-none">障害者又は勤労学生の内容</div>
-                  <div className="font-bold text-[7.5px] pt-0.5 font-sans truncate">
-                    {data.disabilityDetails || (data.isWorkingStudent ? `学校名: ${data.workingStudentSchool || '〇〇大学'}` : '該当なし')}
-                  </div>
-                </div>
-
-                <div className="col-span-2 p-1 text-center text-[6.5px] text-slate-400 flex items-center justify-center">
-                  ―
-                </div>
-              </div>
-
-              {/* ───────────────────────────────────────────────────────────── */}
-              {/* Ｄ. 他の所得者が控除を受ける扶養親族等 */}
-              {/* ───────────────────────────────────────────────────────────── */}
-              <div className="border-t border-black grid grid-cols-12 text-[7px] bg-slate-50/20">
-                <div className="col-span-1 border-r border-black bg-slate-50 flex items-center justify-center font-bold text-center p-0.5">
-                  Ｄ<br />他所得者
-                </div>
-                <div className="col-span-11 p-1 text-[6.5px] flex justify-between items-center text-slate-500">
-                  <span>他の所得者が控除を受ける扶養親族等（氏名・続柄・生年月日・住所 / 控除を受ける他の所得者）</span>
-                  <span className="font-bold text-slate-700 font-sans">{data.otherTaxPayerDependents?.length ? `${data.otherTaxPayerDependents.length}名記載あり` : '【 該当なし 】'}</span>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-          {/* 下段：住民税に関する事項（16歳未満の年少扶養 ＆ 退職手当等親族） */}
-          {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-          <div className="border border-black mb-1">
-            <div className="bg-slate-100 px-1 py-0.5 font-bold text-[7.5px] border-b border-black flex justify-between items-center font-sans">
-              <span>○ 住民税に関する事項（地方税法第45条の3の2及び第317条の3の2に基づき市区町村長に提出する申告書を兼ねています）</span>
-              <span className="text-[6.5px] font-normal text-slate-600">※16歳未満の扶養親族 / 退職所得を有する配偶者・扶養親族</span>
-            </div>
-
-            {/* 16歳未満の扶養親族（平23.1.2以後生） */}
-            <table className="w-full border-collapse text-[7px]">
-              <thead>
-                <tr className="bg-slate-50 border-b border-black text-center text-[6.5px]">
-                  <th className="border-r border-black w-24 py-0.5">区分</th>
-                  <th className="border-r border-black w-28 py-0.5">（フリガナ）氏　名</th>
-                  <th className="border-r border-black w-24 py-0.5">個　人　番　号</th>
-                  <th className="border-r border-black w-14 py-0.5">あなたとの続柄</th>
-                  <th className="border-r border-black w-24 py-0.5">生　年　月　日</th>
-                  <th className="border-r border-black py-0.5">住　所　又　は　居　所</th>
-                  <th className="border-r border-black w-20 py-0.5">控除対象外国外親族</th>
-                  <th className="border-r border-black w-20 py-0.5">令和８年中の所得見積額</th>
-                  <th className="w-16 py-0.5">異動月日及び事由</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black">
-                {u16Rows.map((dep, idx) => {
-                  const u16Date = dep ? parseJapaneseEraDate(dep.birthDate) : null;
-                  return (
-                    <tr key={idx} className="h-5">
-                      {idx === 0 && (
-                        <td rowSpan={2} className="border-r border-black text-center font-bold bg-slate-50 w-24 text-[6.5px] font-sans">
-                          16歳未満の扶養親族<br />（平23.1.2以後生）
-                        </td>
-                      )}
-                      <td className="border-r border-black px-1">
-                        {dep ? (
-                          <div>
-                            <span className="text-[6px] text-slate-500">（{dep.nameKana || '　'}）</span>
-                            <span className="font-bold text-[7.5px] ml-1 font-sans">{dep.name}</span>
-                          </div>
-                        ) : ''}
-                      </td>
-                      <td className="border-r border-black text-center font-mono text-[7px]">
-                        {dep ? (dep.myNumber ? dep.myNumber : '************') : ''}
-                      </td>
-                      <td className="border-r border-black text-center font-bold font-sans">
-                        {dep?.relation || ''}
-                      </td>
-                      <td className="border-r border-black text-center text-[6.5px] font-sans">
-                        {u16Date ? `${u16Date.era}${u16Date.year}年${u16Date.month}月${u16Date.day}日` : ''}
-                      </td>
-                      <td className="border-r border-black px-1 text-[6.5px] truncate max-w-[180px]">
-                        {dep ? (dep.address || data.employeeAddress) : ''}
-                      </td>
-                      <td className="border-r border-black text-center text-[6.5px]">
-                        {dep?.isNonResident ? '○' : ''}
-                      </td>
-                      <td className="border-r border-black text-right px-1 font-bold font-sans">
-                        {dep ? '0 円' : ''}
-                      </td>
-                      <td className="text-center text-[6px] text-slate-400">
-                        ―
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {/* 退職手当等親族枠 */}
-            <div className="border-t border-black bg-slate-50/30 p-0.5 text-[6.5px] flex justify-between items-center text-slate-500 font-sans">
-              <span>退職手当等を有する配偶者・扶養親族・特定親族の記載欄</span>
-              <span className="font-bold text-slate-700">{data.retirementDependents?.length ? `${data.retirementDependents.length}名記載あり` : '【 該当なし 】'}</span>
-            </div>
-          </div>
-
-          {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-          {/* フッター：申告年月日 ＆ 申告者署名 ＆ 給与支払者印枠 */}
-          {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-          <div className="border border-black p-1 flex justify-between items-center text-[7.5px] bg-slate-50/50">
-            <div>
-              申告年月日: <span className="font-bold font-sans text-[8px]">{data.appliedDate}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div>
-                申告者氏名: <span className="font-black text-xs border-b border-black px-3 font-sans tracking-wider">{data.employeeName}</span>
-                <span className="text-[6.5px] text-slate-500 ml-1">（電磁的方法による申告受領済）</span>
-              </div>
-              <div className="w-12 h-6 border border-dashed border-slate-400 text-[6px] text-slate-400 flex items-center justify-center font-sans">
-                給与支払者印
-              </div>
-            </div>
-          </div>
-
+          )}
         </div>
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════════════════ */}
-      {/* 📄 ② 国税庁原本PDF（2026bun_01）インライン閲覧ビュー */}
+      {/* 📄 ② 国税庁公式 入力用原本PDF インラインプレビュー */}
       {/* ══════════════════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'pdf_view' && (
-        <div className="max-w-[1080px] mx-auto bg-white p-4 rounded-2xl shadow-xl border border-slate-200 space-y-3">
+        <div className="max-w-[1120px] mx-auto bg-white p-4 rounded-2xl shadow-xl border border-slate-200 space-y-3">
           <div className="flex items-center justify-between border-b border-slate-200 pb-2">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
@@ -671,10 +568,10 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════════════════ */}
-      {/* 📄 ③ 裏面手引き（申告についてのご注意・扶養親族の範囲） */}
+      {/* 📄 ③ 裏面手引き（控除要件・記入上の注意） */}
       {/* ══════════════════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'guide_view' && (
-        <div className="max-w-[1080px] mx-auto bg-white p-5 rounded-2xl shadow-xl border border-slate-200 font-sans text-xs space-y-4">
+        <div className="max-w-[1120px] mx-auto bg-white p-5 rounded-2xl shadow-xl border border-slate-200 font-sans text-xs space-y-4">
           <div className="border-b border-slate-200 pb-2 flex justify-between items-center">
             <h2 className="font-bold text-sm text-slate-800">
               給与所得者の扶養控除等（異動）申告書　裏面手引（令和８年分）
