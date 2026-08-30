@@ -157,7 +157,7 @@ export const TaxDocMasterInspector: React.FC = () => {
         const { data } = await supabase.from('system_settings').select('tax_doc_coordinates').limit(1).single();
         const saved = data?.tax_doc_coordinates;
         if (saved && Array.isArray(saved)) {
-          const parsedMap = new Map(saved.map((f) => [f.id, f]));
+          const parsedMap = new Map<string, any>(saved.map((f: any) => [f.id, f]));
           setFields(DEFAULT_TAX_FIELDS.map(def => {
             const custom = parsedMap.get(def.id);
             if (custom) return { ...def, x: custom.x, y: custom.y, fontSize: custom.fontSize, pitch: custom.pitch !== undefined ? custom.pitch : def.pitch };
@@ -167,7 +167,7 @@ export const TaxDocMasterInspector: React.FC = () => {
           const localSaved = localStorage.getItem('taxDocMasterFields');
           if (localSaved) {
             const parsed = JSON.parse(localSaved);
-            const parsedMap = new Map(parsed.map((f) => [f.id, f]));
+            const parsedMap = new Map<string, any>(parsed.map((f: any) => [f.id, f]));
             setFields(DEFAULT_TAX_FIELDS.map(def => {
               const custom = parsedMap.get(def.id);
               if (custom) return { ...def, x: custom.x, y: custom.y, fontSize: custom.fontSize, pitch: custom.pitch !== undefined ? custom.pitch : def.pitch };
