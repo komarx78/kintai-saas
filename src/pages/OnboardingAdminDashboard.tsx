@@ -1527,7 +1527,20 @@ export default function OnboardingAdminDashboard() {
               <button onClick={() => setCabinetModal({ isOpen: false, employee: null, activeDoc: 'contract' })} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer">
                 閉じる
               </button>
-              <button onClick={() => window.print()} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+              <button
+                onClick={() => {
+                  if (cabinetModal.activeDoc === 'tax') {
+                    const iframe = document.getElementById('official-tax-print-iframe') as HTMLIFrameElement | null;
+                    if (iframe && iframe.contentWindow) {
+                      iframe.contentWindow.focus();
+                      iframe.contentWindow.print();
+                      return;
+                    }
+                  }
+                  window.print();
+                }}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              >
                 <Printer className="w-4 h-4" />
                 表示中の書面をA4印刷 / PDF保存
               </button>

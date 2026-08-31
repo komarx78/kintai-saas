@@ -440,68 +440,95 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
     return () => { isCancelled = true; };
   }, [data]);
 
+  /**
+   * 🖨️ A4横 1枚ピッタリ確実印刷（iframe方式で真っ白・写り込みを100%防止）
+   */
+  const handleDirectPrint = () => {
+    if (!canvasUrl) {
+      alert('書類画像の生成中です。少々お待ちください。');
+      return;
+    }
+
+    // 既存のprintFrameがあれば再利用、なければ生成
+    let printFrame = document.getElementById('official-tax-print-iframe') as HTMLIFrameElement | null;
+    if (!printFrame) {
+      printFrame = document.createElement('iframe');
+      printFrame.id = 'official-tax-print-iframe';
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = '0';
+      document.body.appendChild(printFrame);
+    }
+
+    const frameDoc = printFrame.contentWindow?.document || printFrame.contentDocument;
+    if (!frameDoc) return;
+
+    frameDoc.open();
+    frameDoc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>令和8年分 給与所得者の扶養控除等（異動）申告書 - 提出用</title>
+          <style>
+            @page {
+              size: A4 landscape;
+              margin: 0mm !important;
+            }
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            html, body {
+              width: 100%;
+              height: 100%;
+              background: #ffffff;
+              margin: 0;
+              padding: 0;
+              overflow: hidden;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .print-wrapper {
+              width: 100vw;
+              height: 100vh;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              background: #ffffff;
+            }
+            img {
+              width: 100vw;
+              height: 100vh;
+              object-fit: contain;
+              display: block;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-wrapper">
+            <img src="${canvasUrl}" alt="扶養控除等申告書" />
+          </div>
+        </body>
+      </html>
+    `);
+    frameDoc.close();
+
+    // 画像がロードされて準備ができたら印刷ダイアログを起動
+    setTimeout(() => {
+      printFrame?.contentWindow?.focus();
+      printFrame?.contentWindow?.print();
+    }, 300);
+  };
+
   return (
-    <div className="w-full bg-slate-100 py-3 print:bg-white print:py-0 select-text font-sans">
-      <style>{`
-        @media print {
-          @page {
-            size: A4 landscape;
-            margin: 0mm !important;
-          }
-          
-          /* ページ全体の不要要素（モーダル背景・管理画面・ナビゲーション等）を完全隔離非表示 */
-          body * {
-            visibility: hidden !important;
-          }
-
-          /* 扶養控除等申告書の書類コンテナとその子要素のみを完全可視化 */
-          .printable-tax-root,
-          .printable-tax-root * {
-            visibility: visible !important;
-          }
-
-          /* A4用紙全面（297mm × 210mm）にフルサイズでピタリと収める */
-          .printable-tax-root {
-            position: fixed !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: white !important;
-            z-index: 99999999 !important;
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-
-          .printable-tax-img {
-            width: 100vw !important;
-            height: 100vh !important;
-            object-fit: contain !important;
-            display: block !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-
-          html, body {
-            width: 100% !important;
-            height: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: white !important;
-            overflow: hidden !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-        }
-      `}</style>
-
+    <div className="w-full bg-slate-100 py-3 select-text font-sans">
       {/* 🧭 トップツールバー */}
-      <div className="max-w-[1150px] mx-auto mb-3 flex flex-wrap items-center justify-between gap-2 px-2 no-print">
+      <div className="max-w-[1150px] mx-auto mb-3 flex flex-wrap items-center justify-between gap-2 px-2">
         <div className="flex items-center gap-1 bg-white p-1 rounded-xl shadow-xs border border-slate-200">
           <button
             type="button"
@@ -538,6 +565,17 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         </div>
 
         <div className="flex items-center gap-2">
+          {canvasUrl && (
+            <a
+              href={canvasUrl}
+              download={`${data.year || 2026}年分_給与所得者の扶養控除等申告書_${data.employeeName || '提出用'}.png`}
+              className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-600" />
+              高解像度PNG保存
+            </a>
+          )}
+
           <a
             href="/2026bun_01.pdf"
             download="令和8年分_給与所得者の扶養控除等申告書_国税庁原本.pdf"
@@ -549,21 +587,18 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
           <button
             type="button"
-            onClick={() => {
-              setActiveTab('canvas_doc');
-              setTimeout(() => window.print(), 150);
-            }}
-            className="px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-xs font-black shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+            onClick={handleDirectPrint}
+            className="px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-xs font-black shadow-md transition flex items-center gap-1.5 cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
-            そのままA4印刷（提出用）
+            そのままA4横印刷（提出用）
           </button>
         </div>
       </div>
 
       {/* 📄 ① 国税庁公式原本 データ直接印字ビュー */}
       {activeTab === 'canvas_doc' && (
-        <div className="max-w-[1150px] mx-auto bg-white p-3 rounded-2xl shadow-2xl border border-slate-300 print:p-0 print:border-none print:shadow-none printable-tax-root">
+        <div className="max-w-[1150px] mx-auto bg-white p-3 rounded-2xl shadow-2xl border border-slate-300">
           {isRendering && (
             <div className="flex flex-col items-center justify-center py-20 space-y-3">
               <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
@@ -575,11 +610,11 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           <canvas ref={canvasRef} className="hidden" />
 
           {canvasUrl && (
-            <div className="w-full overflow-x-auto print:overflow-visible">
+            <div className="w-full overflow-x-auto">
               <img
                 src={canvasUrl}
                 alt="令和8年分 給与所得者の扶養控除等（異動）申告書"
-                className="w-full h-auto rounded-lg border border-slate-200 print:border-none print:rounded-none shadow-sm printable-tax-img"
+                className="w-full h-auto rounded-lg border border-slate-200 shadow-sm"
               />
             </div>
           )}
