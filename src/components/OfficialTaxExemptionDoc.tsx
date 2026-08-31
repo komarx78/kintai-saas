@@ -441,7 +441,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
   }, [data]);
 
   /**
-   * 🖨️ A4横 1枚ピッタリ確実印刷（iframe方式で真っ白・写り込みを100%防止）
+   * 🖨️ A4横 1枚ピッタリ確実印刷（画像完全ロード待機＆新規ウィンドウ方式で真っ白を100%防止）
    */
   const handleDirectPrint = () => {
     if (!canvasUrl) {
@@ -449,27 +449,16 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
       return;
     }
 
-    // 既存のprintFrameがあれば再利用、なければ生成
-    let printFrame = document.getElementById('official-tax-print-iframe') as HTMLIFrameElement | null;
-    if (!printFrame) {
-      printFrame = document.createElement('iframe');
-      printFrame.id = 'official-tax-print-iframe';
-      printFrame.style.position = 'fixed';
-      printFrame.style.right = '0';
-      printFrame.style.bottom = '0';
-      printFrame.style.width = '0';
-      printFrame.style.height = '0';
-      printFrame.style.border = '0';
-      document.body.appendChild(printFrame);
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      alert('ポップアップがブロックされました。ブラウザのアドレスバー右端でポップアップを許可するか、「高解像度PNG保存」をご利用ください。');
+      return;
     }
 
-    const frameDoc = printFrame.contentWindow?.document || printFrame.contentDocument;
-    if (!frameDoc) return;
-
-    frameDoc.open();
-    frameDoc.write(`
+    printWin.document.open();
+    printWin.document.write(`
       <!DOCTYPE html>
-      <html>
+      <html lang="ja">
         <head>
           <meta charset="utf-8">
           <title>令和8年分 給与所得者の扶養控除等（異動）申告書 - 提出用</title>
@@ -486,14 +475,12 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
             html, body {
               width: 100%;
               height: 100%;
-              background: #ffffff;
               margin: 0;
               padding: 0;
+              background: #ffffff;
               overflow: hidden;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
             }
-            .print-wrapper {
+            .page-container {
               width: 100vw;
               height: 100vh;
               display: flex;
@@ -510,19 +497,27 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           </style>
         </head>
         <body>
-          <div class="print-wrapper">
-            <img src="${canvasUrl}" alt="扶養控除等申告書" />
+          <div class="page-container">
+            <img id="printTargetImg" src="${canvasUrl}" alt="扶養控除等申告書" />
           </div>
+          <script>
+            const img = document.getElementById('printTargetImg');
+            function startPrint() {
+              window.focus();
+              setTimeout(function() {
+                window.print();
+              }, 250);
+            }
+            if (img && img.complete) {
+              startPrint();
+            } else if (img) {
+              img.onload = startPrint;
+            }
+          <\/script>
         </body>
       </html>
     `);
-    frameDoc.close();
-
-    // 画像がロードされて準備ができたら印刷ダイアログを起動
-    setTimeout(() => {
-      printFrame?.contentWindow?.focus();
-      printFrame?.contentWindow?.print();
-    }, 300);
+    printWin.document.close();
   };
 
   return (
