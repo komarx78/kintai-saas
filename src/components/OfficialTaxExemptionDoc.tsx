@@ -92,6 +92,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
   const [activeTab, setActiveTab] = useState<'canvas_doc' | 'pdf_view' | 'guide_view'>('canvas_doc');
   const [isRendering, setIsRendering] = useState(true);
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
+  const [backCanvasUrl, setBackCanvasUrl] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const under16Dependents = (data.dependents || []).filter(d => d.isUnder16);
@@ -453,6 +454,25 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
         const url = canvas.toDataURL('image/png');
         setCanvasUrl(url);
+
+        // 3. 国税庁PDF原本の裏面（2ページ目: 手引き）も高解像度レンダリング
+        try {
+          if (pdf.numPages >= 2) {
+            const backPage = await pdf.getPage(2);
+            const backViewport = backPage.getViewport({ scale });
+            const backCanvas = document.createElement('canvas');
+            backCanvas.width = backViewport.width;
+            backCanvas.height = backViewport.height;
+            const backCtx = backCanvas.getContext('2d');
+            if (backCtx) {
+              await backPage.render({ canvasContext: backCtx, viewport: backViewport }).promise;
+              setBackCanvasUrl(backCanvas.toDataURL('image/png'));
+            }
+          }
+        } catch (bErr) {
+          console.warn('Back page render error:', bErr);
+        }
+
         setIsRendering(false);
       } catch (err) {
         console.error('PDF Render Error:', err);
@@ -464,53 +484,124 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
     return () => { isCancelled = true; };
   }, [data]);
 
+  /**
+   * 🖨️ A4横 確実ダイレクト印刷（表面1枚 / 両面2枚セット）
+   */
+  const handlePrint = (mode: 'front' | 'both' | 'back' = 'front') => {
+    if (!canvasUrl) {
+      alert('書類画像の生成中です。少々お待ちください。');
+      return;
+    }
+
+    const printWin = window.open('', '_blank');
+    if (!printWin) {
+      alert('ポップアップがブロックされました。ブラウザのアドレスバー右端でポップアップを許可してください。');
+      return;
+    }
+
+    let pagesHtml = '';
+    if (mode === 'front') {
+      pagesHtml = `
+        <div class="page">
+          <img id="printTargetImg1" src="${canvasUrl}" alt="扶養控除等申告書（表面）" />
+        </div>
+      `;
+    } else if (mode === 'back') {
+      pagesHtml = `
+        <div class="page">
+          <img id="printTargetImg1" src="${backCanvasUrl || '/2026bun_01.pdf'}" alt="裏面手引き" />
+        </div>
+      `;
+    } else {
+      // both (表面 + 裏面手引きの2枚)
+      pagesHtml = `
+        <div class="page">
+          <img id="printTargetImg1" src="${canvasUrl}" alt="扶養控除等申告書（表面）" />
+        </div>
+        <div class="page page-break">
+          <img id="printTargetImg2" src="${backCanvasUrl || canvasUrl}" alt="裏面手引き" />
+        </div>
+      `;
+    }
+
+    printWin.document.open();
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html lang="ja">
+        <head>
+          <meta charset="utf-8">
+          <title>令和8年分 給与所得者の扶養控除等（異動）申告書 - ${mode === 'both' ? '両面(2枚)' : mode === 'back' ? '裏面手引' : '提出用(表面)'}</title>
+          <style>
+            @page {
+              size: A4 landscape;
+              margin: 0mm !important;
+            }
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            html, body {
+              width: 100%;
+              background: #ffffff;
+              margin: 0;
+              padding: 0;
+            }
+            .page {
+              width: 100vw;
+              height: 100vh;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              background: #ffffff;
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+            .page-break {
+              page-break-before: always;
+              break-before: page;
+            }
+            img {
+              width: 100vw;
+              height: 100vh;
+              object-fit: contain;
+              display: block;
+            }
+          </style>
+        </head>
+        <body>
+          ${pagesHtml}
+          <script>
+            const img1 = document.getElementById('printTargetImg1');
+            const img2 = document.getElementById('printTargetImg2');
+            let ready = 0;
+            const needed = img2 ? 2 : 1;
+            function done() {
+              ready++;
+              if (ready >= needed) {
+                window.focus();
+                setTimeout(function() {
+                  window.print();
+                }, 250);
+              }
+            }
+            if (img1) {
+              if (img1.complete) done();
+              else img1.onload = done;
+            }
+            if (img2) {
+              if (img2.complete) done();
+              else img2.onload = done;
+            }
+          <\/script>
+        </body>
+      </html>
+    `);
+    printWin.document.close();
+  };
+
   return (
     <div className="w-full bg-slate-100 py-3 select-text font-sans">
-      <style>{`
-        @media print {
-          @page {
-            size: A4 landscape;
-            margin: 0mm !important;
-          }
-          /* 印刷時は不要なヘッダー・ボタン・管理画面・モーダル枠をすべて完全非表示 */
-          .no-print, header, nav, aside, button, .modal-backdrop, .modal-header, .modal-tabs, .modal-footer {
-            display: none !important;
-          }
-          /* ページ全体をリセットして書類画像のみを用紙全面にピタリと固定展開 */
-          html, body {
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            background: #ffffff !important;
-            overflow: visible !important;
-          }
-          .official-tax-print-container {
-            position: fixed !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: #ffffff !important;
-            z-index: 999999999 !important;
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-          .official-tax-print-container img {
-            width: 100vw !important;
-            height: 100vh !important;
-            object-fit: contain !important;
-            display: block !important;
-            margin: 0 !important;
-          }
-        }
-      `}</style>
-
       {/* 🧭 トップツールバー */}
       <div className="max-w-[1150px] mx-auto mb-3 flex flex-wrap items-center justify-between gap-2 px-2 no-print">
         <div className="flex items-center gap-1 bg-white p-1 rounded-xl shadow-xs border border-slate-200">
@@ -522,18 +613,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
             }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            ① 令和8年分 扶養控除等申告書（提出用プレビュー）
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('pdf_view')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-              activeTab === 'pdf_view' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Eye className="w-3.5 h-3.5" />
-            ② 国税庁原本PDF（2026bun_01）
+            ① 令和8年分 扶養控除等申告書（表面）
           </button>
 
           <button
@@ -544,11 +624,22 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            ③ 裏面手引き
+            ② 裏面手引き（記載要領）
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('pdf_view')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'pdf_view' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Eye className="w-3.5 h-3.5" />
+            ③ 国税庁原本PDF（2026bun_01）
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {canvasUrl && (
             <a
               href={canvasUrl}
@@ -556,38 +647,33 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
               className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5 text-emerald-600" />
-              高解像度PNG保存
+              表面PNG保存
             </a>
           )}
 
-          <a
-            href="/2026bun_01.pdf"
-            download="令和8年分_給与所得者の扶養控除等申告書_国税庁原本.pdf"
-            className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-indigo-600" />
-            原本PDF保存
-          </a>
-
           <button
             type="button"
-            onClick={() => {
-              setActiveTab('canvas_doc');
-              setTimeout(() => {
-                window.print();
-              }, 150);
-            }}
+            onClick={() => handlePrint('front')}
             className="px-4 py-1.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white rounded-xl text-xs font-black shadow-md transition flex items-center gap-1.5 cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
-            そのままA4横印刷（提出用）
+            🖨️ 表面のみ印刷（A4横 1枚）
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handlePrint('both')}
+            className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-black shadow-md transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5 text-amber-300" />
+            📄 両面印刷（表面＋裏面 2枚）
           </button>
         </div>
       </div>
 
-      {/* 📄 ① 国税庁公式原本 データ直接印字ビュー */}
+      {/* 📄 ① 国税庁公式原本 データ直接印字ビュー（表面） */}
       {activeTab === 'canvas_doc' && (
-        <div className="max-w-[1150px] mx-auto bg-white p-3 rounded-2xl shadow-2xl border border-slate-300 print:p-0 print:border-none print:shadow-none official-tax-print-container">
+        <div className="max-w-[1150px] mx-auto bg-white p-3 rounded-2xl shadow-2xl border border-slate-300">
           {isRendering && (
             <div className="flex flex-col items-center justify-center py-20 space-y-3 no-print">
               <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
@@ -599,11 +685,49 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           <canvas ref={canvasRef} className="hidden" />
 
           {canvasUrl && (
-            <div className="w-full overflow-x-auto print:overflow-visible">
+            <div className="w-full overflow-x-auto">
               <img
                 src={canvasUrl}
-                alt="令和8年分 給与所得者の扶養控除等（異動）申告書"
-                className="w-full h-auto rounded-lg border border-slate-200 print:border-none print:rounded-none shadow-sm"
+                alt="令和8年分 給与所得者の扶養控除等（異動）申告書（表面）"
+                className="w-full h-auto rounded-lg border border-slate-200 shadow-sm"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 📄 ② 裏面手引き（記載要領ビュー） */}
+      {activeTab === 'guide_view' && (
+        <div className="max-w-[1150px] mx-auto bg-white p-4 rounded-2xl shadow-2xl border border-slate-300 space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm">国税庁公式 扶養控除等申告書 裏面手引（令和８年分記載要領）</h3>
+              <p className="text-xs text-slate-400">控除対象扶養親族・障害者・配偶者控除等の詳細な記載規定です。</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handlePrint('back')}
+              className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              裏面手引きのみ印刷（A4横 1枚）
+            </button>
+          </div>
+
+          {backCanvasUrl ? (
+            <div className="w-full overflow-x-auto">
+              <img
+                src={backCanvasUrl}
+                alt="裏面手引（令和８年分）"
+                className="w-full h-auto rounded-lg border border-slate-200 shadow-sm"
+              />
+            </div>
+          ) : (
+            <div className="w-full h-[700px] border border-slate-300 rounded-xl overflow-hidden shadow-inner bg-slate-100">
+              <iframe
+                src="/2026bun_01.pdf#page=2&toolbar=0&navpanes=0"
+                className="w-full h-full"
+                title="裏面手引き"
               />
             </div>
           )}
