@@ -26,7 +26,7 @@ import {
   UserCheck, ArrowUp, ArrowDown, RotateCcw, Edit3,
   Network, Award, Crown, Shield
 } from 'lucide-react';
-import { PREFECTURES, getPrefectureRate } from '../lib/socialInsurance';
+import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress } from '../lib/socialInsurance';
 
 interface DepartmentMaster {
   id: string;
@@ -516,6 +516,9 @@ export default function CompanySettingsDashboard() {
         holiday_text_summary: holSummary
       };
 
+      // 住所から都道府県コード（滋賀県 = '25' 等）を自動抽出！
+      const autoPrefCode = extractPrefectureCodeFromAddress(basicInfo.address) || payrollSettings.prefecture_code || '25';
+
       // 1. 基本安全ペイロード
       const mainPayload: Record<string, any> = {
         name: basicInfo.name,
@@ -524,8 +527,8 @@ export default function CompanySettingsDashboard() {
         phone_number: basicInfo.phone_number,
         corporate_number: basicInfo.corporate_number,
         work_calendar_settings: updatedCalendar,
-        payroll_common_settings: payrollSettings,
-        prefecture_code: payrollSettings.prefecture_code || '13',
+        payroll_common_settings: { ...payrollSettings, prefecture_code: autoPrefCode },
+        prefecture_code: autoPrefCode,
         gemini_api_key: geminiApiKey,
         onboarding_workflow_settings: onboardingSteps,
         position_settings: positions

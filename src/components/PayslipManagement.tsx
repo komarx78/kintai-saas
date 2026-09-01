@@ -14,7 +14,7 @@ import {
   type AttendanceSummary, 
   type PayrollSettings 
 } from '../lib/payrollEngine';
-import { PREFECTURES, getPrefectureRate } from '../lib/socialInsurance';
+import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress } from '../lib/socialInsurance';
 
 interface PayslipManagementProps {
   tenantId: string | null;
@@ -367,23 +367,50 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     if (!tenantId) return;
     setIsLoading(true);
     try {
-      // 1. 会社情報取得
+      // 1. 会社情報取得 (tenants & company_master_settings & LocalStorage)
       const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
-      setTenantInfo(tData);
+      const { data: cmsData } = await supabase.from('company_master_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
+      
+      let companyAddress = cmsData?.address || tData?.address || '';
+      if (!companyAddress) {
+        try {
+          const rawLocal = localStorage.getItem(`company_basic_settings_${tenantId}`) || 
+                           localStorage.getItem(`company_settings_${tenantId}`) ||
+                           localStorage.getItem('company_basic_info');
+          if (rawLocal) {
+            const parsed = JSON.parse(rawLocal);
+            companyAddress = parsed.address || '';
+          }
+        } catch (e) {}
+      }
+
+      // 住所から都道府県コード（滋賀県 = '25' 等）をスマート自動検出！
+      const detectedPrefCode = extractPrefectureCodeFromAddress(companyAddress) || tData?.prefecture_code || '25';
+      setTenantInfo({ ...tData, ...cmsData, address: companyAddress, prefecture_code: detectedPrefCode });
 
       // 2. 給与基本設定取得
       const { data: setRow } = await supabase.from('payroll_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
+      const activePrefCode = setRow?.prefecture_code || detectedPrefCode;
+      const prefRateData = getPrefectureRate(activePrefCode);
+
       if (setRow) {
         setPayrollSettings({
           closing_day: setRow.closing_day || 'end_of_month',
           payment_month: setRow.payment_month || 'current',
           payment_day: setRow.payment_day || '25',
+          prefecture_code: activePrefCode,
           employment_insurance_rate: setRow.employment_insurance_rate ?? 0.006,
-          health_insurance_rate: setRow.health_insurance_rate ?? 0.05,
-          nursing_insurance_rate: setRow.nursing_insurance_rate ?? 0.009,
+          health_insurance_rate: setRow.health_insurance_rate ?? Number((prefRateData.healthRate / 2).toFixed(5)),
+          nursing_insurance_rate: setRow.nursing_insurance_rate ?? 0.008,
           pension_insurance_rate: setRow.pension_insurance_rate ?? 0.0915,
           rounding_method: setRow.rounding_method || 'floor'
         });
+      } else {
+        setPayrollSettings(prev => ({
+          ...prev,
+          prefecture_code: activePrefCode,
+          health_insurance_rate: Number((prefRateData.healthRate / 2).toFixed(5))
+        }));
       }
 
       // 3. 従業員一覧取得

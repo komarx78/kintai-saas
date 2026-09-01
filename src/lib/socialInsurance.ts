@@ -65,6 +65,19 @@ export const PREFECTURES: PrefectureSocialRate[] = [
 ];
 
 /**
+ * 会社所在地（住所文字列）から都道府県コード（01〜47）をインテリジェントに自動抽出
+ * 例: "滋賀県大津市坂本3丁目21-16" -> "25" (滋賀県)
+ */
+export function extractPrefectureCodeFromAddress(address?: string | null): string | null {
+  if (!address) return null;
+  const match = PREFECTURES.find(p => {
+    const shortName = p.name.replace(/[都府県]$/, '');
+    return address.includes(p.name) || address.includes(shortName);
+  });
+  return match ? match.code : null;
+}
+
+/**
  * 指定された都道府県コードの料率を取得（未指定時は東京都）
  */
 export function getPrefectureRate(code?: string): PrefectureSocialRate {
