@@ -1389,7 +1389,7 @@ export default function OnboardingAdminDashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6 print:hidden">
         
         {/* サマリーカード */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1860,6 +1860,37 @@ export default function OnboardingAdminDashboard() {
                       </div>
 
                       <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        {/* 📄 労働条件通知書 兼 雇用契約書のプレビュー・単独印刷ボタン */}
+                        <button
+                          onClick={() => {
+                            const emp = employees.find(e => e.user_id === sub.user_id) || {
+                              user_id: sub.user_id,
+                              name: sub.user_name,
+                              role: 'employee',
+                              status: 'active',
+                              join_date: sub.created_at?.split('T')[0] || '2026-04-01',
+                              employment_type: 'full-time',
+                              department: '本社',
+                              base_salary: 250000,
+                              hourly_wage: 1200,
+                              commuting_allowance: 12000,
+                              health_insurance_joined: true,
+                              pension_insurance_joined: true,
+                              employment_insurance_joined: true
+                            };
+                            setCabinetModal({
+                              isOpen: true,
+                              employee: emp as any,
+                              activeDoc: 'contract'
+                            });
+                          }}
+                          className="bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 text-indigo-900 font-bold text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1 shadow-xs cursor-pointer"
+                          title="労働条件通知書 兼 雇用契約書をA4印刷・プレビュー"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                          労働条件通知書
+                        </button>
+
                         {/* 📄 令和8年分 扶養控除等申告書のプレビュー・印刷ボタン */}
                         {sub.document_type === 'dependents_form' && (
                           <button
@@ -2013,9 +2044,19 @@ export default function OnboardingAdminDashboard() {
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">入社時に締結した契約書および提出された通勤届・口座届のエビデンス原本</p>
               </div>
-              <button onClick={() => setCabinetModal({ isOpen: false, employee: null, activeDoc: 'contract' })} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  この書面をA4印刷 / PDF保存
+                </button>
+                <button onClick={() => setCabinetModal({ isOpen: false, employee: null, activeDoc: 'contract' })} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* 書面タブ切り替え */}
