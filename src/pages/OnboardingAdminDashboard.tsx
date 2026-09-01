@@ -91,6 +91,8 @@ interface DocumentSubmission {
 interface DepartmentMaster {
   id: string;
   name: string;
+  manager_user_id?: string;
+  manager_user_name?: string;
   display_order: number;
 }
 
@@ -109,7 +111,6 @@ export default function OnboardingAdminDashboard() {
   const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [currentUserRole, setCurrentUserRole] = useState<string>('admin');
-  const [currentUserDept, setCurrentUserDept] = useState<string>('');
   const [currentAdminName, setCurrentAdminName] = useState<string>('管理者');
   const [employees, setEmployees] = useState<EmployeeOnboardingData[]>([]);
   const [submissions, setSubmissions] = useState<DocumentSubmission[]>([]);
@@ -277,7 +278,6 @@ export default function OnboardingAdminDashboard() {
         if (adminUser) {
           if (adminUser.name) setCurrentAdminName(adminUser.name);
           if (adminUser.role) setCurrentUserRole(adminUser.role);
-          if (adminUser.department) setCurrentUserDept(adminUser.department);
         }
       }
 
@@ -441,8 +441,14 @@ export default function OnboardingAdminDashboard() {
 
     // 3. 配属部署の所属長 (department_head)
     if (stepObj.approver_type === 'department_head') {
-      if (currentUserRole === 'manager' && currentUserDept === empDept) return { canApprove: true };
-      return { canApprove: false, reason: `このステップは配属先（${empDept || '該当部署'}）の所属長のみ承認可能です。` };
+      const deptObj = departments.find(d => d.name === empDept);
+      if (deptObj?.manager_user_id) {
+        if (deptObj.manager_user_id === currentUserId) return { canApprove: true };
+        return { canApprove: false, reason: `このステップは配属先（${empDept}）の所属長（${deptObj.manager_user_name || '所属長'} 殿）のみ承認可能です。` };
+      }
+      // 所属長が未指定の場合は管理者・マネージャーなら承認可能
+      if (currentUserRole === 'admin' || currentUserRole === 'manager') return { canApprove: true };
+      return { canApprove: false, reason: `配属先（${empDept || '該当部署'}）の所属長または管理者のみ承認可能です。` };
     }
 
     // 4. 管理者全員 (all_admins)
@@ -1388,9 +1394,16 @@ export default function OnboardingAdminDashboard() {
                                 }`}>
                                   Step {currentStepNum}/{workflowSteps.length}: {currentStepObj?.name || '手続き中'}
                                 </span>
-                                {!isCompleted && currentStepObj?.approver_name && (
-                                  <span className="text-[9px] text-slate-500 font-bold bg-slate-100 px-1.5 py-0.5 rounded">
-                                    承認: {currentStepObj.approver_name}
+                                {!isCompleted && (
+                                  <span className="text-[9px] text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded">
+                                    承認: {
+                                      currentStepObj?.approver_type === 'department_head'
+                                        ? (() => {
+                                            const dObj = departments.find(d => d.name === emp.department);
+                                            return dObj?.manager_user_name ? `${emp.department || '配属先'}所属長 (${dObj.manager_user_name})` : `${emp.department || '配属先'}所属長`;
+                                          })()
+                                        : (currentStepObj?.approver_name || '管理者全員')
+                                    }
                                   </span>
                                 )}
                               </div>
@@ -1414,7 +1427,14 @@ export default function OnboardingAdminDashboard() {
                                       onClick={() => handleAdvanceStep(emp)}
                                       disabled={isSaving}
                                       className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-2.5 py-1 rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50"
-                                      title={`承認して次のステップへ進める (承認権限: ${currentStepObj?.approver_name || '管理者全員'})`}
+                                      title={`承認して次のステップへ進める (承認権限: ${
+                                        currentStepObj?.approver_type === 'department_head'
+                                          ? (() => {
+                                              const dObj = departments.find(d => d.name === emp.department);
+                                              return dObj?.manager_user_name ? `${emp.department || '配属先'}所属長 (${dObj.manager_user_name})` : `${emp.department || '配属先'}所属長`;
+                                            })()
+                                          : (currentStepObj?.approver_name || '管理者全員')
+                                      })`}
                                     >
                                       承認して次へ
                                       <ArrowRight className="w-3 h-3" />
