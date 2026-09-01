@@ -64,8 +64,9 @@ const UserDashboard = () => {
       const fetchMonthly = async () => {
         const y = viewMonth.getFullYear();
         const m = viewMonth.getMonth() + 1;
+        const lastDay = new Date(y, m, 0).getDate();
         const start = `${y}-${m.toString().padStart(2, '0')}-01`;
-        const end = `${y}-${m.toString().padStart(2, '0')}-31`;
+        const end = `${y}-${m.toString().padStart(2, '0')}-${lastDay.toString().padStart(2, '0')}`;
         
         const { data } = await supabase
           .from('attendance_records')
@@ -135,8 +136,11 @@ const UserDashboard = () => {
     try {
       const todayStr = new Date().toISOString().split('T')[0];
       const [y, m] = shiftMonth.split('-');
+      const yNum = parseInt(y, 10);
+      const mNum = parseInt(m, 10);
+      const lastDay = new Date(yNum, mNum, 0).getDate();
       const startOfMonthStr = `${y}-${m}-01`;
-      const endOfMonthStr = `${y}-${m}-31`;
+      const endOfMonthStr = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
 
       // 1. 確定シフトテーブル（shifts）の取得
       const { data: shiftList } = await supabase
@@ -232,6 +236,13 @@ const UserDashboard = () => {
     }
     setIsSubmittingShift(true);
     try {
+      const [y, m] = shiftMonth.split('-');
+      const yNum = parseInt(y, 10);
+      const mNum = parseInt(m, 10);
+      const lastDay = new Date(yNum, mNum, 0).getDate();
+      const startOfMonthStr = `${y}-${m}-01`;
+      const endOfMonthStr = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+
       const shiftDataArray = entries.map(([date, val]) => ({
         date,
         isHoliday: val.type === 'off',
@@ -255,16 +266,16 @@ const UserDashboard = () => {
         .eq('user_id', user.id)
         .eq('type', 'シフト希望')
         .eq('status', '申請中')
-        .gte('start_date', `${shiftMonth}-01`)
-        .lte('start_date', `${shiftMonth}-31`);
+        .gte('start_date', startOfMonthStr)
+        .lte('start_date', endOfMonthStr);
 
       // 最新のシフト希望を新規申請
       const { error } = await supabase.from('leave_requests').insert({
         tenant_id: user.tenant_id,
         user_id: user.id,
         approver_id: user.approver_id || null,
-        start_date: `${shiftMonth}-01`,
-        end_date: `${shiftMonth}-31`,
+        start_date: startOfMonthStr,
+        end_date: endOfMonthStr,
         type: 'シフト希望',
         reason: fullReason,
         status: '申請中'

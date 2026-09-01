@@ -94,14 +94,14 @@ export default function AdminShifts() {
         let startDate, endDate;
         if (activeTab === 'monthly') {
           startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-          endDate = `${year}-${String(month + 1).padStart(2, '0')}-${daysInMonth}`;
+          endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`;
         } else {
           // 日別ビューの場合は、その前後を含めて余裕を持って取得する
           const dYear = dailyDate.getFullYear();
           const dMonth = dailyDate.getMonth();
           const dDaysInMonth = new Date(dYear, dMonth + 1, 0).getDate();
           startDate = `${dYear}-${String(dMonth + 1).padStart(2, '0')}-01`;
-          endDate = `${dYear}-${String(dMonth + 1).padStart(2, '0')}-${dDaysInMonth}`;
+          endDate = `${dYear}-${String(dMonth + 1).padStart(2, '0')}-${String(dDaysInMonth).padStart(2, '0')}`;
         }
         
         const { data: shiftData } = await supabase

@@ -58,8 +58,9 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     try {
       const year = currentMonth.getFullYear();
       const month = currentMonth.getMonth() + 1;
+      const lastDay = new Date(year, month, 0).getDate();
       const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+      const endDate = `${year}-${month.toString().padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
       // 1. 従業員一覧取得
       const { data: uData } = await supabase

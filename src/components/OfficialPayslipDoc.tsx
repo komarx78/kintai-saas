@@ -43,6 +43,8 @@ interface OfficialPayslipDocProps {
 }
 
 export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip, userName, tenantName, companySealUrl }) => {
+  const [sealLoadError, setSealLoadError] = React.useState(false);
+
   // 年月・支給日の和暦・西暦フォーマット
   const getFormattedDates = () => {
     let year = 2026;
@@ -186,11 +188,12 @@ export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip,
             <div className="text-xs font-black text-slate-800">{companyName}</div>
             <div className="text-[10px] text-slate-500 mt-0.5">支給日: {payDateFormatted}</div>
           </div>
-          {activeSealUrl ? (
+          {activeSealUrl && !sealLoadError ? (
             <div className="w-14 h-14 relative flex items-center justify-center pointer-events-none">
               <img 
                 src={activeSealUrl} 
                 alt="社印" 
+                onError={() => setSealLoadError(true)}
                 className="max-w-full max-h-full object-contain mix-blend-multiply opacity-90 drop-shadow-sm rotate-[-2deg]" 
               />
             </div>
