@@ -110,7 +110,10 @@ export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip,
 
   // 1. 勤怠項目
   const attendanceList: { label: string; value: string; unit?: string }[] = [];
-  attendanceList.push({ label: '有休残日数', value: (payslip.paid_leave_remaining !== undefined ? payslip.paid_leave_remaining : 0.0).toFixed(1), unit: '日' });
+  const remDays = payslip.paid_leave_remaining !== undefined && payslip.paid_leave_remaining !== null
+    ? Number(payslip.paid_leave_remaining)
+    : (Number(payslip.user?.paid_leave_balance || 0) + Number(payslip.user?.paid_leave_carryover || 0));
+  attendanceList.push({ label: '有休残日数', value: remDays.toFixed(1), unit: '日' });
   if (payslip.work_days && payslip.work_days > 0) attendanceList.push({ label: '出勤日数', value: `${payslip.work_days}`, unit: '日' });
   if (payslip.actual_hours && payslip.actual_hours > 0) attendanceList.push({ label: '実労働時間', value: `${payslip.actual_hours}`, unit: 'h' });
   if (payslip.overtime_hours && payslip.overtime_hours > 0) attendanceList.push({ label: '時間外労働', value: `${payslip.overtime_hours}`, unit: 'h' });

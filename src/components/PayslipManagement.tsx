@@ -608,10 +608,12 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         // 大元労務マスタから最新の給与計算（個別基本給・各種手当＋生年月日の介護保険自動判定）を実行！
         const calculated = calculatePayroll(prof, attSummary, latestPayrollSettings);
 
-        // 有給残日数（ユーザー基本情報の残日数、またはデフォルト付与日数）
-        const userLeaveBal = u.paid_leave_balance !== undefined && u.paid_leave_balance !== null 
-          ? Number(u.paid_leave_balance) 
-          : (u.employment_type === 'part-time' ? 5.0 : 10.0);
+        // 有給残日数（今年度付与分 + 前年度繰越分の【合計残日数】）
+        const curBal = Number(u.paid_leave_balance || 0);
+        const carryBal = Number(u.paid_leave_carryover || 0);
+        const hasLeaveData = (u.paid_leave_balance !== undefined && u.paid_leave_balance !== null) || 
+                             (u.paid_leave_carryover !== undefined && u.paid_leave_carryover !== null);
+        const userTotalLeaveBal = hasLeaveData ? (curBal + carryBal) : (u.employment_type === 'part-time' ? 5.0 : 10.0);
 
         return {
           id: existingSlip?.id || `draft_${u.id}_${currentYearMonth}`,
@@ -621,7 +623,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           payment_date: existingSlip?.payment_date || `${currentYearMonth}-25`,
           paid_leave_remaining: existingSlip?.paid_leave_remaining !== undefined && existingSlip?.paid_leave_remaining !== null 
             ? Number(existingSlip.paid_leave_remaining) 
-            : userLeaveBal,
+            : userTotalLeaveBal,
           ...calculated,
           note: existingSlip?.note || '今月も勤務お疲れ様でした。',
           status: existingSlip?.status || 'draft',
@@ -825,16 +827,18 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         });
 
         const paymentDayStr = payrollSettings.payment_day === 'end_of_month' ? '28' : String(payrollSettings.payment_day);
-        const empLeaveBal = emp.paid_leave_balance !== undefined && emp.paid_leave_balance !== null 
-          ? Number(emp.paid_leave_balance) 
-          : (emp.employment_type === 'part-time' ? 5.0 : 10.0);
+        const curBalEmp = Number(emp.paid_leave_balance || 0);
+        const carryBalEmp = Number(emp.paid_leave_carryover || 0);
+        const hasEmpLeave = (emp.paid_leave_balance !== undefined && emp.paid_leave_balance !== null) || 
+                            (emp.paid_leave_carryover !== undefined && emp.paid_leave_carryover !== null);
+        const empTotalLeaveBal = hasEmpLeave ? (curBalEmp + carryBalEmp) : (emp.employment_type === 'part-time' ? 5.0 : 10.0);
 
         const payload: any = {
           tenant_id: tenantId,
           user_id: emp.id,
           year_month: currentYearMonth,
           payment_date: `${currentYearMonth}-${paymentDayStr.padStart(2, '0')}`,
-          paid_leave_remaining: empLeaveBal,
+          paid_leave_remaining: empTotalLeaveBal,
           ...calculated,
           note: '今月も勤務お疲れ様でした。',
           status: 'draft',
@@ -1592,9 +1596,12 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                           <span className="font-mono text-slate-800">{slip.absence_days || 0} 日</span>
                         </div>
                         <div className="flex justify-between items-center bg-blue-100/80 px-2.5 py-1.5 rounded-xl border border-blue-200 mt-2">
-                          <span className="font-black text-blue-900 text-xs">🏖️ 有休残日数:</span>
+                          <span className="font-black text-blue-900 text-xs">🏖️ 有休残日数 (合計):</span>
                           <span className="font-black font-mono text-blue-950 text-xs bg-white px-2 py-0.5 rounded-md border border-blue-300">
-                            {(slip.paid_leave_remaining !== undefined && slip.paid_leave_remaining !== null ? Number(slip.paid_leave_remaining) : (slip.user?.paid_leave_balance ?? 10.0)).toFixed(1)} 日
+                            {(slip.paid_leave_remaining !== undefined && slip.paid_leave_remaining !== null 
+                              ? Number(slip.paid_leave_remaining) 
+                              : (Number(slip.user?.paid_leave_balance || 0) + Number(slip.user?.paid_leave_carryover || 0))
+                            ).toFixed(1)} 日
                           </span>
                         </div>
                       </div>
@@ -1914,9 +1921,12 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                       <span>{slip.absence_days || 0} 日</span>
                                     </div>
                                     <div className="flex justify-between items-center bg-blue-100/70 p-1.5 rounded-lg border border-blue-200 text-blue-900 font-bold mt-1.5">
-                                      <span>🏖️ 有休残日数:</span>
+                                      <span>🏖️ 有休残日数 (合計):</span>
                                       <span className="font-mono font-black text-xs">
-                                        {(slip.paid_leave_remaining !== undefined && slip.paid_leave_remaining !== null ? Number(slip.paid_leave_remaining) : (slip.user?.paid_leave_balance ?? 10.0)).toFixed(1)} 日
+                                        {(slip.paid_leave_remaining !== undefined && slip.paid_leave_remaining !== null 
+                                          ? Number(slip.paid_leave_remaining) 
+                                          : (Number(slip.user?.paid_leave_balance || 0) + Number(slip.user?.paid_leave_carryover || 0))
+                                        ).toFixed(1)} 日
                                       </span>
                                     </div>
                                   </div>
