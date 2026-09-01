@@ -248,10 +248,13 @@ export function calculateSocialInsuranceDeduction(params: {
     ? pensionStandardRemuneration
     : lookupStandardMonthlyRemuneration(monthlySalary, 'pension');
 
-  // 介護保険該当フラグ（手動指定があれば優先、なければ生年月日から完全自動判定）
-  const isNursing = isNursingManualOverride !== undefined && isNursingManualOverride !== null
-    ? isNursingManualOverride
-    : isNursingInsuranceApplicable(birthDate, targetDate);
+  // 介護保険該当フラグ（生年月日の実年齢を最優先判定、生年月日未指定時は手動指定を参照）
+  let isNursing = false;
+  if (birthDate) {
+    isNursing = isNursingInsuranceApplicable(birthDate, targetDate);
+  } else if (isNursingManualOverride !== undefined && isNursingManualOverride !== null) {
+    isNursing = isNursingManualOverride;
+  }
 
   // 折半計算（50銭以下切り捨て、50銭超切り上げの標準方式）
   const roundHalf = (val: number) => Math.round(val);

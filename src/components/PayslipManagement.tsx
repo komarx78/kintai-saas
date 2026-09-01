@@ -310,7 +310,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       dependents_count: 0,
       birth_date: '',
       health_insurance_enabled: true,
-      nursing_insurance_enabled: false,
+      nursing_insurance_enabled: null,
       pension_insurance_enabled: true,
       employment_insurance_enabled: true,
       resident_tax_monthly: 0,
@@ -645,6 +645,15 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
         // 従業員の給与マスタプロファイル
         const existingProf = payrollProfiles[emp.id];
+        
+        let localBackup: any = null;
+        try {
+          const raw = localStorage.getItem(`employee_master_backup_${emp.id}`);
+          if (raw) localBackup = JSON.parse(raw);
+        } catch (e) {}
+
+        const empBirthDate = existingProf?.birth_date || emp.birth_date || localBackup?.birth_date || null;
+
         const profile: EmployeePayrollProfile = {
           tenant_id: tenantId,
           user_id: emp.id,
@@ -660,9 +669,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           fixed_overtime_hours: existingProf?.fixed_overtime_hours ?? 0,
           fixed_overtime_allowance: existingProf?.fixed_overtime_allowance ?? 0,
           dependents_count: existingProf?.dependents_count ?? 0,
-          birth_date: emp.birth_date || existingProf?.birth_date || null,
+          birth_date: empBirthDate,
           health_insurance_enabled: existingProf?.health_insurance_enabled ?? true,
-          nursing_insurance_enabled: existingProf?.nursing_insurance_enabled ?? null,
+          nursing_insurance_enabled: existingProf?.nursing_insurance_enabled,
           pension_insurance_enabled: existingProf?.pension_insurance_enabled ?? true,
           employment_insurance_enabled: existingProf?.employment_insurance_enabled ?? true,
           resident_tax_monthly: existingProf?.resident_tax_monthly ?? 0,
