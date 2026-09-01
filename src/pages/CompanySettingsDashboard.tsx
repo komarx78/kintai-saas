@@ -5,6 +5,7 @@ import AppSwitcher from '../components/AppSwitcher';
 import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 import { OfficialCompanyCalendarDoc } from '../components/OfficialCompanyCalendarDoc';
 import { OrgChartPrintModal } from '../components/OrgChartPrintModal';
+import { OfficialLaborContractDoc } from '../components/OfficialLaborContractDoc';
 import { 
   type LaborContractTemplate, 
   DEFAULT_LABOR_CONTRACT_TEMPLATE, 
@@ -33,7 +34,7 @@ import {
   Sparkles, Bot, Clock, ShieldCheck, Printer, X,
   UserCheck, ArrowUp, ArrowDown, RotateCcw, Edit3,
   Network, Award, Crown, Shield, FileText, Upload,
-  ImageIcon, Wand2, CheckCircle2
+  ImageIcon, Wand2, CheckCircle2, Eye
 } from 'lucide-react';
 import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress } from '../lib/socialInsurance';
 
@@ -111,6 +112,7 @@ export default function CompanySettingsDashboard() {
 
   // 労働条件・雇用契約書テンプレートState
   const [contractTemplate, setContractTemplate] = useState<LaborContractTemplate>(DEFAULT_LABOR_CONTRACT_TEMPLATE);
+  const [contractPreviewModalOpen, setContractPreviewModalOpen] = useState(false);
 
   // AI条文清書モーダルState
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -429,12 +431,13 @@ export default function CompanySettingsDashboard() {
     }
   };
 
-  // 年間の全休日セットを算出（ルール ＋ 個別上書き）
+  // 年間の全休日セットを算出（ルール ＋ 個別上書き ＋ 翌年1月年末年始）
   const computedHolidaysSet = useMemo(() => {
     const set = new Set<string>();
     const year = calendarSettings.year || 2026;
+    const nextYear = year + 1;
 
-    // 1. 固定曜日
+    // 1. 固定曜日 (当年12ヶ月 ＋ 翌年1月)
     for (let m = 0; m < 12; m++) {
       const daysInMonth = new Date(year, m + 1, 0).getDate();
       for (let d = 1; d <= daysInMonth; d++) {
@@ -445,22 +448,55 @@ export default function CompanySettingsDashboard() {
         }
       }
     }
+    // 翌年1月の固定曜日
+    const nextJanDays = new Date(nextYear, 1, 0).getDate();
+    for (let d = 1; d <= nextJanDays; d++) {
+      const date = new Date(nextYear, 0, d);
+      if (calendarSettings.fixed_holidays.includes(date.getDay())) {
+        const key = `${nextYear}-01-${String(d).padStart(2, '0')}`;
+        set.add(key);
+      }
+    }
 
-    // 2. 国民の祝日
+    // 2. 国民の祝日 (当年 ＋ 翌年1月)
     if (calendarSettings.national_holidays_enabled) {
       Object.keys(NATIONAL_HOLIDAYS_2026).forEach(k => {
         if (k.startsWith(`${year}-`)) set.add(k);
       });
+      // 翌年1月の祝日（元日 1/1 ＋ 成人の日 第2月曜）
+      set.add(`${nextYear}-01-01`);
+      // 翌年1月の第2月曜日を算出
+      let mondayCount = 0;
+      for (let d = 1; d <= 14; d++) {
+        const dt = new Date(nextYear, 0, d);
+        if (dt.getDay() === 1) {
+          mondayCount++;
+          if (mondayCount === 2) {
+            set.add(`${nextYear}-01-${String(d).padStart(2, '0')}`);
+            break;
+          }
+        }
+      }
     }
 
-    // 3. 年末年始休暇
-    if (calendarSettings.winter_vacation_enabled && calendarSettings.winter_vacation_start && calendarSettings.winter_vacation_end) {
-      let cur = new Date(calendarSettings.winter_vacation_start);
-      const end = new Date(calendarSettings.winter_vacation_end);
-      while (cur <= end) {
-        const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
-        if (key.startsWith(`${year}-`)) set.add(key);
-        cur.setDate(cur.getDate() + 1);
+    // 3. 年末年始休暇 (当年12月〜翌年1月)
+    if (calendarSettings.winter_vacation_enabled) {
+      if (calendarSettings.winter_vacation_start && calendarSettings.winter_vacation_end) {
+        let cur = new Date(calendarSettings.winter_vacation_start);
+        const end = new Date(calendarSettings.winter_vacation_end);
+        while (cur <= end) {
+          const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+          set.add(key);
+          cur.setDate(cur.getDate() + 1);
+        }
+      } else {
+        // デフォルト: 12/29〜1/3 を年末年始休暇として追加
+        set.add(`${year}-12-29`);
+        set.add(`${year}-12-30`);
+        set.add(`${year}-12-31`);
+        set.add(`${nextYear}-01-01`);
+        set.add(`${nextYear}-01-02`);
+        set.add(`${nextYear}-01-03`);
       }
     }
 
@@ -477,7 +513,7 @@ export default function CompanySettingsDashboard() {
 
     // 5. 独自休日
     calendarSettings.custom_holidays.forEach(h => {
-      if (h.date && h.date.startsWith(`${year}-`)) {
+      if (h.date && (h.date.startsWith(`${year}-`) || h.date.startsWith(`${nextYear}-01`))) {
         set.add(h.date);
       }
     });
@@ -600,7 +636,7 @@ export default function CompanySettingsDashboard() {
       resignation_rules_article: extracted.resignationArticle,
       retirement_rules_article: extracted.retirementArticle,
       dismissal_rules_article: extracted.dismissalArticle,
-      paid_leave_rules_article: `就業規則${extracted.paidLeaveArticle}に定める通り、雇入れの日から6ヶ月継続勤務し全労働日の8割以上出勤した場合に法定日数を付与する。`,
+      paid_leave_rules_article: `${extracted.paidLeaveArticle}に定める通り、雇入れの日から6ヶ月継続勤務し全労働日の8割以上出勤した場合に法定日数を付与する。`,
       resignation_procedure_text: `自己都合退職の手続き: 退職を希望する日の30日前までに会社所定の退職届を提出し、業務引継ぎを完了すること。`,
       retirement_age_text: `定年制: あり（満60歳到達の月末をもって定年退職とする。ただし本人が希望し健康状態に問題がない場合は、満65歳まで継続雇用・再雇用する制度あり）。`,
       dismissal_procedure_text: `解雇の事由及び手続き: 30日前の予告または平均賃金の30日分以上の解雇予告手当の支払をもって行う。天災事変その他やむを得ない事由により事業の継続が不可能となった場合または労働者の責に帰すべき事由による場合はこの限りではない。`
@@ -2513,6 +2549,15 @@ export default function CompanySettingsDashboard() {
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
+                  onClick={() => setContractPreviewModalOpen(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                >
+                  <Eye className="w-4 h-4" />
+                  📄 書面確認（A4プレビュー / 印刷）
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setAiModalOpen(true)}
                   className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
                 >
@@ -2866,6 +2911,90 @@ export default function CompanySettingsDashboard() {
               <button onClick={() => window.print()} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer">
                 <Printer className="w-4 h-4" />
                 営業カレンダーをA4印刷 / PDF保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📄 労働条件通知書 兼 雇用契約書 A4プレビュー / 印刷モーダル（書面確認） */}
+      {contractPreviewModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto print:static print:p-0 print:m-0 print:bg-white print:overflow-visible print:z-auto">
+          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-100 my-8 print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none print:w-full">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4 print:hidden">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-indigo-600" />
+                  労働条件通知書 兼 雇用契約書 書面プレビュー（公式A4帳票）
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  登録された社印・就業規則連動条文・カスタマイズ内容が反映された実際の印字イメージです
+                </p>
+              </div>
+              <button 
+                onClick={() => setContractPreviewModalOpen(false)} 
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 書面プレビュー本体 */}
+            <div className="border border-slate-200 rounded-2xl p-6 bg-slate-50/50 print:border-none print:p-0 print:bg-white print:max-h-none print:overflow-visible max-h-[70vh] overflow-y-auto">
+              <OfficialLaborContractDoc 
+                data={{
+                  companyName: basicInfo.name || '株式会社KAP',
+                  companyAddress: basicInfo.address || '滋賀県大津市坂本3丁目21-16',
+                  representativeName: basicInfo.representative_name || '代表取締役 駒井 秀一朗',
+                  employeeName: '山田 太郎（サンプル）',
+                  employeeAddress: '滋賀県大津市〇〇 1-1',
+                  joinDate: '2026-04-01',
+                  contractType: 'indefinite',
+                  trialPeriodMonths: 3,
+                  workLocation: contractTemplate.work_location_default,
+                  jobDescription: '営業部門における業務全般',
+                  startTime: '09:00',
+                  endTime: '18:00',
+                  breakTimeMinutes: 60,
+                  overtimeWork: contractTemplate.overtime_work_notes,
+                  holidaysText: '完全週休2日制（土・日）、国民の祝日、年末年始休暇',
+                  paidLeaveGrantDays: 10,
+                  salaryType: 'monthly',
+                  baseSalary: 280000,
+                  hourlyWage: 1500,
+                  positionAllowance: 20000,
+                  qualificationAllowance: 10000,
+                  housingAllowance: 15000,
+                  familyAllowance: 10000,
+                  commutingAllowance: 15000,
+                  fixedOvertimeHours: 0,
+                  fixedOvertimeAllowance: 0,
+                  bonusPolicy: 'あり（会社の業績および本人の勤務成績を勘案して支給）',
+                  raisePolicy: 'あり（原則として年1回査定）',
+                  retirementAllowance: 'なし',
+                  healthInsuranceJoined: true,
+                  pensionInsuranceJoined: true,
+                  employmentInsuranceJoined: true,
+                  workersCompJoined: true,
+                  companySealUrl: companySealUrl,
+                  template: contractTemplate
+                }} 
+              />
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100 print:hidden">
+              <button 
+                onClick={() => setContractPreviewModalOpen(false)} 
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                閉じる
+              </button>
+              <button 
+                onClick={() => window.print()} 
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                労働条件通知書をA4印刷 / PDF保存
               </button>
             </div>
           </div>
