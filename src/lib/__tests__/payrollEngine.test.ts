@@ -1,5 +1,5 @@
-import { calculatePayroll, calculateIncomeTax, type EmployeePayrollProfile, type AttendanceSummary } from '../payrollEngine';
-import { isNursingInsuranceApplicable, lookupStandardMonthlyRemuneration, calculateSocialInsuranceDeduction, getPrefectureRate } from '../socialInsurance';
+import { calculatePayroll, type EmployeePayrollProfile, type AttendanceSummary } from '../payrollEngine';
+import { isNursingInsuranceApplicable, lookupStandardMonthlyRemuneration, calculateSocialInsuranceDeduction } from '../socialInsurance';
 
 /**
  * 給与計算エンジン ＆ 社会保険計算エンジンの単体テストスイート

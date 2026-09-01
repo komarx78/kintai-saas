@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { PREFECTURES, type PrefectureSocialRate } from '../lib/socialInsurance';
-import { Shield, Save, RefreshCw, Sparkles, CheckCircle2, AlertCircle, Calendar, Plus } from 'lucide-react';
+import { PREFECTURES } from '../lib/socialInsurance';
+import { Shield, Save, RefreshCw, Sparkles, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 interface SocialRateRecord {
   id?: string;
@@ -238,31 +238,37 @@ export const SocialInsuranceMasterManager: React.FC = () => {
           </div>
         </div>
 
-        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead className="bg-slate-100 text-slate-700 sticky top-0 z-10 shadow-xs">
-              <tr>
-                <th className="p-3 font-black w-14 text-center">コード</th>
-                <th className="p-3 font-black w-28">都道府県</th>
-                <th className="p-3 font-black">健康保険料率（全額）</th>
-                <th className="p-3 font-black">本人折半負担率</th>
-                <th className="p-3 font-black">介護保険料率（全額）</th>
-                <th className="p-3 font-black">厚生年金料率（全額）</th>
-                <th className="p-3 font-black">適用開始</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
-              {rates.map((rate, idx) => {
-                const healthPct = (rate.health_insurance_rate * 100);
-                const halfPct = (healthPct / 2);
-                const nursingPct = (rate.nursing_insurance_rate * 100);
-                const pensionPct = (rate.pension_insurance_rate * 100);
+        {loading ? (
+          <div className="py-20 flex flex-col items-center justify-center text-slate-400">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-600 mb-2" />
+            <span className="text-xs font-bold">47都道府県の料率データを読込中...</span>
+          </div>
+        ) : (
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-slate-100 text-slate-700 sticky top-0 z-10 shadow-xs">
+                <tr>
+                  <th className="p-3 font-black w-14 text-center">コード</th>
+                  <th className="p-3 font-black w-28">都道府県</th>
+                  <th className="p-3 font-black">健康保険料率（全額）</th>
+                  <th className="p-3 font-black">本人折半負担率</th>
+                  <th className="p-3 font-black">介護保険料率（全額）</th>
+                  <th className="p-3 font-black">厚生年金料率（全額）</th>
+                  <th className="p-3 font-black">適用開始</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {rates.map((rate, idx) => {
+                  const healthPct = (rate.health_insurance_rate * 100);
+                  const halfPct = (healthPct / 2);
+                  const nursingPct = (rate.nursing_insurance_rate * 100);
+                  const pensionPct = (rate.pension_insurance_rate * 100);
 
-                return (
-                  <tr key={rate.prefecture_code} className="hover:bg-indigo-50/30 transition-colors">
-                    <td className="p-3 text-center font-mono text-slate-400 font-bold">
-                      {rate.prefecture_code}
-                    </td>
+                  return (
+                    <tr key={rate.prefecture_code} className="hover:bg-indigo-50/30 transition-colors">
+                      <td className="p-3 text-center font-mono text-slate-400 font-bold">
+                        {rate.prefecture_code}
+                      </td>
                     <td className="p-3 font-black text-slate-800">
                       {rate.prefecture_name}
                     </td>
@@ -296,6 +302,7 @@ export const SocialInsuranceMasterManager: React.FC = () => {
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );

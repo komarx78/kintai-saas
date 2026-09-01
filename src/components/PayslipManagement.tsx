@@ -1169,7 +1169,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={profileModal.profile.nursing_insurance_enabled}
+                      checked={!!profileModal.profile.nursing_insurance_enabled}
                       onChange={e => setProfileModal({
                         ...profileModal,
                         profile: { ...profileModal.profile, nursing_insurance_enabled: e.target.checked }

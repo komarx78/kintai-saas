@@ -3,7 +3,7 @@
  * 労働基準法および日本の税務・社会保険制度に準拠した給与自動計算ロジック
  */
 
-import { calculateSocialInsuranceDeduction, getPrefectureRate } from './socialInsurance';
+import { calculateSocialInsuranceDeduction } from './socialInsurance';
 
 export interface EmployeePayrollProfile {
   id?: string;
