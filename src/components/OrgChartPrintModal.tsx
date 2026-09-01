@@ -115,26 +115,37 @@ export const OrgChartPrintModal: FC<OrgChartPrintModalProps> = ({
               <div className="w-0.5 h-6 bg-slate-800 print:bg-slate-900"></div>
             </div>
 
-            {/* 🌳 水平分配ライン ＆ 部門ブランチ */}
+            {/* 🌳 水平分配ライン ＆ 部門ブランチ（何部門あっても横一列に水平バーで展開） */}
             {departments.length > 0 && (
-              <div className="relative">
-                {/* 水平バー（各部門の幅に合わせて左右に展開） */}
-                {departments.length > 1 && (
-                  <div className="hidden sm:block absolute top-0 left-0 right-0 h-0.5 bg-slate-800 print:bg-slate-900 mx-[calc(100%/12)]"></div>
-                )}
-
-                <div className={`grid grid-cols-1 sm:grid-cols-${Math.min(departments.length, 4)} gap-4 pt-4`}>
+              <div className="relative pt-2">
+                {/* 部門横一列コンテナ */}
+                <div className="flex items-start justify-center gap-4 min-w-full overflow-x-auto pb-4 pt-2">
                   {departments.map((dept, idx) => {
                     const deptMembers = dept.members || [];
                     const regularMembers = deptMembers.filter(m => m.id !== dept.manager_user_id);
+                    const isFirst = idx === 0;
+                    const isLast = idx === departments.length - 1;
+                    const isOnly = departments.length === 1;
 
                     return (
-                      <div key={dept.id} className="relative flex flex-col items-center">
-                        {/* 各部門への垂直ドロップ線 */}
-                        <div className="hidden sm:block absolute -top-4 w-0.5 h-4 bg-slate-800 print:bg-slate-900"></div>
+                      <div key={dept.id} className="relative flex-1 min-w-[220px] max-w-[280px] flex flex-col items-center">
+                        {/* 🌳 水平バーと垂直枝線（コネクター） */}
+                        {!isOnly && (
+                          <div className="w-full h-4 relative flex justify-center">
+                            {/* 左半分の水平バー */}
+                            <div className={`h-0.5 bg-slate-800 absolute top-0 left-0 right-1/2 ${isFirst ? 'hidden' : 'block'}`}></div>
+                            {/* 右半分の水平バー */}
+                            <div className={`h-0.5 bg-slate-800 absolute top-0 left-1/2 right-0 ${isLast ? 'hidden' : 'block'}`}></div>
+                            {/* 下向きのドロップ線 */}
+                            <div className="w-0.5 h-4 bg-slate-800 absolute top-0 left-1/2 -translate-x-1/2"></div>
+                          </div>
+                        )}
+                        {isOnly && (
+                          <div className="w-0.5 h-4 bg-slate-800 mb-1"></div>
+                        )}
 
                         {/* 🏢 部門カード（Tree Node） */}
-                        <div className="w-full bg-white rounded-2xl border-2 border-slate-800 p-4 space-y-3 shadow-xs print:border-slate-800 print:break-inside-avoid">
+                        <div className="w-full bg-white rounded-2xl border-2 border-slate-800 p-3.5 space-y-3 shadow-xs print:border-slate-800 print:break-inside-avoid">
                           {/* 部署タイトル */}
                           <div className="bg-slate-100 p-2 rounded-xl flex items-center justify-between border border-slate-300">
                             <div className="flex items-center gap-1.5">

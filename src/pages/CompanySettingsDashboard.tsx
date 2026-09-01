@@ -106,6 +106,14 @@ export default function CompanySettingsDashboard() {
     user: null
   });
 
+  // 新規社員登録State
+  const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserDept, setNewUserDept] = useState('');
+  const [newUserPosId, setNewUserPosId] = useState('');
+  const [newUserRole, setNewUserRole] = useState<'admin' | 'manager' | 'user'>('user');
+
   // 1. 会社基本情報State
   const [basicInfo, setBasicInfo] = useState({
     name: '株式会社KAP',
@@ -258,13 +266,28 @@ export default function CompanySettingsDashboard() {
         ]);
       }
 
-      // 自社ユーザー一覧（役職・所属長・組織図用）取得
+      // 自社ユーザー一覧（役職・所属長・組織図用）の一元取得
       const { data: uData } = await supabase
         .from('users')
         .select('id, name, role, department, position_id, position_name')
         .eq('tenant_id', tenantIdData)
         .order('name', { ascending: true });
-      setCompanyUsers((uData as any) || []);
+
+      let mergedUsers: OrgMemberInfo[] = (uData as any) || [];
+
+      // ログイン中の管理者自身が未登録の場合は自動補完
+      if (user && !mergedUsers.some(u => u.id === user.id)) {
+        const selfUser: OrgMemberInfo = {
+          id: user.id,
+          name: basicInfo.representative_name.replace('代表取締役', '').trim() || user.email?.split('@')[0] || '管理者',
+          role: 'admin',
+          position_name: '代表取締役',
+          department: undefined
+        };
+        mergedUsers = [selfUser, ...mergedUsers];
+      }
+
+      setCompanyUsers(mergedUsers);
     } catch (e) {
       console.error(e);
     } finally {
@@ -345,9 +368,10 @@ export default function CompanySettingsDashboard() {
     });
   }, [companyUsers, positions]);
 
-  // 組織図用: 各部門ごとの所属ノード（部門長 ＋ 所属メンバー）
+  // 組織図用: 各部門ごとの所属ノード（マスタ部署 ＋ 社員が所属する実在部署をすべて自動包括）
   const computedOrgDepartments = useMemo<OrgDepartmentNode[]>(() => {
-    return departments.map(d => {
+    // 1. マスタ登録済みの部署
+    const deptList: OrgDepartmentNode[] = departments.map(d => {
       const members = companyUsers.filter(u => u.department === d.name);
       return {
         id: d.id,
@@ -359,7 +383,29 @@ export default function CompanySettingsDashboard() {
         members
       };
     });
+
+    // 2. 社員が入退社台帳等で所属しているが、部署マスタに未登録の部署（人事部、経理部等）を自動補完
+    const existingNames = new Set(deptList.map(d => d.name));
+    companyUsers.forEach(u => {
+      if (u.department && !existingNames.has(u.department)) {
+        existingNames.add(u.department);
+        const members = companyUsers.filter(m => m.department === u.department);
+        deptList.push({
+          id: `auto_${u.department}`,
+          name: u.department,
+          members,
+          display_order: deptList.length + 1
+        });
+      }
+    });
+
+    return deptList;
   }, [departments, companyUsers]);
+
+  // 未配属・本部直属のメンバー
+  const computedUnassignedMembers = useMemo<OrgMemberInfo[]>(() => {
+    return companyUsers.filter(u => !u.department && !computedExecutives.some(e => e.id === u.id));
+  }, [companyUsers, computedExecutives]);
 
   // カレンダーの日付クリックで休日/出勤日をトグル
   const handleToggleDay = (dateKey: string) => {
@@ -509,6 +555,43 @@ export default function CompanySettingsDashboard() {
     } catch (e: any) {
       console.error(e);
       alert('社員情報の更新に失敗しました: ' + e.message);
+    }
+  };
+
+  // 新規社員の直接登録（usersテーブルへの一元追加）
+  const handleCreateCompanyUser = async () => {
+    if (!tenantId) return;
+    if (!newUserName.trim()) {
+      alert('社員氏名を入力してください。');
+      return;
+    }
+    const targetPos = positions.find(p => p.id === newUserPosId);
+    const posName = targetPos ? targetPos.name : '';
+
+    try {
+      const newUserId = `user_${Date.now()}`;
+      await supabase.from('users').insert({
+        id: newUserId,
+        tenant_id: tenantId,
+        name: newUserName.trim(),
+        email: newUserEmail.trim() || `${newUserId}@company.local`,
+        role: newUserRole,
+        department: newUserDept || null,
+        position_id: newUserPosId || null,
+        position_name: posName || null
+      });
+
+      setIsCreateUserModalOpen(false);
+      setNewUserName('');
+      setNewUserEmail('');
+      setNewUserDept('');
+      setNewUserPosId('');
+      setNewUserRole('user');
+      await fetchData();
+      alert('🎉 新しい社員を全社マスタ（users）に登録し、組織図へ即座に反映しました！');
+    } catch (e: any) {
+      console.error('Create user error:', e);
+      alert('社員登録に失敗しました: ' + e.message);
     }
   };
 
@@ -958,6 +1041,14 @@ export default function CompanySettingsDashboard() {
 
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() => setIsCreateUserModalOpen(true)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4" />
+                  新しい社員・役員を登録
+                </button>
+
+                <button
                   onClick={() => setIsOrgChartPrintModalOpen(true)}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition flex items-center gap-2 shadow-xs cursor-pointer whitespace-nowrap"
                 >
@@ -969,14 +1060,23 @@ export default function CompanySettingsDashboard() {
 
             {/* 🌳 1. 会社組織図（ビジュアルビュー） */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
                 <h4 className="font-black text-slate-800 text-sm flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-indigo-600" />
                   自社組織図プレビュー（社員をクリックして役職・所属を変更可能）
                 </h4>
-                <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-                  全従業員: {companyUsers.length}名
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsCreateUserModalOpen(true)}
+                    className="text-xs font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    社員を新規追加
+                  </button>
+                  <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl">
+                    全社メンバー: {companyUsers.length}名
+                  </span>
+                </div>
               </div>
 
               {/* 経営陣・役員ブロック */}
@@ -1016,12 +1116,41 @@ export default function CompanySettingsDashboard() {
                 </div>
               </div>
 
-              {/* 部門・部署別組織ツリー */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* 👤 未配属・入社手続き中メンバー トレイ */}
+              {computedUnassignedMembers.length > 0 && (
+                <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-200 space-y-2">
+                  <div className="text-xs font-black text-amber-900 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-amber-600" />
+                      未配属・入社手続き中メンバー（クリックして配属・役職を設定）
+                    </span>
+                    <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">
+                      {computedUnassignedMembers.length}名
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {computedUnassignedMembers.map(u => (
+                      <button
+                        key={u.id}
+                        onClick={() => setEditingUserModal({ isOpen: true, user: u })}
+                        className="bg-white hover:bg-amber-100/60 border border-amber-300 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-800 flex items-center gap-2 transition cursor-pointer shadow-2xs"
+                      >
+                        <span>{u.name}</span>
+                        <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                          {u.position_name || '未配属'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 部門・部署別組織ツリー（横一列スクロール対応で並列展開） */}
+              <div className="flex items-stretch justify-start gap-4 overflow-x-auto pb-4 pt-2">
                 {computedOrgDepartments.map((dept, idx) => (
                   <div
                     key={dept.id}
-                    className="bg-slate-50/70 hover:bg-slate-50 rounded-2xl border-2 border-slate-200 p-4 space-y-3.5 shadow-xs transition flex flex-col justify-between"
+                    className="min-w-[260px] max-w-[320px] flex-1 bg-slate-50/70 hover:bg-slate-50 rounded-2xl border-2 border-slate-200 p-4 space-y-3.5 shadow-xs transition flex flex-col justify-between"
                   >
                     <div className="space-y-3">
                       {/* 部署ヘッダー */}
@@ -2279,6 +2408,116 @@ export default function CompanySettingsDashboard() {
               >
                 <Save className="w-3.5 h-3.5" />
                 役職・所属を保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 👤 新規社員・役員 直接登録モーダル */}
+      {isCreateUserModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-emerald-600" />
+                  新しい社員・役員を登録
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  全社マスタ（users）に直接追加され、組織図・勤怠・入退社管理へ即時反映されます。
+                </p>
+              </div>
+              <button
+                onClick={() => setIsCreateUserModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  社員氏名 <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="例: 山田 太郎"
+                  value={newUserName}
+                  onChange={e => setNewUserName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  メールアドレス（任意）
+                </label>
+                <input
+                  type="email"
+                  placeholder="例: yamada@company.com（未入力時は自動生成）"
+                  value={newUserEmail}
+                  onChange={e => setNewUserEmail(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">配属部署</label>
+                <select
+                  value={newUserDept}
+                  onChange={e => setNewUserDept(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                >
+                  <option value="">（部署未設定 / 本部直属）</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">役職（Position）</label>
+                <select
+                  value={newUserPosId}
+                  onChange={e => setNewUserPosId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                >
+                  <option value="">（役職なし / 一般社員）</option>
+                  {positions.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} (Lv.{p.rank_level})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">システム権限</label>
+                <select
+                  value={newUserRole}
+                  onChange={e => setNewUserRole(e.target.value as any)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                >
+                  <option value="user">一般従業員（自分の勤怠・申請のみ）</option>
+                  <option value="manager">マネージャー（部門承認・閲覧権限）</option>
+                  <option value="admin">全社管理者（マスタ設定・承認・管理権限）</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setIsCreateUserModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleCreateCompanyUser}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5" />
+                登録して組織図へ反映
               </button>
             </div>
           </div>
