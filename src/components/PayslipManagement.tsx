@@ -118,6 +118,25 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     payslip: null
   });
 
+  // 📅 勤怠出勤簿・タイムカード詳細モーダルState
+  const [attendanceSheetModal, setAttendanceSheetModal] = useState<{
+    isOpen: boolean;
+    user: any | null;
+    payslip: Payslip | null;
+    records: any[];
+    requests: any[];
+    shifts: any[];
+    loading: boolean;
+  }>({
+    isOpen: false,
+    user: null,
+    payslip: null,
+    records: [],
+    requests: [],
+    shifts: [],
+    loading: false
+  });
+
   // 勤怠・給与の内訳詳細アコーディオン展開中のユーザーID
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
@@ -1057,6 +1076,67 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     }
   };
 
+  // 📅 勤怠出勤簿モーダルを開く
+  const handleOpenAttendanceSheet = async (slip: Payslip) => {
+    if (!tenantId || !slip.user_id) return;
+    setAttendanceSheetModal({
+      isOpen: true,
+      user: slip.user,
+      payslip: slip,
+      records: [],
+      requests: [],
+      shifts: [],
+      loading: true
+    });
+
+    try {
+      const [yStr, mStr] = slip.year_month.split('-');
+      const yNum = parseInt(yStr, 10);
+      const mNum = parseInt(mStr, 10);
+      const lastDay = new Date(yNum, mNum, 0).getDate();
+      const startStr = `${yStr}-${mStr}-01`;
+      const endStr = `${yStr}-${mStr}-${String(lastDay).padStart(2, '0')}`;
+
+      // 1. 打刻レコード取得
+      const { data: recData } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', slip.user_id)
+        .gte('date', startStr)
+        .lte('date', endStr)
+        .order('date', { ascending: true });
+
+      // 2. 休暇・打刻修正申請取得
+      const { data: reqData } = await supabase
+        .from('leave_requests')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', slip.user_id)
+        .or(`and(start_date.gte.${startStr},start_date.lte.${endStr}),and(end_date.gte.${startStr},end_date.lte.${endStr})`);
+
+      // 3. 確定シフト取得
+      const { data: shiftData } = await supabase
+        .from('shifts')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', slip.user_id)
+        .gte('work_date', startStr)
+        .lte('work_date', endStr);
+
+      setAttendanceSheetModal(prev => ({
+        ...prev,
+        records: recData || [],
+        requests: reqData || [],
+        shifts: shiftData || [],
+        loading: false
+      }));
+    } catch (e) {
+      console.error('Fetch attendance sheet error:', e);
+      setAttendanceSheetModal(prev => ({ ...prev, loading: false }));
+    }
+  };
+
   // 給与マスタプロファイル保存
   const handleSaveProfile = async (prof: EmployeePayrollProfile) => {
     if (!tenantId) return;
@@ -1534,6 +1614,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                         <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
                         給与マスタ設定
                       </button>
+
+                      <button
+                        onClick={() => handleOpenAttendanceSheet(slip)}
+                        className="text-xs font-bold text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-200 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        title="当月の日別打刻実績・出勤簿・申請状況をカレンダーで確認"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                        出勤簿・勤怠確認
+                      </button>
+
                       <button
                         onClick={() => setEditModal({ isOpen: true, data: { ...slip } })}
                         className="text-xs font-bold text-slate-600 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 border border-slate-200 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
@@ -1850,6 +1940,13 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                               title={slip.status === 'published' ? '下書きに戻す' : '確定公開する'}
                             >
                               {slip.status === 'published' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                            </button>
+                            <button
+                              onClick={() => handleOpenAttendanceSheet(slip)}
+                              className="p-1.5 text-blue-600 hover:text-white hover:bg-blue-600 rounded-lg transition cursor-pointer"
+                              title="当月の出勤簿・日別勤怠実績を確認"
+                            >
+                              <Calendar className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => setPreviewModal({ isOpen: true, payslip: slip })}
@@ -2525,6 +2622,205 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               <button onClick={handleSavePayrollSettings} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer">
                 設定を保存
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📅 当月 勤怠出勤簿・タイムカード詳細モーダル */}
+      {attendanceSheetModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto print:static print:p-0 print:m-0 print:bg-white print:overflow-visible">
+          <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl border border-slate-100 my-8 print:my-0 print:p-0 print:border-none print:shadow-none print:max-w-none print:w-full">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4 print:hidden">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base">
+                    出勤簿・タイムカード詳細（{attendanceSheetModal.user?.name || '従業員'} 殿）
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {attendanceSheetModal.payslip?.year_month}度 勤怠実績 ＆ 打刻データ照会
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setAttendanceSheetModal(prev => ({ ...prev, isOpen: false }))} 
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {attendanceSheetModal.loading ? (
+              <div className="py-16 text-center text-slate-400">
+                <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600 mb-2" />
+                <p className="text-xs font-bold">勤怠データを読み込み中...</p>
+              </div>
+            ) : (
+              <div className="space-y-4 text-xs">
+                {/* 勤怠サマリーカード */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-400 block font-bold">出勤日数</span>
+                    <span className="text-base font-black text-slate-800 font-mono">
+                      {attendanceSheetModal.payslip?.work_days ?? 0} <span className="text-xs font-normal">日</span>
+                    </span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-400 block font-bold">総実労働時間</span>
+                    <span className="text-base font-black text-blue-600 font-mono">
+                      {attendanceSheetModal.payslip?.actual_hours ?? 0} <span className="text-xs font-normal">h</span>
+                    </span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-400 block font-bold">残業時間</span>
+                    <span className="text-base font-black text-rose-600 font-mono">
+                      {attendanceSheetModal.payslip?.overtime_hours ?? 0} <span className="text-xs font-normal">h</span>
+                    </span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                    <span className="text-[10px] text-slate-400 block font-bold">有休取得日数</span>
+                    <span className="text-base font-black text-emerald-600 font-mono">
+                      {attendanceSheetModal.payslip?.paid_leave_days ?? 0} <span className="text-xs font-normal">日</span>
+                    </span>
+                  </div>
+                  <div className="bg-blue-50/80 p-2.5 rounded-xl border border-blue-200">
+                    <span className="text-[10px] text-blue-800 block font-black">🏖️ 有休残日数 (合計)</span>
+                    <span className="text-base font-black text-blue-950 font-mono">
+                      {(attendanceSheetModal.payslip?.paid_leave_remaining !== undefined && attendanceSheetModal.payslip?.paid_leave_remaining !== null 
+                        ? Number(attendanceSheetModal.payslip.paid_leave_remaining) 
+                        : (Number(attendanceSheetModal.user?.paid_leave_balance || 0) + Number(attendanceSheetModal.user?.paid_leave_carryover || 0))
+                      ).toFixed(1)} <span className="text-xs font-normal">日</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* 日別出勤簿テーブル */}
+                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs max-h-[55vh] overflow-y-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-100 text-slate-700 font-bold sticky top-0 z-10 border-b border-slate-200">
+                      <tr>
+                        <th className="py-2.5 px-3">日付</th>
+                        <th className="py-2.5 px-2">シフト予定</th>
+                        <th className="py-2.5 px-2 text-center">出勤打刻</th>
+                        <th className="py-2.5 px-2 text-center">退勤打刻</th>
+                        <th className="py-2.5 px-2 text-right">実働</th>
+                        <th className="py-2.5 px-2 text-right">残業</th>
+                        <th className="py-2.5 px-3">申請・状況</th>
+                        <th className="py-2.5 px-3">備考</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(() => {
+                        const ym = attendanceSheetModal.payslip?.year_month || currentYearMonth;
+                        const [yStr, mStr] = ym.split('-');
+                        const yNum = parseInt(yStr, 10);
+                        const mNum = parseInt(mStr, 10);
+                        const lastDay = new Date(yNum, mNum, 0).getDate();
+                        const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+                        const rows = [];
+
+                        for (let day = 1; day <= lastDay; day++) {
+                          const dateStr = `${yStr}-${mStr}-${String(day).padStart(2, '0')}`;
+                          const dObj = new Date(yNum, mNum - 1, day);
+                          const dayOfWeek = dObj.getDay();
+                          const isSat = dayOfWeek === 6;
+                          const isSun = dayOfWeek === 0;
+
+                          const rec = attendanceSheetModal.records.find(r => r.date === dateStr);
+                          const req = attendanceSheetModal.requests.find(l => 
+                            (l.start_date <= dateStr && (l.end_date ? l.end_date >= dateStr : l.start_date >= dateStr))
+                          );
+                          const shift = attendanceSheetModal.shifts.find(s => s.work_date === dateStr);
+
+                          let actualStr = '-';
+                          let overtimeStr = '-';
+
+                          if (rec?.check_in_time && rec?.check_out_time) {
+                            const [inH, inM] = rec.check_in_time.split(':').map(Number);
+                            const [outH, outM] = rec.check_out_time.split(':').map(Number);
+                            let inTotal = inH * 60 + inM;
+                            let outTotal = outH * 60 + outM;
+                            if (outTotal < inTotal) outTotal += 24 * 60;
+                            const totalM = Math.max(0, outTotal - inTotal);
+                            const breakM = totalM >= 480 ? 60 : (totalM >= 360 ? 45 : 0);
+                            const workM = Math.max(0, totalM - breakM);
+                            actualStr = `${(workM / 60).toFixed(1)}h`;
+                            if (workM > 480) {
+                              overtimeStr = `${((workM - 480) / 60).toFixed(1)}h`;
+                            }
+                          }
+
+                          rows.push(
+                            <tr key={dateStr} className={`hover:bg-slate-50 transition-colors ${
+                              isSun ? 'bg-rose-50/40 text-rose-900' : isSat ? 'bg-blue-50/30 text-blue-900' : ''
+                            }`}>
+                              <td className="py-2 px-3 font-mono font-bold">
+                                {day}日 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                  isSun ? 'bg-rose-100 text-rose-700' : isSat ? 'bg-blue-100 text-blue-700' : 'text-slate-500'
+                                }`}>
+                                  ({dayNames[dayOfWeek]})
+                                </span>
+                              </td>
+                              <td className="py-2 px-2 text-slate-500 font-mono text-[11px]">
+                                {shift ? (shift.is_holiday ? <span className="text-slate-400">公休</span> : `${shift.start_time?.substring(0, 5)}〜${shift.end_time?.substring(0, 5)}`) : '-'}
+                              </td>
+                              <td className="py-2 px-2 text-center font-mono font-bold text-slate-800">
+                                {rec?.check_in_time ? rec.check_in_time.substring(0, 5) : '-'}
+                              </td>
+                              <td className="py-2 px-2 text-center font-mono font-bold text-slate-800">
+                                {rec?.check_out_time ? rec.check_out_time.substring(0, 5) : '-'}
+                              </td>
+                              <td className="py-2 px-2 text-right font-mono font-bold text-slate-900">
+                                {actualStr}
+                              </td>
+                              <td className="py-2 px-2 text-right font-mono font-bold text-rose-600">
+                                {overtimeStr}
+                              </td>
+                              <td className="py-2 px-3">
+                                {req && (
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                    req.type?.includes('有給') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                                  }`}>
+                                    {req.type} ({req.status})
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2 px-3 text-slate-500 text-[11px] truncate max-w-[150px]">
+                                {rec?.note || req?.reason || ''}
+                              </td>
+                            </tr>
+                          );
+                        }
+                        return rows;
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-between items-center pt-4 border-t border-slate-100 print:hidden">
+              <span className="text-xs text-slate-400">
+                ※打刻の修正や休暇申請の承認は「勤怠管理メニュー」からも行えます
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setAttendanceSheetModal(prev => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                >
+                  閉じる
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  出勤簿を印刷 / PDF保存
+                </button>
+              </div>
             </div>
           </div>
         </div>
