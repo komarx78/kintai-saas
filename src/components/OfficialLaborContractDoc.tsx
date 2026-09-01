@@ -1,4 +1,6 @@
 import React from 'react';
+import type { LaborContractTemplate } from '../lib/laborContractTemplate';
+import { DEFAULT_LABOR_CONTRACT_TEMPLATE } from '../lib/laborContractTemplate';
 
 export interface LaborContractData {
   companyName: string;
@@ -40,6 +42,8 @@ export interface LaborContractData {
   employmentInsuranceJoined: boolean;
   workersCompJoined: boolean;
   createdDate?: string;
+  companySealUrl?: string; // 社印・角印の印影画像
+  template?: Partial<LaborContractTemplate>; // 全社マスタ条文テンプレート
 }
 
 interface OfficialLaborContractDocProps {
@@ -49,6 +53,13 @@ interface OfficialLaborContractDocProps {
 export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> = ({ data }) => {
   const isFixedTerm = data.contractType === 'fixed_term';
   const isHourly = data.salaryType === 'hourly';
+
+  const tpl: LaborContractTemplate = {
+    ...DEFAULT_LABOR_CONTRACT_TEMPLATE,
+    ...(data.template || {})
+  };
+
+  const sealImg = data.companySealUrl || tpl.company_seal_url;
 
   const docDate = data.createdDate || new Date().toISOString().split('T')[0];
   const [docY, docM, docD] = docDate.split('-');
@@ -122,12 +133,15 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
             </th>
             <td className="p-2.5">
               <div className="mb-1">
-                <span className="font-bold text-slate-700">就業場所:</span> {data.workLocation || '本社および会社が指定する場所'}
+                <span className="font-bold text-slate-700">就業場所:</span> {data.workLocation || tpl.work_location_default}
               </div>
               <div>
-                <span className="font-bold text-slate-700">業務内容:</span> {data.jobDescription || '業務全般および指示する業務'}
+                <span className="font-bold text-slate-700">業務内容:</span> {data.jobDescription || tpl.job_description_default}
               </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">（就業場所・業務の変更の範囲: 会社の定める業務・就業場所）</div>
+              <div className="text-[10px] text-slate-500 mt-1 bg-slate-50 p-1.5 rounded border border-slate-200">
+                ・{tpl.work_location_scope}<br />
+                ・{tpl.job_description_scope}
+              </div>
             </td>
           </tr>
 
@@ -141,8 +155,13 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
                 始業 {data.startTime || '09:00'} 〜 終業 {data.endTime || '18:00'} （休憩時間 {data.breakTimeMinutes || 60}分）
               </div>
               <div className="text-[11px] text-slate-600 mt-0.5">
-                時間外労働（残業）: <span className="font-bold">{data.overtimeWork || 'あり（業務の都合により命じる場合がある）'}</span>
+                時間外労働（残業）: <span className="font-bold">{data.overtimeWork || tpl.overtime_work_notes}</span>
               </div>
+              {tpl.work_time_special_notes && (
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  ※ {tpl.work_time_special_notes}
+                </div>
+              )}
             </td>
           </tr>
 
@@ -154,8 +173,13 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
             <td className="p-2.5">
               <div className="font-bold">{data.holidaysText || '完全週休2日制（土・日）、国民の祝日、年末年始休暇'}</div>
               <div className="text-[11px] text-slate-600 mt-0.5">
-                年次有給休暇: 雇入れの日から6ヶ月継続勤務し、所定労働日の8割以上出勤した場合に法定通り付与（初年度 {data.paidLeaveGrantDays || 10}日）
+                {tpl.paid_leave_rules_article || `年次有給休暇: 雇入れの日から6ヶ月継続勤務し、所定労働日の8割以上出勤した場合に法定通り付与（初年度 ${data.paidLeaveGrantDays || 10}日）`}
               </div>
+              {tpl.holidays_special_notes && (
+                <div className="text-[10px] text-slate-500 mt-0.5">
+                  ※ 特記事項: {tpl.holidays_special_notes}
+                </div>
+              )}
             </td>
           </tr>
 
@@ -180,12 +204,12 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
                   {data.qualificationAllowance > 0 && <div>・資格職能手当: ¥{data.qualificationAllowance.toLocaleString()}</div>}
                   {data.housingAllowance > 0 && <div>・住宅手当: ¥{data.housingAllowance.toLocaleString()}</div>}
                   {data.familyAllowance > 0 && <div>・家族手当: ¥{data.familyAllowance.toLocaleString()}</div>}
-                  <div>・通勤手当: ¥{data.commutingAllowance.toLocaleString()}（実費支給・非課税上限内）</div>
+                  <div>・通勤手当: ¥{data.commutingAllowance.toLocaleString()}（{tpl.commuting_allowance_notes || '実費支給・非課税上限内'}）</div>
                 </div>
 
                 {data.fixedOvertimeHours > 0 && (
                   <div className="text-[10px] text-slate-500 bg-slate-50 p-1.5 rounded border border-slate-200 mt-1">
-                    ※ 固定残業手当: ¥{data.fixedOvertimeAllowance.toLocaleString()}（時間外労働 {data.fixedOvertimeHours} 時間分を含み、超過分は追加支給する）
+                    ※ 固定残業手当: ¥{data.fixedOvertimeAllowance.toLocaleString()}（時間外労働 {data.fixedOvertimeHours} 時間分を含み、超過分は追加支給する。{tpl.fixed_overtime_clause}）
                   </div>
                 )}
 
@@ -193,7 +217,7 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
                   ・賃金締切日: {data.closingDayText || '毎月末日'} / 支払日: {data.paymentDayText || '当月25日（金融機関振込）'}
                 </div>
                 <div className="text-[11px] text-slate-600">
-                  ・昇給: {data.raisePolicy} / 賞与: {data.bonusPolicy} / 退職金: {data.retirementAllowance}
+                  ・昇給・賞与・退職金: {tpl.raise_bonus_notes || `昇給: ${data.raisePolicy} / 賞与: ${data.bonusPolicy} / 退職金: ${data.retirementAllowance}`}
                 </div>
               </div>
             </td>
@@ -222,15 +246,15 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
             </td>
           </tr>
 
-          {/* 7. 退職・解雇に関する事項 */}
+          {/* 7. 退職・解雇・定年に関する事項（就業規則連動） */}
           <tr>
             <th className="bg-slate-100 p-2.5 font-bold text-left border-r border-slate-300">
-              7. 退職に関する事項
+              7. 退職・解雇・定年<br />に関する事項
             </th>
-            <td className="p-2.5 text-[11px] text-slate-600 space-y-0.5">
-              <div>・自己都合退職の手続き: 退職を希望する日の30日前までに会社に退職届を提出すること。</div>
-              <div>・定年制: あり（60歳到達の月末、希望者は65歳までの再雇用制度あり）。</div>
-              <div>・解雇の事由及び手続き: 就業規則第〇条に定める事由に該当する場合に限り、30日前の予告または予告手当の支給をもって行う。</div>
+            <td className="p-2.5 text-[11px] text-slate-600 space-y-1">
+              <div>・{tpl.resignation_procedure_text} <span className="font-mono text-[10px] text-slate-400">（{tpl.resignation_rules_article}）</span></div>
+              <div>・{tpl.retirement_age_text} <span className="font-mono text-[10px] text-slate-400">（{tpl.retirement_rules_article}）</span></div>
+              <div>・{tpl.dismissal_procedure_text} <span className="font-mono text-[10px] text-slate-400">（{tpl.dismissal_rules_article}）</span></div>
             </td>
           </tr>
         </tbody>
@@ -248,17 +272,29 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
 
         <div className="grid grid-cols-2 gap-8">
           {/* 甲 署名 */}
-          <div className="border border-slate-300 p-4 rounded-xl relative">
+          <div className="border border-slate-300 p-4 rounded-xl relative overflow-hidden bg-slate-50/50">
             <span className="text-[10px] font-bold text-slate-500 block mb-1">【事業主（甲）署名捺印】</span>
             <div className="text-xs font-bold text-slate-800">{data.companyName}</div>
             <div className="text-xs text-slate-700 mt-1">{data.representativeName || '代表取締役 〇〇 〇〇'}　　　　　印</div>
-            <div className="absolute right-4 bottom-3 w-10 h-10 border border-red-400/40 rounded flex items-center justify-center text-red-500 text-[8px] font-serif select-none">
-              社印
-            </div>
+            
+            {/* 社印・印影画像 */}
+            {sealImg ? (
+              <div className="absolute right-4 bottom-2 w-16 h-16 pointer-events-none flex items-center justify-center">
+                <img 
+                  src={sealImg} 
+                  alt="社印" 
+                  className="max-w-full max-h-full object-contain mix-blend-multiply opacity-90 drop-shadow-sm select-none rotate-[-2deg]" 
+                />
+              </div>
+            ) : (
+              <div className="absolute right-4 bottom-3 w-10 h-10 border border-red-400/40 rounded flex items-center justify-center text-red-500 text-[8px] font-serif select-none">
+                社印
+              </div>
+            )}
           </div>
 
           {/* 乙 署名 */}
-          <div className="border border-slate-300 p-4 rounded-xl">
+          <div className="border border-slate-300 p-4 rounded-xl bg-slate-50/50">
             <span className="text-[10px] font-bold text-slate-500 block mb-1">【労働者（乙）署名捺印】</span>
             <div className="text-xs text-slate-400 mt-1">ご住所: _____________________________________</div>
             <div className="text-xs text-slate-400 mt-3">ご署名: ___________________________　　　　印</div>

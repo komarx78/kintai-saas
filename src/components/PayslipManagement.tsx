@@ -2323,7 +2323,11 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             </div>
 
             <div className="border border-slate-200 rounded-2xl overflow-hidden p-6 bg-slate-50/50">
-              <OfficialPayslipDoc payslip={previewModal.payslip} tenantName={tenantInfo?.name} />
+              <OfficialPayslipDoc 
+                payslip={previewModal.payslip} 
+                tenantName={tenantInfo?.name} 
+                companySealUrl={(tenantInfo as any)?.company_seal_url || localStorage.getItem(`company_seal_image_${tenantInfo?.id}`) || localStorage.getItem('company_seal_image') || undefined}
+              />
             </div>
 
             <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100">

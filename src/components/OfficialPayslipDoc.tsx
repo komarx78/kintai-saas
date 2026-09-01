@@ -37,9 +37,10 @@ interface OfficialPayslipDocProps {
   };
   userName?: string;
   tenantName?: string;
+  companySealUrl?: string;
 }
 
-export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip, userName, tenantName }) => {
+export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip, userName, tenantName, companySealUrl }) => {
   // 年月・支給日の和暦・西暦フォーマット
   const getFormattedDates = () => {
     let year = 2026;
@@ -163,10 +164,20 @@ export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip,
             <div className="text-xs font-black text-slate-800">{companyName}</div>
             <div className="text-[10px] text-slate-500 mt-0.5">支給日: {payDateFormatted}</div>
           </div>
-          <div className="w-12 h-12 rounded-lg border-2 border-red-500/40 bg-red-50/50 flex flex-col items-center justify-center text-red-600 font-serif font-black text-[9px] leading-tight select-none shadow-2xs">
-            <span>社印</span>
-            <span className="text-[7px]">之印</span>
-          </div>
+          {companySealUrl ? (
+            <div className="w-14 h-14 relative flex items-center justify-center pointer-events-none">
+              <img 
+                src={companySealUrl} 
+                alt="社印" 
+                className="max-w-full max-h-full object-contain mix-blend-multiply opacity-90 drop-shadow-sm rotate-[-2deg]" 
+              />
+            </div>
+          ) : (
+            <div className="w-12 h-12 rounded-lg border-2 border-red-500/40 bg-red-50/50 flex flex-col items-center justify-center text-red-600 font-serif font-black text-[9px] leading-tight select-none shadow-2xs">
+              <span>社印</span>
+              <span className="text-[7px]">之印</span>
+            </div>
+          )}
         </div>
       </div>
 

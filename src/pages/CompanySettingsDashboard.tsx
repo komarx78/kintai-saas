@@ -1,10 +1,18 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AppSwitcher from '../components/AppSwitcher';
 import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 import { OfficialCompanyCalendarDoc } from '../components/OfficialCompanyCalendarDoc';
 import { OrgChartPrintModal } from '../components/OrgChartPrintModal';
+import { 
+  type LaborContractTemplate, 
+  DEFAULT_LABOR_CONTRACT_TEMPLATE, 
+  extractRulesArticlesFromText, 
+  generateOfficialClausesFromNotes, 
+  getLaborContractTemplateFromStorage, 
+  saveLaborContractTemplateToStorage 
+} from '../lib/laborContractTemplate';
 import { 
   type PositionMaster, 
   type OrgDepartmentNode, 
@@ -24,7 +32,8 @@ import {
   ArrowLeft, LogOut, Loader2, Save, Plus, Trash2, 
   Sparkles, Bot, Clock, ShieldCheck, Printer, X,
   UserCheck, ArrowUp, ArrowDown, RotateCcw, Edit3,
-  Network, Award, Crown, Shield
+  Network, Award, Crown, Shield, FileText, Upload,
+  ImageIcon, Wand2, CheckCircle2
 } from 'lucide-react';
 import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress } from '../lib/socialInsurance';
 
@@ -90,11 +99,24 @@ const saveDepartmentsToStorage = (tId: string, depts: DepartmentMaster[]) => {
 
 export default function CompanySettingsDashboard() {
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'onboarding' | 'rules'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules'>('basic');
+
+  // 社印画像State
+  const [companySealUrl, setCompanySealUrl] = useState<string>('');
+
+  // 労働条件・雇用契約書テンプレートState
+  const [contractTemplate, setContractTemplate] = useState<LaborContractTemplate>(DEFAULT_LABOR_CONTRACT_TEMPLATE);
+
+  // AI条文清書モーダルState
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiNotesInput, setAiNotesInput] = useState('');
+  const [aiGeneratedResult, setAiGeneratedResult] = useState<Partial<LaborContractTemplate> | null>(null);
+  const [aiIsGenerating, setAiIsGenerating] = useState(false);
 
   // 入社手続きワークフローステップState
   const [onboardingSteps, setOnboardingSteps] = useState<OnboardingWorkflowStep[]>(DEFAULT_ONBOARDING_STEPS);
@@ -140,7 +162,8 @@ export default function CompanySettingsDashboard() {
     address: '滋賀県大津市坂本3丁目21-16',
     representative_name: '代表取締役 駒井 秀一朗',
     phone_number: '077-574-6907',
-    corporate_number: ''
+    corporate_number: '',
+    company_seal_url: ''
   });
 
   // 2. 部署マスタState
@@ -217,12 +240,20 @@ export default function CompanySettingsDashboard() {
       // テナント全体設定取得
       const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantIdData).maybeSingle();
       
-      let loadedBasic = {
+      let loadedBasic: {
+        name: string;
+        address: string;
+        representative_name: string;
+        phone_number: string;
+        corporate_number: string;
+        company_seal_url: string;
+      } = {
         name: tData?.name || '株式会社KAP',
         address: tData?.address || '滋賀県大津市坂本3丁目21-16',
         representative_name: tData?.representative_name || '代表取締役 駒井 秀一朗',
         phone_number: tData?.phone_number || '077-574-6907',
-        corporate_number: tData?.corporate_number || ''
+        corporate_number: tData?.corporate_number || '',
+        company_seal_url: tData?.company_seal_url || ''
       };
 
       try {
@@ -234,12 +265,29 @@ export default function CompanySettingsDashboard() {
             ...loadedBasic,
             ...parsed,
             address: parsed.address || loadedBasic.address,
-            name: parsed.name || loadedBasic.name
+            name: parsed.name || loadedBasic.name,
+            company_seal_url: parsed.company_seal_url || loadedBasic.company_seal_url
           };
         }
       } catch (e) {}
 
+      // 社印画像の復元
+      let sealLoaded = loadedBasic.company_seal_url || '';
+      try {
+        const storedSeal = localStorage.getItem(`company_seal_image_${tenantIdData}`);
+        if (storedSeal) sealLoaded = storedSeal;
+      } catch (e) {}
+      setCompanySealUrl(sealLoaded);
+      loadedBasic.company_seal_url = sealLoaded;
+
       setBasicInfo(loadedBasic);
+
+      // 労働条件・雇用契約書テンプレートの復元
+      const tplLoaded = getLaborContractTemplateFromStorage(tenantIdData);
+      if (sealLoaded && !tplLoaded.company_seal_url) {
+        tplLoaded.company_seal_url = sealLoaded;
+      }
+      setContractTemplate(tplLoaded);
 
       if (tData) {
         if (tData.work_calendar_settings) {
@@ -510,6 +558,84 @@ export default function CompanySettingsDashboard() {
     }));
   };
 
+  // 社印（印影）画像のアップロード処理 (Base64化)
+  const handleSealImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('社印画像のファイルサイズは 2MB 以下にしてください。');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      setCompanySealUrl(base64);
+      setContractTemplate(prev => ({ ...prev, company_seal_url: base64 }));
+      setBasicInfo(prev => ({ ...prev, company_seal_url: base64 }));
+      if (tenantId) {
+        localStorage.setItem(`company_seal_image_${tenantId}`, base64);
+        localStorage.setItem('company_seal_image', base64);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // 社印（印影）の削除
+  const handleRemoveSeal = () => {
+    if (!confirm('登録された社印（印影）画像を削除しますか？')) return;
+    setCompanySealUrl('');
+    setContractTemplate(prev => ({ ...prev, company_seal_url: '' }));
+    setBasicInfo(prev => ({ ...prev, company_seal_url: '' }));
+    if (tenantId) {
+      localStorage.removeItem(`company_seal_image_${tenantId}`);
+      localStorage.removeItem('company_seal_image');
+    }
+  };
+
+  // 就業規則から条文番号（退職・定年・解雇・有休）を自動抽出してテンプレートへマッピング
+  const handleExtractArticlesFromRules = () => {
+    const extracted = extractRulesArticlesFromText(employmentRulesText);
+    setContractTemplate(prev => ({
+      ...prev,
+      resignation_rules_article: extracted.resignationArticle,
+      retirement_rules_article: extracted.retirementArticle,
+      dismissal_rules_article: extracted.dismissalArticle,
+      paid_leave_rules_article: `就業規則${extracted.paidLeaveArticle}に定める通り、雇入れの日から6ヶ月継続勤務し全労働日の8割以上出勤した場合に法定日数を付与する。`,
+      resignation_procedure_text: `自己都合退職の手続き: 退職を希望する日の30日前までに会社所定の退職届を提出し、業務引継ぎを完了すること。`,
+      retirement_age_text: `定年制: あり（満60歳到達の月末をもって定年退職とする。ただし本人が希望し健康状態に問題がない場合は、満65歳まで継続雇用・再雇用する制度あり）。`,
+      dismissal_procedure_text: `解雇の事由及び手続き: 30日前の予告または平均賃金の30日分以上の解雇予告手当の支払をもって行う。天災事変その他やむを得ない事由により事業の継続が不可能となった場合または労働者の責に帰すべき事由による場合はこの限りではない。`
+    }));
+    alert('✨ 就業規則から退職・定年・解雇・有休の条文番号を自動抽出し、労働条件通知書へ反映しました！');
+  };
+
+  // 🤖 AIに箇条書きで相談して公式条文を自動清書
+  const handleGenerateAiClauses = () => {
+    if (!aiNotesInput.trim()) {
+      alert('箇条書きやメモ（例: 残業20h、土日祝休み、退職30日前、定年60歳で65歳再雇用 等）を入力してください。');
+      return;
+    }
+    setAiIsGenerating(true);
+    setTimeout(() => {
+      const extracted = extractRulesArticlesFromText(employmentRulesText);
+      const generated = generateOfficialClausesFromNotes(aiNotesInput, extracted);
+      setAiGeneratedResult(generated);
+      setAiIsGenerating(false);
+    }, 500);
+  };
+
+  // AI清書結果をテンプレートに一括適用
+  const handleApplyAiGenerated = () => {
+    if (!aiGeneratedResult) return;
+    setContractTemplate(prev => ({
+      ...prev,
+      ...aiGeneratedResult
+    }));
+    setAiModalOpen(false);
+    setAiNotesInput('');
+    setAiGeneratedResult(null);
+    alert('✨ AIが生成した公式条文を労働条件通知書テンプレートに一括適用しました！');
+  };
+
   // 全社設定の一括保存（超頑健化＆フォールバック）
   const handleSaveAllSettings = async () => {
     if (!tenantId) {
@@ -534,8 +660,20 @@ export default function CompanySettingsDashboard() {
       };
 
       // ローカルストレージに即時最優先保存（全画面で100%同期）
-      localStorage.setItem(`company_basic_settings_${tenantId}`, JSON.stringify(basicInfo));
-      localStorage.setItem('company_basic_info', JSON.stringify(basicInfo));
+      const updatedBasicInfo = {
+        ...basicInfo,
+        company_seal_url: companySealUrl
+      };
+      localStorage.setItem(`company_basic_settings_${tenantId}`, JSON.stringify(updatedBasicInfo));
+      localStorage.setItem('company_basic_info', JSON.stringify(updatedBasicInfo));
+      if (companySealUrl) {
+        localStorage.setItem(`company_seal_image_${tenantId}`, companySealUrl);
+        localStorage.setItem('company_seal_image', companySealUrl);
+      }
+      saveLaborContractTemplateToStorage(tenantId, {
+        ...contractTemplate,
+        company_seal_url: companySealUrl
+      });
       saveWorkflowStepsToStorage(onboardingSteps);
       savePositionsToStorage(positions);
       saveDepartmentsToStorage(tenantId, departments);
@@ -1148,13 +1286,13 @@ export default function CompanySettingsDashboard() {
           </button>
 
           <button
-            onClick={() => setActiveTab('payroll')}
+            onClick={() => setActiveTab('contract')}
             className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeTab === 'payroll' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+              activeTab === 'contract' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <DollarSign className="w-4 h-4" />
-            4. 給与締め日・労務規定
+            <FileText className="w-4 h-4" />
+            5. 労働条件通知書 ＆ 雇用契約書
           </button>
 
           <button
@@ -1164,7 +1302,7 @@ export default function CompanySettingsDashboard() {
             }`}
           >
             <UserCheck className="w-4 h-4" />
-            5. 入社手続きステップ ＆ 承認者マスタ
+            6. 入社手続きステップ ＆ 承認者マスタ
           </button>
 
           <button
@@ -1174,13 +1312,13 @@ export default function CompanySettingsDashboard() {
             }`}
           >
             <BookOpen className="w-4 h-4" />
-            6. 就業規則（AI連動）
+            7. 就業規則（AI連動）
           </button>
         </div>
 
         {/* 1. 会社基本情報 タブ */}
         {activeTab === 'basic' && (
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-5 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6 animate-in fade-in duration-200">
             <div>
               <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-indigo-600" />
@@ -1228,6 +1366,81 @@ export default function CompanySettingsDashboard() {
                   onChange={e => setBasicInfo({ ...basicInfo, phone_number: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 font-bold text-slate-800"
                 />
+              </div>
+            </div>
+
+            {/* 🏢 会社実印・社印（角印/丸印）の登録・プレビューセクション */}
+            <div className="pt-5 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                    <Shield className="w-4 h-4 text-indigo-600" />
+                    会社実印・社印（角印 / 丸印）の印影登録
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    登録された印影は、<strong>「給与支払明細書」</strong>および<strong>「労働条件通知書 兼 雇用契約書」</strong>の事業主捺印欄へ自動印字されます（背景透過PNG推奨）。
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+                {/* アップロード操作エリア */}
+                <div className="md:col-span-7 space-y-3">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleSealImageUpload}
+                    accept="image/png,image/jpeg,image/svg+xml"
+                    className="hidden"
+                  />
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-2xs"
+                    >
+                      <Upload className="w-4 h-4" />
+                      印影画像をアップロード
+                    </button>
+                    {companySealUrl && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveSeal}
+                        className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold px-3 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        印影を削除
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500 leading-relaxed space-y-0.5">
+                    <div>・推奨フォーマット: <strong>背景が透明な PNG 画像</strong>（または白背景の鮮明な写真）</div>
+                    <div>・最大ファイルサイズ: 2MB</div>
+                    <div>※ 朱肉の赤色が鮮明に映るよう、自動で実印オーバーレイ調整されます。</div>
+                  </div>
+                </div>
+
+                {/* プレビュー表示エリア */}
+                <div className="md:col-span-5 flex flex-col items-center justify-center p-4 bg-white rounded-xl border border-slate-200 min-h-[120px]">
+                  <div className="text-[10px] font-bold text-slate-400 mb-2">印影プレビュー（実寸連動）</div>
+                  {companySealUrl ? (
+                    <div className="relative w-24 h-24 flex items-center justify-center p-1 bg-slate-50/60 rounded-xl border border-dashed border-indigo-200">
+                      <img
+                        src={companySealUrl}
+                        alt="社印印影"
+                        className="max-w-full max-h-full object-contain mix-blend-multiply drop-shadow-sm select-none"
+                      />
+                      <span className="absolute -bottom-2 bg-emerald-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow-2xs">
+                        登録済み
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 text-[10px]">
+                      <ImageIcon className="w-6 h-6 mb-1 opacity-40" />
+                      <span>未登録</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -2282,6 +2495,203 @@ export default function CompanySettingsDashboard() {
           </div>
         )}
 
+        {/* 5. 労働条件通知書 ＆ 雇用契約書テンプレート タブ */}
+        {activeTab === 'contract' && (
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6 animate-in fade-in duration-200">
+            {/* 上部ヘッダー ＆ AI清書・就業規則抽出ボタン群 */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-4">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-indigo-600" />
+                  労働条件通知書 兼 雇用契約書 条文テンプレート設定
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  全社共通の労働条件通知書・雇用契約書の各条文（就業場所、業務範囲、退職・解雇・定年規定等）をカスタマイズできます。
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setAiModalOpen(true)}
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                >
+                  <Wand2 className="w-4 h-4 text-amber-300" />
+                  🤖 AIに箇条書きで相談して条文を作成
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExtractArticlesFromRules}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-xl border border-slate-200 flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap"
+                >
+                  <BookOpen className="w-4 h-4 text-indigo-600" />
+                  📖 就業規則から条文番号を自動反映
+                </button>
+              </div>
+            </div>
+
+            {/* 条文編集グリッド */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
+              {/* 1. 就業場所・従事すべき業務 */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                  <Building2 className="w-4 h-4 text-indigo-600" />
+                  1. 就業場所 及び 従事すべき業務の範囲
+                </h4>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">就業場所の初期デフォルト</label>
+                  <input
+                    type="text"
+                    value={contractTemplate.work_location_default}
+                    onChange={e => setContractTemplate({ ...contractTemplate, work_location_default: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">就業場所の変更の範囲（法定義務）</label>
+                  <input
+                    type="text"
+                    value={contractTemplate.work_location_scope}
+                    onChange={e => setContractTemplate({ ...contractTemplate, work_location_scope: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">従事すべき業務の変更の範囲（法定義務）</label>
+                  <input
+                    type="text"
+                    value={contractTemplate.job_description_scope}
+                    onChange={e => setContractTemplate({ ...contractTemplate, job_description_scope: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                  />
+                </div>
+              </div>
+
+              {/* 2. 労働時間・時間外労働・休日休暇 */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                  <Clock className="w-4 h-4 text-blue-600" />
+                  2. 労働時間・時間外労働・休日休暇の特記事項
+                </h4>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">始業・終業時刻に関する特記事項</label>
+                  <input
+                    type="text"
+                    value={contractTemplate.work_time_special_notes}
+                    onChange={e => setContractTemplate({ ...contractTemplate, work_time_special_notes: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">時間外労働（残業規定）</label>
+                  <input
+                    type="text"
+                    value={contractTemplate.overtime_work_notes}
+                    onChange={e => setContractTemplate({ ...contractTemplate, overtime_work_notes: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">年次有給休暇（就業規則連動条項）</label>
+                  <input
+                    type="text"
+                    value={contractTemplate.paid_leave_rules_article}
+                    onChange={e => setContractTemplate({ ...contractTemplate, paid_leave_rules_article: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                  />
+                </div>
+              </div>
+
+              {/* 3. 賃金・手当・昇給賞与 */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                  <DollarSign className="w-4 h-4 text-emerald-600" />
+                  3. 賃金・通勤手当・昇給賞与規定
+                </h4>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">通勤手当支給規定</label>
+                  <input
+                    type="text"
+                    value={contractTemplate.commuting_allowance_notes}
+                    onChange={e => setContractTemplate({ ...contractTemplate, commuting_allowance_notes: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">固定残業代（みなし残業）超過清算条項</label>
+                  <input
+                    type="text"
+                    value={contractTemplate.fixed_overtime_clause}
+                    onChange={e => setContractTemplate({ ...contractTemplate, fixed_overtime_clause: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">昇給・賞与・退職金規定</label>
+                  <input
+                    type="text"
+                    value={contractTemplate.raise_bonus_notes}
+                    onChange={e => setContractTemplate({ ...contractTemplate, raise_bonus_notes: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                  />
+                </div>
+              </div>
+
+              {/* 4. 退職・解雇・定年（就業規則自動連動） */}
+              <div className="bg-indigo-50/60 p-4 rounded-2xl border border-indigo-200 space-y-3">
+                <h4 className="font-bold text-indigo-950 text-xs flex items-center justify-between border-b border-indigo-200 pb-2">
+                  <span className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                    4. 退職・定年・解雇規定（就業規則と自動連動）
+                  </span>
+                  <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold">
+                    就業規則連動中
+                  </span>
+                </h4>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[11px] font-bold text-slate-700">自己都合退職の手続き規定</label>
+                    <span className="text-[10px] text-indigo-600 font-mono">{contractTemplate.resignation_rules_article}</span>
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={contractTemplate.resignation_procedure_text}
+                    onChange={e => setContractTemplate({ ...contractTemplate, resignation_procedure_text: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl p-2 text-xs text-slate-800"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[11px] font-bold text-slate-700">定年制 ＆ 再雇用・継続雇用規定</label>
+                    <span className="text-[10px] text-indigo-600 font-mono">{contractTemplate.retirement_rules_article}</span>
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={contractTemplate.retirement_age_text}
+                    onChange={e => setContractTemplate({ ...contractTemplate, retirement_age_text: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl p-2 text-xs text-slate-800"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[11px] font-bold text-slate-700">解雇の事由及び手続き規定</label>
+                    <span className="text-[10px] text-indigo-600 font-mono">{contractTemplate.dismissal_rules_article}</span>
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={contractTemplate.dismissal_procedure_text}
+                    onChange={e => setContractTemplate({ ...contractTemplate, dismissal_procedure_text: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl p-2 text-xs text-slate-800"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {renderSaveFooter()}
+          </div>
+        )}
+
         {/* 6. 就業規則（AI連動） タブ */}
         {activeTab === 'rules' && (
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-5 animate-in fade-in duration-200">
@@ -2319,6 +2729,105 @@ export default function CompanySettingsDashboard() {
         )}
 
       </main>
+
+      {/* 🤖 AI条文清書アシスタント モーダル */}
+      {aiModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 my-8 animate-in fade-in zoom-in-95 duration-150 space-y-4">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white shadow-sm">
+                  <Wand2 className="w-5 h-5 text-amber-300" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base">
+                    AI 労働条件・条文自動清書アシスタント
+                  </h3>
+                  <p className="text-xs text-slate-400">箇条書きのメモから労働基準法に完全準拠した公式条文を瞬時に作成します</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAiModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  自社の労働条件・希望ルールを箇条書きで自由に入力してください：
+                </label>
+                <textarea
+                  rows={4}
+                  value={aiNotesInput}
+                  onChange={e => setAiNotesInput(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3 font-sans text-xs text-slate-800 focus:bg-white focus:border-indigo-500 transition"
+                  placeholder="例:&#10;・残業は月20時間くらい、土日祝休み&#10;・退職は1ヶ月前までに届出、引き継ぎ必須&#10;・定年は60歳、希望者は65歳まで再雇用あり&#10;・自宅でのテレワークも認める&#10;・試用期間は3ヶ月"
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleGenerateAiClauses}
+                  disabled={aiIsGenerating}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
+                >
+                  {aiIsGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-amber-300" />}
+                  {aiIsGenerating ? 'AIが公式条文を生成中...' : '✨ 労働基準法準拠の公式条文を生成'}
+                </button>
+              </div>
+
+              {/* 生成結果プレビュー */}
+              {aiGeneratedResult && (
+                <div className="bg-gradient-to-br from-indigo-50/80 to-purple-50/60 p-4 rounded-2xl border border-indigo-200 space-y-2 mt-3 animate-in fade-in">
+                  <div className="font-bold text-indigo-900 text-xs flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      AIが生成した公式条文案（プレビュー）
+                    </span>
+                    <span className="text-[10px] text-indigo-600 font-bold">法改正・労基法準拠</span>
+                  </div>
+
+                  <div className="text-[11px] text-slate-700 space-y-1.5 bg-white p-3 rounded-xl border border-indigo-100 max-h-48 overflow-y-auto">
+                    {aiGeneratedResult.work_location_default && (
+                      <div><strong>就業場所:</strong> {aiGeneratedResult.work_location_default}</div>
+                    )}
+                    {aiGeneratedResult.overtime_work_notes && (
+                      <div><strong>時間外労働:</strong> {aiGeneratedResult.overtime_work_notes}</div>
+                    )}
+                    {aiGeneratedResult.holidays_special_notes && (
+                      <div><strong>休日休暇:</strong> {aiGeneratedResult.holidays_special_notes}</div>
+                    )}
+                    {aiGeneratedResult.resignation_procedure_text && (
+                      <div><strong>退職手続:</strong> {aiGeneratedResult.resignation_procedure_text}</div>
+                    )}
+                    {aiGeneratedResult.retirement_age_text && (
+                      <div><strong>定年制:</strong> {aiGeneratedResult.retirement_age_text}</div>
+                    )}
+                    {aiGeneratedResult.dismissal_procedure_text && (
+                      <div><strong>解雇規定:</strong> {aiGeneratedResult.dismissal_procedure_text}</div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleApplyAiGenerated}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      この内容を通知書テンプレートに一括適用する
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 📄 年間営業カレンダー A4印刷 / PDF出力 モーダル */}
       {calendarPrintModalOpen && (

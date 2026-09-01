@@ -7,6 +7,7 @@ import { OfficialCommutingPassDoc } from '../components/OfficialCommutingPassDoc
 import { OfficialBankPassbookDoc } from '../components/OfficialBankPassbookDoc';
 import { OfficialTaxExemptionDoc } from '../components/OfficialTaxExemptionDoc';
 import { compressImageFile } from '../lib/imageCompressor';
+import { getLaborContractTemplateFromStorage } from '../lib/laborContractTemplate';
 import { 
   type OnboardingWorkflowStep, 
   DEFAULT_ONBOARDING_STEPS, 
@@ -1976,43 +1977,52 @@ export default function OnboardingAdminDashboard() {
 
             {/* 書面本体 */}
             <div className="border border-slate-200 rounded-2xl overflow-hidden p-6 bg-slate-50/50 print:border-none print:p-0 print:bg-white max-h-[65vh] print:max-h-none overflow-y-auto print:overflow-visible">
-              {cabinetModal.activeDoc === 'contract' && (
-                <OfficialLaborContractDoc data={{
-                  companyName: tenantInfo?.name || '株式会社KAP',
-                  companyAddress: tenantInfo?.address || '東京都千代田区大手町 1-2-3',
-                  representativeName: tenantInfo?.representative_name || '代表取締役 〇〇 〇〇',
-                  employeeName: cabinetModal.employee.name,
-                  employeeAddress: '東京都新宿区〇〇 1-1',
-                  joinDate: cabinetModal.employee.join_date,
-                  contractType: cabinetModal.employee.contract_type || 'indefinite',
-                  trialPeriodMonths: cabinetModal.employee.trial_period_months ?? 3,
-                  workLocation: '本社 および 会社が指定する就業場所',
-                  jobDescription: `${cabinetModal.employee.department || '営業部'}における業務全般`,
-                  startTime: cabinetModal.employee.start_time || '09:00',
-                  endTime: cabinetModal.employee.end_time || '18:00',
-                  breakTimeMinutes: cabinetModal.employee.break_time_minutes || 60,
-                  overtimeWork: 'あり（業務の都合により命じる場合がある）',
-                  holidaysText: cabinetModal.employee.holidays_text || '完全週休2日制（土・日）、国民の祝日',
-                  paidLeaveGrantDays: 10,
-                  salaryType: (cabinetModal.employee.salary_type || (cabinetModal.employee.employment_type === 'part-time' ? 'hourly' : 'monthly')),
-                  baseSalary: cabinetModal.employee.base_salary,
-                  hourlyWage: cabinetModal.employee.hourly_wage,
-                  positionAllowance: cabinetModal.employee.position_allowance,
-                  qualificationAllowance: cabinetModal.employee.qualification_allowance || 0,
-                  housingAllowance: cabinetModal.employee.housing_allowance || 0,
-                  familyAllowance: cabinetModal.employee.family_allowance || 0,
-                  commutingAllowance: cabinetModal.employee.commuting_allowance,
-                  fixedOvertimeHours: 0,
-                  fixedOvertimeAllowance: 0,
-                  bonusPolicy: 'あり（会社の業績および本人の勤務成績を勘案して支給）',
-                  raisePolicy: 'あり（原則として年1回査定）',
-                  retirementAllowance: 'なし',
-                  healthInsuranceJoined: cabinetModal.employee.health_insurance_joined,
-                  pensionInsuranceJoined: cabinetModal.employee.pension_insurance_joined,
-                  employmentInsuranceJoined: cabinetModal.employee.employment_insurance_joined,
-                  workersCompJoined: true
-                }} />
-              )}
+              {cabinetModal.activeDoc === 'contract' && (() => {
+                const contractTpl = getLaborContractTemplateFromStorage(tenantId || '');
+                const sealImg = (tenantInfo as any)?.company_seal_url || contractTpl.company_seal_url || localStorage.getItem(`company_seal_image_${tenantId}`) || localStorage.getItem('company_seal_image') || undefined;
+
+                return (
+                  <OfficialLaborContractDoc 
+                    data={{
+                      companyName: tenantInfo?.name || '株式会社KAP',
+                      companyAddress: tenantInfo?.address || '滋賀県大津市坂本3丁目21-16',
+                      representativeName: tenantInfo?.representative_name || '代表取締役 駒井 秀一朗',
+                      employeeName: cabinetModal.employee.name,
+                      employeeAddress: cabinetModal.employee.address || '未登録',
+                      joinDate: cabinetModal.employee.join_date,
+                      contractType: cabinetModal.employee.contract_type || 'indefinite',
+                      trialPeriodMonths: cabinetModal.employee.trial_period_months ?? 3,
+                      workLocation: contractTpl.work_location_default || '本社 および 会社が指定する就業場所',
+                      jobDescription: `${cabinetModal.employee.department || '営業部'}における業務全般`,
+                      startTime: cabinetModal.employee.start_time || '09:00',
+                      endTime: cabinetModal.employee.end_time || '18:00',
+                      breakTimeMinutes: cabinetModal.employee.break_time_minutes || 60,
+                      overtimeWork: contractTpl.overtime_work_notes || 'あり（業務の都合により命じる場合がある）',
+                      holidaysText: cabinetModal.employee.holidays_text || '完全週休2日制（土・日）、国民の祝日',
+                      paidLeaveGrantDays: 10,
+                      salaryType: (cabinetModal.employee.salary_type || (cabinetModal.employee.employment_type === 'part-time' ? 'hourly' : 'monthly')),
+                      baseSalary: cabinetModal.employee.base_salary,
+                      hourlyWage: cabinetModal.employee.hourly_wage,
+                      positionAllowance: cabinetModal.employee.position_allowance,
+                      qualificationAllowance: cabinetModal.employee.qualification_allowance || 0,
+                      housingAllowance: cabinetModal.employee.housing_allowance || 0,
+                      familyAllowance: cabinetModal.employee.family_allowance || 0,
+                      commutingAllowance: cabinetModal.employee.commuting_allowance,
+                      fixedOvertimeHours: 0,
+                      fixedOvertimeAllowance: 0,
+                      bonusPolicy: 'あり（会社の業績および本人の勤務成績を勘案して支給）',
+                      raisePolicy: 'あり（原則として年1回査定）',
+                      retirementAllowance: 'なし',
+                      healthInsuranceJoined: cabinetModal.employee.health_insurance_joined,
+                      pensionInsuranceJoined: cabinetModal.employee.pension_insurance_joined,
+                      employmentInsuranceJoined: cabinetModal.employee.employment_insurance_joined,
+                      workersCompJoined: true,
+                      companySealUrl: sealImg,
+                      template: contractTpl
+                    }} 
+                  />
+                );
+              })()}
 
               {cabinetModal.activeDoc === 'commuting' && (() => {
                 const subComm = submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'commuting_pass');
