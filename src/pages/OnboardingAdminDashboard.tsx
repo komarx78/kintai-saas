@@ -34,6 +34,7 @@ interface EmployeeOnboardingData {
   retirement_reason?: string;
   employment_type: 'full-time' | 'part-time' | 'contract';
   department?: string;
+  position_name?: string;
   contract_type: 'indefinite' | 'fixed_term';
   trial_period_months?: number;
   start_time?: string;
@@ -1366,7 +1367,9 @@ export default function OnboardingAdminDashboard() {
                                   {emp.name}
                                   {isRetired && <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-bold">退職</span>}
                                 </div>
-                                <div className="text-[10px] text-slate-400">{emp.department || '営業部'} / {emp.join_date}入社</div>
+                                <div className="text-[10px] text-slate-400">
+                                  {emp.department || '営業部'}{emp.position_name ? ` (${emp.position_name})` : ''} / {emp.join_date}入社
+                                </div>
                               </div>
                             </div>
                           </td>
