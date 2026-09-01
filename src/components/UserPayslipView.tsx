@@ -14,21 +14,46 @@ interface UserPayslipViewProps {
 export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userName, tenantId }) => {
   const [payslips, setPayslips] = useState<any[]>([]);
   const [selectedPayslip, setSelectedPayslip] = useState<any | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
-  const [tenantName, setTenantName] = useState<string>('株式会社cocotte');
+  const [tenantName, setTenantName] = useState<string>('株式会社KAP');
+  const [companySealUrl, setCompanySealUrl] = useState<string>('');
 
   useEffect(() => {
     const fetchPayslips = async () => {
       setIsLoading(true);
       try {
+        // 会社名 ＆ 社印の取得
         if (tenantId) {
-          const { data: tData } = await supabase.from('tenants').select('name').eq('id', tenantId).maybeSingle();
-          if (tData?.name) setTenantName(tData.name);
+          try {
+            const { data: tData } = await supabase.from('tenants').select('name, company_seal_url').eq('id', tenantId).maybeSingle();
+            if (tData?.name) setTenantName(tData.name);
+            if (tData?.company_seal_url) setCompanySealUrl(tData.company_seal_url);
+          } catch (tErr) {
+            console.warn('Tenant fetch error:', tErr);
+          }
         }
+
+        // LocalStorage からの会社名・社印フォールバック取得
+        try {
+          const sealStored = (tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null) || 
+                             localStorage.getItem('company_seal_image');
+          if (sealStored) {
+            setCompanySealUrl(sealStored);
+          } else {
+            const basicRaw = (tenantId ? localStorage.getItem(`company_basic_settings_${tenantId}`) : null) || 
+                             localStorage.getItem('company_basic_info');
+            if (basicRaw) {
+              const basicParsed = JSON.parse(basicRaw);
+              if (basicParsed.name) setTenantName(basicParsed.name);
+              if (basicParsed.company_seal_url) setCompanySealUrl(basicParsed.company_seal_url);
+            }
+          }
+        } catch (e) {}
 
         let combined: any[] = [];
 
-        // 1. Supabaseから取得
+        // 1. Supabaseから確定公開済みの明細を取得
         if (userId) {
           try {
             const { data } = await supabase
@@ -46,18 +71,20 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
           }
         }
 
-        // 2. LocalStorageから取得＆マージ
+        // 2. LocalStorageから取得＆マージ（確定公開済み status === 'published' のみ）
         const localKey = tenantId ? `mf_payslips_${tenantId}` : 'mf_payslips_default';
         const storedLocal = localStorage.getItem(localKey);
         if (storedLocal) {
           try {
             const parsedLocal: any[] = JSON.parse(storedLocal);
-            // 自分のIDまたは名前でフィルタ
-            const myLocal = parsedLocal.filter(p => 
-              (userId && p.user_id === userId) ||
-              (userName && p.employee_name && p.employee_name.replace(/\s+/g, '') === userName.replace(/\s+/g, '')) ||
-              (userName && p.user?.name && p.user.name.replace(/\s+/g, '') === userName.replace(/\s+/g, ''))
-            );
+            // 自分のIDまたは名前でフィルタ ＆ 確定公開済み（published）のみ対象
+            const myLocal = parsedLocal.filter(p => {
+              const isMine = (userId && p.user_id === userId) ||
+                (userName && p.employee_name && p.employee_name.replace(/\s+/g, '') === userName.replace(/\s+/g, '')) ||
+                (userName && p.user?.name && p.user.name.replace(/\s+/g, '') === userName.replace(/\s+/g, ''));
+              const isPublished = p.status === 'published' || p.status === undefined;
+              return isMine && isPublished;
+            });
 
             myLocal.forEach(lp => {
               if (!combined.some(cp => cp.year_month === lp.year_month)) {
@@ -69,14 +96,23 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
           }
         }
 
-        combined.sort((a, b) => (b.year_month || '').localeCompare(a.year_month || ''));
+        // 各レコードに一意の識別キーを確実に付与
+        const normalized = combined.map((p, idx) => ({
+          ...p,
+          uniqueKey: p.id || `${p.user_id || 'u'}_${p.year_month || idx}`
+        }));
 
-        if (combined.length > 0) {
-          setPayslips(combined);
-          setSelectedPayslip(combined[0]); // 最新の明細を選択
+        // 年月降順（新しい月順）でソート
+        normalized.sort((a, b) => (b.year_month || '').localeCompare(a.year_month || ''));
+
+        if (normalized.length > 0) {
+          setPayslips(normalized);
+          setSelectedPayslip(normalized[0]);
+          setSelectedKey(normalized[0].uniqueKey);
         } else {
           setPayslips([]);
           setSelectedPayslip(null);
+          setSelectedKey('');
         }
       } catch (e) {
         console.error('Fetch user payslip error:', e);
@@ -110,15 +146,19 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
           <div className="flex items-center gap-2">
             <label className="text-xs font-bold text-slate-600">支給月度:</label>
             <select
-              value={selectedPayslip.id}
+              value={selectedKey}
               onChange={(e) => {
-                const found = payslips.find(p => p.id === e.target.value);
-                if (found) setSelectedPayslip(found);
+                const targetKey = e.target.value;
+                const found = payslips.find(p => p.uniqueKey === targetKey);
+                if (found) {
+                  setSelectedPayslip(found);
+                  setSelectedKey(targetKey);
+                }
               }}
-              className="text-xs font-black p-2 px-3 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white text-slate-800"
+              className="text-xs font-black p-2 px-3 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white text-slate-800 cursor-pointer shadow-2xs"
             >
               {payslips.map(p => (
-                <option key={p.id} value={p.id}>
+                <option key={p.uniqueKey} value={p.uniqueKey}>
                   {p.year_month} 支給分（支給日: {p.payment_date}）
                 </option>
               ))}
@@ -160,6 +200,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
             payslip={selectedPayslip}
             userName={userName}
             tenantName={tenantName}
+            companySealUrl={companySealUrl}
           />
         </div>
       )}

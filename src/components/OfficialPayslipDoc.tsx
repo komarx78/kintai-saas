@@ -3,6 +3,7 @@ import { DollarSign, ShieldCheck, Calendar, FileText, CheckCircle2 } from 'lucid
 
 interface OfficialPayslipDocProps {
   payslip: {
+    tenant_id?: string;
     year_month: string;
     payment_date: string;
     employee_number?: string | number;
@@ -34,6 +35,7 @@ interface OfficialPayslipDocProps {
     cash_amount?: number;
     note?: string;
     user?: any;
+    [key: string]: any;
   };
   userName?: string;
   tenantName?: string;
@@ -82,7 +84,27 @@ export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip,
   const { titleYearMonth, subYearMonth, payDateFormatted } = getFormattedDates();
   const empName = userName || payslip.employee_name || payslip.user?.name || '駒井 秀一朗';
   const empNumber = payslip.employee_number || payslip.user?.employee_code || '2';
-  const companyName = tenantName || '株式会社KAP';
+  
+  // 社印画像の多重フォールバック
+  const activeSealUrl = companySealUrl || 
+    (typeof window !== 'undefined' ? (
+      (payslip.tenant_id ? localStorage.getItem(`company_seal_image_${payslip.tenant_id}`) : null) ||
+      localStorage.getItem('company_seal_image')
+    ) : '');
+
+  // 会社名の多重フォールバック
+  let resolvedCompanyName = tenantName || '';
+  if (!resolvedCompanyName && typeof window !== 'undefined') {
+    try {
+      const basicRaw = (payslip.tenant_id ? localStorage.getItem(`company_basic_settings_${payslip.tenant_id}`) : null) || 
+                       localStorage.getItem('company_basic_info');
+      if (basicRaw) {
+        const parsed = JSON.parse(basicRaw);
+        if (parsed.name) resolvedCompanyName = parsed.name;
+      }
+    } catch (e) {}
+  }
+  const companyName = resolvedCompanyName || '株式会社KAP';
 
   // 1. 勤怠項目
   const attendanceList: { label: string; value: string; unit?: string }[] = [];
@@ -164,10 +186,10 @@ export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip,
             <div className="text-xs font-black text-slate-800">{companyName}</div>
             <div className="text-[10px] text-slate-500 mt-0.5">支給日: {payDateFormatted}</div>
           </div>
-          {companySealUrl ? (
+          {activeSealUrl ? (
             <div className="w-14 h-14 relative flex items-center justify-center pointer-events-none">
               <img 
-                src={companySealUrl} 
+                src={activeSealUrl} 
                 alt="社印" 
                 className="max-w-full max-h-full object-contain mix-blend-multiply opacity-90 drop-shadow-sm rotate-[-2deg]" 
               />
