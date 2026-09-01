@@ -341,6 +341,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           else if (spouseBirth.era === '大') renderCircle(getField('spouseEraTaisho'));
           else if (spouseBirth.era === '昭') renderCircle(getField('spouseEraShowa'));
           else if (spouseBirth.era === '平') renderCircle(getField('spouseEraHeisei'));
+          else if (spouseBirth.era === '令') renderCircle(getField('spouseEraReiwa'));
 
           renderText(spouseBirth.year, getField('spouseBirthY'));
           renderText(spouseBirth.month, getField('spouseBirthM'));
@@ -396,11 +397,12 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
           renderText(dep.relation || '', getField(`dep${idx}Rel`));
 
-          // 扶養元号○印（明・大・昭・平）
+          // 扶養元号○印（明・大・昭・平・令）
           if (bDate.era === '明') renderCircle(getField(`dep${idx}EraMeiji`));
           else if (bDate.era === '大') renderCircle(getField(`dep${idx}EraTaisho`));
           else if (bDate.era === '昭') renderCircle(getField(`dep${idx}EraShowa`));
           else if (bDate.era === '平') renderCircle(getField(`dep${idx}EraHeisei`));
+          else if (bDate.era === '令') renderCircle(getField(`dep${idx}EraReiwa`));
 
           renderText(bDate.year, getField(`dep${idx}BirthY`));
           renderText(bDate.month, getField(`dep${idx}BirthM`));

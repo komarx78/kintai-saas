@@ -201,10 +201,12 @@ export default function OnboardingAdminDashboard() {
     isOpen: boolean;
     employee: EmployeeOnboardingData | null;
     activeDoc: 'contract' | 'commuting' | 'bank' | 'tax' | 'identity';
+    selectedSubmission?: DocumentSubmission | null;
   }>({
     isOpen: false,
     employee: null,
-    activeDoc: 'contract'
+    activeDoc: 'contract',
+    selectedSubmission: null
   });
 
   // 退職処理モーダルState
@@ -1884,7 +1886,8 @@ export default function OnboardingAdminDashboard() {
                             setCabinetModal({
                               isOpen: true,
                               employee: emp as any,
-                              activeDoc: 'contract'
+                              activeDoc: 'contract',
+                              selectedSubmission: sub
                             });
                           }}
                           className="bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 text-indigo-900 font-bold text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1 shadow-xs cursor-pointer"
@@ -1919,7 +1922,8 @@ export default function OnboardingAdminDashboard() {
                               setCabinetModal({
                                 isOpen: true,
                                 employee: emp as any,
-                                activeDoc: 'tax'
+                                activeDoc: 'tax',
+                                selectedSubmission: sub
                               });
                             }}
                             className="bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-black text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1 shadow-xs cursor-pointer"
@@ -1954,7 +1958,8 @@ export default function OnboardingAdminDashboard() {
                               setCabinetModal({
                                 isOpen: true,
                                 employee: emp as any,
-                                activeDoc: 'commuting'
+                                activeDoc: 'commuting',
+                                selectedSubmission: sub
                               });
                             }}
                             className="bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 font-bold text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1 shadow-xs cursor-pointer"
@@ -2205,10 +2210,17 @@ export default function OnboardingAdminDashboard() {
               })()}
 
               {cabinetModal.activeDoc === 'tax' && (() => {
-                const subTax = submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'dependents_form');
+                const userTaxSubs = submissions
+                  .filter(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'dependents_form')
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                
+                const subTax = (cabinetModal.selectedSubmission?.document_type === 'dependents_form' ? cabinetModal.selectedSubmission : null) || userTaxSubs[0];
                 const tData = subTax?.data || {};
-                const subResident = submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'resident_certificate');
-                const rData = subResident?.data || {};
+
+                const userResSubs = submissions
+                  .filter(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'resident_certificate')
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                const rData = userResSubs[0]?.data || {};
 
                 return (
                   <OfficialTaxExemptionDoc data={{
