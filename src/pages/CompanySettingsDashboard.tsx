@@ -68,6 +68,25 @@ const NATIONAL_HOLIDAYS_2026: { [key: string]: string } = {
   '2026-11-23': '勤労感謝の日'
 };
 
+const getDepartmentsFromStorage = (tId: string): DepartmentMaster[] => {
+  try {
+    const raw = localStorage.getItem(`company_departments_${tId}`) || localStorage.getItem('company_departments');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.warn('LocalStorage departments parse error:', e);
+  }
+  return [];
+};
+
+const saveDepartmentsToStorage = (tId: string, depts: DepartmentMaster[]) => {
+  try {
+    localStorage.setItem(`company_departments_${tId}`, JSON.stringify(depts));
+    localStorage.setItem('company_departments', JSON.stringify(depts));
+  } catch (e) {
+    console.warn('LocalStorage departments save error:', e);
+  }
+};
+
 export default function CompanySettingsDashboard() {
   const navigate = useNavigate();
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -240,13 +259,41 @@ export default function CompanySettingsDashboard() {
         setPositions(getPositionsFromStorage());
       }
 
-      // 部署マスタ取得
-      const { data: deptData } = await supabase
-        .from('department_masters')
-        .select('*')
-        .eq('tenant_id', tenantIdData)
-        .order('display_order', { ascending: true });
-      setDepartments(deptData || []);
+      // 部署マスタ取得（DBまたはLocalStorageバックアップから確実に復元）
+      let deptsLoaded: DepartmentMaster[] = [];
+      try {
+        const { data: deptData } = await supabase
+          .from('department_masters')
+          .select('*')
+          .eq('tenant_id', tenantIdData)
+          .order('display_order', { ascending: true });
+        if (deptData && deptData.length > 0) {
+          deptsLoaded = deptData;
+        }
+      } catch (e) {
+        console.warn('Fetch department masters from DB error:', e);
+      }
+
+      // DBにない、または所属長が空の場合はLocalStorageから確実にマージ復元
+      const storageDepts = getDepartmentsFromStorage(tenantIdData);
+      if (storageDepts.length > 0) {
+        const mergedMap = new Map<string, DepartmentMaster>();
+        deptsLoaded.forEach(d => mergedMap.set(d.name, d));
+        storageDepts.forEach(sd => {
+          if (mergedMap.has(sd.name)) {
+            const current = mergedMap.get(sd.name)!;
+            mergedMap.set(sd.name, {
+              ...current,
+              manager_user_id: sd.manager_user_id || current.manager_user_id,
+              manager_user_name: sd.manager_user_name || current.manager_user_name
+            });
+          } else {
+            mergedMap.set(sd.name, sd);
+          }
+        });
+        deptsLoaded = Array.from(mergedMap.values());
+      }
+      setDepartments(deptsLoaded);
 
       // 就業時間パターンマスタ取得
       const { data: patData } = await supabase
@@ -502,6 +549,7 @@ export default function CompanySettingsDashboard() {
       // ローカルストレージにも同期（勤怠・カレンダー・入社手続きで即使えるように）
       saveWorkflowStepsToStorage(onboardingSteps);
       savePositionsToStorage(positions);
+      saveDepartmentsToStorage(tenantId, departments);
       localStorage.setItem('mock_company_holidays', JSON.stringify(Array.from(computedHolidaysSet)));
       localStorage.setItem(`company_employment_rules_${tenantId}`, employmentRulesText);
       localStorage.setItem('company_employment_rules', employmentRulesText);
@@ -686,14 +734,14 @@ export default function CompanySettingsDashboard() {
     const targetUser = companyUsers.find(u => u.id === managerUserId);
     const managerName = targetUser ? targetUser.name : '';
 
-    const cleanDeptName = deptIdOrName.startsWith('auto_') ? deptIdOrName.replace('auto_', '') : '';
+    const cleanDeptName = deptIdOrName.startsWith('auto_') ? deptIdOrName.replace('auto_', '') : deptIdOrName;
     const existingIndex = departments.findIndex(
-      d => d.id === deptIdOrName || (cleanDeptName && d.name === cleanDeptName) || d.name === deptIdOrName
+      d => d.id === deptIdOrName || d.name === cleanDeptName || d.name === deptIdOrName
     );
 
     let updatedDepts = [...departments];
     let targetDeptId = deptIdOrName;
-    let targetDeptName = cleanDeptName || deptIdOrName;
+    let targetDeptName = cleanDeptName;
 
     if (existingIndex >= 0) {
       targetDeptId = departments[existingIndex].id;
@@ -720,8 +768,7 @@ export default function CompanySettingsDashboard() {
 
     // LocalStorage に即座にバックアップ永続化
     if (tenantId) {
-      localStorage.setItem(`company_departments_${tenantId}`, JSON.stringify(updatedDepts));
-      localStorage.setItem('company_departments', JSON.stringify(updatedDepts));
+      saveDepartmentsToStorage(tenantId, updatedDepts);
     }
 
     // Supabase DB（department_masters）への安全な Upsert
