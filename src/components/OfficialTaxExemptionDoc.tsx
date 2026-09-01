@@ -95,8 +95,44 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
   const [backCanvasUrl, setBackCanvasUrl] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const under16Dependents = (data.dependents || []).filter(d => d.isUnder16);
-  const regularDependents = (data.dependents || []).filter(d => !d.isUnder16);
+  const targetYear = data.year || 2026;
+
+  // 国税庁法定基準：対象年度(year)に応じた完全動的年齢判定（未来永劫自動更新）
+  const isUnder16Statutory = (d: DependentItem): boolean => {
+    if (d.birthDate) {
+      const dObj = new Date(d.birthDate);
+      if (!isNaN(dObj.getTime())) {
+        // (targetYear - 15)年 1月2日以後生まれなら16歳未満
+        return dObj >= new Date(targetYear - 15, 0, 2);
+      }
+    }
+    return Boolean(d.isUnder16);
+  };
+
+  const isSpecificStatutory = (d: DependentItem): boolean => {
+    if (d.birthDate) {
+      const dObj = new Date(d.birthDate);
+      if (!isNaN(dObj.getTime())) {
+        // 19歳以上23歳未満: (targetYear - 22)年1月2日 〜 (targetYear - 18)年1月1日生まれ
+        return dObj >= new Date(targetYear - 22, 0, 2) && dObj <= new Date(targetYear - 18, 0, 1);
+      }
+    }
+    return Boolean(d.isSpecific);
+  };
+
+  const isElderlyStatutory = (d: DependentItem): boolean => {
+    if (d.birthDate) {
+      const dObj = new Date(d.birthDate);
+      if (!isNaN(dObj.getTime())) {
+        // 70歳以上: (targetYear - 69)年1月1日以前生まれ
+        return dObj <= new Date(targetYear - 69, 0, 1);
+      }
+    }
+    return Boolean(d.isElderly);
+  };
+
+  const under16Dependents = (data.dependents || []).filter(d => isUnder16Statutory(d));
+  const regularDependents = (data.dependents || []).filter(d => !isUnder16Statutory(d));
   const empBirth = parseJapaneseEraDate(data.birthDate);
   const spouseBirth = parseJapaneseEraDate(data.spouseBirthDate);
 
@@ -120,10 +156,18 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         const pdfjsLib = window.pdfjsLib;
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-        // 国税庁原本PDF（2026bun_01.pdf）をロード
-        const loadingTask = pdfjsLib.getDocument('/2026bun_01.pdf');
-        const pdf = await loadingTask.promise;
-        const page = await pdf.getPage(1);
+        // 国税庁原本PDF（年度別動的切替 ＆ フォールバック）
+        let pdfDoc: any = null;
+        try {
+          const loadingTask = pdfjsLib.getDocument(`/${targetYear}bun_01.pdf`);
+          pdfDoc = await loadingTask.promise;
+        } catch (pdfErr) {
+          console.warn(`PDF for year ${targetYear} not found, falling back to 2026bun_01.pdf`);
+          const fallbackTask = pdfjsLib.getDocument('/2026bun_01.pdf');
+          pdfDoc = await fallbackTask.promise;
+        }
+
+        const page = await pdfDoc.getPage(1);
 
         const scale = 2.5; // 高精細A4印刷解像度（幅約3000px）
         const viewport = page.getViewport({ scale });
@@ -237,16 +281,16 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         renderText(data.companyAddress || '本社所在地', getField('companyAddress'));
 
         // 👤 申告者本人
-        renderText(data.employeeNameKana || 'テスト タロウ', getField('empKana'), 'left', false);
-        renderText(data.employeeName || '駒井 秀一朗', getField('empName'), 'left', true);
+        renderText(data.employeeNameKana || '', getField('empKana'), 'left', false);
+        renderText(data.employeeName || '', getField('empName'), 'left', true);
 
         // 12桁マイナンバーマス目
-        const myNumStr = data.myNumber ? data.myNumber.replace(/[^0-9]/g, '') : '123456789012';
+        const myNumStr = data.myNumber ? data.myNumber.replace(/[^0-9]/g, '') : '************';
         renderPitchText(myNumStr, getField('empMyNumber'));
 
         // 住所・郵便番号
-        renderText(data.postalCode || '160-0023', getField('empPostal'));
-        renderText(data.employeeAddress || '京都市山科区大塚西浦町3-57', getField('empAddress'));
+        renderText(data.postalCode || '', getField('empPostal'));
+        renderText(data.employeeAddress || '', getField('empAddress'));
 
         // 本人生年月日 元号○印
         if (empBirth.era === '明') renderCircle(getField('empEraMeiji'));
@@ -261,7 +305,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         renderText(empBirth.day, getField('empBirthD'));
 
         // 世帯主・続柄
-        renderText(data.householderName || data.employeeName || '駒井 秀一朗', getField('householderName'));
+        renderText(data.householderName || data.employeeName || '', getField('householderName'));
         renderText(data.householderRelation || '本人', getField('householderRel'));
 
         // 配偶者有無（○印）
@@ -363,7 +407,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           renderText(bDate.day, getField(`dep${idx}BirthD`));
 
           // 老人扶養親族チェック（同居老親等 / その他）
-          if (dep.isElderly) {
+          if (isElderlyStatutory(dep)) {
             if (dep.isLivingTogether !== false) {
               renderCheck(getField(`dep${idx}CheckElderlyLiving`));
             } else {
@@ -372,7 +416,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           }
 
           // 特定扶養親族チェック
-          if (dep.isSpecific) {
+          if (isSpecificStatutory(dep)) {
             renderCheck(getField(`dep${idx}CheckSpecific`));
           }
 
@@ -426,8 +470,20 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           if (!uDep) return;
           const ubDate = parseJapaneseEraDate(uDep.birthDate);
 
-          renderText(uDep.nameKana || '', getField(`u16_${idx}Kana`), 'left', false);
-          renderText(uDep.name, getField(`u16_${idx}Name`));
+          let uName = uDep.name || '';
+          let uKana = uDep.nameKana || '';
+
+          const isKana = (str: string) => /^[\u30A0-\u30FF\u3040-\u309F\s]+$/.test(str.trim());
+          const hasKanji = (str: string) => /[\u4E00-\u9FFF]/.test(str);
+
+          if (hasKanji(uKana) && isKana(uName)) {
+            const temp = uName;
+            uName = uKana;
+            uKana = temp;
+          }
+
+          renderText(uKana, getField(`u16_${idx}Kana`), 'left', false);
+          renderText(uName, getField(`u16_${idx}Name`));
 
           const uNumStr = uDep.myNumber ? uDep.myNumber.replace(/[^0-9]/g, '') : '************';
           renderPitchText(uNumStr, getField(`u16_${idx}MyNumber`));
@@ -457,8 +513,8 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
         // 3. 国税庁PDF原本の裏面（2ページ目: 手引き）も高解像度レンダリング
         try {
-          if (pdf.numPages >= 2) {
-            const backPage = await pdf.getPage(2);
+          if (pdfDoc && pdfDoc.numPages >= 2) {
+            const backPage = await pdfDoc.getPage(2);
             const backViewport = backPage.getViewport({ scale });
             const backCanvas = document.createElement('canvas');
             backCanvas.width = backViewport.width;

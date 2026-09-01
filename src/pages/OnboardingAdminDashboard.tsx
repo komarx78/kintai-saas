@@ -440,7 +440,7 @@ export default function OnboardingAdminDashboard() {
 
       const formattedSubmissions: DocumentSubmission[] = (subData || []).map((s: any) => ({
         ...s,
-        user_name: userMap.get(s.user_id) || '従業員'
+        user_name: s.data?.name || userMap.get(s.user_id) || '従業員'
       }));
 
       setSubmissions(formattedSubmissions);
@@ -1863,20 +1863,23 @@ export default function OnboardingAdminDashboard() {
                         {/* 📄 労働条件通知書 兼 雇用契約書のプレビュー・単独印刷ボタン */}
                         <button
                           onClick={() => {
-                            const emp = employees.find(e => e.user_id === sub.user_id) || {
+                            const targetName = sub.data?.name || sub.user_name;
+                            const matchedEmp = employees.find(e => e.user_id === sub.user_id);
+                            const emp = {
+                              ...(matchedEmp || {}),
                               user_id: sub.user_id,
-                              name: sub.user_name,
-                              role: 'employee',
-                              status: 'active',
-                              join_date: sub.created_at?.split('T')[0] || '2026-04-01',
-                              employment_type: 'full-time',
-                              department: '本社',
-                              base_salary: 250000,
-                              hourly_wage: 1200,
-                              commuting_allowance: 12000,
-                              health_insurance_joined: true,
-                              pension_insurance_joined: true,
-                              employment_insurance_joined: true
+                              name: targetName,
+                              role: matchedEmp?.role || 'employee',
+                              status: matchedEmp?.status || 'active',
+                              join_date: matchedEmp?.join_date || sub.created_at?.split('T')[0] || '2026-04-01',
+                              employment_type: matchedEmp?.employment_type || 'full-time',
+                              department: matchedEmp?.department || '本社',
+                              base_salary: matchedEmp?.base_salary || 250000,
+                              hourly_wage: matchedEmp?.hourly_wage || 1200,
+                              commuting_allowance: matchedEmp?.commuting_allowance || 12000,
+                              health_insurance_joined: matchedEmp?.health_insurance_joined ?? true,
+                              pension_insurance_joined: matchedEmp?.pension_insurance_joined ?? true,
+                              employment_insurance_joined: matchedEmp?.employment_insurance_joined ?? true
                             };
                             setCabinetModal({
                               isOpen: true,
@@ -1895,20 +1898,23 @@ export default function OnboardingAdminDashboard() {
                         {sub.document_type === 'dependents_form' && (
                           <button
                             onClick={() => {
-                              const emp = employees.find(e => e.user_id === sub.user_id) || {
+                              const targetName = sub.data?.name || sub.user_name;
+                              const matchedEmp = employees.find(e => e.user_id === sub.user_id);
+                              const emp = {
+                                ...(matchedEmp || {}),
                                 user_id: sub.user_id,
-                                name: sub.user_name,
-                                role: 'employee',
-                                status: 'active',
-                                join_date: sub.created_at?.split('T')[0] || '2026-04-01',
-                                employment_type: 'full-time',
-                                department: '本社',
-                                base_salary: 250000,
-                                hourly_wage: 1200,
-                                commuting_allowance: 12000,
-                                health_insurance_joined: true,
-                                pension_insurance_joined: true,
-                                employment_insurance_joined: true
+                                name: targetName,
+                                role: matchedEmp?.role || 'employee',
+                                status: matchedEmp?.status || 'active',
+                                join_date: matchedEmp?.join_date || sub.created_at?.split('T')[0] || '2026-04-01',
+                                employment_type: matchedEmp?.employment_type || 'full-time',
+                                department: matchedEmp?.department || '本社',
+                                base_salary: matchedEmp?.base_salary || 250000,
+                                hourly_wage: matchedEmp?.hourly_wage || 1200,
+                                commuting_allowance: matchedEmp?.commuting_allowance || 12000,
+                                health_insurance_joined: matchedEmp?.health_insurance_joined ?? true,
+                                pension_insurance_joined: matchedEmp?.pension_insurance_joined ?? true,
+                                employment_insurance_joined: matchedEmp?.employment_insurance_joined ?? true
                               };
                               setCabinetModal({
                                 isOpen: true,
@@ -1927,20 +1933,23 @@ export default function OnboardingAdminDashboard() {
                         {sub.document_type === 'commuting_pass' && (
                           <button
                             onClick={() => {
-                              const emp = employees.find(e => e.user_id === sub.user_id) || {
+                              const targetName = sub.data?.name || sub.user_name;
+                              const matchedEmp = employees.find(e => e.user_id === sub.user_id);
+                              const emp = {
+                                ...(matchedEmp || {}),
                                 user_id: sub.user_id,
-                                name: sub.user_name,
-                                role: 'employee',
-                                status: 'active',
-                                join_date: sub.created_at?.split('T')[0] || '2026-04-01',
-                                employment_type: 'full-time',
-                                department: '本社',
-                                base_salary: 250000,
-                                hourly_wage: 1200,
-                                commuting_allowance: sub.data?.one_month_pass_amount || 12000,
-                                health_insurance_joined: true,
-                                pension_insurance_joined: true,
-                                employment_insurance_joined: true
+                                name: targetName,
+                                role: matchedEmp?.role || 'employee',
+                                status: matchedEmp?.status || 'active',
+                                join_date: matchedEmp?.join_date || sub.created_at?.split('T')[0] || '2026-04-01',
+                                employment_type: matchedEmp?.employment_type || 'full-time',
+                                department: matchedEmp?.department || '本社',
+                                base_salary: matchedEmp?.base_salary || 250000,
+                                hourly_wage: matchedEmp?.hourly_wage || 1200,
+                                commuting_allowance: sub.data?.one_month_pass_amount || matchedEmp?.commuting_allowance || 12000,
+                                health_insurance_joined: matchedEmp?.health_insurance_joined ?? true,
+                                pension_insurance_joined: matchedEmp?.pension_insurance_joined ?? true,
+                                employment_insurance_joined: matchedEmp?.employment_insurance_joined ?? true
                               };
                               setCabinetModal({
                                 isOpen: true,
@@ -2160,7 +2169,7 @@ export default function OnboardingAdminDashboard() {
                 return (
                   <OfficialCommutingPassDoc data={{
                     companyName: tenantInfo?.name || '株式会社KAP',
-                    employeeName: cabinetModal.employee.name,
+                    employeeName: cData.name || cabinetModal.employee.name,
                     department: cabinetModal.employee.department || '営業部',
                     transportMode: cData.transport_mode || 'train_bus',
                     originStation: cData.origin_station || '自宅最寄',
@@ -2175,20 +2184,25 @@ export default function OnboardingAdminDashboard() {
                 );
               })()}
 
-              {cabinetModal.activeDoc === 'bank' && (
-                <OfficialBankPassbookDoc data={{
-                  companyName: tenantInfo?.name || '株式会社KAP',
-                  employeeName: cabinetModal.employee.name,
-                  department: cabinetModal.employee.department || '営業部',
-                  bankName: cabinetModal.employee.bank_name || '未登録',
-                  branchName: cabinetModal.employee.branch_name || '未登録',
-                  accountType: cabinetModal.employee.account_type || 'ordinary',
-                  accountNumber: cabinetModal.employee.account_number || '',
-                  accountHolder: cabinetModal.employee.account_holder || cabinetModal.employee.name,
-                  attachmentImage: submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'bank_passbook')?.attachment_data,
-                  appliedDate: cabinetModal.employee.join_date
-                }} />
-              )}
+              {cabinetModal.activeDoc === 'bank' && (() => {
+                const bSub = submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'bank_passbook');
+                const bData = bSub?.data || {};
+
+                return (
+                  <OfficialBankPassbookDoc data={{
+                    companyName: tenantInfo?.name || '株式会社KAP',
+                    employeeName: bData.name || cabinetModal.employee.name,
+                    department: cabinetModal.employee.department || '営業部',
+                    bankName: bData.bank_name || cabinetModal.employee.bank_name || '未登録',
+                    branchName: bData.branch_name || cabinetModal.employee.branch_name || '未登録',
+                    accountType: bData.account_type || cabinetModal.employee.account_type || 'ordinary',
+                    accountNumber: bData.account_number || cabinetModal.employee.account_number || '',
+                    accountHolder: bData.account_holder || cabinetModal.employee.account_holder || cabinetModal.employee.name,
+                    attachmentImage: bSub?.attachment_data,
+                    appliedDate: cabinetModal.employee.join_date
+                  }} />
+                );
+              })()}
 
               {cabinetModal.activeDoc === 'tax' && (() => {
                 const subTax = submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'dependents_form');
@@ -2200,23 +2214,23 @@ export default function OnboardingAdminDashboard() {
                   <OfficialTaxExemptionDoc data={{
                     year: tData.year || 2026,
                     companyName: tenantInfo?.name || '株式会社KAP',
-                    companyAddress: tenantInfo?.address || '東京都千代田区大手町 1-2-3',
+                    companyAddress: tenantInfo?.address || '滋賀県大津市坂本3丁目21-16',
                     corporateNumber: tenantInfo?.corporate_number || '1010001999999',
-                    taxOfficeName: tenantInfo?.tax_office_name || '千代田',
-                    municipalityName: tenantInfo?.municipality_name || '千代田区',
-                    employeeName: cabinetModal.employee.name,
+                    taxOfficeName: tenantInfo?.tax_office_name || '大津',
+                    municipalityName: tenantInfo?.municipality_name || '大津市',
+                    employeeName: tData.name || rData.name || cabinetModal.employee.name,
                     employeeNameKana: tData.name_kana || rData.name_kana || '',
-                    employeeAddress: tData.address || rData.address || '東京都新宿区西新宿 2-8-1',
-                    postalCode: tData.postal_code || rData.postal_code || '160-0023',
+                    employeeAddress: tData.address || rData.address || cabinetModal.employee.address || '滋賀県大津市坂本3丁目21-16',
+                    postalCode: tData.postal_code || rData.postal_code || '520-0113',
                     myNumber: tData.my_number || '',
-                    birthDate: tData.birth_date || rData.birth_date || '1995-04-01',
-                    householderName: tData.householder_name || rData.householder_name || cabinetModal.employee.name,
+                    birthDate: rData.birth_date || tData.birth_date || '1998-04-01',
+                    householderName: tData.householder_name || rData.householder_name || tData.name || cabinetModal.employee.name,
                     householderRelation: tData.householder_relation || rData.householder_relation || '本人',
                     hasSpouse: tData.has_spouse || false,
-                    spouseName: tData.spouse_name || tData.spouseName,
-                    spouseNameKana: tData.spouse_name_kana || tData.spouseNameKana || (tData.spouse_name === 'テスト 花子' ? 'テスト ハナコ' : tData.spouse_name_kana),
+                    spouseName: tData.spouse_name || tData.spouseName || '',
+                    spouseNameKana: tData.spouse_name_kana || tData.spouseNameKana || '',
                     spouseBirthDate: tData.spouse_birth_date || tData.spouseBirthDate || '1996-05-15',
-                    spouseIncomeEstimate: tData.spouse_income_estimate ?? tData.spouseIncomeEstimate,
+                    spouseIncomeEstimate: tData.spouse_income_estimate ?? tData.spouseIncomeEstimate ?? 0,
                     spouseIsLivingTogether: tData.spouse_is_living_together !== false,
                     dependents: tData.dependents || [],
                     isDisability: tData.is_disability,

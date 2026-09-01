@@ -145,7 +145,7 @@ export default function EmployeeOnboardingWelcome() {
     birthDate: '2015-05-01',
     isLivingTogether: true,
     incomeEstimate: 0,
-    isUnder16: false,
+    isUnder16: true, // 2015年生まれは令和8年時点で11歳（16歳未満）
     isSpecific: false,
     isElderly: false
   });
@@ -370,23 +370,49 @@ export default function EmployeeOnboardingWelcome() {
     }
   };
 
+  // 扶養親族の法定年齢区分（令和8年分 = 2026年基準）の自動計算関数
+  const calculateDependentCategory = (bDateStr: string) => {
+    if (!bDateStr) return { isUnder16: false, isSpecific: false, isElderly: false };
+    const d = new Date(bDateStr);
+    if (isNaN(d.getTime())) return { isUnder16: false, isSpecific: false, isElderly: false };
+    
+    // 令和8年分（2026年12月31日時点）
+    // 16歳未満: 平成23年(2011年)1月2日以後生まれ（2015年生まれ等）
+    const isUnder16 = d >= new Date('2011-01-02');
+    // 特定扶養(19歳以上23歳未満): 平成15年(2003年)1月2日〜平成19年(2007年)1月1日生まれ
+    const isSpecific = d >= new Date('2003-01-02') && d <= new Date('2007-01-01');
+    // 老人扶養(70歳以上): 昭和32年(1957年)1月1日以前生まれ
+    const isElderly = d <= new Date('1957-01-01');
+
+    return { isUnder16, isSpecific, isElderly };
+  };
+
   // 扶養親族の追加
   const handleAddDependent = () => {
     if (!newDep.name.trim()) {
       alert('扶養親族の氏名を入力してください。');
       return;
     }
+    const cats = calculateDependentCategory(newDep.birthDate);
+    const depToAdd: DependentItem = {
+      ...newDep,
+      isUnder16: cats.isUnder16,
+      isSpecific: cats.isSpecific,
+      isElderly: cats.isElderly
+    };
+
     setTaxData(prev => ({
       ...prev,
-      dependents: [...prev.dependents, newDep]
+      dependents: [...prev.dependents, depToAdd]
     }));
+
     setNewDep({
       name: '',
       relation: '子',
       birthDate: '2015-05-01',
       isLivingTogether: true,
       incomeEstimate: 0,
-      isUnder16: false,
+      isUnder16: true,
       isSpecific: false,
       isElderly: false
     });
@@ -498,9 +524,14 @@ export default function EmployeeOnboardingWelcome() {
           householder_relation: basicData.householderRelation,
           has_spouse: taxData.hasSpouse,
           spouse_name: taxData.spouseName,
+          spouse_name_kana: taxData.spouseNameKana,
+          spouse_birth_date: taxData.spouseBirthDate,
           spouse_income_estimate: taxData.spouseIncomeEstimate,
-          dependents: taxData.dependents,
-          dependents_count: taxData.dependents.filter(d => !d.isUnder16).length + (taxData.hasSpouse ? 1 : 0),
+          dependents: taxData.dependents.map(d => {
+            const cats = calculateDependentCategory(d.birthDate);
+            return { ...d, isUnder16: cats.isUnder16, isSpecific: cats.isSpecific, isElderly: cats.isElderly };
+          }),
+          dependents_count: taxData.dependents.filter(d => !calculateDependentCategory(d.birthDate).isUnder16).length + (taxData.hasSpouse ? 1 : 0),
           is_disability: taxData.isDisability,
           is_single_parent: taxData.isSingleParent,
           is_widow: taxData.isWidow,
@@ -1490,8 +1521,8 @@ export default function EmployeeOnboardingWelcome() {
                       value={newDep.birthDate}
                       onChange={e => {
                         const bDate = e.target.value;
-                        const age = new Date().getFullYear() - new Date(bDate).getFullYear();
-                        setNewDep({ ...newDep, birthDate: bDate, isUnder16: age < 16, isSpecific: age >= 19 && age < 23, isElderly: age >= 70 });
+                        const cats = calculateDependentCategory(bDate);
+                        setNewDep({ ...newDep, birthDate: bDate, isUnder16: cats.isUnder16, isSpecific: cats.isSpecific, isElderly: cats.isElderly });
                       }}
                       className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold"
                     />
