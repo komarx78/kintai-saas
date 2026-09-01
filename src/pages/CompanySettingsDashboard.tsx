@@ -1090,22 +1090,25 @@ export default function CompanySettingsDashboard() {
                     <div className="pt-2 border-t border-slate-200 text-right">
                       <button
                         onClick={() => {
-                          const firstUnassigned = companyUsers.find(u => !u.department);
-                          if (firstUnassigned) {
-                            setEditingUserModal({
-                              isOpen: true,
-                              user: { ...firstUnassigned, department: dept.name }
-                            });
-                          } else if (companyUsers.length > 0) {
-                            setEditingUserModal({
-                              isOpen: true,
-                              user: { ...companyUsers[0], department: dept.name }
-                            });
+                          if (companyUsers.length === 0) {
+                            alert('現在登録されている社員・ユーザーがいません。先に従業員を登録してください。');
+                            return;
                           }
+                          const unassigned = companyUsers.find(u => !u.department);
+                          const targetUser = unassigned || companyUsers[0];
+                          setEditingUserModal({
+                            isOpen: true,
+                            user: {
+                              ...targetUser,
+                              department: dept.name,
+                              is_department_head: dept.manager_user_id === targetUser.id
+                            }
+                          });
                         }}
-                        className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer"
+                        className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer flex items-center justify-end gap-1 ml-auto"
                       >
-                        ＋ この部署に社員を配属・役職設定
+                        <Plus className="w-3 h-3" />
+                        この部署に社員を配属・役職設定
                       </button>
                     </div>
                   </div>
@@ -2147,13 +2150,54 @@ export default function CompanySettingsDashboard() {
 
             <div className="space-y-4 text-xs">
               <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  対象社員 <span className="text-indigo-600 font-bold">*</span>
+                </label>
+                <select
+                  value={editingUserModal.user.id}
+                  onChange={e => {
+                    const uId = e.target.value;
+                    const targetU = companyUsers.find(u => u.id === uId);
+                    if (targetU) {
+                      setEditingUserModal(prev => ({
+                        ...prev,
+                        user: {
+                          ...targetU,
+                          department: prev.user?.department || targetU.department,
+                          is_department_head: targetU.department
+                            ? departments.find(d => d.name === targetU.department)?.manager_user_id === targetU.id
+                            : false
+                        }
+                      }));
+                    }
+                  }}
+                  className="w-full bg-indigo-50/50 border border-indigo-200 rounded-xl px-3 py-2 font-black text-slate-800"
+                >
+                  {companyUsers.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}（現在: {u.department || '未所属'} / {u.position_name || '役職なし'}）
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">配属部署</label>
                 <select
                   value={editingUserModal.user.department || ''}
-                  onChange={e => setEditingUserModal(prev => prev.user ? {
-                    ...prev,
-                    user: { ...prev.user, department: e.target.value }
-                  } : prev)}
+                  onChange={e => {
+                    const newDept = e.target.value;
+                    setEditingUserModal(prev => prev.user ? {
+                      ...prev,
+                      user: {
+                        ...prev.user,
+                        department: newDept,
+                        is_department_head: newDept
+                          ? departments.find(d => d.name === newDept)?.manager_user_id === prev.user?.id
+                          : false
+                      }
+                    } : prev);
+                  }}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
                 >
                   <option value="">（部署未設定 / 本部直属）</option>
