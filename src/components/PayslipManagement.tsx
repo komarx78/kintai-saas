@@ -5,7 +5,7 @@ import {
   Edit3, CheckCircle2, Lock, Unlock, Printer, 
   Users, Sparkles, Loader2, X, FileSpreadsheet,
   Settings as SettingsIcon, Download, UserCheck, CreditCard, Building2, Save,
-  ChevronDown, ChevronUp, Clock, Calendar, TrendingUp
+  ChevronDown, ChevronUp, Clock, Calendar, TrendingUp, MapPin
 } from 'lucide-react';
 import { OfficialPayslipDoc } from './OfficialPayslipDoc';
 import { 
@@ -14,6 +14,7 @@ import {
   type AttendanceSummary, 
   type PayrollSettings 
 } from '../lib/payrollEngine';
+import { PREFECTURES, getPrefectureRate } from '../lib/socialInsurance';
 
 interface PayslipManagementProps {
   tenantId: string | null;
@@ -792,8 +793,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
       if (error) throw error;
 
-      alert('会社給与基本設定を保存しました！');
+      alert('会社給与基本設定を保存しました！適用都道府県と保険料率が更新されました。');
       setSettingsModalOpen(false);
+      await fetchData();
     } catch (err: any) {
       console.error('Save settings error:', err);
       alert('設定保存に失敗しました: ' + err.message);
@@ -874,6 +876,34 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           </button>
         </div>
       </div>
+
+      {/* 📍 適用社会保険料率バッジバー */}
+      {(() => {
+        const prefCode = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '13';
+        const prefData = getPrefectureRate(prefCode);
+        return (
+          <div className="bg-gradient-to-r from-indigo-50 via-blue-50 to-indigo-50/60 border border-indigo-200/80 rounded-2xl p-3.5 px-4.5 flex flex-wrap items-center justify-between gap-2 text-xs shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <span className="p-1.5 rounded-xl bg-indigo-600 text-white font-bold shadow-xs">
+                <MapPin className="w-4 h-4" />
+              </span>
+              <div>
+                <span className="font-bold text-slate-700">適用社会保険料率: </span>
+                <span className="font-black text-indigo-800 text-sm">{prefData.name}</span>
+                <span className="text-indigo-600 font-bold ml-1.5">（健康保険 {(prefData.healthRate * 100).toFixed(2)}% / 折半 {(prefData.healthRate * 50).toFixed(3)}%）</span>
+                <span className="text-slate-400 text-[11px] ml-2 font-mono">※厚生年金 18.30% / 雇用 0.6% / 介護 1.60%</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setSettingsModalOpen(true)}
+              className="text-[11px] bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <SettingsIcon className="w-3.5 h-3.5 text-indigo-600" />
+              都道府県・設定を変更
+            </button>
+          </div>
+        );
+      })()}
 
       {/* サマリーカード */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1261,13 +1291,19 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                     ③ 控除額の計算内訳
                                   </div>
                                   <div className="space-y-1 text-slate-600 pt-1 text-[11px]">
-                                    <div className="flex justify-between">
-                                      <span>健康保険料:</span>
-                                      <span>¥{(slip.health_insurance || 0).toLocaleString()}</span>
-                                    </div>
+                                    {(() => {
+                                      const prefCode = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '13';
+                                      const prefData = getPrefectureRate(prefCode);
+                                      return (
+                                        <div className="flex justify-between">
+                                          <span>健康保険料 ({prefData.name} {(prefData.healthRate * 50).toFixed(3)}%):</span>
+                                          <span className="font-bold text-slate-800">¥{(slip.health_insurance || 0).toLocaleString()}</span>
+                                        </div>
+                                      );
+                                    })()}
                                     {slip.nursing_insurance && slip.nursing_insurance > 0 ? (
                                       <div className="flex justify-between text-purple-600">
-                                        <span>介護保険料（40〜64歳）:</span>
+                                        <span>介護保険料（40〜64歳 0.8%）:</span>
                                         <span>¥{slip.nursing_insurance.toLocaleString()}</span>
                                       </div>
                                     ) : null}
@@ -1640,6 +1676,36 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             </div>
 
             <div className="space-y-4 text-xs">
+              {/* 事業所所在地（都道府県） */}
+              <div className="bg-indigo-50/60 p-3.5 rounded-2xl border border-indigo-200 space-y-1.5">
+                <label className="text-xs font-black text-indigo-900 flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-indigo-600" />
+                  事業所の所在地（都道府県・協会けんぽ管轄）
+                </label>
+                <p className="text-[10px] text-slate-500">
+                  選択した都道府県の協会けんぽ公式料率が、全従業員の健康保険料計算に自動適用されます。
+                </p>
+                <select
+                  value={payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '13'}
+                  onChange={e => {
+                    const code = e.target.value;
+                    const pref = getPrefectureRate(code);
+                    setPayrollSettings({
+                      ...payrollSettings,
+                      prefecture_code: code,
+                      health_insurance_rate: Number((pref.healthRate / 2).toFixed(5))
+                    });
+                  }}
+                  className="w-full bg-white border border-indigo-300 rounded-xl px-3 py-2 font-bold text-slate-800 text-xs mt-1"
+                >
+                  {PREFECTURES.map(p => (
+                    <option key={p.code} value={p.code}>
+                      {p.name} （健康保険 全額 {(p.healthRate * 100).toFixed(2)}% / 折半 {(p.healthRate * 50).toFixed(3)}%）
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-1">締め日</label>
