@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Plus, Edit, Trash2, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import AppSwitcher from '../components/AppSwitcher';
 
 type ShiftPattern = {
   id: string;
@@ -130,14 +131,17 @@ export default function AdminShiftPatterns() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center mb-6 space-x-4">
-          <button 
-            onClick={() => navigate('/admin')}
-            className="p-2 rounded hover:bg-gray-200 text-gray-600 transition"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-2xl font-bold text-gray-800">シフトパターン設定</h1>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-4">
+            <button 
+              onClick={() => navigate('/shift/admin')}
+              className="p-2 rounded hover:bg-gray-200 text-gray-600 transition cursor-pointer"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-2xl font-bold text-gray-800">シフトパターン設定</h1>
+          </div>
+          <AppSwitcher currentApp="shift" role="admin" />
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Clock, Calendar, LogOut, FileText, CheckCircle, UserCheck, XCircle, ChevronLeft, ChevronRight, Settings, Bot, DollarSign } from 'lucide-react';
+import { Clock, Calendar, LogOut, FileText, CheckCircle, UserCheck, XCircle, ChevronLeft, ChevronRight, Settings, Bot, DollarSign, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { RulesAiAssistant } from '../components/RulesAiAssistant';
 import { UserPayslipView } from '../components/UserPayslipView';
+import AppSwitcher from '../components/AppSwitcher';
 
 const UserDashboard = () => {
   const navigate = useNavigate();
@@ -682,8 +683,41 @@ const UserDashboard = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-4 md:p-8 overflow-auto">
-        <div className="max-w-4xl mx-auto space-y-6">
+      <div className="flex-1 overflow-auto relative flex flex-col">
+        {/* Top App Bar (全システム統一) */}
+        <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs print:hidden">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => navigate('/portal')}
+              className="p-2 hover:bg-slate-100 rounded-xl text-slate-600 transition flex items-center gap-1 text-xs font-bold cursor-pointer"
+              title="ポータルに戻る"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              ポータル
+            </button>
+            <div className="h-4 w-px bg-slate-200" />
+            <div className="text-xs font-bold text-slate-500">
+              勤怠・有給管理
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <AppSwitcher currentApp="kintai" role={user?.role === 'admin' ? 'admin' : 'user'} />
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut();
+                navigate('/');
+              }}
+              className="p-2 rounded-full hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+              title="ログアウト"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+
+        <div className="p-4 md:p-8 flex-1">
+          <div className="max-w-4xl mx-auto space-y-6">
           
           {activeTab === 'home' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1825,6 +1859,7 @@ const UserDashboard = () => {
         </div>
       </div>
     </div>
+  </div>
   );
 };
 

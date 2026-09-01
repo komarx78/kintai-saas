@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Users, Save, ArrowLeft, Shield, UserPlus, X, Copy, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import AppSwitcher from '../components/AppSwitcher';
 
 interface EmployeeSetting {
   user_id: string;
@@ -128,10 +129,11 @@ const ShiftEmployeeMaster: React.FC = () => {
             <button 
               onClick={handleSave} 
               disabled={saving}
-              className="bg-indigo-600 text-white px-6 py-2 rounded-xl flex items-center hover:bg-indigo-700 transition shadow-sm font-bold"
+              className="bg-indigo-600 text-white px-6 py-2 rounded-xl flex items-center hover:bg-indigo-700 transition shadow-sm font-bold cursor-pointer"
             >
               {saving ? <div className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full"></div> : <><Save className="w-5 h-5 mr-2" />一括保存</>}
             </button>
+            <AppSwitcher currentApp="shift" role="admin" />
           </div>
         </div>
 

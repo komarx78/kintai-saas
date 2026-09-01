@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { generateAutoShift } from '../lib/shiftAlgorithm';
+import AppSwitcher from '../components/AppSwitcher';
 
 interface Shift {
   id: string;
@@ -394,6 +395,7 @@ const ShiftCalendarView: React.FC = () => {
               <Plus className="w-4 h-4" />
               <span>シフト追加</span>
             </button>
+            <AppSwitcher currentApp="shift" role="admin" />
           </div>
         </div>
 

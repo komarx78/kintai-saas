@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Settings, Save, ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import AppSwitcher from '../components/AppSwitcher';
 
 interface ShiftRole {
   id: string;
@@ -95,14 +96,17 @@ const ShiftSettings: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 p-6 font-sans text-slate-800">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center mb-8">
-          <button onClick={() => navigate('/shift/admin')} className="p-2 hover:bg-slate-200 rounded-full transition mr-4">
-            <ArrowLeft className="w-5 h-5 text-slate-600" />
-          </button>
-          <h1 className="text-2xl font-bold flex items-center">
-            <Settings className="w-6 h-6 mr-3 text-indigo-600" />
-            シフト詳細設定
-          </h1>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center">
+            <button onClick={() => navigate('/shift/admin')} className="p-2 hover:bg-slate-200 rounded-full transition mr-4 cursor-pointer">
+              <ArrowLeft className="w-5 h-5 text-slate-600" />
+            </button>
+            <h1 className="text-2xl font-bold flex items-center">
+              <Settings className="w-6 h-6 mr-3 text-indigo-600" />
+              シフト詳細設定
+            </h1>
+          </div>
+          <AppSwitcher currentApp="shift" role="admin" />
         </div>
 
         {loading ? (

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Save, ArrowLeft, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import AppSwitcher from '../components/AppSwitcher';
 
 const roles = ['ホール', 'キッチン', 'レジ', '清掃'];
 const patternTypes = ['平日', '土日', '祝日'];
@@ -159,13 +160,16 @@ const ShiftRequirementSettings: React.FC = () => {
               必要シフト枠設定
             </h1>
           </div>
-          <button 
-            onClick={handleSave}
-            className="flex items-center px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all font-medium"
-          >
-            {saved ? <CheckCircle2 className="w-5 h-5 mr-2" /> : <Save className="w-5 h-5 mr-2" />}
-            {saved ? '保存しました' : '設定を保存'}
-          </button>
+          <div className="flex items-center space-x-3">
+            <button 
+              onClick={handleSave}
+              className="flex items-center px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all font-medium cursor-pointer"
+            >
+              {saved ? <CheckCircle2 className="w-5 h-5 mr-2" /> : <Save className="w-5 h-5 mr-2" />}
+              {saved ? '保存しました' : '設定を保存'}
+            </button>
+            <AppSwitcher currentApp="shift" role="admin" />
+          </div>
         </div>
 
         <div className="bg-white/70 backdrop-blur-xl border border-white/60 shadow-2xl rounded-3xl p-6 md:p-8 flex flex-col gap-8">

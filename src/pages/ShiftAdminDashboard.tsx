@@ -3,6 +3,7 @@ import { DollarSign, Zap, Calendar, ArrowLeft, CheckCircle, Settings, Users, Cli
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { startOfWeek, endOfWeek, format, addDays } from 'date-fns';
+import AppSwitcher from '../components/AppSwitcher';
 
 import { calculateLaborCost, generateAutoShift } from '../lib/shiftAlgorithm';
 
@@ -438,6 +439,9 @@ const ShiftAdminDashboard: React.FC = () => {
             <button onClick={() => navigate('/shift/admin/settings')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm cursor-pointer">
               <Settings className="w-4 h-4 mr-2" />詳細設定
             </button>
+            <div className="bg-white/20 p-0.5 rounded-full backdrop-blur-md border border-white/30">
+              <AppSwitcher currentApp="shift" role="admin" />
+            </div>
           </div>
         </div>
 

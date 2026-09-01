@@ -1,8 +1,9 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { ArrowLeft, ClipboardList, ChevronLeft, ChevronRight, Clock, User, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek } from 'date-fns';
+import AppSwitcher from '../components/AppSwitcher';
 
 
 interface ShiftRequest {
@@ -148,11 +149,12 @@ const ShiftRequestsView: React.FC = () => {
             <button 
               onClick={handleGenerateDummy}
               disabled={generating}
-              className="bg-amber-500 text-white px-4 py-2 rounded-xl flex items-center hover:bg-amber-600 transition shadow-sm font-bold text-sm"
+              className="bg-amber-500 text-white px-4 py-2 rounded-xl flex items-center hover:bg-amber-600 transition shadow-sm font-bold text-sm cursor-pointer"
             >
               {generating ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full mr-2"></div> : <Zap className="w-4 h-4 mr-2" />}
               ダミー希望生成
             </button>
+            <AppSwitcher currentApp="shift" role="admin" />
           </div>
         </div>
 

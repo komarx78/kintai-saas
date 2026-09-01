@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday } from 'date-fns';
 import { ja } from 'date-fns/locale';
+import AppSwitcher from '../components/AppSwitcher';
 
 type ShiftType = 'none' | 'working' | 'off';
 
@@ -262,7 +263,7 @@ const ShiftEmployeeRequest: React.FC = () => {
           <CalendarIcon className="w-5 h-5 mr-2 text-indigo-600" />
           {format(currentMonthStart, 'yyyy年M月')}のシフト希望
         </h1>
-        <div className="w-8"></div>
+        <AppSwitcher currentApp="shift" role="user" />
       </div>
 
       {/* Tabs */}
