@@ -410,9 +410,12 @@ export default function CompanySettingsDashboard() {
       if (u.department && !existingNames.has(u.department)) {
         existingNames.add(u.department);
         const members = companyUsers.filter(m => m.department === u.department);
+        const matchedMasterDept = departments.find(d => d.name === u.department);
         deptList.push({
-          id: `auto_${u.department}`,
+          id: matchedMasterDept ? matchedMasterDept.id : `auto_${u.department}`,
           name: u.department,
+          manager_user_id: matchedMasterDept?.manager_user_id,
+          manager_user_name: matchedMasterDept?.manager_user_name,
           members,
           display_order: deptList.length + 1
         });
@@ -658,29 +661,78 @@ export default function CompanySettingsDashboard() {
     }
   };
 
-  // 部署の所属長（部門長）の更新
-  const handleUpdateDepartmentManager = async (deptId: string, managerUserId: string) => {
+  // 部署の所属長（部門長）の更新（未登録の自動包括部署も即座にマスタ登録・保存）
+  const handleUpdateDepartmentManager = async (deptIdOrName: string, managerUserId: string) => {
     const targetUser = companyUsers.find(u => u.id === managerUserId);
     const managerName = targetUser ? targetUser.name : '';
 
-    const updatedDepts = departments.map(d => {
-      if (d.id === deptId) {
-        return {
-          ...d,
-          manager_user_id: managerUserId || undefined,
-          manager_user_name: managerName || undefined
-        };
-      }
-      return d;
-    });
+    const cleanDeptName = deptIdOrName.startsWith('auto_') ? deptIdOrName.replace('auto_', '') : '';
+    const existingIndex = departments.findIndex(
+      d => d.id === deptIdOrName || (cleanDeptName && d.name === cleanDeptName) || d.name === deptIdOrName
+    );
+
+    let updatedDepts = [...departments];
+    let targetDeptId = deptIdOrName;
+    let targetDeptName = cleanDeptName || deptIdOrName;
+
+    if (existingIndex >= 0) {
+      targetDeptId = departments[existingIndex].id;
+      targetDeptName = departments[existingIndex].name;
+      updatedDepts[existingIndex] = {
+        ...updatedDepts[existingIndex],
+        manager_user_id: managerUserId || undefined,
+        manager_user_name: managerName || undefined
+      };
+    } else {
+      // マスタ未登録部署（自動包括ノード）の場合はマスタへ新規追加
+      targetDeptId = `dept_${Date.now()}`;
+      updatedDepts.push({
+        id: targetDeptId,
+        name: targetDeptName,
+        manager_user_id: managerUserId || undefined,
+        manager_user_name: managerName || undefined,
+        display_order: updatedDepts.length + 1
+      });
+    }
+
+    // UI state を即時更新（これで画面のプルダウンに即座に選択値が入る）
     setDepartments(updatedDepts);
 
+    // LocalStorage に即座にバックアップ永続化
+    if (tenantId) {
+      localStorage.setItem(`company_departments_${tenantId}`, JSON.stringify(updatedDepts));
+      localStorage.setItem('company_departments', JSON.stringify(updatedDepts));
+    }
+
+    // Supabase DB（department_masters）への安全な Upsert
     if (tenantId) {
       try {
-        await supabase.from('department_masters').update({
-          manager_user_id: managerUserId || null,
-          manager_user_name: managerName || null
-        }).eq('id', deptId);
+        const { data: existRecords } = await supabase
+          .from('department_masters')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('name', targetDeptName);
+
+        if (existRecords && existRecords.length > 0) {
+          await supabase
+            .from('department_masters')
+            .update({
+              manager_user_id: managerUserId || null,
+              manager_user_name: managerName || null
+            })
+            .eq('id', existRecords[0].id);
+        } else {
+          await supabase
+            .from('department_masters')
+            .insert({
+              id: targetDeptId,
+              tenant_id: tenantId,
+              name: targetDeptName,
+              manager_user_id: managerUserId || null,
+              manager_user_name: managerName || null,
+              display_order: updatedDepts.length
+            });
+        }
       } catch (e) {
         console.error('Update department manager error:', e);
       }
@@ -1245,17 +1297,10 @@ export default function CompanySettingsDashboard() {
                           </div>
                           <select
                             value={dept.manager_user_id || ''}
-                            onChange={e => {
-                              const dObj = departments.find(d => d.name === dept.name);
-                              if (dObj) {
-                                handleUpdateDepartmentManager(dObj.id, e.target.value);
-                              } else {
-                                handleUpdateDepartmentManager(dept.id, e.target.value);
-                              }
-                            }}
+                            onChange={e => handleUpdateDepartmentManager(dept.name, e.target.value)}
                             className={`w-full text-xs font-bold px-2 py-1.5 rounded-lg border transition ${
                               dept.manager_user_id
-                                ? 'bg-white text-slate-900 border-amber-300 font-black'
+                                ? 'bg-white text-slate-900 border-amber-300 font-black shadow-2xs'
                                 : 'bg-white/80 text-slate-500 border-amber-200'
                             }`}
                           >
