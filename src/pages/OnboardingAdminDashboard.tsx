@@ -107,6 +107,9 @@ export default function OnboardingAdminDashboard() {
   const navigate = useNavigate();
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [currentUserRole, setCurrentUserRole] = useState<string>('admin');
+  const [currentUserDept, setCurrentUserDept] = useState<string>('');
   const [currentAdminName, setCurrentAdminName] = useState<string>('管理者');
   const [employees, setEmployees] = useState<EmployeeOnboardingData[]>([]);
   const [submissions, setSubmissions] = useState<DocumentSubmission[]>([]);
@@ -266,11 +269,16 @@ export default function OnboardingAdminDashboard() {
       const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantIdData).maybeSingle();
       setTenantInfo(tData);
 
-      // ログイン管理者の氏名取得
+      // ログイン管理者の詳細情報（権限・所属）取得
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (currentUser) {
-        const { data: adminUser } = await supabase.from('users').select('name').eq('id', currentUser.id).maybeSingle();
-        if (adminUser?.name) setCurrentAdminName(adminUser.name);
+        setCurrentUserId(currentUser.id);
+        const { data: adminUser } = await supabase.from('users').select('id, name, role, department').eq('id', currentUser.id).maybeSingle();
+        if (adminUser) {
+          if (adminUser.name) setCurrentAdminName(adminUser.name);
+          if (adminUser.role) setCurrentUserRole(adminUser.role);
+          if (adminUser.department) setCurrentUserDept(adminUser.department);
+        }
       }
 
       // 入社手続きワークフローステップの取得
@@ -418,6 +426,34 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
+  // 承認権限チェック関数（システム全体の権限と担当者を連動判定）
+  const checkCanApproveStep = (stepObj: OnboardingWorkflowStep | undefined, empDept: string | undefined): { canApprove: boolean; reason?: string } => {
+    if (!stepObj) return { canApprove: true };
+
+    // 1. システム管理者(admin)は特権として全ステップ承認可能
+    if (currentUserRole === 'admin') return { canApprove: true };
+
+    // 2. 個別担当者指定 (specific_user)
+    if (stepObj.approver_type === 'specific_user' && stepObj.approver_user_id) {
+      if (stepObj.approver_user_id === currentUserId) return { canApprove: true };
+      return { canApprove: false, reason: `このステップは指定された担当者（${stepObj.approver_name}）のみ承認可能です。` };
+    }
+
+    // 3. 配属部署の所属長 (department_head)
+    if (stepObj.approver_type === 'department_head') {
+      if (currentUserRole === 'manager' && currentUserDept === empDept) return { canApprove: true };
+      return { canApprove: false, reason: `このステップは配属先（${empDept || '該当部署'}）の所属長のみ承認可能です。` };
+    }
+
+    // 4. 管理者全員 (all_admins)
+    if (stepObj.approver_type === 'all_admins') {
+      if (currentUserRole === 'admin' || currentUserRole === 'manager') return { canApprove: true };
+      return { canApprove: false, reason: '管理者またはマネージャー権限が必要です。' };
+    }
+
+    return { canApprove: true };
+  };
+
   // 1. ステップを次へ進める（承認）
   const handleAdvanceStep = async (emp: EmployeeOnboardingData) => {
     if (!tenantId) return;
@@ -433,11 +469,19 @@ export default function OnboardingAdminDashboard() {
     const currentStepObj = workflowSteps.find(s => s.step_number === currentStepNum);
     const nextStepObj = workflowSteps.find(s => s.step_number === nextStepNum);
 
+    // 🛡️ 承認権限チェックの厳格実行
+    const permCheck = checkCanApproveStep(currentStepObj, emp.department);
+    if (!permCheck.canApprove) {
+      alert(`⚠️【権限不足】\n${permCheck.reason}\n\n※ 現在のアカウント: ${currentAdminName}（権限: ${currentUserRole === 'admin' ? '管理者' : currentUserRole === 'manager' ? 'マネージャー' : '一般'}）`);
+      return;
+    }
+
     const historyEntry: OnboardingStepHistory = {
       step_id: currentStepObj?.id || `step_${currentStepNum}`,
       step_number: currentStepNum,
       step_name: currentStepObj?.name || `Step ${currentStepNum}`,
-      approved_by_name: currentAdminName || '管理者',
+      approved_by_name: `${currentAdminName}${currentStepObj?.approver_name ? ` (${currentStepObj.approver_name})` : ''}`,
+      approved_by_id: currentUserId,
       approved_at: new Date().toISOString()
     };
 
@@ -1344,6 +1388,11 @@ export default function OnboardingAdminDashboard() {
                                 }`}>
                                   Step {currentStepNum}/{workflowSteps.length}: {currentStepObj?.name || '手続き中'}
                                 </span>
+                                {!isCompleted && currentStepObj?.approver_name && (
+                                  <span className="text-[9px] text-slate-500 font-bold bg-slate-100 px-1.5 py-0.5 rounded">
+                                    承認: {currentStepObj.approver_name}
+                                  </span>
+                                )}
                               </div>
 
                               {!isRetired && (
@@ -1365,7 +1414,7 @@ export default function OnboardingAdminDashboard() {
                                       onClick={() => handleAdvanceStep(emp)}
                                       disabled={isSaving}
                                       className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-2.5 py-1 rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50"
-                                      title="承認して次のステップへ進める"
+                                      title={`承認して次のステップへ進める (承認権限: ${currentStepObj?.approver_name || '管理者全員'})`}
                                     >
                                       承認して次へ
                                       <ArrowRight className="w-3 h-3" />

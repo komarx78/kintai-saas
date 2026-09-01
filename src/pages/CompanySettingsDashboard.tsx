@@ -66,9 +66,11 @@ export default function CompanySettingsDashboard() {
 
   // 入社手続きワークフローステップState
   const [onboardingSteps, setOnboardingSteps] = useState<OnboardingWorkflowStep[]>(DEFAULT_ONBOARDING_STEPS);
+  const [companyUsers, setCompanyUsers] = useState<{ id: string; name: string; role: string; department?: string }[]>([]);
   const [newStepName, setNewStepName] = useState('');
   const [newStepDesc, setNewStepDesc] = useState('');
-  const [newStepApprover, setNewStepApprover] = useState('管理者全員');
+  const [newStepApproverType, setNewStepApproverType] = useState<'all_admins' | 'specific_user' | 'department_head'>('all_admins');
+  const [newStepApproverUserId, setNewStepApproverUserId] = useState('');
   const [editingStepModal, setEditingStepModal] = useState<{
     isOpen: boolean;
     index: number;
@@ -222,6 +224,14 @@ export default function CompanySettingsDashboard() {
           { id: '4', name: '育児・時短勤務', start_time: '09:30', end_time: '16:30', break_minutes: 60, target_department: '', display_order: 4 }
         ]);
       }
+
+      // 自社ユーザー一覧（承認者アサイン用）取得
+      const { data: uData } = await supabase
+        .from('users')
+        .select('id, name, role, department')
+        .eq('tenant_id', tenantIdData)
+        .order('name', { ascending: true });
+      setCompanyUsers(uData || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -515,20 +525,30 @@ export default function CompanySettingsDashboard() {
       alert('ステップ名を入力してください。');
       return;
     }
+    let approverName = '管理者全員';
+    if (newStepApproverType === 'specific_user') {
+      const targetUser = companyUsers.find(u => u.id === newStepApproverUserId);
+      approverName = targetUser ? `${targetUser.name} (${targetUser.department || '担当'})` : '担当者指定';
+    } else if (newStepApproverType === 'department_head') {
+      approverName = '配属部署の所属長';
+    }
+
     const newStep: OnboardingWorkflowStep = {
       id: `step_${Date.now()}`,
       step_number: onboardingSteps.length + 1,
       name: newStepName.trim(),
       description: newStepDesc.trim() || '社内所定の手続き',
       required_action: 'custom',
-      approver_type: 'all_admins',
-      approver_name: newStepApprover.trim() || '管理者全員',
+      approver_type: newStepApproverType,
+      approver_user_id: newStepApproverType === 'specific_user' ? newStepApproverUserId : undefined,
+      approver_name: approverName,
       is_enabled: true
     };
     setOnboardingSteps([...onboardingSteps, newStep]);
     setNewStepName('');
     setNewStepDesc('');
-    setNewStepApprover('管理者全員');
+    setNewStepApproverType('all_admins');
+    setNewStepApproverUserId('');
   };
 
   // ステップ内容の編集保存
@@ -1390,27 +1410,46 @@ export default function CompanySettingsDashboard() {
                   placeholder="ステップ名（例: PC手配・研修受講）"
                   value={newStepName}
                   onChange={e => setNewStepName(e.target.value)}
-                  className="sm:col-span-4 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                  className="sm:col-span-3 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
                 />
                 <input
                   type="text"
                   placeholder="手続き内容説明"
                   value={newStepDesc}
                   onChange={e => setNewStepDesc(e.target.value)}
-                  className="sm:col-span-4 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700"
+                  className="sm:col-span-3 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700"
                 />
-                <div className="sm:col-span-4 flex gap-2">
+                <div className="sm:col-span-6 flex gap-2 flex-wrap sm:flex-nowrap">
                   <select
-                    value={newStepApprover}
-                    onChange={e => setNewStepApprover(e.target.value)}
-                    className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                    value={newStepApproverType}
+                    onChange={e => {
+                      const val = e.target.value as any;
+                      setNewStepApproverType(val);
+                      if (val === 'specific_user' && companyUsers.length > 0 && !newStepApproverUserId) {
+                        setNewStepApproverUserId(companyUsers[0].id);
+                      }
+                    }}
+                    className="w-44 bg-white border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-800"
                   >
-                    <option value="管理者全員">承認権限: 管理者全員</option>
-                    <option value="労務責任者">承認権限: 労務責任者</option>
-                    <option value="労務担当者">承認権限: 労務担当者</option>
-                    <option value="直属上長・所属長">承認権限: 直属上長・所属長</option>
-                    <option value="総務部">承認権限: 総務部</option>
+                    <option value="all_admins">👥 管理者全員</option>
+                    <option value="specific_user">👤 担当者を指名</option>
+                    <option value="department_head">🏢 配属部署の所属長</option>
                   </select>
+
+                  {newStepApproverType === 'specific_user' && (
+                    <select
+                      value={newStepApproverUserId}
+                      onChange={e => setNewStepApproverUserId(e.target.value)}
+                      className="flex-1 bg-indigo-50 border border-indigo-200 rounded-xl px-2.5 py-2 text-xs font-bold text-indigo-900"
+                    >
+                      {companyUsers.map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.department || '所属なし'}{u.role === 'admin' ? ' / 管理者' : ''})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
                   <button
                     onClick={handleAddNewStep}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-xs cursor-pointer whitespace-nowrap"
@@ -1556,45 +1595,68 @@ export default function CompanySettingsDashboard() {
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">承認権限（誰が承認できるか） <span className="text-indigo-600 font-bold">*</span></label>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">承認権限（誰が承認を実行できるか） <span className="text-indigo-600 font-bold">*</span></label>
                 <div className="space-y-2">
                   <select
-                    value={
-                      ['管理者全員', '労務責任者', '労務担当者', '直属上長・所属長', '総務部'].includes(editingStepModal.step.approver_name || '')
-                        ? (editingStepModal.step.approver_name || '管理者全員')
-                        : 'custom'
-                    }
+                    value={editingStepModal.step.approver_type || 'all_admins'}
                     onChange={e => {
-                      const val = e.target.value;
-                      if (val !== 'custom') {
-                        setEditingStepModal(prev => prev.step ? {
-                          ...prev,
-                          step: { ...prev.step, approver_name: val }
-                        } : prev);
+                      const val = e.target.value as any;
+                      let newName = '管理者全員';
+                      let newUserId = undefined;
+
+                      if (val === 'specific_user' && companyUsers.length > 0) {
+                        const firstUser = companyUsers[0];
+                        newUserId = firstUser.id;
+                        newName = `${firstUser.name} (${firstUser.department || '担当'})`;
+                      } else if (val === 'department_head') {
+                        newName = '配属部署の所属長';
                       }
+
+                      setEditingStepModal(prev => prev.step ? {
+                        ...prev,
+                        step: {
+                          ...prev.step,
+                          approver_type: val,
+                          approver_user_id: newUserId,
+                          approver_name: newName
+                        }
+                      } : prev);
                     }}
                     className="w-full bg-indigo-50/50 border border-indigo-200 rounded-xl px-3 py-2 font-bold text-indigo-900"
                   >
-                    <option value="管理者全員">管理者全員（システム管理者なら誰でも承認可）</option>
-                    <option value="労務責任者">労務責任者（人事労務の責任者）</option>
-                    <option value="労務担当者">労務担当者（現場の労務担当）</option>
-                    <option value="直属上長・所属長">直属上長・所属長（配属部署の責任者）</option>
-                    <option value="総務部">総務部（総務担当者）</option>
-                    <option value="custom">カスタム自由入力（自社の役職・担当者名）</option>
+                    <option value="all_admins">👥 管理者全員（システム管理者なら誰でも承認可）</option>
+                    <option value="specific_user">👤 自社の個別担当者を指名（社員一覧から選択）</option>
+                    <option value="department_head">🏢 配属部署の所属長・部門長</option>
                   </select>
 
-                  {/* カスタム入力欄 */}
-                  {!['管理者全員', '労務責任者', '労務担当者', '直属上長・所属長', '総務部'].includes(editingStepModal.step.approver_name || '') && (
-                    <input
-                      type="text"
-                      placeholder="承認権限名を入力（例: 代表取締役、店長、人事部長 等）"
-                      value={editingStepModal.step.approver_name || ''}
-                      onChange={e => setEditingStepModal(prev => prev.step ? {
-                        ...prev,
-                        step: { ...prev.step, approver_name: e.target.value }
-                      } : prev)}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                    />
+                  {/* 自社ユーザー選択プルダウン */}
+                  {editingStepModal.step.approver_type === 'specific_user' && (
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-bold block mb-1">担当者を選択:</label>
+                      <select
+                        value={editingStepModal.step.approver_user_id || ''}
+                        onChange={e => {
+                          const uId = e.target.value;
+                          const targetUser = companyUsers.find(u => u.id === uId);
+                          const newName = targetUser ? `${targetUser.name} (${targetUser.department || '担当'})` : '担当者指定';
+                          setEditingStepModal(prev => prev.step ? {
+                            ...prev,
+                            step: {
+                              ...prev.step,
+                              approver_user_id: uId,
+                              approver_name: newName
+                            }
+                          } : prev);
+                        }}
+                        className="w-full bg-white border border-indigo-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                      >
+                        {companyUsers.map(u => (
+                          <option key={u.id} value={u.id}>
+                            {u.name} ({u.department || '所属なし'}{u.role === 'admin' ? ' / 管理者' : ''})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   )}
                 </div>
               </div>

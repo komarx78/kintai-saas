@@ -5,7 +5,8 @@ export interface OnboardingWorkflowStep {
   description: string;
   required_action: 'contract_sign' | 'document_submit' | 'admin_review' | 'gov_procedure' | 'complete' | 'custom';
   approver_type: 'all_admins' | 'specific_user' | 'department_head';
-  approver_name?: string;
+  approver_user_id?: string; // 特定ユーザー指定時のuser_id
+  approver_name: string; // 表示用名称（例: "管理者全員", "山田 太郎", "配属部署の所属長"）
   is_enabled: boolean;
 }
 
@@ -47,7 +48,7 @@ export const DEFAULT_ONBOARDING_STEPS: OnboardingWorkflowStep[] = [
     description: '提出書類・通帳写真の審査、差戻しまたは承認・マスタ反映',
     required_action: 'admin_review',
     approver_type: 'all_admins',
-    approver_name: '労務責任者',
+    approver_name: '管理者全員',
     is_enabled: true
   },
   {
@@ -57,7 +58,7 @@ export const DEFAULT_ONBOARDING_STEPS: OnboardingWorkflowStep[] = [
     description: '年金事務所資格取得届、ハローワーク雇用保険届、住民税特別徴収切替',
     required_action: 'gov_procedure',
     approver_type: 'all_admins',
-    approver_name: '労務担当者',
+    approver_name: '管理者全員',
     is_enabled: true
   },
   {
