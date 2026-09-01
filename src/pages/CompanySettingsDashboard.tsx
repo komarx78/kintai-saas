@@ -24,8 +24,9 @@ import {
   ArrowLeft, LogOut, Loader2, Save, Plus, Trash2, 
   Sparkles, Bot, Clock, ShieldCheck, Printer, X,
   UserCheck, ArrowUp, ArrowDown, RotateCcw, Edit3,
-  Network, Award, Crown
+  Network, Award, Crown, Shield
 } from 'lucide-react';
+import { PREFECTURES, getPrefectureRate } from '../lib/socialInsurance';
 
 interface DepartmentMaster {
   id: string;
@@ -182,6 +183,7 @@ export default function CompanySettingsDashboard() {
     closing_day: 31,
     payment_day: 25,
     payment_month: 'current',
+    prefecture_code: '13', // デフォルト: 13 東京都
     overtime_rate: 1.25,
     night_rate: 0.25,
     holiday_rate: 1.35,
@@ -523,6 +525,7 @@ export default function CompanySettingsDashboard() {
         corporate_number: basicInfo.corporate_number,
         work_calendar_settings: updatedCalendar,
         payroll_common_settings: payrollSettings,
+        prefecture_code: payrollSettings.prefecture_code || '13',
         gemini_api_key: geminiApiKey,
         onboarding_workflow_settings: onboardingSteps,
         position_settings: positions
@@ -1957,6 +1960,94 @@ export default function CompanySettingsDashboard() {
                 </div>
               </div>
             </div>
+
+            {/* 🏥 社会保険料率マスタ（協会けんぽ管轄都道府県） */}
+            {(() => {
+              const currentPref = getPrefectureRate(payrollSettings.prefecture_code || '13');
+              return (
+                <div className="bg-gradient-to-br from-indigo-50/50 via-slate-50 to-blue-50/50 p-5 rounded-2xl border border-indigo-100/80 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="font-black text-slate-800 text-sm flex items-center gap-1.5">
+                        <Shield className="w-4 h-4 text-indigo-600" />
+                        社会保険（協会けんぽ・厚生年金）適用都道府県 ＆ 料率
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        自社の事業所所在地（都道府県）を選択すると、協会けんぽの最新標準報酬月額表・料率が給与計算に自動連動します。
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-600 whitespace-nowrap">事業所所在地:</span>
+                      <select
+                        value={payrollSettings.prefecture_code || '13'}
+                        onChange={e => setPayrollSettings({ ...payrollSettings, prefecture_code: e.target.value })}
+                        className="bg-white border border-indigo-300 rounded-xl px-3 py-1.5 font-black text-indigo-700 text-xs shadow-xs focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                      >
+                        {PREFECTURES.map(p => (
+                          <option key={p.code} value={p.code}>
+                            {p.code} : {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 適用料率カード一覧 */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                    <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-xs">
+                      <div className="text-[10px] text-slate-400 font-bold">健康保険料率（{currentPref.name}）</div>
+                      <div className="text-base font-black text-indigo-700 mt-0.5">
+                        {(currentPref.healthRate * 100).toFixed(2)}%
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        本人負担: <span className="font-bold text-slate-700">{((currentPref.healthRate * 100) / 2).toFixed(3)}%</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-xs">
+                      <div className="text-[10px] text-slate-400 font-bold">介護保険料率（全国一律）</div>
+                      <div className="text-base font-black text-indigo-700 mt-0.5">
+                        {(currentPref.nursingRate * 100).toFixed(2)}%
+                      </div>
+                      <div className="text-[10px] text-emerald-600 font-bold mt-0.5">
+                        40〜64歳に完全自動適用
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-xs">
+                      <div className="text-[10px] text-slate-400 font-bold">厚生年金保険料率（全国一律）</div>
+                      <div className="text-base font-black text-indigo-700 mt-0.5">
+                        {(currentPref.pensionRate * 100).toFixed(2)}%
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        本人負担: <span className="font-bold text-slate-700">{((currentPref.pensionRate * 100) / 2).toFixed(2)}%</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-xs">
+                      <div className="text-[10px] text-slate-400 font-bold">雇用保険料率（一般事業）</div>
+                      <div className="text-base font-black text-indigo-700 mt-0.5">
+                        {(currentPref.employmentRate * 100).toFixed(1)}%
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        本人負担: <span className="font-bold text-slate-700">0.6%</span> (会社負担: 0.95%)
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-3 text-[11px] text-blue-900 flex items-start gap-2">
+                    <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-black">💡 自動更新・自動判定について:</span>
+                      <p className="mt-0.5 text-blue-800 leading-relaxed">
+                        社会保険料率は毎年3月の法改正時に販売者本部（SuperAdmin）が一括更新するため、各企業様での面倒な料率手入力や月額表更新は一切不要です。
+                        また、40歳到達時（誕生日前日）の介護保険開始や65歳到達時の終了も、従業員の生年月日から給与計算時に完全自動判定されます。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {renderSaveFooter()}
           </div>

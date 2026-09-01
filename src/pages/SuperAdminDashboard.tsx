@@ -3,10 +3,11 @@ import { supabase } from '../lib/supabase';
 import { 
   Settings, Users, Save, Database, Edit, X, Sparkles, 
   CheckCircle2, Loader2, Building2, FileText, 
-  Activity, ShieldAlert, RefreshCw, ExternalLink
+  Activity, ShieldAlert, RefreshCw, ExternalLink, Shield
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TaxDocMasterInspector } from '../components/TaxDocMasterInspector';
+import { SocialInsuranceMasterManager } from '../components/SocialInsuranceMasterManager';
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
@@ -47,6 +48,7 @@ export default function SuperAdminDashboard() {
   useEffect(() => {
     const titles: Record<string, string> = {
       tenants_monitor: '🏢 契約企業・テナント管理マスタ | 特権管理者運用本部',
+      social_rates: '🏥 社会保険料率マスタ設定 | 特権管理者運用本部',
       tax_docs: '📄 国税庁公的帳票マスタ設定 | 特権管理者運用本部',
       system_health: '🚨 システムヘルス＆エラー監視 | 特権管理者運用本部',
       billing: 'プラン＆価格管理 | 特権管理者運用本部',
@@ -288,6 +290,16 @@ export default function SuperAdminDashboard() {
           </button>
 
           <button 
+            onClick={() => setActiveTab('social_rates')}
+            className={`w-full flex items-center px-3.5 py-3 rounded-xl transition cursor-pointer ${
+              activeTab === 'social_rates' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <Shield className="h-4 w-4 mr-2.5 text-blue-400" />
+            🏥 社会保険料率マスタ（全国）
+          </button>
+
+          <button 
             onClick={() => setActiveTab('tax_docs')}
             className={`w-full flex items-center px-3.5 py-3 rounded-xl transition cursor-pointer ${
               activeTab === 'tax_docs' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
@@ -470,6 +482,13 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════════════════════ */}
+        {/* 🏥 タブ：全国社会保険料率マスタ（協会けんぽ 47都道府県・年度別） */}
+        {/* ══════════════════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'social_rates' && (
+          <SocialInsuranceMasterManager />
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════════════════ */}

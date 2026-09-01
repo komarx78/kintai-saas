@@ -3,6 +3,8 @@
  * 労働基準法および日本の税務・社会保険制度に準拠した給与自動計算ロジック
  */
 
+import { calculateSocialInsuranceDeduction, getPrefectureRate } from './socialInsurance';
+
 export interface EmployeePayrollProfile {
   id?: string;
   tenant_id: string;
@@ -19,9 +21,10 @@ export interface EmployeePayrollProfile {
   fixed_overtime_hours: number; // 固定残業時間
   fixed_overtime_allowance: number; // 固定残業手当
   dependents_count: number; // 扶養親族等の数
+  birth_date?: string | Date | null; // 生年月日（40〜64歳の介護保険完全自動判定用）
   health_insurance_enabled: boolean; // 健康保険加入
   health_standard_monthly_remuneration?: number | null; // 健康保険 標準報酬月額
-  nursing_insurance_enabled: boolean; // 介護保険（40歳以上）
+  nursing_insurance_enabled?: boolean | null; // 介護保険（未指定時は生年月日から完全自動判定）
   pension_insurance_enabled: boolean; // 厚生年金加入
   pension_standard_monthly_remuneration?: number | null; // 厚生年金 標準報酬月額
   employment_insurance_enabled: boolean; // 雇用保険加入
@@ -49,10 +52,11 @@ export interface PayrollSettings {
   closing_day: string;
   payment_month: string;
   payment_day: string;
-  employment_insurance_rate: number; // デフォルト 0.006 (6/1000)
-  health_insurance_rate: number; // デフォルト 0.05 (折半後 5%)
-  nursing_insurance_rate: number; // デフォルト 0.009 (折半後 0.9%)
-  pension_insurance_rate: number; // デフォルト 0.0915 (折半後 9.15%)
+  prefecture_code?: string; // 適用都道府県（デフォルト: 13 東京都）
+  employment_insurance_rate?: number; // 指定があれば上書き
+  health_insurance_rate?: number; // 指定があれば上書き
+  nursing_insurance_rate?: number; // 指定があれば上書き
+  pension_insurance_rate?: number; // 指定があれば上書き
   rounding_method: 'floor' | 'round';
 }
 
@@ -133,12 +137,7 @@ export function calculatePayroll(
   attendance: AttendanceSummary,
   settings?: Partial<PayrollSettings>
 ): CalculatedPayslip {
-  const empRate = settings?.employment_insurance_rate ?? 0.006;
-  const healthRate = settings?.health_insurance_rate ?? 0.05;
-  const nursingRate = settings?.nursing_insurance_rate ?? 0.009;
-  const pensionRate = settings?.pension_insurance_rate ?? 0.0915;
   const rounding = settings?.rounding_method ?? 'floor';
-
   const round = (val: number) => rounding === 'round' ? Math.round(val) : Math.floor(val);
 
   // 1. 支給額の計算
@@ -222,15 +221,36 @@ export function calculatePayroll(
     lateEarlyDeduction
   );
 
-  // 2. 社会保険料の計算
-  // 標準報酬月額（設定があればそれを適用、なければ総支給額）
-  const healthBase = profile.health_standard_monthly_remuneration || totalEarnings;
-  const pensionBase = profile.pension_standard_monthly_remuneration || totalEarnings;
+  // 2. 社会保険料の計算（都道府県料率 ＆ 生年月日による40〜64歳介護保険自動判定）
+  const socialResult = calculateSocialInsuranceDeduction({
+    monthlySalary: totalEarnings,
+    healthStandardRemuneration: profile.health_standard_monthly_remuneration,
+    pensionStandardRemuneration: profile.pension_standard_monthly_remuneration,
+    prefectureCode: settings?.prefecture_code || '13',
+    birthDate: profile.birth_date,
+    targetDate: new Date(),
+    isHealthEnabled: profile.health_insurance_enabled,
+    isPensionEnabled: profile.pension_insurance_enabled,
+    isEmploymentEnabled: profile.employment_insurance_enabled,
+    isNursingManualOverride: profile.nursing_insurance_enabled,
+  });
 
-  const healthInsurance = profile.health_insurance_enabled ? round(healthBase * healthRate) : 0;
-  const nursingInsurance = (profile.health_insurance_enabled && profile.nursing_insurance_enabled) ? round(healthBase * nursingRate) : 0;
-  const pensionInsurance = profile.pension_insurance_enabled ? round(pensionBase * pensionRate) : 0;
-  const employmentInsurance = profile.employment_insurance_enabled ? round(totalEarnings * empRate) : 0;
+  // 設定でカスタム料率が指定されている場合はカスタム料率優先
+  const healthInsurance = settings?.health_insurance_rate !== undefined
+    ? (profile.health_insurance_enabled ? round((socialResult.healthBase * settings.health_insurance_rate)) : 0)
+    : socialResult.healthInsurance;
+
+  const nursingInsurance = settings?.nursing_insurance_rate !== undefined
+    ? ((profile.health_insurance_enabled && socialResult.isNursing) ? round((socialResult.healthBase * settings.nursing_insurance_rate)) : 0)
+    : socialResult.nursingInsurance;
+
+  const pensionInsurance = settings?.pension_insurance_rate !== undefined
+    ? (profile.pension_insurance_enabled ? round((socialResult.pensionBase * settings.pension_insurance_rate)) : 0)
+    : socialResult.pensionInsurance;
+
+  const employmentInsurance = settings?.employment_insurance_rate !== undefined
+    ? (profile.employment_insurance_enabled ? round(totalEarnings * settings.employment_insurance_rate) : 0)
+    : socialResult.employmentInsurance;
 
   const totalSocialInsurance = healthInsurance + nursingInsurance + pensionInsurance + employmentInsurance;
 
