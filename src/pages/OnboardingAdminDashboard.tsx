@@ -2104,7 +2104,9 @@ export default function OnboardingAdminDashboard() {
                       employmentInsuranceJoined: cabinetModal.employee.employment_insurance_joined,
                       workersCompJoined: true,
                       companySealUrl: sealImg,
-                      template: contractTpl
+                      template: contractTpl,
+                      isEmployeeSigned: true,
+                      employeeSignedAt: `${cabinetModal.employee.join_date || '2026-09-01'} 09:00:00`
                     }} 
                   />
                 );

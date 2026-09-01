@@ -34,9 +34,15 @@ import {
   Sparkles, Bot, Clock, ShieldCheck, Printer, X,
   UserCheck, ArrowUp, ArrowDown, RotateCcw, Edit3,
   Network, Award, Crown, Shield, FileText, Upload,
-  ImageIcon, Wand2, CheckCircle2, Eye
+  ImageIcon, Wand2, CheckCircle2, Eye, Bell
 } from 'lucide-react';
 import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress } from '../lib/socialInsurance';
+import { 
+  type AnnouncementItem, 
+  getAnnouncementsFromStorage, 
+  saveAnnouncementsToStorage, 
+  generateAiAnnouncementDraft 
+} from '../lib/announcements';
 
 interface DepartmentMaster {
   id: string;
@@ -105,7 +111,14 @@ export default function CompanySettingsDashboard() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements'>('basic');
+
+  // 📢 全社お知らせ掲示板State
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [newAnnTitle, setNewAnnTitle] = useState('');
+  const [newAnnContent, setNewAnnContent] = useState('');
+  const [newAnnTag, setNewAnnTag] = useState('お知らせ');
+  const [newAnnDate, setNewAnnDate] = useState(new Date().toISOString().split('T')[0].replace(/-/g, '.'));
 
   // 社印画像State
   const [companySealUrl, setCompanySealUrl] = useState<string>('');
@@ -290,6 +303,10 @@ export default function CompanySettingsDashboard() {
         tplLoaded.company_seal_url = sealLoaded;
       }
       setContractTemplate(tplLoaded);
+
+      // お知らせ一覧の復元
+      const annLoaded = getAnnouncementsFromStorage(tenantIdData);
+      setAnnouncements(annLoaded);
 
       if (tData) {
         if (tData.work_calendar_settings) {
@@ -713,6 +730,7 @@ export default function CompanySettingsDashboard() {
       saveWorkflowStepsToStorage(onboardingSteps);
       savePositionsToStorage(positions);
       saveDepartmentsToStorage(tenantId, departments);
+      saveAnnouncementsToStorage(announcements, tenantId);
       localStorage.setItem('mock_company_holidays', JSON.stringify(Array.from(computedHolidaysSet)));
       localStorage.setItem(`company_employment_rules_${tenantId}`, employmentRulesText);
       localStorage.setItem('company_employment_rules', employmentRulesText);
@@ -1349,6 +1367,16 @@ export default function CompanySettingsDashboard() {
           >
             <BookOpen className="w-4 h-4" />
             7. 就業規則（AI連動）
+          </button>
+
+          <button
+            onClick={() => setActiveTab('announcements')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'announcements' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <Bell className="w-4 h-4" />
+            8. 📢 全社お知らせ管理
           </button>
         </div>
 
@@ -2768,6 +2796,203 @@ export default function CompanySettingsDashboard() {
               className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-4 font-mono text-xs leading-relaxed"
               placeholder="自社の就業規則テキストを入力してください..."
             />
+
+            {renderSaveFooter()}
+          </div>
+        )}
+
+        {/* 8. 📢 全社お知らせ掲示板管理 タブ */}
+        {activeTab === 'announcements' && (
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6 animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-indigo-600" />
+                  全社ポータル お知らせ掲示板 管理
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  ここで登録・編集したお知らせは、全従業員・管理者のトップポータル（KAP Base）にリアルタイムで掲示されます。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/portal')}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <Eye className="w-4 h-4" />
+                ポータルのお知らせ表示を確認
+              </button>
+            </div>
+
+            {/* 🤖 AIによるお知らせ自動起草ツール */}
+            <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 p-4 sm:p-5 rounded-2xl border border-indigo-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-indigo-900 text-xs flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-purple-600" />
+                  ✨ AIお知らせ自動起草アシスタント（ワンクリック作成）
+                </span>
+                <span className="text-[10px] text-purple-700 font-bold bg-white px-2 py-0.5 rounded-full border border-purple-200">
+                  全社告知文テンプレート
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600">
+                告知したい内容を選択し「AIでドラフト作成」をクリックすると、丁寧な社内通知文が即座に入力欄に生成されます。
+              </p>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {[
+                  '今月度の給与明細のWeb公開発行',
+                  '来月度 シフト希望提出期日のお知らせ',
+                  '年末年始休業および会社カレンダーのお知らせ',
+                  '就業規則および社内諸規程の改定に関するお知らせ'
+                ].map((topic, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      const draft = generateAiAnnouncementDraft(topic, basicInfo.name);
+                      setNewAnnTitle(draft.title);
+                      setNewAnnContent(draft.content);
+                      setNewAnnTag(draft.tag);
+                    }}
+                    className="text-xs font-bold bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 px-3 py-1.5 rounded-xl transition cursor-pointer shadow-2xs text-left"
+                  >
+                    ✨ {topic}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 新規お知らせ作成フォーム */}
+            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+              <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                <Plus className="w-4 h-4 text-indigo-600" />
+                新しいお知らせを投稿・追加
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">掲載日付</label>
+                  <input
+                    type="text"
+                    value={newAnnDate}
+                    onChange={e => setNewAnnDate(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-800"
+                    placeholder="2026.09.01"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">タグ・カテゴリ</label>
+                  <select
+                    value={newAnnTag}
+                    onChange={e => setNewAnnTag(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                  >
+                    <option value="お知らせ">お知らせ</option>
+                    <option value="新機能">新機能</option>
+                    <option value="給与">給与</option>
+                    <option value="シフト">シフト</option>
+                    <option value="重要">重要</option>
+                    <option value="社内規定">社内規定</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">お知らせタイトル <span className="text-rose-500">*</span></label>
+                  <input
+                    type="text"
+                    value={newAnnTitle}
+                    onChange={e => setNewAnnTitle(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                    placeholder="例: 今月度の給与明細を発行いたしました。"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">詳細内容・本文（任意）</label>
+                <textarea
+                  rows={4}
+                  value={newAnnContent}
+                  onChange={e => setNewAnnContent(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs font-sans text-slate-800 leading-relaxed"
+                  placeholder="詳細な説明や補足事項があれば入力してください..."
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!newAnnTitle.trim()) {
+                      alert('お知らせタイトルを入力してください。');
+                      return;
+                    }
+                    const newItem: AnnouncementItem = {
+                      id: `ann-${Date.now()}`,
+                      date: newAnnDate || new Date().toISOString().split('T')[0].replace(/-/g, '.'),
+                      title: newAnnTitle.trim(),
+                      content: newAnnContent.trim() || undefined,
+                      tag: newAnnTag
+                    };
+                    const updated = [newItem, ...announcements];
+                    setAnnouncements(updated);
+                    saveAnnouncementsToStorage(updated, tenantId || undefined);
+                    setNewAnnTitle('');
+                    setNewAnnContent('');
+                    alert('📢 新しいお知らせを追加・掲載しました！');
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  お知らせを一覧に追加する
+                </button>
+              </div>
+            </div>
+
+            {/* 現在掲載中のお知らせ一覧 */}
+            <div className="space-y-3">
+              <h4 className="font-bold text-slate-800 text-xs flex items-center justify-between">
+                <span>📋 現在掲載中のお知らせ一覧（{announcements.length}件）</span>
+                <span className="text-[10px] text-slate-400 font-normal">※ ゴミ箱アイコンで即座に削除できます</span>
+              </h4>
+
+              <div className="divide-y divide-slate-200 border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                {announcements.map((item, idx) => (
+                  <div key={item.id} className="p-4 hover:bg-slate-50 transition flex items-start justify-between gap-4">
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                          {item.date}
+                        </span>
+                        {item.tag && (
+                          <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                            {item.tag}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs font-bold text-slate-800 mt-1">{item.title}</div>
+                      {item.content && (
+                        <p className="text-[11px] text-slate-500 mt-1 whitespace-pre-line leading-relaxed">
+                          {item.content}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!confirm(`お知らせ「${item.title}」を削除しますか？`)) return;
+                        const updated = announcements.filter((_, i) => i !== idx);
+                        setAnnouncements(updated);
+                        saveAnnouncementsToStorage(updated, tenantId || undefined);
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                      title="このお知らせを削除"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             {renderSaveFooter()}
           </div>

@@ -44,6 +44,11 @@ export interface LaborContractData {
   createdDate?: string;
   companySealUrl?: string; // 社印・角印の印影画像
   template?: Partial<LaborContractTemplate>; // 全社マスタ条文テンプレート
+  // 📝 電子署名・電磁的合意情報
+  isEmployeeSigned?: boolean; // 労働者による電子署名・合意の有無
+  employeeSignedAt?: string; // 電子署名日時（タイムスタンプ）
+  employeeSignIp?: string; // 承諾時IPアドレス
+  employeeSignatureImage?: string; // 手書き署名または認印画像
 }
 
 interface OfficialLaborContractDocProps {
@@ -59,10 +64,15 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
     ...(data.template || {})
   };
 
-  const sealImg = data.companySealUrl || tpl.company_seal_url;
+  const rawSeal = data.companySealUrl || tpl.company_seal_url;
+  const isValidImage = (src?: string) => !!src && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:image/'));
+  const sealImg = isValidImage(rawSeal) ? rawSeal : undefined;
 
   const docDate = data.createdDate || new Date().toISOString().split('T')[0];
   const [docY, docM, docD] = docDate.split('-');
+
+  // 労働者の姓（印鑑用）
+  const empLastName = (data.employeeName || '印').trim().split(/[\s　]+/)[0] || '印';
 
   return (
     <div className="bg-white p-6 sm:p-10 max-w-4xl mx-auto text-slate-800 font-sans text-xs leading-relaxed select-text print:p-0 print:m-0 print:max-w-none shadow-sm rounded-2xl border border-slate-200">
@@ -294,10 +304,42 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
           </div>
 
           {/* 乙 署名 */}
-          <div className="border border-slate-300 p-4 rounded-xl bg-slate-50/50">
-            <span className="text-[10px] font-bold text-slate-500 block mb-1">【労働者（乙）署名捺印】</span>
-            <div className="text-xs text-slate-400 mt-1">ご住所: _____________________________________</div>
-            <div className="text-xs text-slate-400 mt-3">ご署名: ___________________________　　　　印</div>
+          <div className="border border-slate-300 p-4 rounded-xl relative overflow-hidden bg-slate-50/50">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold text-slate-500 block">【労働者（乙）署名捺印】</span>
+              {(data.isEmployeeSigned || data.employeeSignedAt) && (
+                <span className="text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded">
+                  ✅ 電子合意締結済
+                </span>
+              )}
+            </div>
+
+            {(data.isEmployeeSigned || data.employeeSignedAt) ? (
+              <div className="space-y-1 mt-1">
+                <div className="text-xs text-slate-600">
+                  <span className="text-slate-400">ご住所:</span> {data.employeeAddress || '（会社登録住所に準拠）'}
+                </div>
+                <div className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                  <span className="text-slate-400 font-normal">ご署名:</span> {data.employeeName}　　　　印
+                </div>
+                <div className="text-[9px] text-slate-400 font-mono mt-1 pt-1 border-t border-slate-200 flex items-center justify-between">
+                  <span>電子署名日時: {data.employeeSignedAt || `${docY}-${docM}-${docD}`}</span>
+                  <span>電磁的合意記録済</span>
+                </div>
+
+                {/* 労働者の電子認印グラフィック */}
+                <div className="absolute right-4 bottom-3 w-12 h-12 rounded-full border-2 border-red-500/80 bg-red-50/30 flex flex-col items-center justify-center text-red-600 font-serif select-none pointer-events-none rotate-[-4deg] shadow-2xs">
+                  <span className="text-[10px] font-black leading-none">{empLastName.substring(0, 2)}</span>
+                  <span className="text-[8px] font-bold leading-none scale-90">之印</span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2 mt-1">
+                <div className="text-xs text-slate-400 mt-1">ご住所: {data.employeeAddress || '_____________________________________'}</div>
+                <div className="text-xs text-slate-400 mt-3">ご署名: ___________________________　　　　印</div>
+                <p className="text-[9px] text-slate-400">※印刷して自筆署名・捺印、またはWebマイページにて電子同意を行ってください。</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

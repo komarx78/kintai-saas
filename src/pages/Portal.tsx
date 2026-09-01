@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2 } from 'lucide-react';
+import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2, Bell, Edit3 } from 'lucide-react';
+import { getAnnouncementsFromStorage, type AnnouncementItem } from '../lib/announcements';
 
 type UserData = {
   name: string;
@@ -15,6 +16,7 @@ export default function Portal() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState<UserData | null>(null);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
 
   useEffect(() => {
     fetchUserData();
@@ -36,6 +38,10 @@ export default function Portal() {
 
       if (error) throw error;
       setUserData(data as UserData);
+
+      // お知らせ一覧のロード
+      const list = getAnnouncementsFromStorage((data as any)?.tenant_id);
+      setAnnouncements(list);
     } catch (err) {
       console.error(err);
       navigate('/');
@@ -211,25 +217,53 @@ export default function Portal() {
           ))}
         </div>
         
-        {/* Info Board placeholder */}
-        <div className="mt-16 bg-white rounded-2xl shadow-sm border border-gray-200 p-8 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
-          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
-            <span className="w-2 h-6 bg-blue-500 rounded-full mr-3"></span>
-            お知らせ
-          </h3>
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center py-3 border-b border-gray-100">
-              <span className="text-sm font-bold text-blue-600 w-24 mb-1 sm:mb-0">2026.08.18</span>
-              <span className="text-sm text-gray-700">KAP Base (総合ポータル) が新しくリリースされました。</span>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center py-3 border-b border-gray-100">
-              <span className="text-sm font-bold text-blue-600 w-24 mb-1 sm:mb-0">2026.08.18</span>
-              <span className="text-sm text-gray-700">シフト管理機能が大幅にアップデートされ、複数日の一括入力に対応しました。</span>
-            </div>
-            <div className="flex flex-col sm:flex-row sm:items-center py-3">
-              <span className="text-sm font-bold text-gray-400 w-24 mb-1 sm:mb-0">2026.08.01</span>
-              <span className="text-sm text-gray-500">システムのベータ運用を開始しました。</span>
-            </div>
+        {/* 📢 全社お知らせ掲示板（動的レンダリング） */}
+        <div className="mt-16 bg-white rounded-3xl shadow-sm border border-gray-200 p-6 sm:p-8 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+          <div className="flex items-center justify-between mb-6 pb-3 border-b border-gray-100">
+            <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
+              <span className="w-2.5 h-6 bg-gradient-to-b from-blue-600 to-indigo-600 rounded-full"></span>
+              <Bell className="w-5 h-5 text-indigo-600" />
+              社内お知らせ・アップデート
+            </h3>
+            {(role === 'admin' || role === 'superadmin') && (
+              <button
+                onClick={() => navigate('/settings/company')}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                title="会社マスタ設定でお知らせを管理・編集"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                お知らせを管理・追加
+              </button>
+            )}
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            {announcements.map((item) => (
+              <div key={item.id} className="py-3.5 hover:bg-slate-50/60 transition rounded-xl px-2 sm:px-3">
+                <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-3">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                      {item.date}
+                    </span>
+                    {item.tag && (
+                      <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                        {item.tag}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-bold text-slate-800">
+                      {item.title}
+                    </h4>
+                    {item.content && (
+                      <p className="text-xs text-slate-500 mt-1 leading-relaxed whitespace-pre-line">
+                        {item.content}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </main>
