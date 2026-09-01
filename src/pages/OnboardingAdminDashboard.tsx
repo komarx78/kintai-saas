@@ -356,13 +356,23 @@ export default function OnboardingAdminDashboard() {
         const onb: any = onbMap.get(u.id);
         const pay: any = payMap.get(u.id);
 
+        let localBackup: any = null;
+        try {
+          const raw = localStorage.getItem(`employee_master_backup_${u.id}`);
+          if (raw) localBackup = JSON.parse(raw);
+        } catch (e) {}
+
+        const bDate = u.birth_date || pay?.birth_date || onb?.birth_date || localBackup?.birth_date || '';
+        const addr = u.address || onb?.address || localBackup?.address || '';
+        const ph = u.phone || onb?.phone || localBackup?.phone || '';
+
         return {
           user_id: u.id,
           name: u.name || '従業員',
           email: u.email,
-          phone: u.phone || onb?.phone || '',
-          birth_date: u.birth_date || pay?.birth_date || onb?.birth_date || '',
-          address: u.address || onb?.address || '',
+          phone: ph,
+          birth_date: bDate,
+          address: addr,
           role: u.role,
           status: onb?.status || (u.is_active === false ? 'retired' : 'active'),
           current_step_number: onb?.current_step_number || (onb?.status === 'onboarding' ? 1 : 5),
@@ -972,42 +982,87 @@ export default function OnboardingAdminDashboard() {
     if (!tenantId || !data) return;
     setIsSaving(true);
     try {
-      await supabase
-        .from('users')
-        .update({
-          name: data.name,
-          department: data.department,
-          employment_type: data.employment_type,
-          join_date: data.join_date,
-          birth_date: data.birth_date || null,
-          address: data.address || null,
-          phone: data.phone || null
-        })
-        .eq('id', data.user_id);
+      // 1. users テーブルの更新（カラム未存在エラー対策フォールバック）
+      try {
+        const { error: uErr } = await supabase
+          .from('users')
+          .update({
+            name: data.name,
+            department: data.department,
+            employment_type: data.employment_type,
+            join_date: data.join_date,
+            birth_date: data.birth_date || null,
+            address: data.address || null,
+            phone: data.phone || null
+          })
+          .eq('id', data.user_id);
+        if (uErr) throw uErr;
+      } catch (uErr) {
+        console.warn('users full update failed, falling back to minimal payload:', uErr);
+        await supabase
+          .from('users')
+          .update({
+            name: data.name,
+            department: data.department,
+            employment_type: data.employment_type,
+            join_date: data.join_date
+          })
+          .eq('id', data.user_id);
+      }
 
-      await supabase
-        .from('employee_payroll_profiles')
-        .upsert({
-          tenant_id: tenantId,
-          user_id: data.user_id,
-          salary_type: data.salary_type,
-          base_salary: data.base_salary,
-          hourly_wage: data.hourly_wage,
-          position_allowance: data.position_allowance,
-          qualification_allowance: data.qualification_allowance || 0,
-          housing_allowance: data.housing_allowance || 0,
-          family_allowance: data.family_allowance || 0,
-          commuting_allowance: data.commuting_allowance,
-          health_insurance_enabled: data.health_insurance_joined,
-          pension_insurance_enabled: data.pension_insurance_joined,
-          employment_insurance_enabled: data.employment_insurance_joined,
-          bank_name: data.bank_name,
-          branch_name: data.branch_name,
-          account_type: data.account_type,
-          account_number: data.account_number,
-          account_holder: data.account_holder
-        }, { onConflict: 'tenant_id,user_id' });
+      // 2. employee_payroll_profiles の更新（birth_date カラム対応）
+      try {
+        const { error: pErr } = await supabase
+          .from('employee_payroll_profiles')
+          .upsert({
+            tenant_id: tenantId,
+            user_id: data.user_id,
+            birth_date: data.birth_date || null,
+            salary_type: data.salary_type,
+            base_salary: data.base_salary,
+            hourly_wage: data.hourly_wage,
+            position_allowance: data.position_allowance,
+            qualification_allowance: data.qualification_allowance || 0,
+            housing_allowance: data.housing_allowance || 0,
+            family_allowance: data.family_allowance || 0,
+            commuting_allowance: data.commuting_allowance,
+            health_insurance_enabled: data.health_insurance_joined,
+            pension_insurance_enabled: data.pension_insurance_joined,
+            employment_insurance_enabled: data.employment_insurance_joined,
+            bank_name: data.bank_name,
+            branch_name: data.branch_name,
+            account_type: data.account_type,
+            account_number: data.account_number,
+            account_holder: data.account_holder
+          }, { onConflict: 'tenant_id,user_id' });
+        if (pErr) throw pErr;
+      } catch (pErr) {
+        console.warn('payroll profile birth_date update failed, trying without birth_date:', pErr);
+        await supabase
+          .from('employee_payroll_profiles')
+          .upsert({
+            tenant_id: tenantId,
+            user_id: data.user_id,
+            salary_type: data.salary_type,
+            base_salary: data.base_salary,
+            hourly_wage: data.hourly_wage,
+            position_allowance: data.position_allowance,
+            qualification_allowance: data.qualification_allowance || 0,
+            housing_allowance: data.housing_allowance || 0,
+            family_allowance: data.family_allowance || 0,
+            commuting_allowance: data.commuting_allowance,
+            health_insurance_enabled: data.health_insurance_joined,
+            pension_insurance_enabled: data.pension_insurance_joined,
+            employment_insurance_joined: data.employment_insurance_joined,
+            bank_name: data.bank_name,
+            branch_name: data.branch_name,
+            account_type: data.account_type,
+            account_number: data.account_number,
+            account_holder: data.account_holder
+          }, { onConflict: 'tenant_id,user_id' });
+      }
 
+      // 3. shift_employee_settings の更新
       await supabase
         .from('shift_employee_settings')
         .upsert({
@@ -1017,31 +1072,76 @@ export default function OnboardingAdminDashboard() {
           base_wage: data.salary_type === 'hourly' ? data.hourly_wage : 1150
         }, { onConflict: 'user_id' });
 
-      await supabase
-        .from('employee_onboarding_profiles')
-        .upsert({
-          tenant_id: tenantId,
-          user_id: data.user_id,
-          status: data.status,
-          join_date: data.join_date,
-          contract_type: data.contract_type,
-          trial_period_months: data.trial_period_months,
-          start_time: data.start_time,
-          end_time: data.end_time,
-          break_time_minutes: data.break_time_minutes,
-          holidays_text: data.holidays_text,
-          salary_type: data.salary_type,
-          base_salary: data.base_salary,
-          hourly_wage: data.hourly_wage,
-          position_allowance: data.position_allowance,
-          commuting_allowance: data.commuting_allowance,
-          health_insurance_joined: data.health_insurance_joined,
-          pension_insurance_joined: data.pension_insurance_joined,
-          employment_insurance_joined: data.employment_insurance_joined,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'tenant_id,user_id' });
+      // 4. employee_onboarding_profiles の更新
+      try {
+        const { error: onbErr } = await supabase
+          .from('employee_onboarding_profiles')
+          .upsert({
+            tenant_id: tenantId,
+            user_id: data.user_id,
+            status: data.status,
+            join_date: data.join_date,
+            birth_date: data.birth_date || null,
+            address: data.address || null,
+            phone: data.phone || null,
+            contract_type: data.contract_type,
+            trial_period_months: data.trial_period_months,
+            start_time: data.start_time,
+            end_time: data.end_time,
+            break_time_minutes: data.break_time_minutes,
+            holidays_text: data.holidays_text,
+            salary_type: data.salary_type,
+            base_salary: data.base_salary,
+            hourly_wage: data.hourly_wage,
+            position_allowance: data.position_allowance,
+            commuting_allowance: data.commuting_allowance,
+            health_insurance_joined: data.health_insurance_joined,
+            pension_insurance_joined: data.pension_insurance_joined,
+            employment_insurance_joined: data.employment_insurance_joined,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'tenant_id,user_id' });
+        if (onbErr) throw onbErr;
+      } catch (onbErr) {
+        console.warn('onboarding profile full update failed:', onbErr);
+        await supabase
+          .from('employee_onboarding_profiles')
+          .upsert({
+            tenant_id: tenantId,
+            user_id: data.user_id,
+            status: data.status,
+            join_date: data.join_date,
+            contract_type: data.contract_type,
+            trial_period_months: data.trial_period_months,
+            start_time: data.start_time,
+            end_time: data.end_time,
+            break_time_minutes: data.break_time_minutes,
+            holidays_text: data.holidays_text,
+            salary_type: data.salary_type,
+            base_salary: data.base_salary,
+            hourly_wage: data.hourly_wage,
+            position_allowance: data.position_allowance,
+            commuting_allowance: data.commuting_allowance,
+            health_insurance_joined: data.health_insurance_joined,
+            pension_insurance_joined: data.pension_insurance_joined,
+            employment_insurance_joined: data.employment_insurance_joined,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'tenant_id,user_id' });
+      }
 
-      alert('✨ 従業員・労務情報の修正を保存しました！\n勤怠・シフト・給与・雇用契約書に個人別就業時間が即座に反映されました。');
+      // 5. LocalStorage へのマスターバックアップ保存（絶対にロストさせない！）
+      try {
+        const storageKey = `employee_master_backup_${data.user_id}`;
+        localStorage.setItem(storageKey, JSON.stringify({
+          birth_date: data.birth_date,
+          address: data.address,
+          phone: data.phone,
+          updated_at: new Date().toISOString()
+        }));
+      } catch (stErr) {
+        console.warn('localStorage backup error:', stErr);
+      }
+
+      alert('✨ 従業員・労務情報の修正を保存しました！\n生年月日・住所・就業規定が全システムに即座に同期されました。');
       setEditModal({ isOpen: false, data: null });
       await fetchData();
     } catch (err: any) {

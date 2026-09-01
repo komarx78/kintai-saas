@@ -444,6 +444,27 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       (profData || []).forEach((p: any) => {
         profileMap[p.user_id] = p;
       });
+
+      // users テーブルおよび LocalStorage バックアップから生年月日・マスタを完全補正！
+      usersList.forEach(u => {
+        let localBackup: any = null;
+        try {
+          const raw = localStorage.getItem(`employee_master_backup_${u.id}`);
+          if (raw) localBackup = JSON.parse(raw);
+        } catch (e) {}
+
+        const bDate = profileMap[u.id]?.birth_date || u.birth_date || localBackup?.birth_date || '';
+        if (profileMap[u.id]) {
+          if (!profileMap[u.id].birth_date && bDate) {
+            profileMap[u.id].birth_date = bDate;
+          }
+        } else {
+          profileMap[u.id] = {
+            ...getInitialProfile(tenantId, u.id),
+            birth_date: bDate
+          };
+        }
+      });
       setPayrollProfiles(profileMap);
 
       // 5. 当月の給与明細取得
