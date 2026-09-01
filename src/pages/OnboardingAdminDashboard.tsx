@@ -25,6 +25,9 @@ interface EmployeeOnboardingData {
   user_id: string;
   name: string;
   email?: string;
+  phone?: string;
+  birth_date?: string;
+  address?: string;
   role: string;
   status: 'onboarding' | 'active' | 'offboarding' | 'retired';
   current_step_number?: number;
@@ -357,6 +360,9 @@ export default function OnboardingAdminDashboard() {
           user_id: u.id,
           name: u.name || '従業員',
           email: u.email,
+          phone: u.phone || onb?.phone || '',
+          birth_date: u.birth_date || pay?.birth_date || onb?.birth_date || '',
+          address: u.address || onb?.address || '',
           role: u.role,
           status: onb?.status || (u.is_active === false ? 'retired' : 'active'),
           current_step_number: onb?.current_step_number || (onb?.status === 'onboarding' ? 1 : 5),
@@ -877,6 +883,9 @@ export default function OnboardingAdminDashboard() {
           tenant_id: tenantId,
           name: wizardData.name,
           email: tempEmail,
+          phone: wizardData.phone || null,
+          birth_date: wizardData.birth_date || null,
+          address: wizardData.address || null,
           role: 'user',
           join_date: wizardData.join_date,
           department: wizardData.department,
@@ -911,6 +920,7 @@ export default function OnboardingAdminDashboard() {
         housing_allowance: wizardData.housing_allowance,
         family_allowance: wizardData.family_allowance,
         commuting_allowance: wizardData.commuting_allowance,
+        birth_date: wizardData.birth_date || null,
         health_insurance_enabled: wizardData.health_insurance_joined,
         pension_insurance_enabled: wizardData.pension_insurance_joined,
         employment_insurance_enabled: wizardData.employment_insurance_joined,
@@ -968,7 +978,10 @@ export default function OnboardingAdminDashboard() {
           name: data.name,
           department: data.department,
           employment_type: data.employment_type,
-          join_date: data.join_date
+          join_date: data.join_date,
+          birth_date: data.birth_date || null,
+          address: data.address || null,
+          phone: data.phone || null
         })
         .eq('id', data.user_id);
 
@@ -1367,8 +1380,16 @@ export default function OnboardingAdminDashboard() {
                                   {emp.name}
                                   {isRetired && <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-bold">退職</span>}
                                 </div>
-                                <div className="text-[10px] text-slate-400">
-                                  {emp.department || '営業部'}{emp.position_name ? ` (${emp.position_name})` : ''} / {emp.join_date}入社
+                                <div className="text-[10px] text-slate-400 flex items-center gap-1.5 flex-wrap">
+                                  <span>{emp.department || '営業部'}{emp.position_name ? ` (${emp.position_name})` : ''}</span>
+                                  <span>•</span>
+                                  <span>{emp.join_date}入社</span>
+                                  {emp.birth_date && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-indigo-600 font-medium">🎂 {emp.birth_date}生</span>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -2028,6 +2049,28 @@ export default function OnboardingAdminDashboard() {
                       type="date"
                       value={editModal.data.join_date}
                       onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, join_date: e.target.value } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-indigo-900 block mb-1">🎂 生年月日（西暦・介護保険連動）</label>
+                    <input
+                      type="date"
+                      value={editModal.data.birth_date ? String(editModal.data.birth_date).substring(0, 10) : ''}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, birth_date: e.target.value } })}
+                      className="w-full bg-white border border-indigo-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">現住所</label>
+                    <input
+                      type="text"
+                      value={editModal.data.address || ''}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, address: e.target.value } })}
+                      placeholder="滋賀県大津市..."
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                     />
                   </div>

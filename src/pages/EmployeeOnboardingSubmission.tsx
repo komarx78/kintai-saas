@@ -49,6 +49,9 @@ export default function EmployeeOnboardingSubmission() {
   // 3. 本人確認・マイナンバーState
   const [idForm, setIdForm] = useState({
     my_number: '',
+    birth_date: '',
+    address: '',
+    phone: '',
     id_type: 'drivers_license', // 'drivers_license', 'my_number_card', 'passport'
     attachment_data: '',
     attachment_filename: '',
@@ -189,7 +192,50 @@ export default function EmployeeOnboardingSubmission() {
 
       if (error) throw error;
 
-      alert(`✨ 「${title}」の提出が完了しました！\n管理者が確認・承認すると、給与や各種設定に自動反映されます。`);
+      // 労務大元マスタ（users / employee_payroll_profiles）へ即時バックアップ連動
+      try {
+        if (docType === 'identity_card' && (formData.birth_date || formData.address || formData.phone)) {
+          await supabase.from('users').update({
+            birth_date: formData.birth_date || null,
+            address: formData.address || null,
+            phone: formData.phone || null
+          }).eq('id', userId);
+
+          if (formData.birth_date) {
+            await supabase.from('employee_payroll_profiles').upsert({
+              tenant_id: tenantId,
+              user_id: userId,
+              birth_date: formData.birth_date
+            }, { onConflict: 'tenant_id,user_id' });
+          }
+        } else if (docType === 'bank_passbook') {
+          await supabase.from('employee_payroll_profiles').upsert({
+            tenant_id: tenantId,
+            user_id: userId,
+            bank_name: formData.bank_name,
+            branch_name: formData.branch_name,
+            account_type: formData.account_type,
+            account_number: formData.account_number,
+            account_holder: formData.account_holder
+          }, { onConflict: 'tenant_id,user_id' });
+        } else if (docType === 'commuting_pass') {
+          await supabase.from('employee_payroll_profiles').upsert({
+            tenant_id: tenantId,
+            user_id: userId,
+            commuting_allowance: formData.one_month_pass_amount || 0
+          }, { onConflict: 'tenant_id,user_id' });
+        } else if (docType === 'dependents_form') {
+          await supabase.from('employee_payroll_profiles').upsert({
+            tenant_id: tenantId,
+            user_id: userId,
+            dependents_count: formData.dependents_count || 0
+          }, { onConflict: 'tenant_id,user_id' });
+        }
+      } catch (syncErr) {
+        console.warn('Auto sync profile error:', syncErr);
+      }
+
+      alert(`✨ 「${title}」の提出が完了しました！\n労務・給与マスタへ即座に反映されました。`);
       await fetchProfileAndSubmissions();
     } catch (err: any) {
       console.error('Submit error:', err);
@@ -559,6 +605,39 @@ export default function EmployeeOnboardingSubmission() {
             </div>
 
             <div className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">🎂 生年月日（西暦） <span className="text-rose-500">*</span></label>
+                  <input
+                    type="date"
+                    value={idForm.birth_date}
+                    onChange={e => setIdForm({ ...idForm, birth_date: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 font-bold text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">連絡先 電話番号</label>
+                  <input
+                    type="tel"
+                    placeholder="例: 090-1234-5678"
+                    value={idForm.phone}
+                    onChange={e => setIdForm({ ...idForm, phone: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">住民票記載の現住所</label>
+                <input
+                  type="text"
+                  placeholder="例: 滋賀県大津市坂本..."
+                  value={idForm.address}
+                  onChange={e => setIdForm({ ...idForm, address: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 font-bold"
+                />
+              </div>
+
               <div>
                 <label className="text-[11px] font-bold text-slate-600 block mb-1">マイナンバー (12桁)</label>
                 <input

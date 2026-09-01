@@ -14,7 +14,7 @@ import {
   type AttendanceSummary, 
   type PayrollSettings 
 } from '../lib/payrollEngine';
-import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress } from '../lib/socialInsurance';
+import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress, isNursingInsuranceApplicable } from '../lib/socialInsurance';
 
 interface PayslipManagementProps {
   tenantId: string | null;
@@ -308,6 +308,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       fixed_overtime_hours: 0,
       fixed_overtime_allowance: 0,
       dependents_count: 0,
+      birth_date: '',
       health_insurance_enabled: true,
       nursing_insurance_enabled: false,
       pension_insurance_enabled: true,
@@ -827,7 +828,19 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
       if (error) throw error;
 
-      alert('従業員の給与マスタ設定を保存しました！');
+      // users テーブル側にも生年月日を安全に同期
+      if (prof.birth_date && prof.user_id) {
+        try {
+          await supabase
+            .from('users')
+            .update({ birth_date: prof.birth_date })
+            .eq('id', prof.user_id);
+        } catch (uErr) {
+          console.warn('users birth_date update:', uErr);
+        }
+      }
+
+      alert('従業員の給与マスタ設定（生年月日・社保・手当）を保存しました！');
       setProfileModal(prev => ({ ...prev, isOpen: false }));
       await fetchData();
     } catch (err: any) {
@@ -1160,8 +1173,31 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                             {slip.status === 'published' ? '公開確定済' : '下書き'}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-400 flex items-center gap-3 mt-1">
-                          <span>{slip.user?.department || '一般社員'}</span>
+                        <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2.5 mt-1.5">
+                          <span className="font-bold text-slate-600">{slip.user?.department || '一般社員'}</span>
+                          <span>•</span>
+                          <span>{slip.user?.join_date ? `${slip.user.join_date} 入社` : '社員'}</span>
+                          {prof?.birth_date ? (() => {
+                            const bDate = new Date(prof.birth_date);
+                            const now = new Date();
+                            let age = now.getFullYear() - bDate.getFullYear();
+                            const mDiff = now.getMonth() - bDate.getMonth();
+                            if (mDiff < 0 || (mDiff === 0 && now.getDate() < bDate.getDate())) age--;
+                            const isNursing = isNursingInsuranceApplicable(prof.birth_date, new Date());
+                            return (
+                              <>
+                                <span>•</span>
+                                <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-bold text-[11px] border border-indigo-100 flex items-center gap-1">
+                                  🎂 {String(prof.birth_date).substring(0, 10)}生 ({age}歳 / {isNursing ? '🛡️介護保険対象' : '介護保険非対象'})
+                                </span>
+                              </>
+                            );
+                          })() : (
+                            <>
+                              <span>•</span>
+                              <span className="text-slate-400 text-[11px]">生年月日未登録</span>
+                            </>
+                          )}
                           {prof?.bank_name ? (
                             <span className="text-[11px] text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded-lg">
                               🏦 {prof.bank_name} {prof.branch_name} ({prof.account_type === 'current' ? '当座' : '普通'} {prof.account_number})
@@ -1713,6 +1749,57 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
                   />
                 </div>
+              </div>
+
+              {/* 🎂 生年月日・年齢・介護保険判定 */}
+              <div className="bg-indigo-50/60 p-4 rounded-2xl border border-indigo-200 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <label className="text-xs font-black text-indigo-900 flex items-center gap-1.5">
+                      🎂 生年月日（西暦）
+                    </label>
+                    <span className="text-[10px] text-indigo-600 font-bold">※ 入退社労務書類管理システム（大元マスタ）と完全連動</span>
+                  </div>
+                  {profileModal.profile.birth_date ? (() => {
+                    const bDate = new Date(profileModal.profile.birth_date);
+                    const now = new Date();
+                    let age = now.getFullYear() - bDate.getFullYear();
+                    const mDiff = now.getMonth() - bDate.getMonth();
+                    if (mDiff < 0 || (mDiff === 0 && now.getDate() < bDate.getDate())) age--;
+                    const isNursing = isNursingInsuranceApplicable(profileModal.profile.birth_date, new Date());
+                    return (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-slate-700 bg-white px-2.5 py-0.5 rounded-lg border border-slate-200">
+                          {age} 歳
+                        </span>
+                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-lg border ${
+                          isNursing ? 'bg-purple-100 text-purple-700 border-purple-300' : 'bg-slate-100 text-slate-500 border-slate-200'
+                        }`}>
+                          {isNursing ? '🛡️ 介護保険 第2号被保険者（40〜64歳：自動徴収）' : '介護保険 対象外'}
+                        </span>
+                      </div>
+                    );
+                  })() : (
+                    <span className="text-[11px] text-slate-400">※生年月日を入力すると介護保険該当（40〜64歳）を自動判定します</span>
+                  )}
+                </div>
+                <input
+                  type="date"
+                  value={profileModal.profile.birth_date ? String(profileModal.profile.birth_date).substring(0, 10) : ''}
+                  onChange={e => {
+                    const bVal = e.target.value;
+                    const isNursing = isNursingInsuranceApplicable(bVal, new Date());
+                    setProfileModal({
+                      ...profileModal,
+                      profile: { 
+                        ...profileModal.profile, 
+                        birth_date: bVal,
+                        nursing_insurance_enabled: isNursing
+                      }
+                    });
+                  }}
+                  className="w-full bg-white border border-indigo-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                />
               </div>
 
               {/* 手当設定 */}
