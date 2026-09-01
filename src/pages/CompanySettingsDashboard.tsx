@@ -14,7 +14,7 @@ import {
   Building2, Users, Calendar, DollarSign, BookOpen, 
   ArrowLeft, LogOut, Loader2, Save, Plus, Trash2, 
   Sparkles, Bot, Clock, ShieldCheck, Printer, X,
-  UserCheck, ArrowUp, ArrowDown, RotateCcw
+  UserCheck, ArrowUp, ArrowDown, RotateCcw, Edit3
 } from 'lucide-react';
 
 interface DepartmentMaster {
@@ -69,6 +69,15 @@ export default function CompanySettingsDashboard() {
   const [newStepName, setNewStepName] = useState('');
   const [newStepDesc, setNewStepDesc] = useState('');
   const [newStepApprover, setNewStepApprover] = useState('管理者全員');
+  const [editingStepModal, setEditingStepModal] = useState<{
+    isOpen: boolean;
+    index: number;
+    step: OnboardingWorkflowStep | null;
+  }>({
+    isOpen: false,
+    index: -1,
+    step: null
+  });
 
   // 1. 会社基本情報State
   const [basicInfo, setBasicInfo] = useState({
@@ -522,9 +531,22 @@ export default function CompanySettingsDashboard() {
     setNewStepApprover('管理者全員');
   };
 
-  // 標準ステップに初期化
+  // ステップ内容の編集保存
+  const handleSaveEditedStep = () => {
+    if (editingStepModal.index < 0 || !editingStepModal.step) return;
+    if (!editingStepModal.step.name.trim()) {
+      alert('ステップ名を入力してください。');
+      return;
+    }
+    const newSteps = [...onboardingSteps];
+    newSteps[editingStepModal.index] = { ...editingStepModal.step };
+    setOnboardingSteps(newSteps);
+    setEditingStepModal({ isOpen: false, index: -1, step: null });
+  };
+
+  // デフォルト設定に初期化
   const handleResetDefaultSteps = () => {
-    if (confirm('入社手続きステップを国税庁・労務標準の5ステップに初期化しますか？')) {
+    if (confirm('入社手続きステップをデフォルト設定（標準5ステップ）に戻しますか？')) {
       setOnboardingSteps(DEFAULT_ONBOARDING_STEPS);
     }
   };
@@ -1257,7 +1279,7 @@ export default function CompanySettingsDashboard() {
                 className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-xl border border-slate-200 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-slate-600" />
-                国税庁・労務標準5ステップに初期化
+                デフォルト設定に戻す
               </button>
             </div>
 
@@ -1265,7 +1287,7 @@ export default function CompanySettingsDashboard() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-black text-slate-700">登録済み手続きステップ ({onboardingSteps.length}ステップ)</span>
-                <span className="text-[10px] text-slate-400">※ 矢印ボタンで順序を自由に入れ替えられます</span>
+                <span className="text-[10px] text-slate-400">※ 各ステップの「✏️ 編集」ボタンや「承認権限」をクリックして変更できます</span>
               </div>
 
               <div className="space-y-2.5">
@@ -1285,9 +1307,14 @@ export default function CompanySettingsDashboard() {
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-slate-800 text-sm">{step.name}</span>
-                          <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                            承認権限: {step.approver_name || '管理者全員'}
-                          </span>
+                          <button
+                            onClick={() => setEditingStepModal({ isOpen: true, index: idx, step: { ...step } })}
+                            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 cursor-pointer transition"
+                            title="クリックして承認権限やステップ名を編集"
+                          >
+                            <span>承認権限: {step.approver_name || '管理者全員'}</span>
+                            <Edit3 className="w-3 h-3 text-indigo-500" />
+                          </button>
                           {!step.is_enabled && (
                             <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
                               無効化中
@@ -1319,6 +1346,15 @@ export default function CompanySettingsDashboard() {
                       </div>
 
                       <button
+                        onClick={() => setEditingStepModal({ isOpen: true, index: idx, step: { ...step } })}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border border-slate-300 flex items-center gap-1"
+                        title="ステップ名・説明・承認権限を編集"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+                        編集
+                      </button>
+
+                      <button
                         onClick={() => handleToggleStep(idx)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border ${
                           step.is_enabled
@@ -1348,29 +1384,33 @@ export default function CompanySettingsDashboard() {
                 <Plus className="w-4 h-4 text-indigo-600" />
                 ＋ 自社独自の入社手続きステップを追加
               </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                 <input
                   type="text"
-                  placeholder="ステップ名（例: 入社オリエン・PC手配）"
+                  placeholder="ステップ名（例: PC手配・研修受講）"
                   value={newStepName}
                   onChange={e => setNewStepName(e.target.value)}
-                  className="bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                  className="sm:col-span-4 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
                 />
                 <input
                   type="text"
                   placeholder="手続き内容説明"
                   value={newStepDesc}
                   onChange={e => setNewStepDesc(e.target.value)}
-                  className="bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700"
+                  className="sm:col-span-4 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700"
                 />
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="承認者（例: 労務担当、総務部）"
+                <div className="sm:col-span-4 flex gap-2">
+                  <select
                     value={newStepApprover}
                     onChange={e => setNewStepApprover(e.target.value)}
                     className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
-                  />
+                  >
+                    <option value="管理者全員">承認権限: 管理者全員</option>
+                    <option value="労務責任者">承認権限: 労務責任者</option>
+                    <option value="労務担当者">承認権限: 労務担当者</option>
+                    <option value="直属上長・所属長">承認権限: 直属上長・所属長</option>
+                    <option value="総務部">承認権限: 総務部</option>
+                  </select>
                   <button
                     onClick={handleAddNewStep}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-xs cursor-pointer whitespace-nowrap"
@@ -1460,6 +1500,119 @@ export default function CompanySettingsDashboard() {
               <button onClick={() => window.print()} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer">
                 <Printer className="w-4 h-4" />
                 営業カレンダーをA4印刷 / PDF保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✏️ 入社手続きステップ ＆ 承認権限 編集モーダル */}
+      {editingStepModal.isOpen && editingStepModal.step && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 my-8 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <Edit3 className="w-5 h-5 text-indigo-600" />
+                  ステップの編集（Step {editingStepModal.step.step_number}）
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">ステップ名、手続き内容、承認権限を設定します</p>
+              </div>
+              <button
+                onClick={() => setEditingStepModal({ isOpen: false, index: -1, step: null })}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">ステップ名 <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  value={editingStepModal.step.name}
+                  onChange={e => setEditingStepModal(prev => prev.step ? {
+                    ...prev,
+                    step: { ...prev.step, name: e.target.value }
+                  } : prev)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                  placeholder="例: 労務書類審査・原本確認"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">手続き内容説明</label>
+                <textarea
+                  rows={3}
+                  value={editingStepModal.step.description}
+                  onChange={e => setEditingStepModal(prev => prev.step ? {
+                    ...prev,
+                    step: { ...prev.step, description: e.target.value }
+                  } : prev)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs text-slate-800"
+                  placeholder="例: 提出された通帳原本や通勤申請の審査・差戻しまたは承認"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">承認権限（誰が承認できるか） <span className="text-indigo-600 font-bold">*</span></label>
+                <div className="space-y-2">
+                  <select
+                    value={
+                      ['管理者全員', '労務責任者', '労務担当者', '直属上長・所属長', '総務部'].includes(editingStepModal.step.approver_name || '')
+                        ? (editingStepModal.step.approver_name || '管理者全員')
+                        : 'custom'
+                    }
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val !== 'custom') {
+                        setEditingStepModal(prev => prev.step ? {
+                          ...prev,
+                          step: { ...prev.step, approver_name: val }
+                        } : prev);
+                      }
+                    }}
+                    className="w-full bg-indigo-50/50 border border-indigo-200 rounded-xl px-3 py-2 font-bold text-indigo-900"
+                  >
+                    <option value="管理者全員">管理者全員（システム管理者なら誰でも承認可）</option>
+                    <option value="労務責任者">労務責任者（人事労務の責任者）</option>
+                    <option value="労務担当者">労務担当者（現場の労務担当）</option>
+                    <option value="直属上長・所属長">直属上長・所属長（配属部署の責任者）</option>
+                    <option value="総務部">総務部（総務担当者）</option>
+                    <option value="custom">カスタム自由入力（自社の役職・担当者名）</option>
+                  </select>
+
+                  {/* カスタム入力欄 */}
+                  {!['管理者全員', '労務責任者', '労務担当者', '直属上長・所属長', '総務部'].includes(editingStepModal.step.approver_name || '') && (
+                    <input
+                      type="text"
+                      placeholder="承認権限名を入力（例: 代表取締役、店長、人事部長 等）"
+                      value={editingStepModal.step.approver_name || ''}
+                      onChange={e => setEditingStepModal(prev => prev.step ? {
+                        ...prev,
+                        step: { ...prev.step, approver_name: e.target.value }
+                      } : prev)}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setEditingStepModal({ isOpen: false, index: -1, step: null })}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSaveEditedStep}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5" />
+                変更を反映する
               </button>
             </div>
           </div>
