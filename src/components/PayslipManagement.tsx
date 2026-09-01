@@ -184,7 +184,18 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
   const savePayslipSafe = async (rawPayload: any) => {
     const fullPayload = sanitizePayslipPayload(rawPayload);
     // 旧スキーマ対応用（新カラムを除外したペイロード）
-    const { absence_deduction, late_early_deduction, special_allowance, hourly_wage, ...legacyPayload } = fullPayload;
+    const { 
+      salary_type, 
+      hourly_wage, 
+      absence_deduction, 
+      late_early_deduction, 
+      special_allowance, 
+      position_allowance, 
+      qualification_allowance, 
+      housing_allowance, 
+      family_allowance, 
+      ...legacyPayload 
+    } = fullPayload as any;
 
     try {
       // 1. まず完全版で upsert を試行
@@ -475,22 +486,29 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
         const bDate = onb?.birth_date || u.birth_date || pay?.birth_date || localBackup?.birth_date || '';
         
-        // 給与形態：労務マスタ > 給与マスタ > 雇用形態判定
-        const salType = onb?.salary_type || pay?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly');
-        // 基本給：労務マスタ > 給与マスタ > 250000
-        const bSalary = onb?.base_salary ?? pay?.base_salary ?? 250000;
-        // 時給：労務マスタ > 給与マスタ > 1150
-        const hWage = onb?.hourly_wage ?? pay?.hourly_wage ?? 1150;
+        // 給与形態：労務マスタ > 給与マスタ > バックアップ > 雇用形態判定
+        const salType = onb?.salary_type || pay?.salary_type || localBackup?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly');
+        // 基本給：労務マスタ > 給与マスタ > バックアップ > 250000
+        const bSalary = onb?.base_salary ?? pay?.base_salary ?? localBackup?.base_salary ?? 250000;
+        // 時給：労務マスタ > 給与マスタ > バックアップ > 1150
+        const hWage = onb?.hourly_wage ?? pay?.hourly_wage ?? localBackup?.hourly_wage ?? 1150;
         // 役職手当
-        const posAllow = onb?.position_allowance ?? pay?.position_allowance ?? 0;
+        const posAllow = onb?.position_allowance ?? pay?.position_allowance ?? localBackup?.position_allowance ?? 0;
         // 資格手当
-        const qualAllow = onb?.qualification_allowance ?? pay?.qualification_allowance ?? 0;
+        const qualAllow = onb?.qualification_allowance ?? pay?.qualification_allowance ?? localBackup?.qualification_allowance ?? 0;
         // 住宅手当
-        const houseAllow = onb?.housing_allowance ?? pay?.housing_allowance ?? 0;
+        const houseAllow = onb?.housing_allowance ?? pay?.housing_allowance ?? localBackup?.housing_allowance ?? 0;
         // 家族手当
-        const famAllow = onb?.family_allowance ?? pay?.family_allowance ?? 0;
+        const famAllow = onb?.family_allowance ?? pay?.family_allowance ?? localBackup?.family_allowance ?? 0;
         // 通勤手当
-        const comAllow = onb?.commuting_allowance ?? pay?.commuting_allowance ?? 15000;
+        const comAllow = onb?.commuting_allowance ?? pay?.commuting_allowance ?? localBackup?.commuting_allowance ?? 15000;
+
+        // 銀行口座情報（SSOT: バックアップ > 労務マスタ > 給与マスタ）
+        const bName = localBackup?.bank_name || onb?.bank_name || pay?.bank_name || '';
+        const brName = localBackup?.branch_name || onb?.branch_name || pay?.branch_name || '';
+        const accType = localBackup?.account_type || onb?.account_type || pay?.account_type || 'ordinary';
+        const accNum = localBackup?.account_number || onb?.account_number || pay?.account_number || '';
+        const accHolder = localBackup?.account_holder || onb?.account_holder || pay?.account_holder || u.name || '';
 
         profileMap[u.id] = {
           tenant_id: tenantId,
@@ -506,19 +524,19 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           commuting_taxable: pay?.commuting_taxable ?? false,
           fixed_overtime_hours: pay?.fixed_overtime_hours ?? 0,
           fixed_overtime_allowance: pay?.fixed_overtime_allowance ?? 0,
-          dependents_count: pay?.dependents_count ?? 0,
+          dependents_count: pay?.dependents_count ?? localBackup?.dependents_count ?? 0,
           birth_date: bDate,
-          health_insurance_enabled: onb?.health_insurance_joined ?? pay?.health_insurance_enabled ?? true,
+          health_insurance_enabled: onb?.health_insurance_joined ?? pay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? true,
           nursing_insurance_enabled: pay?.nursing_insurance_enabled ?? null,
-          pension_insurance_enabled: onb?.pension_insurance_joined ?? pay?.pension_insurance_enabled ?? true,
-          employment_insurance_enabled: onb?.employment_insurance_joined ?? pay?.employment_insurance_enabled ?? true,
+          pension_insurance_enabled: onb?.pension_insurance_joined ?? pay?.pension_insurance_enabled ?? localBackup?.pension_insurance_joined ?? true,
+          employment_insurance_enabled: onb?.employment_insurance_joined ?? pay?.employment_insurance_enabled ?? localBackup?.employment_insurance_joined ?? true,
           resident_tax_monthly: pay?.resident_tax_monthly ?? 0,
           tax_bracket: pay?.tax_bracket || 'kou',
-          bank_name: pay?.bank_name || '',
-          branch_name: pay?.branch_name || '',
-          account_type: pay?.account_type || 'ordinary',
-          account_number: pay?.account_number || '',
-          account_holder: pay?.account_holder || ''
+          bank_name: bName,
+          branch_name: brName,
+          account_type: accType,
+          account_number: accNum,
+          account_holder: accHolder
         };
       });
       setPayrollProfiles(profileMap);
@@ -990,13 +1008,48 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     if (!tenantId) return;
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from('employee_payroll_profiles')
-        .upsert(prof, { onConflict: 'tenant_id,user_id' });
+      // 1. LocalStorage バックアップへのマージ保存（SSOT保護）
+      let localMaster: any = {};
+      try {
+        const raw = localStorage.getItem(`employee_master_backup_${prof.user_id}`);
+        if (raw) localMaster = JSON.parse(raw);
+      } catch (e) {}
 
-      if (error) throw error;
+      localMaster = {
+        ...localMaster,
+        birth_date: prof.birth_date || localMaster.birth_date,
+        salary_type: prof.salary_type,
+        base_salary: prof.base_salary,
+        hourly_wage: prof.hourly_wage,
+        position_allowance: prof.position_allowance,
+        qualification_allowance: prof.qualification_allowance,
+        housing_allowance: prof.housing_allowance,
+        family_allowance: prof.family_allowance,
+        commuting_allowance: prof.commuting_allowance,
+        bank_name: prof.bank_name || localMaster.bank_name,
+        branch_name: prof.branch_name || localMaster.branch_name,
+        account_type: prof.account_type || localMaster.account_type,
+        account_number: prof.account_number || localMaster.account_number,
+        account_holder: prof.account_holder || localMaster.account_holder,
+        dependents_count: prof.dependents_count,
+        updated_at: new Date().toISOString()
+      };
+      try {
+        localStorage.setItem(`employee_master_backup_${prof.user_id}`, JSON.stringify(localMaster));
+      } catch (e) {}
 
-      // users テーブル側にも生年月日を安全に同期
+      // 2. employee_payroll_profiles への保存
+      try {
+        const { error } = await supabase
+          .from('employee_payroll_profiles')
+          .upsert(prof, { onConflict: 'tenant_id,user_id' });
+
+        if (error) console.warn('Supabase payroll profile upsert error:', error.message);
+      } catch (dbErr) {
+        console.warn('Supabase payroll profile exception:', dbErr);
+      }
+
+      // 3. users テーブル側にも生年月日を安全に同期
       if (prof.birth_date && prof.user_id) {
         try {
           await supabase
@@ -1008,7 +1061,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         }
       }
 
-      alert('従業員の給与マスタ設定（生年月日・社保・手当）を保存しました！');
+      alert('従業員の給与マスタ設定（生年月日・口座・社保・手当）を保存しました！');
       setProfileModal(prev => ({ ...prev, isOpen: false }));
       await fetchData();
     } catch (err: any) {

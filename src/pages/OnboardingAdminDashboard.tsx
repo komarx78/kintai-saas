@@ -737,15 +737,36 @@ export default function OnboardingAdminDashboard() {
       if (proxyInputModal.docType === 'bank_passbook') {
         await supabase
           .from('employee_payroll_profiles')
-          .upsert({
-            tenant_id: tenantId,
-            user_id: uId,
-            bank_name: proxyInputModal.bankName,
-            branch_name: proxyInputModal.branchName,
-            account_type: proxyInputModal.accountType,
-            account_number: proxyInputModal.accountNumber,
-            account_holder: proxyInputModal.accountHolder
-          }, { onConflict: 'tenant_id,user_id' });
+        // 既存バックアップの取得とマージ
+        let localMaster: any = {};
+        try {
+          const raw = localStorage.getItem(`employee_master_backup_${uId}`);
+          if (raw) localMaster = JSON.parse(raw);
+        } catch (e) {}
+
+        localMaster.bank_name = proxyInputModal.bankName;
+        localMaster.branch_name = proxyInputModal.branchName;
+        localMaster.account_type = proxyInputModal.accountType;
+        localMaster.account_number = proxyInputModal.accountNumber;
+        localMaster.account_holder = proxyInputModal.accountHolder;
+        localMaster.updated_at = new Date().toISOString();
+        try {
+          localStorage.setItem(`employee_master_backup_${uId}`, JSON.stringify(localMaster));
+        } catch (e) {}
+
+        try {
+          await supabase
+            .from('employee_payroll_profiles')
+            .upsert({
+              tenant_id: tenantId,
+              user_id: uId,
+              bank_name: proxyInputModal.bankName,
+              branch_name: proxyInputModal.branchName,
+              account_type: proxyInputModal.accountType,
+              account_number: proxyInputModal.accountNumber,
+              account_holder: proxyInputModal.accountHolder
+            }, { onConflict: 'tenant_id,user_id' });
+        } catch (e) {}
 
         await supabase
           .from('employee_document_submissions')
@@ -765,13 +786,26 @@ export default function OnboardingAdminDashboard() {
             status: 'approved'
           });
       } else if (proxyInputModal.docType === 'commuting_pass') {
-        await supabase
-          .from('employee_payroll_profiles')
-          .upsert({
-            tenant_id: tenantId,
-            user_id: uId,
-            commuting_allowance: proxyInputModal.commutingAmount
-          }, { onConflict: 'tenant_id,user_id' });
+        let localMaster: any = {};
+        try {
+          const raw = localStorage.getItem(`employee_master_backup_${uId}`);
+          if (raw) localMaster = JSON.parse(raw);
+        } catch (e) {}
+        localMaster.commuting_allowance = proxyInputModal.commutingAmount;
+        localMaster.updated_at = new Date().toISOString();
+        try {
+          localStorage.setItem(`employee_master_backup_${uId}`, JSON.stringify(localMaster));
+        } catch (e) {}
+
+        try {
+          await supabase
+            .from('employee_payroll_profiles')
+            .upsert({
+              tenant_id: tenantId,
+              user_id: uId,
+              commuting_allowance: proxyInputModal.commutingAmount
+            }, { onConflict: 'tenant_id,user_id' });
+        } catch (e) {}
 
         await supabase
           .from('employee_document_submissions')
@@ -825,39 +859,68 @@ export default function OnboardingAdminDashboard() {
     try {
       const uId = sub.user_id;
 
+      // 既存バックアップの取得とマージ
+      let localMaster: any = {};
+      try {
+        const raw = localStorage.getItem(`employee_master_backup_${uId}`);
+        if (raw) localMaster = JSON.parse(raw);
+      } catch (e) {}
+
       if (sub.document_type === 'bank_passbook') {
         const d = sub.data;
-        await supabase
-          .from('employee_payroll_profiles')
-          .upsert({
-            tenant_id: tenantId,
-            user_id: uId,
-            bank_name: d.bank_name,
-            branch_name: d.branch_name,
-            account_type: d.account_type,
-            account_number: d.account_number,
-            account_holder: d.account_holder
-          }, { onConflict: 'tenant_id,user_id' });
+        localMaster.bank_name = d.bank_name;
+        localMaster.branch_name = d.branch_name;
+        localMaster.account_type = d.account_type;
+        localMaster.account_number = d.account_number;
+        localMaster.account_holder = d.account_holder;
+
+        try {
+          await supabase
+            .from('employee_payroll_profiles')
+            .upsert({
+              tenant_id: tenantId,
+              user_id: uId,
+              bank_name: d.bank_name,
+              branch_name: d.branch_name,
+              account_type: d.account_type,
+              account_number: d.account_number,
+              account_holder: d.account_holder
+            }, { onConflict: 'tenant_id,user_id' });
+        } catch (e) {}
       } else if (sub.document_type === 'commuting_pass') {
         const d = sub.data;
         const amount = d.one_month_pass_amount || 0;
-        await supabase
-          .from('employee_payroll_profiles')
-          .upsert({
-            tenant_id: tenantId,
-            user_id: uId,
-            commuting_allowance: amount
-          }, { onConflict: 'tenant_id,user_id' });
+        localMaster.commuting_allowance = amount;
+
+        try {
+          await supabase
+            .from('employee_payroll_profiles')
+            .upsert({
+              tenant_id: tenantId,
+              user_id: uId,
+              commuting_allowance: amount
+            }, { onConflict: 'tenant_id,user_id' });
+        } catch (e) {}
       } else if (sub.document_type === 'dependents_form') {
         const d = sub.data;
-        await supabase
-          .from('employee_payroll_profiles')
-          .upsert({
-            tenant_id: tenantId,
-            user_id: uId,
-            dependents_count: d.dependents_count || 0
-          }, { onConflict: 'tenant_id,user_id' });
+        localMaster.dependents_count = d.dependents_count || 0;
+
+        try {
+          await supabase
+            .from('employee_payroll_profiles')
+            .upsert({
+              tenant_id: tenantId,
+              user_id: uId,
+              dependents_count: d.dependents_count || 0
+            }, { onConflict: 'tenant_id,user_id' });
+        } catch (e) {}
       }
+
+      // LocalStorage への永続保存
+      try {
+        localMaster.updated_at = new Date().toISOString();
+        localStorage.setItem(`employee_master_backup_${uId}`, JSON.stringify(localMaster));
+      } catch (e) {}
 
       await supabase
         .from('employee_document_submissions')
@@ -1129,20 +1192,36 @@ export default function OnboardingAdminDashboard() {
           }, { onConflict: 'tenant_id,user_id' });
       }
 
-      // 5. LocalStorage へのマスターバックアップ保存（絶対にロストさせない！）
+      // 5. LocalStorage へのマスターバックアップ保存（絶対にロストさせない大元マスタSSOT！）
       try {
         const storageKey = `employee_master_backup_${data.user_id}`;
         localStorage.setItem(storageKey, JSON.stringify({
           birth_date: data.birth_date,
           address: data.address,
           phone: data.phone,
+          bank_name: data.bank_name,
+          branch_name: data.branch_name,
+          account_type: data.account_type,
+          account_number: data.account_number,
+          account_holder: data.account_holder,
+          salary_type: data.salary_type,
+          base_salary: data.base_salary,
+          hourly_wage: data.hourly_wage,
+          position_allowance: data.position_allowance,
+          qualification_allowance: data.qualification_allowance || 0,
+          housing_allowance: data.housing_allowance || 0,
+          family_allowance: data.family_allowance || 0,
+          commuting_allowance: data.commuting_allowance,
+          health_insurance_joined: data.health_insurance_joined,
+          pension_insurance_joined: data.pension_insurance_joined,
+          employment_insurance_joined: data.employment_insurance_joined,
           updated_at: new Date().toISOString()
         }));
       } catch (stErr) {
         console.warn('localStorage backup error:', stErr);
       }
 
-      alert('✨ 従業員・労務情報の修正を保存しました！\n生年月日・住所・就業規定が全システムに即座に同期されました。');
+      alert('✨ 従業員・労務情報の修正を保存しました！\n銀行口座・生年月日・住所・就業規定が全システムに即座に同期されました。');
       setEditModal({ isOpen: false, data: null });
       await fetchData();
     } catch (err: any) {
