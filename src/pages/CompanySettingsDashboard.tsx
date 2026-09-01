@@ -137,10 +137,10 @@ export default function CompanySettingsDashboard() {
   // 1. 会社基本情報State
   const [basicInfo, setBasicInfo] = useState({
     name: '株式会社KAP',
-    address: '東京都千代田区大手町 1-2-3',
-    representative_name: '代表取締役 〇〇 〇〇',
-    phone_number: '03-1234-5678',
-    corporate_number: '1234567890123'
+    address: '滋賀県大津市坂本3丁目21-16',
+    representative_name: '代表取締役 駒井 秀一朗',
+    phone_number: '077-574-6907',
+    corporate_number: ''
   });
 
   // 2. 部署マスタState
@@ -183,11 +183,11 @@ export default function CompanySettingsDashboard() {
     closing_day: 31,
     payment_day: 25,
     payment_month: 'current',
-    prefecture_code: '13', // デフォルト: 13 東京都
+    prefecture_code: '25', // デフォルト: 25 滋賀県
     overtime_rate: 1.25,
     night_rate: 0.25,
     holiday_rate: 1.35,
-    health_insurance_rate: 0.05,
+    health_insurance_rate: 0.0494, // 滋賀県 9.88% 折半 4.94%
     pension_rate: 0.0915,
     employment_insurance_rate: 0.006,
     commuting_allowance_limit: 150000

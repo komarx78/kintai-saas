@@ -76,9 +76,10 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     closing_day: 'end_of_month',
     payment_month: 'current',
     payment_day: '25',
+    prefecture_code: '25', // デフォルト: 25 滋賀県
     employment_insurance_rate: 0.006,
-    health_insurance_rate: 0.05,
-    nursing_insurance_rate: 0.009,
+    health_insurance_rate: 0.0494, // 滋賀県 9.88% の折半 4.94%
+    nursing_insurance_rate: 0.008,
     pension_insurance_rate: 0.0915,
     rounding_method: 'floor'
   });
@@ -385,12 +386,19 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       }
 
       // 住所から都道府県コード（滋賀県 = '25' 等）をスマート自動検出！
-      const detectedPrefCode = extractPrefectureCodeFromAddress(companyAddress) || tData?.prefecture_code || '25';
-      setTenantInfo({ ...tData, ...cmsData, address: companyAddress, prefecture_code: detectedPrefCode });
+      const detectedPrefCode = extractPrefectureCodeFromAddress(companyAddress) || 
+                               (companyAddress?.includes('滋賀') ? '25' : null) || 
+                               '25'; // 滋賀県を最優先デフォルトに！
+      setTenantInfo({ ...tData, ...cmsData, address: companyAddress || '滋賀県大津市坂本3丁目21-16', prefecture_code: detectedPrefCode });
 
       // 2. 給与基本設定取得
       const { data: setRow } = await supabase.from('payroll_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
-      const activePrefCode = setRow?.prefecture_code || detectedPrefCode;
+      
+      // 旧デフォルトの '13' (東京) が残っている場合でも、会社住所が滋賀県なら '25' (滋賀県) を優先適用！
+      let activePrefCode = setRow?.prefecture_code;
+      if (!activePrefCode || activePrefCode === '13') {
+        activePrefCode = detectedPrefCode || '25';
+      }
       const prefRateData = getPrefectureRate(activePrefCode);
 
       if (setRow) {
@@ -400,7 +408,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           payment_day: setRow.payment_day || '25',
           prefecture_code: activePrefCode,
           employment_insurance_rate: setRow.employment_insurance_rate ?? 0.006,
-          health_insurance_rate: setRow.health_insurance_rate ?? Number((prefRateData.healthRate / 2).toFixed(5)),
+          health_insurance_rate: Number((prefRateData.healthRate / 2).toFixed(5)),
           nursing_insurance_rate: setRow.nursing_insurance_rate ?? 0.008,
           pension_insurance_rate: setRow.pension_insurance_rate ?? 0.0915,
           rounding_method: setRow.rounding_method || 'floor'
