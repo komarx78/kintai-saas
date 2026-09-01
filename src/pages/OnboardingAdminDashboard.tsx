@@ -363,9 +363,16 @@ export default function OnboardingAdminDashboard() {
           if (raw) localBackup = JSON.parse(raw);
         } catch (e) {}
 
-        const bDate = u.birth_date || pay?.birth_date || onb?.birth_date || localBackup?.birth_date || '';
+        const bDate = u.birth_date || onb?.birth_date || pay?.birth_date || localBackup?.birth_date || '';
         const addr = u.address || onb?.address || localBackup?.address || '';
         const ph = u.phone || onb?.phone || localBackup?.phone || '';
+
+        // 銀行口座情報（従業員IDごとの固有データ）
+        const bName = onb?.bank_name || pay?.bank_name || localBackup?.bank_name || '';
+        const brName = onb?.branch_name || pay?.branch_name || localBackup?.branch_name || '';
+        const accType = onb?.account_type || pay?.account_type || localBackup?.account_type || 'ordinary';
+        const accNum = onb?.account_number || pay?.account_number || localBackup?.account_number || '';
+        const accHolder = onb?.account_holder || pay?.account_holder || localBackup?.account_holder || u.name || '';
 
         return {
           user_id: u.id,
@@ -389,22 +396,22 @@ export default function OnboardingAdminDashboard() {
           end_time: onb?.end_time || defaultEndTime,
           break_time_minutes: onb?.break_time_minutes || defaultBreak,
           holidays_text: onb?.holidays_text || defaultHolText,
-          salary_type: pay?.salary_type || onb?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly'),
-          base_salary: pay?.base_salary || onb?.base_salary || 250000,
-          hourly_wage: pay?.hourly_wage || onb?.hourly_wage || 1150,
-          position_allowance: pay?.position_allowance || 0,
-          qualification_allowance: pay?.qualification_allowance || 0,
-          housing_allowance: pay?.housing_allowance || 0,
-          family_allowance: pay?.family_allowance || 0,
-          commuting_allowance: pay?.commuting_allowance || 15000,
-          health_insurance_joined: pay?.health_insurance_enabled ?? true,
-          pension_insurance_joined: pay?.pension_insurance_enabled ?? true,
-          employment_insurance_joined: pay?.employment_insurance_enabled ?? true,
-          bank_name: pay?.bank_name || '',
-          branch_name: pay?.branch_name || '',
-          account_type: pay?.account_type || 'ordinary',
-          account_number: pay?.account_number || '',
-          account_holder: pay?.account_holder || '',
+          salary_type: onb?.salary_type || pay?.salary_type || localBackup?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly'),
+          base_salary: onb?.base_salary ?? pay?.base_salary ?? localBackup?.base_salary ?? 250000,
+          hourly_wage: onb?.hourly_wage ?? pay?.hourly_wage ?? localBackup?.hourly_wage ?? 1150,
+          position_allowance: onb?.position_allowance ?? pay?.position_allowance ?? localBackup?.position_allowance ?? 0,
+          qualification_allowance: onb?.qualification_allowance ?? pay?.qualification_allowance ?? localBackup?.qualification_allowance ?? 0,
+          housing_allowance: onb?.housing_allowance ?? pay?.housing_allowance ?? localBackup?.housing_allowance ?? 0,
+          family_allowance: onb?.family_allowance ?? pay?.family_allowance ?? localBackup?.family_allowance ?? 0,
+          commuting_allowance: onb?.commuting_allowance ?? pay?.commuting_allowance ?? localBackup?.commuting_allowance ?? 15000,
+          health_insurance_joined: onb?.health_insurance_joined ?? pay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? true,
+          pension_insurance_joined: onb?.pension_insurance_joined ?? pay?.pension_insurance_enabled ?? localBackup?.pension_insurance_joined ?? true,
+          employment_insurance_joined: onb?.employment_insurance_joined ?? pay?.employment_insurance_enabled ?? localBackup?.employment_insurance_joined ?? true,
+          bank_name: bName,
+          branch_name: brName,
+          account_type: accType,
+          account_number: accNum,
+          account_holder: accHolder,
           documents_checklist: onb?.documents_checklist || {
             id_copy: true,
             my_number: false,

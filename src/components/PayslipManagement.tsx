@@ -607,12 +607,20 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         // 大元労務マスタから最新の給与計算（個別基本給・各種手当＋生年月日の介護保険自動判定）を実行！
         const calculated = calculatePayroll(prof, attSummary, latestPayrollSettings);
 
+        // 有給残日数（ユーザー基本情報の残日数、またはデフォルト付与日数）
+        const userLeaveBal = u.paid_leave_balance !== undefined && u.paid_leave_balance !== null 
+          ? Number(u.paid_leave_balance) 
+          : (u.employment_type === 'part-time' ? 5.0 : 10.0);
+
         return {
           id: existingSlip?.id || `draft_${u.id}_${currentYearMonth}`,
           tenant_id: tenantId,
           user_id: u.id,
           year_month: currentYearMonth,
           payment_date: existingSlip?.payment_date || `${currentYearMonth}-25`,
+          paid_leave_remaining: existingSlip?.paid_leave_remaining !== undefined && existingSlip?.paid_leave_remaining !== null 
+            ? Number(existingSlip.paid_leave_remaining) 
+            : userLeaveBal,
           ...calculated,
           note: existingSlip?.note || '今月も勤務お疲れ様でした。',
           status: existingSlip?.status || 'draft',
@@ -816,11 +824,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         });
 
         const paymentDayStr = payrollSettings.payment_day === 'end_of_month' ? '28' : String(payrollSettings.payment_day);
+        const empLeaveBal = emp.paid_leave_balance !== undefined && emp.paid_leave_balance !== null 
+          ? Number(emp.paid_leave_balance) 
+          : (emp.employment_type === 'part-time' ? 5.0 : 10.0);
+
         const payload: any = {
           tenant_id: tenantId,
           user_id: emp.id,
           year_month: currentYearMonth,
           payment_date: `${currentYearMonth}-${paymentDayStr.padStart(2, '0')}`,
+          paid_leave_remaining: empLeaveBal,
           ...calculated,
           note: '今月も勤務お疲れ様でした。',
           status: 'draft',

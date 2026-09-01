@@ -71,6 +71,17 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
           }
         }
 
+        // 本人の有給残日数・ユーザー情報を取得
+        let userLeaveBalance = 10.0;
+        if (userId) {
+          try {
+            const { data: uInfo } = await supabase.from('users').select('paid_leave_balance').eq('id', userId).maybeSingle();
+            if (uInfo && uInfo.paid_leave_balance !== undefined && uInfo.paid_leave_balance !== null) {
+              userLeaveBalance = Number(uInfo.paid_leave_balance);
+            }
+          } catch (uErr) {}
+        }
+
         // 2. LocalStorageから取得＆マージ（確定公開済み status === 'published' のみ）
         const localKey = tenantId ? `mf_payslips_${tenantId}` : 'mf_payslips_default';
         const storedLocal = localStorage.getItem(localKey);
@@ -96,9 +107,10 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
           }
         }
 
-        // 各レコードに一意の識別キーを確実に付与
+        // 各レコードに一意の識別キーと有給残日数を確実に付与
         const normalized = combined.map((p, idx) => ({
           ...p,
+          paid_leave_remaining: p.paid_leave_remaining !== undefined && p.paid_leave_remaining !== null ? Number(p.paid_leave_remaining) : userLeaveBalance,
           uniqueKey: p.id || `${p.user_id || 'u'}_${p.year_month || idx}`
         }));
 
