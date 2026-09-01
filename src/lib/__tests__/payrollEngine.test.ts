@@ -53,7 +53,7 @@ export function runPayrollEngineTests(): { success: boolean; results: string[] }
   // テスト3: 都道府県別健康保険料率（東京・大阪）の折半計算
   // ==========================================
   {
-    // 東京都（13: 9.98%, 介護 1.60%, 年金 18.30%）
+    // 東京都（13: 9.85%, 介護 1.60%, 年金 18.30%）
     const tokyoDeduction = calculateSocialInsuranceDeduction({
       monthlySalary: 300000,
       prefectureCode: '13',
@@ -63,17 +63,17 @@ export function runPayrollEngineTests(): { success: boolean; results: string[] }
       isEmploymentEnabled: true,
     });
 
-    // 健康保険 300,000 * 9.98% / 2 = 14,970円
+    // 健康保険 300,000 * 9.85% / 2 = 14,775円
     // 介護保険 300,000 * 1.60% / 2 = 2,400円
     // 厚生年金 300,000 * 18.30% / 2 = 27,450円
     // 雇用保険 300,000 * 0.6% = 1,800円
-    if (tokyoDeduction.healthInsurance === 14970 && tokyoDeduction.nursingInsurance === 2400 && tokyoDeduction.pensionInsurance === 27450 && tokyoDeduction.employmentInsurance === 1800) {
+    if (tokyoDeduction.healthInsurance === 14775 && tokyoDeduction.nursingInsurance === 2400 && tokyoDeduction.pensionInsurance === 27450 && tokyoDeduction.employmentInsurance === 1800) {
       results.push('✅ テスト3 パス: 東京都・40代の社会保険料（健康・介護・厚生年金・雇用）折半計算が1円単位で完全一致');
     } else {
       results.push(`❌ テスト3 失敗: 東京都社保計算不整合 (health:${tokyoDeduction.healthInsurance}, nursing:${tokyoDeduction.nursingInsurance}, pension:${tokyoDeduction.pensionInsurance})`);
     }
 
-    // 大阪府（27: 10.34%, 介護 1.60%）25歳（介護非該当）
+    // 大阪府（27: 10.13%, 介護 1.60%）25歳（介護非該当）
     const osakaDeduction = calculateSocialInsuranceDeduction({
       monthlySalary: 300000,
       prefectureCode: '27',
@@ -83,9 +83,9 @@ export function runPayrollEngineTests(): { success: boolean; results: string[] }
       isEmploymentEnabled: true,
     });
 
-    // 健康保険 300,000 * 10.34% / 2 = 15,510円
+    // 健康保険 300,000 * 10.13% / 2 = 15,195円
     // 介護保険 0円
-    if (osakaDeduction.healthInsurance === 15510 && osakaDeduction.nursingInsurance === 0) {
+    if (osakaDeduction.healthInsurance === 15195 && osakaDeduction.nursingInsurance === 0) {
       results.push('✅ テスト4 パス: 大阪府・20代の都道府県別料率＆介護保険非該当が完全正確');
     } else {
       results.push(`❌ テスト4 失敗: 大阪府社保計算不整合 (health:${osakaDeduction.healthInsurance}, nursing:${osakaDeduction.nursingInsurance})`);

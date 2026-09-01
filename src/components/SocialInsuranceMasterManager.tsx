@@ -159,23 +159,39 @@ export const SocialInsuranceMasterManager: React.FC = () => {
     }
   };
 
-  // 🤖 協会けんぽテキスト貼り付けからのAI一括抽出
+  // 🤖 協会けんぽテキスト貼り付けからのAI一括抽出（全角・矢印改定テキスト完全対応）
   const handleParsePastedText = () => {
     if (!pasteText.trim()) return;
     setIsParsing(true);
     try {
+      // 1. 全角英数・記号を半角に正規化 (NFKC)
+      const normalized = pasteText.normalize('NFKC');
       const updated = [...rates];
       let matchCount = 0;
 
       PREFECTURES.forEach((p, idx) => {
-        // 例: 「東京都 9.98%」や「13 東京都 0.0998」などのパターンを柔軟に検出
-        const regex = new RegExp(`(?:${p.name}|${p.code})[^0-9]*?([0-9]{1,2}(?:\\.[0-9]+)?)\\s*%?`, 'i');
-        const match = pasteText.match(regex);
-        if (match && match[1]) {
-          const num = parseFloat(match[1]);
-          const rateVal = num > 1 ? num / 100 : num;
-          updated[idx].health_insurance_rate = rateVal;
-          matchCount++;
+        const pName = p.name;
+        const pShort = pName.replace(/[都府県]$/, ''); // 東京、大阪、京都、北海道
+
+        // 都道府県名以降で次の都道府県名（または文字列終端）までのセクションを切り出す
+        const sectionRegex = new RegExp(`(?:${pName}|${pShort})([\\s\\S]*?)(?=(?:北海道|東京都|大阪府|京都府|[一-龥]{2,3}[県])|$)`, 'i');
+        const sectionMatch = normalized.match(sectionRegex);
+
+        if (sectionMatch && sectionMatch[1]) {
+          const sectionText = sectionMatch[1];
+          // セクション内のすべてのパーセント/数値を抽出 (例: 10.31%, 10.28%)
+          const numberMatches = Array.from(sectionText.matchAll(/([0-9]{1,2}(?:\.[0-9]+)?)\s*%/g));
+          
+          if (numberMatches.length > 0) {
+            // 矢印（↓、→）がある場合も含め、最後の数値（改定後）を採用！
+            const lastValStr = numberMatches[numberMatches.length - 1][1];
+            const num = parseFloat(lastValStr);
+            if (!isNaN(num) && num > 0) {
+              const rateVal = num > 1 ? num / 100 : num;
+              updated[idx].health_insurance_rate = Number(rateVal.toFixed(4));
+              matchCount++;
+            }
+          }
         }
       });
 
@@ -184,7 +200,7 @@ export const SocialInsuranceMasterManager: React.FC = () => {
       setPasteText('');
       setStatusMsg({
         type: 'success',
-        text: `🤖 貼り付けテキストから【${matchCount}都道府県】の料率を自動抽出・反映しました。「全国マスタを一括保存」ボタンで全社に適用してください。`
+        text: `🤖 貼り付けテキストから【${matchCount} / 47 都道府県】の最新改定後料率を完全自動抽出・反映しました！「全国マスタを一括保存」ボタンで全社に適用してください。`
       });
     } catch (e: any) {
       alert('解析中にエラーが発生しました: ' + e.message);
