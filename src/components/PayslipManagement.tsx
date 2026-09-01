@@ -5,7 +5,7 @@ import {
   Edit3, CheckCircle2, Lock, Unlock, Printer, 
   Users, Sparkles, Loader2, X, FileSpreadsheet,
   Settings as SettingsIcon, Download, UserCheck, CreditCard, Building2, Save,
-  ChevronDown, ChevronUp, Clock, Calendar, TrendingUp, MapPin
+  ChevronDown, ChevronUp, Clock, Calendar, TrendingUp, MapPin, LayoutGrid, List
 } from 'lucide-react';
 import { OfficialPayslipDoc } from './OfficialPayslipDoc';
 import { 
@@ -119,6 +119,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
   // 勤怠・給与の内訳詳細アコーディオン展開中のユーザーID
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+
+  // 表示モード（'card': 全詳細常時表示カードビュー / 'table': コンパクト表ビュー）
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
 
   const updateLocalStorageBackup = (payload: any) => {
     if (!payload.tenant_id) return;
@@ -502,10 +505,23 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
     setIsSaving(true);
     try {
+      // 締め日設定に基づく集計期間算出
       const year = currentMonth.getFullYear();
       const month = currentMonth.getMonth() + 1;
-      const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+      let startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+      let endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
+      if (payrollSettings.closing_day === '20') {
+        const prevM = month === 1 ? 12 : month - 1;
+        const prevY = month === 1 ? year - 1 : year;
+        startDate = `${prevY}-${prevM.toString().padStart(2, '0')}-21`;
+        endDate = `${year}-${month.toString().padStart(2, '0')}-20`;
+      } else if (payrollSettings.closing_day === '25') {
+        const prevM = month === 1 ? 12 : month - 1;
+        const prevY = month === 1 ? year - 1 : year;
+        startDate = `${prevY}-${prevM.toString().padStart(2, '0')}-26`;
+        endDate = `${year}-${month.toString().padStart(2, '0')}-25`;
+      }
 
       // 1. 当月の打刻データ取得 (attendance_records)
       const { data: attData } = await supabase
@@ -528,7 +544,6 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         .from('leave_requests')
         .select('*')
         .eq('tenant_id', tenantId)
-        .eq('status', '承認')
         .gte('start_date', startDate)
         .lte('start_date', endDate);
 
@@ -536,7 +551,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const shifts = shiftData || [];
       const requests = reqData || [];
 
-      const activePrefecture = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '13';
+      const activePrefecture = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '25';
 
       for (const emp of employees) {
         const empRecords = records.filter(r => r.user_id === emp.id);
@@ -560,10 +575,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               if (outTotal < inTotal) outTotal += 24 * 60;
 
               const total = Math.max(0, outTotal - inTotal);
-              const breakM = total >= 480 ? 60 : (total >= 360 ? 45 : 0);
+              const breakM = r.break_minutes ?? (total >= 480 ? 60 : (total >= 360 ? 45 : 0));
               const work = Math.max(0, total - breakM);
               actualMins += work;
-              overtimeMins += Math.max(0, work - 480);
+              
+              // 残業時間の計算（明示残業分または8h超過分）
+              if (r.overtime_minutes && r.overtime_minutes > 0) {
+                overtimeMins += r.overtime_minutes;
+              } else {
+                overtimeMins += Math.max(0, work - 480);
+              }
 
               // 深夜時間（22:00〜翌5:00）
               for (let m = inTotal; m < outTotal; m++) {
@@ -593,7 +614,11 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         }
 
         // 有給休暇日数集計
-        const empRequests = requests.filter(r => r.user_id === emp.id && (r.type?.includes('有給') || r.type?.includes('年休')));
+        const empRequests = requests.filter(r => 
+          r.user_id === emp.id && 
+          (r.status === '承認' || !r.status || r.status === 'approved') &&
+          (r.type?.includes('有給') || r.type?.includes('年休') || r.leave_type?.includes('有給') || r.reason?.includes('有給'))
+        );
         const paidLeaveDays = empRequests.length;
 
         // 従業員の給与マスタプロファイル
@@ -1045,12 +1070,36 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
       {/* 給与台帳テーブル */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-            <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
-            {currentYearMonth}度 給与明細一覧
-          </h3>
-          <span className="text-xs text-slate-400">クリックで個別編集・詳細確認が可能です</span>
+        <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-white">
+          <div className="flex items-center gap-2">
+            <FileSpreadsheet className="w-5 h-5 text-indigo-600" />
+            <h3 className="font-black text-slate-800 text-base">
+              {currentYearMonth}度 給与明細一覧
+            </h3>
+            <span className="text-xs text-slate-400 font-bold ml-1">（全{payslips.length}名）</span>
+          </div>
+
+          {/* 表示形式切り替えタブ */}
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+            <button
+              onClick={() => setViewMode('card')}
+              className={`text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'card' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              📑 全詳細カード一覧（標準・常時全開）
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'table' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              📋 コンパクト表
+            </button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -1079,6 +1128,222 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 ⚡ 実績勤怠から自動計算する
               </button>
             </div>
+          </div>
+        ) : viewMode === 'card' ? (
+          /* 📑 全詳細カード一覧（詳細を押さなくても常時全開！） */
+          <div className="p-4 sm:p-6 space-y-6 bg-slate-50/60">
+            {payslips.map(slip => {
+              const prof = payrollProfiles[slip.user_id];
+              const isHourly = prof?.salary_type === 'hourly' || slip.salary_type === 'hourly';
+              const prefCode = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '25';
+              const prefData = getPrefectureRate(prefCode);
+
+              return (
+                <div key={slip.user_id} className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-xs hover:shadow-md transition">
+                  {/* カード上部: 社員基本情報 & 操作 */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 font-black text-lg flex items-center justify-center border border-indigo-100 shadow-2xs">
+                        {(slip.user?.name || '員').substring(0, 1)}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-black text-slate-800">{slip.user?.name || '従業員'}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                            isHourly ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+                          }`}>
+                            {isHourly ? '時給制' : '月給制'}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                            slip.status === 'published' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200'
+                          }`}>
+                            {slip.status === 'published' ? '公開確定済' : '下書き'}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-400 flex items-center gap-3 mt-1">
+                          <span>{slip.user?.department || '一般社員'}</span>
+                          {prof?.bank_name ? (
+                            <span className="text-[11px] text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded-lg">
+                              🏦 {prof.bank_name} {prof.branch_name} ({prof.account_type === 'current' ? '当座' : '普通'} {prof.account_number})
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                              ⚠️ 口座未登録
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setProfileModal({ isOpen: true, user: slip.user, profile: prof || getInitialProfile(tenantId || '', slip.user_id) })}
+                        className="text-xs font-bold text-slate-600 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 border border-slate-200 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
+                        給与マスタ設定
+                      </button>
+                      <button
+                        onClick={() => setEditModal({ isOpen: true, data: { ...slip } })}
+                        className="text-xs font-bold text-slate-600 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 border border-slate-200 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                        個別編集
+                      </button>
+                      <button
+                        onClick={() => setPreviewModal({ isOpen: true, payslip: slip })}
+                        className="text-xs font-bold text-indigo-600 hover:text-white bg-indigo-50 hover:bg-indigo-600 border border-indigo-200 px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        明細プレビュー / 印刷
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* カード中央: 3カラム全詳細グリッド（常時展開） */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                    {/* 1. 勤怠実績 */}
+                    <div className="bg-blue-50/60 p-4 rounded-2xl border border-blue-200 space-y-2">
+                      <div className="font-bold text-blue-900 flex items-center justify-between text-xs pb-2 border-b border-blue-200">
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="w-4 h-4 text-blue-600" />
+                          ① 勤怠・就業実績
+                        </span>
+                        <span className="text-xs text-blue-700 font-mono font-black">{slip.work_days}日 出勤</span>
+                      </div>
+                      <div className="space-y-2 text-slate-700 text-xs pt-1">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">総実労働時間:</span>
+                          <span className="font-bold font-mono text-slate-800">{slip.actual_hours} 時間</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-500">普通残業時間:</span>
+                          {slip.overtime_hours > 0 ? (
+                            <span className="font-black font-mono text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md border border-rose-200 text-xs">
+                              {slip.overtime_hours} 時間
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-mono">0 時間</span>
+                          )}
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">深夜労働時間:</span>
+                          <span className="font-mono text-slate-800">{slip.midnight_hours || 0} 時間</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-500">有給取得日数:</span>
+                          {slip.paid_leave_days && slip.paid_leave_days > 0 ? (
+                            <span className="font-black font-mono text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200 text-xs">
+                              {slip.paid_leave_days} 日
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-mono">0 日</span>
+                          )}
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">欠勤日数:</span>
+                          <span className="font-mono text-slate-800">{slip.absence_days || 0} 日</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2. 支給額明細 */}
+                    <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200 space-y-2">
+                      <div className="font-bold text-emerald-900 flex items-center justify-between text-xs pb-2 border-b border-emerald-200">
+                        <span className="flex items-center gap-1.5">
+                          <DollarSign className="w-4 h-4 text-emerald-600" />
+                          ② 支給額の計算内訳
+                        </span>
+                        <span className="text-xs text-emerald-800 font-black">¥{(slip.total_earnings || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="space-y-2 text-slate-700 text-xs pt-1">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">基本給:</span>
+                          <span className="font-bold font-mono text-slate-800">¥{(slip.base_salary || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-500">残業手当 (割増):</span>
+                          <span className={`font-black font-mono ${slip.overtime_allowance > 0 ? 'text-rose-600 text-xs' : 'text-slate-400'}`}>
+                            ¥{(slip.overtime_allowance || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">通勤手当 (非課税):</span>
+                          <span className="font-mono text-slate-800">¥{(slip.commuting_allowance || 0).toLocaleString()}</span>
+                        </div>
+                        {((slip.position_allowance || 0) + (slip.qualification_allowance || 0) + (slip.housing_allowance || 0) + (slip.family_allowance || 0)) > 0 ? (
+                          <div className="flex justify-between text-blue-700">
+                            <span className="text-slate-500">役職・資格・諸手当:</span>
+                            <span className="font-mono">¥{((slip.position_allowance || 0) + (slip.qualification_allowance || 0) + (slip.housing_allowance || 0) + (slip.family_allowance || 0)).toLocaleString()}</span>
+                          </div>
+                        ) : null}
+                        <div className="border-t border-emerald-200 pt-1.5 flex justify-between font-black text-emerald-900 text-xs">
+                          <span>総支給額（額面）:</span>
+                          <span className="font-mono text-sm">¥{(slip.total_earnings || 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 3. 控除額明細 */}
+                    <div className="bg-rose-50/60 p-4 rounded-2xl border border-rose-200 space-y-2">
+                      <div className="font-bold text-rose-900 flex items-center justify-between text-xs pb-2 border-b border-rose-200">
+                        <span className="flex items-center gap-1.5">
+                          <TrendingUp className="w-4 h-4 text-rose-600" />
+                          ③ 控除額の計算内訳
+                        </span>
+                        <span className="text-xs text-rose-800 font-black">-¥{(slip.total_deductions || 0).toLocaleString()}</span>
+                      </div>
+                      <div className="space-y-2 text-slate-700 text-xs pt-1">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">健康保険 ({prefData.name} {(prefData.healthRate * 50).toFixed(3)}%):</span>
+                          <span className="font-bold font-mono text-slate-800">¥{(slip.health_insurance || 0).toLocaleString()}</span>
+                        </div>
+                        {slip.nursing_insurance && slip.nursing_insurance > 0 ? (
+                          <div className="flex justify-between text-purple-700">
+                            <span className="text-slate-500">介護保険 (40〜64歳):</span>
+                            <span className="font-mono">¥{slip.nursing_insurance.toLocaleString()}</span>
+                          </div>
+                        ) : null}
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">厚生年金保険料:</span>
+                          <span className="font-mono text-slate-800">¥{(slip.pension_insurance || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">雇用保険料 (0.6%):</span>
+                          <span className="font-mono text-slate-800">¥{(slip.employment_insurance || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-indigo-700 font-bold">
+                          <span>所得税 (源泉徴収):</span>
+                          <span className="font-mono">¥{(slip.income_tax || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="border-t border-rose-200 pt-1.5 flex justify-between font-black text-rose-900 text-xs">
+                          <span>控除合計額:</span>
+                          <span className="font-mono text-sm">-¥{(slip.total_deductions || 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* カード下部: 手取り振込額バナー */}
+                  <div className="mt-4 bg-gradient-to-r from-indigo-600 via-indigo-700 to-blue-700 text-white rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-md shadow-indigo-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                        <CreditCard className="w-5 h-5 text-amber-300" />
+                      </div>
+                      <div>
+                        <div className="text-[11px] text-indigo-200 font-medium">差引支給額（従業員口座への実振込手取り額）</div>
+                        <div className="text-xs font-bold text-white">
+                          総支給 ¥{(slip.total_earnings || 0).toLocaleString()} − 控除 ¥{(slip.total_deductions || 0).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-2xl font-black tracking-tight text-amber-300 font-mono">
+                      ¥{(slip.net_salary || 0).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -1327,7 +1592,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                   </div>
                                   <div className="space-y-1 text-slate-600 pt-1 text-[11px]">
                                     {(() => {
-                                      const prefCode = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '13';
+                                      const prefCode = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '25';
                                       const prefData = getPrefectureRate(prefCode);
                                       return (
                                         <div className="flex justify-between">
