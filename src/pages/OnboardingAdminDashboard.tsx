@@ -8,11 +8,17 @@ import { OfficialBankPassbookDoc } from '../components/OfficialBankPassbookDoc';
 import { OfficialTaxExemptionDoc } from '../components/OfficialTaxExemptionDoc';
 import { compressImageFile } from '../lib/imageCompressor';
 import { 
+  type OnboardingWorkflowStep, 
+  DEFAULT_ONBOARDING_STEPS, 
+  getWorkflowStepsFromStorage, 
+  type OnboardingStepHistory 
+} from '../lib/onboardingWorkflow';
+import { 
   UserPlus, Users, FileText, CheckCircle2, 
   Printer, ArrowLeft, LogOut, Loader2, X, ChevronRight, 
   HelpCircle, Building2, Check, UserCheck, Edit3, UserMinus, 
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
-  FolderOpen, Settings, Clock, Smartphone
+  FolderOpen, Settings, Clock, Smartphone, AlertCircle, ArrowRight, CornerDownLeft
 } from 'lucide-react';
 
 interface EmployeeOnboardingData {
@@ -21,6 +27,8 @@ interface EmployeeOnboardingData {
   email?: string;
   role: string;
   status: 'onboarding' | 'active' | 'offboarding' | 'retired';
+  current_step_number?: number;
+  step_history?: OnboardingStepHistory[];
   join_date: string;
   retirement_date?: string;
   retirement_reason?: string;
@@ -76,6 +84,8 @@ interface DocumentSubmission {
   status: 'pending' | 'approved' | 'rejected';
   admin_comment?: string;
   created_at: string;
+  approved_by?: string;
+  approved_at?: string;
 }
 
 interface DepartmentMaster {
@@ -97,16 +107,40 @@ export default function OnboardingAdminDashboard() {
   const navigate = useNavigate();
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
+  const [currentAdminName, setCurrentAdminName] = useState<string>('管理者');
   const [employees, setEmployees] = useState<EmployeeOnboardingData[]>([]);
   const [submissions, setSubmissions] = useState<DocumentSubmission[]>([]);
   const [departments, setDepartments] = useState<DepartmentMaster[]>([]);
   const [schedulePatterns, setSchedulePatterns] = useState<WorkSchedulePattern[]>([]);
+  const [workflowSteps, setWorkflowSteps] = useState<OnboardingWorkflowStep[]>(DEFAULT_ONBOARDING_STEPS);
   
   const [currentView, setCurrentView] = useState<'employees' | 'submissions'>('employees');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'onboarding' | 'retired'>('all');
-  const [submissionFilter, setSubmissionFilter] = useState<'all' | 'pending' | 'approved'>('pending');
+  const [submissionFilter, setSubmissionFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  // 提出書類 修正（編集）モーダルState
+  const [editSubmissionModal, setEditSubmissionModal] = useState<{
+    isOpen: boolean;
+    submission: DocumentSubmission | null;
+    editedData: any;
+  }>({
+    isOpen: false,
+    submission: null,
+    editedData: {}
+  });
+
+  // 提出書類 差戻しモーダルState
+  const [rejectSubmissionModal, setRejectSubmissionModal] = useState<{
+    isOpen: boolean;
+    submission: DocumentSubmission | null;
+    comment: string;
+  }>({
+    isOpen: false,
+    submission: null,
+    comment: ''
+  });
 
   // 新規入社ウィザードState
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -232,6 +266,20 @@ export default function OnboardingAdminDashboard() {
       const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantIdData).maybeSingle();
       setTenantInfo(tData);
 
+      // ログイン管理者の氏名取得
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        const { data: adminUser } = await supabase.from('users').select('name').eq('id', currentUser.id).maybeSingle();
+        if (adminUser?.name) setCurrentAdminName(adminUser.name);
+      }
+
+      // 入社手続きワークフローステップの取得
+      if (tData?.onboarding_workflow_settings && Array.isArray(tData.onboarding_workflow_settings)) {
+        setWorkflowSteps(tData.onboarding_workflow_settings);
+      } else {
+        setWorkflowSteps(getWorkflowStepsFromStorage());
+      }
+
       // 部署マスタ取得
       const { data: deptData } = await supabase
         .from('department_masters')
@@ -302,6 +350,8 @@ export default function OnboardingAdminDashboard() {
           email: u.email,
           role: u.role,
           status: onb?.status || (u.is_active === false ? 'retired' : 'active'),
+          current_step_number: onb?.current_step_number || (onb?.status === 'onboarding' ? 1 : 5),
+          step_history: onb?.step_history || [],
           join_date: onb?.join_date || u.join_date || '2026-04-01',
           retirement_date: onb?.retirement_date,
           retirement_reason: onb?.retirement_reason,
@@ -365,6 +415,206 @@ export default function OnboardingAdminDashboard() {
       console.error('Fetch onboarding error:', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 1. ステップを次へ進める（承認）
+  const handleAdvanceStep = async (emp: EmployeeOnboardingData) => {
+    if (!tenantId) return;
+    const currentStepNum = emp.current_step_number || 1;
+    const maxStepNum = workflowSteps.length;
+
+    if (currentStepNum >= maxStepNum) {
+      alert('すでに最終ステップ（完了・本稼働）に達しています。');
+      return;
+    }
+
+    const nextStepNum = currentStepNum + 1;
+    const currentStepObj = workflowSteps.find(s => s.step_number === currentStepNum);
+    const nextStepObj = workflowSteps.find(s => s.step_number === nextStepNum);
+
+    const historyEntry: OnboardingStepHistory = {
+      step_id: currentStepObj?.id || `step_${currentStepNum}`,
+      step_number: currentStepNum,
+      step_name: currentStepObj?.name || `Step ${currentStepNum}`,
+      approved_by_name: currentAdminName || '管理者',
+      approved_at: new Date().toISOString()
+    };
+
+    const newHistory = [...(emp.step_history || []), historyEntry];
+    const isFinalStep = nextStepNum === maxStepNum;
+    const newStatus = isFinalStep ? 'active' : 'onboarding';
+
+    setIsSaving(true);
+    try {
+      await supabase.from('employee_onboarding_profiles').upsert({
+        tenant_id: tenantId,
+        user_id: emp.user_id,
+        status: newStatus,
+        current_step_number: nextStepNum,
+        step_history: newHistory,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'tenant_id,user_id' });
+
+      alert(`🎉 ${emp.name} さんを次のステップ「${nextStepObj?.name || `Step ${nextStepNum}`}」へ進めました！\n（承認者: ${currentAdminName}）`);
+      await fetchData();
+    } catch (err: any) {
+      console.error('Advance step error:', err);
+      alert('ステップ更新に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 2. ステップを前へ戻す（巻き戻し）
+  const handleRollbackStep = async (emp: EmployeeOnboardingData) => {
+    if (!tenantId) return;
+    const currentStepNum = emp.current_step_number || 1;
+
+    if (currentStepNum <= 1) {
+      alert('すでに最初のステップです。');
+      return;
+    }
+
+    const prevStepNum = currentStepNum - 1;
+    const prevStepObj = workflowSteps.find(s => s.step_number === prevStepNum);
+
+    if (!confirm(`${emp.name} さんを前のステップ「${prevStepObj?.name || `Step ${prevStepNum}`}」に戻しますか？`)) return;
+
+    setIsSaving(true);
+    try {
+      await supabase.from('employee_onboarding_profiles').upsert({
+        tenant_id: tenantId,
+        user_id: emp.user_id,
+        status: 'onboarding',
+        current_step_number: prevStepNum,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'tenant_id,user_id' });
+
+      alert(`↩️ ${emp.name} さんの手続きを「${prevStepObj?.name || `Step ${prevStepNum}`}」に戻しました。`);
+      await fetchData();
+    } catch (err: any) {
+      console.error('Rollback step error:', err);
+      alert('ステップ戻しに失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 3. 提出書類の修正保存
+  const handleSaveEditedSubmission = async () => {
+    if (!tenantId || !editSubmissionModal.submission) return;
+    setIsSaving(true);
+    try {
+      const sub = editSubmissionModal.submission;
+      const edited = editSubmissionModal.editedData;
+
+      await supabase
+        .from('employee_document_submissions')
+        .update({
+          data: edited,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', sub.id);
+
+      // 口座情報や通勤定期代が編集された場合は給与マスタにも即時連動
+      if (sub.document_type === 'bank_passbook') {
+        await supabase.from('employee_payroll_profiles').upsert({
+          tenant_id: tenantId,
+          user_id: sub.user_id,
+          bank_name: edited.bank_name,
+          branch_name: edited.branch_name,
+          account_type: edited.account_type,
+          account_number: edited.account_number,
+          account_holder: edited.account_holder
+        }, { onConflict: 'tenant_id,user_id' });
+      } else if (sub.document_type === 'commuting_pass') {
+        await supabase.from('employee_payroll_profiles').upsert({
+          tenant_id: tenantId,
+          user_id: sub.user_id,
+          commuting_allowance: edited.one_month_pass_amount || 0
+        }, { onConflict: 'tenant_id,user_id' });
+      }
+
+      alert('✨ 提出書類の内容を修正・保存しました！関連マスタにも即座に同期されました。');
+      setEditSubmissionModal({ isOpen: false, submission: null, editedData: {} });
+      await fetchData();
+    } catch (err: any) {
+      console.error('Save edited submission error:', err);
+      alert('修正保存に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 4. 提出書類の差戻し（再提出依頼）
+  const handleRejectSubmission = async () => {
+    if (!tenantId || !rejectSubmissionModal.submission) return;
+    if (!rejectSubmissionModal.comment.trim()) {
+      alert('差戻しの理由を入力してください。（例: 口座番号に誤りがあります、写真が不鮮明です 等）');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const sub = rejectSubmissionModal.submission;
+
+      await supabase
+        .from('employee_document_submissions')
+        .update({
+          status: 'rejected',
+          admin_comment: rejectSubmissionModal.comment.trim(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', sub.id);
+
+      alert(`↩️ ${sub.user_name} 殿の「${sub.title}」を差戻しました。\n（理由: ${rejectSubmissionModal.comment}）`);
+      setRejectSubmissionModal({ isOpen: false, submission: null, comment: '' });
+      await fetchData();
+    } catch (err: any) {
+      console.error('Reject submission error:', err);
+      alert('差戻し処理に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 5. 提出書類の削除
+  const handleDeleteSubmission = async (sub: DocumentSubmission) => {
+    if (!confirm(`【確認】${sub.user_name} 殿の「${sub.title}」を完全に削除しますか？\n※ 二重提出や誤送信の整理にご利用ください。`)) return;
+
+    setIsSaving(true);
+    try {
+      await supabase.from('employee_document_submissions').delete().eq('id', sub.id);
+      alert('🗑️ 提出書類を削除しました。');
+      await fetchData();
+    } catch (err: any) {
+      console.error('Delete submission error:', err);
+      alert('削除に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 6. 従業員の完全削除（抹消）
+  const handleDeleteEmployee = async (emp: EmployeeOnboardingData) => {
+    if (!confirm(`⚠️【危険】${emp.name} さんのすべてのデータ（入社情報、提出書類、給与設定）を完全に抹消・削除しますか？\n\n※ 誤登録や入社辞退者の整理用です。この操作は取り消せません。`)) return;
+
+    setIsSaving(true);
+    try {
+      await supabase.from('employee_document_submissions').delete().eq('user_id', emp.user_id);
+      await supabase.from('employee_payroll_profiles').delete().eq('user_id', emp.user_id);
+      await supabase.from('employee_onboarding_profiles').delete().eq('user_id', emp.user_id);
+      await supabase.from('shift_employee_settings').delete().eq('user_id', emp.user_id);
+      await supabase.from('users').delete().eq('id', emp.user_id);
+
+      alert(`🗑️ ${emp.name} さんのデータを完全に削除しました。`);
+      await fetchData();
+    } catch (err: any) {
+      console.error('Delete employee error:', err);
+      alert('従業員削除に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -545,11 +795,12 @@ export default function OnboardingAdminDashboard() {
         .from('employee_document_submissions')
         .update({
           status: 'approved',
+          approved_by: currentAdminName || '管理者',
           approved_at: new Date().toISOString()
         })
         .eq('id', sub.id);
 
-      alert(`✅ 「${sub.title}」を承認しました！\n給与計算マスタおよび労務台帳に即座に反映されました。`);
+      alert(`✅ 「${sub.title}」を承認しました！\n（承認者: ${currentAdminName}）\n給与計算マスタおよび労務台帳に即座に反映されました。`);
       await fetchData();
     } catch (err: any) {
       console.error(err);
@@ -1032,14 +1283,13 @@ export default function OnboardingAdminDashboard() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[980px]">
+                <table className="w-full text-left border-collapse min-w-[1100px]">
                   <thead>
                     <tr className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
                       <th className="py-3 px-4">氏名 / 所属</th>
                       <th className="py-3 px-3">雇用形態 / 就業時間</th>
-                      <th className="py-3 px-3">入社日 / 退職日</th>
-                      <th className="py-3 px-3">給与設定</th>
-                      <th className="py-3 px-3">口座・通勤費</th>
+                      <th className="py-3 px-3">手続き進捗（ステップ）</th>
+                      <th className="py-3 px-3">給与 / 口座・通勤費</th>
                       <th className="py-3 px-3 text-center">労務書面証憑</th>
                       <th className="py-3 px-4 text-center">操作</th>
                     </tr>
@@ -1048,6 +1298,9 @@ export default function OnboardingAdminDashboard() {
                     {filteredEmployees.map(emp => {
                       const isHourly = emp.salary_type === 'hourly' || emp.employment_type === 'part-time';
                       const isRetired = emp.status === 'retired';
+                      const currentStepNum = emp.current_step_number || (emp.status === 'onboarding' ? 1 : workflowSteps.length);
+                      const currentStepObj = workflowSteps.find(s => s.step_number === currentStepNum);
+                      const isCompleted = currentStepNum >= workflowSteps.length && emp.status === 'active';
 
                       return (
                         <tr key={emp.user_id} className={`hover:bg-slate-50/80 transition ${isRetired ? 'bg-slate-50/50 opacity-75' : ''}`}>
@@ -1063,7 +1316,7 @@ export default function OnboardingAdminDashboard() {
                                   {emp.name}
                                   {isRetired && <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-bold">退職</span>}
                                 </div>
-                                <div className="text-[10px] text-slate-400">{emp.department || '営業部'}</div>
+                                <div className="text-[10px] text-slate-400">{emp.department || '営業部'} / {emp.join_date}入社</div>
                               </div>
                             </div>
                           </td>
@@ -1080,24 +1333,62 @@ export default function OnboardingAdminDashboard() {
                             </div>
                           </td>
 
-                          <td className="py-3.5 px-3 font-medium text-slate-700">
-                            <div>{emp.join_date}</div>
-                            {emp.retirement_date && (
-                              <div className="text-[10px] text-rose-500 font-bold">退: {emp.retirement_date}</div>
-                            )}
+                          {/* 🚶 手続き進捗ステップ ＆ 順次進行ボタン */}
+                          <td className="py-3.5 px-3">
+                            <div className="space-y-1.5 min-w-[200px]">
+                              <div className="flex items-center justify-between">
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${
+                                  isCompleted
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                    : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                }`}>
+                                  Step {currentStepNum}/{workflowSteps.length}: {currentStepObj?.name || '手続き中'}
+                                </span>
+                              </div>
+
+                              {!isRetired && (
+                                <div className="flex items-center gap-1">
+                                  {currentStepNum > 1 && (
+                                    <button
+                                      onClick={() => handleRollbackStep(emp)}
+                                      disabled={isSaving}
+                                      className="p-1 hover:bg-slate-200 rounded text-slate-500 text-[10px] font-bold transition cursor-pointer flex items-center gap-0.5"
+                                      title="前のステップに戻す"
+                                    >
+                                      <CornerDownLeft className="w-3 h-3" />
+                                      戻す
+                                    </button>
+                                  )}
+
+                                  {currentStepNum < workflowSteps.length && (
+                                    <button
+                                      onClick={() => handleAdvanceStep(emp)}
+                                      disabled={isSaving}
+                                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-2.5 py-1 rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50"
+                                      title="承認して次のステップへ進める"
+                                    >
+                                      承認して次へ
+                                      <ArrowRight className="w-3 h-3" />
+                                    </button>
+                                  )}
+
+                                  {isCompleted && (
+                                    <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
+                                      <Check className="w-3.5 h-3.5" /> 手続き全完了
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </td>
 
-                          <td className="py-3.5 px-3 font-bold text-slate-800">
-                            {isHourly ? (
-                              <span>時給 ¥{emp.hourly_wage?.toLocaleString()}</span>
-                            ) : (
-                              <span>月給 ¥{emp.base_salary?.toLocaleString()}</span>
-                            )}
-                          </td>
-
-                          <td className="py-3.5 px-3 text-slate-600 text-[11px]">
-                            <div>口座: {emp.bank_name ? `${emp.bank_name}` : <span className="text-slate-400">未登録</span>}</div>
-                            <div className="text-blue-600 font-bold text-[10px]">通勤: ¥{emp.commuting_allowance?.toLocaleString() || 0}</div>
+                          <td className="py-3.5 px-3 text-slate-700 text-[11px]">
+                            <div className="font-bold">
+                              {isHourly ? `時給 ¥${emp.hourly_wage?.toLocaleString()}` : `月給 ¥${emp.base_salary?.toLocaleString()}`}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              口座: {emp.bank_name || '未登録'} / 通勤: ¥{emp.commuting_allowance?.toLocaleString() || 0}
+                            </div>
                           </td>
 
                           {/* 📁 労務書面キャビネット ボタン */}
@@ -1109,10 +1400,10 @@ export default function OnboardingAdminDashboard() {
                                 activeDoc: 'contract'
                               })}
                               className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-2.5 py-1.5 rounded-xl border border-indigo-200 transition flex items-center gap-1 mx-auto cursor-pointer"
-                              title="労働条件通知書・通勤届・口座届をまとめて閲覧"
+                              title="労働条件通知書・通勤届・口座届・扶養控除申告書をまとめて閲覧"
                             >
                               <FolderOpen className="w-3.5 h-3.5" />
-                              書面・証憑 (3)
+                              書面・証憑
                             </button>
                           </td>
 
@@ -1149,6 +1440,14 @@ export default function OnboardingAdminDashboard() {
                                   <UserMinus className="w-3.5 h-3.5" />
                                 </button>
                               )}
+
+                              <button
+                                onClick={() => handleDeleteEmployee(emp)}
+                                className="bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 font-bold text-xs p-1.5 rounded-lg border border-slate-200 transition cursor-pointer"
+                                title="従業員データを完全抹消・削除（誤登録用）"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1173,12 +1472,24 @@ export default function OnboardingAdminDashboard() {
                 <p className="text-xs text-slate-400 mt-0.5">通帳写真や通勤費申請を確認し、承認すると給与マスタへ即座に自動反映されます</p>
               </div>
 
-              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold flex-wrap">
                 <button
                   onClick={() => setSubmissionFilter('pending')}
                   className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${submissionFilter === 'pending' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
                 >
-                  未審査のみ ({pendingSubmissionsCount})
+                  未審査のみ ({submissions.filter(s => s.status === 'pending').length})
+                </button>
+                <button
+                  onClick={() => setSubmissionFilter('rejected')}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${submissionFilter === 'rejected' ? 'bg-white text-rose-600 shadow-xs' : 'text-slate-500'}`}
+                >
+                  差戻し中 ({submissions.filter(s => s.status === 'rejected').length})
+                </button>
+                <button
+                  onClick={() => setSubmissionFilter('approved')}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${submissionFilter === 'approved' ? 'bg-white text-emerald-600 shadow-xs' : 'text-slate-500'}`}
+                >
+                  承認済 ({submissions.filter(s => s.status === 'approved').length})
                 </button>
                 <button
                   onClick={() => setSubmissionFilter('all')}
@@ -1192,18 +1503,22 @@ export default function OnboardingAdminDashboard() {
             {filteredSubmissions.length === 0 ? (
               <div className="py-16 text-center text-slate-400">
                 <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-400 mb-3" />
-                <p className="font-bold text-slate-600 text-sm">未審査の書類・申請はありません</p>
+                <p className="font-bold text-slate-600 text-sm">該当する提出書類・申請はありません</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100 text-xs">
                 {filteredSubmissions.map(sub => {
                   const isPending = sub.status === 'pending';
+                  const isRejected = sub.status === 'rejected';
+                  const isApproved = sub.status === 'approved';
                   const d = sub.data || {};
 
                   return (
-                    <div key={sub.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/50 transition">
+                    <div key={sub.id} className={`p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 transition ${
+                      isRejected ? 'bg-rose-50/40' : isApproved ? 'bg-slate-50/30' : 'hover:bg-slate-50/50'
+                    }`}>
                       <div className="space-y-1.5 flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-black text-slate-800 text-sm">{sub.user_name} 殿</span>
                           <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200">
                             {sub.title}
@@ -1211,7 +1526,29 @@ export default function OnboardingAdminDashboard() {
                           <span className="text-[10px] text-slate-400">
                             提出: {new Date(sub.created_at).toLocaleString('ja-JP')}
                           </span>
+
+                          {isRejected && (
+                            <span className="bg-rose-100 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded border border-rose-300 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3 text-rose-600" />
+                              差戻し中（再提出待ち）
+                            </span>
+                          )}
+
+                          {isApproved && (
+                            <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                              <Check className="w-3 h-3" />
+                              承認済 {sub.approved_by ? `(承認者: ${sub.approved_by})` : ''}
+                            </span>
+                          )}
                         </div>
+
+                        {/* 差戻し理由の警告表示 */}
+                        {isRejected && sub.admin_comment && (
+                          <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-bold flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <span>差戻し理由: {sub.admin_comment}</span>
+                          </div>
+                        )}
 
                         <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-700">
                           {sub.document_type === 'bank_passbook' && (
@@ -1234,7 +1571,7 @@ export default function OnboardingAdminDashboard() {
                             </>
                           )}
                           {sub.document_type === 'dependents_form' && (
-                            <div>扶養親族等の数: <span className="font-bold">{d.dependents_count}名</span></div>
+                            <div>扶養親族等の数: <span className="font-bold">{d.dependents_count}名</span> {d.has_spouse ? '（配偶者控除あり）' : ''}</div>
                           )}
                           {sub.document_type === 'my_number' && (
                             <div>マイナンバー: <span className="font-bold tracking-widest">{d.my_number ? '************' : '書類添付済'}</span></div>
@@ -1242,7 +1579,7 @@ export default function OnboardingAdminDashboard() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
                         {/* 📄 令和8年分 扶養控除等申告書のプレビュー・印刷ボタン */}
                         {sub.document_type === 'dependents_form' && (
                           <button
@@ -1268,10 +1605,10 @@ export default function OnboardingAdminDashboard() {
                                 activeDoc: 'tax'
                               });
                             }}
-                            className="bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-black text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                            className="bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-black text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1 shadow-xs cursor-pointer"
                           >
-                            <FileText className="w-4 h-4 text-amber-600" />
-                            令和8年分 申告書を表示 / 印刷
+                            <FileText className="w-3.5 h-3.5 text-amber-600" />
+                            申告書
                           </button>
                         )}
 
@@ -1300,10 +1637,10 @@ export default function OnboardingAdminDashboard() {
                                 activeDoc: 'commuting'
                               });
                             }}
-                            className="bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 font-bold text-xs px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                            className="bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-900 font-bold text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1 shadow-xs cursor-pointer"
                           >
-                            <Train className="w-4 h-4 text-blue-600" />
-                            通勤申請書を表示 / 印刷
+                            <Train className="w-3.5 h-3.5 text-blue-600" />
+                            通勤届
                           </button>
                         )}
 
@@ -1315,26 +1652,63 @@ export default function OnboardingAdminDashboard() {
                               title: `${sub.user_name} 殿の提出写真 (${sub.title})`,
                               imageSrc: sub.attachment_data!
                             })}
-                            className="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs px-3 py-2 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                            className="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs px-2.5 py-1.5 rounded-xl transition flex items-center gap-1 shadow-xs cursor-pointer"
+                            title="添付写真原本を確認"
                           >
-                            <Eye className="w-4 h-4 text-blue-600" />
-                            提出写真原本を確認
+                            <Eye className="w-3.5 h-3.5 text-blue-600" />
+                            写真
                           </button>
                         )}
 
-                        {isPending ? (
+                        {/* ✏️ 修正（編集）ボタン */}
+                        <button
+                          onClick={() => setEditSubmissionModal({
+                            isOpen: true,
+                            submission: sub,
+                            editedData: { ...sub.data }
+                          })}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-2.5 py-1.5 rounded-xl border border-slate-300 transition flex items-center gap-1 cursor-pointer"
+                          title="提出内容を管理者が手動修正"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+                          修正
+                        </button>
+
+                        {/* ↩️ 差戻しボタン */}
+                        {!isRejected && (
+                          <button
+                            onClick={() => setRejectSubmissionModal({
+                              isOpen: true,
+                              submission: sub,
+                              comment: ''
+                            })}
+                            className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs px-2.5 py-1.5 rounded-xl border border-rose-200 transition flex items-center gap-1 cursor-pointer"
+                            title="理由を付けて従業員に再提出を依頼"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                            差戻し
+                          </button>
+                        )}
+
+                        {/* 🗑️ 削除ボタン */}
+                        <button
+                          onClick={() => handleDeleteSubmission(sub)}
+                          className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition cursor-pointer"
+                          title="この提出書類を削除（テスト・二重提出整理用）"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* 承認ボタン */}
+                        {isPending && (
                           <button
                             onClick={() => handleApproveSubmission(sub)}
                             disabled={isSaving}
-                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs px-3.5 py-1.5 rounded-xl shadow-xs transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
                           >
-                            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-4 h-4" />}
-                            承認してマスタ反映
+                            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                            承認
                           </button>
-                        ) : (
-                          <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-3 py-1.5 rounded-xl border border-emerald-200 flex items-center gap-1">
-                            <Check className="w-3.5 h-3.5" /> 承認済（マスタ反映済）
-                          </span>
                         )}
                       </div>
                     </div>
@@ -2455,6 +2829,294 @@ export default function OnboardingAdminDashboard() {
             <div className="mt-6 flex justify-end pt-4 border-t border-slate-100">
               <button onClick={() => setGuideModalOpen(false)} className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer">
                 閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✏️ 提出書類 内容修正（手動編集）モーダル */}
+      {editSubmissionModal.isOpen && editSubmissionModal.submission && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 my-8 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <Edit3 className="w-5 h-5 text-indigo-600" />
+                  提出書類の修正（{editSubmissionModal.submission.user_name} 殿）
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">誤字や入力ミスを管理者が手動で修正し、マスタへ即時反映します</p>
+              </div>
+              <button
+                onClick={() => setEditSubmissionModal({ isOpen: false, submission: null, editedData: {} })}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {/* 口座情報修正 */}
+              {editSubmissionModal.submission.document_type === 'bank_passbook' && (
+                <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">金融機関名</label>
+                      <input
+                        type="text"
+                        value={editSubmissionModal.editedData.bank_name || ''}
+                        onChange={e => setEditSubmissionModal(prev => ({
+                          ...prev,
+                          editedData: { ...prev.editedData, bank_name: e.target.value }
+                        }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">支店名</label>
+                      <input
+                        type="text"
+                        value={editSubmissionModal.editedData.branch_name || ''}
+                        onChange={e => setEditSubmissionModal(prev => ({
+                          ...prev,
+                          editedData: { ...prev.editedData, branch_name: e.target.value }
+                        }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">口座種別</label>
+                      <select
+                        value={editSubmissionModal.editedData.account_type || 'ordinary'}
+                        onChange={e => setEditSubmissionModal(prev => ({
+                          ...prev,
+                          editedData: { ...prev.editedData, account_type: e.target.value }
+                        }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold"
+                      >
+                        <option value="ordinary">普通預金</option>
+                        <option value="current">当座預金</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">口座番号 (7桁)</label>
+                      <input
+                        type="text"
+                        maxLength={7}
+                        value={editSubmissionModal.editedData.account_number || ''}
+                        onChange={e => setEditSubmissionModal(prev => ({
+                          ...prev,
+                          editedData: { ...prev.editedData, account_number: e.target.value }
+                        }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">口座名義人（カタカナ）</label>
+                    <input
+                      type="text"
+                      value={editSubmissionModal.editedData.account_holder || ''}
+                      onChange={e => setEditSubmissionModal(prev => ({
+                        ...prev,
+                        editedData: { ...prev.editedData, account_holder: e.target.value }
+                      }))}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* 通勤費申請修正 */}
+              {editSubmissionModal.submission.document_type === 'commuting_pass' && (
+                <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">出発駅 / 自宅最寄</label>
+                      <input
+                        type="text"
+                        value={editSubmissionModal.editedData.origin_station || ''}
+                        onChange={e => setEditSubmissionModal(prev => ({
+                          ...prev,
+                          editedData: { ...prev.editedData, origin_station: e.target.value }
+                        }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">到着駅 / 勤務先最寄</label>
+                      <input
+                        type="text"
+                        value={editSubmissionModal.editedData.destination_station || ''}
+                        onChange={e => setEditSubmissionModal(prev => ({
+                          ...prev,
+                          editedData: { ...prev.editedData, destination_station: e.target.value }
+                        }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">1ヶ月定期代合計 (円)</label>
+                    <input
+                      type="number"
+                      value={editSubmissionModal.editedData.one_month_pass_amount || 0}
+                      onChange={e => setEditSubmissionModal(prev => ({
+                        ...prev,
+                        editedData: { ...prev.editedData, one_month_pass_amount: parseInt(e.target.value, 10) || 0 }
+                      }))}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-indigo-700 text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* 扶養控除等申告修正 */}
+              {editSubmissionModal.submission.document_type === 'dependents_form' && (
+                <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={!!editSubmissionModal.editedData.has_spouse}
+                      onChange={e => setEditSubmissionModal(prev => ({
+                        ...prev,
+                        editedData: { ...prev.editedData, has_spouse: e.target.checked }
+                      }))}
+                      className="w-4 h-4 text-indigo-600 rounded"
+                    />
+                    源泉控除対象配偶者あり
+                  </label>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">扶養親族等の数 (名)</label>
+                    <input
+                      type="number"
+                      value={editSubmissionModal.editedData.dependents_count || 0}
+                      onChange={e => setEditSubmissionModal(prev => ({
+                        ...prev,
+                        editedData: { ...prev.editedData, dependents_count: parseInt(e.target.value, 10) || 0 }
+                      }))}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* マイナンバー修正 */}
+              {editSubmissionModal.submission.document_type === 'my_number' && (
+                <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">マイナンバー (12桁)</label>
+                    <input
+                      type="text"
+                      maxLength={12}
+                      value={editSubmissionModal.editedData.my_number || ''}
+                      onChange={e => setEditSubmissionModal(prev => ({
+                        ...prev,
+                        editedData: { ...prev.editedData, my_number: e.target.value }
+                      }))}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold font-mono tracking-widest"
+                      placeholder="123456789012"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setEditSubmissionModal({ isOpen: false, submission: null, editedData: {} })}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSaveEditedSubmission}
+                disabled={isSaving}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                修正内容を保存してマスタ同期
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ↩️ 提出書類 差戻しモーダル */}
+      {rejectSubmissionModal.isOpen && rejectSubmissionModal.submission && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 my-8 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <RotateCcw className="w-5 h-5 text-rose-600" />
+                  提出書類の差戻し（再提出依頼）
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">{rejectSubmissionModal.submission.user_name} 殿の「{rejectSubmissionModal.submission.title}」</p>
+              </div>
+              <button
+                onClick={() => setRejectSubmissionModal({ isOpen: false, submission: null, comment: '' })}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <label className="text-[11px] font-bold text-slate-700 block">
+                差戻しの理由・従業員への修正指示 <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                rows={4}
+                value={rejectSubmissionModal.comment}
+                onChange={e => setRejectSubmissionModal(prev => ({ ...prev, comment: e.target.value }))}
+                className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-xs font-medium text-slate-800"
+                placeholder="例: 通帳写真が見切れているため、口座番号と名義がはっきり写るように再撮影をお願いします。"
+              />
+
+              {/* 定型理由クイック挿入 */}
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-400 font-bold">よくある差戻し理由を挿入:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    '添付写真が不鮮明で文字が読めないため、再撮影をお願いします。',
+                    '口座番号または名義人のフリガナに相違があります。',
+                    '通勤経路の定期代に誤りがあります。最安ルートで再申請をお願いします。',
+                    'マイナンバーの裏面写真が不足しています。'
+                  ].map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setRejectSubmissionModal(prev => ({ ...prev, comment: preset }))}
+                      className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer text-left"
+                    >
+                      {preset.substring(0, 20)}...
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setRejectSubmissionModal({ isOpen: false, submission: null, comment: '' })}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleRejectSubmission}
+                disabled={isSaving}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                差戻しを実行する
               </button>
             </div>
           </div>

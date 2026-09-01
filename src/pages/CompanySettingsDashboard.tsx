@@ -5,9 +5,16 @@ import AppSwitcher from '../components/AppSwitcher';
 import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 import { OfficialCompanyCalendarDoc } from '../components/OfficialCompanyCalendarDoc';
 import { 
+  type OnboardingWorkflowStep, 
+  DEFAULT_ONBOARDING_STEPS, 
+  getWorkflowStepsFromStorage, 
+  saveWorkflowStepsToStorage 
+} from '../lib/onboardingWorkflow';
+import { 
   Building2, Users, Calendar, DollarSign, BookOpen, 
   ArrowLeft, LogOut, Loader2, Save, Plus, Trash2, 
-  Sparkles, Bot, Clock, ShieldCheck, Printer, X
+  Sparkles, Bot, Clock, ShieldCheck, Printer, X,
+  UserCheck, ArrowUp, ArrowDown, RotateCcw
 } from 'lucide-react';
 
 interface DepartmentMaster {
@@ -55,7 +62,13 @@ export default function CompanySettingsDashboard() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'rules'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'onboarding' | 'rules'>('basic');
+
+  // 入社手続きワークフローステップState
+  const [onboardingSteps, setOnboardingSteps] = useState<OnboardingWorkflowStep[]>(DEFAULT_ONBOARDING_STEPS);
+  const [newStepName, setNewStepName] = useState('');
+  const [newStepDesc, setNewStepDesc] = useState('');
+  const [newStepApprover, setNewStepApprover] = useState('管理者全員');
 
   // 1. 会社基本情報State
   const [basicInfo, setBasicInfo] = useState({
@@ -166,6 +179,13 @@ export default function CompanySettingsDashboard() {
         if (tData.gemini_api_key) {
           setGeminiApiKey(tData.gemini_api_key);
         }
+        if (tData.onboarding_workflow_settings && Array.isArray(tData.onboarding_workflow_settings)) {
+          setOnboardingSteps(tData.onboarding_workflow_settings);
+        } else {
+          setOnboardingSteps(getWorkflowStepsFromStorage());
+        }
+      } else {
+        setOnboardingSteps(getWorkflowStepsFromStorage());
       }
 
       // 部署マスタ取得
@@ -312,7 +332,8 @@ export default function CompanySettingsDashboard() {
         work_calendar_settings: updatedCalendar,
         payroll_common_settings: payrollSettings,
         employment_rules_text: employmentRulesText,
-        gemini_api_key: geminiApiKey
+        gemini_api_key: geminiApiKey,
+        onboarding_workflow_settings: onboardingSteps
       };
 
       const { error } = await supabase
@@ -333,7 +354,8 @@ export default function CompanySettingsDashboard() {
         if (fbErr) throw fbErr;
       }
 
-      // ローカルストレージにも同期（勤怠・カレンダーで即使えるように）
+      // ローカルストレージにも同期（勤怠・カレンダー・入社手続きで即使えるように）
+      saveWorkflowStepsToStorage(onboardingSteps);
       localStorage.setItem('mock_company_holidays', JSON.stringify(Array.from(computedHolidaysSet)));
       localStorage.setItem(`company_employment_rules_${tenantId}`, employmentRulesText);
       localStorage.setItem('company_employment_rules', employmentRulesText);
@@ -435,6 +457,76 @@ export default function CompanySettingsDashboard() {
   const handleDeleteCustomHoliday = (index: number) => {
     const updated = calendarSettings.custom_holidays.filter((_, i) => i !== index);
     setCalendarSettings({ ...calendarSettings, custom_holidays: updated });
+  };
+
+  // 入社手続きステップ並び替え（上へ）
+  const handleMoveStepUp = (index: number) => {
+    if (index === 0) return;
+    const newSteps = [...onboardingSteps];
+    const temp = newSteps[index];
+    newSteps[index] = newSteps[index - 1];
+    newSteps[index - 1] = temp;
+    newSteps.forEach((s, i) => { s.step_number = i + 1; });
+    setOnboardingSteps(newSteps);
+  };
+
+  // 入社手続きステップ並び替え（下へ）
+  const handleMoveStepDown = (index: number) => {
+    if (index === onboardingSteps.length - 1) return;
+    const newSteps = [...onboardingSteps];
+    const temp = newSteps[index];
+    newSteps[index] = newSteps[index + 1];
+    newSteps[index + 1] = temp;
+    newSteps.forEach((s, i) => { s.step_number = i + 1; });
+    setOnboardingSteps(newSteps);
+  };
+
+  // ステップ有効/無効切り替え
+  const handleToggleStep = (index: number) => {
+    const newSteps = [...onboardingSteps];
+    newSteps[index].is_enabled = !newSteps[index].is_enabled;
+    setOnboardingSteps(newSteps);
+  };
+
+  // ステップ削除
+  const handleDeleteStep = (index: number) => {
+    if (onboardingSteps.length <= 1) {
+      alert('少なくとも1つのステップが必要です。');
+      return;
+    }
+    if (!confirm('このステップを削除しますか？')) return;
+    const newSteps = onboardingSteps.filter((_, i) => i !== index);
+    newSteps.forEach((s, i) => { s.step_number = i + 1; });
+    setOnboardingSteps(newSteps);
+  };
+
+  // 新規ステップ追加
+  const handleAddNewStep = () => {
+    if (!newStepName.trim()) {
+      alert('ステップ名を入力してください。');
+      return;
+    }
+    const newStep: OnboardingWorkflowStep = {
+      id: `step_${Date.now()}`,
+      step_number: onboardingSteps.length + 1,
+      name: newStepName.trim(),
+      description: newStepDesc.trim() || '社内所定の手続き',
+      required_action: 'custom',
+      approver_type: 'all_admins',
+      approver_name: newStepApprover.trim() || '管理者全員',
+      is_enabled: true
+    };
+    setOnboardingSteps([...onboardingSteps, newStep]);
+    setNewStepName('');
+    setNewStepDesc('');
+    setNewStepApprover('管理者全員');
+  };
+
+  // 標準ステップに初期化
+  const handleResetDefaultSteps = () => {
+    if (confirm('入社手続きステップを国税庁・労務標準の5ステップに初期化しますか？')) {
+      setOnboardingSteps(DEFAULT_ONBOARDING_STEPS);
+    }
   };
 
   // 共通の保存ボタンスニペット
@@ -580,13 +672,23 @@ export default function CompanySettingsDashboard() {
           </button>
 
           <button
+            onClick={() => setActiveTab('onboarding')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'onboarding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <UserCheck className="w-4 h-4" />
+            5. 入社手続きステップ ＆ 承認者マスタ
+          </button>
+
+          <button
             onClick={() => setActiveTab('rules')}
             className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'rules' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
             <BookOpen className="w-4 h-4" />
-            5. 就業規則（AI連動）
+            6. 就業規則（AI連動）
           </button>
         </div>
 
@@ -1137,7 +1239,153 @@ export default function CompanySettingsDashboard() {
           </div>
         )}
 
-        {/* 5. 就業規則（AI連動） タブ */}
+        {/* 5. 入社手続きステップ ＆ 承認者マスタ タブ */}
+        {activeTab === 'onboarding' && (
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6 animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <UserCheck className="w-5 h-5 text-indigo-600" />
+                  入社手続きワークフローステップ ＆ 承認者マスタ
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  内定から入社・書類提出・原本審査・官公庁届出・本稼働までのステップ順序と承認者を会社ごとに定義します。
+                </p>
+              </div>
+              <button
+                onClick={handleResetDefaultSteps}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-xl border border-slate-200 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-600" />
+                国税庁・労務標準5ステップに初期化
+              </button>
+            </div>
+
+            {/* ステップ一覧リスト */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-700">登録済み手続きステップ ({onboardingSteps.length}ステップ)</span>
+                <span className="text-[10px] text-slate-400">※ 矢印ボタンで順序を自由に入れ替えられます</span>
+              </div>
+
+              <div className="space-y-2.5">
+                {onboardingSteps.map((step, idx) => (
+                  <div
+                    key={step.id}
+                    className={`p-4 rounded-2xl border transition flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                      step.is_enabled
+                        ? 'bg-slate-50/70 border-slate-200 hover:border-indigo-300'
+                        : 'bg-slate-100/50 border-slate-200 opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white font-black text-xs flex items-center justify-center shadow-xs shrink-0 mt-0.5">
+                        {step.step_number}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-slate-800 text-sm">{step.name}</span>
+                          <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            承認権限: {step.approver_name || '管理者全員'}
+                          </span>
+                          {!step.is_enabled && (
+                            <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                              無効化中
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">{step.description}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end md:self-center">
+                      <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-xs">
+                        <button
+                          onClick={() => handleMoveStepUp(idx)}
+                          disabled={idx === 0}
+                          className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 disabled:opacity-30 cursor-pointer"
+                          title="上へ移動"
+                        >
+                          <ArrowUp className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleMoveStepDown(idx)}
+                          disabled={idx === onboardingSteps.length - 1}
+                          className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 disabled:opacity-30 cursor-pointer"
+                          title="下へ移動"
+                        >
+                          <ArrowDown className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => handleToggleStep(idx)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                          step.is_enabled
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                            : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+                        }`}
+                      >
+                        {step.is_enabled ? '有効' : '無効'}
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteStep(idx)}
+                        className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition cursor-pointer"
+                        title="ステップを削除"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 新規ステップ追加エリア */}
+            <div className="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 space-y-3">
+              <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                <Plus className="w-4 h-4 text-indigo-600" />
+                ＋ 自社独自の入社手続きステップを追加
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input
+                  type="text"
+                  placeholder="ステップ名（例: 入社オリエン・PC手配）"
+                  value={newStepName}
+                  onChange={e => setNewStepName(e.target.value)}
+                  className="bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                />
+                <input
+                  type="text"
+                  placeholder="手続き内容説明"
+                  value={newStepDesc}
+                  onChange={e => setNewStepDesc(e.target.value)}
+                  className="bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700"
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="承認者（例: 労務担当、総務部）"
+                    value={newStepApprover}
+                    onChange={e => setNewStepApprover(e.target.value)}
+                    className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                  />
+                  <button
+                    onClick={handleAddNewStep}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-xs cursor-pointer whitespace-nowrap"
+                  >
+                    追加
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {renderSaveFooter()}
+          </div>
+        )}
+
+        {/* 6. 就業規則（AI連動） タブ */}
         {activeTab === 'rules' && (
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-5 animate-in fade-in duration-200">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
