@@ -587,17 +587,37 @@ export default function CompanySettingsDashboard() {
         console.warn('LocalStorage save error:', e);
       }
 
-      // 3. 部門長任命
-      if (isDeptHead && deptName) {
-        const dObj = departments.find(d => d.name === deptName);
-        if (dObj) {
-          await handleUpdateDepartmentManager(dObj.id, userId);
+      // 3. 部門長（所属長）の確実なアサイン・解除
+      if (deptName) {
+        if (isDeptHead) {
+          // この社員を所属長に任命
+          await handleUpdateDepartmentManager(deptName, userId);
+        } else {
+          // もしこの社員が元々この部署の所属長だった場合は解除
+          const currentDept = departments.find(d => d.name === deptName);
+          if (currentDept && currentDept.manager_user_id === userId) {
+            await handleUpdateDepartmentManager(deptName, '');
+          }
         }
       }
 
+      // 4. companyUsers ローカルstateを即時更新
+      setCompanyUsers(prev => prev.map(u => {
+        if (u.id === userId) {
+          return {
+            ...u,
+            department: deptName || undefined,
+            position_id: posId || undefined,
+            position_name: posName || undefined,
+            is_department_head: isDeptHead
+          };
+        }
+        return u;
+      }));
+
       setEditingUserModal({ isOpen: false, user: null });
       await fetchData();
-      alert(`✅ 社員の役職（${posName || '一般'}）および配属（${deptName || '未所属'}）を更新・保存しました！`);
+      alert(`✅ 社員の役職（${posName || '一般'}）および配属（${deptName || '未所属'}）${isDeptHead ? '【★所属長に任命】' : ''}を更新・保存しました！`);
     } catch (e: any) {
       console.error(e);
       alert('社員情報の更新に失敗しました: ' + e.message);
@@ -1321,7 +1341,14 @@ export default function CompanySettingsDashboard() {
                               dept.members.map(m => (
                                 <div
                                   key={m.id}
-                                  onClick={() => setEditingUserModal({ isOpen: true, user: m })}
+                                  onClick={() => setEditingUserModal({
+                                    isOpen: true,
+                                    user: {
+                                      ...m,
+                                      department: dept.name,
+                                      is_department_head: dept.manager_user_id === m.id
+                                    }
+                                  })}
                                   className="flex items-center justify-between py-1.5 px-2.5 bg-white hover:bg-indigo-50/60 rounded-xl border border-slate-200 hover:border-indigo-300 transition cursor-pointer shadow-2xs"
                                   title="クリックして役職や所属を変更"
                                 >
