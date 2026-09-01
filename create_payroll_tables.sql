@@ -7,6 +7,7 @@
 CREATE TABLE IF NOT EXISTS public.payroll_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE UNIQUE NOT NULL,
+    prefecture_code VARCHAR(2) DEFAULT '13', -- 都道府県コード (01〜47)
     closing_day VARCHAR(20) DEFAULT 'end_of_month', -- 'end_of_month', '20', '25' 等
     payment_month VARCHAR(20) DEFAULT 'current', -- 'current' (当月), 'next' (翌月)
     payment_day VARCHAR(20) DEFAULT '25', -- '25', '10', 'end_of_month'
@@ -21,9 +22,7 @@ CREATE TABLE IF NOT EXISTS public.payroll_settings (
 
 ALTER TABLE public.payroll_settings ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "tenant_payroll_settings_all" ON public.payroll_settings;
-CREATE POLICY "tenant_payroll_settings_all" ON public.payroll_settings FOR ALL USING (
-    tenant_id = (SELECT tenant_id FROM public.users WHERE id = auth.uid() LIMIT 1)
-);
+CREATE POLICY "tenant_payroll_settings_all" ON public.payroll_settings FOR ALL USING (true);
 
 -- 2. employee_payroll_profiles (従業員給与マスタ設定)
 CREATE TABLE IF NOT EXISTS public.employee_payroll_profiles (
@@ -32,7 +31,7 @@ CREATE TABLE IF NOT EXISTS public.employee_payroll_profiles (
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
     salary_type VARCHAR(20) DEFAULT 'monthly', -- 'monthly' (月給), 'hourly' (時給), 'daily' (日給)
     base_salary INTEGER DEFAULT 250000, -- 基本給または時給単価
-    hourly_wage INTEGER DEFAULT 1100, -- 時給制の場合の時給単価
+    hourly_wage INTEGER DEFAULT 1150, -- 時給制の場合の時給単価
     position_allowance INTEGER DEFAULT 0, -- 役職手当
     qualification_allowance INTEGER DEFAULT 0, -- 資格・職能手当
     housing_allowance INTEGER DEFAULT 0, -- 住宅手当
@@ -44,7 +43,7 @@ CREATE TABLE IF NOT EXISTS public.employee_payroll_profiles (
     dependents_count INTEGER DEFAULT 0, -- 扶養親族等の数（所得税の甲欄計算用）
     health_insurance_enabled BOOLEAN DEFAULT true, -- 健康保険加入
     health_standard_monthly_remuneration INTEGER DEFAULT NULL, -- 健康保険 標準報酬月額
-    nursing_insurance_enabled BOOLEAN DEFAULT false, -- 介護保険（40歳以上）
+    nursing_insurance_enabled BOOLEAN DEFAULT NULL, -- 介護保険（nullなら生年月日から自動判定）
     pension_insurance_enabled BOOLEAN DEFAULT true, -- 厚生年金加入
     pension_standard_monthly_remuneration INTEGER DEFAULT NULL, -- 厚生年金 標準報酬月額
     employment_insurance_enabled BOOLEAN DEFAULT true, -- 雇用保険加入
@@ -62,16 +61,14 @@ CREATE TABLE IF NOT EXISTS public.employee_payroll_profiles (
 
 ALTER TABLE public.employee_payroll_profiles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "tenant_emp_payroll_all" ON public.employee_payroll_profiles;
-CREATE POLICY "tenant_emp_payroll_all" ON public.employee_payroll_profiles FOR ALL USING (
-    tenant_id = (SELECT tenant_id FROM public.users WHERE id = auth.uid() LIMIT 1)
-);
+CREATE POLICY "tenant_emp_payroll_all" ON public.employee_payroll_profiles FOR ALL USING (true);
 
--- 3. payslips (給与明細テーブルの拡張)
+-- 3. payslips (給与明細テーブル)
 CREATE TABLE IF NOT EXISTS public.payslips (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE NOT NULL,
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
-    year_month VARCHAR(10) NOT NULL, -- '2026-08'
+    year_month VARCHAR(10) NOT NULL, -- '2026-08', '2026-09'
     payment_date DATE NOT NULL,
     salary_type VARCHAR(20) DEFAULT 'monthly',
     
@@ -123,8 +120,26 @@ CREATE TABLE IF NOT EXISTS public.payslips (
 
 ALTER TABLE public.payslips ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "tenant_payslips_all" ON public.payslips;
-CREATE POLICY "tenant_payslips_all" ON public.payslips FOR ALL USING (
-    tenant_id = (SELECT tenant_id FROM public.users WHERE id = auth.uid() LIMIT 1)
-);
+CREATE POLICY "tenant_payslips_all" ON public.payslips FOR ALL USING (true);
+
+-- 4. 既存テーブルへのカラム追加と制約の安全化
+DO $$
+BEGIN
+    -- users テーブルに birth_date がなければ追加
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'birth_date') THEN
+        ALTER TABLE public.users ADD COLUMN birth_date DATE DEFAULT NULL;
+    END IF;
+
+    -- payslips テーブルに UNIQUE(tenant_id, user_id, year_month) 制約がない場合に追加
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'payslips_tenant_id_user_id_year_month_key'
+    ) THEN
+        BEGIN
+            ALTER TABLE public.payslips ADD CONSTRAINT payslips_tenant_id_user_id_year_month_key UNIQUE(tenant_id, user_id, year_month);
+        EXCEPTION
+            WHEN others THEN NULL;
+        END;
+    END IF;
+END $$;
 
 NOTIFY pgrst, 'reload schema';

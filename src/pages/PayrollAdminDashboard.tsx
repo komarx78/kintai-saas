@@ -59,9 +59,9 @@ export default function PayrollAdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans overflow-x-auto">
       {/* Header */}
-      <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+      <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs min-w-[1024px]">
         <div className="flex items-center space-x-3">
           <button
             onClick={() => navigate('/portal')}
@@ -101,7 +101,7 @@ export default function PayrollAdminDashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 min-w-[1024px]">
         <PayslipManagement tenantId={tenantId} />
       </main>
     </div>
