@@ -280,63 +280,69 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
           締結日: {docY}年 {docM}月 {docD}日
         </div>
 
-        <div className="grid grid-cols-2 gap-8">
+        <div className="grid grid-cols-2 gap-6">
           {/* 甲 署名 */}
-          <div className="border border-slate-300 p-4 rounded-xl relative overflow-hidden bg-slate-50/50">
-            <span className="text-[10px] font-bold text-slate-500 block mb-1">【事業主（甲）署名捺印】</span>
-            <div className="text-xs font-bold text-slate-800">{data.companyName}</div>
-            <div className="text-xs text-slate-700 mt-1">{data.representativeName || '代表取締役 〇〇 〇〇'}　　　　　印</div>
+          <div className="border border-slate-300 p-3.5 rounded-xl relative bg-slate-50/40 min-h-[92px] flex flex-col justify-between">
+            <div>
+              <span className="text-[10px] font-bold text-slate-500 block mb-0.5">【事業主（甲）署名捺印】</span>
+              <div className="text-xs font-bold text-slate-800">{data.companyName}</div>
+              <div className="text-xs text-slate-700 mt-1 flex items-center justify-between">
+                <span>{data.representativeName || '代表取締役 〇〇 〇〇'}</span>
+                <span className="text-slate-400 font-serif text-[11px] pr-2">印</span>
+              </div>
+            </div>
             
             {/* 社印・印影画像 */}
             {sealImg ? (
-              <div className="absolute right-4 bottom-2 w-16 h-16 pointer-events-none flex items-center justify-center">
+              <div className="absolute right-3 top-3 w-16 h-16 pointer-events-none flex items-center justify-center">
                 <img 
                   src={sealImg} 
                   alt="社印" 
-                  className="max-w-full max-h-full object-contain mix-blend-multiply opacity-90 drop-shadow-sm select-none rotate-[-2deg]" 
+                  className="max-w-full max-h-full object-contain mix-blend-multiply opacity-90 drop-shadow-xs select-none rotate-[-2deg]" 
                 />
               </div>
             ) : (
-              <div className="absolute right-4 bottom-3 w-10 h-10 border border-red-400/40 rounded flex items-center justify-center text-red-500 text-[8px] font-serif select-none">
+              <div className="absolute right-4 top-4 w-10 h-10 border border-red-400/50 rounded flex items-center justify-center text-red-500 text-[8px] font-serif select-none">
                 社印
               </div>
             )}
           </div>
 
           {/* 乙 署名 */}
-          <div className="border border-slate-300 p-4 rounded-xl relative overflow-hidden bg-slate-50/50">
-            <div className="flex items-center justify-between mb-1">
+          <div className="border border-slate-300 p-3.5 rounded-xl relative bg-slate-50/40 min-h-[92px] flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-0.5">
               <span className="text-[10px] font-bold text-slate-500 block">【労働者（乙）署名捺印】</span>
               {(data.isEmployeeSigned || data.employeeSignedAt) && (
-                <span className="text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded">
+                <span className="text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.2 rounded">
                   ✅ 電子合意締結済
                 </span>
               )}
             </div>
 
             {(data.isEmployeeSigned || data.employeeSignedAt) ? (
-              <div className="space-y-1 mt-1">
-                <div className="text-xs text-slate-600">
+              <div className="space-y-1">
+                <div className="text-[11px] text-slate-600 truncate">
                   <span className="text-slate-400">ご住所:</span> {data.employeeAddress || '（会社登録住所に準拠）'}
                 </div>
-                <div className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                  <span className="text-slate-400 font-normal">ご署名:</span> {data.employeeName}　　　　印
+                <div className="text-xs font-bold text-slate-800 flex items-center justify-between relative pr-2">
+                  <div><span className="text-slate-400 font-normal">ご署名:</span> {data.employeeName}</div>
+                  <span className="text-slate-300 font-serif text-[11px]">印</span>
+
+                  {/* 労働者の電子認印グラフィック（「印」の文字に美しく重ねる） */}
+                  <div className="absolute right-0 top-[-6px] w-10 h-10 rounded-full border-2 border-red-600/90 bg-red-50/50 flex flex-col items-center justify-center text-red-600 font-serif select-none pointer-events-none rotate-[-4deg] shadow-2xs">
+                    <span className="text-[9px] font-black leading-none">{empLastName.substring(0, 2)}</span>
+                    <span className="text-[7px] font-bold leading-none scale-90">之印</span>
+                  </div>
                 </div>
-                <div className="text-[9px] text-slate-400 font-mono mt-1 pt-1 border-t border-slate-200 flex items-center justify-between">
+                <div className="text-[9px] text-slate-400 font-mono pt-1 border-t border-slate-200 flex items-center justify-between">
                   <span>電子署名日時: {data.employeeSignedAt || `${docY}-${docM}-${docD}`}</span>
                   <span>電磁的合意記録済</span>
                 </div>
-
-                {/* 労働者の電子認印グラフィック */}
-                <div className="absolute right-4 bottom-3 w-12 h-12 rounded-full border-2 border-red-500/80 bg-red-50/30 flex flex-col items-center justify-center text-red-600 font-serif select-none pointer-events-none rotate-[-4deg] shadow-2xs">
-                  <span className="text-[10px] font-black leading-none">{empLastName.substring(0, 2)}</span>
-                  <span className="text-[8px] font-bold leading-none scale-90">之印</span>
-                </div>
               </div>
             ) : (
-              <div className="space-y-2 mt-1">
-                <div className="text-xs text-slate-400 mt-1">ご住所: {data.employeeAddress || '_____________________________________'}</div>
-                <div className="text-xs text-slate-400 mt-3">ご署名: ___________________________　　　　印</div>
+              <div className="space-y-1.5">
+                <div className="text-[11px] text-slate-400">ご住所: {data.employeeAddress || '_____________________________________'}</div>
+                <div className="text-xs text-slate-400">ご署名: ___________________________　　　　印</div>
                 <p className="text-[9px] text-slate-400">※印刷して自筆署名・捺印、またはWebマイページにて電子同意を行ってください。</p>
               </div>
             )}
