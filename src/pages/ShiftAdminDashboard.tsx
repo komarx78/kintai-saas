@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Zap, Calendar, ArrowLeft, CheckCircle, Settings, Users, ClipboardList, Send } from 'lucide-react';
+import { DollarSign, Zap, Calendar, ArrowLeft, CheckCircle, Settings, Users, ClipboardList, Send, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { startOfWeek, endOfWeek, format, addDays } from 'date-fns';
@@ -9,6 +9,7 @@ import { calculateLaborCost, generateAutoShift } from '../lib/shiftAlgorithm';
 
 const ShiftAdminDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const [tenantName, setTenantName] = useState<string>('');
   const [loadingStats, setLoadingStats] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -201,6 +202,9 @@ const ShiftAdminDashboard: React.FC = () => {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
       if (!tenantId) return;
 
+      const { data: tData } = await supabase.from('tenants').select('name').eq('id', tenantId).maybeSingle();
+      if (tData) setTenantName(tData.name);
+
       const { data: empData } = await supabase.from('users').select('id, name, email').eq('tenant_id', tenantId);
       setAllEmployees(empData || []);
 
@@ -386,64 +390,103 @@ const ShiftAdminDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans relative overflow-hidden">
-      <div className="absolute top-0 left-0 w-full h-[400px] bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-700 opacity-90 rounded-b-[4rem] shadow-2xl"></div>
-      
-      <div className="relative z-10 max-w-6xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-10">
-          <div className="flex items-center text-white">
-            <button onClick={() => navigate('/portal')} className="p-2 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-full transition mr-4">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <h1 className="text-3xl font-bold flex items-center">
-              <Calendar className="w-8 h-8 mr-3" />
-              シフト管理ダッシュボード
-            </h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button 
-              onClick={handleResetAllShiftData} 
-              disabled={isResetting}
-              className="bg-rose-500 hover:bg-rose-600 text-white shadow-lg px-3.5 py-2 rounded-xl flex items-center transition font-bold text-sm cursor-pointer disabled:opacity-50"
-              title="確定シフト・ドラフト・希望を全削除して初期化します"
-            >
-              {isResetting ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full mr-2"></div> : <span className="mr-1.5">🗑️</span>}
-              全リセット
-            </button>
-            <button 
-              onClick={handleSeedDummyData} 
-              disabled={isSeeding}
-              className="bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-lg px-4 py-2 rounded-xl flex items-center transition font-black text-sm cursor-pointer disabled:opacity-50"
-              title="【9:00〜18:00（各1名）】の必要枠・ダミー従業員・今週のシフト希望を一瞬で自動セットアップします"
-            >
-              {isSeeding ? <div className="animate-spin w-4 h-4 border-2 border-slate-950/30 border-t-slate-950 rounded-full mr-2"></div> : <span className="mr-1.5">🪄</span>}
-              9-18時データ投入
-            </button>
-            <button 
-              onClick={handlePublishDrafts} 
-              disabled={isPublishing}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg px-4 py-2 rounded-xl flex items-center transition font-bold text-sm disabled:opacity-50 cursor-pointer"
-            >
-              {isPublishing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full mr-2"></div> : <Send className="w-4 h-4 mr-2" />}
-              下書きシフトを確定する（Publish）
-            </button>
-            <button onClick={() => navigate('/shift/admin/employees')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm cursor-pointer">
-              <Users className="w-4 h-4 mr-2" />人員マスタ
-            </button>
-            <button onClick={() => navigate('/shift/admin/patterns')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm cursor-pointer">
-              <ClipboardList className="w-4 h-4 mr-2" />必要枠設定
-            </button>
-            <button onClick={() => navigate('/shift/admin/monthly')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm cursor-pointer">
-              <Calendar className="w-4 h-4 mr-2" />月間シフト状況
-            </button>
-            <button onClick={() => navigate('/shift/admin/settings')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold border border-white/30 text-sm cursor-pointer">
-              <Settings className="w-4 h-4 mr-2" />詳細設定
-            </button>
-            <div className="bg-white/20 p-0.5 rounded-full backdrop-blur-md border border-white/30">
-              <AppSwitcher currentApp="shift" role="admin" />
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans relative overflow-hidden flex flex-col">
+      {/* 画面最上部：全システム共通ヘッダー（固定トップバー） */}
+      <header className="bg-white/95 backdrop-blur-md border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => navigate('/portal')}
+            className="p-2 hover:bg-slate-100 rounded-xl text-slate-600 transition flex items-center gap-1 text-xs font-bold cursor-pointer"
+            title="ポータルに戻る"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            ポータル
+          </button>
+          <div className="h-4 w-px bg-slate-200" />
+          <div className="flex items-center space-x-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-sm">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-sm font-black text-slate-800 flex items-center gap-1.5">
+                クラウドシフト管理システム
+                <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full border border-indigo-200">
+                  管理画面
+                </span>
+              </div>
+              <div className="text-[10px] text-slate-400 font-bold">{tenantName || '株式会社KAP'}</div>
             </div>
           </div>
         </div>
+
+        <div className="flex items-center space-x-3">
+          <AppSwitcher currentApp="shift" role="admin" />
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut();
+              navigate('/');
+            }}
+            className="p-2 rounded-full hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+            title="ログアウト"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
+
+      {/* グラデーション背景バナー */}
+      <div className="relative flex-1">
+        <div className="absolute top-0 left-0 w-full h-[320px] bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-700 opacity-90 rounded-b-[3rem] shadow-2xl"></div>
+        
+        <div className="relative z-10 max-w-6xl mx-auto px-4 py-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-8 gap-4">
+            <div className="text-white">
+              <h1 className="text-2xl lg:text-3xl font-black flex items-center tracking-tight">
+                シフト管理ダッシュボード
+              </h1>
+              <p className="text-xs text-indigo-100 mt-1 font-medium">希望シフトの収集からAI自動生成・確定・人件費試算まで一括管理</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button 
+                onClick={handleResetAllShiftData} 
+                disabled={isResetting}
+                className="bg-rose-500 hover:bg-rose-600 text-white shadow-md px-3 py-2 rounded-xl flex items-center transition font-bold text-xs cursor-pointer disabled:opacity-50"
+                title="確定シフト・ドラフト・希望を全削除して初期化します"
+              >
+                {isResetting ? <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full mr-1.5"></div> : <span className="mr-1">🗑️</span>}
+                全リセット
+              </button>
+              <button 
+                onClick={handleSeedDummyData} 
+                disabled={isSeeding}
+                className="bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md px-3.5 py-2 rounded-xl flex items-center transition font-black text-xs cursor-pointer disabled:opacity-50"
+                title="【9:00〜18:00（各1名）】の必要枠・ダミー従業員・今週のシフト希望を一瞬で自動セットアップします"
+              >
+                {isSeeding ? <div className="animate-spin w-3.5 h-3.5 border-2 border-slate-950/30 border-t-slate-950 rounded-full mr-1.5"></div> : <span className="mr-1">🪄</span>}
+                9-18時データ投入
+              </button>
+              <button 
+                onClick={handlePublishDrafts} 
+                disabled={isPublishing}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-md px-3.5 py-2 rounded-xl flex items-center transition font-bold text-xs disabled:opacity-50 cursor-pointer"
+              >
+                {isPublishing ? <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full mr-1.5"></div> : <Send className="w-3.5 h-3.5 mr-1.5" />}
+                下書き確定（Publish）
+              </button>
+              <button onClick={() => navigate('/shift/admin/employees')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-3 py-2 rounded-xl flex items-center transition shadow-xs font-bold border border-white/30 text-xs cursor-pointer">
+                <Users className="w-3.5 h-3.5 mr-1.5" />人員マスタ
+              </button>
+              <button onClick={() => navigate('/shift/admin/patterns')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-3 py-2 rounded-xl flex items-center transition shadow-xs font-bold border border-white/30 text-xs cursor-pointer">
+                <ClipboardList className="w-3.5 h-3.5 mr-1.5" />必要枠設定
+              </button>
+              <button onClick={() => navigate('/shift/admin/monthly')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-3 py-2 rounded-xl flex items-center transition shadow-xs font-bold border border-white/30 text-xs cursor-pointer">
+                <Calendar className="w-3.5 h-3.5 mr-1.5" />月間状況
+              </button>
+              <button onClick={() => navigate('/shift/admin/settings')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-3 py-2 rounded-xl flex items-center transition shadow-xs font-bold border border-white/30 text-xs cursor-pointer">
+                <Settings className="w-3.5 h-3.5 mr-1.5" />詳細設定
+              </button>
+            </div>
+          </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 relative overflow-hidden group">
@@ -654,6 +697,7 @@ const ShiftAdminDashboard: React.FC = () => {
         </div>
       </div>
     </div>
+  </div>
   );
 };
 
