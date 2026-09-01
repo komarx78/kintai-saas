@@ -434,36 +434,92 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const usersList = uData || [];
       setEmployees(usersList);
 
-      // 4. 従業員給与マスタ取得
-      const { data: profData } = await supabase
-        .from('employee_payroll_profiles')
-        .select('*')
-        .eq('tenant_id', tenantId);
+      // 4. 【大元マスタ SSOT】入退社労務プロファイル取得 (employee_onboarding_profiles)
+      let onbList: any[] = [];
+      try {
+        const { data: oData } = await supabase
+          .from('employee_onboarding_profiles')
+          .select('*')
+          .eq('tenant_id', tenantId);
+        onbList = oData || [];
+      } catch (e) {
+        console.warn('employee_onboarding_profiles fetch error:', e);
+      }
+      const onbMap = new Map(onbList.map(o => [o.user_id, o]));
+
+      // 5. 従業員給与プロファイル取得 (employee_payroll_profiles)
+      let profList: any[] = [];
+      try {
+        const { data: profData } = await supabase
+          .from('employee_payroll_profiles')
+          .select('*')
+          .eq('tenant_id', tenantId);
+        profList = profData || [];
+      } catch (e) {
+        console.warn('employee_payroll_profiles fetch error:', e);
+      }
+      const payMap = new Map(profList.map(p => [p.user_id, p]));
       
       const profileMap: Record<string, EmployeePayrollProfile> = {};
-      (profData || []).forEach((p: any) => {
-        profileMap[p.user_id] = p;
-      });
 
-      // users テーブルおよび LocalStorage バックアップから生年月日・マスタを完全補正！
+      // 大元労務マスタ（SSOT）を起点として各従業員の給与プロファイルを完全構築！
       usersList.forEach(u => {
+        const onb: any = onbMap.get(u.id);
+        const pay: any = payMap.get(u.id);
+
         let localBackup: any = null;
         try {
           const raw = localStorage.getItem(`employee_master_backup_${u.id}`);
           if (raw) localBackup = JSON.parse(raw);
         } catch (e) {}
 
-        const bDate = profileMap[u.id]?.birth_date || u.birth_date || localBackup?.birth_date || '';
-        if (profileMap[u.id]) {
-          if (!profileMap[u.id].birth_date && bDate) {
-            profileMap[u.id].birth_date = bDate;
-          }
-        } else {
-          profileMap[u.id] = {
-            ...getInitialProfile(tenantId, u.id),
-            birth_date: bDate
-          };
-        }
+        const bDate = onb?.birth_date || u.birth_date || pay?.birth_date || localBackup?.birth_date || '';
+        
+        // 給与形態：労務マスタ > 給与マスタ > 雇用形態判定
+        const salType = onb?.salary_type || pay?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly');
+        // 基本給：労務マスタ > 給与マスタ > 250000
+        const bSalary = onb?.base_salary ?? pay?.base_salary ?? 250000;
+        // 時給：労務マスタ > 給与マスタ > 1150
+        const hWage = onb?.hourly_wage ?? pay?.hourly_wage ?? 1150;
+        // 役職手当
+        const posAllow = onb?.position_allowance ?? pay?.position_allowance ?? 0;
+        // 資格手当
+        const qualAllow = onb?.qualification_allowance ?? pay?.qualification_allowance ?? 0;
+        // 住宅手当
+        const houseAllow = onb?.housing_allowance ?? pay?.housing_allowance ?? 0;
+        // 家族手当
+        const famAllow = onb?.family_allowance ?? pay?.family_allowance ?? 0;
+        // 通勤手当
+        const comAllow = onb?.commuting_allowance ?? pay?.commuting_allowance ?? 15000;
+
+        profileMap[u.id] = {
+          tenant_id: tenantId,
+          user_id: u.id,
+          salary_type: salType,
+          base_salary: bSalary,
+          hourly_wage: hWage,
+          position_allowance: posAllow,
+          qualification_allowance: qualAllow,
+          housing_allowance: houseAllow,
+          family_allowance: famAllow,
+          commuting_allowance: comAllow,
+          commuting_taxable: pay?.commuting_taxable ?? false,
+          fixed_overtime_hours: pay?.fixed_overtime_hours ?? 0,
+          fixed_overtime_allowance: pay?.fixed_overtime_allowance ?? 0,
+          dependents_count: pay?.dependents_count ?? 0,
+          birth_date: bDate,
+          health_insurance_enabled: onb?.health_insurance_joined ?? pay?.health_insurance_enabled ?? true,
+          nursing_insurance_enabled: pay?.nursing_insurance_enabled ?? null,
+          pension_insurance_enabled: onb?.pension_insurance_joined ?? pay?.pension_insurance_enabled ?? true,
+          employment_insurance_enabled: onb?.employment_insurance_joined ?? pay?.employment_insurance_enabled ?? true,
+          resident_tax_monthly: pay?.resident_tax_monthly ?? 0,
+          tax_bracket: pay?.tax_bracket || 'kou',
+          bank_name: pay?.bank_name || '',
+          branch_name: pay?.branch_name || '',
+          account_type: pay?.account_type || 'ordinary',
+          account_number: pay?.account_number || '',
+          account_holder: pay?.account_holder || ''
+        };
       });
       setPayrollProfiles(profileMap);
 
@@ -500,11 +556,53 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         }
       }
 
-      const enriched = combinedPayslips.map(p => ({
-        ...p,
-        user: usersList.find(u => u.id === p.user_id) || p.user || { name: p.employee_name || '従業員' }
-      }));
-      setPayslips(enriched);
+      // 6. 各従業員の給与明細を大元労務マスタ（SSOT）に基づいて完全最新化
+      const prefRateDataLatest = getPrefectureRate(activePrefCode);
+      const latestPayrollSettings: any = {
+        prefecture_code: activePrefCode,
+        employment_insurance_rate: 0.006,
+        health_insurance_rate: Number((prefRateDataLatest.healthRate / 2).toFixed(5)),
+        nursing_insurance_rate: 0.008,
+        pension_insurance_rate: 0.0915,
+        rounding_method: 'floor'
+      };
+
+      const finalPayslips = usersList.map(u => {
+        const prof = profileMap[u.id];
+        const existingSlip = combinedPayslips.find(cp => cp.user_id === u.id);
+
+        const isHourly = prof?.salary_type === 'hourly';
+        const defaultWorkDays = isHourly ? 0 : 20;
+        const defaultActualHours = isHourly ? 0 : 160;
+
+        const attSummary: AttendanceSummary = {
+          work_days: existingSlip?.work_days ?? defaultWorkDays,
+          actual_hours: existingSlip?.actual_hours ?? defaultActualHours,
+          overtime_hours: existingSlip?.overtime_hours ?? 0,
+          midnight_hours: existingSlip?.midnight_hours ?? 0,
+          holiday_hours: existingSlip?.holiday_hours ?? 0,
+          paid_leave_days: existingSlip?.paid_leave_days ?? 0,
+          absence_days: existingSlip?.absence_days ?? 0,
+          late_early_hours: existingSlip?.late_early_hours ?? 0
+        };
+
+        // 大元労務マスタから最新の給与計算（個別基本給・各種手当＋生年月日の介護保険自動判定）を実行！
+        const calculated = calculatePayroll(prof, attSummary, latestPayrollSettings);
+
+        return {
+          id: existingSlip?.id || `draft_${u.id}_${currentYearMonth}`,
+          tenant_id: tenantId,
+          user_id: u.id,
+          year_month: currentYearMonth,
+          payment_date: existingSlip?.payment_date || `${currentYearMonth}-25`,
+          ...calculated,
+          note: existingSlip?.note || '今月も勤務お疲れ様でした。',
+          status: existingSlip?.status || 'draft',
+          user: u
+        };
+      });
+
+      setPayslips(finalPayslips);
     } catch (e) {
       console.error('Error fetching payslips:', e);
     } finally {
