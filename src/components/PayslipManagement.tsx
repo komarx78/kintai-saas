@@ -348,7 +348,6 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
   // 勤怠実績から当月の給与を一括自動計算
   const handleAutoGenerateFromAttendance = async () => {
     if (!tenantId || employees.length === 0) return;
-    if (!confirm(`${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月度の打刻データ・有給実績を集計して、全員分の給与を自動計算しますか？`)) return;
 
     setIsSaving(true);
     try {
@@ -357,7 +356,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
       const endDate = new Date(year, month, 0).toISOString().split('T')[0];
 
-      // 1. 当月の打刻データ取得
+      // 1. 当月の打刻データ取得 (attendance_records)
       const { data: attData } = await supabase
         .from('attendance_records')
         .select('*')
@@ -365,7 +364,15 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         .gte('date', startDate)
         .lte('date', endDate);
 
-      // 2. 当月の有給申請データ取得
+      // 2. 当月の確定シフトデータ取得 (advanced_shifts: フォールバック用)
+      const { data: shiftData } = await supabase
+        .from('advanced_shifts')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .gte('target_date', startDate)
+        .lte('target_date', endDate);
+
+      // 3. 当月の有給申請データ取得 (leave_requests)
       const { data: reqData } = await supabase
         .from('leave_requests')
         .select('*')
@@ -375,80 +382,117 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         .lte('start_date', endDate);
 
       const records = attData || [];
+      const shifts = shiftData || [];
       const requests = reqData || [];
+
+      const activePrefecture = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '13';
 
       for (const emp of employees) {
         const empRecords = records.filter(r => r.user_id === emp.id);
-        const workDays = empRecords.filter(r => r.check_in_time).length;
-        
+        const empShifts = shifts.filter(s => s.user_id === emp.id);
+
+        let workDays = 0;
         let actualMins = 0;
         let overtimeMins = 0;
         let midnightMins = 0;
+        let holidayHours = 0;
 
-        empRecords.forEach(r => {
-          if (r.check_in_time && r.check_out_time) {
-            const [inH, inM] = r.check_in_time.split(':').map(Number);
-            const [outH, outM] = r.check_out_time.split(':').map(Number);
-            let inTotal = inH * 60 + inM;
-            let outTotal = outH * 60 + outM;
-            if (outTotal < inTotal) outTotal += 24 * 60;
+        if (empRecords.length > 0) {
+          // ① 打刻実績データが存在する場合
+          workDays = empRecords.filter(r => r.check_in_time).length;
+          empRecords.forEach(r => {
+            if (r.check_in_time && r.check_out_time) {
+              const [inH, inM] = r.check_in_time.split(':').map(Number);
+              const [outH, outM] = r.check_out_time.split(':').map(Number);
+              let inTotal = inH * 60 + inM;
+              let outTotal = outH * 60 + outM;
+              if (outTotal < inTotal) outTotal += 24 * 60;
 
-            const total = Math.max(0, outTotal - inTotal);
-            const breakM = total >= 480 ? 60 : (total >= 360 ? 45 : 0);
-            const work = Math.max(0, total - breakM);
-            actualMins += work;
-            overtimeMins += Math.max(0, work - 480);
+              const total = Math.max(0, outTotal - inTotal);
+              const breakM = total >= 480 ? 60 : (total >= 360 ? 45 : 0);
+              const work = Math.max(0, total - breakM);
+              actualMins += work;
+              overtimeMins += Math.max(0, work - 480);
 
-            // 深夜時間（22:00〜翌5:00）の計算
-            for (let m = inTotal; m < outTotal; m++) {
-              const h = Math.floor(m / 60) % 24;
-              if (h >= 22 || h < 5) midnightMins++;
+              // 深夜時間（22:00〜翌5:00）
+              for (let m = inTotal; m < outTotal; m++) {
+                const h = Math.floor(m / 60) % 24;
+                if (h >= 22 || h < 5) midnightMins++;
+              }
             }
-          }
-        });
+          });
+        } else if (empShifts.length > 0) {
+          // ② 打刻がまだないが確定シフトが存在する場合
+          workDays = empShifts.length;
+          empShifts.forEach(s => {
+            if (s.start_time && s.end_time) {
+              const [inH, inM] = s.start_time.split(':').map(Number);
+              const [outH, outM] = s.end_time.split(':').map(Number);
+              let inTotal = inH * 60 + inM;
+              let outTotal = outH * 60 + outM;
+              if (outTotal < inTotal) outTotal += 24 * 60;
 
+              const total = Math.max(0, outTotal - inTotal);
+              const breakM = total >= 480 ? 60 : (total >= 360 ? 45 : 0);
+              const work = Math.max(0, total - breakM);
+              actualMins += work;
+              overtimeMins += Math.max(0, work - 480);
+            }
+          });
+        }
+
+        // 有給休暇日数集計
         const empRequests = requests.filter(r => r.user_id === emp.id && (r.type?.includes('有給') || r.type?.includes('年休')));
         const paidLeaveDays = empRequests.length;
 
-        // 従業員の給与マスタプロファイル（未設定なら初期値）
-        const profile = payrollProfiles[emp.id] || {
+        // 従業員の給与マスタプロファイル
+        const existingProf = payrollProfiles[emp.id];
+        const profile: EmployeePayrollProfile = {
           tenant_id: tenantId,
           user_id: emp.id,
-          salary_type: (emp.employment_type === 'part-time' || emp.role?.includes('パート')) ? 'hourly' : 'monthly',
-          base_salary: 250000,
-          hourly_wage: 1150,
-          position_allowance: 0,
-          qualification_allowance: 0,
-          housing_allowance: 0,
-          family_allowance: 0,
-          commuting_allowance: 15000,
-          commuting_taxable: false,
-          fixed_overtime_hours: 0,
-          fixed_overtime_allowance: 0,
-          dependents_count: 0,
-          health_insurance_enabled: true,
-          nursing_insurance_enabled: false,
-          pension_insurance_enabled: true,
-          employment_insurance_enabled: true,
-          resident_tax_monthly: 0,
-          tax_bracket: 'kou'
+          salary_type: existingProf?.salary_type || ((emp.employment_type === 'part-time' || emp.role?.includes('パート')) ? 'hourly' : 'monthly'),
+          base_salary: existingProf?.base_salary ?? 250000,
+          hourly_wage: existingProf?.hourly_wage ?? 1150,
+          position_allowance: existingProf?.position_allowance ?? 0,
+          qualification_allowance: existingProf?.qualification_allowance ?? 0,
+          housing_allowance: existingProf?.housing_allowance ?? 0,
+          family_allowance: existingProf?.family_allowance ?? 0,
+          commuting_allowance: existingProf?.commuting_allowance ?? 15000,
+          commuting_taxable: existingProf?.commuting_taxable ?? false,
+          fixed_overtime_hours: existingProf?.fixed_overtime_hours ?? 0,
+          fixed_overtime_allowance: existingProf?.fixed_overtime_allowance ?? 0,
+          dependents_count: existingProf?.dependents_count ?? 0,
+          birth_date: emp.birth_date || existingProf?.birth_date || null,
+          health_insurance_enabled: existingProf?.health_insurance_enabled ?? true,
+          nursing_insurance_enabled: existingProf?.nursing_insurance_enabled ?? null,
+          pension_insurance_enabled: existingProf?.pension_insurance_enabled ?? true,
+          employment_insurance_enabled: existingProf?.employment_insurance_enabled ?? true,
+          resident_tax_monthly: existingProf?.resident_tax_monthly ?? 0,
+          tax_bracket: existingProf?.tax_bracket || 'kou'
         };
 
+        const isHourly = profile.salary_type === 'hourly';
+        const defaultWorkDays = isHourly ? 0 : 20;
+        const defaultActualHours = isHourly ? 0 : 160;
+
         const attSummary: AttendanceSummary = {
-          work_days: workDays || (profile.salary_type === 'monthly' ? 20 : 0),
-          actual_hours: Number((actualMins / 60).toFixed(1)) || (profile.salary_type === 'monthly' ? 160 : 0),
+          work_days: workDays || defaultWorkDays,
+          actual_hours: actualMins > 0 ? Number((actualMins / 60).toFixed(1)) : defaultActualHours,
           overtime_hours: Number((overtimeMins / 60).toFixed(1)),
           midnight_hours: Number((midnightMins / 60).toFixed(1)),
-          holiday_hours: 0,
+          holiday_hours: holidayHours,
           paid_leave_days: paidLeaveDays,
           absence_days: 0,
           late_early_hours: 0
         };
 
-        // 給与計算エンジンの実行！
-        const calculated = calculatePayroll(profile, attSummary, payrollSettings);
+        // 給与計算エンジンの実行（都道府県・生年月日・社保料率・税金完全自動連動）
+        const calculated = calculatePayroll(profile, attSummary, {
+          ...payrollSettings,
+          prefecture_code: activePrefecture
+        });
 
-        const paymentDayStr = payrollSettings.payment_day === 'end_of_month' ? '28' : payrollSettings.payment_day;
+        const paymentDayStr = payrollSettings.payment_day === 'end_of_month' ? '28' : String(payrollSettings.payment_day);
         const payload: any = {
           tenant_id: tenantId,
           user_id: emp.id,
@@ -456,7 +500,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           payment_date: `${currentYearMonth}-${paymentDayStr.padStart(2, '0')}`,
           ...calculated,
           note: '今月も勤務お疲れ様でした。',
-          status: 'draft'
+          status: 'draft',
+          updated_at: new Date().toISOString()
         };
 
         await supabase
@@ -464,11 +509,106 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           .upsert(payload, { onConflict: 'tenant_id,user_id,year_month' });
       }
 
-      alert('⚡ 全従業員の勤怠・有給データから最新の給与計算（下書き）を一括完了しました！');
       await fetchData();
     } catch (err: any) {
       console.error('Auto generate error:', err);
       alert('給与自動計算中にエラーが発生しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 🪄 テスト用勤怠打刻・有給データの一括投入 ＆ 給与即時自動計算
+  const handleSeedDummyAttendanceAndCalculate = async () => {
+    if (!tenantId || employees.length === 0) return;
+    if (!confirm(`【${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月度】のテスト用勤怠打刻データ（平日9:00〜18:00、残業・深夜・有給含む）を一括生成し、即座に給与を自動計算します。よろしいですか？`)) return;
+
+    setIsSaving(true);
+    try {
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth() + 1;
+      const daysInMonth = new Date(year, month, 0).getDate();
+
+      const attendanceRecordsToInsert: any[] = [];
+      const dummyRequestsToInsert: any[] = [];
+
+      for (const emp of employees) {
+        let workedDaysCount = 0;
+
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateObj = new Date(year, month - 1, d);
+          const dayOfWeek = dateObj.getDay();
+          const dateStr = `${year}-${month.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
+
+          // 土日は除外（平日のみ）
+          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            workedDaysCount++;
+
+            // 15日は有給休暇テスト
+            if (d === 15) {
+              dummyRequestsToInsert.push({
+                tenant_id: tenantId,
+                user_id: emp.id,
+                type: '有給休暇（全休）',
+                start_date: dateStr,
+                end_date: dateStr,
+                status: '承認',
+                reason: 'テスト有給申請'
+              });
+              continue;
+            }
+
+            // 通常の打刻データ（時々残業・深夜あり）
+            const hasOvertime = workedDaysCount % 4 === 0;
+            const hasMidnight = workedDaysCount % 7 === 0;
+
+            const checkIn = '09:00';
+            let checkOut = '18:00';
+            if (hasOvertime) checkOut = '20:00'; // 2h残業
+            if (hasMidnight) checkOut = '23:00'; // 4h残業 + 1h深夜
+
+            attendanceRecordsToInsert.push({
+              tenant_id: tenantId,
+              user_id: emp.id,
+              date: dateStr,
+              check_in_time: checkIn,
+              check_out_time: checkOut,
+              status: '退勤済',
+              note: 'テスト自動生成打刻'
+            });
+          }
+        }
+      }
+
+      // 既存データを一度クリアして再投入
+      const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+
+      await supabase
+        .from('attendance_records')
+        .delete()
+        .eq('tenant_id', tenantId)
+        .gte('date', startDate)
+        .lte('date', endDate);
+
+      if (attendanceRecordsToInsert.length > 0) {
+        await supabase
+          .from('attendance_records')
+          .insert(attendanceRecordsToInsert);
+      }
+
+      if (dummyRequestsToInsert.length > 0) {
+        await supabase
+          .from('leave_requests')
+          .insert(dummyRequestsToInsert);
+      }
+
+      // 直ちに給与自動計算を実行！
+      await handleAutoGenerateFromAttendance();
+      alert('🪄 テスト用勤怠打刻データ（出勤・残業・深夜・有給）を投入し、全員分の給与計算（社保・所得税・手取り）が完了しました！');
+    } catch (err: any) {
+      console.error('Seed attendance error:', err);
+      alert('テスト勤怠データ投入エラー: ' + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -677,6 +817,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       <div className="bg-white rounded-2xl p-4 shadow-xs border border-slate-100 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <button
+            onClick={handleSeedDummyAttendanceAndCalculate}
+            disabled={isSaving || employees.length === 0}
+            className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-black text-xs px-3.5 py-2.5 rounded-xl transition shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="ワンクリックで当月の平日打刻・有給データを生成し、給与を即座に自動計算します"
+          >
+            <Sparkles className="w-4 h-4 text-amber-100" />
+            🪄 テスト用勤怠投入＆一括計算
+          </button>
+
+          <button
             onClick={handleAutoGenerateFromAttendance}
             disabled={isSaving || employees.length === 0}
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
@@ -735,12 +885,22 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             <DollarSign className="w-12 h-12 mx-auto text-slate-300 mb-3" />
             <p className="font-bold text-slate-600 text-sm">当月の給与データがまだありません</p>
             <p className="text-xs text-slate-400 mt-1 mb-4">「⚡ 勤怠から一括自動計算」ボタンを押すと、全員の給与を一瞬で自動試算します。</p>
-            <button
-              onClick={handleAutoGenerateFromAttendance}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer"
-            >
-              今すぐ自動計算する
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={handleSeedDummyAttendanceAndCalculate}
+                className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+              >
+                <Sparkles className="w-4 h-4" />
+                🪄 テスト用勤怠を投入して即時計算
+              </button>
+              <button
+                onClick={handleAutoGenerateFromAttendance}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+              >
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                ⚡ 実績勤怠から自動計算する
+              </button>
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
