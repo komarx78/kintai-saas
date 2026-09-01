@@ -923,23 +923,63 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       alert('確定対象の給与明細データがありません。');
       return;
     }
-    if (!confirm(`${currentYearMonth}度 の給与明細（全${payslips.length}件）を一括確定し、従業員へ公開しますか？`)) return;
+    if (!confirm(`${currentYearMonth}度 の給与明細（全${payslips.length}件）を一括確定し、従業員へWeb公開しますか？`)) return;
 
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from('payslips')
-        .update({ status: 'published', updated_at: new Date().toISOString() })
-        .eq('tenant_id', tenantId)
-        .eq('year_month', currentYearMonth);
+      // 画面上の全給与明細を確実に published として保存
+      for (const slip of payslips) {
+        const payload = {
+          ...slip,
+          tenant_id: tenantId,
+          year_month: currentYearMonth,
+          status: 'published' as const,
+          updated_at: new Date().toISOString()
+        };
+        await savePayslipSafe(payload);
+      }
 
-      if (error) throw error;
+      // Supabase 側の直接 update も実行
+      try {
+        await supabase
+          .from('payslips')
+          .update({ status: 'published', updated_at: new Date().toISOString() })
+          .eq('tenant_id', tenantId)
+          .eq('year_month', currentYearMonth);
+      } catch (e) {}
 
-      alert('🎉 給与明細を一括確定・公開しました！従業員ポータルから閲覧・印刷できます。');
+      alert('🎉 全員の給与明細を一括確定・公開しました！\n従業員のWeb給与明細画面へ即時反映されました。');
       await fetchData();
     } catch (err: any) {
       console.error('Publish error:', err);
       alert('公開処理に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 個別の確定公開 / 下書きトグル
+  const handleTogglePublishSingle = async (slip: Payslip) => {
+    if (!tenantId) return;
+    const newStatus = slip.status === 'published' ? 'draft' : 'published';
+    const actionName = newStatus === 'published' ? '確定公開' : '下書きに戻す';
+    
+    if (!confirm(`【${slip.user?.name || '従業員'}】の給与明細を「${actionName}」にしますか？`)) return;
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        ...slip,
+        tenant_id: tenantId,
+        year_month: currentYearMonth,
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      };
+      await savePayslipSafe(payload);
+      await fetchData();
+    } catch (e: any) {
+      console.error('Toggle single publish error:', e);
+      alert('更新に失敗しました: ' + e.message);
     } finally {
       setIsSaving(false);
     }
@@ -1339,7 +1379,20 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={() => handleTogglePublishSingle(slip)}
+                        className={`text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                          slip.status === 'published'
+                            ? 'bg-emerald-50 hover:bg-rose-50 text-emerald-700 hover:text-rose-700 border border-emerald-200 hover:border-rose-200'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm'
+                        }`}
+                        title={slip.status === 'published' ? 'クリックして下書きに戻す' : 'クリックして確定公開する'}
+                      >
+                        {slip.status === 'published' ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                        {slip.status === 'published' ? '公開中（下書きに戻す）' : '確定公開する'}
+                      </button>
+
                       <button
                         onClick={() => setProfileModal({ isOpen: true, user: slip.user, profile: prof || getInitialProfile(tenantId || '', slip.user_id) })}
                         className="text-xs font-bold text-slate-600 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 border border-slate-200 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
@@ -1625,19 +1678,36 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                         </td>
 
                         <td className="py-3.5 px-3 text-center">
-                          {slip.status === 'published' ? (
-                            <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200 flex items-center justify-center gap-1 w-fit mx-auto">
-                              <Lock className="w-2.5 h-2.5" /> 確定公開
-                            </span>
-                          ) : (
-                            <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-200 flex items-center justify-center gap-1 w-fit mx-auto">
-                              <Unlock className="w-2.5 h-2.5" /> 下書き
-                            </span>
-                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTogglePublishSingle(slip);
+                            }}
+                            className={`text-[10px] font-bold px-2.5 py-1 rounded-full border flex items-center justify-center gap-1 w-fit mx-auto cursor-pointer transition ${
+                              slip.status === 'published'
+                                ? 'bg-emerald-50 hover:bg-rose-50 text-emerald-700 hover:text-rose-700 border-emerald-200 hover:border-rose-200'
+                                : 'bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border-slate-200 hover:border-emerald-200'
+                            }`}
+                            title={slip.status === 'published' ? 'クリックして下書きに戻す' : 'クリックして確定公開する'}
+                          >
+                            {slip.status === 'published' ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
+                            {slip.status === 'published' ? '確定公開済' : '下書き'}
+                          </button>
                         </td>
 
                         <td className="py-3.5 px-4 text-center">
                           <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => handleTogglePublishSingle(slip)}
+                              className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                slip.status === 'published'
+                                  ? 'text-emerald-600 hover:bg-rose-50 hover:text-rose-600'
+                                  : 'text-indigo-600 hover:bg-indigo-50'
+                              }`}
+                              title={slip.status === 'published' ? '下書きに戻す' : '確定公開する'}
+                            >
+                              {slip.status === 'published' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                            </button>
                             <button
                               onClick={() => setPreviewModal({ isOpen: true, payslip: slip })}
                               className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
