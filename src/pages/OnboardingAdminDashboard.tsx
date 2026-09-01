@@ -200,7 +200,7 @@ export default function OnboardingAdminDashboard() {
   const [cabinetModal, setCabinetModal] = useState<{
     isOpen: boolean;
     employee: EmployeeOnboardingData | null;
-    activeDoc: 'contract' | 'commuting' | 'bank' | 'tax' | 'identity';
+    activeDoc: 'contract' | 'commuting' | 'bank' | 'tax' | 'identity' | 'raw_data';
     selectedSubmission?: DocumentSubmission | null;
   }>({
     isOpen: false,
@@ -2114,6 +2114,16 @@ export default function OnboardingAdminDashboard() {
                 <FileText className="w-4 h-4" />
                 4. 扶養控除等申告書
               </button>
+
+              <button
+                onClick={() => setCabinetModal(prev => ({ ...prev, activeDoc: 'raw_data' }))}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                  cabinetModal.activeDoc === 'raw_data' ? 'bg-amber-600 text-white shadow-sm' : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-300'
+                }`}
+              >
+                <CheckCircle2 className="w-4 h-4 text-amber-700" />
+                📋 5. スマホ入力原本・照合チェック
+              </button>
             </div>
 
             {/* 書面本体 */}
@@ -2168,7 +2178,12 @@ export default function OnboardingAdminDashboard() {
               })()}
 
               {cabinetModal.activeDoc === 'commuting' && (() => {
-                const subComm = submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'commuting_pass');
+                const targetEmpName = cabinetModal.employee?.name?.trim() || '';
+                const targetUserId = cabinetModal.employee?.user_id || '';
+                const userCommSubs = submissions
+                  .filter(s => (s.user_id === targetUserId || (targetEmpName && s.data?.name?.trim() === targetEmpName) || (targetEmpName && s.user_name?.trim() === targetEmpName)) && s.document_type === 'commuting_pass')
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                const subComm = (cabinetModal.selectedSubmission?.document_type === 'commuting_pass' ? cabinetModal.selectedSubmission : null) || userCommSubs[0];
                 const cData = subComm?.data || {};
 
                 return (
@@ -2190,7 +2205,12 @@ export default function OnboardingAdminDashboard() {
               })()}
 
               {cabinetModal.activeDoc === 'bank' && (() => {
-                const bSub = submissions.find(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'bank_passbook');
+                const targetEmpName = cabinetModal.employee?.name?.trim() || '';
+                const targetUserId = cabinetModal.employee?.user_id || '';
+                const userBankSubs = submissions
+                  .filter(s => (s.user_id === targetUserId || (targetEmpName && s.data?.name?.trim() === targetEmpName) || (targetEmpName && s.user_name?.trim() === targetEmpName)) && s.document_type === 'bank_passbook')
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                const bSub = (cabinetModal.selectedSubmission?.document_type === 'bank_passbook' ? cabinetModal.selectedSubmission : null) || userBankSubs[0];
                 const bData = bSub?.data || {};
 
                 return (
@@ -2210,47 +2230,281 @@ export default function OnboardingAdminDashboard() {
               })()}
 
               {cabinetModal.activeDoc === 'tax' && (() => {
+                const targetEmpName = cabinetModal.employee?.name?.trim() || '';
+                const targetUserId = cabinetModal.employee?.user_id || '';
+
                 const userTaxSubs = submissions
-                  .filter(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'dependents_form')
+                  .filter(s => (s.user_id === targetUserId || (targetEmpName && s.data?.name?.trim() === targetEmpName) || (targetEmpName && s.user_name?.trim() === targetEmpName)) && s.document_type === 'dependents_form')
                   .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
                 
                 const subTax = (cabinetModal.selectedSubmission?.document_type === 'dependents_form' ? cabinetModal.selectedSubmission : null) || userTaxSubs[0];
                 const tData = subTax?.data || {};
 
                 const userResSubs = submissions
-                  .filter(s => s.user_id === cabinetModal.employee?.user_id && s.document_type === 'resident_certificate')
+                  .filter(s => (s.user_id === targetUserId || (targetEmpName && s.data?.name?.trim() === targetEmpName) || (targetEmpName && s.user_name?.trim() === targetEmpName)) && s.document_type === 'resident_certificate')
                   .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
                 const rData = userResSubs[0]?.data || {};
 
                 return (
-                  <OfficialTaxExemptionDoc data={{
-                    year: tData.year || 2026,
-                    companyName: tenantInfo?.name || '株式会社KAP',
-                    companyAddress: tenantInfo?.address || '滋賀県大津市坂本3丁目21-16',
-                    corporateNumber: tenantInfo?.corporate_number || '1010001999999',
-                    taxOfficeName: tenantInfo?.tax_office_name || '大津',
-                    municipalityName: tenantInfo?.municipality_name || '大津市',
-                    employeeName: tData.name || rData.name || cabinetModal.employee.name,
-                    employeeNameKana: tData.name_kana || rData.name_kana || '',
-                    employeeAddress: tData.address || rData.address || cabinetModal.employee.address || '滋賀県大津市坂本3丁目21-16',
-                    postalCode: tData.postal_code || rData.postal_code || '520-0113',
-                    myNumber: tData.my_number || '',
-                    birthDate: rData.birth_date || tData.birth_date || '1998-04-01',
-                    householderName: tData.householder_name || rData.householder_name || tData.name || cabinetModal.employee.name,
-                    householderRelation: tData.householder_relation || rData.householder_relation || '本人',
-                    hasSpouse: tData.has_spouse || false,
-                    spouseName: tData.spouse_name || tData.spouseName || '',
-                    spouseNameKana: tData.spouse_name_kana || tData.spouseNameKana || '',
-                    spouseBirthDate: tData.spouse_birth_date || tData.spouseBirthDate || '1996-05-15',
-                    spouseIncomeEstimate: tData.spouse_income_estimate ?? tData.spouseIncomeEstimate ?? 0,
-                    spouseIsLivingTogether: tData.spouse_is_living_together !== false,
-                    dependents: tData.dependents || [],
-                    isDisability: tData.is_disability,
-                    isSingleParent: tData.is_single_parent,
-                    isWidow: tData.is_widow,
-                    isWorkingStudent: tData.is_working_student,
-                    appliedDate: cabinetModal.employee.join_date
-                  }} />
+                  <div className="space-y-4">
+                    {/* 📱 従業員がWeb送信した大元データのサマリー照合バー */}
+                    <div className="bg-amber-50/80 border border-amber-200 p-3.5 rounded-2xl print:hidden space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-black text-amber-900 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-amber-600" />
+                          📱 スマホ・PCから送信された大元入力データ（照合中）
+                        </span>
+                        <span className="text-[10px] text-amber-700 font-bold">
+                          送信日時: {subTax?.created_at ? new Date(subTax.created_at).toLocaleString('ja-JP') : '未送信'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-700">
+                        <div className="bg-white p-2 rounded-xl border border-amber-100">
+                          <span className="text-slate-400 block text-[10px]">申告者氏名</span>
+                          <span className="font-bold text-slate-900">{tData.name || cabinetModal.employee.name}</span>
+                          {tData.name_kana && <span className="text-[9px] text-slate-500 block">({tData.name_kana})</span>}
+                        </div>
+                        <div className="bg-white p-2 rounded-xl border border-amber-100">
+                          <span className="text-slate-400 block text-[10px]">配偶者控除</span>
+                          <span className="font-bold text-slate-900">
+                            {tData.has_spouse ? `${tData.spouse_name || 'あり'} (${tData.spouse_name_kana || ''})` : 'なし'}
+                          </span>
+                        </div>
+                        <div className="bg-white p-2 rounded-xl border border-amber-100 sm:col-span-2">
+                          <span className="text-slate-400 block text-[10px]">扶養親族（{tData.dependents?.length || 0}名）</span>
+                          <span className="font-bold text-slate-900">
+                            {tData.dependents && tData.dependents.length > 0 
+                              ? tData.dependents.map((d: any) => `${d.name || '子'}(${d.birthDate || ''})`).join('、 ')
+                              : 'なし'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <OfficialTaxExemptionDoc data={{
+                      year: tData.year || 2026,
+                      companyName: tenantInfo?.name || '株式会社KAP',
+                      companyAddress: tenantInfo?.address || '滋賀県大津市坂本3丁目21-16',
+                      corporateNumber: tenantInfo?.corporate_number || '1010001999999',
+                      taxOfficeName: tenantInfo?.tax_office_name || '大津',
+                      municipalityName: tenantInfo?.municipality_name || '大津市',
+                      employeeName: tData.name || rData.name || cabinetModal.employee.name,
+                      employeeNameKana: tData.name_kana || rData.name_kana || '',
+                      employeeAddress: tData.address || rData.address || cabinetModal.employee.address || '滋賀県大津市坂本3丁目21-16',
+                      postalCode: tData.postal_code || rData.postal_code || '520-0113',
+                      myNumber: tData.my_number || '',
+                      birthDate: rData.birth_date || tData.birth_date || '1998-04-01',
+                      householderName: tData.householder_name || rData.householder_name || tData.name || cabinetModal.employee.name,
+                      householderRelation: tData.householder_relation || rData.householder_relation || '本人',
+                      hasSpouse: tData.has_spouse || false,
+                      spouseName: tData.spouse_name || tData.spouseName || '',
+                      spouseNameKana: tData.spouse_name_kana || tData.spouseNameKana || '',
+                      spouseBirthDate: tData.spouse_birth_date || tData.spouseBirthDate || '1996-05-15',
+                      spouseIncomeEstimate: tData.spouse_income_estimate ?? tData.spouseIncomeEstimate ?? 0,
+                      spouseIsLivingTogether: tData.spouse_is_living_together !== false,
+                      dependents: tData.dependents || [],
+                      isDisability: tData.is_disability,
+                      isSingleParent: tData.is_single_parent,
+                      isWidow: tData.is_widow,
+                      isWorkingStudent: tData.is_working_student,
+                      appliedDate: cabinetModal.employee.join_date
+                    }} />
+                  </div>
+                );
+              })()}
+
+              {/* 📋 5. スマホ・PC入力原本 全データ照合ビュー */}
+              {cabinetModal.activeDoc === 'raw_data' && (() => {
+                const targetEmpName = cabinetModal.employee?.name?.trim() || '';
+                const targetUserId = cabinetModal.employee?.user_id || '';
+
+                const userTaxSubs = submissions
+                  .filter(s => (s.user_id === targetUserId || (targetEmpName && s.data?.name?.trim() === targetEmpName) || (targetEmpName && s.user_name?.trim() === targetEmpName)) && s.document_type === 'dependents_form')
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                const tData = userTaxSubs[0]?.data || {};
+
+                const userCommSubs = submissions
+                  .filter(s => (s.user_id === targetUserId || (targetEmpName && s.data?.name?.trim() === targetEmpName) || (targetEmpName && s.user_name?.trim() === targetEmpName)) && s.document_type === 'commuting_pass')
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                const cData = userCommSubs[0]?.data || {};
+
+                const userBankSubs = submissions
+                  .filter(s => (s.user_id === targetUserId || (targetEmpName && s.data?.name?.trim() === targetEmpName) || (targetEmpName && s.user_name?.trim() === targetEmpName)) && s.document_type === 'bank_passbook')
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                const bData = userBankSubs[0]?.data || {};
+
+                const userMyNumSubs = submissions
+                  .filter(s => (s.user_id === targetUserId || (targetEmpName && s.data?.name?.trim() === targetEmpName) || (targetEmpName && s.user_name?.trim() === targetEmpName)) && s.document_type === 'my_number')
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                const mData = userMyNumSubs[0]?.data || {};
+
+                return (
+                  <div className="space-y-6 text-xs text-slate-800">
+                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-4 rounded-2xl text-white shadow-md flex items-center justify-between">
+                      <div>
+                        <h4 className="font-black text-sm flex items-center gap-2">
+                          <CheckCircle2 className="w-5 h-5 text-amber-200" />
+                          従業員Web入力データ原本・全項目照合シート
+                        </h4>
+                        <p className="text-[11px] text-amber-100 mt-0.5">
+                          スマホ・PCで実際に入力・送信された生データを一覧表示しています。各公的書面への印字内容と照合してください。
+                        </p>
+                      </div>
+                      <span className="bg-white/20 px-3 py-1 rounded-xl text-xs font-bold">
+                        対象: {tData.name || cabinetModal.employee.name} 殿
+                      </span>
+                    </div>
+
+                    {/* 1. 基本・世帯情報 */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                      <h5 className="font-black text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-1.5 text-xs">
+                        <UserCheck className="w-4 h-4 text-indigo-600" />
+                        1. 本人基本・世帯主情報
+                      </h5>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">氏名（漢字）</span>
+                          <span className="font-bold text-slate-900 text-sm">{tData.name || cabinetModal.employee.name}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">フリガナ（カナ）</span>
+                          <span className="font-bold text-slate-900 text-sm">{tData.name_kana || '未登録'}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">生年月日</span>
+                          <span className="font-bold text-slate-900">{tData.birth_date || cabinetModal.employee.birth_date || '未登録'}</span>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <span className="text-slate-400 block text-[10px]">現住所</span>
+                          <span className="font-bold text-slate-900">{tData.address || cabinetModal.employee.address || '未登録'}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">世帯主 / 続柄</span>
+                          <span className="font-bold text-slate-900">
+                            {tData.householder_name || tData.name || '本人'} ({tData.householder_relation || '本人'})
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2. 配偶者情報 */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                      <h5 className="font-black text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-1.5 text-xs">
+                        <Users className="w-4 h-4 text-amber-600" />
+                        2. 源泉控除対象配偶者
+                      </h5>
+                      {tData.has_spouse ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">配偶者氏名</span>
+                            <span className="font-bold text-slate-900">{tData.spouse_name || '未入力'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">フリガナ</span>
+                            <span className="font-bold text-slate-900">{tData.spouse_name_kana || '未入力'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">生年月日</span>
+                            <span className="font-bold text-slate-900">{tData.spouse_birth_date || '未入力'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px]">本年所得見積額</span>
+                            <span className="font-bold text-slate-900">¥{(tData.spouse_income_estimate || 0).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-slate-400 text-xs italic">配偶者控除の該当なし</p>
+                      )}
+                    </div>
+
+                    {/* 3. 扶養親族一覧 */}
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <h5 className="font-black text-slate-900 flex items-center gap-1.5 text-xs">
+                          <Users className="w-4 h-4 text-emerald-600" />
+                          3. 扶養親族一覧（登録数: {tData.dependents?.length || 0}名）
+                        </h5>
+                      </div>
+
+                      {tData.dependents && tData.dependents.length > 0 ? (
+                        <div className="divide-y divide-slate-100">
+                          {tData.dependents.map((dep: any, idx: number) => {
+                            const isU16 = dep.birthDate ? (new Date(dep.birthDate) >= new Date('2011-01-02')) : dep.isUnder16;
+                            return (
+                              <div key={idx} className="py-2.5 flex items-center justify-between gap-4">
+                                <div className="space-y-0.5">
+                                  <div className="font-bold text-slate-900 text-xs flex items-center gap-2">
+                                    <span>{dep.name}</span>
+                                    {dep.nameKana && <span className="text-[10px] text-slate-500">({dep.nameKana})</span>}
+                                    <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[10px]">
+                                      続柄: {dep.relation}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-400">
+                                    生年月日: <span className="font-semibold text-slate-700">{dep.birthDate}</span> / 
+                                    同居区分: <span className="font-semibold text-slate-700">{dep.isLivingTogether !== false ? '同居' : '別居'}</span> / 
+                                    所得見積: <span className="font-semibold text-slate-700">¥{(dep.incomeEstimate || 0).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                                <div>
+                                  {isU16 ? (
+                                    <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-md border border-amber-200">
+                                      【16歳未満】住民税欄
+                                    </span>
+                                  ) : (
+                                    <span className="bg-indigo-100 text-indigo-800 text-[10px] font-black px-2 py-0.5 rounded-md border border-indigo-200">
+                                      【控除対象・16歳以上】B欄
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-slate-400 text-xs italic">扶養親族の登録なし</p>
+                      )}
+                    </div>
+
+                    {/* 4. 給与振込口座 ＆ 通勤交通費 ＆ マイナンバー */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+                        <h5 className="font-black text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-1.5 text-xs">
+                          <CreditCard className="w-4 h-4 text-blue-600" />
+                          4. 給与振込口座
+                        </h5>
+                        <div className="space-y-1 text-xs">
+                          <div>金融機関: <span className="font-bold text-slate-900">{bData.bank_name || '未登録'} {bData.branch_name || ''}</span></div>
+                          <div>口座: <span className="font-bold text-slate-900">{bData.account_type === 'ordinary' ? '普通' : '当座'} {bData.account_number || ''}</span></div>
+                          <div>名義人: <span className="font-bold text-slate-900">{bData.account_holder || cabinetModal.employee.name}</span></div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+                        <h5 className="font-black text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-1.5 text-xs">
+                          <Train className="w-4 h-4 text-emerald-600" />
+                          5. 通勤交通費・定期代
+                        </h5>
+                        <div className="space-y-1 text-xs">
+                          <div>通勤手段: <span className="font-bold text-slate-900">{cData.transport_mode === 'train_bus' ? '電車・バス' : cData.transport_mode === 'car_bike' ? 'マイカー・バイク' : '徒歩・自転車'}</span></div>
+                          <div>1ヶ月定期支給額: <span className="font-black text-indigo-700">¥{(cData.one_month_pass_amount || 0).toLocaleString()}</span></div>
+                          <div>非課税区分: <span className="font-bold text-emerald-600">{cData.is_tax_free !== false ? '全額非課税' : '一部課税あり'}</span></div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+                        <h5 className="font-black text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-1.5 text-xs">
+                          <FileText className="w-4 h-4 text-purple-600" />
+                          6. マイナンバー・社保届
+                        </h5>
+                        <div className="space-y-1 text-xs">
+                          <div>マイナンバー: <span className="font-bold text-slate-900">{mData.my_number ? '************ (登録済)' : '書類添付確認'}</span></div>
+                          <div>年金手帳番号: <span className="font-bold text-slate-900">{mData.pension_number || '未登録'}</span></div>
+                          <div>雇用保険番号: <span className="font-bold text-slate-900">{mData.employment_insurance_number || '未登録'}</span></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 );
               })()}
             </div>
