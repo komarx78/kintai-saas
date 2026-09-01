@@ -130,6 +130,7 @@ export default function EmployeeOnboardingWelcome() {
     spouseNameKana: '',
     spouseBirthDate: '1996-05-15',
     spouseIncomeEstimate: 0,
+    spouseIsLivingTogether: true,
     dependents: [] as DependentItem[],
     isDisability: false,
     isSingleParent: false,
@@ -408,6 +409,7 @@ export default function EmployeeOnboardingWelcome() {
 
     setNewDep({
       name: '',
+      nameKana: '',
       relation: '子',
       birthDate: '2015-05-01',
       isLivingTogether: true,
@@ -434,6 +436,18 @@ export default function EmployeeOnboardingWelcome() {
       return;
     }
 
+    // 💡 もし扶養親族入力欄に入力中のデータがある場合、自動的に合流
+    let currentDependents = [...taxData.dependents];
+    if (newDep.name.trim()) {
+      const cats = calculateDependentCategory(newDep.birthDate);
+      currentDependents.push({
+        ...newDep,
+        isUnder16: cats.isUnder16,
+        isSpecific: cats.isSpecific,
+        isElderly: cats.isElderly
+      });
+    }
+
     setIsSubmitting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -449,6 +463,7 @@ export default function EmployeeOnboardingWelcome() {
           title: '住民票の写し（原本確認）',
           data: {
             name: basicData.name,
+            name_kana: basicData.nameKana,
             address: basicData.address,
             householder_name: basicData.householderName,
             householder_relation: basicData.householderRelation
@@ -527,11 +542,12 @@ export default function EmployeeOnboardingWelcome() {
           spouse_name_kana: taxData.spouseNameKana,
           spouse_birth_date: taxData.spouseBirthDate,
           spouse_income_estimate: taxData.spouseIncomeEstimate,
-          dependents: taxData.dependents.map(d => {
+          spouse_is_living_together: taxData.spouseIsLivingTogether !== false,
+          dependents: currentDependents.map(d => {
             const cats = calculateDependentCategory(d.birthDate);
             return { ...d, isUnder16: cats.isUnder16, isSpecific: cats.isSpecific, isElderly: cats.isElderly };
           }),
-          dependents_count: taxData.dependents.filter(d => !calculateDependentCategory(d.birthDate).isUnder16).length + (taxData.hasSpouse ? 1 : 0),
+          dependents_count: currentDependents.filter(d => !calculateDependentCategory(d.birthDate).isUnder16).length + (taxData.hasSpouse ? 1 : 0),
           is_disability: taxData.isDisability,
           is_single_parent: taxData.isSingleParent,
           is_widow: taxData.isWidow,
