@@ -5,7 +5,7 @@ import {
   Edit3, CheckCircle2, Lock, Unlock, Printer, 
   Users, Sparkles, Loader2, X, FileSpreadsheet,
   Settings as SettingsIcon, Download, UserCheck, CreditCard, Building2, Save,
-  ChevronDown, ChevronUp, Clock, Calendar, TrendingUp, MapPin, LayoutGrid, List
+  ChevronDown, ChevronUp, Clock, Calendar, TrendingUp, MapPin, LayoutGrid, List, RotateCcw
 } from 'lucide-react';
 import { OfficialPayslipDoc } from './OfficialPayslipDoc';
 import { 
@@ -34,6 +34,7 @@ export interface Payslip {
   midnight_hours?: number;
   holiday_hours?: number;
   paid_leave_days: number;
+  paid_leave_remaining?: number;
   absence_days: number;
   late_early_hours?: number;
 
@@ -989,6 +990,42 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     }
   };
 
+  // 一括下書きに戻す（Web公開取下げ）
+  const handleUnpublishAll = async () => {
+    if (payslips.length === 0) return;
+    if (!confirm(`${currentYearMonth}度 の給与明細を一括で「下書き」に戻し、従業員へのWeb公開を取下げますか？`)) return;
+
+    setIsSaving(true);
+    try {
+      for (const slip of payslips) {
+        const payload = {
+          ...slip,
+          tenant_id: tenantId,
+          year_month: currentYearMonth,
+          status: 'draft' as const,
+          updated_at: new Date().toISOString()
+        };
+        await savePayslipSafe(payload);
+      }
+
+      try {
+        await supabase
+          .from('payslips')
+          .update({ status: 'draft', updated_at: new Date().toISOString() })
+          .eq('tenant_id', tenantId)
+          .eq('year_month', currentYearMonth);
+      } catch (e) {}
+
+      alert('🔄 全員の給与明細を「下書き」に戻しました。\n（従業員のWeb明細一覧からも非公開になりました）');
+      await fetchData();
+    } catch (err: any) {
+      console.error('Unpublish error:', err);
+      alert('下書き戻し処理に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // 個別の確定公開 / 下書きトグル
   const handleTogglePublishSingle = async (slip: Payslip) => {
     if (!tenantId) return;
@@ -1030,7 +1067,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
       localMaster = {
         ...localMaster,
-        birth_date: prof.birth_date || localMaster.birth_date,
+        birth_date: prof.birth_date !== undefined ? prof.birth_date : localMaster.birth_date,
         salary_type: prof.salary_type,
         base_salary: prof.base_salary,
         hourly_wage: prof.hourly_wage,
@@ -1039,11 +1076,11 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         housing_allowance: prof.housing_allowance,
         family_allowance: prof.family_allowance,
         commuting_allowance: prof.commuting_allowance,
-        bank_name: prof.bank_name || localMaster.bank_name,
-        branch_name: prof.branch_name || localMaster.branch_name,
-        account_type: prof.account_type || localMaster.account_type,
-        account_number: prof.account_number || localMaster.account_number,
-        account_holder: prof.account_holder || localMaster.account_holder,
+        bank_name: prof.bank_name !== undefined ? prof.bank_name : (localMaster.bank_name || ''),
+        branch_name: prof.branch_name !== undefined ? prof.branch_name : (localMaster.branch_name || ''),
+        account_type: prof.account_type || localMaster.account_type || 'ordinary',
+        account_number: prof.account_number !== undefined ? prof.account_number : (localMaster.account_number || ''),
+        account_holder: prof.account_holder !== undefined ? prof.account_holder : (localMaster.account_holder || ''),
         dependents_count: prof.dependents_count,
         updated_at: new Date().toISOString()
       };
@@ -1061,6 +1098,22 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       } catch (dbErr) {
         console.warn('Supabase payroll profile exception:', dbErr);
       }
+
+      // 3. employee_onboarding_profiles にも口座情報を同期
+      try {
+        await supabase
+          .from('employee_onboarding_profiles')
+          .update({
+            bank_name: prof.bank_name,
+            branch_name: prof.branch_name,
+            account_type: prof.account_type,
+            account_number: prof.account_number,
+            account_holder: prof.account_holder,
+            updated_at: new Date().toISOString()
+          })
+          .eq('tenant_id', tenantId)
+          .eq('user_id', prof.user_id);
+      } catch (onbErr) {}
 
       // 3. users テーブル側にも生年月日を安全に同期
       if (prof.birth_date && prof.user_id) {
@@ -1289,9 +1342,20 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             onClick={handlePublishAll}
             disabled={isSaving || payslips.length === 0}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            title="全員の給与明細を確定し、Web給与明細で従業員へ公開します"
           >
             <CheckCircle2 className="w-4 h-4" />
             一括確定 (Web公開)
+          </button>
+
+          <button
+            onClick={handleUnpublishAll}
+            disabled={isSaving || payslips.length === 0}
+            className="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-sm px-3.5 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="全員の給与明細を一度下書きに戻し、従業員へのWeb公開を取下げます"
+          >
+            <RotateCcw className="w-4 h-4 text-amber-600" />
+            一括下書きに戻す (公開取下げ)
           </button>
 
           <button
@@ -1526,6 +1590,12 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                         <div className="flex justify-between">
                           <span className="text-slate-500">欠勤日数:</span>
                           <span className="font-mono text-slate-800">{slip.absence_days || 0} 日</span>
+                        </div>
+                        <div className="flex justify-between items-center bg-blue-100/80 px-2.5 py-1.5 rounded-xl border border-blue-200 mt-2">
+                          <span className="font-black text-blue-900 text-xs">🏖️ 有休残日数:</span>
+                          <span className="font-black font-mono text-blue-950 text-xs bg-white px-2 py-0.5 rounded-md border border-blue-300">
+                            {(slip.paid_leave_remaining !== undefined && slip.paid_leave_remaining !== null ? Number(slip.paid_leave_remaining) : (slip.user?.paid_leave_balance ?? 10.0)).toFixed(1)} 日
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1842,6 +1912,12 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                     <div className="flex justify-between text-slate-400">
                                       <span>欠勤日数:</span>
                                       <span>{slip.absence_days || 0} 日</span>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-blue-100/70 p-1.5 rounded-lg border border-blue-200 text-blue-900 font-bold mt-1.5">
+                                      <span>🏖️ 有休残日数:</span>
+                                      <span className="font-mono font-black text-xs">
+                                        {(slip.paid_leave_remaining !== undefined && slip.paid_leave_remaining !== null ? Number(slip.paid_leave_remaining) : (slip.user?.paid_leave_balance ?? 10.0)).toFixed(1)} 日
+                                      </span>
                                     </div>
                                   </div>
                                 </div>
@@ -2497,7 +2573,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               {/* 勤怠項目 */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <h4 className="font-bold text-slate-700 mb-2">勤怠実績の修正</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                   <div>
                     <label className="text-[10px] text-slate-500 block mb-0.5">出勤日数 (日)</label>
                     <input
@@ -2528,13 +2604,23 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">有給取得日数 (日)</label>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">有休取得 (日)</label>
                     <input
                       type="number"
                       step="0.5"
                       value={editModal.data.paid_leave_days}
                       onChange={e => setEditModal({ ...editModal, data: { ...editModal.data, paid_leave_days: parseFloat(e.target.value) || 0 } })}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-emerald-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-blue-900 block mb-0.5">🏖️ 有休残日数 (日)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={editModal.data.paid_leave_remaining ?? 10.0}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data, paid_leave_remaining: parseFloat(e.target.value) || 0 } })}
+                      className="w-full bg-blue-50 border border-blue-300 rounded-lg px-2.5 py-1.5 font-bold text-blue-950"
                     />
                   </div>
                 </div>

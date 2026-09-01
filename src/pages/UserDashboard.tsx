@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock, Calendar, LogOut, FileText, CheckCircle, UserCheck, XCircle, ChevronLeft, ChevronRight, Settings, Bot, DollarSign, ArrowLeft } from 'lucide-react';
+import { Clock, Calendar, LogOut, FileText, CheckCircle, UserCheck, XCircle, ChevronLeft, ChevronRight, Settings, Bot, DollarSign, ArrowLeft, RotateCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { RulesAiAssistant } from '../components/RulesAiAssistant';
@@ -292,6 +292,29 @@ const UserDashboard = () => {
       alert('シフト希望の送信に失敗しました: ' + err.message);
     } finally {
       setIsSubmittingShift(false);
+    }
+  };
+
+  // 申請の取下げ・取消
+  const handleCancelRequest = async (requestId: string, reqType: string) => {
+    if (!confirm(`この「${reqType}」申請を取り下げて取消しますか？`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .delete()
+        .eq('id', requestId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      alert('申請を取り下げました。');
+      setMyRecentRequests(prev => prev.filter(r => r.id !== requestId));
+      fetchMyRequests();
+      fetchMyShifts();
+    } catch (err: any) {
+      console.error('Cancel Request Error:', err);
+      alert('申請の取り下げに失敗しました: ' + (err.message || err));
     }
   };
 
@@ -1574,20 +1597,55 @@ const UserDashboard = () => {
                   </div>
                 </div>
 
-                {/* 最下部 一括提出ボタン */}
-                <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
+                {/* 最下部 一括提出 ＆ 取下げボタン */}
+                <div className="flex flex-wrap justify-between items-center gap-3 mt-6 pt-4 border-t border-gray-100">
                   <p className="text-xs text-gray-500">
-                    ※提出後も上長が承認するまでは再提出が可能です。
+                    ※提出後も上長が承認するまでは再提出・取下げが可能です。
                   </p>
-                  <button
-                    type="button"
-                    onClick={handleSubmitShiftRequests}
-                    disabled={isSubmittingShift}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl text-sm font-black shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    <CheckCircle className="w-5 h-5" />
-                    {isSubmittingShift ? '提出中...' : 'シフト希望を提出する'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {Object.keys(shiftRequestsMap).length > 0 && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!confirm(`${shiftMonth}月度のシフト希望提出を取り下げて入力内容をクリアしますか？`)) return;
+                          try {
+                            const [y, m] = shiftMonth.split('-');
+                            const yNum = parseInt(y, 10);
+                            const mNum = parseInt(m, 10);
+                            const lastDay = new Date(yNum, mNum, 0).getDate();
+                            const startOfMonthStr = `${y}-${m}-01`;
+                            const endOfMonthStr = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+                            await supabase
+                              .from('leave_requests')
+                              .delete()
+                              .eq('user_id', user!.id)
+                              .eq('type', 'シフト希望')
+                              .gte('start_date', startOfMonthStr)
+                              .lte('start_date', endOfMonthStr);
+                            setShiftRequestsMap({});
+                            alert('シフト希望を取り下げました。');
+                            fetchMyRequests();
+                            fetchMyShifts();
+                          } catch (e: any) {
+                            alert('取下げエラー: ' + e.message);
+                          }
+                        }}
+                        className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-4 py-3 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <RotateCcw className="w-4 h-4 text-rose-600" />
+                        希望を取り下げてクリア
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSubmitShiftRequests}
+                      disabled={isSubmittingShift}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl text-sm font-black shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      <CheckCircle className="w-5 h-5" />
+                      {isSubmittingShift ? '提出中...' : 'シフト希望を提出する'}
+                    </button>
+                  </div>
                 </div>
 
               </div>
@@ -1769,9 +1827,20 @@ const UserDashboard = () => {
                           <div key={req.id} className="p-3 rounded-lg border border-gray-100 bg-gray-50/50 hover:bg-gray-50 transition text-xs">
                             <div className="flex justify-between items-center mb-1">
                               <span className="font-bold text-gray-800">{req.type}</span>
-                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${badgeClass}`}>
-                                {req.status}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${badgeClass}`}>
+                                  {req.status}
+                                </span>
+                                {req.status === '申請中' && (
+                                  <button
+                                    onClick={() => handleCancelRequest(req.id, req.type)}
+                                    className="text-[10px] text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-0.5 rounded-md font-bold transition cursor-pointer"
+                                    title="申請を取り下げて取消す"
+                                  >
+                                    ↩️ 取下げ
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             <p className="text-gray-500 text-[11px]">
                               {req.start_date} {req.start_date !== req.end_date ? `～ ${req.end_date}` : ''}
