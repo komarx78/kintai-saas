@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { PREFECTURES } from '../lib/socialInsurance';
-import { Shield, Save, RefreshCw, Sparkles, CheckCircle2, AlertCircle, Loader2, Building2, DownloadCloud, FileText, X } from 'lucide-react';
+import { 
+  Shield, Save, RefreshCw, Sparkles, CheckCircle2, AlertCircle, 
+  Loader2, Building2, DownloadCloud, FileText, X, ExternalLink 
+} from 'lucide-react';
 
 interface SocialRateRecord {
   id?: string;
@@ -460,15 +463,29 @@ export const SocialInsuranceMasterManager: React.FC = () => {
               </button>
             </div>
 
-            <p className="text-xs text-slate-500">
-              協会けんぽの告知ページやPDFのテキスト（例:「北海道 10.21%、東京都 9.98%...」等）をそのまま貼り付けてください。47都道府県の料率を自動解析してテーブルに反映します。
-            </p>
+            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-700">📌 協会けんぽ公式 都道府県別保険料率ページ:</span>
+                <a
+                  href="https://www.kyoukaikenpo.or.jp/g7/cat330/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-3 py-1 rounded-lg transition flex items-center gap-1 text-[11px]"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  協会けんぽ公式サイトを開く
+                </a>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                上記サイトの改定表テキストをコピーして下の枠に貼り付けるだけで、47都道府県の健康保険料率をAIが自動抽出して一括反映します。
+              </p>
+            </div>
 
             <textarea
               value={pasteText}
               onChange={e => setPasteText(e.target.value)}
-              placeholder="ここに協会けんぽの改定表テキストを貼り付け..."
-              rows={8}
+              placeholder="ここに協会けんぽの改定表テキストを貼り付け（例: 東京都 9.98%、大阪府 10.34%...）"
+              rows={7}
               className="w-full bg-slate-50 border border-slate-300 rounded-2xl p-3.5 text-xs focus:bg-white focus:border-indigo-500 font-mono"
             />
 
