@@ -214,7 +214,11 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
                   {data.qualificationAllowance > 0 && <div>・資格職能手当: ¥{data.qualificationAllowance.toLocaleString()}</div>}
                   {data.housingAllowance > 0 && <div>・住宅手当: ¥{data.housingAllowance.toLocaleString()}</div>}
                   {data.familyAllowance > 0 && <div>・家族手当: ¥{data.familyAllowance.toLocaleString()}</div>}
-                  <div>・通勤手当: ¥{data.commutingAllowance.toLocaleString()}（{tpl.commuting_allowance_notes || '実費支給・非課税上限内'}）</div>
+                  <div className="col-span-2">
+                    ・通勤手当: {data.commutingAllowance > 0 
+                      ? `¥${data.commutingAllowance.toLocaleString()}（${tpl.commuting_allowance_notes || '実費支給・非課税上限内'}）` 
+                      : `${tpl.commuting_allowance_notes || '実費支給（非課税限度額内、月額上限150,000円まで・申請承認後に確定支給）'}`}
+                  </div>
                 </div>
 
                 {data.fixedOvertimeHours > 0 && (

@@ -685,15 +685,16 @@ export default function EmployeeOnboardingWelcome() {
           <div>
             <h2 className="text-xl font-black">公的入社書類の提出が完了しました！</h2>
             <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-              ご入力いただいた法定書類および住民票・通帳・通勤乗り継ぎ申請は、人事部へ安全に暗号化送信されました。管理者の確認が完了次第、給与・社会保険の手続きが完了となります。
+              ご入力いただいた本人情報・通勤届・口座情報・扶養控除申告書は、安全に送信されました。<br />
+              管理者の審査完了後、確定情報がすべて反映された<strong className="text-indigo-300">正式な『雇用契約書 兼 労働条件通知書（締結済正本PDF）』</strong>が自動発行・交付されます。
             </p>
           </div>
 
           <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-left text-xs space-y-2 text-slate-300">
-            <div className="font-bold text-white mb-1">📋 提出された公式書類:</div>
-            <div>✅ 1. 労働条件通知書 兼 雇用契約書（電子合意締結済）</div>
-            <div>✅ 2. 本人基本情報 ＆ 住民票原本</div>
-            <div>✅ 3. 通勤交通費 支給申請書（複数乗り継ぎ {commutingData.segments.length} 区間）</div>
+            <div className="font-bold text-white mb-1">📋 提出・申請された書類一覧:</div>
+            <div>✅ 1. 労働条件の確認・電子承諾</div>
+            <div>✅ 2. 本人基本情報 ＆ 住民票写真</div>
+            <div>✅ 3. 通勤交通費 支給申請書（{commutingData.segments.length > 0 ? `${commutingData.segments.length}区間` : 'マイカー・徒歩等'}）</div>
             <div>✅ 4. 給与振込口座 登録届出書 兼 通帳確認</div>
             <div>✅ 5. 令和8年分 扶養控除等（異動）申告書</div>
             <div>✅ 6. マイナンバー ＆ 年金・雇用保険届出</div>
@@ -701,7 +702,7 @@ export default function EmployeeOnboardingWelcome() {
 
           <button
             onClick={() => navigate('/portal')}
-            className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold py-3 px-4 rounded-2xl shadow-lg transition cursor-pointer text-xs"
+            className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-black py-3 px-4 rounded-2xl shadow-lg transition cursor-pointer text-xs"
           >
             ポータル画面へ進む
           </button>
