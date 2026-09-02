@@ -105,6 +105,10 @@ const ShiftCalendarView: React.FC = () => {
         .eq('tenant_id', tenantIdData);
       setRequirements(reqsData || []);
       
+      const { data: empSettingsData } = await supabase.from('shift_employee_settings').select('user_id, default_role').eq('tenant_id', tenantIdData);
+      const userRoleMap: Record<string, string> = {};
+      (empSettingsData || []).forEach((es: any) => { if (es.default_role) userRoleMap[es.user_id] = es.default_role; });
+
       const userMap: Record<string, string> = {};
       (usersData || []).forEach((u: any) => { userMap[u.id] = u.name; });
       
@@ -117,7 +121,7 @@ const ShiftCalendarView: React.FC = () => {
           target_date: r.target_date,
           start_time: r.available_start_time,
           end_time: r.available_end_time,
-          role: rolesData && rolesData.length > 0 ? rolesData[0].name : '不明',
+          role: r.preferred_role || userRoleMap[r.user_id] || (rolesData && rolesData.length > 0 ? rolesData[0].name : 'ホール'),
           status: 'request',
           user: { name: userMap[r.user_id] || '不明' }
         }));

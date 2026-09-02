@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, Zap, Calendar, ArrowLeft, CheckCircle, Settings, Users, ClipboardList, Send, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { startOfWeek, endOfWeek, format, addDays } from 'date-fns';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, addDays } from 'date-fns';
 import AppSwitcher from '../components/AppSwitcher';
 
 import { calculateLaborCost, generateAutoShift } from '../lib/shiftAlgorithm';
@@ -357,7 +357,9 @@ const ShiftAdminDashboard: React.FC = () => {
         }
       }
 
-      const { data: shiftsData } = await supabase.from('advanced_shifts').select('*').eq('tenant_id', tenantId).gte('target_date', format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-01')).lte('target_date', format(endOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy-MM-31'));
+      const monthStartStr = format(startOfMonth(currentDate), 'yyyy-MM-dd');
+      const monthEndStr = format(endOfMonth(currentDate), 'yyyy-MM-dd');
+      const { data: shiftsData } = await supabase.from('advanced_shifts').select('*').eq('tenant_id', tenantId).gte('target_date', monthStartStr).lte('target_date', monthEndStr);
       const { data: wageData } = await supabase.from('shift_employee_settings').select('*').eq('tenant_id', tenantId);
       
       if (shiftsData && wageData) {
