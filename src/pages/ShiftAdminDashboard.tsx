@@ -126,58 +126,58 @@ const ShiftAdminDashboard: React.FC = () => {
       await supabase.from('advanced_shift_requirements').delete().eq('tenant_id', tenantId).is('target_date', null);
       await supabase.from('advanced_shift_requirements').insert(reqsToInsert);
 
-      // 3. 40名スタッフの定義（ホール12名、キッチン10名、レジ12名、清掃6名）
+      // 3. 40名スタッフの定義（小刻みなリアル希望時間帯：午前/昼/午後/フル/早朝/夜間）
       const dummyStaffs = [
-        // ホール担当 (12名) - ホール運営部
-        { name: '佐藤 裕美', roleName: 'ホール', dept: 'ホール運営部', wage: 1200, priority: 5, maxH: 40, pref: 'day', days: [1, 2, 3, 4, 5] },
-        { name: '田中 健太', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 4, maxH: 30, pref: 'day', days: [2, 3, 4, 5, 6] },
-        { name: '高橋 優香', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 4, maxH: 25, pref: 'day', days: [0, 1, 4, 5, 6] },
-        { name: '渡辺 直樹', roleName: 'ホール', dept: 'ホール運営部', wage: 1250, priority: 5, maxH: 40, pref: 'day', days: [0, 1, 2, 3, 6] },
-        { name: '伊藤 結衣', roleName: 'ホール', dept: 'ホール運営部', wage: 1100, priority: 3, maxH: 20, pref: 'day', days: [1, 3, 5] },
-        { name: '山本 拓也', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 3, maxH: 30, pref: 'day', days: [2, 4, 6] },
-        { name: '中村 美咲', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 4, maxH: 28, pref: 'day', days: [0, 2, 3, 5] },
-        { name: '小林 翔平', roleName: 'ホール', dept: 'ホール運営部', wage: 1200, priority: 4, maxH: 35, pref: 'day', days: [1, 2, 4, 6] },
-        { name: '加藤 綾乃', roleName: 'ホール', dept: 'ホール運営部', wage: 1100, priority: 3, maxH: 20, pref: 'day', days: [0, 3, 5] },
-        { name: '吉田 大地', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 3, maxH: 25, pref: 'day', days: [1, 4, 6] },
-        { name: '山田 浩二', roleName: 'ホール', dept: 'ホール運営部', wage: 1200, priority: 4, maxH: 32, pref: 'day', days: [0, 2, 5] },
-        { name: '佐々木 葵', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 3, maxH: 24, pref: 'day', days: [1, 3, 6] },
+        // ホール担当 (12名)
+        { name: '佐藤 裕美', roleName: 'ホール', dept: 'ホール運営部', wage: 1200, priority: 5, maxH: 25, startT: '09:00:00', endT: '14:00:00', days: [1, 2, 3, 4, 5] },
+        { name: '田中 健太', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 4, maxH: 25, startT: '13:00:00', endT: '18:00:00', days: [2, 3, 4, 5, 6] },
+        { name: '高橋 優香', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 4, maxH: 25, startT: '10:00:00', endT: '15:00:00', days: [0, 1, 4, 5, 6] },
+        { name: '渡辺 直樹', roleName: 'ホール', dept: 'ホール運営部', wage: 1250, priority: 5, maxH: 40, startT: '09:00:00', endT: '18:00:00', days: [0, 1, 2, 3, 6] },
+        { name: '伊藤 結衣', roleName: 'ホール', dept: 'ホール運営部', wage: 1100, priority: 3, maxH: 15, startT: '14:00:00', endT: '18:00:00', days: [1, 3, 5] },
+        { name: '山本 拓也', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 3, maxH: 15, startT: '09:00:00', endT: '13:00:00', days: [2, 4, 6] },
+        { name: '中村 美咲', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 4, maxH: 24, startT: '10:00:00', endT: '16:00:00', days: [0, 2, 3, 5] },
+        { name: '小林 翔平', roleName: 'ホール', dept: 'ホール運営部', wage: 1200, priority: 4, maxH: 24, startT: '12:00:00', endT: '18:00:00', days: [1, 2, 4, 6] },
+        { name: '加藤 綾乃', roleName: 'ホール', dept: 'ホール運営部', wage: 1100, priority: 3, maxH: 15, startT: '13:00:00', endT: '18:00:00', days: [0, 3, 5] },
+        { name: '吉田 大地', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 3, maxH: 20, startT: '09:00:00', endT: '14:00:00', days: [1, 4, 6] },
+        { name: '山田 浩二', roleName: 'ホール', dept: 'ホール運営部', wage: 1200, priority: 4, maxH: 20, startT: '14:00:00', endT: '18:00:00', days: [0, 2, 5] },
+        { name: '佐々木 葵', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 3, maxH: 16, startT: '11:00:00', endT: '15:00:00', days: [1, 3, 6] },
 
-        // キッチン担当 (10名) - 調理厨房部
-        { name: '鈴木 一郎', roleName: 'キッチン', dept: '調理厨房部', wage: 1350, priority: 5, maxH: 40, pref: 'day', days: [1, 2, 3, 4, 5] },
-        { name: '斉藤 健二', roleName: 'キッチン', dept: '調理厨房部', wage: 1300, priority: 5, maxH: 40, pref: 'day', days: [0, 1, 2, 3, 6] },
-        { name: '松本 恭子', roleName: 'キッチン', dept: '調理厨房部', wage: 1250, priority: 4, maxH: 30, pref: 'day', days: [2, 3, 4, 5, 6] },
-        { name: '井上 蓮', roleName: 'キッチン', dept: '調理厨房部', wage: 1200, priority: 3, maxH: 25, pref: 'day', days: [0, 2, 4, 6] },
-        { name: '木村 友美', roleName: 'キッチン', dept: '調理厨房部', wage: 1250, priority: 4, maxH: 32, pref: 'day', days: [1, 3, 5] },
-        { name: '林 龍平', roleName: 'キッチン', dept: '調理厨房部', wage: 1300, priority: 4, maxH: 38, pref: 'day', days: [0, 1, 4, 5] },
-        { name: '清水 麻美', roleName: 'キッチン', dept: '調理厨房部', wage: 1200, priority: 3, maxH: 20, pref: 'day', days: [2, 3, 6] },
-        { name: '山口 慎太郎', roleName: 'キッチン', dept: '調理厨房部', wage: 1250, priority: 4, maxH: 30, pref: 'day', days: [1, 4, 6] },
-        { name: '池田 美優', roleName: 'キッチン', dept: '調理厨房部', wage: 1200, priority: 3, maxH: 24, pref: 'day', days: [0, 3, 5] },
-        { name: '橋本 陽介', roleName: 'キッチン', dept: '調理厨房部', wage: 1300, priority: 4, maxH: 35, pref: 'day', days: [2, 5, 6] },
+        // キッチン担当 (10名)
+        { name: '鈴木 一郎', roleName: 'キッチン', dept: '調理厨房部', wage: 1350, priority: 5, maxH: 40, startT: '09:00:00', endT: '18:00:00', days: [1, 2, 3, 4, 5] },
+        { name: '斉藤 健二', roleName: 'キッチン', dept: '調理厨房部', wage: 1300, priority: 5, maxH: 40, startT: '09:00:00', endT: '18:00:00', days: [0, 1, 2, 3, 6] },
+        { name: '松本 恭子', roleName: 'キッチン', dept: '調理厨房部', wage: 1250, priority: 4, maxH: 25, startT: '09:00:00', endT: '14:00:00', days: [2, 3, 4, 5, 6] },
+        { name: '井上 蓮', roleName: 'キッチン', dept: '調理厨房部', wage: 1200, priority: 3, maxH: 20, startT: '13:00:00', endT: '18:00:00', days: [0, 2, 4, 6] },
+        { name: '木村 友美', roleName: 'キッチン', dept: '調理厨房部', wage: 1250, priority: 4, maxH: 20, startT: '10:00:00', endT: '15:00:00', days: [1, 3, 5] },
+        { name: '林 龍平', roleName: 'キッチン', dept: '調理厨房部', wage: 1300, priority: 4, maxH: 35, startT: '09:00:00', endT: '18:00:00', days: [0, 1, 4, 5] },
+        { name: '清水 麻美', roleName: 'キッチン', dept: '調理厨房部', wage: 1200, priority: 3, maxH: 16, startT: '14:00:00', endT: '18:00:00', days: [2, 3, 6] },
+        { name: '山口 慎太郎', roleName: 'キッチン', dept: '調理厨房部', wage: 1250, priority: 4, maxH: 24, startT: '11:00:00', endT: '17:00:00', days: [1, 4, 6] },
+        { name: '池田 美優', roleName: 'キッチン', dept: '調理厨房部', wage: 1200, priority: 3, maxH: 16, startT: '09:00:00', endT: '13:00:00', days: [0, 3, 5] },
+        { name: '橋本 陽介', roleName: 'キッチン', dept: '調理厨房部', wage: 1300, priority: 4, maxH: 24, startT: '12:00:00', endT: '18:00:00', days: [2, 5, 6] },
 
-        // レジ担当 (12名) - フロント・レジ部
-        { name: '山崎 栞', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 5, maxH: 35, pref: 'day', days: [1, 2, 3, 4, 5] },
-        { name: '森 淳', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1200, priority: 5, maxH: 40, pref: 'day', days: [0, 1, 2, 3, 6] },
-        { name: '阿部 さくら', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 4, maxH: 30, pref: 'day', days: [2, 3, 4, 5, 6] },
-        { name: '石川 雅人', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1100, priority: 3, maxH: 20, pref: 'day', days: [0, 1, 4, 5] },
-        { name: '前田 菜月', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 4, maxH: 28, pref: 'day', days: [1, 3, 5, 6] },
-        { name: '藤田 涼太', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1100, priority: 3, maxH: 25, pref: 'day', days: [0, 2, 4] },
-        { name: '後藤 萌', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 4, maxH: 30, pref: 'day', days: [1, 2, 5, 6] },
-        { name: '岡田 雄介', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 3, maxH: 24, pref: 'day', days: [0, 3, 4] },
-        { name: '長谷川 凛', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1100, priority: 3, maxH: 20, pref: 'day', days: [2, 4, 6] },
-        { name: '村上 和也', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1200, priority: 4, maxH: 35, pref: 'day', days: [1, 3, 5] },
-        { name: '近藤 恵', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 4, maxH: 30, pref: 'day', days: [0, 2, 5, 6] },
-        { name: '石井 達也', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1100, priority: 3, maxH: 22, pref: 'day', days: [1, 4, 6] },
+        // レジ担当 (12名)
+        { name: '山崎 栞', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 5, maxH: 25, startT: '09:00:00', endT: '14:00:00', days: [1, 2, 3, 4, 5] },
+        { name: '森 淳', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1200, priority: 5, maxH: 25, startT: '13:00:00', endT: '18:00:00', days: [0, 1, 2, 3, 6] },
+        { name: '阿部 さくら', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 4, maxH: 25, startT: '09:00:00', endT: '14:00:00', days: [2, 3, 4, 5, 6] },
+        { name: '石川 雅人', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1100, priority: 3, maxH: 20, startT: '14:00:00', endT: '18:00:00', days: [0, 1, 4, 5] },
+        { name: '前田 菜月', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 4, maxH: 20, startT: '10:00:00', endT: '15:00:00', days: [1, 3, 5, 6] },
+        { name: '藤田 涼太', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1100, priority: 3, maxH: 15, startT: '13:00:00', endT: '18:00:00', days: [0, 2, 4] },
+        { name: '後藤 萌', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 4, maxH: 16, startT: '09:00:00', endT: '13:00:00', days: [1, 2, 5, 6] },
+        { name: '岡田 雄介', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 3, maxH: 16, startT: '14:00:00', endT: '18:00:00', days: [0, 3, 4] },
+        { name: '長谷川 凛', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1100, priority: 3, maxH: 20, startT: '09:00:00', endT: '14:00:00', days: [2, 4, 6] },
+        { name: '村上 和也', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1200, priority: 4, maxH: 25, startT: '13:00:00', endT: '18:00:00', days: [1, 3, 5] },
+        { name: '近藤 恵', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 4, maxH: 35, startT: '09:00:00', endT: '18:00:00', days: [0, 2, 5, 6] },
+        { name: '石井 達也', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1100, priority: 3, maxH: 35, startT: '09:00:00', endT: '18:00:00', days: [1, 4, 6] },
 
-        // 清掃担当 (6名) - 環境整備・清掃部（早朝3名 / 夜間3名）
-        { name: '遠藤 勝', roleName: '清掃', dept: '環境整備・清掃部', wage: 1150, priority: 5, maxH: 30, pref: 'morning', days: [1, 2, 3, 4, 5] },
-        { name: '青木 テル', roleName: '清掃', dept: '環境整備・清掃部', wage: 1100, priority: 4, maxH: 20, pref: 'morning', days: [0, 2, 4, 6] },
-        { name: '坂本 昭夫', roleName: '清掃', dept: '環境整備・清掃部', wage: 1150, priority: 5, maxH: 28, pref: 'morning', days: [0, 1, 3, 5, 6] },
-        { name: '斉藤 清', roleName: '清掃', dept: '環境整備・清掃部', wage: 1100, priority: 4, maxH: 20, pref: 'evening', days: [1, 2, 3, 4, 5] },
-        { name: '福田 トメ', roleName: '清掃', dept: '環境整備・清掃部', wage: 1080, priority: 3, maxH: 18, pref: 'evening', days: [0, 2, 4, 6] },
-        { name: '西村 重三', roleName: '清掃', dept: '環境整備・清掃部', wage: 1100, priority: 4, maxH: 22, pref: 'evening', days: [0, 1, 3, 5, 6] }
+        // 清掃担当 (6名)
+        { name: '遠藤 勝', roleName: '清掃', dept: '環境整備・清掃部', wage: 1150, priority: 5, maxH: 15, startT: '07:00:00', endT: '10:00:00', days: [1, 2, 3, 4, 5] },
+        { name: '青木 テル', roleName: '清掃', dept: '環境整備・清掃部', wage: 1100, priority: 4, maxH: 15, startT: '07:00:00', endT: '10:00:00', days: [0, 2, 4, 6] },
+        { name: '坂本 昭夫', roleName: '清掃', dept: '環境整備・清掃部', wage: 1150, priority: 5, maxH: 15, startT: '07:00:00', endT: '10:00:00', days: [0, 1, 3, 5, 6] },
+        { name: '斉藤 清', roleName: '清掃', dept: '環境整備・清掃部', wage: 1100, priority: 4, maxH: 15, startT: '19:00:00', endT: '22:00:00', days: [1, 2, 3, 4, 5] },
+        { name: '福田 トメ', roleName: '清掃', dept: '環境整備・清掃部', wage: 1080, priority: 3, maxH: 15, startT: '19:00:00', endT: '22:00:00', days: [0, 2, 4, 6] },
+        { name: '西村 重三', roleName: '清掃', dept: '環境整備・清掃部', wage: 1100, priority: 4, maxH: 15, startT: '19:00:00', endT: '22:00:00', days: [0, 1, 3, 5, 6] }
       ];
 
-      const createdUserList: { id: string; name: string; roleName: string; pref: string; days: number[] }[] = [];
+      const createdUserList: { id: string; name: string; roleName: string; startT: string; endT: string; days: number[] }[] = [];
 
       for (let idx = 0; idx < dummyStaffs.length; idx++) {
         const staff = dummyStaffs[idx];
@@ -227,7 +227,8 @@ const ShiftAdminDashboard: React.FC = () => {
             id: uid,
             name: staff.name,
             roleName: staff.roleName,
-            pref: staff.pref,
+            startT: staff.startT,
+            endT: staff.endT,
             days: staff.days
           });
 
@@ -267,7 +268,7 @@ const ShiftAdminDashboard: React.FC = () => {
         }
       }
 
-      // 4. 今週＋翌週（14日間：月〜日×2）のシフト希望を一括生成
+      // 4. 今週＋翌週（14日間：月〜日×2）の小刻みシフト希望を一括生成
       const requestsToInsert: any[] = [];
 
       for (let i = 0; i < 14; i++) {
@@ -277,23 +278,12 @@ const ShiftAdminDashboard: React.FC = () => {
 
         createdUserList.forEach((staff) => {
           if (staff.days.includes(dow)) {
-            let startT = '09:00:00';
-            let endT = '18:00:00';
-
-            if (staff.pref === 'morning') {
-              startT = '07:00:00';
-              endT = '10:00:00';
-            } else if (staff.pref === 'evening') {
-              startT = '19:00:00';
-              endT = '22:00:00';
-            }
-
             requestsToInsert.push({
               tenant_id: tenantId,
               user_id: staff.id,
               target_date: dStr,
-              available_start_time: startT,
-              available_end_time: endT,
+              available_start_time: staff.startT,
+              available_end_time: staff.endT,
               preferred_role: staff.roleName,
               status: 'submitted'
             });
@@ -306,7 +296,7 @@ const ShiftAdminDashboard: React.FC = () => {
         if (reqError) throw reqError;
       }
 
-      alert('🎉 40名規模のリアルなデモデータセットを一括投入しました！\n\n【内訳】\n・ホール 12名 / キッチン 10名 / レジ 12名 / 清壊 6名\n・必要枠：ホール1、キッチン1、レジ2、清掃朝1・夜1\n・14日間分のシフト希望：' + requestsToInsert.length + '件\n\n「⚡ シフトを自動生成する (AI)」を押して動作をご確認ください！');
+      alert('🎉 40名規模の小刻みでリアルなデモデータセットを一括投入しました！\n\n【内訳】\n・午前(9-14時) / 午後(13-18時) / フル(9-18時) / 早朝(7-10時) / 夜間(19-22時)\n・14日間分のシフト希望：' + requestsToInsert.length + '件\n\n「⚡ シフトを自動生成する (AI)」を押して動作をご確認ください！');
       setGenerationResult(null);
       await fetchStats();
     } catch (err: any) {
