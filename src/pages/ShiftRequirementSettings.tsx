@@ -64,7 +64,7 @@ const ShiftRequirementSettings: React.FC = () => {
       if (error) throw error;
       
       const newReqs: Record<string, Requirement[]> = { '平日': [], '土日': [], '祝日': [] };
-      if (data) {
+      if (data && data.length > 0) {
         // 重複登録されている曜日（例: 平日は1〜5）を1つのパターン枠として重複排除して読み込む
         const seenKeys = {
           '平日': new Set<string>(),
@@ -96,6 +96,26 @@ const ShiftRequirementSettings: React.FC = () => {
           }
         });
       }
+
+      // もしDBに枠がない、または土日・祝日が空の場合は標準枠（ホール/キッチン/レジ/清掃）を自動補完して消去を防止
+      const defaultStandardReqs: Requirement[] = [
+        { id: 'def_hall', role: 'ホール', startHour: 9, endHour: 18, count: 1 },
+        { id: 'def_kitchen', role: 'キッチン', startHour: 9, endHour: 18, count: 1 },
+        { id: 'def_register', role: 'レジ', startHour: 9, endHour: 18, count: 2 },
+        { id: 'def_clean_morning', role: '清掃', startHour: 7, endHour: 10, count: 1 },
+        { id: 'def_clean_evening', role: '清掃', startHour: 19, endHour: 22, count: 1 }
+      ];
+
+      if (newReqs['平日'].length === 0) {
+        newReqs['平日'] = defaultStandardReqs.map(r => ({ ...r, id: `weekday_${r.id}` }));
+      }
+      if (newReqs['土日'].length === 0) {
+        newReqs['土日'] = newReqs['平日'].map(r => ({ ...r, id: `weekend_${r.id}` }));
+      }
+      if (newReqs['祝日'].length === 0) {
+        newReqs['祝日'] = newReqs['平日'].map(r => ({ ...r, id: `holiday_${r.id}` }));
+      }
+
       setRequirements(newReqs);
     } catch (err) {
       console.error(err);
@@ -178,15 +198,19 @@ const ShiftRequirementSettings: React.FC = () => {
       });
 
       // 平日 (月〜金: 1〜5)
-      (requirements['平日'] || []).forEach(req => {
+      const weekdayReqs = requirements['平日'] || [];
+      const weekendReqs = (requirements['土日'] && requirements['土日'].length > 0) ? requirements['土日'] : weekdayReqs;
+      const holidayReqs = (requirements['祝日'] && requirements['祝日'].length > 0) ? requirements['祝日'] : weekdayReqs;
+
+      weekdayReqs.forEach(req => {
         [1, 2, 3, 4, 5].forEach(dow => insertData.push(createRow(req, dow)));
       });
       // 土日 (日: 0, 土: 6)
-      (requirements['土日'] || []).forEach(req => {
+      weekendReqs.forEach(req => {
         [0, 6].forEach(dow => insertData.push(createRow(req, dow)));
       });
       // 祝日 (7)
-      (requirements['祝日'] || []).forEach(req => {
+      holidayReqs.forEach(req => {
         insertData.push(createRow(req, 7));
       });
 
