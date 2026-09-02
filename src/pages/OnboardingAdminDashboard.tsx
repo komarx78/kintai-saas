@@ -633,7 +633,7 @@ export default function OnboardingAdminDashboard() {
         })
         .eq('id', sub.id);
 
-      // 口座情報や通勤定期代が編集された場合は給与マスタにも即時連動
+      // 口座情報・通勤定期代・扶養控除申告が編集された場合は給与マスタにも即時連動
       if (sub.document_type === 'bank_passbook') {
         await supabase.from('employee_payroll_profiles').upsert({
           tenant_id: tenantId,
@@ -649,6 +649,13 @@ export default function OnboardingAdminDashboard() {
           tenant_id: tenantId,
           user_id: sub.user_id,
           commuting_allowance: edited.one_month_pass_amount || 0
+        }, { onConflict: 'tenant_id,user_id' });
+      } else if (sub.document_type === 'dependents_form' || sub.document_type === 'tax_withholding') {
+        const depCount = Array.isArray(edited.dependents) ? edited.dependents.length : (edited.dependents_count || 0);
+        await supabase.from('employee_payroll_profiles').upsert({
+          tenant_id: tenantId,
+          user_id: sub.user_id,
+          dependents_count: depCount
         }, { onConflict: 'tenant_id,user_id' });
       }
 
@@ -3046,9 +3053,10 @@ export default function OnboardingAdminDashboard() {
                     </label>
                     <input
                       type="number"
-                      value={editModal.data.salary_type === 'hourly' ? editModal.data.hourly_wage : editModal.data.base_salary}
+                      placeholder="例: 250000"
+                      value={editModal.data.salary_type === 'hourly' ? (editModal.data.hourly_wage === 0 ? '' : editModal.data.hourly_wage) : (editModal.data.base_salary === 0 ? '' : editModal.data.base_salary)}
                       onChange={e => {
-                        const val = parseInt(e.target.value, 10) || 0;
+                        const val = e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0);
                         setEditModal({
                           ...editModal,
                           data: editModal.data!.salary_type === 'hourly'
@@ -3066,8 +3074,9 @@ export default function OnboardingAdminDashboard() {
                     <label className="text-[10px] text-slate-500 block mb-0.5">役職手当</label>
                     <input
                       type="number"
-                      value={editModal.data.position_allowance}
-                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, position_allowance: parseInt(e.target.value, 10) || 0 } })}
+                      placeholder="例: 30000"
+                      value={editModal.data.position_allowance === 0 ? '' : editModal.data.position_allowance}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, position_allowance: e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0) } })}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                     />
                   </div>
@@ -3075,8 +3084,9 @@ export default function OnboardingAdminDashboard() {
                     <label className="text-[10px] text-slate-500 block mb-0.5">通勤手当</label>
                     <input
                       type="number"
-                      value={editModal.data.commuting_allowance}
-                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, commuting_allowance: parseInt(e.target.value, 10) || 0 } })}
+                      placeholder="例: 6990"
+                      value={editModal.data.commuting_allowance === 0 ? '' : editModal.data.commuting_allowance}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, commuting_allowance: e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0) } })}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                     />
                   </div>
@@ -3401,9 +3411,10 @@ export default function OnboardingAdminDashboard() {
                     </label>
                     <input
                       type="number"
-                      value={wizardData.salary_type === 'hourly' ? wizardData.hourly_wage : wizardData.base_salary}
+                      placeholder="例: 250000"
+                      value={wizardData.salary_type === 'hourly' ? (wizardData.hourly_wage === 0 ? '' : wizardData.hourly_wage) : (wizardData.base_salary === 0 ? '' : wizardData.base_salary)}
                       onChange={e => {
-                        const val = parseInt(e.target.value, 10) || 0;
+                        const val = e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0);
                         setWizardData(wizardData.salary_type === 'hourly' ? { ...wizardData, hourly_wage: val } : { ...wizardData, base_salary: val });
                       }}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
@@ -3416,8 +3427,9 @@ export default function OnboardingAdminDashboard() {
                     <label className="text-[11px] text-slate-500 block mb-1">通勤手当 (月額)</label>
                     <input
                       type="number"
-                      value={wizardData.commuting_allowance}
-                      onChange={e => setWizardData({ ...wizardData, commuting_allowance: parseInt(e.target.value, 10) || 0 })}
+                      placeholder="例: 6990"
+                      value={wizardData.commuting_allowance === 0 ? '' : wizardData.commuting_allowance}
+                      onChange={e => setWizardData({ ...wizardData, commuting_allowance: e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0) })}
                       className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                     />
                   </div>
@@ -3425,8 +3437,9 @@ export default function OnboardingAdminDashboard() {
                     <label className="text-[11px] text-slate-500 block mb-1">役職手当 (月額)</label>
                     <input
                       type="number"
-                      value={wizardData.position_allowance}
-                      onChange={e => setWizardData({ ...wizardData, position_allowance: parseInt(e.target.value, 10) || 0 })}
+                      placeholder="例: 30000"
+                      value={wizardData.position_allowance === 0 ? '' : wizardData.position_allowance}
+                      onChange={e => setWizardData({ ...wizardData, position_allowance: e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0) })}
                       className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                     />
                   </div>
@@ -3622,8 +3635,9 @@ export default function OnboardingAdminDashboard() {
                     <label className="text-[10px] text-slate-500 block mb-0.5">1ヶ月定期代（円）</label>
                     <input
                       type="number"
-                      value={proxyInputModal.commutingAmount}
-                      onChange={e => setProxyInputModal(prev => ({ ...prev, commutingAmount: parseInt(e.target.value, 10) || 0 }))}
+                      placeholder="例: 6990"
+                      value={proxyInputModal.commutingAmount === 0 ? '' : proxyInputModal.commutingAmount}
+                      onChange={e => setProxyInputModal(prev => ({ ...prev, commutingAmount: e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0) }))}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                     />
                   </div>
@@ -3919,33 +3933,201 @@ export default function OnboardingAdminDashboard() {
                 </div>
               )}
 
-              {/* 扶養控除等申告修正 */}
-              {editSubmissionModal.submission.document_type === 'dependents_form' && (
-                <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
-                    <input
-                      type="checkbox"
-                      checked={!!editSubmissionModal.editedData.has_spouse}
-                      onChange={e => setEditSubmissionModal(prev => ({
-                        ...prev,
-                        editedData: { ...prev.editedData, has_spouse: e.target.checked }
-                      }))}
-                      className="w-4 h-4 text-indigo-600 rounded"
-                    />
-                    源泉控除対象配偶者あり
-                  </label>
+              {/* 扶養控除等申告修正（tax_withholding / dependents_form 両対応） */}
+              {(editSubmissionModal.submission.document_type === 'dependents_form' || editSubmissionModal.submission.document_type === 'tax_withholding') && (
+                <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                  {/* 配偶者情報 */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={!!editSubmissionModal.editedData.has_spouse}
+                        onChange={e => setEditSubmissionModal(prev => ({
+                          ...prev,
+                          editedData: { ...prev.editedData, has_spouse: e.target.checked }
+                        }))}
+                        className="w-4 h-4 text-indigo-600 rounded"
+                      />
+                      源泉控除対象配偶者あり
+                    </label>
 
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">扶養親族等の数 (名)</label>
-                    <input
-                      type="number"
-                      value={editSubmissionModal.editedData.dependents_count || 0}
-                      onChange={e => setEditSubmissionModal(prev => ({
-                        ...prev,
-                        editedData: { ...prev.editedData, dependents_count: parseInt(e.target.value, 10) || 0 }
-                      }))}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold"
-                    />
+                    {editSubmissionModal.editedData.has_spouse && (
+                      <div className="space-y-2 pt-2 border-t border-slate-100">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] text-slate-500 block mb-0.5">配偶者 氏名</label>
+                            <input
+                              type="text"
+                              placeholder="例: 佐藤 花子"
+                              value={editSubmissionModal.editedData.spouse_name || ''}
+                              onChange={e => setEditSubmissionModal(prev => ({
+                                ...prev,
+                                editedData: { ...prev.editedData, spouse_name: e.target.value }
+                              }))}
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-500 block mb-0.5">フリガナ</label>
+                            <input
+                              type="text"
+                              placeholder="例: サトウ ハナコ"
+                              value={editSubmissionModal.editedData.spouse_name_kana || ''}
+                              onChange={e => setEditSubmissionModal(prev => ({
+                                ...prev,
+                                editedData: { ...prev.editedData, spouse_name_kana: e.target.value }
+                              }))}
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] text-slate-500 block mb-0.5">生年月日</label>
+                            <input
+                              type="date"
+                              value={editSubmissionModal.editedData.spouse_birth_date || ''}
+                              onChange={e => setEditSubmissionModal(prev => ({
+                                ...prev,
+                                editedData: { ...prev.editedData, spouse_birth_date: e.target.value }
+                              }))}
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 font-bold text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-slate-500 block mb-0.5">所得見積額 (円)</label>
+                            <input
+                              type="number"
+                              placeholder="例: 480000"
+                              value={editSubmissionModal.editedData.spouse_income_estimate === 0 ? '' : (editSubmissionModal.editedData.spouse_income_estimate || '')}
+                              onChange={e => setEditSubmissionModal(prev => ({
+                                ...prev,
+                                editedData: { ...prev.editedData, spouse_income_estimate: e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0) }
+                              }))}
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 扶養親族一覧 */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-slate-700">
+                        控除対象 扶養親族 ({Array.isArray(editSubmissionModal.editedData.dependents) ? editSubmissionModal.editedData.dependents.length : 0}名)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentDeps = Array.isArray(editSubmissionModal.editedData.dependents) ? [...editSubmissionModal.editedData.dependents] : [];
+                          currentDeps.push({
+                            name: '',
+                            nameKana: '',
+                            relation: '子',
+                            birthDate: '2015-01-01',
+                            incomeEstimate: 0,
+                            isLivingTogether: true
+                          });
+                          setEditSubmissionModal(prev => ({
+                            ...prev,
+                            editedData: { ...prev.editedData, dependents: currentDeps, dependents_count: currentDeps.length }
+                          }));
+                        }}
+                        className="text-[10px] bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold px-2 py-0.5 rounded-lg transition"
+                      >
+                        ＋ 扶養親族を追加
+                      </button>
+                    </div>
+
+                    {Array.isArray(editSubmissionModal.editedData.dependents) && editSubmissionModal.editedData.dependents.map((dep: any, idx: number) => (
+                      <div key={idx} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-slate-500">扶養親族 #{idx + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const currentDeps = editSubmissionModal.editedData.dependents.filter((_: any, i: number) => i !== idx);
+                              setEditSubmissionModal(prev => ({
+                                ...prev,
+                                editedData: { ...prev.editedData, dependents: currentDeps, dependents_count: currentDeps.length }
+                              }));
+                            }}
+                            className="text-[10px] text-rose-500 hover:underline"
+                          >
+                            削除
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          <input
+                            type="text"
+                            placeholder="氏名"
+                            value={dep.name || ''}
+                            onChange={e => {
+                              const currentDeps = [...editSubmissionModal.editedData.dependents];
+                              currentDeps[idx] = { ...currentDeps[idx], name: e.target.value };
+                              setEditSubmissionModal(prev => ({ ...prev, editedData: { ...prev.editedData, dependents: currentDeps } }));
+                            }}
+                            className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold"
+                          />
+                          <select
+                            value={dep.relation || '子'}
+                            onChange={e => {
+                              const currentDeps = [...editSubmissionModal.editedData.dependents];
+                              currentDeps[idx] = { ...currentDeps[idx], relation: e.target.value };
+                              setEditSubmissionModal(prev => ({ ...prev, editedData: { ...prev.editedData, dependents: currentDeps } }));
+                            }}
+                            className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold"
+                          >
+                            <option value="子">子</option>
+                            <option value="父">父</option>
+                            <option value="母">母</option>
+                            <option value="祖父">祖父</option>
+                            <option value="祖母">祖母</option>
+                            <option value="兄弟姉妹">兄弟姉妹</option>
+                          </select>
+                          <input
+                            type="date"
+                            value={dep.birthDate || ''}
+                            onChange={e => {
+                              const currentDeps = [...editSubmissionModal.editedData.dependents];
+                              currentDeps[idx] = { ...currentDeps[idx], birthDate: e.target.value };
+                              setEditSubmissionModal(prev => ({ ...prev, editedData: { ...prev.editedData, dependents: currentDeps } }));
+                            }}
+                            className="bg-white border border-slate-300 rounded px-1 py-1 text-[11px]"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 特別控除区分 */}
+                  <div className="grid grid-cols-2 gap-2 bg-white p-3 rounded-xl border border-slate-200">
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={!!editSubmissionModal.editedData.is_disability}
+                        onChange={e => setEditSubmissionModal(prev => ({
+                          ...prev,
+                          editedData: { ...prev.editedData, is_disability: e.target.checked }
+                        }))}
+                        className="w-3.5 h-3.5 text-indigo-600 rounded"
+                      />
+                      障害者控除
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={!!editSubmissionModal.editedData.is_single_parent}
+                        onChange={e => setEditSubmissionModal(prev => ({
+                          ...prev,
+                          editedData: { ...prev.editedData, is_single_parent: e.target.checked }
+                        }))}
+                        className="w-3.5 h-3.5 text-indigo-600 rounded"
+                      />
+                      ひとり親控除
+                    </label>
                   </div>
                 </div>
               )}

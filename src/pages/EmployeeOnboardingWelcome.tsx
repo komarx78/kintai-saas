@@ -22,7 +22,7 @@ import {
   UserCheck, CreditCard, Train, ShieldCheck, 
   Upload, Trash2, CheckCircle2, ChevronRight, ChevronLeft, 
   Loader2, Home, Lock, Plus, FileText, Sparkles, MapPin, Check,
-  Bot
+  Bot, Edit3, Users
 } from 'lucide-react';
 
 interface DependentItem {
@@ -45,7 +45,7 @@ export default function EmployeeOnboardingWelcome() {
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
   const [isAiRouting, setIsAiRouting] = useState(false);
   const [ocrSuccessMsg, setOcrSuccessMsg] = useState<string | null>(null);
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5 | 6 | 7>(1);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
 
@@ -725,24 +725,26 @@ export default function EmployeeOnboardingWelcome() {
           </div>
         </div>
         <div className="text-[10px] bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700 font-bold">
-          Step {currentStep} / 6
+          Step {currentStep} / 7
         </div>
       </header>
 
       {/* ステップインジケーター */}
       <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 overflow-x-auto">
-        <div className="flex items-center justify-between max-w-lg mx-auto text-[10px] font-bold text-slate-400 min-w-[360px]">
-          <span className={currentStep === 1 ? 'text-indigo-400 font-black' : ''}>1.雇用契約合意</span>
+        <div className="flex items-center justify-between max-w-lg mx-auto text-[10px] font-bold text-slate-400 min-w-[420px]">
+          <span className={currentStep === 1 ? 'text-indigo-400 font-black' : ''}>1.条件確認</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
           <span className={currentStep === 2 ? 'text-indigo-400 font-black' : ''}>2.基本・住民票</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
-          <span className={currentStep === 3 ? 'text-indigo-400 font-black' : ''}>3.通勤・交通費</span>
+          <span className={currentStep === 3 ? 'text-indigo-400 font-black' : ''}>3.通勤届</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
-          <span className={currentStep === 4 ? 'text-indigo-400 font-black' : ''}>4.口座・通帳</span>
+          <span className={currentStep === 4 ? 'text-indigo-400 font-black' : ''}>4.口座届</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
-          <span className={currentStep === 5 ? 'text-indigo-400 font-black' : ''}>5.扶養控除申告</span>
+          <span className={currentStep === 5 ? 'text-indigo-400 font-black' : ''}>5.扶養申告</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
           <span className={currentStep === 6 ? 'text-indigo-400 font-black' : ''}>6.個人番号</span>
+          <ChevronRight className="w-3 h-3 text-slate-600" />
+          <span className={currentStep === 7 ? 'text-emerald-400 font-black' : ''}>7.最終確認</span>
         </div>
       </div>
 
@@ -1314,15 +1316,21 @@ export default function EmployeeOnboardingWelcome() {
                                     onClick={async () => {
                                       const origin = commutingData.originStation || '花山稲荷（バス停）';
                                       const newDest = s.formalStationName;
-                                      
-                                      // 実運賃・複数乗り継ぎルートを即時自動生成
-                                      const generatedSegs = await generateMultiRouteWithAi(origin, newDest);
+                                      setIsAiRouting(true);
+                                      try {
+                                        // 実運賃・複数乗り継ぎルートを即時自動生成
+                                        const generatedSegs = await generateMultiRouteWithAi(origin, newDest);
 
-                                      setCommutingData(prev => ({
-                                        ...prev,
-                                        destinationStation: newDest,
-                                        segments: generatedSegs.length > 0 ? generatedSegs : prev.segments
-                                      }));
+                                        setCommutingData(prev => ({
+                                          ...prev,
+                                          destinationStation: newDest,
+                                          segments: generatedSegs.length > 0 ? generatedSegs : prev.segments
+                                        }));
+                                      } catch (e) {
+                                        console.error('Auto route failed:', e);
+                                      } finally {
+                                        setIsAiRouting(false);
+                                      }
                                     }}
                                     className={`${colorClass} border px-2 py-1 rounded-lg font-bold transition flex items-center gap-1 cursor-pointer text-[10px]`}
                                     title={`${s.region} ${s.formalStationName} (${s.lineName})`}
@@ -1441,8 +1449,9 @@ export default function EmployeeOnboardingWelcome() {
                               <label className="text-[10px] text-slate-400 block mb-0.5">1ヶ月定期代（円）</label>
                               <input
                                 type="number"
-                                value={seg.oneMonthPassAmount}
-                                onChange={e => handleUpdateSegment(seg.id, 'oneMonthPassAmount', parseInt(e.target.value, 10) || 0)}
+                                placeholder="例: 6990"
+                                value={seg.oneMonthPassAmount === 0 ? '' : seg.oneMonthPassAmount}
+                                onChange={e => handleUpdateSegment(seg.id, 'oneMonthPassAmount', e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0))}
                                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 font-black text-cyan-400 text-sm"
                               />
                             </div>
@@ -1450,8 +1459,9 @@ export default function EmployeeOnboardingWelcome() {
                               <label className="text-[10px] text-slate-400 block mb-0.5">片道運賃（円）</label>
                               <input
                                 type="number"
-                                value={seg.oneWayFare}
-                                onChange={e => handleUpdateSegment(seg.id, 'oneWayFare', parseInt(e.target.value, 10) || 0)}
+                                placeholder="例: 240"
+                                value={seg.oneWayFare === 0 ? '' : seg.oneWayFare}
+                                onChange={e => handleUpdateSegment(seg.id, 'oneWayFare', e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0))}
                                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white"
                               />
                             </div>
@@ -1752,9 +1762,9 @@ export default function EmployeeOnboardingWelcome() {
                         <label className="text-[10px] text-slate-400 block mb-0.5">本年所得の見積額 (円)</label>
                         <input
                           type="number"
-                          placeholder="480000"
-                          value={taxData.spouseIncomeEstimate}
-                          onChange={e => setTaxData({ ...taxData, spouseIncomeEstimate: parseInt(e.target.value, 10) || 0 })}
+                          placeholder="例: 480000"
+                          value={taxData.spouseIncomeEstimate === 0 ? '' : taxData.spouseIncomeEstimate}
+                          onChange={e => setTaxData({ ...taxData, spouseIncomeEstimate: e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0) })}
                           className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 font-bold text-white"
                         />
                       </div>
@@ -1779,6 +1789,7 @@ export default function EmployeeOnboardingWelcome() {
                       <div className="text-[10px] text-slate-400">
                         生年: {dep.birthDate} / {dep.isLivingTogether ? '同居' : '別居'}
                         {dep.isUnder16 ? '【16歳未満】' : dep.isSpecific ? '【特定扶養】' : dep.isElderly ? '【老人扶養】' : ''}
+                        {dep.incomeEstimate ? ` / 所得: ¥${dep.incomeEstimate.toLocaleString()}` : ''}
                       </div>
                     </div>
                     <button onClick={() => handleDeleteDependent(idx)} className="p-1 text-slate-400 hover:text-rose-400">
@@ -1819,22 +1830,37 @@ export default function EmployeeOnboardingWelcome() {
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="date"
-                      value={newDep.birthDate}
-                      onChange={e => {
-                        const bDate = e.target.value;
-                        const cats = calculateDependentCategory(bDate);
-                        setNewDep({ ...newDep, birthDate: bDate, isUnder16: cats.isUnder16, isSpecific: cats.isSpecific, isElderly: cats.isElderly });
-                      }}
-                      className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold"
-                    />
+                    <div>
+                      <label className="text-[9px] text-slate-400 block mb-0.5">生年月日</label>
+                      <input
+                        type="date"
+                        value={newDep.birthDate}
+                        onChange={e => {
+                          const bDate = e.target.value;
+                          const cats = calculateDependentCategory(bDate);
+                          setNewDep({ ...newDep, birthDate: bDate, isUnder16: cats.isUnder16, isSpecific: cats.isSpecific, isElderly: cats.isElderly });
+                        }}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-slate-400 block mb-0.5">所得見積額 (円)</label>
+                      <input
+                        type="number"
+                        placeholder="例: 0"
+                        value={newDep.incomeEstimate === 0 ? '' : newDep.incomeEstimate}
+                        onChange={e => setNewDep({ ...newDep, incomeEstimate: e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0) })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-white font-bold text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div className="pt-1 flex justify-end">
                     <button
                       type="button"
                       onClick={handleAddDependent}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-lg text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-3 rounded-lg text-xs transition flex items-center justify-center gap-1 cursor-pointer"
                     >
-                      <Plus className="w-3.5 h-3.5" /> 扶養に追加
+                      <Plus className="w-3.5 h-3.5" /> 扶養親族リストに追加
                     </button>
                   </div>
                 </div>
@@ -1959,6 +1985,188 @@ export default function EmployeeOnboardingWelcome() {
           </div>
         )}
 
+        {/* ========================================================================= */}
+        {/* STEP 7: 🚀 提出前 最終確認＆修正シート */}
+        {/* ========================================================================= */}
+        {currentStep === 7 && (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="bg-gradient-to-r from-emerald-900/60 via-teal-900/40 to-slate-900 p-4 rounded-3xl border border-emerald-500/30 text-white space-y-1">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-sm flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  7. 提出前の最終確認シート
+                </h3>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/30 font-bold">
+                  最終確認
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                入力した内容に間違いがないか最終確認してください。<br />
+                修正したい項目がある場合は、各ブロックの「<strong className="text-emerald-300">✏️ 修正する</strong>」ボタンから該当画面に戻っていつでも直せます。
+              </p>
+            </div>
+
+            {/* 1. 労働条件 ＆ 本人基本情報 */}
+            <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <UserCheck className="w-4 h-4 text-indigo-400" />
+                  1. 本人基本情報・住民票
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(2)}
+                  className="bg-slate-800 hover:bg-slate-700 text-indigo-300 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-slate-700 flex items-center gap-1 cursor-pointer"
+                >
+                  <Edit3 className="w-3 h-3" /> 修正する
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div><span className="text-slate-400">氏名:</span> <span className="font-bold text-white">{basicData.name || '未入力'}</span></div>
+                <div><span className="text-slate-400">フリガナ:</span> <span className="text-slate-200">{basicData.nameKana || '未入力'}</span></div>
+                <div><span className="text-slate-400">生年月日:</span> <span className="font-bold text-white">{basicData.birthDate || '未入力'}</span></div>
+                <div><span className="text-slate-400">電話番号:</span> <span className="text-white">{basicData.phoneNumber || '未入力'}</span></div>
+                <div className="col-span-2"><span className="text-slate-400">現住所:</span> <span className="font-bold text-white">{basicData.address || '未入力'}</span></div>
+                <div><span className="text-slate-400">世帯主:</span> <span className="text-slate-200">{basicData.householderName || basicData.name} ({basicData.householderRelation})</span></div>
+                <div><span className="text-slate-400">緊急連絡先:</span> <span className="text-slate-200">{basicData.emergencyContactName} ({basicData.emergencyContactRelation}) {basicData.emergencyContactPhone}</span></div>
+                <div className="col-span-2 pt-1 text-[10px] text-emerald-400">
+                  {basicData.residentCertificatePhoto ? '📷 住民票の写しを添付済' : '⚠️ 住民票写真は後日提出可能'}
+                </div>
+              </div>
+            </div>
+
+            {/* 2. 通勤交通費申請 */}
+            <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <Train className="w-4 h-4 text-cyan-400" />
+                  2. 通勤交通費 支給申請
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(3)}
+                  className="bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-slate-700 flex items-center gap-1 cursor-pointer"
+                >
+                  <Edit3 className="w-3 h-3" /> 修正する
+                </button>
+              </div>
+              <div className="space-y-1.5 text-[11px]">
+                <div>
+                  <span className="text-slate-400">通勤区分:</span>{' '}
+                  <span className="font-bold text-white">
+                    {commutingData.transportMode === 'train_bus' ? '公共交通機関（電車・バス乗り継ぎ）' : commutingData.transportMode === 'car_bike' ? `マイカー・バイク通勤 (${commutingData.carDistanceKm}km)` : '徒歩・自転車'}
+                  </span>
+                </div>
+                {commutingData.transportMode === 'train_bus' && commutingData.segments.length > 0 && (
+                  <div className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-1">
+                    <div className="text-[10px] text-slate-400 font-bold">乗り継ぎ区間明細 ({commutingData.segments.length}区間):</div>
+                    {commutingData.segments.map((s, idx) => (
+                      <div key={s.id} className="text-[10px] flex items-center justify-between text-slate-300">
+                        <span>第{idx + 1}区間: {s.fromStation} 〜 {s.toStation} ({s.lineName})</span>
+                        <span className="font-mono text-cyan-300 font-bold">1ヶ月 ¥{s.oneMonthPassAmount.toLocaleString()}</span>
+                      </div>
+                    ))}
+                    <div className="pt-1 border-t border-slate-800 flex items-center justify-between font-bold text-white text-xs">
+                      <span>1ヶ月定期支給合計額:</span>
+                      <span className="text-cyan-400 font-black text-sm">¥{commuteTotals.totalOneMonthPass.toLocaleString()} /月</span>
+                    </div>
+                  </div>
+                )}
+                <div className="text-[10px] text-emerald-400 pt-0.5">
+                  {commutingData.passPhoto ? '📷 定期券・運賃スクショ写真を添付済' : '※ 運賃写真は任意'}
+                </div>
+              </div>
+            </div>
+
+            {/* 3. 給与振込口座届 */}
+            <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <CreditCard className="w-4 h-4 text-blue-400" />
+                  3. 給与振込口座
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(4)}
+                  className="bg-slate-800 hover:bg-slate-700 text-blue-300 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-slate-700 flex items-center gap-1 cursor-pointer"
+                >
+                  <Edit3 className="w-3 h-3" /> 修正する
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div><span className="text-slate-400">金融機関:</span> <span className="font-bold text-white">{bankData.bankName || '未登録'}</span></div>
+                <div><span className="text-slate-400">支店名:</span> <span className="font-bold text-white">{bankData.branchName || '未登録'}</span></div>
+                <div><span className="text-slate-400">種別 / 口座番号:</span> <span className="font-bold text-white">{bankData.accountType === 'ordinary' ? '普通' : '当座'} {bankData.accountNumber || '未登録'}</span></div>
+                <div><span className="text-slate-400">口座名義人:</span> <span className="font-bold text-white">{bankData.accountHolder || basicData.name}</span></div>
+                <div className="col-span-2 text-[10px] text-emerald-400 pt-0.5">
+                  {bankData.passbookPhoto ? '📷 通帳・キャッシュカード写真を添付済' : '※ 通帳写真は任意'}
+                </div>
+              </div>
+            </div>
+
+            {/* 4. 扶養控除等申告書 */}
+            <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-amber-400" />
+                  4. 令和8年分 扶養控除等申告書
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(5)}
+                  className="bg-slate-800 hover:bg-slate-700 text-amber-300 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-slate-700 flex items-center gap-1 cursor-pointer"
+                >
+                  <Edit3 className="w-3 h-3" /> 修正する
+                </button>
+              </div>
+              <div className="space-y-1.5 text-[11px]">
+                <div>
+                  <span className="text-slate-400">配偶者控除:</span>{' '}
+                  <span className="font-bold text-white">
+                    {taxData.hasSpouse ? `あり (${taxData.spouseName} 殿 / 所得見積: ¥${(taxData.spouseIncomeEstimate || 0).toLocaleString()})` : 'なし'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400">扶養親族 ({taxData.dependents.length}名):</span>{' '}
+                  <span className="font-bold text-white">
+                    {taxData.dependents.length === 0 ? 'なし' : taxData.dependents.map(d => `${d.name} (${d.relation})`).join('、 ')}
+                  </span>
+                </div>
+                {(taxData.isDisability || taxData.isSingleParent || taxData.isWidow || taxData.isWorkingStudent) && (
+                  <div className="text-[10px] text-amber-400">
+                    特別控除該当: {taxData.isDisability ? '【障害者】' : ''} {taxData.isSingleParent ? '【ひとり親】' : ''} {taxData.isWidow ? '【寡婦】' : ''} {taxData.isWorkingStudent ? '【勤労学生】' : ''}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 5. マイナンバー ＆ 社保届 */}
+            <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-purple-400" />
+                  5. マイナンバー・社会保険届
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(6)}
+                  className="bg-slate-800 hover:bg-slate-700 text-purple-300 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-slate-700 flex items-center gap-1 cursor-pointer"
+                >
+                  <Edit3 className="w-3 h-3" /> 修正する
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div><span className="text-slate-400">マイナンバー:</span> <span className="font-bold text-white">{officialDocsData.myNumber ? `************${officialDocsData.myNumber.slice(-4)}` : '書類添付で確認'}</span></div>
+                <div><span className="text-slate-400">年金番号:</span> <span className="text-white">{officialDocsData.pensionNumber || '未入力'}</span></div>
+                <div><span className="text-slate-400">雇用保険番号:</span> <span className="text-white">{officialDocsData.employmentInsuranceNumber || '未入力'}</span></div>
+                <div className="text-[10px] text-emerald-400">
+                  {officialDocsData.myNumberCardPhoto ? '📷 番号確認写真を添付済' : '※ 写真添付あり'}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
 
       {/* フッターナビゲーション */}
@@ -1974,7 +2182,7 @@ export default function EmployeeOnboardingWelcome() {
             </button>
           ) : <div />}
 
-          {currentStep < 6 ? (
+          {currentStep < 7 ? (
             <button
               onClick={() => {
                 if (currentStep === 1 && !contractAgreement.isAgreed) {
@@ -1987,19 +2195,19 @@ export default function EmployeeOnboardingWelcome() {
                 }
                 setCurrentStep((currentStep + 1) as any);
               }}
-              className="flex-1 max-w-[200px] ml-auto py-3 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-black text-xs rounded-2xl shadow-lg transition flex items-center justify-center gap-1 cursor-pointer"
+              className="flex-1 max-w-[220px] ml-auto py-3 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-black text-xs rounded-2xl shadow-lg transition flex items-center justify-center gap-1 cursor-pointer"
             >
-              次へ進む
+              {currentStep === 6 ? '最終確認シートへ' : '次へ進む'}
               <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
             <button
               onClick={handleSubmitAll}
               disabled={isSubmitting}
-              className="flex-1 max-w-[260px] ml-auto py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-xs rounded-2xl shadow-lg transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="flex-1 max-w-[280px] ml-auto py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-xs rounded-2xl shadow-lg transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              公的入社書類をすべて送信する
+              すべての公的書類を会社へ送信する
             </button>
           )}
         </div>
