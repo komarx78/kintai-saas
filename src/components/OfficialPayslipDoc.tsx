@@ -117,7 +117,10 @@ export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip,
   if (payslip.work_days && payslip.work_days > 0) attendanceList.push({ label: '出勤日数', value: `${payslip.work_days}`, unit: '日' });
   if (payslip.actual_hours && payslip.actual_hours > 0) attendanceList.push({ label: '実労働時間', value: `${payslip.actual_hours}`, unit: 'h' });
   if (payslip.overtime_hours && payslip.overtime_hours > 0) attendanceList.push({ label: '時間外労働', value: `${payslip.overtime_hours}`, unit: 'h' });
+  if ((payslip as any).midnight_hours && (payslip as any).midnight_hours > 0) attendanceList.push({ label: '深夜労働時間', value: `${(payslip as any).midnight_hours}`, unit: 'h' });
+  if ((payslip as any).holiday_hours && (payslip as any).holiday_hours > 0) attendanceList.push({ label: '休日労働時間', value: `${(payslip as any).holiday_hours}`, unit: 'h' });
   if (payslip.paid_leave_days && payslip.paid_leave_days > 0) attendanceList.push({ label: '有休取得日数', value: `${payslip.paid_leave_days}`, unit: '日' });
+  if ((payslip as any).absence_days && (payslip as any).absence_days > 0) attendanceList.push({ label: '欠勤日数', value: `${(payslip as any).absence_days}`, unit: '日' });
 
   // 2. 支給項目
   // 2. 支給項目

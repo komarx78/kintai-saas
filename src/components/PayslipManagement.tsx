@@ -1717,6 +1717,26 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                             ¥{(slip.overtime_allowance || 0).toLocaleString()}
                           </span>
                         </div>
+                        {slip.midnight_allowance !== undefined && slip.midnight_allowance > 0 ? (
+                          <div className="flex justify-between items-center text-purple-700">
+                            <span className="text-slate-500 flex items-center gap-1">
+                              <span>🌙 深夜割増手当:</span>
+                            </span>
+                            <span className="font-black font-mono text-purple-600 text-xs">
+                              ¥{(slip.midnight_allowance || 0).toLocaleString()}
+                            </span>
+                          </div>
+                        ) : null}
+                        {slip.holiday_allowance !== undefined && slip.holiday_allowance > 0 ? (
+                          <div className="flex justify-between items-center text-amber-700">
+                            <span className="text-slate-500 flex items-center gap-1">
+                              <span>🚩 休日割増手当:</span>
+                            </span>
+                            <span className="font-black font-mono text-amber-600 text-xs">
+                              ¥{(slip.holiday_allowance || 0).toLocaleString()}
+                            </span>
+                          </div>
+                        ) : null}
                         <div className="flex justify-between">
                           <span className="text-slate-500">通勤手当 (非課税):</span>
                           <span className="font-mono text-slate-800">¥{(slip.commuting_allowance || 0).toLocaleString()}</span>
@@ -1725,6 +1745,18 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                           <div className="flex justify-between text-blue-700">
                             <span className="text-slate-500">役職・資格・諸手当:</span>
                             <span className="font-mono">¥{((slip.position_allowance || 0) + (slip.qualification_allowance || 0) + (slip.housing_allowance || 0) + (slip.family_allowance || 0)).toLocaleString()}</span>
+                          </div>
+                        ) : null}
+                        {slip.absence_deduction && slip.absence_deduction > 0 ? (
+                          <div className="flex justify-between text-rose-600">
+                            <span className="text-slate-500">欠勤控除:</span>
+                            <span className="font-mono">-¥{slip.absence_deduction.toLocaleString()}</span>
+                          </div>
+                        ) : null}
+                        {slip.late_early_deduction && slip.late_early_deduction > 0 ? (
+                          <div className="flex justify-between text-rose-600">
+                            <span className="text-slate-500">遅刻早退控除:</span>
+                            <span className="font-mono">-¥{slip.late_early_deduction.toLocaleString()}</span>
                           </div>
                         ) : null}
                         <div className="border-t border-emerald-200 pt-1.5 flex justify-between font-black text-emerald-900 text-xs">
@@ -2879,7 +2911,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               {/* 勤怠項目 */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <h4 className="font-bold text-slate-700 mb-2">勤怠実績の修正</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
                   <div>
                     <label className="text-[10px] text-slate-500 block mb-0.5">出勤日数 (日)</label>
                     <input
@@ -2910,6 +2942,26 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                     />
                   </div>
                   <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">🌙 深夜労働 (h)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={editModal.data.midnight_hours ?? 0}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data, midnight_hours: parseFloat(e.target.value) || 0 } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-purple-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">🚩 休日労働 (h)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={editModal.data.holiday_hours ?? 0}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data, holiday_hours: parseFloat(e.target.value) || 0 } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-amber-600"
+                    />
+                  </div>
+                  <div>
                     <label className="text-[10px] text-slate-500 block mb-0.5">有休取得 (日)</label>
                     <input
                       type="number"
@@ -2920,7 +2972,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold text-blue-900 block mb-0.5">🏖️ 有休残日数 (日)</label>
+                    <label className="text-[10px] font-bold text-blue-900 block mb-0.5">🏖️ 有休残 (日)</label>
                     <input
                       type="number"
                       step="0.5"
@@ -2935,7 +2987,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               {/* 支給項目 */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
                 <h4 className="font-bold text-slate-700 mb-2">支給項目の修正 (円)</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div>
                     <label className="text-[10px] text-slate-500 block mb-0.5">基本給</label>
                     <input
@@ -2955,6 +3007,24 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                     />
                   </div>
                   <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">🌙 深夜割増手当</label>
+                    <input
+                      type="number"
+                      value={editModal.data.midnight_allowance ?? 0}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data, midnight_allowance: parseInt(e.target.value, 10) || 0 } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-purple-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">🚩 休日割増手当</label>
+                    <input
+                      type="number"
+                      value={editModal.data.holiday_allowance ?? 0}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data, holiday_allowance: parseInt(e.target.value, 10) || 0 } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-amber-600"
+                    />
+                  </div>
+                  <div>
                     <label className="text-[10px] text-slate-500 block mb-0.5">役職手当</label>
                     <input
                       type="number"
@@ -2964,7 +3034,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">通勤手当</label>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">資格・職能手当</label>
+                    <input
+                      type="number"
+                      value={editModal.data.qualification_allowance ?? 0}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data, qualification_allowance: parseInt(e.target.value, 10) || 0 } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">通勤手当 (非課税)</label>
                     <input
                       type="number"
                       value={editModal.data.commuting_allowance}
@@ -2982,12 +3061,39 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">特別手当 / インセンティブ</label>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">家族・扶養手当</label>
+                    <input
+                      type="number"
+                      value={editModal.data.family_allowance ?? 0}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data, family_allowance: parseInt(e.target.value, 10) || 0 } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">特別手当 / 賞与</label>
                     <input
                       type="number"
                       value={editModal.data.special_allowance}
                       onChange={e => setEditModal({ ...editModal, data: { ...editModal.data, special_allowance: parseInt(e.target.value, 10) || 0 } })}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">欠勤控除</label>
+                    <input
+                      type="number"
+                      value={editModal.data.absence_deduction ?? 0}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data, absence_deduction: parseInt(e.target.value, 10) || 0 } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-rose-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">遅刻早退控除</label>
+                    <input
+                      type="number"
+                      value={editModal.data.late_early_deduction ?? 0}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data, late_early_deduction: parseInt(e.target.value, 10) || 0 } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-rose-600"
                     />
                   </div>
                 </div>
