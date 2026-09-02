@@ -537,6 +537,85 @@ export default function OnboardingAdminDashboard() {
         });
 
       setSubmissions(formattedSubmissions);
+
+      // 🌟【自己修復・SSOT自動同期】承認済みの提出書類が存在するのに users / combined に未登録の従業員を自動検出して登録！
+      const existingNames = new Set(combined.map(e => e.name.trim()));
+      const approvedSubs = formattedSubmissions.filter(s => s.status === 'approved');
+
+      for (const sub of approvedSubs) {
+        const d = sub.data || {};
+        const empName = (d.name || sub.user_name || '').trim();
+        if (empName && !existingNames.has(empName)) {
+          existingNames.add(empName);
+          try {
+            // users テーブルに自動登録
+            const tempEmail = d.email || `emp_${Date.now()}@sample.local`;
+            const { data: createdUser } = await supabase
+              .from('users')
+              .insert({
+                tenant_id: tenantIdData,
+                name: empName,
+                email: tempEmail,
+                role: 'user',
+                department: d.department || '営業部',
+                employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
+                join_date: d.join_date || new Date().toISOString().split('T')[0],
+                birth_date: d.birth_date || null,
+                address: d.address || null,
+                phone: d.phone || null,
+                has_kintai_access: true,
+                has_shift_access: true
+              })
+              .select()
+              .single();
+
+            if (createdUser) {
+              // 台帳一覧に追加
+              combined.push({
+                user_id: createdUser.id,
+                name: empName,
+                email: tempEmail,
+                phone: d.phone || '',
+                birth_date: d.birth_date || '',
+                address: d.address || '',
+                role: 'user',
+                status: 'active',
+                current_step_number: 5,
+                step_history: [],
+                join_date: d.join_date || new Date().toISOString().split('T')[0],
+                employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
+                department: d.department || '営業部',
+                contract_type: d.contract_type || 'indefinite',
+                trial_period_months: 3,
+                start_time: defaultStartTime,
+                end_time: defaultEndTime,
+                break_time_minutes: defaultBreak,
+                holidays_text: defaultHolText,
+                salary_type: d.salary_type || 'monthly',
+                base_salary: d.base_salary || 250000,
+                hourly_wage: d.hourly_wage || 1150,
+                position_allowance: d.position_allowance || 0,
+                qualification_allowance: d.qualification_allowance || 0,
+                housing_allowance: 0,
+                family_allowance: 0,
+                commuting_allowance: d.one_month_pass_amount || 0,
+                health_insurance_joined: true,
+                pension_insurance_joined: true,
+                employment_insurance_joined: true,
+                bank_name: d.bank_name || '',
+                branch_name: d.branch_name || '',
+                account_type: d.account_type || 'ordinary',
+                account_number: d.account_number || '',
+                account_holder: d.account_holder || empName
+              });
+            }
+          } catch (autoErr) {
+            console.warn('Auto-sync approved employee error:', autoErr);
+          }
+        }
+      }
+
+      setEmployees([...combined]);
     } catch (e) {
       console.error('Fetch onboarding error:', e);
     } finally {
@@ -1007,32 +1086,68 @@ export default function OnboardingAdminDashboard() {
     if (!tenantId) return;
     setIsSaving(true);
     try {
-      const uId = sub.user_id;
+      let uId = sub.user_id;
       const d = sub.data || {};
-      const empName = d.name || sub.user_name || '新入社員';
+      const empName = (d.name || sub.user_name || '新入社員').trim();
 
-      // 1. users テーブルに該当従業員が存在するか確認し、なければ新入社員として自動本登録！
+      // 1. users テーブルに該当従業員が存在するか確認し、なければ新入社員として自動本登録（正規UUID自動発行）！
       try {
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select('id, name')
-          .eq('id', uId)
-          .maybeSingle();
+        let existingUser: any = null;
+        // uId が UUID 形式（36文字でハイフン含む）か判定
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uId);
+        
+        if (isUuid) {
+          const { data } = await supabase
+            .from('users')
+            .select('id, name')
+            .eq('id', uId)
+            .maybeSingle();
+          existingUser = data;
+        } else {
+          // 氏名で既存ユーザー照合
+          const { data } = await supabase
+            .from('users')
+            .select('id, name')
+            .eq('tenant_id', tenantId)
+            .eq('name', empName)
+            .maybeSingle();
+          existingUser = data;
+        }
 
-        if (!existingUser) {
-          const tempEmail = `emp_${Date.now()}@sample.local`;
-          await supabase.from('users').upsert({
-            id: uId,
-            tenant_id: tenantId,
-            name: empName,
-            email: tempEmail,
-            role: 'user',
-            department: d.department || '本社',
-            employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
-            join_date: d.join_date || new Date().toISOString().split('T')[0],
-            has_kintai_access: true,
-            has_shift_access: true
-          }, { onConflict: 'id' });
+        if (existingUser) {
+          uId = existingUser.id;
+        } else {
+          // 新規従業員として users テーブルに本登録！
+          const tempEmail = d.email || `emp_${Date.now()}@sample.local`;
+          const { data: newUser, error: insErr } = await supabase
+            .from('users')
+            .insert({
+              tenant_id: tenantId,
+              name: empName,
+              email: tempEmail,
+              role: 'user',
+              department: d.department || '営業部',
+              employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
+              join_date: d.join_date || new Date().toISOString().split('T')[0],
+              birth_date: d.birth_date || null,
+              address: d.address || null,
+              phone: d.phone || null,
+              has_kintai_access: true,
+              has_shift_access: true
+            })
+            .select()
+            .single();
+
+          if (newUser) {
+            uId = newUser.id;
+            // 提出書類の user_id も正式な uId に更新
+            await supabase
+              .from('employee_document_submissions')
+              .update({ user_id: uId })
+              .eq('id', sub.id);
+          } else if (insErr) {
+            console.warn('User insert error on approval:', insErr);
+          }
         }
       } catch (uErr) {
         console.warn('Auto user registration fallback:', uErr);
