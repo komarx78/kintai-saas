@@ -97,7 +97,7 @@ const ShiftEmployeeMaster: React.FC = () => {
       }));
 
       if (upserts.length > 0) {
-        const { error } = await supabase.from('shift_employee_settings').upsert(upserts, { onConflict: 'user_id' });
+        const { error } = await supabase.from('shift_employee_settings').upsert(upserts, { onConflict: 'tenant_id,user_id' });
         if (error) throw error;
       }
       

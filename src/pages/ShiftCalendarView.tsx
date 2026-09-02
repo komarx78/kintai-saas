@@ -240,6 +240,10 @@ const ShiftCalendarView: React.FC = () => {
         .select('*').eq('tenant_id', tenantIdData)
         .gte('target_date', startStr).lte('target_date', endStr);
 
+      // 最新の必要枠マスタを取得
+      const { data: latestReqs } = await supabase.from('advanced_shift_requirements').select('*').eq('tenant_id', tenantIdData);
+      const activeReqs = (latestReqs && latestReqs.length > 0) ? latestReqs : (requirements || []);
+
       const toInsert: any[] = [];
       const datesToProcess = eachDayOfInterval({ start: startDate, end: endDate });
 
@@ -248,7 +252,7 @@ const ShiftCalendarView: React.FC = () => {
         const dbDow = targetDay.getDay(); // 0: 日 〜 6: 土
 
         const generated = generateAutoShift(
-          requirements || [], 
+          activeReqs, 
           rawRequests || [], 
           existingShifts || [], 
           empSettings || [], 
@@ -268,7 +272,7 @@ const ShiftCalendarView: React.FC = () => {
       }
       
       alert(`🎉 AI自動割り当てが完了しました！（${toInsert.length}件のシフトを配置）\nカレンダーで配置状況を確認し、「一括確定」を行ってください。`);
-      fetchSettingsAndData();
+      await fetchSettingsAndData();
     } catch (err) {
       console.error(err);
       alert('自動生成中にエラーが発生しました');

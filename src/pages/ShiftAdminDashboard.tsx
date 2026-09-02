@@ -244,29 +244,33 @@ const ShiftAdminDashboard: React.FC = () => {
               phone_number: `090-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
               address: '東京都港区芝公園1-1-1',
               updated_at: new Date().toISOString()
-            }, { onConflict: 'user_id' });
+            }, { onConflict: 'tenant_id,user_id' });
           } catch (profileErr) {
             console.warn('employee_onboarding_profiles upsert skipped:', profileErr);
           }
 
           // シフト要員設定への連動 (shift_employee_settings)
-          await supabase.from('shift_employee_settings').upsert({
-            tenant_id: tenantId,
-            user_id: uid,
-            hire_date: '2024-04-01',
-            max_hours_per_week: staff.maxH,
-            priority_score: staff.priority,
-            default_role: staff.roleName,
-            base_wage: staff.wage,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'user_id' });
+          try {
+            await supabase.from('shift_employee_settings').upsert({
+              tenant_id: tenantId,
+              user_id: uid,
+              hire_date: '2024-04-01',
+              max_hours_per_week: staff.maxH,
+              priority_score: staff.priority,
+              default_role: staff.roleName,
+              base_wage: staff.wage,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'tenant_id,user_id' });
+          } catch (settingErr) {
+            console.warn('shift_employee_settings upsert fallback:', settingErr);
+          }
         }
       }
 
-      // 4. 今週分（月〜日）のシフト希望を一括生成
+      // 4. 今週＋翌週（14日間：月〜日×2）のシフト希望を一括生成
       const requestsToInsert: any[] = [];
 
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < 14; i++) {
         const d = addDays(weekStart, i);
         const dStr = format(d, 'yyyy-MM-dd');
         const dow = d.getDay(); // 0:日, 1:月, ... 6:土
@@ -302,7 +306,7 @@ const ShiftAdminDashboard: React.FC = () => {
         if (reqError) throw reqError;
       }
 
-      alert('🎉 40名規模のリアルなデモデータセットを一括投入しました！\n\n【内訳】\n・ホール 12名 / キッチン 10名 / レジ 12名 / 清掃 6名\n・必要枠：ホール1、キッチン1、レジ2、清掃朝1・夜1\n・今週分のシフト希望：' + requestsToInsert.length + '件\n\n「⚡ シフトを自動生成する (AI)」を押して動作をご確認ください！');
+      alert('🎉 40名規模のリアルなデモデータセットを一括投入しました！\n\n【内訳】\n・ホール 12名 / キッチン 10名 / レジ 12名 / 清壊 6名\n・必要枠：ホール1、キッチン1、レジ2、清掃朝1・夜1\n・14日間分のシフト希望：' + requestsToInsert.length + '件\n\n「⚡ シフトを自動生成する (AI)」を押して動作をご確認ください！');
       setGenerationResult(null);
       await fetchStats();
     } catch (err: any) {
