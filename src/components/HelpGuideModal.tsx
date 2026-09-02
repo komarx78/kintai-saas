@@ -694,7 +694,7 @@ export const HelpGuideModal: React.FC<HelpGuideModalProps> = ({ screenKey, isOpe
               <div className="bg-gradient-to-r from-indigo-50/80 to-purple-50/80 border border-indigo-100 p-4 rounded-2xl">
                 <div className="flex items-center space-x-2 text-indigo-900 font-bold text-xs mb-1">
                   <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                  <span>💡 軍師孔明・設計の意図</span>
+                  <span>💡 本システムの設計意図</span>
                 </div>
                 <p className="text-xs text-indigo-950 leading-relaxed">{content.whyNeeded.intent}</p>
               </div>
@@ -784,7 +784,7 @@ export const HelpGuideModal: React.FC<HelpGuideModalProps> = ({ screenKey, isOpe
         {/* Footer */}
         <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
           <div className="text-[11px] text-slate-400 flex items-center">
-            <span>🛡️ 軍師孔明・完全サポートガイド</span>
+            <span>🛡️ クラウド労務・シフト完全サポートガイド</span>
           </div>
           <button
             onClick={onClose}

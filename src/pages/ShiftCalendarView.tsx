@@ -607,12 +607,16 @@ const ShiftCalendarView: React.FC = () => {
                                     );
                                   })
                                 )}
-                                {/* 役割ごとの不足状況サマリー */}
-                                <div className="flex bg-red-50/20 group border-b border-slate-100">
-                                  <div className="w-48 shrink-0 p-2 font-bold text-red-500 border-r border-slate-100 text-[10px] flex items-center sticky left-0 z-10 bg-white shadow-[1px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                                    {role.name} 不足状況
+                                {/* 役割ごとの不足状況サマリー（ガントチャート時間軸と完全同期） */}
+                                <div className="flex bg-rose-50/20 group border-b border-slate-100 hover:bg-rose-50/30 transition-colors">
+                                  <div className="w-48 shrink-0 p-2 font-bold text-rose-600 border-r border-slate-100 text-[10px] flex items-center justify-between sticky left-0 z-10 bg-white shadow-[1px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                    <span className="flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+                                      {role.name} 不足状況
+                                    </span>
                                   </div>
-                                  <div className="flex-1 min-h-[36px] flex items-center flex-wrap p-1.5 gap-1.5 relative">
+                                  <div className="flex-1 min-h-[38px] relative flex items-center">
+                                    {/* 24時間グリッド線 */}
                                     <div className="absolute inset-0 flex pointer-events-none">
                                       {Array.from({length: 24}, (_, i) => i).map(h => (
                                         <div key={h} className="flex-1 border-r border-slate-100/50 h-full"></div>
@@ -622,10 +626,11 @@ const ShiftCalendarView: React.FC = () => {
                                     {(() => {
                                       const dow = d.getDay();
                                       const dayReqs = requirements.filter(r => r.day_of_week === dow && r.role === role.name);
-                                      const dayShifts = shifts.filter(s => s.target_date === format(d, 'yyyy-MM-dd') && s.role === role.name);
+                                      // 確定・ドラフトのみを実働シフトとしてカウント
+                                      const dayAssignedShifts = dayShifts.filter(s => s.role === role.name && s.status !== 'request');
                                       
-                                      const shortages = [];
-                                      let currentStart = null;
+                                      const shortages: { start: number; end: number; count: number }[] = [];
+                                      let currentStart: number | null = null;
                                       let currentCount = 0;
 
                                       for (let h = 0; h < 24; h++) {
@@ -639,7 +644,7 @@ const ShiftCalendarView: React.FC = () => {
 
                                         let actual = 0;
                                         if (required > 0) {
-                                          dayShifts.forEach(shift => {
+                                          dayAssignedShifts.forEach(shift => {
                                             const [sh] = shift.start_time.split(':').map(Number);
                                             const [eh, em] = shift.end_time.split(':').map(Number);
                                             const endHour = em > 0 ? eh : eh - 1;
@@ -668,17 +673,57 @@ const ShiftCalendarView: React.FC = () => {
                                       }
 
                                       if (shortages.length === 0) {
-                                        return <div className="text-[10px] font-bold text-slate-400 pl-4 z-10">不足なし</div>;
+                                        return (
+                                          <div className="text-[10px] font-bold text-slate-400 pl-4 z-10 select-none">
+                                            充足（不足なし）
+                                          </div>
+                                        );
                                       }
 
-                                      return shortages.map((shortage, idx) => (
-                                        <div 
-                                          key={idx}
-                                          className="z-10 text-[10px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full shadow-sm border border-red-200"
-                                        >
-                                          {shortage.start}:00 - {shortage.end}:00 ({shortage.count}枠不足)
-                                        </div>
-                                      ));
+                                      const totalMinutes = 24 * 60;
+
+                                      return shortages.map((shortage, idx) => {
+                                        const startMinutes = shortage.start * 60;
+                                        const endMinutes = shortage.end * 60;
+                                        const leftPercent = (startMinutes / totalMinutes) * 100;
+                                        const widthPercent = ((endMinutes - startMinutes) / totalMinutes) * 100;
+
+                                        return (
+                                          <div 
+                                            key={idx}
+                                            onClick={() => {
+                                              const shStr = shortage.start.toString().padStart(2, '0') + ':00';
+                                              const ehStr = shortage.end.toString().padStart(2, '0') + ':00';
+                                              setModalData({
+                                                target_date: dStr,
+                                                role: role.name,
+                                                start_time: shStr,
+                                                end_time: ehStr,
+                                                user_id: users[0]?.id
+                                              });
+                                              setIsModalOpen(true);
+                                            }}
+                                            className="absolute top-1.5 bottom-1.5 rounded-md shadow-xs bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black flex items-center justify-center px-1 overflow-hidden whitespace-nowrap z-10 border border-rose-600 cursor-pointer transition-all hover:scale-[1.02] hover:z-20"
+                                            style={{
+                                              left: `${leftPercent}%`,
+                                              width: `${widthPercent}%`,
+                                              minWidth: '20px'
+                                            }}
+                                            title={`${shortage.start}:00〜${shortage.end}:00 【${shortage.count}人不足】（クリックしてこの時間帯にシフト追加）`}
+                                          >
+                                            <span className="truncate flex items-center gap-0.5 pointer-events-none">
+                                              <span className="text-[9px]">⚠️</span>
+                                              {widthPercent >= 8 ? (
+                                                <span>{shortage.start}:00-{shortage.end}:00 ({shortage.count}人不足)</span>
+                                              ) : widthPercent >= 4.5 ? (
+                                                <span>{shortage.count}人不足</span>
+                                              ) : (
+                                                <span>{shortage.count}</span>
+                                              )}
+                                            </span>
+                                          </div>
+                                        );
+                                      });
                                     })()}
                                   </div>
                                 </div>
