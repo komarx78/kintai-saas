@@ -111,22 +111,11 @@ export default function EmployeeOnboardingWelcome() {
   // 2. 通勤交通費 支給申請書（複数乗り継ぎ対応）
   const [commutingData, setCommutingData] = useState({
     transportMode: 'train_bus' as 'train_bus' | 'car_bike' | 'walk_bicycle',
-    originStation: '北大塚',
+    originStation: '',
     viaStation: '',
-    destinationStation: '新大阪',
-    segments: [
-      {
-        id: 'seg_1',
-        transportType: 'jr' as const,
-        fromStation: '北大塚',
-        toStation: '新大阪',
-        lineName: 'JR線 最短連絡ルート',
-        oneWayFare: 290,
-        oneMonthPassAmount: 10440,
-        sixMonthPassAmount: 56370
-      }
-    ] as CommuteRouteSegment[],
-    carDistanceKm: 8.5,
+    destinationStation: '',
+    segments: [] as CommuteRouteSegment[],
+    carDistanceKm: 0,
     passPhoto: '',
     passFileName: '',
     passSizeInfo: '',
@@ -1364,7 +1353,17 @@ export default function EmployeeOnboardingWelcome() {
                       </button>
                     </div>
 
-                    {commutingData.segments.map((seg, idx) => {
+                    {commutingData.segments.length === 0 ? (
+                      <div className="bg-slate-800/40 p-5 rounded-2xl border border-dashed border-slate-700 text-center space-y-2">
+                        <Train className="w-8 h-8 text-slate-500 mx-auto" />
+                        <p className="text-slate-300 font-bold text-xs">まだ通勤区間が登録されていません</p>
+                        <p className="text-[10px] text-slate-400">
+                          上の「乗車地・降車地」を入力して「🤖 最適乗り継ぎを一括自動算出」を押すか、<br />
+                          右上の「＋ 乗り継ぎ区間を追加」から手動で登録してください。
+                        </p>
+                      </div>
+                    ) : (
+                      commutingData.segments.map((seg, idx) => {
                       return (
                         <div key={seg.id} className="bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700 space-y-2.5">
                           <div className="flex items-center justify-between">
@@ -1448,7 +1447,8 @@ export default function EmployeeOnboardingWelcome() {
                           </div>
                         </div>
                       );
-                    })}
+                    })
+                  )}
                   </div>
 
                   {/* 💰 乗り継ぎ合計金額ボックス */}
