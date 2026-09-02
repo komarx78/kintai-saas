@@ -58,6 +58,10 @@ export default function EmployeeOnboardingWelcome() {
     salaryType: 'monthly' as 'monthly' | 'hourly',
     baseSalary: 250000,
     hourlyWage: 1200,
+    positionName: '',
+    positionAllowance: 0,
+    qualificationAllowance: 0,
+    fixedOvertimeAllowance: 0,
     department: '営業部',
     workLocation: '本社 および 会社が指定する就業場所',
     workHours: '09:00 〜 18:00（休憩60分・実働8時間）',
@@ -186,20 +190,24 @@ export default function EmployeeOnboardingWelcome() {
   useEffect(() => {
     fetchTenant();
 
-    // 📱 管理者が発行したURLクエリパラメータ（個人別 労働条件・給与設定）の自動読取
+    // 📱 管理者が発行したURLクエリパラメータ（個人別 労働条件・給与・役職設定）の自動読取
     try {
       const searchParams = new URLSearchParams(window.location.search);
       const nameParam = searchParams.get('name');
       const salaryTypeParam = searchParams.get('salary_type');
       const baseSalaryParam = searchParams.get('base_salary');
       const hourlyWageParam = searchParams.get('hourly_wage');
+      const posNameParam = searchParams.get('position_name');
+      const posAllowanceParam = searchParams.get('position_allowance');
+      const qualAllowanceParam = searchParams.get('qualification_allowance');
+      const fixedOtParam = searchParams.get('fixed_overtime_allowance');
       const deptParam = searchParams.get('department');
       const empTypeParam = searchParams.get('employment_type');
       const joinDateParam = searchParams.get('join_date');
       const locParam = searchParams.get('work_location');
       const hoursParam = searchParams.get('work_hours');
 
-      if (nameParam || baseSalaryParam || hourlyWageParam || deptParam) {
+      if (nameParam || baseSalaryParam || hourlyWageParam || deptParam || posNameParam) {
         if (nameParam) {
           setBasicData(prev => ({ ...prev, name: nameParam }));
         }
@@ -210,6 +218,10 @@ export default function EmployeeOnboardingWelcome() {
           salaryType: (salaryTypeParam as any) || prev.salaryType,
           baseSalary: baseSalaryParam ? parseInt(baseSalaryParam, 10) : prev.baseSalary,
           hourlyWage: hourlyWageParam ? parseInt(hourlyWageParam, 10) : prev.hourlyWage,
+          positionName: posNameParam || prev.positionName,
+          positionAllowance: posAllowanceParam ? parseInt(posAllowanceParam, 10) : prev.positionAllowance,
+          qualificationAllowance: qualAllowanceParam ? parseInt(qualAllowanceParam, 10) : prev.qualificationAllowance,
+          fixedOvertimeAllowance: fixedOtParam ? parseInt(fixedOtParam, 10) : prev.fixedOvertimeAllowance,
           department: deptParam || prev.department,
           employmentType: empTypeParam || prev.employmentType,
           joinDate: joinDateParam || prev.joinDate,
@@ -519,8 +531,14 @@ export default function EmployeeOnboardingWelcome() {
           agreed_at: contractAgreement.agreedAt || new Date().toISOString(),
           signature_name: contractAgreement.employeeSignatureName || basicData.name,
           employment_type: contractAgreement.employmentType,
+          salary_type: contractAgreement.salaryType,
           base_salary: contractAgreement.baseSalary,
           hourly_wage: contractAgreement.hourlyWage,
+          position_name: contractAgreement.positionName,
+          position_allowance: contractAgreement.positionAllowance,
+          qualification_allowance: contractAgreement.qualificationAllowance,
+          fixed_overtime_allowance: contractAgreement.fixedOvertimeAllowance,
+          department: contractAgreement.department,
           work_location: contractAgreement.workLocation,
           work_hours: contractAgreement.workHours,
           join_date: contractAgreement.joinDate
@@ -792,8 +810,13 @@ export default function EmployeeOnboardingWelcome() {
 
               <div className="grid grid-cols-1 gap-2.5 text-slate-300">
                 <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
-                  <span className="text-slate-400">雇用形態 / 契約期間:</span>
-                  <span className="font-bold text-indigo-300">{contractAgreement.employmentType}（期間の定めなし）</span>
+                  <span className="text-slate-400">雇用形態 / 配属・役職:</span>
+                  <span className="font-bold text-indigo-300">
+                    {contractAgreement.employmentType}
+                    <span className="text-white ml-1">
+                      （{contractAgreement.department}{contractAgreement.positionName ? ` / ${contractAgreement.positionName}` : ''}）
+                    </span>
+                  </span>
                 </div>
 
                 <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
@@ -811,6 +834,36 @@ export default function EmployeeOnboardingWelcome() {
                     )}
                   </span>
                 </div>
+
+                {contractAgreement.positionAllowance > 0 && (
+                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-indigo-500/30 flex justify-between items-center text-indigo-300">
+                    <span className="text-slate-400">👑 役職手当:</span>
+                    <span className="font-black font-mono">¥{contractAgreement.positionAllowance.toLocaleString()} / 月</span>
+                  </div>
+                )}
+
+                {contractAgreement.qualificationAllowance > 0 && (
+                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-blue-500/30 flex justify-between items-center text-blue-300">
+                    <span className="text-slate-400">🎓 資格・職能手当:</span>
+                    <span className="font-black font-mono">¥{contractAgreement.qualificationAllowance.toLocaleString()} / 月</span>
+                  </div>
+                )}
+
+                {contractAgreement.fixedOvertimeAllowance > 0 && (
+                  <div className="bg-slate-900/80 p-2.5 rounded-xl border border-amber-500/30 flex justify-between items-center text-amber-300">
+                    <span className="text-slate-400">⏱️ 固定残業手当（みなし）:</span>
+                    <span className="font-black font-mono">¥{contractAgreement.fixedOvertimeAllowance.toLocaleString()} / 月</span>
+                  </div>
+                )}
+
+                {contractAgreement.salaryType !== 'hourly' && (contractAgreement.positionAllowance > 0 || contractAgreement.qualificationAllowance > 0 || contractAgreement.fixedOvertimeAllowance > 0) && (
+                  <div className="bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-500/40 flex justify-between items-center text-emerald-400">
+                    <span className="font-black text-xs text-white">💰 総支給見込額（額面合計）:</span>
+                    <span className="font-black font-mono text-base">
+                      ¥{(contractAgreement.baseSalary + contractAgreement.positionAllowance + contractAgreement.qualificationAllowance + contractAgreement.fixedOvertimeAllowance).toLocaleString()} / 月
+                    </span>
+                  </div>
+                )}
 
                 <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
                   <span className="text-slate-400">割増賃金率:</span>

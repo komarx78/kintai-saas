@@ -266,6 +266,10 @@ export default function OnboardingAdminDashboard() {
     salaryType: 'monthly' as 'monthly' | 'hourly',
     baseSalary: 250000,
     hourlyWage: 1200,
+    positionName: '',
+    positionAllowance: 0,
+    qualificationAllowance: 0,
+    fixedOvertimeAllowance: 0,
     department: '営業部',
     joinDate: new Date().toISOString().split('T')[0],
     startTime: '09:00',
@@ -1495,6 +1499,10 @@ export default function OnboardingAdminDashboard() {
                   salaryType: 'monthly',
                   baseSalary: 250000,
                   hourlyWage: 1200,
+                  positionName: '',
+                  positionAllowance: 0,
+                  qualificationAllowance: 0,
+                  fixedOvertimeAllowance: 0,
                   department: departments[0]?.name || '営業部',
                   joinDate: new Date().toISOString().split('T')[0],
                   startTime: '09:00',
@@ -1506,7 +1514,7 @@ export default function OnboardingAdminDashboard() {
                 });
               }}
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-4 py-2 rounded-xl shadow-md shadow-indigo-200 transition flex items-center gap-1.5 cursor-pointer"
-              title="新入社員の給与・労働条件を設定して専用入社URLを発行"
+              title="新入社員の給与・役職・労働条件を設定して専用入社URLを発行"
             >
               <Smartphone className="w-4 h-4 text-cyan-300" />
               ✨ 給与設定 ＆ 専用入社URLを発行
@@ -1733,6 +1741,10 @@ export default function OnboardingAdminDashboard() {
                                     salaryType: isH ? 'hourly' : 'monthly',
                                     baseSalary: emp.base_salary || 250000,
                                     hourlyWage: emp.hourly_wage || 1200,
+                                    positionName: emp.position_name || '',
+                                    positionAllowance: emp.position_allowance || 0,
+                                    qualificationAllowance: emp.qualification_allowance || 0,
+                                    fixedOvertimeAllowance: 0,
                                     department: emp.department || departments[0]?.name || '営業部',
                                     joinDate: emp.join_date || new Date().toISOString().split('T')[0],
                                     startTime: emp.start_time || '09:00',
@@ -1744,7 +1756,7 @@ export default function OnboardingAdminDashboard() {
                                   });
                                 }}
                                 className="bg-cyan-50 hover:bg-cyan-100 text-cyan-700 font-bold text-xs p-1.5 rounded-lg border border-cyan-200 transition cursor-pointer"
-                                title="この従業員の給与・労働条件でスマホ入社URLを発行"
+                                title="この従業員の給与・役職条件でスマホ入社URLを発行"
                               >
                                 <Smartphone className="w-3.5 h-3.5 text-cyan-700" />
                               </button>
@@ -3817,12 +3829,20 @@ export default function OnboardingAdminDashboard() {
       {/* 📱 個人別 労働条件設定 ＆ 専用入社手続きURL発行モーダル */}
       {inviteUrlModal.isOpen && (() => {
         const isHourly = inviteUrlModal.salaryType === 'hourly';
+        const totalEstimatedMonthly = isHourly
+          ? 0
+          : inviteUrlModal.baseSalary + inviteUrlModal.positionAllowance + inviteUrlModal.qualificationAllowance + inviteUrlModal.fixedOvertimeAllowance;
+
         const params = new URLSearchParams({
           name: inviteUrlModal.name.trim(),
           employment_type: inviteUrlModal.employmentType,
           salary_type: inviteUrlModal.salaryType,
           base_salary: String(isHourly ? 0 : inviteUrlModal.baseSalary),
           hourly_wage: String(isHourly ? inviteUrlModal.hourlyWage : Math.round(inviteUrlModal.baseSalary / 160)),
+          position_name: inviteUrlModal.positionName.trim(),
+          position_allowance: String(inviteUrlModal.positionAllowance || 0),
+          qualification_allowance: String(inviteUrlModal.qualificationAllowance || 0),
+          fixed_overtime_allowance: String(inviteUrlModal.fixedOvertimeAllowance || 0),
           department: inviteUrlModal.department,
           join_date: inviteUrlModal.joinDate,
           work_location: inviteUrlModal.workLocation,
@@ -3840,10 +3860,10 @@ export default function OnboardingAdminDashboard() {
                   </div>
                   <div>
                     <h3 className="font-black text-slate-800 text-base">
-                      個人別 労働条件設定 ＆ 専用入社URL発行
+                      個人別 労働条件・給与・役職設定 ＆ 専用入社URL発行
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      給与・労働条件を設定した専用URLを発行し、新入社員へ送付できます
+                      役職・給与手当を設定した専用URLを発行し、新入社員へ送付できます
                     </p>
                   </div>
                 </div>
@@ -3856,11 +3876,11 @@ export default function OnboardingAdminDashboard() {
               </div>
 
               <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1 text-xs">
-                {/* 1. 基本設定 */}
+                {/* 1. 基本設定（役職含む） */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                   <h4 className="font-bold text-slate-700 flex items-center gap-1.5">
                     <UserCheck className="w-4 h-4 text-indigo-600" />
-                    新入社員のお名前 ＆ 配属先
+                    新入社員のお名前 ＆ 配属・役職
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -3891,6 +3911,18 @@ export default function OnboardingAdminDashboard() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                        👑 役職名（役職付き入社の場合）
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="例: 部長、課長、主任、店長、一般"
+                        value={inviteUrlModal.positionName}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, positionName: e.target.value, copied: false }))}
+                        className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 font-bold text-indigo-800 placeholder:text-slate-400"
+                      />
+                    </div>
+                    <div>
                       <label className="text-[11px] font-bold text-slate-600 block mb-1">雇用形態</label>
                       <select
                         value={inviteUrlModal.employmentType}
@@ -3903,24 +3935,33 @@ export default function OnboardingAdminDashboard() {
                         <option value="業務委託">業務委託</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-600 block mb-1">入社予定日</label>
-                      <input
-                        type="date"
-                        value={inviteUrlModal.joinDate}
-                        onChange={e => setInviteUrlModal(prev => ({ ...prev, joinDate: e.target.value, copied: false }))}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                      />
-                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">入社予定日</label>
+                    <input
+                      type="date"
+                      value={inviteUrlModal.joinDate}
+                      onChange={e => setInviteUrlModal(prev => ({ ...prev, joinDate: e.target.value, copied: false }))}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                    />
                   </div>
                 </div>
 
-                {/* 2. 給与・賃金設定 */}
+                {/* 2. 給与・諸手当設定 */}
                 <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200 space-y-3">
-                  <h4 className="font-bold text-emerald-900 flex items-center gap-1.5">
-                    <DollarSign className="w-4 h-4 text-emerald-600" />
-                    賃金・給与条件の設定
+                  <h4 className="font-bold text-emerald-900 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <DollarSign className="w-4 h-4 text-emerald-600" />
+                      賃金・諸手当の設定
+                    </span>
+                    {!isHourly && totalEstimatedMonthly > 0 && (
+                      <span className="text-xs bg-emerald-600 text-white font-black px-2.5 py-0.5 rounded-full shadow-xs">
+                        額面計: ¥{totalEstimatedMonthly.toLocaleString()} / 月
+                      </span>
+                    )}
                   </h4>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[11px] font-bold text-emerald-800 block mb-1">給与形態</label>
@@ -3954,9 +3995,49 @@ export default function OnboardingAdminDashboard() {
                       />
                     </div>
                   </div>
-                  <p className="text-[10px] text-emerald-700">
-                    ※ ここで設定した金額が、新入社員のスマホ画面上の「労働条件通知書 兼 雇用契約書」に自動セットされます。
-                  </p>
+
+                  {!isHourly && (
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-emerald-200/60">
+                      <div>
+                        <label className="text-[10px] font-bold text-indigo-800 block mb-0.5">👑 役職手当 (円)</label>
+                        <input
+                          type="number"
+                          step="1000"
+                          placeholder="0"
+                          value={inviteUrlModal.positionAllowance || ''}
+                          onChange={e => setInviteUrlModal(prev => ({ ...prev, positionAllowance: parseInt(e.target.value, 10) || 0, copied: false }))}
+                          className="w-full bg-white border border-indigo-200 rounded-xl px-2.5 py-1.5 font-bold text-indigo-700"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-blue-800 block mb-0.5">🎓 資格手当 (円)</label>
+                        <input
+                          type="number"
+                          step="1000"
+                          placeholder="0"
+                          value={inviteUrlModal.qualificationAllowance || ''}
+                          onChange={e => setInviteUrlModal(prev => ({ ...prev, qualificationAllowance: parseInt(e.target.value, 10) || 0, copied: false }))}
+                          className="w-full bg-white border border-blue-200 rounded-xl px-2.5 py-1.5 font-bold text-blue-700"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-amber-800 block mb-0.5">⏱️ 固定残業代 (円)</label>
+                        <input
+                          type="number"
+                          step="1000"
+                          placeholder="0"
+                          value={inviteUrlModal.fixedOvertimeAllowance || ''}
+                          onChange={e => setInviteUrlModal(prev => ({ ...prev, fixedOvertimeAllowance: parseInt(e.target.value, 10) || 0, copied: false }))}
+                          className="w-full bg-white border border-amber-200 rounded-xl px-2.5 py-1.5 font-bold text-amber-700"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="p-2 bg-emerald-100/70 rounded-xl text-[10px] text-emerald-800 space-y-0.5">
+                    <p className="font-bold">🚆 通勤交通費について:</p>
+                    <p>新入社員がスマホ入社フォームで自宅最寄駅・通勤経路・定期代を申請し、会社が審査・承認した後に確定します（事前設定不要）。</p>
+                  </div>
                 </div>
 
                 {/* 3. 就業時間 ＆ 勤務地 */}
