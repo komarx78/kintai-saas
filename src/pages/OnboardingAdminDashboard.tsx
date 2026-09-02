@@ -9,6 +9,11 @@ import { OfficialTaxExemptionDoc } from '../components/OfficialTaxExemptionDoc';
 import { compressImageFile } from '../lib/imageCompressor';
 import { getLaborContractTemplateFromStorage } from '../lib/laborContractTemplate';
 import { 
+  type PositionMaster, 
+  DEFAULT_POSITIONS, 
+  getPositionsFromStorage 
+} from '../lib/orgChart';
+import { 
   type OnboardingWorkflowStep, 
   DEFAULT_ONBOARDING_STEPS, 
   getWorkflowStepsFromStorage, 
@@ -121,6 +126,7 @@ export default function OnboardingAdminDashboard() {
   const [employees, setEmployees] = useState<EmployeeOnboardingData[]>([]);
   const [submissions, setSubmissions] = useState<DocumentSubmission[]>([]);
   const [departments, setDepartments] = useState<DepartmentMaster[]>([]);
+  const [positions, setPositions] = useState<PositionMaster[]>(DEFAULT_POSITIONS);
   const [schedulePatterns, setSchedulePatterns] = useState<WorkSchedulePattern[]>([]);
   const [workflowSteps, setWorkflowSteps] = useState<OnboardingWorkflowStep[]>(DEFAULT_ONBOARDING_STEPS);
   
@@ -325,6 +331,13 @@ export default function OnboardingAdminDashboard() {
         .eq('tenant_id', tenantIdData)
         .order('display_order', { ascending: true });
       setDepartments(deptData || []);
+
+      // 役職マスタ取得
+      let posList: PositionMaster[] = getPositionsFromStorage();
+      if (tData?.position_masters && Array.isArray(tData.position_masters) && tData.position_masters.length > 0) {
+        posList = tData.position_masters;
+      }
+      setPositions(posList);
 
       // 就業時間パターンマスタ取得
       const { data: patData } = await supabase
@@ -2712,6 +2725,50 @@ export default function OnboardingAdminDashboard() {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">👑 役職（役職マスタ連携）</label>
+                    <select
+                      value={editModal.data.position_name || ''}
+                      onChange={e => {
+                        const selectedName = e.target.value;
+                        const foundPos = positions.find(p => p.name === selectedName);
+                        setEditModal({
+                          ...editModal,
+                          data: {
+                            ...editModal.data!,
+                            position_name: selectedName,
+                            position_allowance: foundPos?.default_allowance !== undefined ? foundPos.default_allowance : editModal.data!.position_allowance
+                          }
+                        });
+                      }}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    >
+                      <option value="">なし（一般社員・手当なし）</option>
+                      {positions.map(pos => (
+                        <option key={pos.id} value={pos.name}>
+                          {pos.name} {pos.default_allowance ? `(標準手当: ¥${pos.default_allowance.toLocaleString()})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">👑 役職手当 (円)</label>
+                    <input
+                      type="number"
+                      value={editModal.data.position_allowance || 0}
+                      onChange={e => setEditModal({
+                        ...editModal,
+                        data: {
+                          ...editModal.data!,
+                          position_allowance: parseInt(e.target.value, 10) || 0
+                        }
+                      })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                </div>
+
                 {/* ⏰ 個人別 就業時間帯の個別上書き設定 */}
                 <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2">
                   <div className="flex items-center justify-between">
@@ -3911,16 +3968,33 @@ export default function OnboardingAdminDashboard() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[11px] font-bold text-slate-600 block mb-1">
-                        👑 役職名（役職付き入社の場合）
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1 flex items-center justify-between">
+                        <span>👑 役職（役職マスタ連携）</span>
+                        {inviteUrlModal.positionName && (
+                          <span className="text-[10px] text-indigo-600 font-bold">選択中: {inviteUrlModal.positionName}</span>
+                        )}
                       </label>
-                      <input
-                        type="text"
-                        placeholder="例: 部長、課長、主任、店長、一般"
+                      <select
                         value={inviteUrlModal.positionName}
-                        onChange={e => setInviteUrlModal(prev => ({ ...prev, positionName: e.target.value, copied: false }))}
-                        className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 font-bold text-indigo-800 placeholder:text-slate-400"
-                      />
+                        onChange={e => {
+                          const selectedName = e.target.value;
+                          const foundPos = positions.find(p => p.name === selectedName);
+                          setInviteUrlModal(prev => ({
+                            ...prev,
+                            positionName: selectedName,
+                            positionAllowance: foundPos?.default_allowance !== undefined ? foundPos.default_allowance : prev.positionAllowance,
+                            copied: false
+                          }));
+                        }}
+                        className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 font-bold text-indigo-800"
+                      >
+                        <option value="">なし（一般社員・手当なし）</option>
+                        {positions.map(pos => (
+                          <option key={pos.id} value={pos.name}>
+                            {pos.name} {pos.default_allowance ? `(標準手当: ¥${pos.default_allowance.toLocaleString()})` : ''}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="text-[11px] font-bold text-slate-600 block mb-1">雇用形態</label>

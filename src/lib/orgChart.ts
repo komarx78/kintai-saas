@@ -3,6 +3,7 @@ export interface PositionMaster {
   name: string;
   rank_level: number; // 1: 経営陣(役員), 2: 部門長(部長・統括), 3: 中間管理職(課長・店長), 4: 現場リーダー, 5: 一般・パート
   display_order: number;
+  default_allowance?: number; // 役職手当の標準月額（円）
 }
 
 export interface OrgMemberInfo {
@@ -27,16 +28,16 @@ export interface OrgDepartmentNode {
 }
 
 export const DEFAULT_POSITIONS: PositionMaster[] = [
-  { id: 'pos_1', name: '代表取締役', rank_level: 1, display_order: 1 },
-  { id: 'pos_2', name: '専務・常務取締役', rank_level: 1, display_order: 2 },
-  { id: 'pos_3', name: '取締役・役員', rank_level: 1, display_order: 3 },
-  { id: 'pos_4', name: '部長・本部長', rank_level: 2, display_order: 4 },
-  { id: 'pos_5', name: 'マネージャー・室長', rank_level: 2, display_order: 5 },
-  { id: 'pos_6', name: '課長・店長', rank_level: 3, display_order: 6 },
-  { id: 'pos_7', name: '係長・主任・リーダー', rank_level: 4, display_order: 7 },
-  { id: 'pos_8', name: '一般社員（正社員）', rank_level: 5, display_order: 8 },
-  { id: 'pos_9', name: '契約社員・嘱託', rank_level: 5, display_order: 9 },
-  { id: 'pos_10', name: 'パート・アルバイト', rank_level: 5, display_order: 10 },
+  { id: 'pos_1', name: '代表取締役', rank_level: 1, display_order: 1, default_allowance: 0 },
+  { id: 'pos_2', name: '専務・常務取締役', rank_level: 1, display_order: 2, default_allowance: 0 },
+  { id: 'pos_3', name: '取締役・役員', rank_level: 1, display_order: 3, default_allowance: 0 },
+  { id: 'pos_4', name: '部長・本部長', rank_level: 2, display_order: 4, default_allowance: 50000 },
+  { id: 'pos_5', name: 'マネージャー・室長', rank_level: 2, display_order: 5, default_allowance: 35000 },
+  { id: 'pos_6', name: '課長・店長', rank_level: 3, display_order: 6, default_allowance: 25000 },
+  { id: 'pos_7', name: '係長・主任・リーダー', rank_level: 4, display_order: 7, default_allowance: 10000 },
+  { id: 'pos_8', name: '一般社員（役職なし）', rank_level: 5, display_order: 8, default_allowance: 0 },
+  { id: 'pos_9', name: '契約社員・嘱託', rank_level: 5, display_order: 9, default_allowance: 0 },
+  { id: 'pos_10', name: 'パート・アルバイト', rank_level: 5, display_order: 10, default_allowance: 0 },
 ];
 
 export const getPositionsFromStorage = (): PositionMaster[] => {
