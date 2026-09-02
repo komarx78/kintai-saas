@@ -165,6 +165,7 @@ export default function CompanySettingsDashboard() {
     user: null
   });
 
+
   // 新規社員登録State
   const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
   const [newUserName, setNewUserName] = useState('');
@@ -309,6 +310,7 @@ export default function CompanySettingsDashboard() {
       // お知らせ一覧の復元
       const annLoaded = getAnnouncementsFromStorage(tenantIdData);
       setAnnouncements(annLoaded);
+
 
       if (tData) {
         if (tData.work_calendar_settings) {
@@ -2401,7 +2403,7 @@ export default function CompanySettingsDashboard() {
           </div>
         )}
 
-        {/* 4. 扶養控除申告書 印字座標マスター調整 タブ */}
+        {/* 4. 扶養控除等申告書 印字座標マスター調整 タブ */}
         {activeTab === 'tax_doc_master' && (
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6 animate-in fade-in duration-200">
             <div className="pb-3 border-b border-slate-100">

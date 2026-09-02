@@ -7,6 +7,11 @@ import { OfficialCommutingPassDoc } from '../components/OfficialCommutingPassDoc
 import { OfficialBankPassbookDoc } from '../components/OfficialBankPassbookDoc';
 import { OfficialTaxExemptionDoc } from '../components/OfficialTaxExemptionDoc';
 import OfficialSpouseDeductionDoc from '../components/OfficialSpouseDeductionDoc';
+import OfficialCustomCanvasDoc from '../components/OfficialCustomCanvasDoc';
+import { 
+  type CustomDocTemplate, 
+  getCustomDocTemplatesFromStorage 
+} from '../lib/customDocManager';
 import { compressImageFile } from '../lib/imageCompressor';
 import { getLaborContractTemplateFromStorage } from '../lib/laborContractTemplate';
 import { 
@@ -72,6 +77,7 @@ interface EmployeeOnboardingData {
   account_holder?: string;
   has_spouse?: boolean;
   dependents_count?: number;
+  dependents?: any[];
   my_number?: string;
   holidays_text?: string;
   documents_checklist?: {
@@ -214,7 +220,7 @@ export default function OnboardingAdminDashboard() {
   const [cabinetModal, setCabinetModal] = useState<{
     isOpen: boolean;
     employee: EmployeeOnboardingData | null;
-    activeDoc: 'contract' | 'commuting' | 'bank' | 'tax' | 'spouse_deduction' | 'identity' | 'raw_data';
+    activeDoc: 'contract' | 'commuting' | 'bank' | 'tax' | 'spouse_deduction' | 'identity' | 'raw_data' | string;
     selectedSubmission?: DocumentSubmission | null;
   }>({
     isOpen: false,
@@ -222,6 +228,9 @@ export default function OnboardingAdminDashboard() {
     activeDoc: 'contract',
     selectedSubmission: null
   });
+
+  // 🖨️ 全社カスタム公的書類一覧 State
+  const [customDocTemplates, setCustomDocTemplates] = useState<CustomDocTemplate[]>([]);
 
   // 退職処理モーダルState
   const [retireModal, setRetireModal] = useState<{
@@ -374,6 +383,10 @@ export default function OnboardingAdminDashboard() {
         end_time: defaultEndTime,
         break_time_minutes: defaultBreak
       }));
+
+      // 全社カスタム公的書類テンプレート一覧の復元
+      const customTemplatesLoaded = getCustomDocTemplatesFromStorage(tenantIdData);
+      setCustomDocTemplates(customTemplatesLoaded);
 
       // ユーザー一覧取得
       const { data: uData } = await supabase
@@ -2396,6 +2409,20 @@ export default function OnboardingAdminDashboard() {
                 5. 配偶者控除等申告書（特別控除）
               </button>
 
+              {/* 🖨️ 全社カスタム登録公的書類タブ一覧 */}
+              {customDocTemplates.map((tpl, tIdx) => (
+                <button
+                  key={tpl.id}
+                  onClick={() => setCabinetModal(prev => ({ ...prev, activeDoc: tpl.id }))}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                    cabinetModal.activeDoc === tpl.id ? 'bg-indigo-600 text-white shadow-sm' : 'bg-indigo-50/80 text-indigo-900 hover:bg-indigo-100 border border-indigo-200'
+                  }`}
+                >
+                  <FileText className="w-4 h-4 text-indigo-500" />
+                  {tIdx + 6}. {tpl.title}
+                </button>
+              ))}
+
               <button
                 onClick={() => setCabinetModal(prev => ({ ...prev, activeDoc: 'raw_data' }))}
                 className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
@@ -2403,7 +2430,7 @@ export default function OnboardingAdminDashboard() {
                 }`}
               >
                 <CheckCircle2 className="w-4 h-4 text-amber-700" />
-                📋 6. スマホ入力原本・照合チェック
+                📋 スマホ原本・照合
               </button>
             </div>
 
@@ -2664,6 +2691,45 @@ export default function OnboardingAdminDashboard() {
                       spouseAddress: resolvedEmp.address,
                       appliedDate: resolvedEmp.join_date
                     }} />
+                  </div>
+                );
+              })()}
+
+              {/* 🖨️ 全社登録カスタム公的書類の自動Canvas印字レンダリング */}
+              {(() => {
+                const currentTpl = customDocTemplates.find(t => t.id === cabinetModal.activeDoc);
+                if (!currentTpl) return null;
+
+                const resolvedEmp = resolveEmployeeFullData(cabinetModal.employee);
+                const targetEmpName = cabinetModal.employee?.name?.trim() || '';
+                const targetUserId = cabinetModal.employee?.user_id || '';
+
+                const userTaxSubs = submissions
+                  .filter(s => (s.user_id === targetUserId || (targetEmpName && s.data?.name?.trim() === targetEmpName) || (targetEmpName && s.user_name?.trim() === targetEmpName)) && (s.document_type === 'dependents_form' || s.document_type === 'tax_withholding'))
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                const tData = userTaxSubs[0]?.data || {};
+
+                const fullEmpData = {
+                  ...resolvedEmp,
+                  ...tData,
+                  my_number: tData.my_number || resolvedEmp.my_number || '',
+                  dependents: tData.dependents || resolvedEmp.dependents || []
+                };
+
+                return (
+                  <div className="space-y-4">
+                    <div className="bg-indigo-50 border border-indigo-200 p-3 rounded-xl flex items-center justify-between text-xs">
+                      <span className="font-bold text-indigo-950">
+                        📑 全社登録書類: {currentTpl.title} ({currentTpl.fields.length}項目自動印字)
+                      </span>
+                      <span className="text-[10px] text-indigo-600">※ A4実寸・高精細原本出力</span>
+                    </div>
+
+                    <OfficialCustomCanvasDoc
+                      template={currentTpl}
+                      employeeData={fullEmpData}
+                      companyData={tenantInfo}
+                    />
                   </div>
                 );
               })()}

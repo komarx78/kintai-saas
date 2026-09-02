@@ -3,11 +3,18 @@ import { supabase } from '../lib/supabase';
 import { 
   Settings, Users, Save, Database, Edit, X, Sparkles, 
   CheckCircle2, Loader2, Building2, FileText, 
-  Activity, ShieldAlert, RefreshCw, ExternalLink, Shield
+  Activity, ShieldAlert, RefreshCw, ExternalLink, Shield,
+  Plus, Trash2, Edit3
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { TaxDocMasterInspector } from '../components/TaxDocMasterInspector';
 import { SocialInsuranceMasterManager } from '../components/SocialInsuranceMasterManager';
+import CustomDocDesignerModal from '../components/CustomDocDesignerModal';
+import { 
+  type CustomDocTemplate, 
+  getCustomDocTemplatesFromStorage, 
+  deleteCustomDocTemplateFromStorage 
+} from '../lib/customDocManager';
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
@@ -35,6 +42,11 @@ export default function SuperAdminDashboard() {
   const [editingTenant, setEditingTenant] = useState<any>(null); // For modal
   const [loadingTenants, setLoadingTenants] = useState(false);
 
+  // 🖨️ 全社公的書類テンプレート一覧 State
+  const [customDocTemplates, setCustomDocTemplates] = useState<CustomDocTemplate[]>([]);
+  const [designerModalOpen, setDesignerModalOpen] = useState(false);
+  const [editingCustomDoc, setEditingCustomDoc] = useState<CustomDocTemplate | null>(null);
+
   // Staff State
   const [staffList, setStaffList] = useState<any[]>([]);
   const [newStaffEmail, setNewStaffEmail] = useState('');
@@ -43,6 +55,7 @@ export default function SuperAdminDashboard() {
     fetchSystemSettings();
     fetchTenants();
     fetchStaff();
+    setCustomDocTemplates(getCustomDocTemplatesFromStorage());
   }, []);
 
   useEffect(() => {
@@ -492,10 +505,104 @@ export default function SuperAdminDashboard() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════════════════ */}
-        {/* 📄 タブ②：国税庁公的帳票マスタ設定（ステップインスペクター） */}
+        {/* 📄 タブ②：国税庁・官公庁公的帳票マスタ設定 ＆ AI書類ビルダー（販売者統括） */}
         {/* ══════════════════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'tax_docs' && (
-          <TaxDocMasterInspector />
+          <div className="space-y-6">
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                  <FileText className="w-6 h-6 text-amber-500" />
+                  官公庁公的帳票マスタ ＆ AI書類ビルダー統制本部
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  販売者本部で登録・更新した公的書類・様式PDFは、<strong>全契約企業（テナント）へ自動配信</strong>され、各社の労務キャビネットから即座に利用可能になります。
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingCustomDoc(null);
+                  setDesignerModalOpen(true);
+                }}
+                className="px-5 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-black text-xs rounded-2xl shadow-lg transition flex items-center gap-2 cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4 text-cyan-300" />
+                ＋ 新しい公的書面・PDF様式を追加する（AI自動配置）
+              </button>
+            </div>
+
+            {/* 📁 全テナント配信中カスタム公的書類一覧 */}
+            {customDocTemplates.length > 0 && (
+              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-black text-sm text-slate-800 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-indigo-600" />
+                    全テナント配信中カスタム公的書類 ({customDocTemplates.length}件)
+                  </h3>
+                  <span className="text-[11px] text-emerald-600 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    ● 全契約企業で即時利用可能
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+                  {customDocTemplates.map(tpl => (
+                    <div key={tpl.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[9px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded border border-indigo-200">
+                            {tpl.category === 'tax' ? '税務' : tpl.category === 'social_insurance' ? '社会保険' : tpl.category === 'labor' ? '労務契約' : '社内様式'}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-mono">
+                            {tpl.fields.length}項目配置
+                          </span>
+                        </div>
+                        <h4 className="font-black text-xs text-slate-900 mt-1.5 line-clamp-1">{tpl.title}</h4>
+                        {tpl.description && <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">{tpl.description}</p>}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-200/60">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingCustomDoc(tpl);
+                            setDesignerModalOpen(true);
+                          }}
+                          className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold text-[10px] rounded-lg border border-slate-200 transition flex items-center gap-1 cursor-pointer"
+                        >
+                          <Edit3 className="w-3 h-3 text-indigo-600" /> 編集・微調整
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`「${tpl.title}」を全社配信から削除しますか？`)) {
+                              deleteCustomDocTemplateFromStorage(tpl.id);
+                              setCustomDocTemplates(prev => prev.filter(t => t.id !== tpl.id));
+                            }
+                          }}
+                          className="px-2 py-1 text-rose-500 hover:bg-rose-50 rounded-lg text-[10px] font-bold transition flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" /> 削除
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 標準帳票: 令和8年分 扶養控除等申告書 公式PDFインスペクター */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="font-black text-xs text-slate-700">
+                  🏛️ 【標準公式帳票】令和8年分 給与所得者の扶養控除等申告書（全国共通インスペクター）
+                </span>
+                <span className="text-[10px] text-slate-400">※ 国税庁原本PDF（A4）印字座標設定</span>
+              </div>
+              <TaxDocMasterInspector />
+            </div>
+          </div>
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════════════════ */}
@@ -772,6 +879,23 @@ export default function SuperAdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* 🖨️ 官公庁公的書類AIカスタムデザイナー モーダル */}
+      <CustomDocDesignerModal
+        isOpen={designerModalOpen}
+        onClose={() => {
+          setDesignerModalOpen(false);
+          setEditingCustomDoc(null);
+        }}
+        onSaved={newTpl => {
+          setCustomDocTemplates(prev => {
+            const filtered = prev.filter(t => t.id !== newTpl.id);
+            return [newTpl, ...filtered];
+          });
+        }}
+        initialTemplate={editingCustomDoc}
+        geminiApiKey={geminiApiKey}
+      />
     </div>
   );
 }
