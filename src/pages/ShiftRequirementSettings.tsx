@@ -521,15 +521,24 @@ const ShiftRequirementSettings: React.FC = () => {
                           const isThisDragging = isRoleDragging && dragState.reqId === req.id;
                           const displayStart = isThisDragging ? dragState.startHour : req.startHour;
                           const displayEnd = isThisDragging ? dragState.endHour : req.endHour;
+                          const duration = displayEnd - displayStart;
 
                           const startPercent = (displayStart / 24) * 100;
-                          const widthPercent = ((displayEnd - displayStart) / 24) * 100;
+                          const widthPercent = (duration / 24) * 100;
 
                           return (
                             <div 
                               key={req.id} 
-                              className={`req-bar absolute top-1 bottom-1 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-lg shadow-md flex items-center justify-between text-xs font-bold transition-shadow group overflow-visible z-10 ${isThisDragging ? 'opacity-90 ring-2 ring-indigo-400 shadow-xl cursor-grabbing' : 'cursor-grab'}`}
+                              className={`req-bar absolute top-1 bottom-1 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-lg shadow-md flex items-center justify-center text-xs font-bold transition-shadow group overflow-visible z-10 ${isThisDragging ? 'opacity-90 ring-2 ring-indigo-400 shadow-xl cursor-grabbing' : 'cursor-grab'}`}
                               style={{ left: `${startPercent}%`, width: `${widthPercent}%` }}
+                              onClick={() => {
+                                setNewReq({
+                                  role: req.role,
+                                  startHour: req.startHour,
+                                  endHour: req.endHour,
+                                  count: req.count
+                                });
+                              }}
                               onMouseDown={(e) => {
                                 if ((e.target as HTMLElement).closest('.resize-handle') || (e.target as HTMLElement).closest('.btn-action')) return;
                                 const containerEl = document.getElementById(`role-timeline-${role}`);
@@ -549,7 +558,7 @@ const ShiftRequirementSettings: React.FC = () => {
                             >
                               {/* 左端リサイズハンドル */}
                               <div 
-                                className="resize-handle absolute left-0 top-0 bottom-0 w-2.5 hover:w-3.5 bg-indigo-800/40 hover:bg-indigo-300 rounded-l-lg cursor-ew-resize transition-all z-20 flex items-center justify-center"
+                                className="resize-handle absolute left-0 top-0 bottom-0 w-2 hover:w-3 bg-indigo-900/30 hover:bg-indigo-300 rounded-l-lg cursor-ew-resize transition-all z-20 flex items-center justify-center"
                                 title="ドラッグして開始時間を変更"
                                 onMouseDown={(e) => {
                                   e.stopPropagation();
@@ -565,46 +574,53 @@ const ShiftRequirementSettings: React.FC = () => {
                                   });
                                 }}
                               >
-                                <div className="w-0.5 h-3 bg-white/70 rounded-full"></div>
+                                <div className="w-0.5 h-2.5 bg-white/70 rounded-full"></div>
                               </div>
 
-                              {/* バー本体コンテンツ（人数＆操作） */}
-                              <div className="flex-1 flex items-center justify-between px-3 overflow-hidden pointer-events-auto">
-                                <span className="text-[11px] font-black text-indigo-100 whitespace-nowrap drop-shadow-sm">
-                                  {displayStart}:00-{displayEnd}:00
-                                </span>
+                              {/* 幅が狭い時（1〜2時間）のスマートコンパクト表示 */}
+                              {duration <= 2 ? (
+                                <div className="px-1 text-center pointer-events-none truncate">
+                                  <span className="text-xs font-black drop-shadow-sm">{req.count}人</span>
+                                </div>
+                              ) : (
+                                /* 幅が広い時（3時間以上）のフル表示 */
+                                <div className="flex-1 flex items-center justify-between px-2 overflow-hidden pointer-events-auto">
+                                  <span className="text-[10px] font-black text-indigo-100 whitespace-nowrap drop-shadow-sm mr-1">
+                                    {displayStart}:00-{displayEnd}:00
+                                  </span>
 
-                                {/* 人数クイックコントローラー */}
-                                <div className="flex items-center gap-1 bg-black/20 backdrop-blur-xs px-1.5 py-0.5 rounded-md border border-white/20">
+                                  {/* 人数クイックコントローラー */}
+                                  <div className="flex items-center gap-1 bg-black/20 backdrop-blur-xs px-1 py-0.5 rounded-md border border-white/20">
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleUpdateCount(req.id, -1); }}
+                                      className="btn-action w-4 h-4 rounded bg-white/20 hover:bg-white/40 flex items-center justify-center text-[10px] font-black cursor-pointer"
+                                      title="人数を減らす"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="text-xs font-black min-w-[16px] text-center">{req.count}人</span>
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleUpdateCount(req.id, 1); }}
+                                      className="btn-action w-4 h-4 rounded bg-white/20 hover:bg-white/40 flex items-center justify-center text-[10px] font-black cursor-pointer"
+                                      title="人数を増やす"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+
                                   <button 
-                                    onClick={(e) => { e.stopPropagation(); handleUpdateCount(req.id, -1); }}
-                                    className="btn-action w-4 h-4 rounded bg-white/20 hover:bg-white/40 flex items-center justify-center text-[10px] font-black cursor-pointer"
-                                    title="人数を減らす"
+                                    onClick={(e) => { e.stopPropagation(); handleRemove(req.id); }}
+                                    className="btn-action p-1 hover:bg-rose-500 rounded text-white/80 hover:text-white transition cursor-pointer ml-1"
+                                    title="この枠を削除"
                                   >
-                                    -
-                                  </button>
-                                  <span className="text-xs font-black min-w-[20px] text-center">{req.count}人</span>
-                                  <button 
-                                    onClick={(e) => { e.stopPropagation(); handleUpdateCount(req.id, 1); }}
-                                    className="btn-action w-4 h-4 rounded bg-white/20 hover:bg-white/40 flex items-center justify-center text-[10px] font-black cursor-pointer"
-                                    title="人数を増やす"
-                                  >
-                                    +
+                                    <Trash2 className="w-3 h-3" />
                                   </button>
                                 </div>
-
-                                <button 
-                                  onClick={(e) => { e.stopPropagation(); handleRemove(req.id); }}
-                                  className="btn-action p-1 hover:bg-rose-500 rounded text-white/80 hover:text-white transition cursor-pointer ml-1"
-                                  title="この枠を削除"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
+                              )}
 
                               {/* 右端リサイズハンドル */}
                               <div 
-                                className="resize-handle absolute right-0 top-0 bottom-0 w-2.5 hover:w-3.5 bg-indigo-800/40 hover:bg-indigo-300 rounded-r-lg cursor-ew-resize transition-all z-20 flex items-center justify-center"
+                                className="resize-handle absolute right-0 top-0 bottom-0 w-2 hover:w-3 bg-indigo-900/30 hover:bg-indigo-300 rounded-r-lg cursor-ew-resize transition-all z-20 flex items-center justify-center"
                                 title="ドラッグして終了時間を伸縮"
                                 onMouseDown={(e) => {
                                   e.stopPropagation();
@@ -620,7 +636,45 @@ const ShiftRequirementSettings: React.FC = () => {
                                   });
                                 }}
                               >
-                                <div className="w-0.5 h-3 bg-white/70 rounded-full"></div>
+                                <div className="w-0.5 h-2.5 bg-white/70 rounded-full"></div>
+                              </div>
+
+                              {/* ホバー時に真上に表示されるスマート吹き出しフローティングツールバー（極小1時間枠でも確実に人数操作可能） */}
+                              <div className="hidden group-hover:flex absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-slate-900/95 text-white px-2.5 py-1.5 rounded-xl shadow-2xl items-center gap-2 z-30 pointer-events-auto border border-slate-700/80 backdrop-blur-md whitespace-nowrap animate-in fade-in zoom-in-95 duration-100">
+                                <span className="text-[11px] font-bold text-slate-300">
+                                  {displayStart}:00-{displayEnd}:00
+                                </span>
+
+                                <div className="flex items-center gap-1 bg-white/10 px-1.5 py-0.5 rounded-lg border border-white/10">
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleUpdateCount(req.id, -1); }}
+                                    className="btn-action w-5 h-5 rounded bg-white/20 hover:bg-indigo-500 flex items-center justify-center text-xs font-black cursor-pointer transition-colors"
+                                    title="人数を減らす"
+                                  >
+                                    -
+                                  </button>
+                                  <span className="text-xs font-black text-amber-300 px-1 min-w-[24px] text-center">
+                                    {req.count}人
+                                  </span>
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleUpdateCount(req.id, 1); }}
+                                    className="btn-action w-5 h-5 rounded bg-white/20 hover:bg-indigo-500 flex items-center justify-center text-xs font-black cursor-pointer transition-colors"
+                                    title="人数を増やす"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleRemove(req.id); }}
+                                  className="btn-action p-1 hover:bg-rose-500 rounded text-slate-400 hover:text-white transition cursor-pointer"
+                                  title="この枠を削除"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* 下向き矢印ポインター */}
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900/95"></div>
                               </div>
                             </div>
                           );
