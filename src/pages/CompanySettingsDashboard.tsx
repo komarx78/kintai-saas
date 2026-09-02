@@ -12,7 +12,8 @@ import {
   extractRulesArticlesFromText, 
   generateOfficialClausesFromNotes, 
   getLaborContractTemplateFromStorage, 
-  saveLaborContractTemplateToStorage 
+  saveLaborContractTemplateToStorage,
+  parsePayrollScheduleFromText
 } from '../lib/laborContractTemplate';
 import { 
   type PositionMaster, 
@@ -742,12 +743,25 @@ export default function CompanySettingsDashboard() {
       // 住所から都道府県コード（滋賀県 = '25' 等）を自動抽出！
       const autoPrefCode = extractPrefectureCodeFromAddress(basicInfo.address) || payrollSettings.prefecture_code || '25';
 
-      // 1. payroll_settings への都道府県コード同期
+      // 雇用契約書の条文テキストから給与設定用の締日・支払日を解析
+      const parsedSched = parsePayrollScheduleFromText(
+        contractTemplate.closing_day_text || '毎月末日',
+        contractTemplate.payment_day_text || '当月25日（金融機関振込）'
+      );
+
+      const mergedPayrollSettings = {
+        ...payrollSettings,
+        closing_day: parsedSched.closing_day,
+        payment_month: parsedSched.payment_month,
+        payment_day: parsedSched.payment_day,
+        prefecture_code: autoPrefCode
+      };
+
+      // 1. payroll_settings への都道府県コード・締切日・支払日同期
       try {
         await supabase.from('payroll_settings').upsert({
           tenant_id: tenantId,
-          ...payrollSettings,
-          prefecture_code: autoPrefCode,
+          ...mergedPayrollSettings,
           updated_at: new Date().toISOString()
         }, { onConflict: 'tenant_id' });
       } catch (pErr) {

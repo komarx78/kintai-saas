@@ -15,6 +15,12 @@ import {
   type PayrollSettings 
 } from '../lib/payrollEngine';
 import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress, isNursingInsuranceApplicable } from '../lib/socialInsurance';
+import { 
+  getLaborContractTemplateFromStorage, 
+  saveLaborContractTemplateToStorage, 
+  formatPayrollScheduleToText, 
+  parsePayrollScheduleFromText 
+} from '../lib/laborContractTemplate';
 
 interface PayslipManagementProps {
   tenantId: string | null;
@@ -436,11 +442,18 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       }
       const prefRateData = getPrefectureRate(activePrefCode);
 
+      // 労働契約書テンプレートとのSSOT連動
+      const contractTpl = getLaborContractTemplateFromStorage(tenantId);
+      const parsedFromContract = parsePayrollScheduleFromText(
+        contractTpl.closing_day_text || '毎月末日', 
+        contractTpl.payment_day_text || '当月25日（金融機関振込）'
+      );
+
       if (setRow) {
         setPayrollSettings({
-          closing_day: setRow.closing_day || 'end_of_month',
-          payment_month: setRow.payment_month || 'current',
-          payment_day: setRow.payment_day || '25',
+          closing_day: setRow.closing_day || parsedFromContract.closing_day || 'end_of_month',
+          payment_month: setRow.payment_month || parsedFromContract.payment_month || 'current',
+          payment_day: setRow.payment_day || parsedFromContract.payment_day || '25',
           prefecture_code: activePrefCode,
           employment_insurance_rate: setRow.employment_insurance_rate ?? 0.006,
           health_insurance_rate: Number((prefRateData.healthRate / 2).toFixed(5)),
@@ -451,6 +464,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       } else {
         setPayrollSettings(prev => ({
           ...prev,
+          closing_day: parsedFromContract.closing_day || 'end_of_month',
+          payment_month: parsedFromContract.payment_month || 'current',
+          payment_day: parsedFromContract.payment_day || '25',
           prefecture_code: activePrefCode,
           health_insurance_rate: Number((prefRateData.healthRate / 2).toFixed(5))
         }));
@@ -1237,7 +1253,20 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
       if (error) throw error;
 
-      alert('会社給与基本設定を保存しました！適用都道府県と保険料率が更新されました。');
+      // 労働契約書テンプレート（laborContractTemplate）側にもSSOT同期保存！
+      const currentTpl = getLaborContractTemplateFromStorage(tenantId);
+      const { closingDayText, paymentDayText } = formatPayrollScheduleToText(
+        payrollSettings.closing_day,
+        payrollSettings.payment_month,
+        payrollSettings.payment_day
+      );
+      saveLaborContractTemplateToStorage(tenantId, {
+        ...currentTpl,
+        closing_day_text: closingDayText,
+        payment_day_text: paymentDayText
+      });
+
+      alert('会社給与基本設定を保存しました！適用都道府県・保険料率および雇用契約書の締切日・支払日条文が完全同期されました。');
       setSettingsModalOpen(false);
       await fetchData();
     } catch (err: any) {

@@ -211,3 +211,57 @@ export function saveLaborContractTemplateToStorage(tId: string, tpl: LaborContra
     console.warn('Failed to save labor_contract_template to LocalStorage:', e);
   }
 }
+
+/**
+ * 給与設定（payroll_settings）の closing_day / payment_month / payment_day から
+ * 雇用契約書用の表記テキスト（closing_day_text / payment_day_text）を自動生成
+ */
+export function formatPayrollScheduleToText(closingDay?: string, paymentMonth?: string, paymentDay?: string): {
+  closingDayText: string;
+  paymentDayText: string;
+} {
+  let closingDayText = '毎月末日';
+  if (closingDay === '20') closingDayText = '毎月20日';
+  else if (closingDay === '25') closingDayText = '毎月25日';
+  else if (closingDay === '15') closingDayText = '毎月15日';
+  else if (closingDay === '10') closingDayText = '毎月10日';
+  else if (closingDay === 'end_of_month') closingDayText = '毎月末日';
+
+  let mPrefix = paymentMonth === 'next' ? '翌月' : '当月';
+  let paymentDayText = `${mPrefix}25日（金融機関振込）`;
+  if (paymentDay === 'end_of_month') paymentDayText = `${mPrefix}末日（金融機関振込）`;
+  else if (paymentDay === '25') paymentDayText = `${mPrefix}25日（金融機関振込）`;
+  else if (paymentDay === '20') paymentDayText = `${mPrefix}20日（金融機関振込）`;
+  else if (paymentDay === '10') paymentDayText = `${mPrefix}10日（金融機関振込）`;
+  else if (paymentDay === '15') paymentDayText = `${mPrefix}15日（金融機関振込）`;
+
+  return { closingDayText, paymentDayText };
+}
+
+/**
+ * 雇用契約書のテキスト表記から給与設定用の closing_day / payment_month / payment_day を解析
+ */
+export function parsePayrollScheduleFromText(closingDayText: string, paymentDayText: string): {
+  closing_day: string;
+  payment_month: 'current' | 'next';
+  payment_day: string;
+} {
+  let closing_day = 'end_of_month';
+  if (closingDayText.includes('20')) closing_day = '20';
+  else if (closingDayText.includes('25')) closing_day = '25';
+  else if (closingDayText.includes('15')) closing_day = '15';
+  else if (closingDayText.includes('10')) closing_day = '10';
+  else if (closingDayText.includes('末')) closing_day = 'end_of_month';
+
+  const payment_month = paymentDayText.includes('翌月') ? 'next' : 'current';
+
+  let payment_day = '25';
+  if (paymentDayText.includes('末')) payment_day = 'end_of_month';
+  else if (paymentDayText.includes('25')) payment_day = '25';
+  else if (paymentDayText.includes('20')) payment_day = '20';
+  else if (paymentDayText.includes('10')) payment_day = '10';
+  else if (paymentDayText.includes('15')) payment_day = '15';
+
+  return { closing_day, payment_month, payment_day };
+}
+
