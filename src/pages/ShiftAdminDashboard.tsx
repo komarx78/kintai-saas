@@ -234,7 +234,13 @@ const ShiftAdminDashboard: React.FC = () => {
 
           // 大元労務台帳詳細プロファイルへの登録 (employee_onboarding_profiles)
           try {
-            await supabase.from('employee_onboarding_profiles').upsert({
+            const { data: existProfile } = await supabase
+              .from('employee_onboarding_profiles')
+              .select('id')
+              .eq('user_id', uid)
+              .maybeSingle();
+
+            const profilePayload = {
               user_id: uid,
               tenant_id: tenantId,
               employment_status: 'active',
@@ -245,14 +251,26 @@ const ShiftAdminDashboard: React.FC = () => {
               phone_number: `090-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
               address: '東京都港区芝公園1-1-1',
               updated_at: new Date().toISOString()
-            }, { onConflict: 'tenant_id,user_id' });
+            };
+
+            if (existProfile) {
+              await supabase.from('employee_onboarding_profiles').update(profilePayload).eq('id', existProfile.id);
+            } else {
+              await supabase.from('employee_onboarding_profiles').insert(profilePayload);
+            }
           } catch (profileErr) {
-            console.warn('employee_onboarding_profiles upsert skipped:', profileErr);
+            console.warn('employee_onboarding_profiles save skipped:', profileErr);
           }
 
           // シフト要員設定への連動 (shift_employee_settings)
           try {
-            await supabase.from('shift_employee_settings').upsert({
+            const { data: existSetting } = await supabase
+              .from('shift_employee_settings')
+              .select('id')
+              .eq('user_id', uid)
+              .maybeSingle();
+
+            const settingPayload = {
               tenant_id: tenantId,
               user_id: uid,
               hire_date: '2024-04-01',
@@ -261,9 +279,15 @@ const ShiftAdminDashboard: React.FC = () => {
               default_role: staff.roleName,
               base_wage: staff.wage,
               updated_at: new Date().toISOString()
-            }, { onConflict: 'tenant_id,user_id' });
+            };
+
+            if (existSetting) {
+              await supabase.from('shift_employee_settings').update(settingPayload).eq('id', existSetting.id);
+            } else {
+              await supabase.from('shift_employee_settings').insert(settingPayload);
+            }
           } catch (settingErr) {
-            console.warn('shift_employee_settings upsert fallback:', settingErr);
+            console.warn('shift_employee_settings save fallback:', settingErr);
           }
         }
       }

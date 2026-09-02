@@ -97,8 +97,14 @@ const ShiftEmployeeMaster: React.FC = () => {
       }));
 
       if (upserts.length > 0) {
-        const { error } = await supabase.from('shift_employee_settings').upsert(upserts, { onConflict: 'tenant_id,user_id' });
-        if (error) throw error;
+        for (const item of upserts) {
+          const { data: exist } = await supabase.from('shift_employee_settings').select('id').eq('user_id', item.user_id).maybeSingle();
+          if (exist) {
+            await supabase.from('shift_employee_settings').update(item).eq('id', exist.id);
+          } else {
+            await supabase.from('shift_employee_settings').insert(item);
+          }
+        }
       }
       
       alert('保存しました');

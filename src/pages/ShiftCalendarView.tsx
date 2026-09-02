@@ -113,8 +113,13 @@ const ShiftCalendarView: React.FC = () => {
       (usersData || []).forEach((u: any) => { userMap[u.id] = u.name; });
       
       const formattedShifts = (shiftsData || []).map((s: any) => ({ ...s, user: { name: userMap[s.user_id] || '不明' }, status: s.status || 'confirmed' }));
+      
+      // すでにドラフトまたは確定シフトが割り当てられているユーザー・日付のキーSet
+      const assignedKeys = new Set(formattedShifts.map((s: any) => `${s.target_date}_${s.user_id}`));
+
+      // まだシフトが割り当てられていない未処理の希望のみを抽出
       const formattedRequests = (requestsData || [])
-        .filter((r: any) => r.available_start_time && r.available_end_time)
+        .filter((r: any) => r.available_start_time && r.available_end_time && !assignedKeys.has(`${r.target_date}_${r.user_id}`))
         .map((r: any) => ({
           id: r.id,
           user_id: r.user_id,
