@@ -32,7 +32,6 @@ const ShiftAdminDashboard: React.FC = () => {
   const [isSavingLock, setIsSavingLock] = useState(false);
   const [isSavingAutoLock, setIsSavingAutoLock] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
 
   // 1. シフトデータの完全リセット（初期化）
   const handleResetAllShiftData = async () => {
@@ -53,283 +52,6 @@ const ShiftAdminDashboard: React.FC = () => {
       alert('リセットに失敗しました: ' + err.message);
     } finally {
       setIsResetting(false);
-    }
-  };
-
-  // 2. 画像に準拠した40名規模のデモデータ一括投入
-  const handleSeedDummyData = async () => {
-    if (!window.confirm('既存のシフト・希望をクリアし、画像準拠の【ホール1名・キッチン1名・レジ2名・清掃朝夜各1名】の必要枠および【40名スタッフ・リアルなシフト希望】を一括投入します。よろしいですか？')) return;
-    setIsSeeding(true);
-    try {
-      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
-      if (!tenantId) {
-        alert('テナントIDが取得できませんでした。');
-        return;
-      }
-
-      // 既存シフト＆希望をクリア
-      await supabase.from('advanced_shifts').delete().eq('tenant_id', tenantId);
-      await supabase.from('advanced_shift_requests').delete().eq('tenant_id', tenantId);
-
-      // 1. 役割（ロール）マスタ作成（画像準拠の4役割）
-      const rolesToInsert = [
-        { tenant_id: tenantId, name: 'ホール', color: '#4F46E5', display_order: 1 },
-        { tenant_id: tenantId, name: 'キッチン', color: '#EA580C', display_order: 2 },
-        { tenant_id: tenantId, name: 'レジ', color: '#8B5CF6', display_order: 3 },
-        { tenant_id: tenantId, name: '清掃', color: '#06B6D4', display_order: 4 }
-      ];
-      await supabase.from('shift_roles').upsert(rolesToInsert, { onConflict: 'tenant_id,name' });
-
-      // 2. 必要人数枠マスタ作成（平日＆土日すべて画像通りの枠）
-      const reqsToInsert: any[] = [];
-      [0, 1, 2, 3, 4, 5, 6].forEach(dow => {
-        reqsToInsert.push({
-          tenant_id: tenantId,
-          day_of_week: dow,
-          role: 'ホール',
-          start_time: '09:00:00',
-          end_time: '18:00:00',
-          required_count: 1
-        });
-        reqsToInsert.push({
-          tenant_id: tenantId,
-          day_of_week: dow,
-          role: 'キッチン',
-          start_time: '09:00:00',
-          end_time: '18:00:00',
-          required_count: 1
-        });
-        reqsToInsert.push({
-          tenant_id: tenantId,
-          day_of_week: dow,
-          role: 'レジ',
-          start_time: '09:00:00',
-          end_time: '18:00:00',
-          required_count: 2
-        });
-        reqsToInsert.push({
-          tenant_id: tenantId,
-          day_of_week: dow,
-          role: '清掃',
-          start_time: '07:00:00',
-          end_time: '10:00:00',
-          required_count: 1
-        });
-        reqsToInsert.push({
-          tenant_id: tenantId,
-          day_of_week: dow,
-          role: '清掃',
-          start_time: '19:00:00',
-          end_time: '22:00:00',
-          required_count: 1
-        });
-      });
-
-      await supabase.from('advanced_shift_requirements').delete().eq('tenant_id', tenantId).is('target_date', null);
-      await supabase.from('advanced_shift_requirements').insert(reqsToInsert);
-
-      // 3. 40名スタッフの定義（小刻みなリアル希望時間帯：午前/昼/午後/フル/早朝/夜間）
-      const dummyStaffs = [
-        // ホール担当 (12名)
-        { name: '佐藤 裕美', roleName: 'ホール', dept: 'ホール運営部', wage: 1200, priority: 5, maxH: 25, startT: '09:00:00', endT: '14:00:00', days: [1, 2, 3, 4, 5] },
-        { name: '田中 健太', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 4, maxH: 25, startT: '13:00:00', endT: '18:00:00', days: [2, 3, 4, 5, 6] },
-        { name: '高橋 優香', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 4, maxH: 25, startT: '10:00:00', endT: '15:00:00', days: [0, 1, 4, 5, 6] },
-        { name: '渡辺 直樹', roleName: 'ホール', dept: 'ホール運営部', wage: 1250, priority: 5, maxH: 40, startT: '09:00:00', endT: '18:00:00', days: [0, 1, 2, 3, 6] },
-        { name: '伊藤 結衣', roleName: 'ホール', dept: 'ホール運営部', wage: 1100, priority: 3, maxH: 15, startT: '14:00:00', endT: '18:00:00', days: [1, 3, 5] },
-        { name: '山本 拓也', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 3, maxH: 15, startT: '09:00:00', endT: '13:00:00', days: [2, 4, 6] },
-        { name: '中村 美咲', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 4, maxH: 24, startT: '10:00:00', endT: '16:00:00', days: [0, 2, 3, 5] },
-        { name: '小林 翔平', roleName: 'ホール', dept: 'ホール運営部', wage: 1200, priority: 4, maxH: 24, startT: '12:00:00', endT: '18:00:00', days: [1, 2, 4, 6] },
-        { name: '加藤 綾乃', roleName: 'ホール', dept: 'ホール運営部', wage: 1100, priority: 3, maxH: 15, startT: '13:00:00', endT: '18:00:00', days: [0, 3, 5] },
-        { name: '吉田 大地', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 3, maxH: 20, startT: '09:00:00', endT: '14:00:00', days: [1, 4, 6] },
-        { name: '山田 浩二', roleName: 'ホール', dept: 'ホール運営部', wage: 1200, priority: 4, maxH: 20, startT: '14:00:00', endT: '18:00:00', days: [0, 2, 5] },
-        { name: '佐々木 葵', roleName: 'ホール', dept: 'ホール運営部', wage: 1150, priority: 3, maxH: 16, startT: '11:00:00', endT: '15:00:00', days: [1, 3, 6] },
-
-        // キッチン担当 (10名)
-        { name: '鈴木 一郎', roleName: 'キッチン', dept: '調理厨房部', wage: 1350, priority: 5, maxH: 40, startT: '09:00:00', endT: '18:00:00', days: [1, 2, 3, 4, 5] },
-        { name: '斉藤 健二', roleName: 'キッチン', dept: '調理厨房部', wage: 1300, priority: 5, maxH: 40, startT: '09:00:00', endT: '18:00:00', days: [0, 1, 2, 3, 6] },
-        { name: '松本 恭子', roleName: 'キッチン', dept: '調理厨房部', wage: 1250, priority: 4, maxH: 25, startT: '09:00:00', endT: '14:00:00', days: [2, 3, 4, 5, 6] },
-        { name: '井上 蓮', roleName: 'キッチン', dept: '調理厨房部', wage: 1200, priority: 3, maxH: 20, startT: '13:00:00', endT: '18:00:00', days: [0, 2, 4, 6] },
-        { name: '木村 友美', roleName: 'キッチン', dept: '調理厨房部', wage: 1250, priority: 4, maxH: 20, startT: '10:00:00', endT: '15:00:00', days: [1, 3, 5] },
-        { name: '林 龍平', roleName: 'キッチン', dept: '調理厨房部', wage: 1300, priority: 4, maxH: 35, startT: '09:00:00', endT: '18:00:00', days: [0, 1, 4, 5] },
-        { name: '清水 麻美', roleName: 'キッチン', dept: '調理厨房部', wage: 1200, priority: 3, maxH: 16, startT: '14:00:00', endT: '18:00:00', days: [2, 3, 6] },
-        { name: '山口 慎太郎', roleName: 'キッチン', dept: '調理厨房部', wage: 1250, priority: 4, maxH: 24, startT: '11:00:00', endT: '17:00:00', days: [1, 4, 6] },
-        { name: '池田 美優', roleName: 'キッチン', dept: '調理厨房部', wage: 1200, priority: 3, maxH: 16, startT: '09:00:00', endT: '13:00:00', days: [0, 3, 5] },
-        { name: '橋本 陽介', roleName: 'キッチン', dept: '調理厨房部', wage: 1300, priority: 4, maxH: 24, startT: '12:00:00', endT: '18:00:00', days: [2, 5, 6] },
-
-        // レジ担当 (12名)
-        { name: '山崎 栞', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 5, maxH: 25, startT: '09:00:00', endT: '14:00:00', days: [1, 2, 3, 4, 5] },
-        { name: '森 淳', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1200, priority: 5, maxH: 25, startT: '13:00:00', endT: '18:00:00', days: [0, 1, 2, 3, 6] },
-        { name: '阿部 さくら', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 4, maxH: 25, startT: '09:00:00', endT: '14:00:00', days: [2, 3, 4, 5, 6] },
-        { name: '石川 雅人', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1100, priority: 3, maxH: 20, startT: '14:00:00', endT: '18:00:00', days: [0, 1, 4, 5] },
-        { name: '前田 菜月', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 4, maxH: 20, startT: '10:00:00', endT: '15:00:00', days: [1, 3, 5, 6] },
-        { name: '藤田 涼太', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1100, priority: 3, maxH: 15, startT: '13:00:00', endT: '18:00:00', days: [0, 2, 4] },
-        { name: '後藤 萌', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 4, maxH: 16, startT: '09:00:00', endT: '13:00:00', days: [1, 2, 5, 6] },
-        { name: '岡田 雄介', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 3, maxH: 16, startT: '14:00:00', endT: '18:00:00', days: [0, 3, 4] },
-        { name: '長谷川 凛', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1100, priority: 3, maxH: 20, startT: '09:00:00', endT: '14:00:00', days: [2, 4, 6] },
-        { name: '村上 和也', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1200, priority: 4, maxH: 25, startT: '13:00:00', endT: '18:00:00', days: [1, 3, 5] },
-        { name: '近藤 恵', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1150, priority: 4, maxH: 35, startT: '09:00:00', endT: '18:00:00', days: [0, 2, 5, 6] },
-        { name: '石井 達也', roleName: 'レジ', dept: 'フロント・レジ部', wage: 1100, priority: 3, maxH: 35, startT: '09:00:00', endT: '18:00:00', days: [1, 4, 6] },
-
-        // 清掃担当 (6名)
-        { name: '遠藤 勝', roleName: '清掃', dept: '環境整備・清掃部', wage: 1150, priority: 5, maxH: 15, startT: '07:00:00', endT: '10:00:00', days: [1, 2, 3, 4, 5] },
-        { name: '青木 テル', roleName: '清掃', dept: '環境整備・清掃部', wage: 1100, priority: 4, maxH: 15, startT: '07:00:00', endT: '10:00:00', days: [0, 2, 4, 6] },
-        { name: '坂本 昭夫', roleName: '清掃', dept: '環境整備・清掃部', wage: 1150, priority: 5, maxH: 15, startT: '07:00:00', endT: '10:00:00', days: [0, 1, 3, 5, 6] },
-        { name: '斉藤 清', roleName: '清掃', dept: '環境整備・清掃部', wage: 1100, priority: 4, maxH: 15, startT: '19:00:00', endT: '22:00:00', days: [1, 2, 3, 4, 5] },
-        { name: '福田 トメ', roleName: '清掃', dept: '環境整備・清掃部', wage: 1080, priority: 3, maxH: 15, startT: '19:00:00', endT: '22:00:00', days: [0, 2, 4, 6] },
-        { name: '西村 重三', roleName: '清掃', dept: '環境整備・清掃部', wage: 1100, priority: 4, maxH: 15, startT: '19:00:00', endT: '22:00:00', days: [0, 1, 3, 5, 6] }
-      ];
-
-      const createdUserList: { id: string; name: string; roleName: string; startT: string; endT: string; days: number[] }[] = [];
-
-      for (let idx = 0; idx < dummyStaffs.length; idx++) {
-        const staff = dummyStaffs[idx];
-        const email = `staff${(idx + 1).toString().padStart(2, '0')}.${tenantId.substring(0, 4)}@example.com`;
-
-        const { data: existUser } = await supabase
-          .from('users')
-          .select('id')
-          .eq('tenant_id', tenantId)
-          .eq('name', staff.name)
-          .maybeSingle();
-
-        let uid = existUser?.id;
-        if (!uid) {
-          const generatedUid = crypto.randomUUID();
-          const { data: newUser, error: userError } = await supabase
-            .from('users')
-            .insert({
-              id: generatedUid,
-              tenant_id: tenantId,
-              name: staff.name,
-              email: email,
-              role: 'user',
-              department: staff.dept,
-              employment_type: staff.wage >= 1300 ? 'full-time' : 'part-time',
-              join_date: '2024-04-01',
-              has_shift_access: true
-            })
-            .select('id')
-            .single();
-          if (userError) {
-            console.error('User insert error:', userError);
-            throw userError;
-          }
-          uid = newUser?.id || generatedUid;
-        } else {
-          await supabase.from('users').update({ 
-            has_shift_access: true,
-            department: staff.dept,
-            employment_type: staff.wage >= 1300 ? 'full-time' : 'part-time',
-            join_date: '2024-04-01'
-          }).eq('id', uid);
-        }
-
-        if (uid) {
-          createdUserList.push({
-            id: uid,
-            name: staff.name,
-            roleName: staff.roleName,
-            startT: staff.startT,
-            endT: staff.endT,
-            days: staff.days
-          });
-
-          // 大元労務台帳詳細プロファイルへの登録 (employee_onboarding_profiles)
-          try {
-            const { data: existProfile } = await supabase
-              .from('employee_onboarding_profiles')
-              .select('id')
-              .eq('user_id', uid)
-              .maybeSingle();
-
-            const profilePayload = {
-              user_id: uid,
-              tenant_id: tenantId,
-              employment_status: 'active',
-              salary_type: staff.wage >= 1300 ? 'monthly' : 'hourly',
-              base_salary: staff.wage >= 1300 ? 250000 : 0,
-              hourly_wage: staff.wage,
-              birth_date: '1996-05-15',
-              phone_number: `090-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`,
-              address: '東京都港区芝公園1-1-1',
-              updated_at: new Date().toISOString()
-            };
-
-            if (existProfile) {
-              await supabase.from('employee_onboarding_profiles').update(profilePayload).eq('id', existProfile.id);
-            } else {
-              await supabase.from('employee_onboarding_profiles').insert(profilePayload);
-            }
-          } catch (profileErr) {
-            console.warn('employee_onboarding_profiles save skipped:', profileErr);
-          }
-
-          // シフト要員設定への連動 (shift_employee_settings)
-          try {
-            const { data: existSetting } = await supabase
-              .from('shift_employee_settings')
-              .select('id')
-              .eq('user_id', uid)
-              .maybeSingle();
-
-            const settingPayload = {
-              tenant_id: tenantId,
-              user_id: uid,
-              hire_date: '2024-04-01',
-              max_hours_per_week: staff.maxH,
-              priority_score: staff.priority,
-              default_role: staff.roleName,
-              base_wage: staff.wage,
-              updated_at: new Date().toISOString()
-            };
-
-            if (existSetting) {
-              await supabase.from('shift_employee_settings').update(settingPayload).eq('id', existSetting.id);
-            } else {
-              await supabase.from('shift_employee_settings').insert(settingPayload);
-            }
-          } catch (settingErr) {
-            console.warn('shift_employee_settings save fallback:', settingErr);
-          }
-        }
-      }
-
-      // 4. 今週＋翌週（14日間：月〜日×2）の小刻みシフト希望を一括生成
-      const requestsToInsert: any[] = [];
-
-      for (let i = 0; i < 14; i++) {
-        const d = addDays(weekStart, i);
-        const dStr = format(d, 'yyyy-MM-dd');
-        const dow = d.getDay(); // 0:日, 1:月, ... 6:土
-
-        createdUserList.forEach((staff) => {
-          if (staff.days.includes(dow)) {
-            requestsToInsert.push({
-              tenant_id: tenantId,
-              user_id: staff.id,
-              target_date: dStr,
-              available_start_time: staff.startT,
-              available_end_time: staff.endT,
-              preferred_role: staff.roleName,
-              status: 'submitted'
-            });
-          }
-        });
-      }
-
-      if (requestsToInsert.length > 0) {
-        const { error: reqError } = await supabase.from('advanced_shift_requests').insert(requestsToInsert);
-        if (reqError) throw reqError;
-      }
-
-      alert('🎉 40名規模の小刻みでリアルなデモデータセットを一括投入しました！\n\n【内訳】\n・午前(9-14時) / 午後(13-18時) / フル(9-18時) / 早朝(7-10時) / 夜間(19-22時)\n・14日間分のシフト希望：' + requestsToInsert.length + '件\n\n「⚡ シフトを自動生成する (AI)」を押して動作をご確認ください！');
-      setGenerationResult(null);
-      await fetchStats();
-    } catch (err: any) {
-      console.error('Seed dummy data error:', err);
-      alert('ダミーデータの投入に失敗しました: ' + err.message);
-    } finally {
-      setIsSeeding(false);
     }
   };
 
@@ -633,15 +355,6 @@ const ShiftAdminDashboard: React.FC = () => {
                 全リセット
               </button>
               <button 
-                onClick={handleSeedDummyData} 
-                disabled={isSeeding}
-                className="bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md px-3.5 py-2 rounded-xl flex items-center transition font-black text-xs cursor-pointer disabled:opacity-50"
-                title="【大元台帳40名・画像通りの必要枠・今週のシフト希望】を一括セットアップします"
-              >
-                {isSeeding ? <div className="animate-spin w-3.5 h-3.5 border-2 border-slate-950 border-t-slate-950 rounded-full mr-1.5"></div> : <span className="mr-1">🪄</span>}
-                40名台帳＆シフト投入
-              </button>
-              <button 
                 onClick={handlePublishDrafts} 
                 disabled={isPublishing}
                 className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-md px-3.5 py-2 rounded-xl flex items-center transition font-bold text-xs disabled:opacity-50 cursor-pointer"
@@ -741,21 +454,6 @@ const ShiftAdminDashboard: React.FC = () => {
                     </button>
                   </div>
                 </div>
-              ) : submissionRate === 0 ? (
-                <div className="space-y-3">
-                  <button 
-                    onClick={handleSeedDummyData} 
-                    disabled={isSeeding}
-                    className="w-full bg-amber-400 text-slate-950 font-black py-3.5 rounded-xl shadow-lg hover:bg-amber-300 hover:scale-[1.02] transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
-                  >
-                    {isSeeding ? (
-                      <><div className="animate-spin w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full mr-3"></div>40名従業員台帳＆シフト投入中...</>
-                    ) : (
-                      <><span>🪄</span><span className="ml-2">40名従業員台帳＆シフトデモデータを投入</span></>
-                    )}
-                  </button>
-                  <p className="text-[11px] text-indigo-200 text-center">※大元従業員台帳（40名）・時給・4役割の必要枠・今週の希望が一括セットされます</p>
-                </div>
               ) : (
                 <button 
                   onClick={handleGenerate} 
@@ -765,7 +463,7 @@ const ShiftAdminDashboard: React.FC = () => {
                   {isGenerating ? (
                     <><div className="animate-spin w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full mr-3"></div>AIがシフトを自動割り当て中...</>
                   ) : (
-                    <>⚡ シフトを自動生成する (AI)</>
+                    <><Zap className="w-5 h-5 mr-2 text-amber-500 fill-amber-500" />⚡ シフトを自動生成する (AI)</>
                   )}
                 </button>
               )}
