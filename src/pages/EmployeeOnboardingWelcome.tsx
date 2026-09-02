@@ -794,7 +794,9 @@ export default function EmployeeOnboardingWelcome() {
             <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 space-y-3 text-xs">
               <div className="flex justify-between items-center pb-2 border-b border-slate-800 text-[11px]">
                 <span className="text-slate-400">事業者（甲）:</span>
-                <span className="font-bold text-white">{tenantInfo?.name || '株式会社KAP'} 代表取締役 {tenantInfo?.representative_name || '駒井 秀一朗'}</span>
+                <span className="font-bold text-white">
+                  {tenantInfo?.name || '株式会社KAP'} 代表取締役 {(tenantInfo?.representative_name || '駒井 秀一朗').replace(/^代表取締役\s*/, '')}
+                </span>
               </div>
 
               <div className="grid grid-cols-1 gap-2.5 text-slate-300">
@@ -853,6 +855,14 @@ export default function EmployeeOnboardingWelcome() {
                     </span>
                   </div>
                 )}
+
+                {/* 🚆 通勤交通費の明示 */}
+                <div className="bg-slate-900/80 p-2.5 rounded-xl border border-cyan-500/30 flex justify-between items-center">
+                  <span className="text-slate-400">🚆 通勤交通費:</span>
+                  <span className="font-bold text-cyan-300 text-right text-[11px]">
+                    実費全額支給（月額上限 150,000 円まで非課税 / Step 3にて確定）
+                  </span>
+                </div>
 
                 <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
                   <span className="text-slate-400">割増賃金率:</span>
