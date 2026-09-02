@@ -45,9 +45,26 @@ export default function EmployeeOnboardingWelcome() {
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
   const [isAiRouting, setIsAiRouting] = useState(false);
   const [ocrSuccessMsg, setOcrSuccessMsg] = useState<string | null>(null);
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
+
+  // 0. 労働条件通知書 兼 雇用契約書 電子合意State
+  const [contractAgreement, setContractAgreement] = useState({
+    isAgreed: false,
+    agreedAt: '',
+    employeeSignatureName: '',
+    employmentType: '正社員（無期雇用）',
+    baseSalary: 250000,
+    hourlyWage: 1200,
+    department: '営業部',
+    workLocation: '本社 および 会社が指定する就業場所',
+    workHours: '09:00 〜 18:00（休憩60分・実働8時間）',
+    overtimePolicy: 'あり（時間外割増 25%、深夜割増 25%、休日割増 35%）',
+    holidayPolicy: '土曜日、日曜日、国民の祝日、年末年始休暇、夏季休暇、年次有給休暇',
+    socialInsurance: '健康保険・厚生年金保険・雇用保険・労災保険に加入',
+    joinDate: '2026-04-01'
+  });
 
   // 📍 地区推測 ＆ 正式駅名・路線バス停サジェスト State（全国マルチ地域対応）
   const [originRegionHint, setOriginRegionHint] = useState<string>('京都府・大阪府・東京都ほか');
@@ -432,7 +449,7 @@ export default function EmployeeOnboardingWelcome() {
   const handleSubmitAll = async () => {
     if (!basicData.name.trim()) {
       alert('氏名を入力してください。');
-      setCurrentStep(1);
+      setCurrentStep(2);
       return;
     }
 
@@ -453,6 +470,27 @@ export default function EmployeeOnboardingWelcome() {
       const { data: { user } } = await supabase.auth.getUser();
       const userId = user?.id || `anon_${Date.now()}`;
       const effectiveTenantId = tenantId || (await supabase.rpc('get_user_tenant_id')).data;
+
+      // 0. 労働条件通知書 兼 雇用契約書（労働者 電子合意締結）の送信
+      await supabase.from('employee_document_submissions').insert({
+        tenant_id: effectiveTenantId,
+        user_id: userId,
+        document_type: 'labor_contract',
+        title: '労働条件通知書 兼 雇用契約書（労働者 電子合意締結済）',
+        data: {
+          name: basicData.name,
+          is_agreed: contractAgreement.isAgreed,
+          agreed_at: contractAgreement.agreedAt || new Date().toISOString(),
+          signature_name: contractAgreement.employeeSignatureName || basicData.name,
+          employment_type: contractAgreement.employmentType,
+          base_salary: contractAgreement.baseSalary,
+          hourly_wage: contractAgreement.hourlyWage,
+          work_location: contractAgreement.workLocation,
+          work_hours: contractAgreement.workHours,
+          join_date: contractAgreement.joinDate
+        },
+        status: 'pending'
+      });
 
       // 1. 住民票の添付（ある場合）
       if (basicData.residentCertificatePhoto) {
@@ -610,11 +648,12 @@ export default function EmployeeOnboardingWelcome() {
 
           <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-left text-xs space-y-2 text-slate-300">
             <div className="font-bold text-white mb-1">📋 提出された公式書類:</div>
-            <div>✅ 1. 本人基本情報 ＆ 住民票原本</div>
-            <div>✅ 2. 通勤交通費 支給申請書（複数乗り継ぎ {commutingData.segments.length} 区間）</div>
-            <div>✅ 3. 給与振込口座 登録届出書 兼 通帳確認</div>
-            <div>✅ 4. 令和8年分 扶養控除等（異動）申告書</div>
-            <div>✅ 5. マイナンバー ＆ 年金・雇用保険届出</div>
+            <div>✅ 1. 労働条件通知書 兼 雇用契約書（電子合意締結済）</div>
+            <div>✅ 2. 本人基本情報 ＆ 住民票原本</div>
+            <div>✅ 3. 通勤交通費 支給申請書（複数乗り継ぎ {commutingData.segments.length} 区間）</div>
+            <div>✅ 4. 給与振込口座 登録届出書 兼 通帳確認</div>
+            <div>✅ 5. 令和8年分 扶養控除等（異動）申告書</div>
+            <div>✅ 6. マイナンバー ＆ 年金・雇用保険届出</div>
           </div>
 
           <button
@@ -642,22 +681,24 @@ export default function EmployeeOnboardingWelcome() {
           </div>
         </div>
         <div className="text-[10px] bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700 font-bold">
-          Step {currentStep} / 5
+          Step {currentStep} / 6
         </div>
       </header>
 
       {/* ステップインジケーター */}
       <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 overflow-x-auto">
-        <div className="flex items-center justify-between max-w-lg mx-auto text-[10px] font-bold text-slate-400 min-w-[320px]">
-          <span className={currentStep === 1 ? 'text-indigo-400 font-black' : ''}>1.基本・住民票</span>
+        <div className="flex items-center justify-between max-w-lg mx-auto text-[10px] font-bold text-slate-400 min-w-[360px]">
+          <span className={currentStep === 1 ? 'text-indigo-400 font-black' : ''}>1.雇用契約合意</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
-          <span className={currentStep === 2 ? 'text-indigo-400 font-black' : ''}>2.通勤・乗り継ぎ</span>
+          <span className={currentStep === 2 ? 'text-indigo-400 font-black' : ''}>2.基本・住民票</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
-          <span className={currentStep === 3 ? 'text-indigo-400 font-black' : ''}>3.口座・通帳</span>
+          <span className={currentStep === 3 ? 'text-indigo-400 font-black' : ''}>3.通勤・交通費</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
-          <span className={currentStep === 4 ? 'text-indigo-400 font-black' : ''}>4.扶養控除申告</span>
+          <span className={currentStep === 4 ? 'text-indigo-400 font-black' : ''}>4.口座・通帳</span>
           <ChevronRight className="w-3 h-3 text-slate-600" />
-          <span className={currentStep === 5 ? 'text-indigo-400 font-black' : ''}>5.個人番号</span>
+          <span className={currentStep === 5 ? 'text-indigo-400 font-black' : ''}>5.扶養控除申告</span>
+          <ChevronRight className="w-3 h-3 text-slate-600" />
+          <span className={currentStep === 6 ? 'text-indigo-400 font-black' : ''}>6.個人番号</span>
         </div>
       </div>
 
@@ -687,13 +728,151 @@ export default function EmployeeOnboardingWelcome() {
       {/* フォーム本体 */}
       <main className="flex-1 max-w-lg w-full mx-auto p-4 space-y-4">
         
-        {/* Step 1: 基本情報 ＆ 住民票の添付（AI自動入力） */}
+        {/* Step 1: 📄 労働条件通知書 兼 雇用契約書の確認 ＆ 電子合意・署名 */}
         {currentStep === 1 && (
+          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-indigo-500/20 text-indigo-400 text-[10px] font-black px-2 py-0.5 rounded-full border border-indigo-500/30">
+                  Step 1 / 6
+                </span>
+                <span className="text-[11px] text-slate-400">労働基準法第15条準拠</span>
+              </div>
+              <h3 className="font-black text-white text-base mt-1 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-400" />
+                労働条件通知書 兼 雇用契約書の確認・電子合意
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-1">
+                会社から提示された労働条件および給与・待遇をご確認の上、最下部にて電子署名・合意を行ってください。
+              </p>
+            </div>
+
+            {/* 労働条件プレビューカード */}
+            <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 space-y-3 text-xs">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-800 text-[11px]">
+                <span className="text-slate-400">事業者（甲）:</span>
+                <span className="font-bold text-white">{tenantInfo?.name || '株式会社KAP'} 代表取締役 {tenantInfo?.representative_name || '駒井 秀一朗'}</span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2.5 text-slate-300">
+                <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
+                  <span className="text-slate-400">雇用形態 / 契約期間:</span>
+                  <span className="font-bold text-indigo-300">{contractAgreement.employmentType}（期間の定めなし）</span>
+                </div>
+
+                <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
+                  <span className="text-slate-400">基本給（月額 / 時給）:</span>
+                  <span className="font-black text-emerald-400 font-mono text-sm">
+                    ¥{contractAgreement.baseSalary.toLocaleString()} / 月
+                    <span className="text-[10px] text-slate-400 font-normal ml-1">（時給換算 約¥{contractAgreement.hourlyWage.toLocaleString()}）</span>
+                  </span>
+                </div>
+
+                <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
+                  <span className="text-slate-400">割増賃金率:</span>
+                  <span className="font-bold text-slate-200">時間外 25% / 深夜 25% / 休日 35%</span>
+                </div>
+
+                <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
+                  <span className="text-slate-400">就業場所:</span>
+                  <span className="font-bold text-slate-200 text-right">{contractAgreement.workLocation}</span>
+                </div>
+
+                <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
+                  <span className="text-slate-400">所定労働時間:</span>
+                  <span className="font-bold text-slate-200">{contractAgreement.workHours}</span>
+                </div>
+
+                <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
+                  <span className="text-slate-400">休日・休暇:</span>
+                  <span className="font-bold text-slate-200 text-right">{contractAgreement.holidayPolicy}</span>
+                </div>
+
+                <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
+                  <span className="text-slate-400">社会保険等の適用:</span>
+                  <span className="font-bold text-emerald-400">{contractAgreement.socialInsurance}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* ✍️ 労働者 電子署名・合意エリア */}
+            <div className="bg-gradient-to-br from-indigo-950/60 to-slate-900 p-4 rounded-2xl border border-indigo-500/30 space-y-3">
+              <h4 className="font-black text-white text-xs flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                労働者（乙）電子署名 ＆ 締結合意
+              </h4>
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-300 block font-bold">
+                  ご署名（あなたのお名前を入力してください）<span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="例: テスト 太郎"
+                  value={contractAgreement.employeeSignatureName || basicData.name}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setContractAgreement(prev => ({ ...prev, employeeSignatureName: val }));
+                    setBasicData(prev => ({ ...prev, name: val }));
+                  }}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-bold focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <label className="flex items-start gap-2.5 p-2.5 bg-slate-950/60 rounded-xl border border-indigo-500/20 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={contractAgreement.isAgreed}
+                  onChange={e => {
+                    const checked = e.target.checked;
+                    setContractAgreement(prev => ({
+                      ...prev,
+                      isAgreed: checked,
+                      agreedAt: checked ? new Date().toISOString() : ''
+                    }));
+                  }}
+                  className="w-4 h-4 rounded text-indigo-600 mt-0.5"
+                />
+                <span className="text-[11px] text-slate-200 leading-snug">
+                  本書面の交付を受け、提示された労働条件および雇用契約内容について説明を受け合意のうえ、本雇用契約を締結いたします。
+                </span>
+              </label>
+
+              {contractAgreement.isAgreed && (
+                <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2 text-emerald-400 text-[11px] font-bold">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>電子署名が有効化されました（合意日時: {new Date().toLocaleString('ja-JP')}）</span>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                if (!basicData.name.trim() && !contractAgreement.employeeSignatureName.trim()) {
+                  alert('ご署名（氏名）を入力してください。');
+                  return;
+                }
+                if (!contractAgreement.isAgreed) {
+                  alert('雇用契約内容の確認チェックボックスにチェックを入れてください。');
+                  return;
+                }
+                setCurrentStep(2);
+              }}
+              className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-black py-3 px-4 rounded-2xl shadow-lg transition flex items-center justify-center gap-2 text-xs cursor-pointer"
+            >
+              <span>合意して次へ（住民票・基本情報の登録）</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Step 2: 基本情報 ＆ 住民票の添付（AI自動入力） */}
+        {currentStep === 2 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <Home className="w-4 h-4 text-indigo-400" />
-                1. あなたの基本情報 ＆ 住民票添付
+                2. あなたの基本情報 ＆ 住民票添付
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">住民票の写真を添付すると、AIが氏名や住所を自動入力します。</p>
             </div>
@@ -840,13 +1019,13 @@ export default function EmployeeOnboardingWelcome() {
           </div>
         )}
 
-        {/* Step 2: 複数乗り継ぎ（バス・私鉄・JR・地下鉄）対応 通勤交通費 支給申請書 */}
-        {currentStep === 2 && (
+        {/* Step 3: 複数乗り継ぎ（バス・私鉄・JR・地下鉄）対応 通勤交通費 支給申請書 */}
+        {currentStep === 3 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <Train className="w-4 h-4 text-cyan-400" />
-                2. 通勤交通費 支給申請書（複数乗り継ぎ対応）
+                3. 通勤交通費 支給申請書（複数乗り継ぎ対応）
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">バス・私鉄・JR・地下鉄の複数乗り継ぎ区間を自由に登録・集計できます。</p>
             </div>
@@ -1292,13 +1471,13 @@ export default function EmployeeOnboardingWelcome() {
           </div>
         )}
 
-        {/* Step 3: 給与振込口座 ＋ 通帳写真撮影（AI自動入力） */}
-        {currentStep === 3 && (
+        {/* Step 4: 給与振込口座 ＋ 通帳写真撮影（AI自動入力） */}
+        {currentStep === 4 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-emerald-400" />
-                3. 給与振込口座の登録 ＆ 通帳原本撮影
+                4. 給与振込口座の登録 ＆ 通帳原本撮影
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">通帳の写真を撮影すると、AIが口座情報を自動入力します。</p>
             </div>
@@ -1400,13 +1579,13 @@ export default function EmployeeOnboardingWelcome() {
           </div>
         )}
 
-        {/* Step 4: 令和8年分 国税庁公式 扶養控除等（異動）申告書 */}
-        {currentStep === 4 && (
+        {/* Step 5: 令和8年分 国税庁公式 扶養控除等（異動）申告書 */}
+        {currentStep === 5 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <FileText className="w-4 h-4 text-amber-400" />
-                4. 令和8年分 給与所得者の扶養控除等（異動）申告書
+                5. 令和8年分 給与所得者の扶養控除等（異動）申告書
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">所得税の源泉徴収税額（甲欄）および年末調整に必須の公的申告です。</p>
             </div>
@@ -1581,13 +1760,13 @@ export default function EmployeeOnboardingWelcome() {
           </div>
         )}
 
-        {/* Step 5: マイナンバー・社会保険・雇用保険・前職源泉 */}
-        {currentStep === 5 && (
+        {/* Step 6: マイナンバー・社会保険・雇用保険・前職源泉 */}
+        {currentStep === 6 && (
           <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 animate-in fade-in duration-200">
             <div>
               <h3 className="font-bold text-white text-sm flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-purple-400" />
-                5. マイナンバー ＆ 年金・雇用保険・前職源泉
+                6. マイナンバー ＆ 年金・雇用保険・前職源泉
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">公的手続き（社会保険加入・雇用保険・源泉徴収）に必要な番号・書類です。</p>
             </div>
@@ -1687,10 +1866,14 @@ export default function EmployeeOnboardingWelcome() {
             </button>
           ) : <div />}
 
-          {currentStep < 5 ? (
+          {currentStep < 6 ? (
             <button
               onClick={() => {
-                if (currentStep === 1 && !basicData.name.trim()) {
+                if (currentStep === 1 && !contractAgreement.isAgreed) {
+                  alert('雇用契約内容の確認チェックボックスにチェックを入れてください。');
+                  return;
+                }
+                if (currentStep === 2 && !basicData.name.trim()) {
                   alert('お名前を入力してください。');
                   return;
                 }
