@@ -13,7 +13,7 @@ const ShiftAdminDashboard: React.FC = () => {
   const [loadingStats, setLoadingStats] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [generationResult, setGenerationResult] = useState<{added: number}|null>(null);
+  const [generationResult, setGenerationResult] = useState<{ added: number } | null>(null);
 
   const [allEmployees, setAllEmployees] = useState<any[]>([]);
   const [submittedUserIds, setSubmittedUserIds] = useState<string[]>([]);
@@ -40,7 +40,6 @@ const ShiftAdminDashboard: React.FC = () => {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
       if (!tenantId) return;
 
-      // advanced_shifts と advanced_shift_requests を全削除
       await supabase.from('advanced_shifts').delete().eq('tenant_id', tenantId);
       await supabase.from('advanced_shift_requests').delete().eq('tenant_id', tenantId);
 
@@ -55,9 +54,9 @@ const ShiftAdminDashboard: React.FC = () => {
     }
   };
 
-  // 2. 9:00〜18:00（各1名）専用のダミーデータ一括投入
+  // 2. 画像に準拠した40名規模のデモデータ一括投入
   const handleSeedDummyData = async () => {
-    if (!window.confirm('既存のシフトをクリアし、【9:00〜18:00（各1名）】の必要枠・ダミー従業員・シフト希望を一括投入します。よろしいですか？')) return;
+    if (!window.confirm('既存のシフト・希望をクリアし、画像準拠の【ホール1名・キッチン1名・レジ2名・清掃朝夜各1名】の必要枠および【40名スタッフ・リアルなシフト希望】を一括投入します。よろしいですか？')) return;
     setIsSeeding(true);
     try {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
@@ -70,17 +69,17 @@ const ShiftAdminDashboard: React.FC = () => {
       await supabase.from('advanced_shifts').delete().eq('tenant_id', tenantId);
       await supabase.from('advanced_shift_requests').delete().eq('tenant_id', tenantId);
 
-      // 1. 役割（ロール）マスタ作成
+      // 1. 役割（ロール）マスタ作成（画像準拠の4役割）
       const rolesToInsert = [
         { tenant_id: tenantId, name: 'ホール', color: '#4F46E5', display_order: 1 },
         { tenant_id: tenantId, name: 'キッチン', color: '#EA580C', display_order: 2 },
-        { tenant_id: tenantId, name: 'リーダー', color: '#10B981', display_order: 3 }
+        { tenant_id: tenantId, name: 'レジ', color: '#8B5CF6', display_order: 3 },
+        { tenant_id: tenantId, name: '清掃', color: '#06B6D4', display_order: 4 }
       ];
       await supabase.from('shift_roles').upsert(rolesToInsert, { onConflict: 'tenant_id,name' });
 
-      // 2. 必要人数枠マスタ作成（平日＆土日 すべて 9:00〜18:00 各1名）
+      // 2. 必要人数枠マスタ作成（平日＆土日すべて画像通りの枠）
       const reqsToInsert: any[] = [];
-      // 0:日, 1:月, 2:火, 3:水, 4:木, 5:金, 6:土
       [0, 1, 2, 3, 4, 5, 6].forEach(dow => {
         reqsToInsert.push({
           tenant_id: tenantId,
@@ -98,23 +97,92 @@ const ShiftAdminDashboard: React.FC = () => {
           end_time: '18:00:00',
           required_count: 1
         });
+        reqsToInsert.push({
+          tenant_id: tenantId,
+          day_of_week: dow,
+          role: 'レジ',
+          start_time: '09:00:00',
+          end_time: '18:00:00',
+          required_count: 2
+        });
+        reqsToInsert.push({
+          tenant_id: tenantId,
+          day_of_week: dow,
+          role: '清掃',
+          start_time: '07:00:00',
+          end_time: '10:00:00',
+          required_count: 1
+        });
+        reqsToInsert.push({
+          tenant_id: tenantId,
+          day_of_week: dow,
+          role: '清掃',
+          start_time: '19:00:00',
+          end_time: '22:00:00',
+          required_count: 1
+        });
       });
 
       await supabase.from('advanced_shift_requirements').delete().eq('tenant_id', tenantId).is('target_date', null);
       await supabase.from('advanced_shift_requirements').insert(reqsToInsert);
 
-      // 3. ダミー従業員5名の登録（users）
+      // 3. 40名スタッフの定義（ホール12名、キッチン10名、レジ12名、清掃6名）
       const dummyStaffs = [
-        { name: '佐藤 花子 (テスト)', email: `dummy.sato.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'part-time', wage: 1150, roles: ['ホール'] },
-        { name: '鈴木 一郎 (テスト)', email: `dummy.suzuki.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'full-time', wage: 1200, roles: ['キッチン'] },
-        { name: '田中 太郎 (テスト)', email: `dummy.tanaka.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'part-time', wage: 1100, roles: ['ホール'] },
-        { name: '高橋 美咲 (テスト)', email: `dummy.takahashi.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'part-time', wage: 1100, roles: ['ホール'] },
-        { name: '伊藤 健太 (テスト)', email: `dummy.ito.${tenantId.substring(0,4)}@example.com`, role: '従業員', employment_type: 'full-time', wage: 1300, roles: ['キッチン'] }
+        // ホール担当 (12名)
+        { name: '佐藤 裕美', roleName: 'ホール', wage: 1200, priority: 5, maxH: 40, pref: 'day', days: [1, 2, 3, 4, 5] },
+        { name: '田中 健太', roleName: 'ホール', wage: 1150, priority: 4, maxH: 30, pref: 'day', days: [2, 3, 4, 5, 6] },
+        { name: '高橋 優香', roleName: 'ホール', wage: 1150, priority: 4, maxH: 25, pref: 'day', days: [0, 1, 4, 5, 6] },
+        { name: '渡辺 直樹', roleName: 'ホール', wage: 1250, priority: 5, maxH: 40, pref: 'day', days: [0, 1, 2, 3, 6] },
+        { name: '伊藤 結衣', roleName: 'ホール', wage: 1100, priority: 3, maxH: 20, pref: 'day', days: [1, 3, 5] },
+        { name: '山本 拓也', roleName: 'ホール', wage: 1150, priority: 3, maxH: 30, pref: 'day', days: [2, 4, 6] },
+        { name: '中村 美咲', roleName: 'ホール', wage: 1150, priority: 4, maxH: 28, pref: 'day', days: [0, 2, 3, 5] },
+        { name: '小林 翔平', roleName: 'ホール', wage: 1200, priority: 4, maxH: 35, pref: 'day', days: [1, 2, 4, 6] },
+        { name: '加藤 綾乃', roleName: 'ホール', wage: 1100, priority: 3, maxH: 20, pref: 'day', days: [0, 3, 5] },
+        { name: '吉田 大地', roleName: 'ホール', wage: 1150, priority: 3, maxH: 25, pref: 'day', days: [1, 4, 6] },
+        { name: '山田 浩二', roleName: 'ホール', wage: 1200, priority: 4, maxH: 32, pref: 'day', days: [0, 2, 5] },
+        { name: '佐々木 葵', roleName: 'ホール', wage: 1150, priority: 3, maxH: 24, pref: 'day', days: [1, 3, 6] },
+
+        // キッチン担当 (10名)
+        { name: '鈴木 一郎', roleName: 'キッチン', wage: 1350, priority: 5, maxH: 40, pref: 'day', days: [1, 2, 3, 4, 5] },
+        { name: '斉藤 健二', roleName: 'キッチン', wage: 1300, priority: 5, maxH: 40, pref: 'day', days: [0, 1, 2, 3, 6] },
+        { name: '松本 恭子', roleName: 'キッチン', wage: 1250, priority: 4, maxH: 30, pref: 'day', days: [2, 3, 4, 5, 6] },
+        { name: '井上 蓮', roleName: 'キッチン', wage: 1200, priority: 3, maxH: 25, pref: 'day', days: [0, 2, 4, 6] },
+        { name: '木村 友美', roleName: 'キッチン', wage: 1250, priority: 4, maxH: 32, pref: 'day', days: [1, 3, 5] },
+        { name: '林 龍平', roleName: 'キッチン', wage: 1300, priority: 4, maxH: 38, pref: 'day', days: [0, 1, 4, 5] },
+        { name: '清水 麻美', roleName: 'キッチン', wage: 1200, priority: 3, maxH: 20, pref: 'day', days: [2, 3, 6] },
+        { name: '山口 慎太郎', roleName: 'キッチン', wage: 1250, priority: 4, maxH: 30, pref: 'day', days: [1, 4, 6] },
+        { name: '池田 美優', roleName: 'キッチン', wage: 1200, priority: 3, maxH: 24, pref: 'day', days: [0, 3, 5] },
+        { name: '橋本 陽介', roleName: 'キッチン', wage: 1300, priority: 4, maxH: 35, pref: 'day', days: [2, 5, 6] },
+
+        // レジ担当 (12名)
+        { name: '山崎 栞', roleName: 'レジ', wage: 1150, priority: 5, maxH: 35, pref: 'day', days: [1, 2, 3, 4, 5] },
+        { name: '森 淳', roleName: 'レジ', wage: 1200, priority: 5, maxH: 40, pref: 'day', days: [0, 1, 2, 3, 6] },
+        { name: '阿部 さくら', roleName: 'レジ', wage: 1150, priority: 4, maxH: 30, pref: 'day', days: [2, 3, 4, 5, 6] },
+        { name: '石川 雅人', roleName: 'レジ', wage: 1100, priority: 3, maxH: 20, pref: 'day', days: [0, 1, 4, 5] },
+        { name: '前田 菜月', roleName: 'レジ', wage: 1150, priority: 4, maxH: 28, pref: 'day', days: [1, 3, 5, 6] },
+        { name: '藤田 涼太', roleName: 'レジ', wage: 1100, priority: 3, maxH: 25, pref: 'day', days: [0, 2, 4] },
+        { name: '後藤 萌', roleName: 'レジ', wage: 1150, priority: 4, maxH: 30, pref: 'day', days: [1, 2, 5, 6] },
+        { name: '岡田 雄介', roleName: 'レジ', wage: 1150, priority: 3, maxH: 24, pref: 'day', days: [0, 3, 4] },
+        { name: '長谷川 凛', roleName: 'レジ', wage: 1100, priority: 3, maxH: 20, pref: 'day', days: [2, 4, 6] },
+        { name: '村上 和也', roleName: 'レジ', wage: 1200, priority: 4, maxH: 35, pref: 'day', days: [1, 3, 5] },
+        { name: '近藤 恵', roleName: 'レジ', wage: 1150, priority: 4, maxH: 30, pref: 'day', days: [0, 2, 5, 6] },
+        { name: '石井 達也', roleName: 'レジ', wage: 1100, priority: 3, maxH: 22, pref: 'day', days: [1, 4, 6] },
+
+        // 清掃担当 (6名) - 早朝3名 / 夜間3名
+        { name: '遠藤 勝', roleName: '清掃', wage: 1150, priority: 5, maxH: 30, pref: 'morning', days: [1, 2, 3, 4, 5] },
+        { name: '青木 テル', roleName: '清掃', wage: 1100, priority: 4, maxH: 20, pref: 'morning', days: [0, 2, 4, 6] },
+        { name: '坂本 昭夫', roleName: '清掃', wage: 1150, priority: 5, maxH: 28, pref: 'morning', days: [0, 1, 3, 5, 6] },
+        { name: '斉藤 清', roleName: '清掃', wage: 1100, priority: 4, maxH: 20, pref: 'evening', days: [1, 2, 3, 4, 5] },
+        { name: '福田 トメ', roleName: '清掃', wage: 1080, priority: 3, maxH: 18, pref: 'evening', days: [0, 2, 4, 6] },
+        { name: '西村 重三', roleName: '清掃', wage: 1100, priority: 4, maxH: 22, pref: 'evening', days: [0, 1, 3, 5, 6] }
       ];
 
-      const createdUserIds: { id: string; name: string; roles: string[]; wage: number }[] = [];
+      const createdUserList: { id: string; name: string; roleName: string; pref: string; days: number[] }[] = [];
 
-      for (const staff of dummyStaffs) {
+      for (let idx = 0; idx < dummyStaffs.length; idx++) {
+        const staff = dummyStaffs[idx];
+        const email = `staff${(idx + 1).toString().padStart(2, '0')}.${tenantId.substring(0, 4)}@example.com`;
+
         const { data: existUser } = await supabase
           .from('users')
           .select('id')
@@ -124,55 +192,87 @@ const ShiftAdminDashboard: React.FC = () => {
 
         let uid = existUser?.id;
         if (!uid) {
-          const { data: newUser } = await supabase
+          const { data: newUser, error: userError } = await supabase
             .from('users')
             .insert({
               tenant_id: tenantId,
               name: staff.name,
-              email: staff.email,
-              role: staff.role,
-              employment_type: staff.employment_type
+              email: email,
+              role: '従業員',
+              employment_type: staff.wage >= 1300 ? 'full-time' : 'part-time',
+              has_shift_access: true
             })
             .select('id')
             .single();
+          if (userError) throw userError;
           if (newUser) uid = newUser.id;
+        } else {
+          await supabase.from('users').update({ has_shift_access: true }).eq('id', uid);
         }
 
         if (uid) {
-          createdUserIds.push({ id: uid, name: staff.name, roles: staff.roles, wage: staff.wage });
-          // 時給設定
+          createdUserList.push({
+            id: uid,
+            name: staff.name,
+            roleName: staff.roleName,
+            pref: staff.pref,
+            days: staff.days
+          });
+
+          // 要員マスタ設定 (shift_employee_settings)
           await supabase.from('shift_employee_settings').upsert({
             tenant_id: tenantId,
             user_id: uid,
-            hourly_wage: staff.wage,
-            roles: staff.roles
-          }, { onConflict: 'tenant_id,user_id' });
+            hire_date: '2024-04-01',
+            max_hours_per_week: staff.maxH,
+            priority_score: staff.priority,
+            default_role: staff.roleName,
+            base_wage: staff.wage,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'user_id' });
         }
       }
 
-      // 4. 今週分のシフト希望（全員 09:00〜18:00 で提出）
+      // 4. 今週分（月〜日）のシフト希望を一括生成
       const requestsToInsert: any[] = [];
 
       for (let i = 0; i < 7; i++) {
         const d = addDays(weekStart, i);
         const dStr = format(d, 'yyyy-MM-dd');
+        const dow = d.getDay(); // 0:日, 1:月, ... 6:土
 
-        createdUserIds.forEach((userItem) => {
-          requestsToInsert.push({
-            tenant_id: tenantId,
-            user_id: userItem.id,
-            target_date: dStr,
-            available_start_time: '09:00:00',
-            available_end_time: '18:00:00',
-            preferred_role: userItem.roles[0] || 'ホール',
-            status: 'submitted'
-          });
+        createdUserList.forEach((staff) => {
+          if (staff.days.includes(dow)) {
+            let startT = '09:00:00';
+            let endT = '18:00:00';
+
+            if (staff.pref === 'morning') {
+              startT = '07:00:00';
+              endT = '10:00:00';
+            } else if (staff.pref === 'evening') {
+              startT = '19:00:00';
+              endT = '22:00:00';
+            }
+
+            requestsToInsert.push({
+              tenant_id: tenantId,
+              user_id: staff.id,
+              target_date: dStr,
+              available_start_time: startT,
+              available_end_time: endT,
+              preferred_role: staff.roleName,
+              status: 'submitted'
+            });
+          }
         });
       }
 
-      await supabase.from('advanced_shift_requests').insert(requestsToInsert);
+      if (requestsToInsert.length > 0) {
+        const { error: reqError } = await supabase.from('advanced_shift_requests').insert(requestsToInsert);
+        if (reqError) throw reqError;
+      }
 
-      alert('🎉 【9:00〜18:00（各1名）】のデータセットを一括投入しました！\n「シフトを自動生成する (AI)」ボタンを押すと、ホール1名・キッチン1名がピッタリ配置されます。');
+      alert('🎉 40名規模のリアルなデモデータセットを一括投入しました！\n\n【内訳】\n・ホール 12名 / キッチン 10名 / レジ 12名 / 清掃 6名\n・必要枠：ホール1、キッチン1、レジ2、清掃朝1・夜1\n・今週分のシフト希望：' + requestsToInsert.length + '件\n\n「⚡ シフトを自動生成する (AI)」を押して動作をご確認ください！');
       setGenerationResult(null);
       await fetchStats();
     } catch (err: any) {
@@ -190,7 +290,6 @@ const ShiftAdminDashboard: React.FC = () => {
   const totalEmployees = allEmployees.length;
   const submittedCount = submittedUserIds.length;
   const submissionRate = totalEmployees > 0 ? Math.round((submittedCount / totalEmployees) * 100) : 0;
-  
 
   useEffect(() => {
     fetchStats();
@@ -217,7 +316,7 @@ const ShiftAdminDashboard: React.FC = () => {
 
       const { data: settingsData } = await supabase.from('shift_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
       if (settingsData) {
-        setRequiredLaborCost(settingsData.monthly_labor_budget);
+        setRequiredLaborCost(settingsData.monthly_labor_budget || 0);
         if (settingsData.shift_period) {
           setShiftPeriod(settingsData.shift_period);
         }
@@ -311,7 +410,6 @@ const ShiftAdminDashboard: React.FC = () => {
     }
   };
 
-
   const handlePublishDrafts = async () => {
     if (!window.confirm('対象期間の下書きシフトをすべて確定（公開）します。よろしいですか？')) return;
     setIsPublishing(true);
@@ -343,8 +441,8 @@ const ShiftAdminDashboard: React.FC = () => {
     setGenerationResult(null);
     try {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
+      if (!tenantId) return;
       
-      let newShiftsCount = 0;
       const { data: settingsData } = await supabase.from('shift_settings').select('auto_generation_mode').eq('tenant_id', tenantId).maybeSingle();
       const mode = settingsData?.auto_generation_mode || 'equal';
       const { data: empSettings } = await supabase.from('shift_employee_settings').select('*').eq('tenant_id', tenantId);
@@ -352,31 +450,49 @@ const ShiftAdminDashboard: React.FC = () => {
       const startDate = format(weekStart, 'yyyy-MM-dd');
       const endDate = format(weekEnd, 'yyyy-MM-dd');
 
+      // 既存のドラフトシフトをクリア（再生成時の二重化防止）
+      await supabase.from('advanced_shifts')
+        .delete()
+        .eq('tenant_id', tenantId)
+        .eq('status', 'draft')
+        .gte('target_date', startDate)
+        .lte('target_date', endDate);
+
       const { data: reqs } = await supabase.from('advanced_shift_requirements').select('*').eq('tenant_id', tenantId).is('target_date', null);
       const { data: requests } = await supabase.from('advanced_shift_requests').select('*').eq('tenant_id', tenantId).gte('target_date', startDate).lte('target_date', endDate);
       const { data: existingShifts } = await supabase.from('advanced_shifts').select('*').eq('tenant_id', tenantId).gte('target_date', startDate).lte('target_date', endDate);
 
-      const toInsert = [];
+      const allPeriodGenerated: any[] = [];
 
       for (let i = 0; i < 7; i++) {
         const targetDay = addDays(weekStart, i);
         const targetDateStr = format(targetDay, 'yyyy-MM-dd');
         const dbDow = targetDay.getDay(); // 0: 日 〜 6: 土
 
-        const generated = generateAutoShift(reqs || [], requests || [], existingShifts || [], empSettings || [], targetDateStr, dbDow, mode);
-        for(const shift of generated) {
-          toInsert.push({...shift, tenant_id: tenantId});
+        const generated = generateAutoShift(
+          reqs || [], 
+          requests || [], 
+          existingShifts || [], 
+          empSettings || [], 
+          targetDateStr, 
+          dbDow, 
+          mode, 
+          allPeriodGenerated
+        );
+        for (const shift of generated) {
+          allPeriodGenerated.push({ ...shift, tenant_id: tenantId, status: 'draft' });
         }
       }
 
-      if (toInsert.length > 0) {
-                  const { error: insertError } = await supabase.from('advanced_shifts').insert(toInsert);
-          if (insertError) {
-            console.error(insertError);
-            alert('シフト保存エラー: ' + insertError.message);
-            throw insertError;
-          }
-        newShiftsCount = toInsert.length;
+      let newShiftsCount = 0;
+      if (allPeriodGenerated.length > 0) {
+        const { error: insertError } = await supabase.from('advanced_shifts').insert(allPeriodGenerated);
+        if (insertError) {
+          console.error(insertError);
+          alert('シフト保存エラー: ' + insertError.message);
+          throw insertError;
+        }
+        newShiftsCount = allPeriodGenerated.length;
       }
       
       setGenerationResult({ added: newShiftsCount });
@@ -460,10 +576,10 @@ const ShiftAdminDashboard: React.FC = () => {
                 onClick={handleSeedDummyData} 
                 disabled={isSeeding}
                 className="bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md px-3.5 py-2 rounded-xl flex items-center transition font-black text-xs cursor-pointer disabled:opacity-50"
-                title="【9:00〜18:00（各1名）】の必要枠・ダミー従業員・今週のシフト希望を一瞬で自動セットアップします"
+                title="【40名スタッフ・画像通りの必要枠・今週のシフト希望】を一瞬で自動セットアップします"
               >
-                {isSeeding ? <div className="animate-spin w-3.5 h-3.5 border-2 border-slate-950/30 border-t-slate-950 rounded-full mr-1.5"></div> : <span className="mr-1">🪄</span>}
-                9-18時データ投入
+                {isSeeding ? <div className="animate-spin w-3.5 h-3.5 border-2 border-slate-950 border-t-slate-950 rounded-full mr-1.5"></div> : <span className="mr-1">🪄</span>}
+                40名デモデータ投入
               </button>
               <button 
                 onClick={handlePublishDrafts} 
@@ -488,223 +604,219 @@ const ShiftAdminDashboard: React.FC = () => {
             </div>
           </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800 flex items-center">
-                  <DollarSign className="w-6 h-6 mr-2 text-indigo-500" />
-                  今月の人件費予実
-                </h2>
-                <p className="text-sm text-slate-500 mt-1">※確定シフトに基づく試算</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800 flex items-center">
+                    <DollarSign className="w-6 h-6 mr-2 text-indigo-500" />
+                    今月の人件費予実
+                  </h2>
+                  <p className="text-sm text-slate-500 mt-1">※確定シフトに基づく試算</p>
+                </div>
               </div>
+
+              {loadingStats ? (
+                <div className="h-32 flex justify-center items-center"><div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div></div>
+              ) : (
+                <div>
+                  <div className="flex justify-between items-end mb-2">
+                    <div>
+                      <span className="text-4xl font-black text-indigo-600 tracking-tight">¥{estimatedLaborCost.toLocaleString()}</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">予算設定額</div>
+                      <div className="text-lg font-bold text-slate-700">¥{requiredLaborCost > 0 ? requiredLaborCost.toLocaleString() : '未設定'}</div>
+                    </div>
+                  </div>
+
+                  <div className="w-full bg-slate-100 rounded-full h-4 mt-4 overflow-hidden shadow-inner">
+                    <div 
+                      className={`h-4 rounded-full ${estimatedLaborCost > requiredLaborCost && requiredLaborCost > 0 ? 'bg-red-500' : 'bg-gradient-to-r from-indigo-500 to-blue-500'}`} 
+                      style={{ width: requiredLaborCost > 0 ? `${Math.min((estimatedLaborCost / requiredLaborCost) * 100, 100)}%` : '0%' }}
+                    ></div>
+                  </div>
+                  {estimatedLaborCost > requiredLaborCost && requiredLaborCost > 0 && (
+                    <p className="text-xs font-bold text-red-500 mt-2 text-right flex items-center justify-end">
+                      <Zap className="w-3 h-3 mr-1" /> 予算をオーバーしています！
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
-            {loadingStats ? (
-              <div className="h-32 flex justify-center items-center"><div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full"></div></div>
-            ) : (
-              <div>
-                <div className="flex justify-between items-end mb-2">
-                  <div>
-                    <span className="text-4xl font-black text-indigo-600 tracking-tight">¥{estimatedLaborCost.toLocaleString()}</span>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">予算設定額</div>
-                    <div className="text-lg font-bold text-slate-700">¥{requiredLaborCost > 0 ? requiredLaborCost.toLocaleString() : '未設定'}</div>
-                  </div>
-                </div>
+            <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-3xl p-6 shadow-xl border border-indigo-500/50 text-white relative overflow-hidden">
+              <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-2xl"></div>
+              <h2 className="text-xl font-bold mb-2 flex items-center">
+                <Zap className="w-6 h-6 mr-2 text-yellow-300" />
+                オートシフト生成 (AI)
+              </h2>
+              <p className="text-indigo-100 text-sm mb-6">提出された希望と必要枠を照らし合わせ、今週の最適なシフトを1秒で自動作成します。</p>
 
-                <div className="w-full bg-slate-100 rounded-full h-4 mt-4 overflow-hidden shadow-inner">
-                  <div 
-                    className={`h-4 rounded-full ${estimatedLaborCost > requiredLaborCost && requiredLaborCost > 0 ? 'bg-red-500' : 'bg-gradient-to-r from-indigo-500 to-blue-500'}`} 
-                    style={{ width: requiredLaborCost > 0 ? `${Math.min((estimatedLaborCost / requiredLaborCost) * 100, 100)}%` : '0%' }}
-                  ></div>
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 mb-6 border border-white/20 flex justify-between items-center cursor-pointer hover:bg-white/20 transition" onClick={() => navigate('/shift/admin/requests')}>
+                <div>
+                  <div className="text-xs text-indigo-200 mb-1">今週のシフト提出率</div>
+                  <div className="text-2xl font-bold">{submissionRate}%</div>
                 </div>
-                {estimatedLaborCost > requiredLaborCost && requiredLaborCost > 0 && (
-                  <p className="text-xs font-bold text-red-500 mt-2 text-right flex items-center justify-end">
-                    <Zap className="w-3 h-3 mr-1" /> 予算をオーバーしています！
+                <div className="w-px h-10 bg-white/20"></div>
+                <div>
+                  <div className="text-xs text-indigo-200 mb-1">対象期間</div>
+                  <div className="font-bold text-sm">{format(weekStart, 'M/d')} - {format(weekEnd, 'M/d')}</div>
+                </div>
+              </div>
+
+              {generationResult ? (
+                <div className="bg-emerald-500/20 border border-emerald-400 rounded-2xl p-4 text-center">
+                  <p className="font-bold text-emerald-100 mb-3 flex items-center justify-center">
+                    <CheckCircle className="w-5 h-5 mr-2 text-emerald-300" />
+                    {generationResult.added}件のシフトを自動生成しました！
                   </p>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-3xl p-6 shadow-xl border border-indigo-500/50 text-white relative overflow-hidden">
-            <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-white/10 rounded-full blur-2xl"></div>
-            <h2 className="text-xl font-bold mb-2 flex items-center">
-              <Zap className="w-6 h-6 mr-2 text-yellow-300" />
-              オートシフト生成 (AI)
-            </h2>
-            <p className="text-indigo-100 text-sm mb-6">提出された希望と必要枠を照らし合わせ、今週の最適なシフトを1秒で自動作成します。</p>
-
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 mb-6 border border-white/20 flex justify-between items-center cursor-pointer hover:bg-white/20 transition" onClick={() => navigate('/shift/admin/requests')}>
-              <div>
-                <div className="text-xs text-indigo-200 mb-1">今週のシフト提出率</div>
-                <div className="text-2xl font-bold">{submissionRate}%</div>
-              </div>
-              <div className="w-px h-10 bg-white/20"></div>
-              <div>
-                <div className="text-xs text-indigo-200 mb-1">対象期間</div>
-                <div className="font-bold text-sm">{format(weekStart, 'M/d')} - {format(weekEnd, 'M/d')}</div>
-              </div>
-            </div>
-
-            {generationResult ? (
-              <div className="bg-emerald-500/20 border border-emerald-400 rounded-2xl p-4 text-center">
-                <p className="font-bold text-emerald-100 mb-3 flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 mr-2 text-emerald-300" />
-                  {generationResult.added}件のシフトを自動生成しました！
-                </p>
-                <div className="mt-4 flex gap-2">
-                  <button onClick={() => navigate('/shift/admin/calendar')} className="flex-1 bg-white text-indigo-700 font-black py-3 rounded-xl shadow-lg hover:bg-indigo-50 transition text-sm flex items-center justify-center cursor-pointer">
-                    📅 シフトカレンダーで確認
-                  </button>
-                  <button onClick={() => setGenerationResult(null)} className="px-4 bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-xl transition text-sm cursor-pointer">
-                    再生成
-                  </button>
+                  <div className="mt-4 flex gap-2">
+                    <button onClick={() => navigate('/shift/admin/calendar')} className="flex-1 bg-white text-indigo-700 font-black py-3 rounded-xl shadow-lg hover:bg-indigo-50 transition text-sm flex items-center justify-center cursor-pointer">
+                      📅 シフトカレンダーで確認
+                    </button>
+                    <button onClick={() => setGenerationResult(null)} className="px-4 bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-xl transition text-sm cursor-pointer">
+                      再生成
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : submissionRate === 0 ? (
-              <div className="space-y-3">
+              ) : submissionRate === 0 ? (
+                <div className="space-y-3">
+                  <button 
+                    onClick={handleSeedDummyData} 
+                    disabled={isSeeding}
+                    className="w-full bg-amber-400 text-slate-950 font-black py-3.5 rounded-xl shadow-lg hover:bg-amber-300 hover:scale-[1.02] transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
+                  >
+                    {isSeeding ? (
+                      <><div className="animate-spin w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full mr-3"></div>40名デモデータ投入中...</>
+                    ) : (
+                      <><span>🪄</span><span className="ml-2">40名テスト用デモデータを投入して試す</span></>
+                    )}
+                  </button>
+                  <p className="text-[11px] text-indigo-200 text-center">※40名スタッフ・時給・4役割の必要枠・今週のリアルな希望が一瞬でセットされます</p>
+                </div>
+              ) : (
                 <button 
-                  onClick={handleSeedDummyData}
-                  disabled={isSeeding}
-                  className="w-full bg-amber-400 text-slate-950 font-black py-3.5 rounded-xl shadow-lg hover:bg-amber-300 hover:scale-[1.02] transition-all flex items-center justify-center cursor-pointer disabled:opacity-50"
+                  onClick={handleGenerate} 
+                  disabled={isGenerating}
+                  className="w-full bg-white text-indigo-700 font-black py-4 rounded-xl shadow-lg hover:bg-indigo-50 hover:scale-[1.02] transition-all flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:hover:scale-100"
                 >
-                  {isSeeding ? (
-                    <><div className="animate-spin w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full mr-3"></div>ダミーデータ投入中...</>
+                  {isGenerating ? (
+                    <><div className="animate-spin w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full mr-3"></div>AIがシフトを自動割り当て中...</>
                   ) : (
-                    <><span>🪄</span><span className="ml-2">テスト用ダミーデータを投入して試す</span></>
+                    <>⚡ シフトを自動生成する (AI)</>
                   )}
                 </button>
-                <p className="text-[11px] text-indigo-200 text-center">※ダミー従業員5名・時給・必要枠・今週の希望が一瞬でセットされます</p>
-              </div>
-            ) : (
-              <button 
-                onClick={handleGenerate} 
-                disabled={isGenerating}
-                className="w-full bg-white text-indigo-700 font-black py-4 rounded-xl shadow-lg hover:bg-indigo-50 hover:scale-[1.02] transition-all flex items-center justify-center cursor-pointer disabled:opacity-50 disabled:hover:scale-100"
-              >
-                {isGenerating ? (
-                  <><div className="animate-spin w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full mr-3"></div>AIがシフトを自動割り当て中...</>
-                ) : (
-                  <>⚡ シフトを自動生成する (AI)</>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 relative overflow-hidden mb-8">
-          <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
-            <Settings className="w-6 h-6 mr-2 text-indigo-500" />
-            シフト管理期間設定
-          </h2>
-          <div className="flex items-center space-x-4">
-            <select
-              value={shiftPeriod}
-              onChange={handlePeriodChange}
-              disabled={isSavingPeriod}
-              className="px-4 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-700 font-bold min-w-[200px]"
-            >
-              <option value="1week">1週間</option>
-              <option value="2weeks">2週間</option>
-              <option value="1month">1ヶ月</option>
-            </select>
-            {isSavingPeriod && <span className="text-sm text-indigo-500 font-bold animate-pulse">保存中...</span>}
-            {!isSavingPeriod && shiftPeriod && (
-              <span className="text-sm text-emerald-600 font-bold flex items-center">
-                <CheckCircle className="w-4 h-4 mr-1" />
-                現在の設定: {shiftPeriod === '1week' ? '1週間' : shiftPeriod === '2weeks' ? '2週間' : '1ヶ月'}
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-slate-500 mt-2">※この設定はシフト提出画面やカレンダーの表示期間に影響します。</p>
-        </div>
-
-        <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 relative overflow-hidden mb-8">
-          <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
-            <Settings className="w-6 h-6 mr-2 text-indigo-500" />
-            提出ルールの設定（テキスト）
-          </h2>
-          <div className="flex flex-col space-y-3">
-            <textarea
-              value={submissionDeadlineRule}
-              onChange={(e) => setSubmissionDeadlineRule(e.target.value)}
-              placeholder="例: 1〜15日のシフトは前月20日までに提出してください"
-              className="w-full p-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-700 min-h-[100px]"
-            />
-            <div className="flex justify-end">
-              <button
-                onClick={handleSaveRule}
-                disabled={isSavingRule}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-xl transition shadow flex items-center disabled:opacity-50"
-              >
-                {isSavingRule ? '保存中...' : 'ルールを保存'}
-              </button>
+              )}
             </div>
           </div>
-          <p className="text-xs text-slate-500 mt-2">※従業員のシフト提出画面の上部にこのルールが表示されます。</p>
-        </div>
 
-        <div className="bg-white rounded-3xl p-6 shadow-xl border border-red-100 relative overflow-hidden mb-8">
-          <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
-            <Settings className="w-6 h-6 mr-2 text-red-500" />
-            提出を締め切る（ロック）
-          </h2>
-          <div className="flex items-center space-x-4">
-            <label className="flex items-center cursor-pointer">
-              <div className="relative">
-                <input type="checkbox" className="sr-only" checked={isSubmissionLocked} onChange={handleToggleLock} disabled={isSavingLock} />
-                <div className={`block w-14 h-8 rounded-full transition-colors ${isSubmissionLocked ? 'bg-red-500' : 'bg-slate-300'}`}></div>
-                <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${isSubmissionLocked ? 'transform translate-x-6' : ''}`}></div>
-              </div>
-              <div className="ml-3 text-slate-700 font-bold">
-                {isSubmissionLocked ? 'ロック中（提出不可）' : '提出可能'}
-              </div>
-            </label>
-            {isSavingLock && <span className="text-sm text-indigo-500 font-bold animate-pulse">保存中...</span>}
+          <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 relative overflow-hidden mb-8">
+            <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
+              <Settings className="w-6 h-6 mr-2 text-indigo-500" />
+              シフト管理期間設定
+            </h2>
+            <div className="flex items-center space-x-4">
+              <select
+                value={shiftPeriod}
+                onChange={handlePeriodChange}
+                disabled={isSavingPeriod}
+                className="px-4 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-700 font-bold min-w-[200px]"
+              >
+                <option value="1week">1週間</option>
+                <option value="2weeks">2週間</option>
+                <option value="1month">1ヶ月</option>
+              </select>
+              {isSavingPeriod && <span className="text-sm text-indigo-500 font-bold animate-pulse">保存中...</span>}
+              {!isSavingPeriod && shiftPeriod && (
+                <span className="text-sm text-emerald-600 font-bold flex items-center">
+                  <CheckCircle className="w-4 h-4 mr-1" />
+                  現在の設定: {shiftPeriod === '1week' ? '1週間' : shiftPeriod === '2weeks' ? '2週間' : '1ヶ月'}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500 mt-2">※この設定はシフト提出画面やカレンダーの表示期間に影響します。</p>
           </div>
-          <p className="text-xs text-slate-500 mt-2">※オンにすると、従業員はシフト希望の提出・変更ができなくなります。</p>
-        </div>
 
-        <div className="bg-white rounded-3xl p-6 shadow-xl border border-orange-100 relative overflow-hidden mb-8">
-          <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
-            <Settings className="w-6 h-6 mr-2 text-orange-500" />
-            自動締め切り日（複数設定可）
-          </h2>
-          <div className="flex flex-col md:flex-row md:items-center space-y-3 md:space-y-0 md:space-x-4">
-            <div className="flex items-center w-full md:w-auto">
-              <input
-                type="text"
-                value={autoLockDays}
-                onChange={(e) => setAutoLockDays(e.target.value)}
-                placeholder="例: 10,25"
-                className="px-4 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-700 w-full md:w-64"
+          <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-100 relative overflow-hidden mb-8">
+            <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
+              <Settings className="w-6 h-6 mr-2 text-indigo-500" />
+              提出ルールの設定（テキスト）
+            </h2>
+            <div className="flex flex-col space-y-3">
+              <textarea
+                value={submissionDeadlineRule}
+                onChange={(e) => setSubmissionDeadlineRule(e.target.value)}
+                placeholder="例: 1〜15日のシフトは前月20日までに提出してください"
+                className="w-full p-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-700 min-h-[100px]"
               />
-              <span className="font-bold text-slate-700 ml-3 whitespace-nowrap">日</span>
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveRule}
+                  disabled={isSavingRule}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-xl transition shadow flex items-center disabled:opacity-50 cursor-pointer"
+                >
+                  {isSavingRule ? '保存中...' : 'ルールを保存'}
+                </button>
+              </div>
             </div>
-            <button
-              onClick={handleSaveAutoLockDays}
-              disabled={isSavingAutoLock}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-xl transition shadow flex items-center justify-center disabled:opacity-50 w-full md:w-auto"
-            >
-              {isSavingAutoLock ? '保存中...' : '保存する'}
-            </button>
+            <p className="text-xs text-slate-500 mt-2">※従業員のシフト提出画面の上部にこのルールが表示されます。</p>
           </div>
-          <p className="text-xs text-slate-500 mt-2">※カンマ区切りで複数指定できます（例: 10,25）。指定した日を過ぎると、次のサイクルの提出開始まで自動的にシフト提出がロックされます（空欄で無効化）。</p>
+
+          <div className="bg-white rounded-3xl p-6 shadow-xl border border-red-100 relative overflow-hidden mb-8">
+            <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
+              <Settings className="w-6 h-6 mr-2 text-red-500" />
+              提出を締め切る（ロック）
+            </h2>
+            <div className="flex items-center space-x-4">
+              <label className="flex items-center cursor-pointer">
+                <div className="relative">
+                  <input type="checkbox" className="sr-only" checked={isSubmissionLocked} onChange={handleToggleLock} disabled={isSavingLock} />
+                  <div className={`block w-14 h-8 rounded-full transition-colors ${isSubmissionLocked ? 'bg-red-500' : 'bg-slate-300'}`}></div>
+                  <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${isSubmissionLocked ? 'transform translate-x-6' : ''}`}></div>
+                </div>
+                <div className="ml-3 text-slate-700 font-bold">
+                  {isSubmissionLocked ? 'ロック中（提出不可）' : '提出可能'}
+                </div>
+              </label>
+              {isSavingLock && <span className="text-sm text-indigo-500 font-bold animate-pulse">保存中...</span>}
+            </div>
+            <p className="text-xs text-slate-500 mt-2">※オンにすると、従業員はシフト希望の提出・変更ができなくなります。</p>
+          </div>
+
+          <div className="bg-white rounded-3xl p-6 shadow-xl border border-orange-100 relative overflow-hidden mb-8">
+            <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
+              <Settings className="w-6 h-6 mr-2 text-orange-500" />
+              自動締め切り日（複数設定可）
+            </h2>
+            <div className="flex flex-col md:flex-row md:items-center space-y-3 md:space-y-0 md:space-x-4">
+              <div className="flex items-center w-full md:w-auto">
+                <input
+                  type="text"
+                  value={autoLockDays}
+                  onChange={(e) => setAutoLockDays(e.target.value)}
+                  placeholder="例: 10,25"
+                  className="px-4 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-700 w-full md:w-64"
+                />
+                <span className="font-bold text-slate-700 ml-3 whitespace-nowrap">日</span>
+              </div>
+              <button
+                onClick={handleSaveAutoLockDays}
+                disabled={isSavingAutoLock}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-xl transition shadow flex items-center justify-center disabled:opacity-50 w-full md:w-auto cursor-pointer"
+              >
+                {isSavingAutoLock ? '保存中...' : '保存する'}
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mt-2">※カンマ区切りで複数指定できます（例: 10,25）。指定した日を過ぎると、次のサイクルの提出開始まで自動的にシフト提出がロックされます（空欄で無効化）。</p>
+          </div>
         </div>
       </div>
     </div>
-  </div>
   );
 };
 
 export default ShiftAdminDashboard;
-
-
-
-
 
 

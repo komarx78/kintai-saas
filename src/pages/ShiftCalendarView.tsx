@@ -211,16 +211,26 @@ const ShiftCalendarView: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    if (!window.confirm('現在の表示期間の希望シフトを元に、自動割り当てを実行しますか？\n（実行後、割り当てられたシフトは「未確定（ドラフト）」として配置され、希望データは削除されます）')) return;
+    if (!window.confirm('現在の表示期間の希望シフトを元に、AI自動割り当てを実行しますか？\n（実行後、割り当てられたシフトは「未確定（ドラフト）」として配置されます）')) return;
     setIsGenerating(true);
     try {
       const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
+      if (!tenantIdData) return;
+
       const startStr = format(startDate, 'yyyy-MM-dd');
       const endStr = format(endDate, 'yyyy-MM-dd');
 
       const { data: settingsData } = await supabase.from('shift_settings').select('auto_generation_mode').eq('tenant_id', tenantIdData).maybeSingle();
       const mode = settingsData?.auto_generation_mode || 'equal';
       const { data: empSettings } = await supabase.from('shift_employee_settings').select('*').eq('tenant_id', tenantIdData);
+
+      // 既存のドラフトシフトをクリア（再生成時の二重配置防止）
+      await supabase.from('advanced_shifts')
+        .delete()
+        .eq('tenant_id', tenantIdData)
+        .eq('status', 'draft')
+        .gte('target_date', startStr)
+        .lte('target_date', endStr);
 
       const { data: rawRequests } = await supabase.from('advanced_shift_requests')
         .select('*').eq('tenant_id', tenantIdData)
@@ -230,7 +240,7 @@ const ShiftCalendarView: React.FC = () => {
         .select('*').eq('tenant_id', tenantIdData)
         .gte('target_date', startStr).lte('target_date', endStr);
 
-      const toInsert = [];
+      const toInsert: any[] = [];
       const datesToProcess = eachDayOfInterval({ start: startDate, end: endDate });
 
       for (const targetDay of datesToProcess) {
@@ -244,24 +254,20 @@ const ShiftCalendarView: React.FC = () => {
           empSettings || [], 
           targetDateStr, 
           dbDow, 
-          mode
+          mode,
+          toInsert
         );
-        for(const shift of generated) {
-          toInsert.push({...shift, tenant_id: tenantIdData, status: 'draft'});
+        for (const shift of generated) {
+          toInsert.push({ ...shift, tenant_id: tenantIdData, status: 'draft' });
         }
       }
 
       if (toInsert.length > 0) {
         const { error: insertError } = await supabase.from('advanced_shifts').insert(toInsert);
         if (insertError) throw insertError;
-
-        const requestIds = (rawRequests || []).map((r: any) => r.id);
-        if (requestIds.length > 0) {
-          await supabase.from('advanced_shift_requests').delete().in('id', requestIds);
-        }
       }
       
-      alert('自動割り当てが完了しました！\n配置されたシフトを確認し、問題なければ「一括確定」を行ってください。');
+      alert(`🎉 AI自動割り当てが完了しました！（${toInsert.length}件のシフトを配置）\nカレンダーで配置状況を確認し、「一括確定」を行ってください。`);
       fetchSettingsAndData();
     } catch (err) {
       console.error(err);

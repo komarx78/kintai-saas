@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AppSwitcher from '../components/AppSwitcher';
 
-const roles = ['ホール', 'キッチン', 'レジ', '清掃'];
+const defaultRoles = ['ホール', 'キッチン', 'レジ', '清掃'];
 const patternTypes = ['平日', '土日', '祝日'];
 const hours = Array.from({ length: 24 }, (_, i) => i);
 
@@ -20,6 +20,7 @@ const ShiftRequirementSettings: React.FC = () => {
   const navigate = useNavigate();
   const [activePattern, setActivePattern] = useState('平日');
   const [saved, setSaved] = useState(false);
+  const [roles, setRoles] = useState<string[]>(defaultRoles);
   
   const [requirements, setRequirements] = useState<Record<string, Requirement[]>>({
     '平日': [],
@@ -30,14 +31,30 @@ const ShiftRequirementSettings: React.FC = () => {
   const [newReq, setNewReq] = useState<Partial<Requirement>>({ role: 'ホール', startHour: 9, endHour: 18, count: 1 });
 
   useEffect(() => {
-    fetchRequirements();
+    fetchRolesAndRequirements();
   }, []);
 
-  const fetchRequirements = async () => {
+  const fetchRolesAndRequirements = async () => {
     try {
       const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
       if (!tenantIdData) return;
 
+      // 1. 役割マスタの取得
+      const { data: rolesData } = await supabase
+        .from('shift_roles')
+        .select('name')
+        .eq('tenant_id', tenantIdData)
+        .order('display_order');
+      
+      if (rolesData && rolesData.length > 0) {
+        const fetchedRoles = rolesData.map(r => r.name);
+        setRoles(fetchedRoles);
+        if (!fetchedRoles.includes(newReq.role || '')) {
+          setNewReq(prev => ({ ...prev, role: fetchedRoles[0] }));
+        }
+      }
+
+      // 2. 必要枠の取得
       const { data, error } = await supabase
         .from('advanced_shift_requirements')
         .select('*')
@@ -48,20 +65,34 @@ const ShiftRequirementSettings: React.FC = () => {
       
       const newReqs: Record<string, Requirement[]> = { '平日': [], '土日': [], '祝日': [] };
       if (data) {
+        // 重複登録されている曜日（例: 平日は1〜5）を1つのパターン枠として重複排除して読み込む
+        const seenKeys = {
+          '平日': new Set<string>(),
+          '土日': new Set<string>(),
+          '祝日': new Set<string>()
+        };
+
         data.forEach(row => {
-          let pattern = '';
-          if (row.day_of_week === 1) pattern = '平日';
-          else if (row.day_of_week === 6) pattern = '土日';
+          let pattern: '平日' | '土日' | '祝日' | null = null;
+          if (row.day_of_week >= 1 && row.day_of_week <= 5) pattern = '平日';
+          else if (row.day_of_week === 0 || row.day_of_week === 6) pattern = '土日';
           else if (row.day_of_week === 7) pattern = '祝日';
 
           if (pattern) {
-            newReqs[pattern].push({
-              id: row.id || Date.now().toString() + Math.random(),
-              role: row.role,
-              startHour: parseInt(row.start_time.split(':')[0], 10),
-              endHour: parseInt(row.end_time.split(':')[0], 10),
-              count: row.required_count
-            });
+            const startH = parseInt(row.start_time.split(':')[0], 10);
+            const endH = parseInt(row.end_time.split(':')[0], 10);
+            const key = `${row.role}_${startH}_${endH}_${row.required_count}`;
+
+            if (!seenKeys[pattern].has(key)) {
+              seenKeys[pattern].add(key);
+              newReqs[pattern].push({
+                id: row.id || `${Date.now()}_${Math.random()}`,
+                role: row.role,
+                startHour: startH,
+                endHour: endH,
+                count: row.required_count
+              });
+            }
           }
         });
       }
@@ -78,10 +109,10 @@ const ShiftRequirementSettings: React.FC = () => {
     }
     const req: Requirement = { 
       id: Date.now().toString(), 
-      role: newReq.role!, 
+      role: newReq.role || roles[0] || 'ホール', 
       startHour: newReq.startHour!, 
       endHour: newReq.endHour!, 
-      count: newReq.count! 
+      count: newReq.count || 1 
     };
     setRequirements({
       ...requirements,
@@ -118,12 +149,15 @@ const ShiftRequirementSettings: React.FC = () => {
         end_time: `${req.endHour.toString().padStart(2, '0')}:00:00`
       });
 
+      // 平日 (月〜金: 1〜5)
       (requirements['平日'] || []).forEach(req => {
         [1, 2, 3, 4, 5].forEach(dow => insertData.push(createRow(req, dow)));
       });
+      // 土日 (日: 0, 土: 6)
       (requirements['土日'] || []).forEach(req => {
         [0, 6].forEach(dow => insertData.push(createRow(req, dow)));
       });
+      // 祝日 (7)
       (requirements['祝日'] || []).forEach(req => {
         insertData.push(createRow(req, 7));
       });
@@ -137,7 +171,7 @@ const ShiftRequirementSettings: React.FC = () => {
 
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-      fetchRequirements();
+      fetchRolesAndRequirements();
     } catch (err) {
       console.error(err);
       alert('保存に失敗しました');
@@ -152,7 +186,7 @@ const ShiftRequirementSettings: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
-            <button onClick={() => navigate('/shift/admin')} className="p-2 bg-white/40 hover:bg-white/60 backdrop-blur-md rounded-full transition-all shadow-sm">
+            <button onClick={() => navigate('/shift/admin')} className="p-2 bg-white/40 hover:bg-white/60 backdrop-blur-md rounded-full transition-all shadow-sm cursor-pointer">
               <ArrowLeft className="w-5 h-5 text-indigo-700" />
             </button>
             <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 flex items-center">
@@ -180,7 +214,7 @@ const ShiftRequirementSettings: React.FC = () => {
               <button
                 key={pattern}
                 onClick={() => setActivePattern(pattern)}
-                className={`px-6 py-3 rounded-2xl font-bold text-lg transition-all ${
+                className={`px-6 py-3 rounded-2xl font-bold text-lg transition-all cursor-pointer ${
                   activePattern === pattern 
                     ? 'bg-indigo-600 text-white shadow-md transform scale-105' 
                     : 'bg-white/60 text-slate-600 hover:bg-white border border-white/50 shadow-sm'
@@ -195,27 +229,27 @@ const ShiftRequirementSettings: React.FC = () => {
           <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 flex flex-wrap gap-4 items-end">
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1">役割</label>
-              <select value={newReq.role} onChange={e => setNewReq({...newReq, role: e.target.value})} className="bg-white rounded-xl px-4 py-2 border-0 shadow-sm outline-none focus:ring-2 focus:ring-indigo-400">
+              <select value={newReq.role} onChange={e => setNewReq({...newReq, role: e.target.value})} className="bg-white rounded-xl px-4 py-2 border-0 shadow-sm outline-none focus:ring-2 focus:ring-indigo-400 font-bold text-slate-700">
                 {roles.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1">開始時間</label>
-              <select value={newReq.startHour} onChange={e => setNewReq({...newReq, startHour: parseInt(e.target.value)})} className="bg-white rounded-xl px-4 py-2 border-0 shadow-sm outline-none focus:ring-2 focus:ring-indigo-400">
-                {hours.map(h => <option key={h} value={h}>{h}:00</option>)}
+              <select value={newReq.startHour} onChange={e => setNewReq({...newReq, startHour: parseInt(e.target.value)})} className="bg-white rounded-xl px-4 py-2 border-0 shadow-sm outline-none focus:ring-2 focus:ring-indigo-400 font-bold text-slate-700">
+                {hours.map(h => <option key={h} value={h}>{h.toString().padStart(2, '0')}:00</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1">終了時間</label>
-              <select value={newReq.endHour} onChange={e => setNewReq({...newReq, endHour: parseInt(e.target.value)})} className="bg-white rounded-xl px-4 py-2 border-0 shadow-sm outline-none focus:ring-2 focus:ring-indigo-400">
-                {hours.map(h => <option key={h} value={h}>{h}:00</option>)}
+              <select value={newReq.endHour} onChange={e => setNewReq({...newReq, endHour: parseInt(e.target.value)})} className="bg-white rounded-xl px-4 py-2 border-0 shadow-sm outline-none focus:ring-2 focus:ring-indigo-400 font-bold text-slate-700">
+                {hours.map(h => <option key={h} value={h}>{h.toString().padStart(2, '0')}:00</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1 ml-1">人数</label>
-              <input type="number" min="1" value={newReq.count} onChange={e => setNewReq({...newReq, count: parseInt(e.target.value) || 1})} className="w-20 bg-white rounded-xl px-4 py-2 border-0 shadow-sm outline-none focus:ring-2 focus:ring-indigo-400 text-center font-bold" />
+              <input type="number" min="1" value={newReq.count} onChange={e => setNewReq({...newReq, count: parseInt(e.target.value) || 1})} className="w-20 bg-white rounded-xl px-4 py-2 border-0 shadow-sm outline-none focus:ring-2 focus:ring-indigo-400 text-center font-bold text-slate-700" />
             </div>
-            <button onClick={handleAdd} className="bg-indigo-600 text-white px-6 py-2 rounded-xl shadow hover:bg-indigo-700 transition flex items-center font-bold h-10">
+            <button onClick={handleAdd} className="bg-indigo-600 text-white px-6 py-2 rounded-xl shadow hover:bg-indigo-700 transition flex items-center font-bold h-10 cursor-pointer">
               <Plus className="w-4 h-4 mr-1" />
               追加
             </button>
@@ -264,7 +298,7 @@ const ShiftRequirementSettings: React.FC = () => {
                               <span className="group-hover:hidden">{req.count}人</span>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleRemove(req.id); }}
-                                className="hidden group-hover:flex items-center justify-center w-full h-full bg-red-500 text-white"
+                                className="hidden group-hover:flex items-center justify-center w-full h-full bg-red-500 text-white cursor-pointer"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
