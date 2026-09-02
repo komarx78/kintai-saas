@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Save, ArrowLeft, Plus, Trash2, CheckCircle2 } from 'lucide-react';
+import { Users, Save, ArrowLeft, Plus, Trash2, CheckCircle2, Copy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AppSwitcher from '../components/AppSwitcher';
@@ -127,6 +127,34 @@ const ShiftRequirementSettings: React.FC = () => {
     });
   };
 
+  // 他のパターン（平日・土日・祝日）からシフト枠を丸ごとコピー
+  const handleCopyPattern = (sourcePattern: string) => {
+    const sourceList = requirements[sourcePattern] || [];
+    if (sourceList.length === 0) {
+      alert(`「${sourcePattern}」には現在設定されている必要枠がありません。`);
+      return;
+    }
+
+    const currentCount = (requirements[activePattern] || []).length;
+    if (currentCount > 0) {
+      if (!window.confirm(`「${sourcePattern}」の設定（${sourceList.length}件）を「${activePattern}」にコピーしますか？\n（※現在の「${activePattern}」の設定は上書きされます）`)) {
+        return;
+      }
+    }
+
+    const cloned = sourceList.map(item => ({
+      ...item,
+      id: `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+    }));
+
+    setRequirements({
+      ...requirements,
+      [activePattern]: cloned
+    });
+
+    alert(`✨「${sourcePattern}」の必要シフト枠（${cloned.length}件）を「${activePattern}」にコピーしました！\n調整後、「設定を保存」ボタンを押してください。`);
+  };
+
   const handleSave = async () => {
     try {
       const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
@@ -208,21 +236,42 @@ const ShiftRequirementSettings: React.FC = () => {
 
         <div className="bg-white/70 backdrop-blur-xl border border-white/60 shadow-2xl rounded-3xl p-6 md:p-8 flex flex-col gap-8">
           
-          {/* Pattern Tabs */}
-          <div className="flex flex-wrap gap-2">
-            {patternTypes.map(pattern => (
-              <button
-                key={pattern}
-                onClick={() => setActivePattern(pattern)}
-                className={`px-6 py-3 rounded-2xl font-bold text-lg transition-all cursor-pointer ${
-                  activePattern === pattern 
-                    ? 'bg-indigo-600 text-white shadow-md transform scale-105' 
-                    : 'bg-white/60 text-slate-600 hover:bg-white border border-white/50 shadow-sm'
-                }`}
-              >
-                {pattern}
-              </button>
-            ))}
+          {/* Pattern Tabs & Copy Actions */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-indigo-100/50">
+            <div className="flex flex-wrap gap-2">
+              {patternTypes.map(pattern => (
+                <button
+                  key={pattern}
+                  onClick={() => setActivePattern(pattern)}
+                  className={`px-6 py-3 rounded-2xl font-bold text-lg transition-all cursor-pointer ${
+                    activePattern === pattern 
+                      ? 'bg-indigo-600 text-white shadow-md transform scale-105' 
+                      : 'bg-white/60 text-slate-600 hover:bg-white border border-white/50 shadow-sm'
+                  }`}
+                >
+                  {pattern}
+                </button>
+              ))}
+            </div>
+
+            {/* コピーボタン群 */}
+            <div className="flex items-center flex-wrap gap-2 bg-indigo-50/70 p-1.5 rounded-2xl border border-indigo-100">
+              <span className="text-xs font-bold text-indigo-900 ml-2 mr-1 flex items-center">
+                <Copy className="w-3.5 h-3.5 mr-1 text-indigo-600" />
+                他からコピー:
+              </span>
+              {patternTypes.filter(p => p !== activePattern).map(sourcePattern => (
+                <button
+                  key={sourcePattern}
+                  onClick={() => handleCopyPattern(sourcePattern)}
+                  className="px-3 py-1.5 bg-white hover:bg-indigo-600 text-indigo-700 hover:text-white text-xs font-bold rounded-xl border border-indigo-200 hover:border-indigo-600 shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                  title={`「${sourcePattern}」の必要枠設定を「${activePattern}」にコピーします`}
+                >
+                  <span>📋</span>
+                  <span>{sourcePattern}からコピー</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Add Form */}
@@ -291,16 +340,18 @@ const ShiftRequirementSettings: React.FC = () => {
                           return (
                             <div 
                               key={req.id} 
-                              className="absolute top-1 bottom-1 bg-indigo-500/80 hover:bg-indigo-600 rounded-md shadow flex items-center justify-center text-white text-xs font-bold transition-all group overflow-hidden cursor-pointer"
+                              onClick={() => setNewReq({ role: req.role, startHour: req.startHour, endHour: req.endHour, count: req.count })}
+                              className="absolute top-1 bottom-1 bg-indigo-500/80 hover:bg-indigo-600 rounded-md shadow flex items-center justify-between text-white text-xs font-bold transition-all group overflow-hidden cursor-pointer px-2"
                               style={{ left: `${startPercent}%`, width: `${widthPercent}%` }}
-                              title={`${req.startHour}:00 - ${req.endHour}:00 (${req.count}人)`}
+                              title={`${req.startHour}:00 - ${req.endHour}:00 (${req.count}人) / クリックで設定フォームに読み込み`}
                             >
-                              <span className="group-hover:hidden">{req.count}人</span>
+                              <span className="truncate">{req.count}人</span>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleRemove(req.id); }}
-                                className="hidden group-hover:flex items-center justify-center w-full h-full bg-red-500 text-white cursor-pointer"
+                                className="hidden group-hover:flex items-center justify-center p-1 bg-red-500 hover:bg-red-600 rounded text-white cursor-pointer ml-1"
+                                title="この枠を削除"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           );
