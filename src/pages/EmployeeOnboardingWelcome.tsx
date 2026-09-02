@@ -516,6 +516,11 @@ export default function EmployeeOnboardingWelcome() {
         title: '労働条件通知書 兼 雇用契約書（労働者 電子合意締結済）',
         data: {
           name: basicData.name,
+          name_kana: basicData.nameKana,
+          birth_date: basicData.birthDate,
+          phone: basicData.phoneNumber,
+          address: basicData.address,
+          postal_code: basicData.postalCode,
           is_agreed: contractAgreement.isAgreed,
           agreed_at: contractAgreement.agreedAt || new Date().toISOString(),
           signature_name: contractAgreement.employeeSignatureName || basicData.name,
@@ -545,7 +550,10 @@ export default function EmployeeOnboardingWelcome() {
           data: {
             name: basicData.name,
             name_kana: basicData.nameKana,
+            birth_date: basicData.birthDate,
+            phone: basicData.phoneNumber,
             address: basicData.address,
+            postal_code: basicData.postalCode,
             householder_name: basicData.householderName,
             householder_relation: basicData.householderRelation
           },
@@ -568,6 +576,9 @@ export default function EmployeeOnboardingWelcome() {
         title: '通勤交通費 支給申請書（複数乗り継ぎ対応）',
         data: {
           name: basicData.name,
+          birth_date: basicData.birthDate,
+          phone: basicData.phoneNumber,
+          address: basicData.address,
           transport_mode: commutingData.transportMode,
           origin_station: commutingData.originStation || (commutingData.segments[0]?.fromStation || ''),
           via_station: commutingData.viaStation || '',
@@ -593,6 +604,8 @@ export default function EmployeeOnboardingWelcome() {
           title: '給与振込口座 登録届出書',
           data: {
             name: basicData.name,
+            birth_date: basicData.birthDate,
+            phone: basicData.phoneNumber,
             bank_name: bankData.bankName,
             branch_name: bankData.branchName,
             account_type: bankData.accountType,
@@ -615,6 +628,9 @@ export default function EmployeeOnboardingWelcome() {
           year: 2026,
           name: basicData.name,
           name_kana: basicData.nameKana,
+          birth_date: basicData.birthDate,
+          phone: basicData.phoneNumber,
+          postal_code: basicData.postalCode,
           address: basicData.address,
           householder_name: basicData.householderName || basicData.name,
           householder_relation: basicData.householderRelation,
@@ -646,6 +662,7 @@ export default function EmployeeOnboardingWelcome() {
           title: '個人番号（マイナンバー）・社会保険等届出書',
           data: {
             name: basicData.name,
+            birth_date: basicData.birthDate,
             my_number: officialDocsData.myNumber,
             pension_number: officialDocsData.pensionNumber,
             employment_insurance_number: officialDocsData.employmentInsuranceNumber

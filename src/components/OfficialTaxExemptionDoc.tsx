@@ -64,28 +64,40 @@ interface TaxExemptionDocProps {
 }
 
 /**
- * 西暦日付を国税庁公式の和暦（元号・年・月・日）に分解
+ * 西暦日付を国税庁公式の和暦（元号・年・月・日）に分解（タイムゾーンの狂いを100%完全排除）
  */
 function parseJapaneseEraDate(dateStr?: string): { era: string; year: string; month: string; day: string } {
   if (!dateStr) return { era: '令', year: ' ', month: ' ', day: ' ' };
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) {
-    const parts = dateStr.replace(/[^0-9]/g, ' ').trim().split(/\s+/);
-    if (parts.length >= 3) {
-      const y = parseInt(parts[0], 10);
-      if (y >= 2019) return { era: '令', year: String(y - 2018), month: parts[1], day: parts[2] };
-      if (y >= 1989) return { era: '平', year: String(y - 1988), month: parts[1], day: parts[2] };
-      if (y >= 1926) return { era: '昭', year: String(y - 1925), month: parts[1], day: parts[2] };
+  
+  const parts = dateStr.replace(/[^0-9]/g, ' ').trim().split(/\s+/);
+  if (parts.length >= 3) {
+    const y = parseInt(parts[0], 10);
+    const m = String(parseInt(parts[1], 10));
+    const d = String(parseInt(parts[2], 10));
+    
+    // 令和: 2019年5月1日以降
+    if (y > 2019 || (y === 2019 && parseInt(parts[1], 10) >= 5)) {
+      const eraYear = y - 2018;
+      return { era: '令', year: String(eraYear === 1 ? '元' : eraYear), month: m, day: d };
     }
-    return { era: '令', year: ' ', month: ' ', day: ' ' };
+    // 平成: 1989年1月8日〜2019年4月30日
+    if (y > 1989 || (y === 1989 && (parseInt(parts[1], 10) > 1 || parseInt(parts[2], 10) >= 8))) {
+      const eraYear = y - 1988;
+      return { era: '平', year: String(eraYear === 1 ? '元' : eraYear), month: m, day: d };
+    }
+    // 昭和: 1926年12月25日〜1989年1月7日
+    if (y >= 1926) {
+      const eraYear = y - 1925;
+      return { era: '昭', year: String(eraYear === 1 ? '元' : eraYear), month: m, day: d };
+    }
+    // 大正: 1912年7月30日〜1926年12月24日
+    if (y >= 1912) {
+      const eraYear = y - 1911;
+      return { era: '大', year: String(eraYear === 1 ? '元' : eraYear), month: m, day: d };
+    }
+    return { era: '明', year: String(y - 1867), month: m, day: d };
   }
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1);
-  const day = String(d.getDate());
-  if (y >= 2019) return { era: '令', year: String(y - 2018 === 1 ? '元' : y - 2018), month: m, day };
-  if (y >= 1989) return { era: '平', year: String(y - 1988 === 1 ? '元' : y - 1988), month: m, day };
-  if (y >= 1926) return { era: '昭', year: String(y - 1925 === 1 ? '元' : y - 1925), month: m, day };
-  return { era: '明', year: String(y - 1867), month: m, day };
+  return { era: '令', year: ' ', month: ' ', day: ' ' };
 }
 
 export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }) => {

@@ -388,6 +388,72 @@ export default function OnboardingAdminDashboard() {
       const customTemplatesLoaded = getCustomDocTemplatesFromStorage(tenantIdData);
       setCustomDocTemplates(customTemplatesLoaded);
 
+      // 書類提出・申請リスト取得（先に取得して台帳に完全マージ）
+      const { data: subData } = await supabase
+        .from('employee_document_submissions')
+        .select('*')
+        .eq('tenant_id', tenantIdData)
+        .order('created_at', { ascending: false });
+
+      // ローカルステータスキャッシュの復元（DBのスキーマ差異による400エラー時でも完全防御）
+      let approvedCache: Record<string, { approved_by: string; approved_at: string }> = {};
+      let rejectedCache: Record<string, { admin_comment: string }> = {};
+      let deletedCache: string[] = [];
+      try {
+        const aRaw = localStorage.getItem(`approved_subs_${tenantIdData}`);
+        if (aRaw) approvedCache = JSON.parse(aRaw);
+        const rRaw = localStorage.getItem(`rejected_subs_${tenantIdData}`);
+        if (rRaw) rejectedCache = JSON.parse(rRaw);
+        const dRaw = localStorage.getItem(`deleted_subs_${tenantIdData}`);
+        if (dRaw) deletedCache = JSON.parse(dRaw);
+      } catch (_) {}
+
+      // ユーザーID ＆ 氏名ごとの提出書類インデックスを作成（全提出書類の完全横断マージ用）
+      const userDocsMap = new Map<string, Record<string, any>>();
+      const nameDocsMap = new Map<string, Record<string, any>>();
+
+      const formattedSubmissions: DocumentSubmission[] = (subData || [])
+        .filter((s: any) => !deletedCache.includes(s.id))
+        .map((s: any) => {
+          let status = s.status;
+          let approved_by = s.approved_by;
+          let approved_at = s.approved_at;
+          let admin_comment = s.admin_comment;
+
+          if (approvedCache[s.id]) {
+            status = 'approved';
+            approved_by = approvedCache[s.id].approved_by || approved_by;
+            approved_at = approvedCache[s.id].approved_at || approved_at;
+          } else if (rejectedCache[s.id]) {
+            status = 'rejected';
+            admin_comment = rejectedCache[s.id].admin_comment || admin_comment;
+          }
+
+          const sName = (s.data?.name || '').trim();
+
+          // ユーザーIDマップへの蓄積
+          if (s.user_id) {
+            if (!userDocsMap.has(s.user_id)) userDocsMap.set(s.user_id, {});
+            userDocsMap.get(s.user_id)![s.document_type] = s.data || {};
+          }
+          // 氏名マップへの蓄積
+          if (sName) {
+            if (!nameDocsMap.has(sName)) nameDocsMap.set(sName, {});
+            nameDocsMap.get(sName)![s.document_type] = s.data || {};
+          }
+
+          return {
+            ...s,
+            status,
+            approved_by,
+            approved_at,
+            admin_comment,
+            user_name: sName || '従業員'
+          };
+        });
+
+      setSubmissions(formattedSubmissions);
+
       // ユーザー一覧取得
       const { data: uData } = await supabase
         .from('users')
@@ -409,11 +475,23 @@ export default function OnboardingAdminDashboard() {
 
       const onbMap = new Map((onbData || []).map((o: any) => [o.user_id, o]));
       const payMap = new Map((payData || []).map((p: any) => [p.user_id, p]));
-      const userMap = new Map((uData || []).map((u: any) => [u.id, u.name]));
 
       const combined: EmployeeOnboardingData[] = (uData || []).map((u: any) => {
         const onb: any = onbMap.get(u.id);
         const pay: any = payMap.get(u.id);
+        const empName = (u.name || '').trim();
+
+        // 提出書類の統合データ
+        const uDocs = userDocsMap.get(u.id) || {};
+        const nDocs = nameDocsMap.get(empName) || {};
+        const mergedDocs = { ...uDocs, ...nDocs };
+
+        const bankDoc = mergedDocs['bank_passbook'] || {};
+        const commDoc = mergedDocs['commuting_pass'] || {};
+        const depDoc = mergedDocs['dependents_form'] || mergedDocs['tax_withholding'] || {};
+        const conDoc = mergedDocs['labor_contract'] || {};
+        const resDoc = mergedDocs['resident_certificate'] || {};
+        const myDoc = mergedDocs['my_number'] || {};
 
         let localBackup: any = null;
         try {
@@ -421,16 +499,20 @@ export default function OnboardingAdminDashboard() {
           if (raw) localBackup = JSON.parse(raw);
         } catch (e) {}
 
-        const bDate = u.birth_date || onb?.birth_date || pay?.birth_date || localBackup?.birth_date || '';
-        const addr = u.address || onb?.address || localBackup?.address || '';
-        const ph = u.phone || onb?.phone || localBackup?.phone || '';
+        // 生年月日（提出書類・台帳・バックアップから最優先抽出）
+        const bDate = depDoc.birth_date || resDoc.birth_date || conDoc.birth_date || myDoc.birth_date || u.birth_date || onb?.birth_date || pay?.birth_date || localBackup?.birth_date || '';
+        const addr = depDoc.address || resDoc.address || conDoc.address || u.address || onb?.address || localBackup?.address || '';
+        const ph = depDoc.phone || conDoc.phone || resDoc.phone || u.phone || onb?.phone || localBackup?.phone || '';
 
-        // 銀行口座情報（従業員IDごとの固有データ）
-        const bName = onb?.bank_name || pay?.bank_name || localBackup?.bank_name || '';
-        const brName = onb?.branch_name || pay?.branch_name || localBackup?.branch_name || '';
-        const accType = onb?.account_type || pay?.account_type || localBackup?.account_type || 'ordinary';
-        const accNum = onb?.account_number || pay?.account_number || localBackup?.account_number || '';
-        const accHolder = onb?.account_holder || pay?.account_holder || localBackup?.account_holder || u.name || '';
+        // 銀行口座情報（提出書類から即座に抽出）
+        const bName = bankDoc.bank_name || onb?.bank_name || pay?.bank_name || localBackup?.bank_name || '';
+        const brName = bankDoc.branch_name || onb?.branch_name || pay?.branch_name || localBackup?.branch_name || '';
+        const accType = bankDoc.account_type || onb?.account_type || pay?.account_type || localBackup?.account_type || 'ordinary';
+        const accNum = bankDoc.account_number || onb?.account_number || pay?.account_number || localBackup?.account_number || '';
+        const accHolder = bankDoc.account_holder || onb?.account_holder || pay?.account_holder || localBackup?.account_holder || u.name || '';
+
+        // 通勤手当（提出書類の通勤定期代から即座に抽出）
+        const commAllowance = commDoc.one_month_pass_amount ?? onb?.commuting_allowance ?? pay?.commuting_allowance ?? localBackup?.commuting_allowance ?? 15000;
 
         return {
           user_id: u.id,
@@ -443,25 +525,25 @@ export default function OnboardingAdminDashboard() {
           status: onb?.status || (u.is_active === false ? 'retired' : 'active'),
           current_step_number: onb?.current_step_number || (onb?.status === 'onboarding' ? 1 : 5),
           step_history: onb?.step_history || [],
-          join_date: onb?.join_date || u.join_date || '2026-04-01',
+          join_date: conDoc.join_date || onb?.join_date || u.join_date || '2026-04-01',
           retirement_date: onb?.retirement_date,
           retirement_reason: onb?.retirement_reason,
-          employment_type: u.employment_type || 'full-time',
-          department: u.department || '営業部',
+          employment_type: conDoc.employment_type ? (conDoc.employment_type.includes('正社員') ? 'full-time' : 'part-time') : (u.employment_type || 'full-time'),
+          department: conDoc.department || u.department || '営業部',
           contract_type: onb?.contract_type || 'indefinite',
           trial_period_months: onb?.trial_period_months ?? 3,
           start_time: onb?.start_time || defaultStartTime,
           end_time: onb?.end_time || defaultEndTime,
           break_time_minutes: onb?.break_time_minutes || defaultBreak,
           holidays_text: onb?.holidays_text || defaultHolText,
-          salary_type: onb?.salary_type || pay?.salary_type || localBackup?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly'),
-          base_salary: onb?.base_salary ?? pay?.base_salary ?? localBackup?.base_salary ?? 250000,
-          hourly_wage: onb?.hourly_wage ?? pay?.hourly_wage ?? localBackup?.hourly_wage ?? 1150,
-          position_allowance: onb?.position_allowance ?? pay?.position_allowance ?? localBackup?.position_allowance ?? 0,
-          qualification_allowance: onb?.qualification_allowance ?? pay?.qualification_allowance ?? localBackup?.qualification_allowance ?? 0,
+          salary_type: conDoc.salary_type || onb?.salary_type || pay?.salary_type || localBackup?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly'),
+          base_salary: conDoc.base_salary ?? onb?.base_salary ?? pay?.base_salary ?? localBackup?.base_salary ?? 250000,
+          hourly_wage: conDoc.hourly_wage ?? onb?.hourly_wage ?? pay?.hourly_wage ?? localBackup?.hourly_wage ?? 1150,
+          position_allowance: conDoc.position_allowance ?? onb?.position_allowance ?? pay?.position_allowance ?? localBackup?.position_allowance ?? 0,
+          qualification_allowance: conDoc.qualification_allowance ?? onb?.qualification_allowance ?? pay?.qualification_allowance ?? localBackup?.qualification_allowance ?? 0,
           housing_allowance: onb?.housing_allowance ?? pay?.housing_allowance ?? localBackup?.housing_allowance ?? 0,
           family_allowance: onb?.family_allowance ?? pay?.family_allowance ?? localBackup?.family_allowance ?? 0,
-          commuting_allowance: onb?.commuting_allowance ?? pay?.commuting_allowance ?? localBackup?.commuting_allowance ?? 15000,
+          commuting_allowance: commAllowance,
           health_insurance_joined: onb?.health_insurance_joined ?? pay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? true,
           pension_insurance_joined: onb?.pension_insurance_joined ?? pay?.pension_insurance_enabled ?? localBackup?.pension_insurance_joined ?? true,
           employment_insurance_joined: onb?.employment_insurance_joined ?? pay?.employment_insurance_enabled ?? localBackup?.employment_insurance_joined ?? true,
@@ -472,12 +554,12 @@ export default function OnboardingAdminDashboard() {
           account_holder: accHolder,
           documents_checklist: onb?.documents_checklist || {
             id_copy: true,
-            my_number: false,
+            my_number: !!myDoc.my_number,
             pension_handbook: false,
             employment_insurance_card: false,
             withholding_tax_slip: false,
-            bank_account_copy: true,
-            labor_contract_signed: false
+            bank_account_copy: !!bName,
+            labor_contract_signed: !!conDoc.is_agreed
           },
           procedure_todo: onb?.procedure_todo || {
             nenkin_office_submitted: false,
@@ -486,57 +568,6 @@ export default function OnboardingAdminDashboard() {
           }
         };
       });
-
-      setEmployees(combined);
-
-      // 書類提出・申請リスト取得
-      const { data: subData } = await supabase
-        .from('employee_document_submissions')
-        .select('*')
-        .eq('tenant_id', tenantIdData)
-        .order('created_at', { ascending: false });
-
-      // ローカルステータスキャッシュの復元（DBのスキーマ差異による400エラー時でも完全防御）
-      let approvedCache: Record<string, { approved_by: string; approved_at: string }> = {};
-      let rejectedCache: Record<string, { admin_comment: string }> = {};
-      let deletedCache: string[] = [];
-      try {
-        const aRaw = localStorage.getItem(`approved_subs_${tenantIdData}`);
-        if (aRaw) approvedCache = JSON.parse(aRaw);
-        const rRaw = localStorage.getItem(`rejected_subs_${tenantIdData}`);
-        if (rRaw) rejectedCache = JSON.parse(rRaw);
-        const dRaw = localStorage.getItem(`deleted_subs_${tenantIdData}`);
-        if (dRaw) deletedCache = JSON.parse(dRaw);
-      } catch (_) {}
-
-      const formattedSubmissions: DocumentSubmission[] = (subData || [])
-        .filter((s: any) => !deletedCache.includes(s.id))
-        .map((s: any) => {
-          let status = s.status;
-          let approved_by = s.approved_by;
-          let approved_at = s.approved_at;
-          let admin_comment = s.admin_comment;
-
-          if (approvedCache[s.id]) {
-            status = 'approved';
-            approved_by = approvedCache[s.id].approved_by || approved_by;
-            approved_at = approvedCache[s.id].approved_at || approved_at;
-          } else if (rejectedCache[s.id]) {
-            status = 'rejected';
-            admin_comment = rejectedCache[s.id].admin_comment || admin_comment;
-          }
-
-          return {
-            ...s,
-            status,
-            approved_by,
-            approved_at,
-            admin_comment,
-            user_name: s.data?.name || userMap.get(s.user_id) || '従業員'
-          };
-        });
-
-      setSubmissions(formattedSubmissions);
 
       // 🌟【自己修復・SSOT自動同期】承認済みの提出書類が存在するのに users / combined に未登録の従業員を自動検出して登録！
       const existingNames = new Set(combined.map(e => e.name.trim()));
@@ -610,43 +641,66 @@ export default function OnboardingAdminDashboard() {
 
             const finalUserId = createdUser?.id || sub.user_id || `user_${Date.now()}`;
 
+            // 全提出書類の統合データから各項目を完全抽出
+            const uDocs = userDocsMap.get(finalUserId) || userDocsMap.get(sub.user_id) || {};
+            const nDocs = nameDocsMap.get(empName) || {};
+            const mergedDocs = { ...uDocs, ...nDocs };
+
+            const bankDoc = mergedDocs['bank_passbook'] || {};
+            const commDoc = mergedDocs['commuting_pass'] || {};
+            const depDoc = mergedDocs['dependents_form'] || mergedDocs['tax_withholding'] || {};
+            const conDoc = mergedDocs['labor_contract'] || {};
+            const resDoc = mergedDocs['resident_certificate'] || {};
+            const myDoc = mergedDocs['my_number'] || {};
+
+            const bDate = depDoc.birth_date || resDoc.birth_date || conDoc.birth_date || myDoc.birth_date || d.birth_date || '';
+            const addr = depDoc.address || resDoc.address || conDoc.address || d.address || '';
+            const ph = depDoc.phone || conDoc.phone || resDoc.phone || d.phone || '';
+            const bName = bankDoc.bank_name || d.bank_name || '';
+            const brName = bankDoc.branch_name || d.branch_name || '';
+            const accType = bankDoc.account_type || d.account_type || 'ordinary';
+            const accNum = bankDoc.account_number || d.account_number || '';
+            const accHolder = bankDoc.account_holder || d.account_holder || empName;
+            const commAllowance = commDoc.one_month_pass_amount ?? d.one_month_pass_amount ?? 15000;
+            const bSalary = conDoc.base_salary ?? d.base_salary ?? 250000;
+
             // 台帳一覧に確実に追加（画面の在職人数に即時反映！）
             combined.push({
               user_id: finalUserId,
               name: empName,
               email: tempEmail,
-              phone: d.phone || '',
-              birth_date: d.birth_date || '',
-              address: d.address || '',
+              phone: ph,
+              birth_date: bDate,
+              address: addr,
               role: 'user',
               status: 'active',
               current_step_number: 5,
               step_history: [],
-              join_date: d.join_date || new Date().toISOString().split('T')[0],
-              employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
-              department: d.department || '営業部',
+              join_date: conDoc.join_date || d.join_date || new Date().toISOString().split('T')[0],
+              employment_type: conDoc.employment_type ? (conDoc.employment_type.includes('正社員') ? 'full-time' : 'part-time') : (d.employment_type === 'part-time' ? 'part-time' : 'full-time'),
+              department: conDoc.department || d.department || '営業部',
               contract_type: d.contract_type || 'indefinite',
               trial_period_months: 3,
               start_time: defaultStartTime,
               end_time: defaultEndTime,
               break_time_minutes: defaultBreak,
               holidays_text: defaultHolText,
-              salary_type: d.salary_type || 'monthly',
-              base_salary: d.base_salary || 250000,
-              hourly_wage: d.hourly_wage || 1150,
-              position_allowance: d.position_allowance || 0,
-              qualification_allowance: d.qualification_allowance || 0,
+              salary_type: conDoc.salary_type || d.salary_type || 'monthly',
+              base_salary: bSalary,
+              hourly_wage: conDoc.hourly_wage || d.hourly_wage || 1150,
+              position_allowance: conDoc.position_allowance || d.position_allowance || 0,
+              qualification_allowance: conDoc.qualification_allowance || d.qualification_allowance || 0,
               housing_allowance: 0,
               family_allowance: 0,
-              commuting_allowance: d.one_month_pass_amount || 0,
+              commuting_allowance: commAllowance,
               health_insurance_joined: true,
               pension_insurance_joined: true,
               employment_insurance_joined: true,
-              bank_name: d.bank_name || '',
-              branch_name: d.branch_name || '',
-              account_type: d.account_type || 'ordinary',
-              account_number: d.account_number || '',
-              account_holder: d.account_holder || empName
+              bank_name: bName,
+              branch_name: brName,
+              account_type: accType,
+              account_number: accNum,
+              account_holder: accHolder
             });
           } catch (autoErr) {
             console.warn('Auto-sync approved employee error:', autoErr);
