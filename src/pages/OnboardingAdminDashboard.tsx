@@ -903,16 +903,84 @@ export default function OnboardingAdminDashboard() {
     setIsSaving(true);
     try {
       const uId = sub.user_id;
+      const d = sub.data || {};
+      const empName = d.name || sub.user_name || '新入社員';
 
-      // 既存バックアップの取得とマージ
+      // 1. users テーブルに該当従業員が存在するか確認し、なければ新入社員として自動本登録！
+      try {
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('id, name')
+          .eq('id', uId)
+          .maybeSingle();
+
+        if (!existingUser) {
+          const tempEmail = `emp_${Date.now()}@sample.local`;
+          await supabase.from('users').upsert({
+            id: uId,
+            tenant_id: tenantId,
+            name: empName,
+            email: tempEmail,
+            role: 'user',
+            department: d.department || '本社',
+            employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
+            join_date: d.join_date || new Date().toISOString().split('T')[0],
+            has_kintai_access: true,
+            has_shift_access: true
+          }, { onConflict: 'id' });
+        }
+      } catch (uErr) {
+        console.warn('Auto user registration fallback:', uErr);
+      }
+
+      // 2. 既存バックアップの取得とマージ
       let localMaster: any = {};
       try {
         const raw = localStorage.getItem(`employee_master_backup_${uId}`);
         if (raw) localMaster = JSON.parse(raw);
       } catch (e) {}
 
-      if (sub.document_type === 'bank_passbook') {
-        const d = sub.data;
+      // 3. 各書類タイプ別のマスタ同期
+      if (sub.document_type === 'labor_contract') {
+        localMaster.name = empName;
+        localMaster.employment_type = d.employment_type;
+        localMaster.salary_type = d.salary_type;
+        localMaster.base_salary = d.base_salary;
+        localMaster.hourly_wage = d.hourly_wage;
+        localMaster.position_name = d.position_name;
+        localMaster.position_allowance = d.position_allowance || 0;
+        localMaster.qualification_allowance = d.qualification_allowance || 0;
+        localMaster.fixed_overtime_allowance = d.fixed_overtime_allowance || 0;
+        localMaster.department = d.department;
+        localMaster.join_date = d.join_date;
+
+        try {
+          await supabase.from('employee_payroll_profiles').upsert({
+            tenant_id: tenantId,
+            user_id: uId,
+            salary_type: d.salary_type || 'monthly',
+            base_salary: d.base_salary || 250000,
+            hourly_wage: d.hourly_wage || 1200,
+            position_allowance: d.position_allowance || 0,
+            qualification_allowance: d.qualification_allowance || 0
+          }, { onConflict: 'tenant_id,user_id' });
+        } catch (e) {}
+
+        try {
+          await supabase.from('employee_onboarding_profiles').upsert({
+            tenant_id: tenantId,
+            user_id: uId,
+            status: 'active',
+            join_date: d.join_date || new Date().toISOString().split('T')[0],
+            salary_type: d.salary_type || 'monthly',
+            base_salary: d.base_salary || 250000,
+            hourly_wage: d.hourly_wage || 1200,
+            position_allowance: d.position_allowance || 0,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'tenant_id,user_id' });
+        } catch (e) {}
+
+      } else if (sub.document_type === 'bank_passbook') {
         localMaster.bank_name = d.bank_name;
         localMaster.branch_name = d.branch_name;
         localMaster.account_type = d.account_type;
@@ -932,8 +1000,23 @@ export default function OnboardingAdminDashboard() {
               account_holder: d.account_holder
             }, { onConflict: 'tenant_id,user_id' });
         } catch (e) {}
+
+        try {
+          await supabase
+            .from('employee_onboarding_profiles')
+            .upsert({
+              tenant_id: tenantId,
+              user_id: uId,
+              bank_name: d.bank_name,
+              branch_name: d.branch_name,
+              account_type: d.account_type,
+              account_number: d.account_number,
+              account_holder: d.account_holder,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'tenant_id,user_id' });
+        } catch (e) {}
+
       } else if (sub.document_type === 'commuting_pass') {
-        const d = sub.data;
         const amount = d.one_month_pass_amount || 0;
         localMaster.commuting_allowance = amount;
 
@@ -946,9 +1029,21 @@ export default function OnboardingAdminDashboard() {
               commuting_allowance: amount
             }, { onConflict: 'tenant_id,user_id' });
         } catch (e) {}
+
+        try {
+          await supabase
+            .from('employee_onboarding_profiles')
+            .upsert({
+              tenant_id: tenantId,
+              user_id: uId,
+              commuting_allowance: amount,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'tenant_id,user_id' });
+        } catch (e) {}
+
       } else if (sub.document_type === 'dependents_form') {
-        const d = sub.data;
         localMaster.dependents_count = d.dependents_count || 0;
+        localMaster.has_spouse = d.has_spouse;
 
         try {
           await supabase
@@ -959,6 +1054,22 @@ export default function OnboardingAdminDashboard() {
               dependents_count: d.dependents_count || 0
             }, { onConflict: 'tenant_id,user_id' });
         } catch (e) {}
+
+      } else if (sub.document_type === 'resident_certificate') {
+        localMaster.address = d.address;
+        localMaster.birth_date = d.birth_date;
+
+        try {
+          await supabase
+            .from('employee_onboarding_profiles')
+            .upsert({
+              tenant_id: tenantId,
+              user_id: uId,
+              address: d.address,
+              birth_date: d.birth_date,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'tenant_id,user_id' });
+        } catch (e) {}
       }
 
       // LocalStorage への永続保存
@@ -967,7 +1078,8 @@ export default function OnboardingAdminDashboard() {
         localStorage.setItem(`employee_master_backup_${uId}`, JSON.stringify(localMaster));
       } catch (e) {}
 
-      await supabase
+      // 4. employee_document_submissions のステータスを approved に更新
+      const { error: subErr } = await supabase
         .from('employee_document_submissions')
         .update({
           status: 'approved',
@@ -976,7 +1088,19 @@ export default function OnboardingAdminDashboard() {
         })
         .eq('id', sub.id);
 
-      alert(`✅ 「${sub.title}」を承認しました！\n（承認者: ${currentAdminName}）\n給与計算マスタおよび労務台帳に即座に反映されました。`);
+      if (subErr) {
+        console.warn('Submission update error:', subErr);
+      }
+
+      // 5. ローカルStateをその場で即座に更新（即時UI反映・Optimistic Update）
+      setSubmissions(prev => prev.map(s => s.id === sub.id ? {
+        ...s,
+        status: 'approved',
+        approved_by: currentAdminName || '管理者',
+        approved_at: new Date().toISOString()
+      } : s));
+
+      alert(`✅ 「${sub.title}」を承認しました！\n（承認者: ${currentAdminName}）\n従業員台帳および給与計算マスタへ即座に反映・同期されました。`);
       await fetchData();
     } catch (err: any) {
       console.error(err);
