@@ -499,17 +499,32 @@ export default function OnboardingAdminDashboard() {
           if (raw) localBackup = JSON.parse(raw);
         } catch (e) {}
 
-        // 生年月日（提出書類・台帳・バックアップから最優先抽出）
-        const bDate = depDoc.birth_date || resDoc.birth_date || conDoc.birth_date || myDoc.birth_date || u.birth_date || onb?.birth_date || pay?.birth_date || localBackup?.birth_date || '';
-        const addr = depDoc.address || resDoc.address || conDoc.address || u.address || onb?.address || localBackup?.address || '';
-        const ph = depDoc.phone || conDoc.phone || resDoc.phone || u.phone || onb?.phone || localBackup?.phone || '';
+        // 生年月日（あらゆる提出書類・台帳・バックアップから最優先抽出）
+        const bDate = 
+          depDoc.birth_date || depDoc.birthDate || 
+          resDoc.birth_date || resDoc.birthDate || 
+          conDoc.birth_date || conDoc.birthDate || 
+          bankDoc.birth_date || bankDoc.birthDate ||
+          commDoc.birth_date || commDoc.birthDate ||
+          myDoc.birth_date || myDoc.birthDate || 
+          u.birth_date || u.birthDate || 
+          onb?.birth_date || pay?.birth_date || 
+          localBackup?.birth_date || localBackup?.birthDate || '';
 
-        // 銀行口座情報（提出書類から即座に抽出）
-        const bName = bankDoc.bank_name || onb?.bank_name || pay?.bank_name || localBackup?.bank_name || '';
-        const brName = bankDoc.branch_name || onb?.branch_name || pay?.branch_name || localBackup?.branch_name || '';
-        const accType = bankDoc.account_type || onb?.account_type || pay?.account_type || localBackup?.account_type || 'ordinary';
-        const accNum = bankDoc.account_number || onb?.account_number || pay?.account_number || localBackup?.account_number || '';
-        const accHolder = bankDoc.account_holder || onb?.account_holder || pay?.account_holder || localBackup?.account_holder || u.name || '';
+        const addr = depDoc.address || resDoc.address || conDoc.address || bankDoc.address || u.address || onb?.address || localBackup?.address || '';
+        const ph = depDoc.phone || depDoc.phoneNumber || conDoc.phone || conDoc.phoneNumber || resDoc.phone || u.phone || onb?.phone || localBackup?.phone || '';
+
+        // 銀行口座情報（キャメルケース・スネークケース完全網羅）
+        const bName = bankDoc.bank_name || bankDoc.bankName || onb?.bank_name || pay?.bank_name || localBackup?.bank_name || '';
+        const brName = bankDoc.branch_name || bankDoc.branchName || onb?.branch_name || pay?.branch_name || localBackup?.branch_name || '';
+        const accType = bankDoc.account_type || bankDoc.accountType || onb?.account_type || pay?.account_type || localBackup?.account_type || 'ordinary';
+        const accNum = bankDoc.account_number || bankDoc.accountNumber || onb?.account_number || pay?.account_number || localBackup?.account_number || '';
+        const accHolder = bankDoc.account_holder || bankDoc.accountHolder || onb?.account_holder || pay?.account_holder || localBackup?.account_holder || u.name || '';
+
+        // マイナンバー ＆ 扶養親族情報
+        const myNum = myDoc.my_number || myDoc.myNumber || depDoc.my_number || depDoc.myNumber || localBackup?.my_number || '';
+        const depCount = depDoc.dependents_count !== undefined ? Number(depDoc.dependents_count) : (Array.isArray(depDoc.dependents) ? depDoc.dependents.length : (localBackup?.dependents_count !== undefined ? Number(localBackup.dependents_count) : (pay?.dependents_count || 0)));
+        const hasSpouse = depDoc.has_spouse !== undefined ? Boolean(depDoc.has_spouse) : (localBackup?.has_spouse !== undefined ? Boolean(localBackup.has_spouse) : Boolean(pay?.has_spouse));
 
         // 通勤手当（提出書類の通勤定期代から即座に抽出）
         const commAllowance = commDoc.one_month_pass_amount ?? onb?.commuting_allowance ?? pay?.commuting_allowance ?? localBackup?.commuting_allowance ?? 15000;
@@ -552,6 +567,9 @@ export default function OnboardingAdminDashboard() {
           account_type: accType,
           account_number: accNum,
           account_holder: accHolder,
+          my_number: myNum,
+          dependents_count: depCount,
+          has_spouse: hasSpouse,
           documents_checklist: onb?.documents_checklist || {
             id_copy: true,
             my_number: !!myDoc.my_number,
@@ -1331,11 +1349,17 @@ export default function OnboardingAdminDashboard() {
         } catch (e) {}
 
       } else if (sub.document_type === 'bank_passbook') {
-        localMaster.bank_name = d.bank_name;
-        localMaster.branch_name = d.branch_name;
-        localMaster.account_type = d.account_type;
-        localMaster.account_number = d.account_number;
-        localMaster.account_holder = d.account_holder;
+        const bName = d.bank_name || d.bankName || '';
+        const brName = d.branch_name || d.branchName || '';
+        const accType = d.account_type || d.accountType || 'ordinary';
+        const accNum = d.account_number || d.accountNumber || '';
+        const accHolder = d.account_holder || d.accountHolder || empName;
+
+        localMaster.bank_name = bName;
+        localMaster.branch_name = brName;
+        localMaster.account_type = accType;
+        localMaster.account_number = accNum;
+        localMaster.account_holder = accHolder;
 
         try {
           await supabase
@@ -1343,11 +1367,11 @@ export default function OnboardingAdminDashboard() {
             .upsert({
               tenant_id: tenantId,
               user_id: uId,
-              bank_name: d.bank_name,
-              branch_name: d.branch_name,
-              account_type: d.account_type,
-              account_number: d.account_number,
-              account_holder: d.account_holder
+              bank_name: bName,
+              branch_name: brName,
+              account_type: accType,
+              account_number: accNum,
+              account_holder: accHolder
             }, { onConflict: 'tenant_id,user_id' });
         } catch (e) {}
 
@@ -1357,17 +1381,17 @@ export default function OnboardingAdminDashboard() {
             .upsert({
               tenant_id: tenantId,
               user_id: uId,
-              bank_name: d.bank_name,
-              branch_name: d.branch_name,
-              account_type: d.account_type,
-              account_number: d.account_number,
-              account_holder: d.account_holder,
+              bank_name: bName,
+              branch_name: brName,
+              account_type: accType,
+              account_number: accNum,
+              account_holder: accHolder,
               updated_at: new Date().toISOString()
             }, { onConflict: 'tenant_id,user_id' });
         } catch (e) {}
 
       } else if (sub.document_type === 'commuting_pass') {
-        const amount = d.one_month_pass_amount || 0;
+        const amount = d.one_month_pass_amount !== undefined ? Number(d.one_month_pass_amount) : 0;
         localMaster.commuting_allowance = amount;
 
         try {
@@ -1391,9 +1415,19 @@ export default function OnboardingAdminDashboard() {
             }, { onConflict: 'tenant_id,user_id' });
         } catch (e) {}
 
-      } else if (sub.document_type === 'dependents_form') {
-        localMaster.dependents_count = d.dependents_count || 0;
+      } else if (sub.document_type === 'dependents_form' || sub.document_type === 'tax_withholding') {
+        const depCount = d.dependents_count !== undefined ? Number(d.dependents_count) : (Array.isArray(d.dependents) ? d.dependents.length : 0);
+        const bDate = d.birth_date || d.birthDate || '';
+        const addr = d.address || '';
+        const ph = d.phone || d.phoneNumber || '';
+        const myNum = d.my_number || d.myNumber || '';
+
+        localMaster.dependents_count = depCount;
         localMaster.has_spouse = d.has_spouse;
+        if (bDate) localMaster.birth_date = bDate;
+        if (addr) localMaster.address = addr;
+        if (ph) localMaster.phone = ph;
+        if (myNum) localMaster.my_number = myNum;
 
         try {
           await supabase
@@ -1401,13 +1435,10 @@ export default function OnboardingAdminDashboard() {
             .upsert({
               tenant_id: tenantId,
               user_id: uId,
-              dependents_count: d.dependents_count || 0
+              dependents_count: depCount,
+              birth_date: bDate || undefined
             }, { onConflict: 'tenant_id,user_id' });
         } catch (e) {}
-
-      } else if (sub.document_type === 'resident_certificate') {
-        localMaster.address = d.address;
-        localMaster.birth_date = d.birth_date;
 
         try {
           await supabase
@@ -1415,11 +1446,40 @@ export default function OnboardingAdminDashboard() {
             .upsert({
               tenant_id: tenantId,
               user_id: uId,
-              address: d.address,
-              birth_date: d.birth_date,
+              address: addr || undefined,
+              birth_date: bDate || undefined,
+              phone: ph || undefined,
               updated_at: new Date().toISOString()
             }, { onConflict: 'tenant_id,user_id' });
         } catch (e) {}
+
+      } else if (sub.document_type === 'resident_certificate') {
+        const bDate = d.birth_date || d.birthDate || '';
+        const addr = d.address || '';
+        const ph = d.phone || d.phoneNumber || '';
+
+        if (addr) localMaster.address = addr;
+        if (bDate) localMaster.birth_date = bDate;
+        if (ph) localMaster.phone = ph;
+
+        try {
+          await supabase
+            .from('employee_onboarding_profiles')
+            .upsert({
+              tenant_id: tenantId,
+              user_id: uId,
+              address: addr || undefined,
+              birth_date: bDate || undefined,
+              phone: ph || undefined,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'tenant_id,user_id' });
+        } catch (e) {}
+
+      } else if (sub.document_type === 'my_number') {
+        const myNum = d.my_number || d.myNumber || '';
+        const bDate = d.birth_date || d.birthDate || '';
+        if (myNum) localMaster.my_number = myNum;
+        if (bDate) localMaster.birth_date = bDate;
       }
 
       // LocalStorage への永続保存
@@ -1860,8 +1920,8 @@ export default function OnboardingAdminDashboard() {
   // 🌟 大元マスタ（SSOT）統合データ解決ヘルパー関数
   // 提出書類データ、ローカルストレージバックアップ、DB従業員台帳から、最新の完全な従業員情報を合成
   const resolveEmployeeFullData = (subOrEmp: any): EmployeeOnboardingData => {
-    const targetUserId = subOrEmp.user_id || subOrEmp.id || '';
-    const targetName = (subOrEmp.data?.name || subOrEmp.user_name || subOrEmp.name || '').trim();
+    const targetUserId = subOrEmp?.user_id || subOrEmp?.id || '';
+    const targetName = (subOrEmp?.data?.name || subOrEmp?.user_name || subOrEmp?.name || '').trim();
     
     // 1. 既存のDB従業員データ
     const matchedEmp = employees.find(e => (targetUserId && e.user_id === targetUserId) || (targetName && e.name?.trim() === targetName)) || ({} as any);
@@ -1880,27 +1940,44 @@ export default function OnboardingAdminDashboard() {
 
     const contractSub = userSubs.find(s => s.document_type === 'labor_contract');
     const residentSub = userSubs.find(s => s.document_type === 'resident_certificate');
-    const taxSub = userSubs.find(s => s.document_type === 'dependents_form');
+    const taxSub = userSubs.find(s => s.document_type === 'dependents_form' || s.document_type === 'tax_withholding');
     const commutingSub = userSubs.find(s => s.document_type === 'commuting_pass');
     const bankSub = userSubs.find(s => s.document_type === 'bank_passbook');
+    const myNumSub = userSubs.find(s => s.document_type === 'my_number');
 
-    const contractData = contractSub?.data || (subOrEmp.document_type === 'labor_contract' ? subOrEmp.data : {}) || {};
-    const residentData = residentSub?.data || (subOrEmp.document_type === 'resident_certificate' ? subOrEmp.data : {}) || {};
-    const taxData = taxSub?.data || (subOrEmp.document_type === 'dependents_form' ? subOrEmp.data : {}) || {};
-    const commutingData = commutingSub?.data || (subOrEmp.document_type === 'commuting_pass' ? subOrEmp.data : {}) || {};
-    const bankData = bankSub?.data || (subOrEmp.document_type === 'bank_passbook' ? subOrEmp.data : {}) || {};
+    const contractData = contractSub?.data || (subOrEmp?.document_type === 'labor_contract' ? subOrEmp.data : {}) || {};
+    const residentData = residentSub?.data || (subOrEmp?.document_type === 'resident_certificate' ? subOrEmp.data : {}) || {};
+    const taxData = taxSub?.data || (subOrEmp?.document_type === 'dependents_form' || subOrEmp?.document_type === 'tax_withholding' ? subOrEmp.data : {}) || {};
+    const commutingData = commutingSub?.data || (subOrEmp?.document_type === 'commuting_pass' ? subOrEmp.data : {}) || {};
+    const bankData = bankSub?.data || (subOrEmp?.document_type === 'bank_passbook' ? subOrEmp.data : {}) || {};
+    const myNumData = myNumSub?.data || (subOrEmp?.document_type === 'my_number' ? subOrEmp.data : {}) || {};
 
     // 住所の解決（優先度: 住民票 ➔ 扶養控除申告書 ➔ バックアップ ➔ 従業員マスタ ➔ subOrEmp）
-    const resolvedAddress = residentData.address || taxData.address || localMaster.address || matchedEmp.address || subOrEmp.address || '';
+    const resolvedAddress = residentData.address || taxData.address || contractData.address || localMaster.address || matchedEmp.address || subOrEmp?.address || '';
     
-    // 生年月日の解決
-    const resolvedBirthDate = residentData.birth_date || taxData.birth_date || localMaster.birth_date || matchedEmp.birth_date || subOrEmp.birth_date || '';
+    // 生年月日の解決（あらゆるキー名・書類から完全抽出）
+    const resolvedBirthDate = 
+      residentData.birth_date || residentData.birthDate ||
+      taxData.birth_date || taxData.birthDate ||
+      contractData.birth_date || contractData.birthDate ||
+      bankData.birth_date || bankData.birthDate ||
+      commutingData.birth_date || commutingData.birthDate ||
+      myNumData.birth_date || myNumData.birthDate ||
+      localMaster.birth_date || localMaster.birthDate ||
+      matchedEmp.birth_date || subOrEmp?.birth_date || subOrEmp?.birthDate || '';
 
-    // 入社日（契約開始日）の解決（優先度: 労働条件通知書合意 ➔ バックアップ ➔ 従業員マスタ ➔ 提出日 ➔ 今日の日付）
-    const resolvedJoinDate = contractData.join_date || localMaster.join_date || (matchedEmp.join_date && matchedEmp.join_date !== '2023-01-01' ? matchedEmp.join_date : '') || (subOrEmp.created_at ? subOrEmp.created_at.split('T')[0] : '') || new Date().toISOString().split('T')[0];
+    // 電話番号の解決
+    const resolvedPhone = 
+      residentData.phone || residentData.phoneNumber ||
+      taxData.phone || taxData.phoneNumber ||
+      contractData.phone || contractData.phoneNumber ||
+      localMaster.phone || matchedEmp.phone || subOrEmp?.phone || '';
 
-    // 署名日時の解決（優先度: 労働条件合意日時 ➔ 提出日時 ➔ 現在）
-    const resolvedSignedAt = contractData.agreed_at || contractSub?.created_at || subOrEmp.created_at || new Date().toISOString();
+    // 入社日（契約開始日）の解決
+    const resolvedJoinDate = contractData.join_date || localMaster.join_date || (matchedEmp.join_date && matchedEmp.join_date !== '2023-01-01' ? matchedEmp.join_date : '') || (subOrEmp?.created_at ? subOrEmp.created_at.split('T')[0] : '') || new Date().toISOString().split('T')[0];
+
+    // 署名日時の解決
+    const resolvedSignedAt = contractData.agreed_at || contractSub?.created_at || subOrEmp?.created_at || new Date().toISOString();
 
     // 役職名 ＆ 役職手当の解決
     const resolvedPositionName = contractData.position_name || localMaster.position_name || matchedEmp.position_name || '';
@@ -1916,11 +1993,17 @@ export default function OnboardingAdminDashboard() {
     const resolvedQualificationAllowance = contractData.qualification_allowance !== undefined ? Number(contractData.qualification_allowance) : (localMaster.qualification_allowance || matchedEmp.qualification_allowance || 0);
     const resolvedFixedOvertimeAllowance = contractData.fixed_overtime_allowance !== undefined ? Number(contractData.fixed_overtime_allowance) : (localMaster.fixed_overtime_allowance || matchedEmp.fixed_overtime_allowance || 0);
 
-    const resolvedBankName = bankData.bank_name || localMaster.bank_name || matchedEmp.bank_name || '';
-    const resolvedBranchName = bankData.branch_name || localMaster.branch_name || matchedEmp.branch_name || '';
-    const resolvedAccountType = bankData.account_type || localMaster.account_type || matchedEmp.account_type || 'ordinary';
-    const resolvedAccountNumber = bankData.account_number || localMaster.account_number || matchedEmp.account_number || '';
-    const resolvedAccountHolder = bankData.account_holder || localMaster.account_holder || matchedEmp.account_holder || targetName || '';
+    // 銀行口座情報の解決（キャメルケース・スネークケース完全両対応）
+    const resolvedBankName = bankData.bank_name || bankData.bankName || localMaster.bank_name || matchedEmp.bank_name || '';
+    const resolvedBranchName = bankData.branch_name || bankData.branchName || localMaster.branch_name || matchedEmp.branch_name || '';
+    const resolvedAccountType = bankData.account_type || bankData.accountType || localMaster.account_type || matchedEmp.account_type || 'ordinary';
+    const resolvedAccountNumber = bankData.account_number || bankData.accountNumber || localMaster.account_number || matchedEmp.account_number || '';
+    const resolvedAccountHolder = bankData.account_holder || bankData.accountHolder || localMaster.account_holder || matchedEmp.account_holder || targetName || '';
+
+    // マイナンバー ＆ 扶養親族情報の解決
+    const resolvedMyNumber = myNumData.my_number || myNumData.myNumber || taxData.my_number || taxData.myNumber || localMaster.my_number || matchedEmp.my_number || '';
+    const resolvedDependentsCount = taxData.dependents_count !== undefined ? Number(taxData.dependents_count) : (Array.isArray(taxData.dependents) ? taxData.dependents.length : (localMaster.dependents_count !== undefined ? Number(localMaster.dependents_count) : (matchedEmp.dependents_count || 0)));
+    const resolvedHasSpouse = taxData.has_spouse !== undefined ? Boolean(taxData.has_spouse) : (localMaster.has_spouse !== undefined ? Boolean(localMaster.has_spouse) : Boolean(matchedEmp.has_spouse));
 
     return {
       user_id: targetUserId || matchedEmp.user_id || `temp_${Date.now()}`,
@@ -1931,10 +2014,15 @@ export default function OnboardingAdminDashboard() {
       department: contractData.department || localMaster.department || matchedEmp.department || '本社',
       employment_type: contractData.employment_type || localMaster.employment_type || matchedEmp.employment_type || 'full-time',
       contract_type: contractData.contract_type || localMaster.contract_type || matchedEmp.contract_type || 'indefinite',
+      trial_period_months: matchedEmp.trial_period_months ?? 3,
+      start_time: matchedEmp.start_time || '09:00',
+      end_time: matchedEmp.end_time || '18:00',
+      break_time_minutes: matchedEmp.break_time_minutes || 60,
+      holidays_text: matchedEmp.holidays_text || '完全週休2日制（土日・祝日）',
       join_date: resolvedJoinDate,
       birth_date: resolvedBirthDate,
       address: resolvedAddress,
-      phone: residentData.phone || localMaster.phone || matchedEmp.phone || '',
+      phone: resolvedPhone,
       position_name: resolvedPositionName,
       position_allowance: resolvedPositionAllowance,
       qualification_allowance: resolvedQualificationAllowance,
@@ -1948,6 +2036,9 @@ export default function OnboardingAdminDashboard() {
       account_type: resolvedAccountType,
       account_number: resolvedAccountNumber,
       account_holder: resolvedAccountHolder,
+      my_number: resolvedMyNumber,
+      dependents_count: resolvedDependentsCount,
+      has_spouse: resolvedHasSpouse,
       health_insurance_joined: matchedEmp.health_insurance_joined ?? true,
       pension_insurance_joined: matchedEmp.pension_insurance_joined ?? true,
       employment_insurance_joined: matchedEmp.employment_insurance_joined ?? true,
@@ -2382,7 +2473,7 @@ export default function OnboardingAdminDashboard() {
                               </button>
 
                               <button
-                                onClick={() => setEditModal({ isOpen: true, data: { ...emp } })}
+                                onClick={() => setEditModal({ isOpen: true, data: resolveEmployeeFullData(emp) })}
                                 className="bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs p-1.5 rounded-lg border border-slate-200 transition cursor-pointer"
                                 title="従業員・就業時間・給与の修正"
                               >
