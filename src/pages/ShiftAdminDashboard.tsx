@@ -6,6 +6,7 @@ import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, addDays } fro
 import AppSwitcher from '../components/AppSwitcher';
 
 import { calculateLaborCost, generateAutoShift } from '../lib/shiftAlgorithm';
+import { HelpGuideModal } from '../components/HelpGuideModal';
 
 const ShiftAdminDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ const ShiftAdminDashboard: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [generationResult, setGenerationResult] = useState<{ added: number } | null>(null);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   const [allEmployees, setAllEmployees] = useState<any[]>([]);
   const [submittedUserIds, setSubmittedUserIds] = useState<string[]>([]);
@@ -586,6 +588,14 @@ const ShiftAdminDashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setIsHelpOpen(true)}
+            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3.5 py-1.5 rounded-xl flex items-center space-x-1.5 transition font-bold text-xs shadow-xs cursor-pointer"
+            title="シフト管理ダッシュボードの使い方・目的を見る"
+          >
+            <span className="text-sm">❓</span>
+            <span>使い方ガイド</span>
+          </button>
           <AppSwitcher currentApp="shift" role="admin" />
           <button
             onClick={async () => {
@@ -863,6 +873,13 @@ const ShiftAdminDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ❓ 使い方ガイドモーダル */}
+      <HelpGuideModal 
+        screenKey="shift_dashboard" 
+        isOpen={isHelpOpen} 
+        onClose={() => setIsHelpOpen(false)} 
+      />
     </div>
   );
 };

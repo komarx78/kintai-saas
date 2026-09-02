@@ -6,6 +6,7 @@ import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, each
 import { ja } from 'date-fns/locale';
 import { generateAutoShift } from '../lib/shiftAlgorithm';
 import AppSwitcher from '../components/AppSwitcher';
+import { HelpGuideModal } from '../components/HelpGuideModal';
 
 interface Shift {
   id: string;
@@ -39,6 +40,7 @@ const ShiftCalendarView: React.FC = () => {
   const [modalData, setModalData] = useState<Partial<Shift>>({});
   const [saving, setSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   useEffect(() => {
     fetchSettingsAndData();
@@ -390,18 +392,26 @@ const ShiftCalendarView: React.FC = () => {
             <button 
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="bg-amber-500 text-white px-4 py-2.5 rounded-xl flex items-center space-x-2 hover:bg-amber-600 transition shadow-md font-bold disabled:opacity-50"
+              className="bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-2 rounded-xl flex flex-col items-center justify-center transition shadow-md font-bold disabled:opacity-50 cursor-pointer"
+              title="希望シフトと必要枠を照合し、AIが未確定の下書き（ドラフト）を作成します"
             >
-              {isGenerating ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Wand2 className="w-4 h-4" />}
-              <span>自動割り当て</span>
+              <div className="flex items-center space-x-1.5 text-xs">
+                {isGenerating ? <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full"></div> : <Wand2 className="w-3.5 h-3.5" />}
+                <span>自動割り当て</span>
+              </div>
+              <span className="text-[10px] text-amber-100 font-medium">（AI下書き作成）</span>
             </button>
 
             <button 
               onClick={handlePublishAll}
-              className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl flex items-center space-x-2 hover:bg-emerald-700 transition shadow-md font-bold"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl flex flex-col items-center justify-center transition shadow-md font-bold cursor-pointer"
+              title="仕上がった下書きシフトを確定し、スタッフのスマホマイページへ本番公開します"
             >
-              <Save className="w-4 h-4" />
-              <span>一括確定</span>
+              <div className="flex items-center space-x-1.5 text-xs">
+                <Save className="w-3.5 h-3.5" />
+                <span>一括確定</span>
+              </div>
+              <span className="text-[10px] text-emerald-100 font-medium">（本番公開・配信）</span>
             </button>
             
             <button 
@@ -409,13 +419,50 @@ const ShiftCalendarView: React.FC = () => {
                 setModalData({ target_date: format(baseDate, 'yyyy-MM-dd'), role: roles[0]?.name || 'ホール', start_time: '10:00', end_time: '15:00', user_id: users[0]?.id });
                 setIsModalOpen(true);
               }}
-              className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl flex items-center space-x-2 hover:bg-indigo-700 transition shadow-md font-bold"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl flex items-center space-x-1.5 transition shadow-md font-bold text-xs cursor-pointer h-[42px]"
             >
               <Plus className="w-4 h-4" />
               <span>シフト追加</span>
             </button>
+
+            <button
+              onClick={() => setIsHelpOpen(true)}
+              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-xl flex items-center space-x-1 transition font-bold text-xs shadow-xs cursor-pointer h-[42px]"
+              title="シフト作成の流れ・機能の違いを見る"
+            >
+              <span className="text-sm">❓</span>
+              <span>使い方ガイド</span>
+            </button>
+
             <AppSwitcher currentApp="shift" role="admin" />
           </div>
+        </div>
+
+        {/* 💡 シフト作成のカンタン3ステップ案内バナー */}
+        <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-blue-50 border border-indigo-100/80 rounded-2xl p-3.5 mb-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs shadow-xs">
+          <div className="flex items-center flex-wrap gap-2 text-slate-700 font-medium">
+            <span className="font-black text-white bg-indigo-600 px-2 py-0.5 rounded-md text-[10px]">運用フロー</span>
+            <span className="flex items-center gap-1 font-bold text-slate-800">
+              <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-700 inline-flex items-center justify-center text-[10px]">1</span>
+              希望収集（赤の斜線）
+            </span>
+            <span className="text-slate-400">➔</span>
+            <span className="flex items-center gap-1 font-bold text-amber-700 bg-amber-100/60 px-2 py-0.5 rounded-lg border border-amber-200/50">
+              <span className="w-4 h-4 rounded-full bg-amber-500 text-white inline-flex items-center justify-center text-[10px]">2</span>
+              ⚡ 自動割り当て（AI下書き作成・手動微調整）
+            </span>
+            <span className="text-slate-400">➔</span>
+            <span className="flex items-center gap-1 font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-lg border border-emerald-200/50">
+              <span className="w-4 h-4 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center text-[10px]">3</span>
+              🚀 一括確定（スタッフへ本番公開・スマホ通知）
+            </span>
+          </div>
+          <button 
+            onClick={() => setIsHelpOpen(true)}
+            className="text-indigo-600 hover:text-indigo-800 font-bold hover:underline shrink-0 text-right cursor-pointer"
+          >
+            詳しく見る ≫
+          </button>
         </div>
 
         {/* 凡例 (Legend) */}
@@ -702,6 +749,13 @@ const ShiftCalendarView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ❓ 使い方ガイドモーダル */}
+      <HelpGuideModal 
+        screenKey="shift_calendar" 
+        isOpen={isHelpOpen} 
+        onClose={() => setIsHelpOpen(false)} 
+      />
     </div>
   );
 };

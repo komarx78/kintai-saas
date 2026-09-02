@@ -8,6 +8,7 @@ import { OfficialBankPassbookDoc } from '../components/OfficialBankPassbookDoc';
 import { OfficialTaxExemptionDoc } from '../components/OfficialTaxExemptionDoc';
 import OfficialSpouseDeductionDoc from '../components/OfficialSpouseDeductionDoc';
 import OfficialCustomCanvasDoc from '../components/OfficialCustomCanvasDoc';
+import { HelpGuideModal } from '../components/HelpGuideModal';
 import { 
   type CustomDocTemplate, 
   getCustomDocTemplatesFromStorage 
@@ -148,6 +149,7 @@ export default function OnboardingAdminDashboard() {
   const [submissionFilter, setSubmissionFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   // 提出書類 修正（編集）モーダルState
   const [editSubmissionModal, setEditSubmissionModal] = useState<{
@@ -2105,11 +2107,12 @@ export default function OnboardingAdminDashboard() {
             会社・全社マスタ設定
           </button>
           <button
-            onClick={() => setGuideModalOpen(true)}
-            className="bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs px-3 py-2 rounded-xl transition border border-slate-200 flex items-center gap-1.5 cursor-pointer"
+            onClick={() => setIsHelpOpen(true)}
+            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-3.5 py-2 rounded-xl transition border border-indigo-200 flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title="大元台帳(SSOT)の役割・入社手続きの流れを見る"
           >
-            <HelpCircle className="w-4 h-4 text-blue-600" />
-            労務手続きガイド
+            <span className="text-sm">❓</span>
+            <span>使い方ガイド</span>
           </button>
           <AppSwitcher currentApp="onboarding" role="admin" />
           <button
@@ -5219,6 +5222,13 @@ export default function OnboardingAdminDashboard() {
           </div>
         );
       })()}
+
+      {/* ❓ 使い方ガイドモーダル */}
+      <HelpGuideModal 
+        screenKey="onboarding_admin" 
+        isOpen={isHelpOpen} 
+        onClose={() => setIsHelpOpen(false)} 
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import AppSwitcher from '../components/AppSwitcher';
+import { HelpGuideModal } from '../components/HelpGuideModal';
 
 type ShiftType = 'none' | 'working' | 'off';
 
@@ -26,6 +27,7 @@ const ShiftEmployeeRequest: React.FC = () => {
   const [deadlineRule, setDeadlineRule] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'request' | 'confirmed'>('request');
   const [isLocked, setIsLocked] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   
   // 当月（1ヶ月）のカレンダー
   const currentMonthStart = startOfMonth(new Date());
@@ -263,7 +265,17 @@ const ShiftEmployeeRequest: React.FC = () => {
           <CalendarIcon className="w-5 h-5 mr-2 text-indigo-600" />
           {format(currentMonthStart, 'yyyy年M月')}のシフト希望
         </h1>
-        <AppSwitcher currentApp="shift" role="user" />
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setIsHelpOpen(true)}
+            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-2.5 py-1.5 rounded-xl flex items-center space-x-1 transition font-bold text-xs shadow-xs cursor-pointer"
+            title="シフト希望の提出方法を見る"
+          >
+            <span>❓</span>
+            <span className="hidden sm:inline">使い方</span>
+          </button>
+          <AppSwitcher currentApp="shift" role="user" />
+        </div>
       </div>
 
       {/* Tabs */}
@@ -525,6 +537,13 @@ const ShiftEmployeeRequest: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ❓ 使い方ガイドモーダル */}
+      <HelpGuideModal 
+        screenKey="shift_user_request" 
+        isOpen={isHelpOpen} 
+        onClose={() => setIsHelpOpen(false)} 
+      />
     </div>
   );
 };

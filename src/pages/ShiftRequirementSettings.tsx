@@ -3,6 +3,7 @@ import { Users, Save, ArrowLeft, Plus, Trash2, CheckCircle2, Copy } from 'lucide
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AppSwitcher from '../components/AppSwitcher';
+import { HelpGuideModal } from '../components/HelpGuideModal';
 
 const defaultRoles = ['ホール', 'キッチン', 'レジ', '清掃'];
 const patternTypes = ['平日', '土日', '祝日'];
@@ -21,6 +22,7 @@ const ShiftRequirementSettings: React.FC = () => {
   const [activePattern, setActivePattern] = useState('平日');
   const [saved, setSaved] = useState(false);
   const [roles, setRoles] = useState<string[]>(defaultRoles);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   
   const [requirements, setRequirements] = useState<Record<string, Requirement[]>>({
     '平日': [],
@@ -367,6 +369,16 @@ const ShiftRequirementSettings: React.FC = () => {
               {saved ? <CheckCircle2 className="w-5 h-5 mr-2" /> : <Save className="w-5 h-5 mr-2" />}
               {saved ? '保存しました' : '設定を保存'}
             </button>
+
+            <button
+              onClick={() => setIsHelpOpen(true)}
+              className="bg-white/80 hover:bg-white text-indigo-700 border border-indigo-200 px-4 py-2.5 rounded-xl flex items-center space-x-1.5 transition font-bold text-sm shadow-sm cursor-pointer"
+              title="必要枠設定の目的とガントチャート操作ガイドを見る"
+            >
+              <span className="text-base">❓</span>
+              <span>使い方ガイド</span>
+            </button>
+
             <AppSwitcher currentApp="shift" role="admin" />
           </div>
         </div>
@@ -689,6 +701,13 @@ const ShiftRequirementSettings: React.FC = () => {
           
         </div>
       </div>
+
+      {/* ❓ 使い方ガイドモーダル */}
+      <HelpGuideModal 
+        screenKey="shift_requirements" 
+        isOpen={isHelpOpen} 
+        onClose={() => setIsHelpOpen(false)} 
+      />
     </div>
   );
 };

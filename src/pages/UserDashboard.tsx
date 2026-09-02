@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { RulesAiAssistant } from '../components/RulesAiAssistant';
 import { UserPayslipView } from '../components/UserPayslipView';
 import AppSwitcher from '../components/AppSwitcher';
+import { HelpGuideModal } from '../components/HelpGuideModal';
 
 const UserDashboard = () => {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ const UserDashboard = () => {
   const [user, setUser] = useState<any>(null);
   const [currentRecord, setCurrentRecord] = useState<any>(null);
   const [monthlyRecords, setMonthlyRecords] = useState<any[]>([]);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   const [companyHolidays, setCompanyHolidays] = useState<Set<string>>(new Set());
   const [roundingUnit, setRoundingUnit] = useState<number>(15);
@@ -736,6 +738,14 @@ const UserDashboard = () => {
           </div>
 
           <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setIsHelpOpen(true)}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3.5 py-1.5 rounded-xl flex items-center space-x-1.5 transition font-bold text-xs shadow-xs cursor-pointer"
+              title="打刻・有給申請・給与明細の使い方を見る"
+            >
+              <span className="text-sm">❓</span>
+              <span>使い方ガイド</span>
+            </button>
             <AppSwitcher currentApp="kintai" role={user?.role === 'admin' ? 'admin' : 'user'} />
             <button
               onClick={async () => {
@@ -1939,6 +1949,13 @@ const UserDashboard = () => {
         </div>
       </div>
     </div>
+    
+    {/* ❓ 使い方ガイドモーダル */}
+    <HelpGuideModal 
+      screenKey="attendance_user" 
+      isOpen={isHelpOpen} 
+      onClose={() => setIsHelpOpen(false)} 
+    />
   </div>
   );
 };

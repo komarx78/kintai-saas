@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AppSwitcher from '../components/AppSwitcher';
+import { HelpGuideModal } from '../components/HelpGuideModal';
 import { compressImageFile } from '../lib/imageCompressor';
 import { 
   CreditCard, Train, Shield, Users, FileText, 
@@ -17,6 +18,7 @@ export default function EmployeeOnboardingSubmission() {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'bank' | 'commuting' | 'identity' | 'dependents' | 'withholding'>('bank');
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   // 提出履歴リスト
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -278,6 +280,14 @@ export default function EmployeeOnboardingSubmission() {
         </div>
 
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setIsHelpOpen(true)}
+            className="bg-cyan-50 hover:bg-cyan-100 text-cyan-700 border border-cyan-200 px-3.5 py-1.5 rounded-xl flex items-center space-x-1.5 transition font-bold text-xs shadow-xs cursor-pointer"
+            title="入社手続き書類の提出方法を見る"
+          >
+            <span className="text-sm">❓</span>
+            <span>使い方ガイド</span>
+          </button>
           <AppSwitcher currentApp="portal" role="user" />
           <button
             onClick={async () => { await supabase.auth.signOut(); navigate('/'); }}
@@ -890,6 +900,13 @@ export default function EmployeeOnboardingSubmission() {
         )}
 
       </main>
+
+      {/* ❓ 使い方ガイドモーダル */}
+      <HelpGuideModal 
+        screenKey="onboarding_user" 
+        isOpen={isHelpOpen} 
+        onClose={() => setIsHelpOpen(false)} 
+      />
     </div>
   );
 }

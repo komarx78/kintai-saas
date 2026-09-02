@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { PayslipManagement } from '../components/PayslipManagement';
 import AppSwitcher from '../components/AppSwitcher';
+import { HelpGuideModal } from '../components/HelpGuideModal';
 import { DollarSign, ArrowLeft, LogOut } from 'lucide-react';
 
 export default function PayrollAdminDashboard() {
@@ -10,6 +11,7 @@ export default function PayrollAdminDashboard() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantName, setTenantName] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -89,6 +91,14 @@ export default function PayrollAdminDashboard() {
         </div>
 
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setIsHelpOpen(true)}
+            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3.5 py-1.5 rounded-xl flex items-center space-x-1.5 transition font-bold text-xs shadow-xs cursor-pointer"
+            title="給与計算の流れ・勤怠連動の仕組みを見る"
+          >
+            <span className="text-sm">❓</span>
+            <span>使い方ガイド</span>
+          </button>
           <AppSwitcher currentApp="payroll" role="admin" />
           <button
             onClick={handleLogout}
@@ -102,8 +112,15 @@ export default function PayrollAdminDashboard() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 min-w-[1024px]">
-        <PayslipManagement tenantId={tenantId} />
+        {tenantId && <PayslipManagement tenantId={tenantId} />}
       </main>
+
+      {/* ❓ 使い方ガイドモーダル */}
+      <HelpGuideModal 
+        screenKey="payroll_admin" 
+        isOpen={isHelpOpen} 
+        onClose={() => setIsHelpOpen(false)} 
+      />
     </div>
   );
 }

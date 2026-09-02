@@ -7,6 +7,7 @@ import { MonthlyAttendanceManagement } from '../components/MonthlyAttendanceMana
 import { PayslipManagement } from '../components/PayslipManagement';
 import AppSwitcher from '../components/AppSwitcher';
 import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
+import { HelpGuideModal } from '../components/HelpGuideModal';
 
 // 2026年の日本の祝日（簡易モック用リスト）
 const NATIONAL_HOLIDAYS_2026 = [
@@ -22,6 +23,7 @@ const AdminDashboard = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -756,6 +758,14 @@ ${tenantId || '（エラー：コード取得失敗）'}
           </div>
 
           <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setIsHelpOpen(true)}
+              className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-3.5 py-1.5 rounded-xl flex items-center space-x-1.5 transition font-bold text-xs shadow-xs cursor-pointer"
+              title="勤怠管理ダッシュボードの使い方・法令チェック機能を見る"
+            >
+              <span className="text-sm">❓</span>
+              <span>使い方ガイド</span>
+            </button>
             <AppSwitcher currentApp="kintai" role="admin" />
             <button
               onClick={async () => {
@@ -2171,6 +2181,12 @@ ${tenantId || '（エラー：コード取得失敗）'}
         </div>
       )}
 
+      {/* ❓ 使い方ガイドモーダル */}
+      <HelpGuideModal 
+        screenKey="attendance_admin" 
+        isOpen={isHelpOpen} 
+        onClose={() => setIsHelpOpen(false)} 
+      />
     </div>
   );
 };

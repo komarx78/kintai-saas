@@ -6,6 +6,7 @@ import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 import { OfficialCompanyCalendarDoc } from '../components/OfficialCompanyCalendarDoc';
 import { OrgChartPrintModal } from '../components/OrgChartPrintModal';
 import { OfficialLaborContractDoc } from '../components/OfficialLaborContractDoc';
+import { HelpGuideModal } from '../components/HelpGuideModal';
 import { 
   type LaborContractTemplate, 
   DEFAULT_LABOR_CONTRACT_TEMPLATE, 
@@ -113,6 +114,7 @@ export default function CompanySettingsDashboard() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements'>('basic');
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   // 📢 全社お知らせ掲示板State
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
@@ -1279,6 +1281,14 @@ export default function CompanySettingsDashboard() {
         </div>
 
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setIsHelpOpen(true)}
+            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3.5 py-2 rounded-xl flex items-center space-x-1.5 transition font-bold text-xs shadow-xs cursor-pointer"
+            title="会社・全社労務マスタの役割・意図を見る"
+          >
+            <span className="text-sm">❓</span>
+            <span>使い方ガイド</span>
+          </button>
           <button
             onClick={handleSaveAllSettings}
             disabled={isSaving}
@@ -3681,6 +3691,13 @@ export default function CompanySettingsDashboard() {
           </div>
         </div>
       )}
+
+      {/* ❓ 使い方ガイドモーダル */}
+      <HelpGuideModal 
+        screenKey="company_settings" 
+        isOpen={isHelpOpen} 
+        onClose={() => setIsHelpOpen(false)} 
+      />
     </div>
   );
 }

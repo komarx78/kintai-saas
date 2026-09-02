@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Users, Save, ArrowLeft, Shield, UserPlus, X, Copy, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AppSwitcher from '../components/AppSwitcher';
+import { HelpGuideModal } from '../components/HelpGuideModal';
 
 interface EmployeeSetting {
   user_id: string;
@@ -27,6 +28,7 @@ const ShiftEmployeeMaster: React.FC = () => {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [tenantName, setTenantName] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -129,10 +131,10 @@ const ShiftEmployeeMaster: React.FC = () => {
               シフト要員マスタ（AI条件設定）
             </h1>
           </div>
-          <div className="flex space-x-4">
+          <div className="flex space-x-3 items-center">
             <button 
               onClick={() => setIsInviteModalOpen(true)}
-              className="bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-xl flex items-center hover:bg-indigo-50 transition shadow-sm font-bold text-sm"
+              className="bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-xl flex items-center hover:bg-indigo-50 transition shadow-sm font-bold text-sm cursor-pointer"
             >
               <UserPlus className="w-4 h-4 mr-2" /> 従業員を新規招待
             </button>
@@ -143,6 +145,16 @@ const ShiftEmployeeMaster: React.FC = () => {
             >
               {saving ? <div className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full"></div> : <><Save className="w-5 h-5 mr-2" />一括保存</>}
             </button>
+
+            <button
+              onClick={() => setIsHelpOpen(true)}
+              className="bg-white text-indigo-700 border border-indigo-200 px-3.5 py-2 rounded-xl flex items-center space-x-1.5 transition font-bold text-sm shadow-sm cursor-pointer"
+              title="シフト要員マスタの役割・目的を見る"
+            >
+              <span className="text-base">❓</span>
+              <span>使い方ガイド</span>
+            </button>
+
             <AppSwitcher currentApp="shift" role="admin" />
           </div>
         </div>
@@ -270,6 +282,13 @@ const ShiftEmployeeMaster: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* ❓ 使い方ガイドモーダル */}
+      <HelpGuideModal 
+        screenKey="shift_employees" 
+        isOpen={isHelpOpen} 
+        onClose={() => setIsHelpOpen(false)} 
+      />
     </div>
   );
 };
