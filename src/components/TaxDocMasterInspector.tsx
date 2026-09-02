@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { 
   Save, Copy, Check, 
   Building2, User, Users, Heart, Shield, Baby, FileText, CheckCircle2, Loader2,
-  ZoomIn, ZoomOut, RotateCcw,
+  ZoomIn, ZoomOut, RotateCcw, Trash2,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
   ChevronsUp, ChevronsDown, ChevronsLeft, ChevronsRight
 } from 'lucide-react';
@@ -448,14 +448,24 @@ export const TaxDocMasterInspector: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => updateField(selectedField.id, 'disabled', !selectedField.disabled)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1 cursor-pointer ${
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md ${
                       selectedField.disabled
-                        ? 'bg-rose-950/80 text-rose-300 border border-rose-600 hover:bg-rose-900'
-                        : 'bg-emerald-950/80 text-emerald-300 border border-emerald-600 hover:bg-emerald-900'
+                        ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border border-emerald-400'
+                        : 'bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white border border-rose-400'
                     }`}
-                    title="この項目の印字を有効または無効（非表示・消去）に切り替えます"
+                    title="この項目の印字を削除（消去・非表示）または復活します"
                   >
-                    {selectedField.disabled ? '🚫 印字無効（消去中）' : '👁️ 印字有効（印字中）'}
+                    {selectedField.disabled ? (
+                      <>
+                        <RotateCcw className="w-3.5 h-3.5 text-amber-200" />
+                        <span>↩️ 削除解除（印字を復活）</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-3.5 h-3.5 text-white" />
+                        <span>🗑️ この項目を印字から削除（消去）</span>
+                      </>
+                    )}
                   </button>
 
                   <div className="text-right font-mono text-xs text-amber-300 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700 whitespace-nowrap">
