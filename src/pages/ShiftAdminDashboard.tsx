@@ -192,20 +192,25 @@ const ShiftAdminDashboard: React.FC = () => {
 
         let uid = existUser?.id;
         if (!uid) {
+          const generatedUid = crypto.randomUUID();
           const { data: newUser, error: userError } = await supabase
             .from('users')
             .insert({
+              id: generatedUid,
               tenant_id: tenantId,
               name: staff.name,
               email: email,
-              role: '従業員',
+              role: 'user',
               employment_type: staff.wage >= 1300 ? 'full-time' : 'part-time',
               has_shift_access: true
             })
             .select('id')
             .single();
-          if (userError) throw userError;
-          if (newUser) uid = newUser.id;
+          if (userError) {
+            console.error('User insert error:', userError);
+            throw userError;
+          }
+          uid = newUser?.id || generatedUid;
         } else {
           await supabase.from('users').update({ has_shift_access: true }).eq('id', uid);
         }
