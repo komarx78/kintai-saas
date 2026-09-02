@@ -6,6 +6,7 @@ import { OfficialLaborContractDoc } from '../components/OfficialLaborContractDoc
 import { OfficialCommutingPassDoc } from '../components/OfficialCommutingPassDoc';
 import { OfficialBankPassbookDoc } from '../components/OfficialBankPassbookDoc';
 import { OfficialTaxExemptionDoc } from '../components/OfficialTaxExemptionDoc';
+import OfficialSpouseDeductionDoc from '../components/OfficialSpouseDeductionDoc';
 import { compressImageFile } from '../lib/imageCompressor';
 import { getLaborContractTemplateFromStorage } from '../lib/laborContractTemplate';
 import { 
@@ -69,6 +70,9 @@ interface EmployeeOnboardingData {
   account_type?: 'ordinary' | 'current';
   account_number?: string;
   account_holder?: string;
+  has_spouse?: boolean;
+  dependents_count?: number;
+  my_number?: string;
   holidays_text?: string;
   documents_checklist?: {
     id_copy: boolean;
@@ -210,7 +214,7 @@ export default function OnboardingAdminDashboard() {
   const [cabinetModal, setCabinetModal] = useState<{
     isOpen: boolean;
     employee: EmployeeOnboardingData | null;
-    activeDoc: 'contract' | 'commuting' | 'bank' | 'tax' | 'identity' | 'raw_data';
+    activeDoc: 'contract' | 'commuting' | 'bank' | 'tax' | 'spouse_deduction' | 'identity' | 'raw_data';
     selectedSubmission?: DocumentSubmission | null;
   }>({
     isOpen: false,
@@ -2199,7 +2203,7 @@ export default function OnboardingAdminDashboard() {
                         </button>
 
                         {/* 📄 令和8年分 扶養控除等申告書のプレビュー・印刷ボタン */}
-                        {sub.document_type === 'dependents_form' && (
+                        {(sub.document_type === 'dependents_form' || sub.document_type === 'tax_withholding') && (
                           <button
                             onClick={() => {
                               const fullEmp = resolveEmployeeFullData(sub);
@@ -2383,13 +2387,23 @@ export default function OnboardingAdminDashboard() {
               </button>
 
               <button
+                onClick={() => setCabinetModal(prev => ({ ...prev, activeDoc: 'spouse_deduction' }))}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  cabinetModal.activeDoc === 'spouse_deduction' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300'
+                }`}
+              >
+                <Users className="w-4 h-4 text-emerald-600" />
+                5. 配偶者控除等申告書（特別控除）
+              </button>
+
+              <button
                 onClick={() => setCabinetModal(prev => ({ ...prev, activeDoc: 'raw_data' }))}
                 className={`px-3.5 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
                   cabinetModal.activeDoc === 'raw_data' ? 'bg-amber-600 text-white shadow-sm' : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-300'
                 }`}
               >
                 <CheckCircle2 className="w-4 h-4 text-amber-700" />
-                📋 5. スマホ入力原本・照合チェック
+                📋 6. スマホ入力原本・照合チェック
               </button>
             </div>
 
@@ -2526,9 +2540,44 @@ export default function OnboardingAdminDashboard() {
                           <CheckCircle2 className="w-4 h-4 text-amber-600" />
                           📱 スマホ・PCから送信された大元入力データ（照合中）
                         </span>
-                        <span className="text-[10px] text-amber-700 font-bold">
-                          送信日時: {subTax?.created_at ? new Date(subTax.created_at).toLocaleString('ja-JP') : '未送信'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-amber-700 font-bold">
+                            送信日時: {subTax?.created_at ? new Date(subTax.created_at).toLocaleString('ja-JP') : '未送信'}
+                          </span>
+                          <button
+                            onClick={() => {
+                              const emp = cabinetModal.employee;
+                              if (!emp) return;
+                              const targetSub = subTax || {
+                                id: `temp_tax_${emp.user_id}`,
+                                tenant_id: tenantId!,
+                                user_id: emp.user_id,
+                                user_name: emp.name,
+                                document_type: 'dependents_form',
+                                title: '令和8年分 扶養控除等申告書',
+                                data: {
+                                  name: emp.name,
+                                  has_spouse: emp.has_spouse || false,
+                                  spouse_name: '',
+                                  spouse_income_estimate: 0,
+                                  dependents_count: emp.dependents_count || 0,
+                                  dependents: []
+                                },
+                                status: 'approved',
+                                created_at: new Date().toISOString()
+                              };
+                              setEditSubmissionModal({
+                                isOpen: true,
+                                submission: targetSub as any,
+                                editedData: { ...targetSub.data }
+                              });
+                            }}
+                            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-xl shadow-xs transition flex items-center gap-1 cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            ✏️ 扶養控除申告書の内容を修正・編集
+                          </button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-700">
                         <div className="bg-white p-2 rounded-xl border border-amber-100">
@@ -2585,7 +2634,41 @@ export default function OnboardingAdminDashboard() {
                 );
               })()}
 
-              {/* 📋 5. スマホ・PC入力原本 全データ照合ビュー */}
+              {/* 👨‍👩‍👧‍👦 5. 配偶者控除等申告書（年末調整・配偶者特別控除計算書） */}
+              {cabinetModal.activeDoc === 'spouse_deduction' && (() => {
+                const targetEmpName = cabinetModal.employee?.name?.trim() || '';
+                const targetUserId = cabinetModal.employee?.user_id || '';
+
+                const userTaxSubs = submissions
+                  .filter(s => (s.user_id === targetUserId || (targetEmpName && s.data?.name?.trim() === targetEmpName) || (targetEmpName && s.user_name?.trim() === targetEmpName)) && (s.document_type === 'dependents_form' || s.document_type === 'tax_withholding'))
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                
+                const tData = userTaxSubs[0]?.data || {};
+                const resolvedEmp = resolveEmployeeFullData(cabinetModal.employee);
+
+                return (
+                  <div className="space-y-4">
+                    <OfficialSpouseDeductionDoc data={{
+                      year: tData.year || 2026,
+                      companyName: tenantInfo?.name || '株式会社KAP',
+                      companyAddress: tenantInfo?.address || '滋賀県大津市坂本3丁目21-16',
+                      corporateNumber: tenantInfo?.corporate_number || '1010001999999',
+                      employeeName: resolvedEmp.name,
+                      employeeAddress: resolvedEmp.address || '滋賀県大津市坂本3丁目21-16',
+                      employeeIncomeEstimate: resolvedEmp.base_salary ? resolvedEmp.base_salary * 12 : 3500000,
+                      hasSpouse: tData.has_spouse || resolvedEmp.has_spouse || false,
+                      spouseName: tData.spouse_name || '',
+                      spouseNameKana: tData.spouse_name_kana || '',
+                      spouseBirthDate: tData.spouse_birth_date || '1996-05-15',
+                      spouseIncomeEstimate: tData.spouse_income_estimate ?? 0,
+                      spouseAddress: resolvedEmp.address,
+                      appliedDate: resolvedEmp.join_date
+                    }} />
+                  </div>
+                );
+              })()}
+
+              {/* 📋 6. スマホ・PC入力原本 全データ照合ビュー */}
               {cabinetModal.activeDoc === 'raw_data' && (() => {
                 const targetEmpName = cabinetModal.employee?.name?.trim() || '';
                 const targetUserId = cabinetModal.employee?.user_id || '';
@@ -3130,6 +3213,50 @@ export default function OnboardingAdminDashboard() {
                       value={editModal.data.account_holder || ''}
                       onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, account_holder: e.target.value } })}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 👨‍👩‍👧‍👦 扶養親族・配偶者控除・マイナンバー設定 */}
+              <div className="bg-amber-50/60 p-4 rounded-2xl border border-amber-200 space-y-3">
+                <h4 className="font-bold text-amber-950 flex items-center justify-between text-xs border-b border-amber-200 pb-1.5">
+                  <span className="flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-amber-600" />
+                    扶養親族 ＆ 配偶者控除設定（給与計算・源泉徴収税額 甲欄連動）
+                  </span>
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[10px] text-slate-600 font-bold block mb-0.5">源泉控除対象配偶者</label>
+                    <select
+                      value={editModal.data.has_spouse ? 'true' : 'false'}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, has_spouse: e.target.value === 'true' } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 font-bold text-xs text-slate-800"
+                    >
+                      <option value="false">なし（単身・対象外）</option>
+                      <option value="true">あり（所得95万以下）</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-600 font-bold block mb-0.5">扶養親族等の数 (名)</label>
+                    <input
+                      type="number"
+                      placeholder="例: 0"
+                      value={editModal.data.dependents_count === 0 ? '' : (editModal.data.dependents_count || '')}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, dependents_count: e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0) } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-xs text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-600 font-bold block mb-0.5">マイナンバー</label>
+                    <input
+                      type="text"
+                      maxLength={12}
+                      placeholder="12桁"
+                      value={editModal.data.my_number || ''}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, my_number: e.target.value } })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 font-mono text-xs"
                     />
                   </div>
                 </div>

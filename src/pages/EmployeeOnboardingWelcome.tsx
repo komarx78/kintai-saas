@@ -1769,6 +1769,28 @@ export default function EmployeeOnboardingWelcome() {
                         />
                       </div>
                     </div>
+
+                    {/* 💡 配偶者の税法上の控除区分 リアルタイム判定バッジ */}
+                    {taxData.spouseIncomeEstimate > 0 && (
+                      <div className="pt-1 text-[10px] leading-relaxed">
+                        {taxData.spouseIncomeEstimate <= 950000 ? (
+                          <div className="bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 p-2 rounded-xl">
+                            ✅ <b>源泉控除対象配偶者（所得95万円以下 / 給与年収150万円以下）</b><br />
+                            毎月の給与計算で源泉所得税が減額され、扶養控除等申告書のA欄に記載されます。
+                          </div>
+                        ) : taxData.spouseIncomeEstimate <= 1330000 ? (
+                          <div className="bg-blue-950/60 border border-blue-500/40 text-blue-300 p-2 rounded-xl">
+                            📋 <b>配偶者特別控除の対象（所得95万円超〜133万円以下 / 給与年収201.6万円未満）</b><br />
+                            毎月の扶養控除申告書A欄には記載されず、年末調整時の<b>『給与所得者の配偶者控除等申告書』</b>にて控除が適用されます。
+                          </div>
+                        ) : (
+                          <div className="bg-rose-950/60 border border-rose-500/40 text-rose-300 p-2 rounded-xl">
+                            ⚠️ <b>控除対象外（所得133万円超 / 給与年収201.6万円超）</b><br />
+                            配偶者の所得が基準を超えるため、税法上の配偶者控除・配偶者特別控除の対象外となります（申告書A欄は空欄となります）。
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -6,6 +6,7 @@ import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 import { OfficialCompanyCalendarDoc } from '../components/OfficialCompanyCalendarDoc';
 import { OrgChartPrintModal } from '../components/OrgChartPrintModal';
 import { OfficialLaborContractDoc } from '../components/OfficialLaborContractDoc';
+import { TaxDocMasterInspector } from '../components/TaxDocMasterInspector';
 import { 
   type LaborContractTemplate, 
   DEFAULT_LABOR_CONTRACT_TEMPLATE, 
@@ -112,7 +113,7 @@ export default function CompanySettingsDashboard() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'tax_doc_master' | 'contract' | 'onboarding' | 'rules' | 'announcements'>('basic');
 
   // 📢 全社お知らせ掲示板State
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
@@ -1354,6 +1355,16 @@ export default function CompanySettingsDashboard() {
           </button>
 
           <button
+            onClick={() => setActiveTab('tax_doc_master')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'tax_doc_master' ? 'bg-amber-600 text-white shadow-sm' : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-300'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 text-amber-600" />
+            4. 扶養控除申告書 印字マスター調整
+          </button>
+
+          <button
             onClick={() => setActiveTab('contract')}
             className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'contract' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
@@ -2387,6 +2398,22 @@ export default function CompanySettingsDashboard() {
             })()}
 
             {renderSaveFooter()}
+          </div>
+        )}
+
+        {/* 4. 扶養控除申告書 印字座標マスター調整 タブ */}
+        {activeTab === 'tax_doc_master' && (
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6 animate-in fade-in duration-200">
+            <div className="pb-3 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-amber-600" />
+                令和8年分 扶養控除等申告書 公式PDF印字マスター座標調整（国税庁様式インスペクター）
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                国税庁原本PDF（A4）に対する各項目の印字位置（X/Y座標）、フォントサイズ、マイナンバーや法人番号のマス目ピッチをミリ単位でドラッグ調整・一括保存できます。
+              </p>
+            </div>
+            <TaxDocMasterInspector />
           </div>
         )}
 

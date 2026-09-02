@@ -320,8 +320,10 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           renderCircle(getField('secondarySalaryCircle'));
         }
 
-        // Ａ. 源泉控除対象配偶者
-        if (data.hasSpouse && data.spouseName) {
+        // Ａ. 源泉控除対象配偶者（税法上の要件: 配偶者の本年所得見積額が95万円以下 / 年収150万円以下のみ記載）
+        const isWithholdingSpouse = data.hasSpouse && data.spouseName && ((data.spouseIncomeEstimate || 0) <= 950000);
+
+        if (isWithholdingSpouse) {
           let spName = data.spouseName || '';
           let spKana = data.spouseNameKana || '';
 
