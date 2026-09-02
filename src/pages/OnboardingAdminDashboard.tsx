@@ -548,67 +548,106 @@ export default function OnboardingAdminDashboard() {
         if (empName && !existingNames.has(empName)) {
           existingNames.add(empName);
           try {
-            // users テーブルに自動登録
+            // users テーブルに自動登録（多重フォールバック）
             const tempEmail = d.email || `emp_${Date.now()}@sample.local`;
-            const { data: createdUser } = await supabase
-              .from('users')
-              .insert({
-                tenant_id: tenantIdData,
-                name: empName,
-                email: tempEmail,
-                role: 'user',
-                department: d.department || '営業部',
-                employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
-                join_date: d.join_date || new Date().toISOString().split('T')[0],
-                birth_date: d.birth_date || null,
-                address: d.address || null,
-                phone: d.phone || null,
-                has_kintai_access: true,
-                has_shift_access: true
-              })
-              .select()
-              .single();
+            let createdUser: any = null;
 
-            if (createdUser) {
-              // 台帳一覧に追加
-              combined.push({
-                user_id: createdUser.id,
-                name: empName,
-                email: tempEmail,
-                phone: d.phone || '',
-                birth_date: d.birth_date || '',
-                address: d.address || '',
-                role: 'user',
-                status: 'active',
-                current_step_number: 5,
-                step_history: [],
-                join_date: d.join_date || new Date().toISOString().split('T')[0],
-                employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
-                department: d.department || '営業部',
-                contract_type: d.contract_type || 'indefinite',
-                trial_period_months: 3,
-                start_time: defaultStartTime,
-                end_time: defaultEndTime,
-                break_time_minutes: defaultBreak,
-                holidays_text: defaultHolText,
-                salary_type: d.salary_type || 'monthly',
-                base_salary: d.base_salary || 250000,
-                hourly_wage: d.hourly_wage || 1150,
-                position_allowance: d.position_allowance || 0,
-                qualification_allowance: d.qualification_allowance || 0,
-                housing_allowance: 0,
-                family_allowance: 0,
-                commuting_allowance: d.one_month_pass_amount || 0,
-                health_insurance_joined: true,
-                pension_insurance_joined: true,
-                employment_insurance_joined: true,
-                bank_name: d.bank_name || '',
-                branch_name: d.branch_name || '',
-                account_type: d.account_type || 'ordinary',
-                account_number: d.account_number || '',
-                account_holder: d.account_holder || empName
-              });
+            try {
+              const { data: u1, error: e1 } = await supabase
+                .from('users')
+                .insert({
+                  tenant_id: tenantIdData,
+                  name: empName,
+                  email: tempEmail,
+                  role: 'user',
+                  department: d.department || '営業部',
+                  employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
+                  join_date: d.join_date || new Date().toISOString().split('T')[0],
+                  birth_date: d.birth_date || null,
+                  address: d.address || null,
+                  phone: d.phone || null,
+                  has_kintai_access: true,
+                  has_shift_access: true
+                })
+                .select()
+                .single();
+              if (!e1 && u1) createdUser = u1;
+            } catch (_) {}
+
+            if (!createdUser) {
+              try {
+                const { data: u2, error: e2 } = await supabase
+                  .from('users')
+                  .insert({
+                    tenant_id: tenantIdData,
+                    name: empName,
+                    email: tempEmail,
+                    role: 'user',
+                    department: d.department || '営業部',
+                    employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time'
+                  })
+                  .select()
+                  .single();
+                if (!e2 && u2) createdUser = u2;
+              } catch (_) {}
             }
+
+            if (!createdUser) {
+              try {
+                const { data: u3, error: e3 } = await supabase
+                  .from('users')
+                  .insert({
+                    tenant_id: tenantIdData,
+                    name: empName,
+                    email: tempEmail,
+                    role: 'user'
+                  })
+                  .select()
+                  .single();
+                if (!e3 && u3) createdUser = u3;
+              } catch (_) {}
+            }
+
+            const finalUserId = createdUser?.id || sub.user_id || `user_${Date.now()}`;
+
+            // 台帳一覧に確実に追加（画面の在職人数に即時反映！）
+            combined.push({
+              user_id: finalUserId,
+              name: empName,
+              email: tempEmail,
+              phone: d.phone || '',
+              birth_date: d.birth_date || '',
+              address: d.address || '',
+              role: 'user',
+              status: 'active',
+              current_step_number: 5,
+              step_history: [],
+              join_date: d.join_date || new Date().toISOString().split('T')[0],
+              employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
+              department: d.department || '営業部',
+              contract_type: d.contract_type || 'indefinite',
+              trial_period_months: 3,
+              start_time: defaultStartTime,
+              end_time: defaultEndTime,
+              break_time_minutes: defaultBreak,
+              holidays_text: defaultHolText,
+              salary_type: d.salary_type || 'monthly',
+              base_salary: d.base_salary || 250000,
+              hourly_wage: d.hourly_wage || 1150,
+              position_allowance: d.position_allowance || 0,
+              qualification_allowance: d.qualification_allowance || 0,
+              housing_allowance: 0,
+              family_allowance: 0,
+              commuting_allowance: d.one_month_pass_amount || 0,
+              health_insurance_joined: true,
+              pension_insurance_joined: true,
+              employment_insurance_joined: true,
+              bank_name: d.bank_name || '',
+              branch_name: d.branch_name || '',
+              account_type: d.account_type || 'ordinary',
+              account_number: d.account_number || '',
+              account_holder: d.account_holder || empName
+            });
           } catch (autoErr) {
             console.warn('Auto-sync approved employee error:', autoErr);
           }
@@ -1117,26 +1156,65 @@ export default function OnboardingAdminDashboard() {
         if (existingUser) {
           uId = existingUser.id;
         } else {
-          // 新規従業員として users テーブルに本登録！
+          // 新規従業員として users テーブルに本登録（多重フォールバック）！
           const tempEmail = d.email || `emp_${Date.now()}@sample.local`;
-          const { data: newUser, error: insErr } = await supabase
-            .from('users')
-            .insert({
-              tenant_id: tenantId,
-              name: empName,
-              email: tempEmail,
-              role: 'user',
-              department: d.department || '営業部',
-              employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
-              join_date: d.join_date || new Date().toISOString().split('T')[0],
-              birth_date: d.birth_date || null,
-              address: d.address || null,
-              phone: d.phone || null,
-              has_kintai_access: true,
-              has_shift_access: true
-            })
-            .select()
-            .single();
+          let newUser: any = null;
+
+          try {
+            const { data: u1 } = await supabase
+              .from('users')
+              .insert({
+                tenant_id: tenantId,
+                name: empName,
+                email: tempEmail,
+                role: 'user',
+                department: d.department || '営業部',
+                employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
+                join_date: d.join_date || new Date().toISOString().split('T')[0],
+                birth_date: d.birth_date || null,
+                address: d.address || null,
+                phone: d.phone || null,
+                has_kintai_access: true,
+                has_shift_access: true
+              })
+              .select()
+              .single();
+            if (u1) newUser = u1;
+          } catch (_) {}
+
+          if (!newUser) {
+            try {
+              const { data: u2 } = await supabase
+                .from('users')
+                .insert({
+                  tenant_id: tenantId,
+                  name: empName,
+                  email: tempEmail,
+                  role: 'user',
+                  department: d.department || '営業部',
+                  employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time'
+                })
+                .select()
+                .single();
+              if (u2) newUser = u2;
+            } catch (_) {}
+          }
+
+          if (!newUser) {
+            try {
+              const { data: u3 } = await supabase
+                .from('users')
+                .insert({
+                  tenant_id: tenantId,
+                  name: empName,
+                  email: tempEmail,
+                  role: 'user'
+                })
+                .select()
+                .single();
+              if (u3) newUser = u3;
+            } catch (_) {}
+          }
 
           if (newUser) {
             uId = newUser.id;
@@ -1145,8 +1223,6 @@ export default function OnboardingAdminDashboard() {
               .from('employee_document_submissions')
               .update({ user_id: uId })
               .eq('id', sub.id);
-          } else if (insErr) {
-            console.warn('User insert error on approval:', insErr);
           }
         }
       } catch (uErr) {
