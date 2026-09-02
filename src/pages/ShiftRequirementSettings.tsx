@@ -122,6 +122,119 @@ const ShiftRequirementSettings: React.FC = () => {
     }
   };
 
+  // ドラッグ操作の状態
+  const [dragState, setDragState] = useState<{
+    type: 'create' | 'resize-start' | 'resize-end' | 'move';
+    role: string;
+    reqId?: string;
+    initialStartHour: number;
+    initialEndHour: number;
+    startHour: number;
+    endHour: number;
+    originHour: number;
+  } | null>(null);
+
+  // マウスX座標から時間（0〜24）への変換ヘルパー
+  const getHourFromEvent = (e: MouseEvent | React.MouseEvent, containerEl: HTMLElement): number => {
+    const rect = containerEl.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const rawHour = Math.floor((x / rect.width) * 24);
+    return Math.max(0, Math.min(23, rawHour));
+  };
+
+  // 全体マウスムーブ＆アップのリスナー（ドラッグ中の滑らかな追従）
+  useEffect(() => {
+    if (!dragState) return;
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      const containerEl = document.getElementById(`role-timeline-${dragState.role}`);
+      if (!containerEl) return;
+
+      const currentHour = getHourFromEvent(e, containerEl);
+
+      if (dragState.type === 'create') {
+        const s = Math.min(dragState.originHour, currentHour);
+        const end = Math.max(dragState.originHour, currentHour) + 1;
+        setDragState(prev => prev ? ({ ...prev, startHour: s, endHour: Math.min(24, end) }) : null);
+      } else if (dragState.type === 'resize-start') {
+        if (currentHour < dragState.initialEndHour) {
+          setDragState(prev => prev ? ({ ...prev, startHour: currentHour }) : null);
+        }
+      } else if (dragState.type === 'resize-end') {
+        const end = Math.max(dragState.initialStartHour + 1, Math.min(24, currentHour + 1));
+        setDragState(prev => prev ? ({ ...prev, endHour: end }) : null);
+      } else if (dragState.type === 'move') {
+        const duration = dragState.initialEndHour - dragState.initialStartHour;
+        const delta = currentHour - dragState.originHour;
+        let newStart = dragState.initialStartHour + delta;
+        let newEnd = newStart + duration;
+
+        if (newStart < 0) {
+          newStart = 0;
+          newEnd = duration;
+        }
+        if (newEnd > 24) {
+          newEnd = 24;
+          newStart = 24 - duration;
+        }
+        setDragState(prev => prev ? ({ ...prev, startHour: newStart, endHour: newEnd }) : null);
+      }
+    };
+
+    const handleWindowMouseUp = () => {
+      if (!dragState) return;
+
+      if (dragState.type === 'create') {
+        if (dragState.endHour > dragState.startHour) {
+          const newId = `${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+          const created: Requirement = {
+            id: newId,
+            role: dragState.role,
+            startHour: dragState.startHour,
+            endHour: dragState.endHour,
+            count: 1
+          };
+          setRequirements(prev => ({
+            ...prev,
+            [activePattern]: [...(prev[activePattern] || []), created]
+          }));
+        }
+      } else if (dragState.reqId) {
+        setRequirements(prev => ({
+          ...prev,
+          [activePattern]: (prev[activePattern] || []).map(r => 
+            r.id === dragState.reqId 
+              ? { ...r, startHour: dragState.startHour, endHour: dragState.endHour }
+              : r
+          )
+        }));
+      }
+
+      setDragState(null);
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, [dragState, activePattern]);
+
+  // 人数の加算・減算
+  const handleUpdateCount = (id: string, delta: number) => {
+    setRequirements(prev => ({
+      ...prev,
+      [activePattern]: (prev[activePattern] || []).map(r => {
+        if (r.id === id) {
+          const nextCount = Math.max(1, r.count + delta);
+          return { ...r, count: nextCount };
+        }
+        return r;
+      })
+    }));
+  };
+
   const handleAdd = () => {
     if (newReq.startHour! >= newReq.endHour!) {
       alert("終了時間は開始時間より後にしてください。");
@@ -233,7 +346,7 @@ const ShiftRequirementSettings: React.FC = () => {
   const currentReqs = requirements[activePattern] || [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-50 to-blue-100 relative overflow-hidden font-sans text-slate-800">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-50 to-blue-100 relative overflow-hidden font-sans text-slate-800 select-none">
       <div className="relative z-10 max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -258,7 +371,7 @@ const ShiftRequirementSettings: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white/70 backdrop-blur-xl border border-white/60 shadow-2xl rounded-3xl p-6 md:p-8 flex flex-col gap-8">
+        <div className="bg-white/70 backdrop-blur-xl border border-white/60 shadow-2xl rounded-3xl p-6 md:p-8 flex flex-col gap-6">
           
           {/* Pattern Tabs & Copy Actions */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-indigo-100/50">
@@ -298,6 +411,18 @@ const ShiftRequirementSettings: React.FC = () => {
             </div>
           </div>
 
+          {/* ドラッグ操作のヒントガイド */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-2.5 rounded-2xl border border-blue-100 flex items-center justify-between text-xs text-indigo-900 font-medium">
+            <div className="flex items-center gap-3">
+              <span className="font-bold bg-indigo-600 text-white px-2 py-0.5 rounded-md text-[10px]">直感操作</span>
+              <span>👉 タイムライン上をドラッグして新規作成</span>
+              <span>↔️ バーの端を引っ張って伸縮</span>
+              <span>✋ バーを掴んで左右に移動</span>
+              <span>🔢 ［+］［-］で人数変更</span>
+            </div>
+            <div className="text-[11px] text-slate-400">※変更後は「設定を保存」を押してください</div>
+          </div>
+
           {/* Add Form */}
           <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 flex flex-wrap gap-4 items-end">
             <div>
@@ -328,11 +453,11 @@ const ShiftRequirementSettings: React.FC = () => {
             </button>
           </div>
 
-          {/* Gantt Chart UI */}
+          {/* Gantt Chart UI (Interactive Drag & Resize) */}
           <div className="overflow-x-auto pb-4">
-            <div className="min-w-[800px]">
+            <div className="min-w-[850px]">
               {/* Header: Hours */}
-              <div className="flex ml-24 border-b border-indigo-200 pb-2 mb-4">
+              <div className="flex ml-28 border-b border-indigo-200 pb-2 mb-4">
                 {hours.map(h => (
                   <div key={h} className="flex-1 text-center text-xs font-bold text-slate-400">
                     {h}
@@ -344,39 +469,159 @@ const ShiftRequirementSettings: React.FC = () => {
               <div className="space-y-6">
                 {roles.map(role => {
                   const roleReqs = currentReqs.filter(r => r.role === role);
+                  const isRoleDragging = dragState && dragState.role === role;
+
                   return (
-                    <div key={role} className="flex items-center relative h-12">
-                      <div className="w-24 shrink-0 font-bold text-slate-600 pr-4 text-right">
+                    <div key={role} className="flex items-center relative h-14">
+                      <div className="w-28 shrink-0 font-bold text-slate-700 pr-4 text-right truncate">
                         {role}
                       </div>
-                      <div className="flex-1 flex relative h-full bg-slate-50/50 rounded-lg border border-slate-100">
+                      
+                      <div 
+                        id={`role-timeline-${role}`}
+                        onMouseDown={(e) => {
+                          if ((e.target as HTMLElement).closest('.req-bar')) return;
+                          const containerEl = e.currentTarget;
+                          const h = getHourFromEvent(e, containerEl);
+                          setDragState({
+                            type: 'create',
+                            role: role,
+                            originHour: h,
+                            initialStartHour: h,
+                            initialEndHour: h + 1,
+                            startHour: h,
+                            endHour: h + 1
+                          });
+                        }}
+                        className="flex-1 flex relative h-full bg-slate-50/70 hover:bg-slate-100/60 rounded-xl border border-slate-200 shadow-inner cursor-crosshair transition-colors"
+                        title="ドラッグして新規必要枠を作成"
+                      >
                         {/* Grid lines */}
-                        <div className="absolute inset-0 flex">
+                        <div className="absolute inset-0 flex pointer-events-none">
                           {hours.map(h => (
-                            <div key={h} className="flex-1 border-r border-slate-200/50 last:border-r-0"></div>
+                            <div key={h} className="flex-1 border-r border-slate-200/40 last:border-r-0 h-full"></div>
                           ))}
                         </div>
 
-                        {/* Bars */}
+                        {/* ドラッグ新規作成中のプレビューバー */}
+                        {isRoleDragging && dragState.type === 'create' && (
+                          <div 
+                            className="absolute top-1 bottom-1 bg-indigo-400/60 border-2 border-dashed border-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-black z-20 pointer-events-none animate-pulse"
+                            style={{ 
+                              left: `${(dragState.startHour / 24) * 100}%`, 
+                              width: `${((dragState.endHour - dragState.startHour) / 24) * 100}%` 
+                            }}
+                          >
+                            {dragState.startHour}:00 - {dragState.endHour}:00 (新規 1人)
+                          </div>
+                        )}
+
+                        {/* 既存のバー */}
                         {roleReqs.map(req => {
-                          const startPercent = (req.startHour / 24) * 100;
-                          const widthPercent = ((req.endHour - req.startHour) / 24) * 100;
+                          const isThisDragging = isRoleDragging && dragState.reqId === req.id;
+                          const displayStart = isThisDragging ? dragState.startHour : req.startHour;
+                          const displayEnd = isThisDragging ? dragState.endHour : req.endHour;
+
+                          const startPercent = (displayStart / 24) * 100;
+                          const widthPercent = ((displayEnd - displayStart) / 24) * 100;
+
                           return (
                             <div 
                               key={req.id} 
-                              onClick={() => setNewReq({ role: req.role, startHour: req.startHour, endHour: req.endHour, count: req.count })}
-                              className="absolute top-1 bottom-1 bg-indigo-500/80 hover:bg-indigo-600 rounded-md shadow flex items-center justify-between text-white text-xs font-bold transition-all group overflow-hidden cursor-pointer px-2"
+                              className={`req-bar absolute top-1 bottom-1 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white rounded-lg shadow-md flex items-center justify-between text-xs font-bold transition-shadow group overflow-visible z-10 ${isThisDragging ? 'opacity-90 ring-2 ring-indigo-400 shadow-xl cursor-grabbing' : 'cursor-grab'}`}
                               style={{ left: `${startPercent}%`, width: `${widthPercent}%` }}
-                              title={`${req.startHour}:00 - ${req.endHour}:00 (${req.count}人) / クリックで設定フォームに読み込み`}
+                              onMouseDown={(e) => {
+                                if ((e.target as HTMLElement).closest('.resize-handle') || (e.target as HTMLElement).closest('.btn-action')) return;
+                                const containerEl = document.getElementById(`role-timeline-${role}`);
+                                if (!containerEl) return;
+                                const h = getHourFromEvent(e, containerEl);
+                                setDragState({
+                                  type: 'move',
+                                  role: role,
+                                  reqId: req.id,
+                                  originHour: h,
+                                  initialStartHour: req.startHour,
+                                  initialEndHour: req.endHour,
+                                  startHour: req.startHour,
+                                  endHour: req.endHour
+                                });
+                              }}
                             >
-                              <span className="truncate">{req.count}人</span>
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); handleRemove(req.id); }}
-                                className="hidden group-hover:flex items-center justify-center p-1 bg-red-500 hover:bg-red-600 rounded text-white cursor-pointer ml-1"
-                                title="この枠を削除"
+                              {/* 左端リサイズハンドル */}
+                              <div 
+                                className="resize-handle absolute left-0 top-0 bottom-0 w-2.5 hover:w-3.5 bg-indigo-800/40 hover:bg-indigo-300 rounded-l-lg cursor-ew-resize transition-all z-20 flex items-center justify-center"
+                                title="ドラッグして開始時間を変更"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  setDragState({
+                                    type: 'resize-start',
+                                    role: role,
+                                    reqId: req.id,
+                                    originHour: req.startHour,
+                                    initialStartHour: req.startHour,
+                                    initialEndHour: req.endHour,
+                                    startHour: req.startHour,
+                                    endHour: req.endHour
+                                  });
+                                }}
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                                <div className="w-0.5 h-3 bg-white/70 rounded-full"></div>
+                              </div>
+
+                              {/* バー本体コンテンツ（人数＆操作） */}
+                              <div className="flex-1 flex items-center justify-between px-3 overflow-hidden pointer-events-auto">
+                                <span className="text-[11px] font-black text-indigo-100 whitespace-nowrap drop-shadow-sm">
+                                  {displayStart}:00-{displayEnd}:00
+                                </span>
+
+                                {/* 人数クイックコントローラー */}
+                                <div className="flex items-center gap-1 bg-black/20 backdrop-blur-xs px-1.5 py-0.5 rounded-md border border-white/20">
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleUpdateCount(req.id, -1); }}
+                                    className="btn-action w-4 h-4 rounded bg-white/20 hover:bg-white/40 flex items-center justify-center text-[10px] font-black cursor-pointer"
+                                    title="人数を減らす"
+                                  >
+                                    -
+                                  </button>
+                                  <span className="text-xs font-black min-w-[20px] text-center">{req.count}人</span>
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleUpdateCount(req.id, 1); }}
+                                    className="btn-action w-4 h-4 rounded bg-white/20 hover:bg-white/40 flex items-center justify-center text-[10px] font-black cursor-pointer"
+                                    title="人数を増やす"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleRemove(req.id); }}
+                                  className="btn-action p-1 hover:bg-rose-500 rounded text-white/80 hover:text-white transition cursor-pointer ml-1"
+                                  title="この枠を削除"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              {/* 右端リサイズハンドル */}
+                              <div 
+                                className="resize-handle absolute right-0 top-0 bottom-0 w-2.5 hover:w-3.5 bg-indigo-800/40 hover:bg-indigo-300 rounded-r-lg cursor-ew-resize transition-all z-20 flex items-center justify-center"
+                                title="ドラッグして終了時間を伸縮"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  setDragState({
+                                    type: 'resize-end',
+                                    role: role,
+                                    reqId: req.id,
+                                    originHour: req.endHour,
+                                    initialStartHour: req.startHour,
+                                    initialEndHour: req.endHour,
+                                    startHour: req.startHour,
+                                    endHour: req.endHour
+                                  });
+                                }}
+                              >
+                                <div className="w-0.5 h-3 bg-white/70 rounded-full"></div>
+                              </div>
                             </div>
                           );
                         })}
