@@ -55,6 +55,7 @@ export default function EmployeeOnboardingWelcome() {
     agreedAt: '',
     employeeSignatureName: '',
     employmentType: '正社員（無期雇用）',
+    salaryType: 'monthly' as 'monthly' | 'hourly',
     baseSalary: 250000,
     hourlyWage: 1200,
     department: '営業部',
@@ -184,6 +185,41 @@ export default function EmployeeOnboardingWelcome() {
 
   useEffect(() => {
     fetchTenant();
+
+    // 📱 管理者が発行したURLクエリパラメータ（個人別 労働条件・給与設定）の自動読取
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const nameParam = searchParams.get('name');
+      const salaryTypeParam = searchParams.get('salary_type');
+      const baseSalaryParam = searchParams.get('base_salary');
+      const hourlyWageParam = searchParams.get('hourly_wage');
+      const deptParam = searchParams.get('department');
+      const empTypeParam = searchParams.get('employment_type');
+      const joinDateParam = searchParams.get('join_date');
+      const locParam = searchParams.get('work_location');
+      const hoursParam = searchParams.get('work_hours');
+
+      if (nameParam || baseSalaryParam || hourlyWageParam || deptParam) {
+        if (nameParam) {
+          setBasicData(prev => ({ ...prev, name: nameParam }));
+        }
+
+        setContractAgreement(prev => ({
+          ...prev,
+          employeeSignatureName: nameParam || prev.employeeSignatureName,
+          salaryType: (salaryTypeParam as any) || prev.salaryType,
+          baseSalary: baseSalaryParam ? parseInt(baseSalaryParam, 10) : prev.baseSalary,
+          hourlyWage: hourlyWageParam ? parseInt(hourlyWageParam, 10) : prev.hourlyWage,
+          department: deptParam || prev.department,
+          employmentType: empTypeParam || prev.employmentType,
+          joinDate: joinDateParam || prev.joinDate,
+          workLocation: locParam || prev.workLocation,
+          workHours: hoursParam || prev.workHours
+        }));
+      }
+    } catch (err) {
+      console.warn('URL params parse error:', err);
+    }
   }, []);
 
   const fetchTenant = async () => {
@@ -761,10 +797,18 @@ export default function EmployeeOnboardingWelcome() {
                 </div>
 
                 <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center">
-                  <span className="text-slate-400">基本給（月額 / 時給）:</span>
+                  <span className="text-slate-400">
+                    {contractAgreement.salaryType === 'hourly' ? '賃金（時給制）:' : '基本給（月給制）:'}
+                  </span>
                   <span className="font-black text-emerald-400 font-mono text-sm">
-                    ¥{contractAgreement.baseSalary.toLocaleString()} / 月
-                    <span className="text-[10px] text-slate-400 font-normal ml-1">（時給換算 約¥{contractAgreement.hourlyWage.toLocaleString()}）</span>
+                    {contractAgreement.salaryType === 'hourly' 
+                      ? `¥${contractAgreement.hourlyWage.toLocaleString()} / 時間` 
+                      : `¥${contractAgreement.baseSalary.toLocaleString()} / 月`}
+                    {contractAgreement.salaryType !== 'hourly' && (
+                      <span className="text-[10px] text-slate-400 font-normal ml-1">
+                        （時給換算 約¥{contractAgreement.hourlyWage.toLocaleString()}）
+                      </span>
+                    )}
                   </span>
                 </div>
 

@@ -19,7 +19,8 @@ import {
   Printer, ArrowLeft, LogOut, Loader2, X, ChevronRight, 
   HelpCircle, Building2, Check, UserCheck, Edit3, UserMinus, 
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
-  FolderOpen, Settings, Clock, Smartphone, AlertCircle, ArrowRight, CornerDownLeft
+  FolderOpen, Settings, Clock, Smartphone, AlertCircle, ArrowRight, CornerDownLeft,
+  Copy, DollarSign, Sparkles
 } from 'lucide-react';
 
 interface EmployeeOnboardingData {
@@ -256,6 +257,24 @@ export default function OnboardingAdminDashboard() {
 
   // 労務手続きガイドモーダルState
   const [guideModalOpen, setGuideModalOpen] = useState(false);
+
+  // 📱 個人別 労働条件設定 ＆ 専用入社URL発行モーダルState
+  const [inviteUrlModal, setInviteUrlModal] = useState({
+    isOpen: false,
+    name: '',
+    employmentType: '正社員（無期雇用）',
+    salaryType: 'monthly' as 'monthly' | 'hourly',
+    baseSalary: 250000,
+    hourlyWage: 1200,
+    department: '営業部',
+    joinDate: new Date().toISOString().split('T')[0],
+    startTime: '09:00',
+    endTime: '18:00',
+    breakMinutes: 60,
+    workLocation: '本社 および 会社が指定する就業場所',
+    generatedUrl: '',
+    copied: false
+  });
 
   useEffect(() => {
     fetchData();
@@ -1469,15 +1488,28 @@ export default function OnboardingAdminDashboard() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                const url = `${window.location.origin}/onboarding/welcome`;
-                navigator.clipboard.writeText(url);
-                alert(`📱 新入社員向け【スマホ入社手続きフォームURL】をコピーしました！\nLINEやメールで新入社員に共有してください。\n\nURL: ${url}`);
+                setInviteUrlModal({
+                  isOpen: true,
+                  name: '',
+                  employmentType: '正社員（無期雇用）',
+                  salaryType: 'monthly',
+                  baseSalary: 250000,
+                  hourlyWage: 1200,
+                  department: departments[0]?.name || '営業部',
+                  joinDate: new Date().toISOString().split('T')[0],
+                  startTime: '09:00',
+                  endTime: '18:00',
+                  breakMinutes: 60,
+                  workLocation: tenantInfo?.address || '本社 および 会社が指定する就業場所',
+                  generatedUrl: '',
+                  copied: false
+                });
               }}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
-              title="新入社員に送るスマホ手続きURLをコピー"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-4 py-2 rounded-xl shadow-md shadow-indigo-200 transition flex items-center gap-1.5 cursor-pointer"
+              title="新入社員の給与・労働条件を設定して専用入社URLを発行"
             >
-              <Smartphone className="w-4 h-4" />
-              スマホ入社手続きURLをコピー
+              <Smartphone className="w-4 h-4 text-cyan-300" />
+              ✨ 給与設定 ＆ 専用入社URLを発行
             </button>
 
             <button
@@ -1691,6 +1723,32 @@ export default function OnboardingAdminDashboard() {
 
                           <td className="py-3.5 px-4 text-center">
                             <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => {
+                                  const isH = emp.salary_type === 'hourly';
+                                  setInviteUrlModal({
+                                    isOpen: true,
+                                    name: emp.name || '',
+                                    employmentType: emp.employment_type === 'part-time' ? 'パート・アルバイト' : '正社員（無期雇用）',
+                                    salaryType: isH ? 'hourly' : 'monthly',
+                                    baseSalary: emp.base_salary || 250000,
+                                    hourlyWage: emp.hourly_wage || 1200,
+                                    department: emp.department || departments[0]?.name || '営業部',
+                                    joinDate: emp.join_date || new Date().toISOString().split('T')[0],
+                                    startTime: emp.start_time || '09:00',
+                                    endTime: emp.end_time || '18:00',
+                                    breakMinutes: emp.break_time_minutes || 60,
+                                    workLocation: tenantInfo?.address || '本社 および 会社が指定する就業場所',
+                                    generatedUrl: '',
+                                    copied: false
+                                  });
+                                }}
+                                className="bg-cyan-50 hover:bg-cyan-100 text-cyan-700 font-bold text-xs p-1.5 rounded-lg border border-cyan-200 transition cursor-pointer"
+                                title="この従業員の給与・労働条件でスマホ入社URLを発行"
+                              >
+                                <Smartphone className="w-3.5 h-3.5 text-cyan-700" />
+                              </button>
+
                               <button
                                 onClick={() => setEditModal({ isOpen: true, data: { ...emp } })}
                                 className="bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs p-1.5 rounded-lg border border-slate-200 transition cursor-pointer"
@@ -3756,6 +3814,253 @@ export default function OnboardingAdminDashboard() {
           </div>
         </div>
       )}
+      {/* 📱 個人別 労働条件設定 ＆ 専用入社手続きURL発行モーダル */}
+      {inviteUrlModal.isOpen && (() => {
+        const isHourly = inviteUrlModal.salaryType === 'hourly';
+        const params = new URLSearchParams({
+          name: inviteUrlModal.name.trim(),
+          employment_type: inviteUrlModal.employmentType,
+          salary_type: inviteUrlModal.salaryType,
+          base_salary: String(isHourly ? 0 : inviteUrlModal.baseSalary),
+          hourly_wage: String(isHourly ? inviteUrlModal.hourlyWage : Math.round(inviteUrlModal.baseSalary / 160)),
+          department: inviteUrlModal.department,
+          join_date: inviteUrlModal.joinDate,
+          work_location: inviteUrlModal.workLocation,
+          work_hours: `${inviteUrlModal.startTime} 〜 ${inviteUrlModal.endTime}（休憩${inviteUrlModal.breakMinutes}分）`
+        });
+        const currentGeneratedUrl = `${window.location.origin}/onboarding/welcome?${params.toString()}`;
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 my-8 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shadow-xs">
+                    <Smartphone className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-800 text-base">
+                      個人別 労働条件設定 ＆ 専用入社URL発行
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      給与・労働条件を設定した専用URLを発行し、新入社員へ送付できます
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setInviteUrlModal(prev => ({ ...prev, isOpen: false }))}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1 text-xs">
+                {/* 1. 基本設定 */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                  <h4 className="font-bold text-slate-700 flex items-center gap-1.5">
+                    <UserCheck className="w-4 h-4 text-indigo-600" />
+                    新入社員のお名前 ＆ 配属先
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                        氏名（フルネーム）<span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="例: 佐藤 健一"
+                        value={inviteUrlModal.name}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, name: e.target.value, copied: false }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署</label>
+                      <select
+                        value={inviteUrlModal.department}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, department: e.target.value, copied: false }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                      >
+                        {departments.map(d => (
+                          <option key={d.id} value={d.name}>{d.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">雇用形態</label>
+                      <select
+                        value={inviteUrlModal.employmentType}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, employmentType: e.target.value, copied: false }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                      >
+                        <option value="正社員（無期雇用）">正社員（無期雇用）</option>
+                        <option value="契約社員（有期雇用）">契約社員（有期雇用）</option>
+                        <option value="パート・アルバイト">パート・アルバイト</option>
+                        <option value="業務委託">業務委託</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">入社予定日</label>
+                      <input
+                        type="date"
+                        value={inviteUrlModal.joinDate}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, joinDate: e.target.value, copied: false }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. 給与・賃金設定 */}
+                <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200 space-y-3">
+                  <h4 className="font-bold text-emerald-900 flex items-center gap-1.5">
+                    <DollarSign className="w-4 h-4 text-emerald-600" />
+                    賃金・給与条件の設定
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-emerald-800 block mb-1">給与形態</label>
+                      <select
+                        value={inviteUrlModal.salaryType}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, salaryType: e.target.value as any, copied: false }))}
+                        className="w-full bg-white border border-emerald-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                      >
+                        <option value="monthly">月給制</option>
+                        <option value="hourly">時給制</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-emerald-800 block mb-1">
+                        {isHourly ? '時給単価 (円)' : '基本給 (月額・円)'}
+                      </label>
+                      <input
+                        type="number"
+                        step={isHourly ? "10" : "1000"}
+                        value={isHourly ? inviteUrlModal.hourlyWage : inviteUrlModal.baseSalary}
+                        onChange={e => {
+                          const val = parseInt(e.target.value, 10) || 0;
+                          setInviteUrlModal(prev => ({
+                            ...prev,
+                            baseSalary: isHourly ? prev.baseSalary : val,
+                            hourlyWage: isHourly ? val : prev.hourlyWage,
+                            copied: false
+                          }));
+                        }}
+                        className="w-full bg-white border border-emerald-300 rounded-xl px-3 py-2 font-black text-emerald-700 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-emerald-700">
+                    ※ ここで設定した金額が、新入社員のスマホ画面上の「労働条件通知書 兼 雇用契約書」に自動セットされます。
+                  </p>
+                </div>
+
+                {/* 3. 就業時間 ＆ 勤務地 */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                  <h4 className="font-bold text-slate-700 flex items-center gap-1.5">
+                    <Clock className="w-4 h-4 text-indigo-600" />
+                    所定就業時間 ＆ 勤務地
+                  </h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">始業時刻</span>
+                      <input
+                        type="time"
+                        value={inviteUrlModal.startTime}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, startTime: e.target.value, copied: false }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">終業時刻</span>
+                      <input
+                        type="time"
+                        value={inviteUrlModal.endTime}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, endTime: e.target.value, copied: false }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block mb-0.5">休憩(分)</span>
+                      <input
+                        type="number"
+                        value={inviteUrlModal.breakMinutes}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, breakMinutes: parseInt(e.target.value, 10) || 60, copied: false }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 font-bold"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">就業場所</label>
+                    <input
+                      type="text"
+                      value={inviteUrlModal.workLocation}
+                      onChange={e => setInviteUrlModal(prev => ({ ...prev, workLocation: e.target.value, copied: false }))}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 font-medium"
+                    />
+                  </div>
+                </div>
+
+                {/* 4. 発行URLプレビュー ＆ コピーエリア */}
+                <div className="bg-indigo-950 text-white p-4 rounded-2xl border border-indigo-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-indigo-300 flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+                      発行される専用入社手続きURL
+                    </span>
+                    <span className="text-[10px] text-indigo-400">リアルタイム生成</span>
+                  </div>
+
+                  <div className="p-2.5 bg-slate-900/90 rounded-xl border border-indigo-700/50 font-mono text-[10px] text-cyan-200 break-all select-all">
+                    {currentGeneratedUrl}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(currentGeneratedUrl);
+                      setInviteUrlModal(prev => ({ ...prev, copied: true }));
+                      setTimeout(() => {
+                        setInviteUrlModal(prev => ({ ...prev, copied: false }));
+                      }, 4000);
+                    }}
+                    className={`w-full py-3 px-4 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-md ${
+                      inviteUrlModal.copied
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-900/50'
+                        : 'bg-gradient-to-r from-indigo-500 to-cyan-600 hover:from-indigo-600 hover:to-cyan-700 text-white shadow-indigo-900/50'
+                    }`}
+                  >
+                    {inviteUrlModal.copied ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                        <span>専用入社URLをコピーしました！（LINEやメールに貼り付け可能）</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span>📋 この条件で専用入社URLをコピーする</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-5 flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  onClick={() => setInviteUrlModal(prev => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                >
+                  閉じる
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
