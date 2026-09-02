@@ -2700,6 +2700,29 @@ export default function CompanySettingsDashboard() {
                     className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
                   />
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">📅 賃金締切日（全社標準）</label>
+                    <input
+                      type="text"
+                      placeholder="例: 毎月末日 / 毎月20日 / 毎月15日"
+                      value={contractTemplate.closing_day_text || '毎月末日'}
+                      onChange={e => setContractTemplate({ ...contractTemplate, closing_day_text: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">💰 給与支払日（全社標準）</label>
+                    <input
+                      type="text"
+                      placeholder="例: 当月25日（金融機関振込） / 翌月10日 / 翌月25日"
+                      value={contractTemplate.payment_day_text || '当月25日（金融機関振込）'}
+                      onChange={e => setContractTemplate({ ...contractTemplate, payment_day_text: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800 font-bold"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 block mb-1">昇給・賞与・退職金規定</label>
                   <input

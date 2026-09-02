@@ -26,6 +26,8 @@ export interface LaborContractTemplate {
   commuting_allowance_notes: string;
   fixed_overtime_clause: string;
   raise_bonus_notes: string;
+  closing_day_text: string; // 賃金締切日（例: 毎月末日）
+  payment_day_text: string; // 賃金支払日（例: 当月25日（金融機関振込））
 
   // 6. 退職・解雇・定年（就業規則連動）
   resignation_procedure_text: string; // 自己都合退職の手続き（例: 30日前の届出）
@@ -59,6 +61,8 @@ export const DEFAULT_LABOR_CONTRACT_TEMPLATE: LaborContractTemplate = {
   commuting_allowance_notes: '実費支給（非課税限度額内、月額上限150,000円まで）',
   fixed_overtime_clause: '固定残業手当は所定の時間外労働に充当し、これを超える時間外・深夜・休日労働を行った場合はその超過分を別途全額支給する。',
   raise_bonus_notes: '昇給: 会社の業績及び本人の勤務成績により年1回査定 / 賞与: 会社の業績に応じて支給 / 退職金: 就業規則の定めに従う',
+  closing_day_text: '毎月末日',
+  payment_day_text: '当月25日（金融機関振込）',
 
   resignation_procedure_text: '自己都合退職の手続き: 退職を希望する日の30日前までに会社所定の退職届を提出すること。引継ぎ等を完了させること。',
   resignation_rules_article: '就業規則第45条（退職手続）',
