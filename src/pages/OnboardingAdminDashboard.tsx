@@ -67,6 +67,8 @@ interface EmployeeOnboardingData {
   fixed_overtime_allowance?: number;
   housing_allowance?: number;
   family_allowance?: number;
+  commuting_type?: 'monthly' | 'daily' | 'none';
+  commuting_daily_amount?: number;
   commuting_allowance: number;
   health_insurance_joined: boolean;
   pension_insurance_joined: boolean;
@@ -1702,6 +1704,8 @@ export default function OnboardingAdminDashboard() {
             qualification_allowance: data.qualification_allowance || 0,
             housing_allowance: data.housing_allowance || 0,
             family_allowance: data.family_allowance || 0,
+            commuting_type: data.commuting_type,
+            commuting_daily_amount: data.commuting_daily_amount,
             commuting_allowance: data.commuting_allowance,
             health_insurance_enabled: data.health_insurance_joined,
             pension_insurance_enabled: data.pension_insurance_joined,
@@ -1727,6 +1731,8 @@ export default function OnboardingAdminDashboard() {
             qualification_allowance: data.qualification_allowance || 0,
             housing_allowance: data.housing_allowance || 0,
             family_allowance: data.family_allowance || 0,
+            commuting_type: data.commuting_type,
+            commuting_daily_amount: data.commuting_daily_amount,
             commuting_allowance: data.commuting_allowance,
             health_insurance_enabled: data.health_insurance_joined,
             pension_insurance_enabled: data.pension_insurance_joined,
@@ -1771,6 +1777,8 @@ export default function OnboardingAdminDashboard() {
             base_salary: data.base_salary,
             hourly_wage: data.hourly_wage,
             position_allowance: data.position_allowance,
+            commuting_type: data.commuting_type,
+            commuting_daily_amount: data.commuting_daily_amount,
             commuting_allowance: data.commuting_allowance,
             health_insurance_joined: data.health_insurance_joined,
             pension_insurance_joined: data.pension_insurance_joined,
@@ -3678,15 +3686,41 @@ export default function OnboardingAdminDashboard() {
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                     />
                   </div>
-                  <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">通勤手当</label>
-                    <input
-                      type="number"
-                      placeholder="例: 6990"
-                      value={editModal.data.commuting_allowance === 0 ? '' : editModal.data.commuting_allowance}
-                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, commuting_allowance: e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0) } })}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
-                    />
+                  <div className="col-span-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-0.5">通勤手当 支給区分</label>
+                        <select
+                          value={editModal.data.commuting_type || (editModal.data.salary_type === 'hourly' ? 'daily' : 'monthly')}
+                          onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, commuting_type: e.target.value as any } })}
+                          className="w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 font-bold text-xs"
+                        >
+                          <option value="daily">🚗 1日往復実費 (出勤日数×日額)</option>
+                          <option value="monthly">🚌 月額固定 (定期代)</option>
+                          <option value="none">❌ 支給なし (0円)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-500 block mb-0.5">
+                          {editModal.data?.commuting_type === 'daily' ? '1日あたり往復交通費 (円/日)' : '月額定期代 (円/月)'}
+                        </label>
+                        <input
+                          type="number"
+                          placeholder="例: 800"
+                          value={editModal.data?.commuting_type === 'daily' ? (editModal.data.commuting_daily_amount ?? 800) : (editModal.data?.commuting_allowance || 0)}
+                          onChange={e => {
+                            if (!editModal.data) return;
+                            const val = e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0);
+                            if (editModal.data.commuting_type === 'daily') {
+                              setEditModal({ ...editModal, data: { ...editModal.data, commuting_daily_amount: val } });
+                            } else {
+                              setEditModal({ ...editModal, data: { ...editModal.data, commuting_allowance: val } });
+                            }
+                          }}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-xs"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

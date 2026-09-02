@@ -340,6 +340,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       qualification_allowance: 0,
       housing_allowance: 0,
       family_allowance: 0,
+      commuting_type: 'monthly',
+      commuting_daily_amount: 800,
       commuting_allowance: 15000,
       commuting_taxable: false,
       fixed_overtime_hours: 0,
@@ -536,7 +538,11 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         const houseAllow = onb?.housing_allowance ?? pay?.housing_allowance ?? localBackup?.housing_allowance ?? 0;
         // 家族手当
         const famAllow = onb?.family_allowance ?? pay?.family_allowance ?? localBackup?.family_allowance ?? 0;
-        // 通勤手当
+        // 通勤手当支給区分（月額定期 / 1日実費 / 支給なし）
+        const comType: 'monthly' | 'daily' | 'none' = onb?.commuting_type || pay?.commuting_type || localBackup?.commuting_type || (salType === 'hourly' ? 'daily' : 'monthly');
+        // 1日あたりの往復交通費（実費）
+        const comDailyAmount = onb?.commuting_daily_amount ?? pay?.commuting_daily_amount ?? localBackup?.commuting_daily_amount ?? 800;
+        // 通勤手当（月額定期代）
         const comAllow = onb?.commuting_allowance ?? pay?.commuting_allowance ?? localBackup?.commuting_allowance ?? 15000;
 
         // 銀行口座情報（SSOT: バックアップ > 労務マスタ > 給与マスタ）
@@ -556,6 +562,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           qualification_allowance: qualAllow,
           housing_allowance: houseAllow,
           family_allowance: famAllow,
+          commuting_type: comType,
+          commuting_daily_amount: comDailyAmount,
           commuting_allowance: comAllow,
           commuting_taxable: pay?.commuting_taxable ?? false,
           fixed_overtime_hours: pay?.fixed_overtime_hours ?? 0,
@@ -1175,6 +1183,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         qualification_allowance: prof.qualification_allowance,
         housing_allowance: prof.housing_allowance,
         family_allowance: prof.family_allowance,
+        commuting_type: prof.commuting_type,
+        commuting_daily_amount: prof.commuting_daily_amount,
         commuting_allowance: prof.commuting_allowance,
         bank_name: prof.bank_name !== undefined ? prof.bank_name : (localMaster.bank_name || ''),
         branch_name: prof.branch_name !== undefined ? prof.branch_name : (localMaster.branch_name || ''),
@@ -1199,11 +1209,14 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         console.warn('Supabase payroll profile exception:', dbErr);
       }
 
-      // 3. employee_onboarding_profiles にも口座情報を同期
+      // 3. employee_onboarding_profiles にも口座情報・通勤手当情報を同期
       try {
         await supabase
           .from('employee_onboarding_profiles')
           .update({
+            commuting_type: prof.commuting_type,
+            commuting_daily_amount: prof.commuting_daily_amount,
+            commuting_allowance: prof.commuting_allowance,
             bank_name: prof.bank_name,
             branch_name: prof.branch_name,
             account_type: prof.account_type,
@@ -2362,15 +2375,43 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                     />
                   </div>
-                  <div>
-                    <label className="text-[11px] text-slate-500 block mb-1">通勤手当（非課税）</label>
-                    <input
-                      type="number"
-                      value={profileModal.profile.commuting_allowance}
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="text-[11px] text-slate-500 block mb-1">通勤手当 支給区分</label>
+                    <select
+                      value={profileModal.profile.commuting_type || (profileModal.profile.salary_type === 'hourly' ? 'daily' : 'monthly')}
                       onChange={e => setProfileModal({
                         ...profileModal,
-                        profile: { ...profileModal.profile, commuting_allowance: parseInt(e.target.value, 10) || 0 }
+                        profile: { ...profileModal.profile, commuting_type: e.target.value as any }
                       })}
+                      className="w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 font-bold text-slate-800"
+                    >
+                      <option value="daily">🚗 1日往復実費 (出勤日数×日額)</option>
+                      <option value="monthly">🚌 月額固定 (定期代)</option>
+                      <option value="none">❌ 支給なし (0円)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-slate-500 block mb-1">
+                      {profileModal.profile.commuting_type === 'daily' ? '1日あたり往復交通費 (円/日)' : '月額定期代 (円/月)'}
+                    </label>
+                    <input
+                      type="number"
+                      value={profileModal.profile.commuting_type === 'daily' ? (profileModal.profile.commuting_daily_amount ?? 800) : profileModal.profile.commuting_allowance}
+                      onChange={e => {
+                        const val = parseInt(e.target.value, 10) || 0;
+                        if (profileModal.profile.commuting_type === 'daily') {
+                          setProfileModal({
+                            ...profileModal,
+                            profile: { ...profileModal.profile, commuting_daily_amount: val }
+                          });
+                        } else {
+                          setProfileModal({
+                            ...profileModal,
+                            profile: { ...profileModal.profile, commuting_allowance: val }
+                          });
+                        }
+                      }}
+                      placeholder="例: 800"
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                     />
                   </div>

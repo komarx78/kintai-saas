@@ -14,6 +14,7 @@ interface EmployeeSetting {
   has_shift_access: boolean;
   hire_date: string;
   max_hours_per_week: number;
+  min_shift_hours: number; // 1回の最低勤務時間（例: 3時間）
   priority_score: number;
   default_role: string;
   base_wage: number;
@@ -60,6 +61,7 @@ const ShiftEmployeeMaster: React.FC = () => {
           has_shift_access: u.has_shift_access || false,
           hire_date: s?.hire_date || '',
           max_hours_per_week: s?.max_hours_per_week || 40,
+          min_shift_hours: s?.min_shift_hours || 3,
           priority_score: s?.priority_score || 3,
           default_role: s?.default_role || '',
           base_wage: s?.base_wage || 1000
@@ -87,29 +89,33 @@ const ShiftEmployeeMaster: React.FC = () => {
         await supabase.from('users').update({ has_shift_access: emp.has_shift_access }).eq('id', emp.user_id);
       }
 
-      const upserts = employees.filter(e => e.has_shift_access).map(e => ({
-        tenant_id: tenantId,
-        user_id: e.user_id,
-        hire_date: e.hire_date || null,
-        max_hours_per_week: e.max_hours_per_week,
-        priority_score: e.priority_score,
-        default_role: e.default_role,
-        base_wage: e.base_wage,
-        updated_at: new Date().toISOString()
-      }));
+      for (const emp of employees.filter(e => e.has_shift_access)) {
+        const { data: exist } = await supabase
+          .from('shift_employee_settings')
+          .select('id')
+          .eq('user_id', emp.user_id)
+          .maybeSingle();
 
-      if (upserts.length > 0) {
-        for (const item of upserts) {
-          const { data: exist } = await supabase.from('shift_employee_settings').select('id').eq('user_id', item.user_id).maybeSingle();
-          if (exist) {
-            await supabase.from('shift_employee_settings').update(item).eq('id', exist.id);
-          } else {
-            await supabase.from('shift_employee_settings').insert(item);
-          }
+        const payload = {
+          tenant_id: tenantId,
+          user_id: emp.user_id,
+          hire_date: emp.hire_date || null,
+          max_hours_per_week: emp.max_hours_per_week,
+          min_shift_hours: emp.min_shift_hours,
+          priority_score: emp.priority_score,
+          default_role: emp.default_role,
+          base_wage: emp.base_wage,
+          updated_at: new Date().toISOString()
+        };
+
+        if (exist) {
+          await supabase.from('shift_employee_settings').update(payload).eq('id', exist.id);
+        } else {
+          await supabase.from('shift_employee_settings').insert(payload);
         }
       }
       
-      alert('保存しました');
+      alert('シフト要員設定を保存しました！');
     } catch (err) {
       console.error(err);
       alert('保存に失敗しました');
@@ -170,14 +176,15 @@ const ShiftEmployeeMaster: React.FC = () => {
                 <th className="p-4 font-bold text-center">入社日</th>
                 <th className="p-4 font-bold text-center">優先度 (5=最高)</th>
                 <th className="p-4 font-bold text-center">週上限(時間)</th>
+                <th className="p-4 font-bold text-center">最低勤務(h/回)</th>
                 <th className="p-4 font-bold text-right">基本時給</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={8} className="p-8 text-center"><div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full mx-auto"></div></td></tr>
+                <tr><td colSpan={9} className="p-8 text-center"><div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full mx-auto"></div></td></tr>
               ) : employees.length === 0 ? (
-                <tr><td colSpan={8} className="p-8 text-center text-slate-500 font-bold">システムに従業員が登録されていません。「従業員を新規招待」から登録してください。</td></tr>
+                <tr><td colSpan={9} className="p-8 text-center text-slate-500 font-bold">システムに従業員が登録されていません。「従業員を新規招待」から登録してください。</td></tr>
               ) : (
                 employees.map(emp => (
                   <tr key={emp.user_id} className={`hover:bg-indigo-50/30 transition-colors ${!emp.has_shift_access ? 'opacity-50 grayscale' : ''}`}>
@@ -217,6 +224,9 @@ const ShiftEmployeeMaster: React.FC = () => {
                     </td>
                     <td className="p-4 text-center">
                       <input disabled={!emp.has_shift_access} type="number" min="0" max="168" value={emp.max_hours_per_week} onChange={e => handleUpdate(emp.user_id, 'max_hours_per_week', Number(e.target.value))} className="w-20 bg-slate-50 border border-slate-200 rounded p-2 text-sm font-bold text-center inline-block disabled:bg-slate-100" />
+                    </td>
+                    <td className="p-4 text-center">
+                      <input disabled={!emp.has_shift_access} type="number" min="1" max="24" value={emp.min_shift_hours} onChange={e => handleUpdate(emp.user_id, 'min_shift_hours', Number(e.target.value))} title="1出勤あたりの最低勤務時間（例: 3時間）" className="w-20 bg-slate-50 border border-slate-200 rounded p-2 text-sm font-bold text-center inline-block disabled:bg-slate-100" />
                     </td>
                     <td className="p-4 text-right">
                       <input disabled={!emp.has_shift_access} type="number" step="10" value={emp.base_wage} onChange={e => handleUpdate(emp.user_id, 'base_wage', Number(e.target.value))} className="w-24 bg-slate-50 border border-slate-200 rounded p-2 text-sm font-bold text-right inline-block disabled:bg-slate-100" />

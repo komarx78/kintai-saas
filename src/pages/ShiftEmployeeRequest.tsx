@@ -485,28 +485,45 @@ const ShiftEmployeeRequest: React.FC = () => {
               </div>
 
               {modalData.type === 'working' && (
-                <div className="flex items-center justify-between pt-2 animate-in fade-in slide-in-from-top-2">
-                  <div className="flex-1 flex flex-col">
-                    <label className="text-xs font-bold text-indigo-400 mb-1 ml-1">出勤時間</label>
-                    <select 
-                      value={modalData.startTime} 
-                      onChange={e => setModalData({...modalData, startTime: e.target.value})}
-                      className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
-                    >
-                      {hours.map(h => <option key={h} value={`${h.toString().padStart(2, '0')}:00`}>{h}:00</option>)}
-                    </select>
+                <div className="space-y-2 pt-2 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 flex flex-col">
+                      <label className="text-xs font-bold text-indigo-400 mb-1 ml-1">出勤時間</label>
+                      <select 
+                        value={modalData.startTime} 
+                        onChange={e => setModalData({...modalData, startTime: e.target.value})}
+                        className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                      >
+                        {hours.map(h => <option key={h} value={`${h.toString().padStart(2, '0')}:00`}>{h}:00</option>)}
+                      </select>
+                    </div>
+                    <div className="px-4 text-indigo-300 font-black pt-4">〜</div>
+                    <div className="flex-1 flex flex-col">
+                      <label className="text-xs font-bold text-indigo-400 mb-1 ml-1">退勤時間</label>
+                      <select 
+                        value={modalData.endTime} 
+                        onChange={e => setModalData({...modalData, endTime: e.target.value})}
+                        className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                      >
+                        {hours.map(h => <option key={h} value={`${h.toString().padStart(2, '0')}:00`}>{h}:00</option>)}
+                      </select>
+                    </div>
                   </div>
-                  <div className="px-4 text-indigo-300 font-black pt-4">〜</div>
-                  <div className="flex-1 flex flex-col">
-                    <label className="text-xs font-bold text-indigo-400 mb-1 ml-1">退勤時間</label>
-                    <select 
-                      value={modalData.endTime} 
-                      onChange={e => setModalData({...modalData, endTime: e.target.value})}
-                      className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
-                    >
-                      {hours.map(h => <option key={h} value={`${h.toString().padStart(2, '0')}:00`}>{h}:00</option>)}
-                    </select>
-                  </div>
+                  {(() => {
+                    const [sh] = modalData.startTime.split(':').map(Number);
+                    const [eh] = modalData.endTime.split(':').map(Number);
+                    const dur = eh > sh ? eh - sh : 24 - sh + eh;
+                    return (
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 rounded-xl text-xs font-bold text-slate-600 border border-slate-100">
+                        <span>希望勤務時間: <strong className="text-indigo-600">{dur}時間</strong></span>
+                        {dur < 3 && (
+                          <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                            ⚠️ 3時間以上を推奨
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 

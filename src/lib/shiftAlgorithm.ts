@@ -37,6 +37,7 @@ export interface ShiftEmployeeSetting {
   user_id: string;
   hire_date?: string;
   max_hours_per_week?: number;
+  min_shift_hours?: number; // 1回の最低勤務時間（例: 3時間）
   priority_score?: number;
   default_role?: string;
   roles?: string[] | any;
@@ -234,6 +235,13 @@ export function generateAutoShift(
       if (bestStartHour !== null && bestEndHour !== null) {
         const startH = Math.max(availSh, bestStartHour);
         const endH = Math.min(availEh, bestEndHour + 1);
+        const shiftDuration = endH - startH;
+
+        // スタッフの最低勤務時間（指定なし時は3時間）を下回る極小シフト（1時間だけ等）は割り当てない
+        const requiredMinHours = empMap.get(req.user_id)?.min_shift_hours ?? 3;
+        if (shiftDuration < requiredMinHours) {
+          continue;
+        }
 
         if (endH > startH) {
           const finalStartStr = `${startH.toString().padStart(2, '0')}:${(startH === availSh ? availSm : 0).toString().padStart(2, '0')}`;

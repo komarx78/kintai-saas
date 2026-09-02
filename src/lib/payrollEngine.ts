@@ -16,7 +16,9 @@ export interface EmployeePayrollProfile {
   qualification_allowance: number; // 資格・職能手当
   housing_allowance: number; // 住宅手当
   family_allowance: number; // 家族・扶養手当
-  commuting_allowance: number; // 通勤手当
+  commuting_type?: 'monthly' | 'daily' | 'none'; // 通勤手当支給区分: 月額固定(定期) | 日額実費(アルバイト) | 支給なし
+  commuting_daily_amount?: number; // 1日あたりの往復交通費（実費）
+  commuting_allowance: number; // 通勤手当（月額定期代または月合計）
   commuting_taxable: boolean; // 通勤手当課税区分
   fixed_overtime_hours: number; // 固定残業時間
   fixed_overtime_allowance: number; // 固定残業手当
@@ -202,7 +204,19 @@ export function calculatePayroll(
   const qualificationAllowance = profile.qualification_allowance || 0;
   const housingAllowance = profile.housing_allowance || 0;
   const familyAllowance = profile.family_allowance || 0;
-  const commutingAllowance = profile.commuting_allowance || 0;
+
+  // 通勤手当の自動計算（時給制アルバイト・日額実費は「出勤日数 × 1日往復交通費」、月給者は「月額定期代」）
+  let commutingAllowance = 0;
+  if (profile.commuting_type === 'none') {
+    commutingAllowance = 0;
+  } else if (profile.commuting_type === 'daily' || profile.salary_type === 'hourly' || profile.salary_type === 'daily') {
+    const dailyAmount = profile.commuting_daily_amount ?? profile.commuting_allowance ?? 0;
+    commutingAllowance = round(dailyAmount * attendance.work_days);
+  } else {
+    // 月額固定（定期代）
+    commutingAllowance = profile.commuting_allowance || 0;
+  }
+
   const specialAllowance = 0;
 
   // 総支給額 (総額)

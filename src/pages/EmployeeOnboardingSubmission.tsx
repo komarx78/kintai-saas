@@ -41,8 +41,10 @@ export default function EmployeeOnboardingSubmission() {
     destination_station: '', // 到着駅/会社
     via_route: '', // 経由路線・駅
     transport_mode: 'train', // 'train', 'bus', 'car', 'bicycle'
+    commuting_type: 'daily', // 'daily'(アルバイト日額実費), 'monthly'(定期代), 'none'(なし)
+    daily_round_trip: 800, // 1日往復交通費
     one_month_pass_amount: 15000, // 1ヶ月定期代
-    one_way_amount: 500, // 片道運賃
+    one_way_amount: 400, // 片道運賃
     attachment_data: '',
     attachment_filename: '',
     fileSizeInfo: ''
@@ -529,14 +531,38 @@ export default function EmployeeOnboardingSubmission() {
                 />
               </div>
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-600 block mb-1">1ヶ月定期代（円） <span className="text-rose-500">*</span></label>
-                <input
-                  type="number"
-                  value={commutingForm.one_month_pass_amount}
-                  onChange={e => setCommutingForm({ ...commutingForm, one_month_pass_amount: parseInt(e.target.value, 10) || 0 })}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 font-bold text-blue-700"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">通勤費の支給タイプ <span className="text-rose-500">*</span></label>
+                  <select
+                    value={commutingForm.commuting_type}
+                    onChange={e => setCommutingForm({ ...commutingForm, commuting_type: e.target.value })}
+                    className="w-full bg-slate-50 border border-indigo-200 rounded-xl px-3 py-2.5 font-bold text-slate-800"
+                  >
+                    <option value="daily">🚗 1日往復実費 (アルバイト・出勤日数×日額)</option>
+                    <option value="monthly">🚌 月額固定 (定期代)</option>
+                    <option value="none">❌ 支給なし (徒歩・自転車など)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    {commutingForm.commuting_type === 'daily' ? '1日の往復運賃（円）' : '1ヶ月定期代（円）'} <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={commutingForm.commuting_type === 'daily' ? commutingForm.daily_round_trip : commutingForm.one_month_pass_amount}
+                    onChange={e => {
+                      const val = parseInt(e.target.value, 10) || 0;
+                      if (commutingForm.commuting_type === 'daily') {
+                        setCommutingForm({ ...commutingForm, daily_round_trip: val });
+                      } else {
+                        setCommutingForm({ ...commutingForm, one_month_pass_amount: val });
+                      }
+                    }}
+                    placeholder="例: 800"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 font-bold text-blue-700"
+                  />
+                </div>
               </div>
 
               <div>
