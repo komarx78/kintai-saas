@@ -48,7 +48,7 @@ export const TaxDocMasterInspector: React.FC = () => {
           const parsedMap = new Map<string, any>(saved.map((f: any) => [f.id, f]));
           setFields(DEFAULT_TAX_FIELDS.map(def => {
             const custom = parsedMap.get(def.id);
-            if (custom) return { ...def, x: custom.x, y: custom.y, fontSize: custom.fontSize, pitch: custom.pitch !== undefined ? custom.pitch : def.pitch };
+            if (custom) return { ...def, x: custom.x, y: custom.y, fontSize: custom.fontSize, pitch: custom.pitch !== undefined ? custom.pitch : def.pitch, disabled: custom.disabled };
             return def;
           }));
         } else {
@@ -58,7 +58,7 @@ export const TaxDocMasterInspector: React.FC = () => {
             const parsedMap = new Map<string, any>(parsed.map((f: any) => [f.id, f]));
             setFields(DEFAULT_TAX_FIELDS.map(def => {
               const custom = parsedMap.get(def.id);
-              if (custom) return { ...def, x: custom.x, y: custom.y, fontSize: custom.fontSize, pitch: custom.pitch !== undefined ? custom.pitch : def.pitch };
+              if (custom) return { ...def, x: custom.x, y: custom.y, fontSize: custom.fontSize, pitch: custom.pitch !== undefined ? custom.pitch : def.pitch, disabled: custom.disabled };
               return def;
             }));
           }
@@ -73,12 +73,15 @@ export const TaxDocMasterInspector: React.FC = () => {
   const [bgBlankPdfImage, setBgBlankPdfImage] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(true);
 
-  // 項目値の更新（pitchは0.01%精度、x/yは0.1%精度、fontSizeは1pt精度）
-  const updateField = useCallback((id: string, key: keyof FieldConfig, value: number) => {
+  // 項目値の更新（pitchは0.01%精度、x/yは0.1%精度、fontSizeは1pt精度、disabledはboolean）
+  const updateField = useCallback((id: string, key: keyof FieldConfig, value: any) => {
     setFields(prev => {
-      const precision = key === 'pitch' ? 100 : (key === 'x' || key === 'y') ? 10 : 1;
-      const rounded = Math.round(value * precision) / precision;
-      const updated = prev.map(f => f.id === id ? { ...f, [key]: rounded } : f);
+      let finalVal = value;
+      if (typeof value === 'number') {
+        const precision = key === 'pitch' ? 100 : (key === 'x' || key === 'y') ? 10 : 1;
+        finalVal = Math.round(value * precision) / precision;
+      }
+      const updated = prev.map(f => f.id === id ? { ...f, [key]: finalVal } : f);
       localStorage.setItem('taxDocMasterFields', JSON.stringify(updated));
       return updated;
     });
@@ -405,8 +408,13 @@ export const TaxDocMasterInspector: React.FC = () => {
                   >
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-indigo-600 ring-2 ring-indigo-300' : 'bg-slate-300'}`}></span>
-                        <span className="text-xs font-bold text-slate-900">{f.name}</span>
+                        <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-indigo-600 ring-2 ring-indigo-300' : f.disabled ? 'bg-slate-300' : 'bg-slate-400'}`}></span>
+                        <span className={`text-xs font-bold ${f.disabled ? 'line-through text-slate-400' : 'text-slate-900'}`}>{f.name}</span>
+                        {f.disabled && (
+                          <span className="text-[9px] bg-rose-50 text-rose-600 font-bold px-1.5 py-0.2 rounded border border-rose-200">
+                            印字OFF
+                          </span>
+                        )}
                       </div>
                       <p className="text-[10px] text-slate-500 mt-0.5 ml-3.5">
                         例: <span className="font-mono text-slate-700 bg-white px-1 rounded border border-slate-200">{f.example}</span>
@@ -427,16 +435,32 @@ export const TaxDocMasterInspector: React.FC = () => {
           {/* 🎮 ③ 選択中項目の「十字キーコントローラー ＆ 数値直接入力」パネル */}
           {selectedField && (
             <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl border border-slate-800 space-y-3">
-              <div className="border-b border-slate-800 pb-2 flex items-center justify-between">
+              <div className="border-b border-slate-800 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider">SELECTED ITEM</span>
                   <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
-                    {selectedField.name}
+                    <span className={`w-2.5 h-2.5 rounded-full ${selectedField.disabled ? 'bg-slate-500' : 'bg-rose-500 animate-ping'}`}></span>
+                    <span className={selectedField.disabled ? 'line-through text-slate-400' : ''}>{selectedField.name}</span>
                   </h4>
                 </div>
-                <div className="text-right font-mono text-xs text-amber-300 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
-                  X: <span className="text-indigo-300 font-bold">{selectedField.x.toFixed(1)}%</span> / Y: <span className="text-amber-300 font-bold">{selectedField.y.toFixed(1)}%</span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateField(selectedField.id, 'disabled', !selectedField.disabled)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1 cursor-pointer ${
+                      selectedField.disabled
+                        ? 'bg-rose-950/80 text-rose-300 border border-rose-600 hover:bg-rose-900'
+                        : 'bg-emerald-950/80 text-emerald-300 border border-emerald-600 hover:bg-emerald-900'
+                    }`}
+                    title="この項目の印字を有効または無効（非表示・消去）に切り替えます"
+                  >
+                    {selectedField.disabled ? '🚫 印字無効（消去中）' : '👁️ 印字有効（印字中）'}
+                  </button>
+
+                  <div className="text-right font-mono text-xs text-amber-300 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700 whitespace-nowrap">
+                    X: <span className="text-indigo-300 font-bold">{selectedField.x.toFixed(1)}%</span> / Y: <span className="text-amber-300 font-bold">{selectedField.y.toFixed(1)}%</span>
+                  </div>
                 </div>
               </div>
 
@@ -796,7 +820,9 @@ export const TaxDocMasterInspector: React.FC = () => {
                         top: `${f.y}%`,
                         transform: 'translate(0, -50%)',
                         fontSize: `${f.fontSize * 0.115}cqw`,
-                        color: isSelected ? '#b91c1c' : '#0f172a',
+                        color: isSelected ? '#b91c1c' : f.disabled ? '#94a3b8' : '#0f172a',
+                        opacity: f.disabled && !isSelected ? 0.3 : 1,
+                        textDecoration: f.disabled ? 'line-through' : 'none',
                         fontWeight: 'bold',
                         cursor: isDraggingThis ? 'grabbing' : 'grab',
                         userSelect: 'none',
@@ -804,10 +830,12 @@ export const TaxDocMasterInspector: React.FC = () => {
                         pointerEvents: 'auto',
                         lineHeight: 1
                       }}
-                      className={`px-0.5 py-0.5 rounded transition-shadow ${
+                      className={`px-0.5 py-0.5 rounded transition-all ${
                         isSelected
                           ? 'ring-2 ring-rose-500 bg-rose-500/20 shadow-2xl z-30 font-black'
-                          : 'hover:ring-1 hover:ring-indigo-500 hover:bg-indigo-100/60 z-10 bg-white/50'
+                          : f.disabled
+                            ? 'bg-slate-200/50 text-slate-400 border border-dashed border-slate-300 z-5'
+                            : 'hover:ring-1 hover:ring-indigo-500 hover:bg-indigo-100/60 z-10 bg-white/50'
                       }`}
                       title={`${f.name} (クリックして選択・十字キーまたはドラッグで移動)`}
                     >

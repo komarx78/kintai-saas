@@ -191,7 +191,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         const H = canvas.height;
 
         // 2. 販売者マスター設定（カスタマイズ座標）の読み込み（localStorage優先で即時反映）
-        let masterMap: Record<string, { x: number; y: number; fontSize: number; pitch?: number }> = {};
+        let masterMap: Record<string, { x: number; y: number; fontSize: number; pitch?: number; disabled?: boolean }> = {};
         try {
           // まずローカルストレージの最新編集を確認
           const saved = localStorage.getItem('taxDocMasterFields');
@@ -205,7 +205,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
           if (parsed && Array.isArray(parsed)) {
             parsed.forEach((f: any) => {
-              masterMap[f.id] = { x: f.x, y: f.y, fontSize: f.fontSize, pitch: f.pitch };
+              masterMap[f.id] = { x: f.x, y: f.y, fontSize: f.fontSize, pitch: f.pitch, disabled: f.disabled };
             });
           }
         } catch (_) {}
@@ -218,18 +218,21 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
           const y = custom ? custom.y : (def ? def.y : 0);
           const fontSize = custom ? custom.fontSize : (def ? def.fontSize : 10);
           const pitch = custom && custom.pitch !== undefined ? custom.pitch : (def ? def.pitch : undefined);
+          const disabled = custom && custom.disabled !== undefined ? custom.disabled : (def ? def.disabled : false);
 
           return {
             x: x / 100, // 0.0〜1.0 (CanvasのW, Hに対する比率)
             y: y / 100,
             fontSizePt: fontSize,
             fontSizePx: Math.max(10, Math.round((fontSize * 0.115 / 100) * W)), // マスター画面の fontSize * 0.115 cqw と完全同一！
-            pitch: pitch ? pitch / 100 : undefined
+            pitch: pitch ? pitch / 100 : undefined,
+            disabled: !!disabled
           };
         };
 
         // マス目数字（マイナンバー・法人番号など）をマスタープレビューと100%同じ中央寄せピッチで印字
         const renderPitchText = (text: string, f: ReturnType<typeof getField>, fontStyle: string = '"Courier New", monospace') => {
+          if (f.disabled) return;
           ctx.font = `bold ${f.fontSizePx}px ${fontStyle}`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
@@ -242,6 +245,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
         // ○印描画ヘルパー
         const renderCircle = (f: ReturnType<typeof getField>) => {
+          if (f.disabled) return;
           ctx.strokeStyle = '#2563eb';
           ctx.lineWidth = Math.max(2, Math.round(W * 0.0008));
           const radius = (1.4 / 100 * W) * 0.5;
@@ -252,6 +256,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
         // ✓チェック描画ヘルパー
         const renderCheck = (f: ReturnType<typeof getField>) => {
+          if (f.disabled) return;
           ctx.fillStyle = '#2563eb';
           ctx.font = `bold ${f.fontSizePx}px sans-serif`;
           ctx.textAlign = 'left';
@@ -261,6 +266,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
 
         // 通常テキスト印字
         const renderText = (text: string, f: ReturnType<typeof getField>, align: 'left' | 'right' | 'center' = 'left', isBold: boolean = true, fontFamily: string = '"Noto Sans JP", sans-serif') => {
+          if (f.disabled) return;
           ctx.fillStyle = '#0f172a';
           ctx.font = `${isBold ? 'bold ' : ''}${f.fontSizePx}px ${fontFamily}`;
           ctx.textAlign = align;

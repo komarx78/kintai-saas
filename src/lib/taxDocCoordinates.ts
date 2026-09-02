@@ -12,6 +12,7 @@ export interface TaxDocFieldConfig {
   description: string;
   isCircle?: boolean; // ○印
   isCheck?: boolean; // ✓チェック
+  disabled?: boolean; // 👁️ 印字無効（非表示・消去）
 }
 
 // 🎯 国税庁原本（2026bun_01.pdf）の枠内にぴったり収まる黄金比率デフォルト値
