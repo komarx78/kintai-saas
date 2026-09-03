@@ -493,6 +493,37 @@ const UserDashboard = () => {
     
     setIsSubmittingLeave(true);
     try {
+      // 🔒 勤怠締めロックチェック（締め済みの過去月への打刻修正・休暇申請を防止）
+      if (startDate) {
+        const targetYearMonth = startDate.substring(0, 7);
+        let isClosed = false;
+        try {
+          const raw = localStorage.getItem(`attendance_closing_${user.tenant_id}_${targetYearMonth}`);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.isClosed) isClosed = true;
+          }
+        } catch {}
+
+        if (!isClosed) {
+          const { data: closingData } = await supabase
+            .from('attendance_monthly_closings')
+            .select('status')
+            .eq('tenant_id', user.tenant_id)
+            .eq('year_month', targetYearMonth)
+            .maybeSingle();
+          if (closingData && closingData.status === 'closed') {
+            isClosed = true;
+          }
+        }
+
+        if (isClosed) {
+          alert(`⚠️ 対象月（${targetYearMonth}度）は全社勤怠締めが確定・ロックされているため、新規申請や打刻修正は提出できません。\n修正が必要な場合は、会社管理者までご連絡ください。`);
+          setIsSubmittingLeave(false);
+          return;
+        }
+      }
+
       const { error } = await supabase.from('leave_requests').insert({
         tenant_id: user.tenant_id,
         user_id: user.id,

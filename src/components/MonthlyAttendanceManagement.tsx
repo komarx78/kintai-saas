@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Calendar, Download, ChevronLeft, ChevronRight, Users, Loader2, 
-  FileText, ArrowLeft, Edit3, X, CheckCircle, AlertCircle
+  FileText, ArrowLeft, Edit3, X, CheckCircle, AlertCircle,
+  Lock, Unlock, CheckCheck
 } from 'lucide-react';
 
 interface MonthlyAttendanceManagementProps {
@@ -17,6 +18,15 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isBulkApproving, setIsBulkApproving] = useState(false);
+  
+  // 🔒 月次勤怠締め確定State
+  const [closingInfo, setClosingInfo] = useState<{
+    isClosed: boolean;
+    closedAt: string | null;
+    closedByName: string | null;
+    notes: string;
+  } | null>(null);
+  const [isProcessingClosing, setIsProcessingClosing] = useState(false);
   
   // viewMode: 'summary' (全社サマリー) | 'individual' (個人別タイムカード)
   const [viewMode, setViewMode] = useState<'summary' | 'individual'>('summary');
@@ -107,8 +117,144 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     }
   };
 
+  // 🔒 月次締め状態の取得
+  const fetchClosingStatus = async () => {
+    if (!tenantId) return;
+    const yearMonth = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+    
+    // ローカルキャッシュからの即時読み出し
+    let localInfo: any = null;
+    try {
+      const raw = localStorage.getItem(`attendance_closing_${tenantId}_${yearMonth}`);
+      if (raw) localInfo = JSON.parse(raw);
+    } catch {}
+
+    try {
+      const { data } = await supabase
+        .from('attendance_monthly_closings')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('year_month', yearMonth)
+        .maybeSingle();
+
+      if (data && data.status === 'closed') {
+        const closedUser = users.find(u => u.id === data.closed_by);
+        const info = {
+          isClosed: true,
+          closedAt: data.closed_at,
+          closedByName: closedUser?.name || '全社管理者',
+          notes: data.notes || ''
+        };
+        setClosingInfo(info);
+        localStorage.setItem(`attendance_closing_${tenantId}_${yearMonth}`, JSON.stringify(info));
+      } else if (data && data.status === 'open') {
+        setClosingInfo({ isClosed: false, closedAt: null, closedByName: null, notes: '' });
+        localStorage.removeItem(`attendance_closing_${tenantId}_${yearMonth}`);
+      } else if (localInfo && localInfo.isClosed) {
+        setClosingInfo(localInfo);
+      } else {
+        setClosingInfo({ isClosed: false, closedAt: null, closedByName: null, notes: '' });
+      }
+    } catch (e) {
+      if (localInfo) setClosingInfo(localInfo);
+      else setClosingInfo({ isClosed: false, closedAt: null, closedByName: null, notes: '' });
+    }
+  };
+
+  // 🔒 月次勤怠締め確定の実行
+  const handleCloseAttendance = async () => {
+    if (!tenantId) return;
+    const yearMonth = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+
+    // 未承認の申請が残っているかチェック
+    const pendingList = leaveRequests.filter(r => r.status === '申請中');
+    if (pendingList.length > 0) {
+      alert(`⚠️ 未承認の申請が ${pendingList.length} 件残っています。\n未承認申請をすべて「承認」または「却下」してから、勤怠締め処理を行ってください。`);
+      return;
+    }
+
+    if (!confirm(`【${yearMonth}度】の勤怠締め処理（確定ロック）を実行しますか？\n\n・確定後は従業員の打刻修正や申請がロックされます。\n・確定した勤怠実績データは給与計算へ安全に引き渡されます。`)) {
+      return;
+    }
+
+    setIsProcessingClosing(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const closedAt = new Date().toISOString();
+      const currentUserName = users.find(u => u.id === user?.id)?.name || '全社管理者';
+
+      const payload = {
+        tenant_id: tenantId,
+        year_month: yearMonth,
+        status: 'closed',
+        closed_at: closedAt,
+        closed_by: user?.id || null,
+        notes: `${yearMonth} 勤怠締め確定実行`
+      };
+
+      try {
+        await supabase
+          .from('attendance_monthly_closings')
+          .upsert(payload, { onConflict: 'tenant_id,year_month' });
+      } catch (dbErr) {
+        console.warn('attendance_monthly_closings upsert fallback:', dbErr);
+      }
+
+      const info = {
+        isClosed: true,
+        closedAt,
+        closedByName: currentUserName,
+        notes: payload.notes
+      };
+      setClosingInfo(info);
+      localStorage.setItem(`attendance_closing_${tenantId}_${yearMonth}`, JSON.stringify(info));
+
+      showToast(`🔒 ${yearMonth}度の勤怠締め確定ロックを完了しました！`);
+      await fetchClosingStatus();
+    } catch (err: any) {
+      console.error('Close attendance error:', err);
+      alert('勤怠締め処理に失敗しました: ' + err.message);
+    } finally {
+      setIsProcessingClosing(false);
+    }
+  };
+
+  // 🔓 月次勤怠締めロックの解除
+  const handleReopenAttendance = async () => {
+    if (!tenantId) return;
+    const yearMonth = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+
+    if (!confirm(`【${yearMonth}度】の勤怠締めロックを解除しますか？\n\n・解除すると、再度打刻修正や申請の受付・編集が可能になります。`)) {
+      return;
+    }
+
+    setIsProcessingClosing(true);
+    try {
+      try {
+        await supabase
+          .from('attendance_monthly_closings')
+          .update({ status: 'open', notes: `${yearMonth} 勤怠締め解除` })
+          .eq('tenant_id', tenantId)
+          .eq('year_month', yearMonth);
+      } catch (dbErr) {
+        console.warn('attendance_monthly_closings reopen fallback:', dbErr);
+      }
+
+      setClosingInfo({ isClosed: false, closedAt: null, closedByName: null, notes: '' });
+      localStorage.removeItem(`attendance_closing_${tenantId}_${yearMonth}`);
+
+      showToast(`🔓 ${yearMonth}度の勤怠締めロックを解除しました。`);
+      await fetchClosingStatus();
+    } catch (err: any) {
+      alert('締め解除に失敗しました: ' + err.message);
+    } finally {
+      setIsProcessingClosing(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchClosingStatus();
   }, [tenantId, currentMonth]);
 
   // 申請の承認処理（打刻修正はattendance_recordsにも自動反映）
@@ -491,6 +637,11 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     e.preventDefault();
     if (!tenantId || !editModal.userId || !editModal.date) return;
 
+    if (closingInfo?.isClosed) {
+      alert(`⚠️ 当月（${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月）は勤怠締め確定済みのため、打刻修正はロックされています。\n修正が必要な場合は、先に「締めロックを解除」してください。`);
+      return;
+    }
+
     try {
       if (editModal.recordId) {
         // 更新
@@ -684,6 +835,80 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           >
             <Download className="w-4 h-4 text-blue-600" /> CSV出力
           </button>
+        </div>
+      </div>
+
+      {/* 🔒 月次勤怠締め確定コントロールパネル */}
+      <div className={`p-4 rounded-2xl border transition-all duration-200 print:hidden ${
+        closingInfo?.isClosed
+          ? 'bg-gradient-to-r from-emerald-50 via-teal-50/40 to-emerald-50 border-emerald-300 shadow-xs'
+          : 'bg-gradient-to-r from-slate-50 via-indigo-50/30 to-slate-50 border-slate-200 shadow-2xs'
+      }`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black shrink-0 ${
+              closingInfo?.isClosed
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                : 'bg-white text-slate-500 border border-slate-200 shadow-2xs'
+            }`}>
+              {closingInfo?.isClosed ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5 text-indigo-600" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-black text-slate-800">
+                  {currentMonth.getFullYear()}年 {currentMonth.getMonth() + 1}月度 勤怠締めステータス
+                </h3>
+                {closingInfo?.isClosed ? (
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-black px-2.5 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1">
+                    <CheckCheck className="w-3 h-3" />
+                    締め確定済み（給与連携ロック完了）
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full border border-slate-200">
+                    集計中（未確定・修正可能）
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                {closingInfo?.isClosed ? (
+                  <span>
+                    確定日時: {new Date(closingInfo.closedAt || '').toLocaleString('ja-JP')} （確定者: {closingInfo.closedByName || '全社管理者'}）
+                    <span className="text-emerald-700 ml-1.5 font-bold">※ 給与計算データとして確定・打刻修正はロックされています</span>
+                  </span>
+                ) : (
+                  <span>
+                    当月の打刻修正・申請確認が完了したら、締め確定ボタンを押して勤怠実績を確定・ロックしてください。
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {closingInfo?.isClosed ? (
+              <button
+                type="button"
+                onClick={handleReopenAttendance}
+                disabled={isProcessingClosing}
+                className="px-3.5 py-2 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 hover:border-rose-300 font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
+                title="勤怠締めのロックを解除して再編集を可能にします（管理者権限）"
+              >
+                {isProcessingClosing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlock className="w-3.5 h-3.5" />}
+                締めロックを解除
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleCloseAttendance}
+                disabled={isProcessingClosing}
+                className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-black text-xs rounded-xl shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="当月の全勤怠データを締め確定して変更をロックします"
+              >
+                {isProcessingClosing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                {currentMonth.getMonth() + 1}月度 勤怠締め確定
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1174,24 +1399,33 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
               </button>
             </div>
 
+            {closingInfo?.isClosed && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-700 font-bold">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>当月（{currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月度）は勤怠締め確定済みのため打刻修正はロックされています。「締めロックを解除」してから修正してください。</span>
+              </div>
+            )}
+
             <form onSubmit={handleSaveRecord} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-black text-slate-700 mb-1">出勤時刻</label>
                   <input 
                     type="time" 
+                    disabled={closingInfo?.isClosed}
                     value={editModal.checkIn} 
                     onChange={e => setEditModal({ ...editModal, checkIn: e.target.value })} 
-                    className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-sm" 
+                    className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-sm disabled:bg-slate-100 disabled:text-slate-400" 
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-black text-slate-700 mb-1">退勤時刻</label>
                   <input 
                     type="time" 
+                    disabled={closingInfo?.isClosed}
                     value={editModal.checkOut} 
                     onChange={e => setEditModal({ ...editModal, checkOut: e.target.value })} 
-                    className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-sm" 
+                    className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-sm disabled:bg-slate-100 disabled:text-slate-400" 
                   />
                 </div>
               </div>
@@ -1199,9 +1433,10 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
               <div>
                 <label className="block text-xs font-black text-slate-700 mb-1">ステータス</label>
                 <select 
+                  disabled={closingInfo?.isClosed}
                   value={editModal.status} 
                   onChange={e => setEditModal({ ...editModal, status: e.target.value })} 
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm bg-white"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   <option value="退勤済">退勤済（通常勤務）</option>
                   <option value="勤務中">勤務中</option>
@@ -1215,9 +1450,10 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                 <label className="block text-xs font-black text-slate-700 mb-1">事由・備考</label>
                 <input 
                   type="text" 
+                  disabled={closingInfo?.isClosed}
                   value={editModal.note} 
                   onChange={e => setEditModal({ ...editModal, note: e.target.value })} 
-                  className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-xs" 
+                  className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-xs disabled:bg-slate-100 disabled:text-slate-400" 
                   placeholder="管理者による修正理由など" 
                 />
               </div>
@@ -1232,9 +1468,11 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer"
+                  disabled={closingInfo?.isClosed}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5"
                 >
-                  保存する
+                  {closingInfo?.isClosed ? <Lock className="w-3.5 h-3.5" /> : null}
+                  {closingInfo?.isClosed ? '締め確定のため編集不可' : '保存する'}
                 </button>
               </div>
             </form>

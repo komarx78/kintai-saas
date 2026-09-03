@@ -106,6 +106,46 @@ const saveDepartmentsToStorage = (tId: string, depts: DepartmentMaster[]) => {
   }
 };
 
+export interface QualificationMaster {
+  id: string;
+  name: string;
+  default_allowance: number;
+  category: string;
+  description: string;
+  display_order: number;
+}
+
+export const DEFAULT_QUALIFICATIONS: QualificationMaster[] = [
+  { id: 'qual-1', name: '第一種衛生管理者', default_allowance: 10000, category: '国家資格', description: '事業場の安全・衛生管理統括', display_order: 1 },
+  { id: 'qual-2', name: '宅地建物取引士', default_allowance: 20000, category: '国家資格', description: '重要事項説明等の専任業務', display_order: 2 },
+  { id: 'qual-3', name: '日商簿記2級', default_allowance: 5000, category: '公的資格', description: '経理・財務・原価計算業務', display_order: 3 },
+  { id: 'qual-4', name: '基本情報技術者', default_allowance: 10000, category: '国家資格', description: 'IT・社内システム開発運用', display_order: 4 },
+  { id: 'qual-5', name: '運行管理者', default_allowance: 15000, category: '国家資格', description: '安全運行・点呼指導管理', display_order: 5 },
+  { id: 'qual-6', name: '登録販売者', default_allowance: 8000, category: '公的資格', description: '一般用医薬品販売管理', display_order: 6 },
+  { id: 'qual-7', name: '介護福祉士', default_allowance: 15000, category: '国家資格', description: '専門介護・現場指導', display_order: 7 },
+  { id: 'qual-8', name: 'フォークリフト運転技能講習修了', default_allowance: 3000, category: '技能講習', description: '物流・倉庫荷役業務', display_order: 8 },
+];
+
+export const getQualificationsFromStorage = (tId?: string | null): QualificationMaster[] => {
+  try {
+    const key = tId ? `company_qualifications_${tId}` : 'company_qualifications';
+    const raw = localStorage.getItem(key) || localStorage.getItem('company_qualifications');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.warn('LocalStorage qualifications parse error:', e);
+  }
+  return DEFAULT_QUALIFICATIONS;
+};
+
+export const saveQualificationsToStorage = (tId: string | null, quals: QualificationMaster[]) => {
+  try {
+    if (tId) localStorage.setItem(`company_qualifications_${tId}`, JSON.stringify(quals));
+    localStorage.setItem('company_qualifications', JSON.stringify(quals));
+  } catch (e) {
+    console.warn('LocalStorage qualifications save error:', e);
+  }
+};
+
 export default function CompanySettingsDashboard() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -113,7 +153,7 @@ export default function CompanySettingsDashboard() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements' | 'qualifications'>('basic');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   // 📢 全社お知らせ掲示板State
@@ -238,6 +278,20 @@ export default function CompanySettingsDashboard() {
   // 6. 就業規則・AI State
   const [employmentRulesText, setEmploymentRulesText] = useState(DEFAULT_EMPLOYMENT_RULES);
   const [geminiApiKey, setGeminiApiKey] = useState('');
+
+  // 7. 📜 資格手当マスタState
+  const [qualifications, setQualifications] = useState<QualificationMaster[]>([]);
+  const [newQualName, setNewQualName] = useState('');
+  const [newQualAllowance, setNewQualAllowance] = useState<number>(10000);
+  const [newQualCategory, setNewQualCategory] = useState('国家資格');
+  const [newQualDesc, setNewQualDesc] = useState('');
+  const [editingQualModal, setEditingQualModal] = useState<{
+    isOpen: boolean;
+    qual: QualificationMaster | null;
+  }>({
+    isOpen: false,
+    qual: null
+  });
 
   useEffect(() => {
     fetchData();
@@ -446,6 +500,25 @@ export default function CompanySettingsDashboard() {
       }
 
       setCompanyUsers(mergedUsers);
+
+      // 7. 資格手当マスタ取得 (LocalStorage & DB)
+      const loadedQuals = getQualificationsFromStorage(tenantIdData);
+      try {
+        const { data: qData } = await supabase
+          .from('company_qualification_masters')
+          .select('*')
+          .eq('tenant_id', tenantIdData)
+          .order('display_order', { ascending: true });
+
+        if (qData && qData.length > 0) {
+          setQualifications(qData);
+          saveQualificationsToStorage(tenantIdData, qData);
+        } else {
+          setQualifications(loadedQuals);
+        }
+      } catch (qErr) {
+        setQualifications(loadedQuals);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -817,9 +890,12 @@ export default function CompanySettingsDashboard() {
         } catch (e) {}
       }
 
-      setSaveSuccessMsg('✅ 全社共通マスタ設定を正常に保存しました！\n「組織図」「勤怠」「シフト」「給与」「入退社・契約書」の全システムに即座に反映されました。');
+      // 資格手当マスタの保存
+      saveQualificationsToStorage(tenantId, qualifications);
+
+      setSaveSuccessMsg('✅ 全社共通マスタ設定を正常に保存しました！\n「組織図」「勤怠」「シフト」「給与」「資格手当」「入退社・契約書」の全システムに即座に反映されました。');
       setTimeout(() => setSaveSuccessMsg(null), 5000);
-      alert('🏛️ 全社共通マスタ設定を保存しました！\n「組織図」「勤怠」「シフト」「給与」「入退社・契約書」の全システムに即座に反映されました。');
+      alert('🏛️ 全社共通マスタ設定を保存しました！\n「組織図」「勤怠」「シフト」「給与」「資格手当」「入退社・契約書」の全システムに即座に反映されました。');
       await fetchData();
     } catch (err: any) {
       console.error('Save company settings error:', err);
@@ -853,6 +929,78 @@ export default function CompanySettingsDashboard() {
     const updated = positions.filter(p => p.id !== id);
     setPositions(updated);
     savePositionsToStorage(updated);
+  };
+
+  // 📜 資格手当マスタ追加
+  const handleAddQualification = async () => {
+    if (!newQualName.trim()) {
+      alert('資格名を入力してください。');
+      return;
+    }
+    const newQ: QualificationMaster = {
+      id: `qual_${Date.now()}`,
+      name: newQualName.trim(),
+      default_allowance: newQualAllowance || 0,
+      category: newQualCategory,
+      description: newQualDesc.trim(),
+      display_order: qualifications.length + 1
+    };
+    const updated = [...qualifications, newQ];
+    setQualifications(updated);
+    saveQualificationsToStorage(tenantId, updated);
+    try {
+      if (tenantId) {
+        await supabase.from('company_qualification_masters').insert({
+          tenant_id: tenantId,
+          name: newQ.name,
+          default_allowance: newQ.default_allowance,
+          category: newQ.category,
+          description: newQ.description,
+          display_order: newQ.display_order
+        });
+      }
+    } catch (e) {
+      console.warn('DB qualification insert note:', e);
+    }
+    setNewQualName('');
+    setNewQualAllowance(10000);
+    setNewQualDesc('');
+    alert(`✨ 資格手当マスタ「${newQ.name}」を追加しました！`);
+  };
+
+  // 📜 資格手当マスタ削除
+  const handleDeleteQualification = async (id: string) => {
+    if (!confirm('この資格手当マスタを削除しますか？')) return;
+    const updated = qualifications.filter(q => q.id !== id);
+    setQualifications(updated);
+    saveQualificationsToStorage(tenantId, updated);
+    try {
+      if (tenantId) {
+        await supabase.from('company_qualification_masters').delete().eq('id', id);
+      }
+    } catch (e) {
+      console.warn('DB qualification delete note:', e);
+    }
+  };
+
+  // 📜 資格手当マスタ更新
+  const handleSaveEditedQualification = async (edited: QualificationMaster) => {
+    const updated = qualifications.map(q => q.id === edited.id ? edited : q);
+    setQualifications(updated);
+    saveQualificationsToStorage(tenantId, updated);
+    try {
+      if (tenantId) {
+        await supabase.from('company_qualification_masters').update({
+          name: edited.name,
+          default_allowance: edited.default_allowance,
+          category: edited.category,
+          description: edited.description
+        }).eq('id', edited.id);
+      }
+    } catch (e) {
+      console.warn('DB qualification update note:', e);
+    }
+    setEditingQualModal({ isOpen: false, qual: null });
   };
 
   // 社員の役職・所属部署・部門長の更新（組織図連動）
@@ -1403,6 +1551,16 @@ export default function CompanySettingsDashboard() {
           >
             <Bell className="w-4 h-4" />
             7. 📢 全社お知らせ管理
+          </button>
+
+          <button
+            onClick={() => setActiveTab('qualifications')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'qualifications' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <Award className="w-4 h-4" />
+            8. 📜 資格手当マスタ
           </button>
         </div>
 
@@ -3048,7 +3206,286 @@ export default function CompanySettingsDashboard() {
           </div>
         )}
 
+        {/* 8. 📜 資格手当マスタ タブ */}
+        {activeTab === 'qualifications' && (
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6 animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <Award className="w-5 h-5 text-indigo-600" />
+                  全社資格手当マスタ管理
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  社内で支給対象とする資格手当の名称・標準支給月額・支給要件を一元管理します。
+                </p>
+              </div>
+              <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-xl self-start sm:self-auto">
+                登録件数: {qualifications.length} 件
+              </span>
+            </div>
+
+            {/* 実務連動インフォメーション */}
+            <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-4 text-xs space-y-1 text-indigo-950">
+              <div className="font-bold flex items-center gap-1.5 text-indigo-900">
+                <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                実務連動の鉄則（合格証必須・画像自動圧縮）
+              </div>
+              <p className="text-[11px] text-indigo-800 leading-relaxed">
+                従業員マスタで資格手当を支給設定する場合、<strong>資格証明書（合格証の写メまたはPDF）のエビデンス添付が必須</strong>となります。スマホ撮影の大容量写真（5〜15MB）は自動で100〜300KB（約90%以上削減）に軽量化圧縮されて安全に保管されます。ここで定義した資格マスタは、従業員編集画面のプルダウン選択肢として100%自動流動します。
+              </p>
+            </div>
+
+            {/* 新規資格手当 追加フォーム */}
+            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+              <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                <Plus className="w-4 h-4 text-indigo-600" />
+                新しい資格手当マスタを登録
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    資格・免許名 <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newQualName}
+                    onChange={e => setNewQualName(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                    placeholder="例: 第一種衛生管理者, 宅地建物取引士, 日商簿記2級"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    資格区分
+                  </label>
+                  <select
+                    value={newQualCategory}
+                    onChange={e => setNewQualCategory(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                  >
+                    <option value="国家資格">国家資格</option>
+                    <option value="公的資格">公的資格</option>
+                    <option value="技能講習">技能講習・特別教育</option>
+                    <option value="民間資格">民間資格</option>
+                    <option value="社内認定">社内認定・職能資格</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    標準手当額 (円/月) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={newQualAllowance}
+                    onChange={e => setNewQualAllowance(parseInt(e.target.value, 10) || 0)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                    placeholder="例: 10000"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-1">説明・手当支給要件（任意）</label>
+                <input
+                  type="text"
+                  value={newQualDesc}
+                  onChange={e => setNewQualDesc(e.target.value)}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                  placeholder="例: 事業場における選任業務従事、または実務での活用を条件とする"
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleAddQualification}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  資格手当マスタに追加する
+                </button>
+              </div>
+            </div>
+
+            {/* 登録済み資格手当一覧テーブル */}
+            <div className="space-y-3">
+              <h4 className="font-bold text-slate-800 text-xs flex items-center justify-between">
+                <span>📋 登録済み資格手当一覧（{qualifications.length}件）</span>
+                <span className="text-[10px] text-slate-400 font-normal">※ 従業員マスタ登録画面の選択肢として表示されます</span>
+              </h4>
+
+              <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs">
+                <table className="w-full text-left border-collapse min-w-[600px]">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-black text-slate-600 uppercase tracking-wider">
+                      <th className="p-3.5 pl-4">資格・免許名</th>
+                      <th className="p-3.5">区分</th>
+                      <th className="p-3.5 text-right">標準手当額 (月額)</th>
+                      <th className="p-3.5">支給要件・備考</th>
+                      <th className="p-3.5 text-center w-28">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {qualifications.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-slate-400 font-bold">
+                          資格手当マスタがまだ登録されていません
+                        </td>
+                      </tr>
+                    ) : (
+                      qualifications.map(q => (
+                        <tr key={q.id} className="hover:bg-slate-50/60 transition">
+                          <td className="p-3.5 pl-4 font-bold text-slate-900 flex items-center gap-2">
+                            <Award className="w-4 h-4 text-amber-500 shrink-0" />
+                            <span>{q.name}</span>
+                          </td>
+                          <td className="p-3.5">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                              {q.category}
+                            </span>
+                          </td>
+                          <td className="p-3.5 text-right font-black text-indigo-600">
+                            ¥{q.default_allowance.toLocaleString()}
+                            <span className="text-[10px] text-slate-400 font-normal ml-0.5">/月</span>
+                          </td>
+                          <td className="p-3.5 text-slate-600 text-[11px]">
+                            {q.description || '-'}
+                          </td>
+                          <td className="p-3.5 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setEditingQualModal({ isOpen: true, qual: { ...q } })}
+                                className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
+                                title="編集"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteQualification(q.id)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                title="削除"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {renderSaveFooter()}
+          </div>
+        )}
+
       </main>
+
+      {/* ✏️ 資格手当マスタ 編集モーダル */}
+      {editingQualModal.isOpen && editingQualModal.qual && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-indigo-600" />
+                資格手当マスタの編集
+              </h3>
+              <button
+                onClick={() => setEditingQualModal({ isOpen: false, qual: null })}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  資格・免許名 <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingQualModal.qual.name}
+                  onChange={e => setEditingQualModal({
+                    ...editingQualModal,
+                    qual: { ...editingQualModal.qual!, name: e.target.value }
+                  })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">資格区分</label>
+                <select
+                  value={editingQualModal.qual.category}
+                  onChange={e => setEditingQualModal({
+                    ...editingQualModal,
+                    qual: { ...editingQualModal.qual!, category: e.target.value }
+                  })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                >
+                  <option value="国家資格">国家資格</option>
+                  <option value="公的資格">公的資格</option>
+                  <option value="技能講習">技能講習・特別教育</option>
+                  <option value="民間資格">民間資格</option>
+                  <option value="社内認定">社内認定・職能資格</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  標準手当額 (円/月) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  value={editingQualModal.qual.default_allowance}
+                  onChange={e => setEditingQualModal({
+                    ...editingQualModal,
+                    qual: { ...editingQualModal.qual!, default_allowance: parseInt(e.target.value, 10) || 0 }
+                  })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">説明・手当支給要件</label>
+                <input
+                  type="text"
+                  value={editingQualModal.qual.description || ''}
+                  onChange={e => setEditingQualModal({
+                    ...editingQualModal,
+                    qual: { ...editingQualModal.qual!, description: e.target.value }
+                  })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-800"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setEditingQualModal({ isOpen: false, qual: null })}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => handleSaveEditedQualification(editingQualModal.qual!)}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5" />
+                変更を保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 🤖 AI条文清書アシスタント モーダル */}
       {aiModalOpen && (
