@@ -213,12 +213,38 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
       const contracts = getRevisionContracts(tenantId);
       setRevisionContracts(contracts);
 
-      // 会社基本情報取得
+      // 会社基本情報取得（DB & LocalStorage & 社印フォールバック）
+      let compInfo: any = {
+        name: '株式会社KAP',
+        address: '滋賀県大津市坂本3丁目21-16',
+        representative_name: '代表取締役 駒井 秀一朗',
+        company_seal_url: ''
+      };
+
       try {
         const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
         const { data: cmsData } = await supabase.from('company_master_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
-        setCompanySettings({ ...tData, ...cmsData });
+        if (tData) {
+          compInfo = { ...compInfo, ...tData };
+          if (tData.name) compInfo.name = tData.name;
+          if (tData.address) compInfo.address = tData.address;
+          if (tData.representative_name) compInfo.representative_name = tData.representative_name;
+          if (tData.company_seal_url) compInfo.company_seal_url = tData.company_seal_url;
+        }
+        if (cmsData) compInfo = { ...compInfo, ...cmsData };
       } catch (e) {}
+
+      try {
+        const rawLocal = localStorage.getItem(`company_basic_settings_${tenantId}`) || localStorage.getItem('company_basic_info');
+        if (rawLocal) {
+          const parsed = JSON.parse(rawLocal);
+          compInfo = { ...compInfo, ...parsed };
+        }
+        const sealStored = localStorage.getItem(`company_seal_image_${tenantId}`) || localStorage.getItem('company_seal_image');
+        if (sealStored) compInfo.company_seal_url = sealStored;
+      } catch (e) {}
+
+      setCompanySettings(compInfo);
 
       // エクセル風バッチ編集ステートの初期化
       const initialBatch: Record<string, BatchEditItem> = {};
@@ -2267,10 +2293,15 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                 const targetEmp = employees.find(e => e.id === previewContractDoc.user_id);
                 const prof = payrollProfiles[previewContractDoc.user_id];
                 const tpl = getLaborContractTemplateFromStorage(tenantId || '');
+                const repName = companySettings?.representative_name || 
+                                (companySettings?.representative ? `代表取締役 ${companySettings.representative}` : '代表取締役 駒井 秀一朗');
+                const compSeal = companySettings?.company_seal_url || tpl?.company_seal_url;
+
                 const contractData: LaborContractData = {
                   companyName: companySettings?.name || '株式会社KAP',
                   companyAddress: companySettings?.address || '滋賀県大津市坂本3丁目21-16',
-                  representativeName: companySettings?.representative || '代表取締役',
+                  representativeName: repName,
+                  companySealUrl: compSeal,
                   employeeName: previewContractDoc.user_name,
                   employeeAddress: targetEmp?.address || '滋賀県大津市',
                   joinDate: targetEmp?.join_date || '2024-04-01',

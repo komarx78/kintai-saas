@@ -85,6 +85,18 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
   // 労働者の姓（印鑑用）
   const empLastName = (data.employeeName || '印').trim().split(/[\s　]+/)[0] || '印';
 
+  // 代表者表示名の整形（役職＋氏名を確実に結合）
+  const displayRepName = (() => {
+    const r = (data.representativeName || '').trim();
+    if (!r || r === '代表取締役' || r === '代表') {
+      return '代表取締役 駒井 秀一朗';
+    }
+    if (!r.includes('代表') && !r.includes('役員') && !r.includes('社長') && !r.includes('理事')) {
+      return `代表取締役 ${r}`;
+    }
+    return r;
+  })();
+
   return (
     <div className="bg-white p-6 sm:p-10 max-w-4xl mx-auto text-slate-800 font-sans text-xs leading-relaxed select-text print:p-0 print:m-0 print:max-w-none shadow-sm rounded-2xl border border-slate-200">
       
@@ -138,8 +150,8 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
         <div>
           <span className="text-[10px] font-bold text-slate-500 block">【雇用者（甲）】</span>
           <div className="font-bold text-slate-800 text-sm mt-0.5">{data.companyName}</div>
-          <div className="text-[11px] text-slate-600 mt-0.5">{data.companyAddress || '本社所在地'}</div>
-          <div className="text-[11px] text-slate-600">{data.representativeName || '代表取締役'}</div>
+          <div className="text-[11px] text-slate-600 mt-0.5">{data.companyAddress || '滋賀県大津市坂本3丁目21-16'}</div>
+          <div className="text-[11px] text-slate-700 font-medium">{displayRepName}</div>
         </div>
         <div>
           <span className="text-[10px] font-bold text-slate-500 block">【労働者（乙）】</span>
@@ -389,15 +401,15 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
             <div>
               <span className="text-[10px] font-bold text-slate-500 block mb-0.5">【事業主（甲）署名捺印】</span>
               <div className="text-xs font-bold text-slate-800">{data.companyName}</div>
-              <div className="text-xs text-slate-700 mt-1 flex items-center justify-between">
-                <span>{data.representativeName || '代表取締役 〇〇 〇〇'}</span>
+              <div className="text-xs text-slate-800 mt-1 flex items-center justify-between relative z-10 font-bold">
+                <span>{displayRepName}</span>
                 <span className="text-slate-400 font-serif text-[11px] pr-2">印</span>
               </div>
             </div>
             
             {/* 社印・印影画像 */}
             {sealImg ? (
-              <div className="absolute right-3 top-3 w-16 h-16 pointer-events-none flex items-center justify-center">
+              <div className="absolute right-3 top-2 w-20 h-20 pointer-events-none flex items-center justify-center z-0">
                 <img 
                   src={sealImg} 
                   alt="社印" 
@@ -405,8 +417,9 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
                 />
               </div>
             ) : (
-              <div className="absolute right-4 top-4 w-10 h-10 border border-red-400/50 rounded flex items-center justify-center text-red-500 text-[8px] font-serif select-none">
-                社印
+              <div className="absolute right-3 top-2 w-14 h-14 border-2 border-red-600/80 bg-red-50/40 rounded flex flex-col items-center justify-center text-red-600 font-serif select-none pointer-events-none rotate-[-2deg] shadow-2xs">
+                <span className="text-[9px] font-black leading-tight tracking-widest">株式</span>
+                <span className="text-[9px] font-black leading-tight tracking-widest">会社印</span>
               </div>
             )}
           </div>
