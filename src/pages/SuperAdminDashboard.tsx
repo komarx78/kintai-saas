@@ -15,6 +15,7 @@ import {
   getCustomDocTemplatesFromStorage, 
   deleteCustomDocTemplateFromStorage 
 } from '../lib/customDocManager';
+import { BILLING_MODELS, type BillingModelType } from '../lib/subscriptionBilling';
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
@@ -28,12 +29,20 @@ export default function SuperAdminDashboard() {
   const [isSavingAi, setIsSavingAi] = useState(false);
   
   const [sysPrices, setSysPrices] = useState({
-    price_1_user: 2000, price_1_user_annual: 20000,
-    price_2_users: 4000, price_2_users_annual: 40000,
-    price_3_users: 6000, price_3_users_annual: 60000,
-    price_4_users: 8000, price_4_users_annual: 80000,
-    price_5_users: 10000, price_5_users_annual: 100000,
-    additional_user_price: 500, additional_user_price_annual: 5000,
+    billing_model: 'per_user' as BillingModelType,
+    unit_price_per_user: 300,
+    unit_price_per_user_annual: 3600,
+    base_fee: 0,
+    base_fee_annual: 0,
+    included_users: 0,
+    flat_monthly_price: 15000,
+    flat_annual_price: 150000,
+    price_1_user: 300, price_1_user_annual: 3600,
+    price_2_users: 600, price_2_users_annual: 7200,
+    price_3_users: 900, price_3_users_annual: 10800,
+    price_4_users: 1200, price_4_users_annual: 14400,
+    price_5_users: 1500, price_5_users_annual: 18000,
+    additional_user_price: 300, additional_user_price_annual: 3600,
     default_trial_days: 30
   });
 
@@ -81,18 +90,26 @@ export default function SuperAdminDashboard() {
         setSettingsId(data.id);
         if (data.gemini_api_key) setGeminiApiKey(data.gemini_api_key);
         setSysPrices({
-          price_1_user: data.price_1_user || 2000,
-          price_1_user_annual: data.price_1_user_annual || 20000,
-          price_2_users: data.price_2_users || 4000,
-          price_2_users_annual: data.price_2_users_annual || 40000,
-          price_3_users: data.price_3_users || 6000,
-          price_3_users_annual: data.price_3_users_annual || 60000,
-          price_4_users: data.price_4_users || 8000,
-          price_4_users_annual: data.price_4_users_annual || 80000,
-          price_5_users: data.price_5_users || 10000,
-          price_5_users_annual: data.price_5_users_annual || 100000,
-          additional_user_price: data.additional_user_price || 500,
-          additional_user_price_annual: data.additional_user_price_annual || 5000,
+          billing_model: (data.billing_model as BillingModelType) || 'per_user',
+          unit_price_per_user: data.unit_price_per_user || 300,
+          unit_price_per_user_annual: data.unit_price_per_user_annual || 3600,
+          base_fee: data.base_fee || 0,
+          base_fee_annual: data.base_fee_annual || 0,
+          included_users: data.included_users || 0,
+          flat_monthly_price: data.flat_monthly_price || 15000,
+          flat_annual_price: data.flat_annual_price || 150000,
+          price_1_user: data.price_1_user || 300,
+          price_1_user_annual: data.price_1_user_annual || 3600,
+          price_2_users: data.price_2_users || 600,
+          price_2_users_annual: data.price_2_users_annual || 7200,
+          price_3_users: data.price_3_users || 900,
+          price_3_users_annual: data.price_3_users_annual || 10800,
+          price_4_users: data.price_4_users || 1200,
+          price_4_users_annual: data.price_4_users_annual || 14400,
+          price_5_users: data.price_5_users || 1500,
+          price_5_users_annual: data.price_5_users_annual || 18000,
+          additional_user_price: data.additional_user_price || 300,
+          additional_user_price_annual: data.additional_user_price_annual || 3600,
           default_trial_days: data.default_trial_days || 30
         });
       } else if (error) {
@@ -128,10 +145,6 @@ export default function SuperAdminDashboard() {
     } catch (e) {
       console.warn('Fetch staff exception:', e);
     }
-  };
-
-  const handleSysPriceChange = (field: string, value: string) => {
-    setSysPrices(prev => ({ ...prev, [field]: Number(value) }));
   };
 
   const handleSaveSettings = async () => {
@@ -180,16 +193,12 @@ export default function SuperAdminDashboard() {
         name: editingTenant.name,
         plan_type: editingTenant.plan_type,
         trial_ends_at: editingTenant.trial_ends_at,
-        custom_price_1_user: editingTenant.custom_price_1_user,
-        custom_price_1_user_annual: editingTenant.custom_price_1_user_annual,
-        custom_price_2_users: editingTenant.custom_price_2_users,
-        custom_price_2_users_annual: editingTenant.custom_price_2_users_annual,
-        custom_price_3_users: editingTenant.custom_price_3_users,
-        custom_price_3_users_annual: editingTenant.custom_price_3_users_annual,
-        custom_price_4_users: editingTenant.custom_price_4_users,
-        custom_price_4_users_annual: editingTenant.custom_price_4_users_annual,
-        custom_price_5_users: editingTenant.custom_price_5_users,
-        custom_price_5_users_annual: editingTenant.custom_price_5_users_annual,
+        custom_billing_model: editingTenant.custom_billing_model || null,
+        custom_unit_price_per_user: editingTenant.custom_unit_price_per_user ? Number(editingTenant.custom_unit_price_per_user) : null,
+        custom_unit_price_per_user_annual: editingTenant.custom_unit_price_per_user_annual ? Number(editingTenant.custom_unit_price_per_user_annual) : null,
+        custom_base_fee: editingTenant.custom_base_fee ? Number(editingTenant.custom_base_fee) : null,
+        custom_included_users: editingTenant.custom_included_users ? Number(editingTenant.custom_included_users) : null,
+        custom_flat_monthly_price: editingTenant.custom_flat_monthly_price ? Number(editingTenant.custom_flat_monthly_price) : null,
       };
       const { error } = await supabase.from('tenants').update(updatePayload).eq('id', editingTenant.id);
       if (error) throw error;
@@ -236,47 +245,6 @@ export default function SuperAdminDashboard() {
       console.error(err);
       alert('権限剥奪に失敗しました。');
     }
-  };
-
-  const renderPriceRow = (label: string, fieldMonthly: string, fieldAnnual: string, isTenantModal = false) => {
-    const stateObj = isTenantModal ? editingTenant : sysPrices;
-    const onChangeFn = isTenantModal 
-      ? (field: string, val: string) => setEditingTenant({ ...editingTenant, [field]: val === '' ? null : Number(val) })
-      : handleSysPriceChange;
-    
-    return (
-      <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-        <td className="py-3 px-4 font-medium text-gray-700 whitespace-nowrap">{label}</td>
-        <td className="py-3 px-4">
-          <div className="relative rounded-md shadow-sm">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <span className="text-gray-500 sm:text-sm">¥</span>
-            </div>
-            <input 
-              type="number" 
-              value={stateObj[fieldMonthly] === null || stateObj[fieldMonthly] === undefined ? '' : stateObj[fieldMonthly]} 
-              onChange={e => onChangeFn(fieldMonthly, e.target.value)} 
-              placeholder={isTenantModal ? "共通設定を適用" : ""}
-              className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-8 pr-3 sm:text-sm border-gray-300 rounded-md py-2 border" 
-            />
-          </div>
-        </td>
-        <td className="py-3 px-4">
-          <div className="relative rounded-md shadow-sm">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <span className="text-gray-500 sm:text-sm">¥</span>
-            </div>
-            <input 
-              type="number" 
-              value={stateObj[fieldAnnual] === null || stateObj[fieldAnnual] === undefined ? '' : stateObj[fieldAnnual]} 
-              onChange={e => onChangeFn(fieldAnnual, e.target.value)} 
-              placeholder={isTenantModal ? "共通設定を適用" : ""}
-              className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-8 pr-3 sm:text-sm border-gray-300 rounded-md py-2 border" 
-            />
-          </div>
-        </td>
-      </tr>
-    );
   };
 
   return (
@@ -734,30 +702,117 @@ export default function SuperAdminDashboard() {
               </p>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden p-6 space-y-4">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-500 font-bold">
-                    <th className="py-2 px-4 text-left">ユーザー規模</th>
-                    <th className="py-2 px-4 text-left">月額料金（円/月）</th>
-                    <th className="py-2 px-4 text-left">年額料金（円/年）</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {renderPriceRow('1ユーザー', 'price_1_user', 'price_1_user_annual')}
-                  {renderPriceRow('2ユーザー', 'price_2_users', 'price_2_users_annual')}
-                  {renderPriceRow('3ユーザー', 'price_3_users', 'price_3_users_annual')}
-                  {renderPriceRow('4ユーザー', 'price_4_users', 'price_4_users_annual')}
-                  {renderPriceRow('5ユーザー', 'price_5_users', 'price_5_users_annual')}
-                </tbody>
-              </table>
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 space-y-6">
+              <div className="bg-indigo-50/70 p-4 rounded-xl border border-indigo-200 space-y-3">
+                <label className="block text-xs font-black text-indigo-950">
+                  🎯 全社デフォルト課金計算モデルの選択
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {BILLING_MODELS.map(m => (
+                    <label 
+                      key={m.id}
+                      className={`p-3 rounded-xl border cursor-pointer transition flex items-start gap-2.5 ${
+                        sysPrices.billing_model === m.id 
+                          ? 'bg-white border-indigo-600 shadow-sm ring-2 ring-indigo-500/20' 
+                          : 'bg-white/60 border-indigo-100 hover:bg-white'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="billing_model"
+                        value={m.id}
+                        checked={sysPrices.billing_model === m.id}
+                        onChange={() => setSysPrices(prev => ({ ...prev, billing_model: m.id }))}
+                        className="mt-0.5 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div>
+                        <div className="font-bold text-xs text-slate-900">{m.name}</div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">{m.description}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
-              <button
-                onClick={handleSaveSettings}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shadow-md transition flex items-center gap-2 cursor-pointer"
-              >
-                <Save className="w-4 h-4" /> 共通料金設定を保存
-              </button>
+              {/* モデル別 パラメータ設定 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    1人あたり月額単価 (円) <span className="text-indigo-600 font-bold">※現在300円</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={sysPrices.unit_price_per_user}
+                    onChange={e => setSysPrices(prev => ({ ...prev, unit_price_per_user: Number(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold font-mono text-slate-800"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">「シンプル1人単価制」等の計算基礎</p>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    1人あたり年額単価 (円)
+                  </label>
+                  <input
+                    type="number"
+                    value={sysPrices.unit_price_per_user_annual}
+                    onChange={e => setSysPrices(prev => ({ ...prev, unit_price_per_user_annual: Number(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold font-mono text-slate-800"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">年額払い選択時の単価（例: 3,600円）</p>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    基本料金 (円/月)
+                  </label>
+                  <input
+                    type="number"
+                    value={sysPrices.base_fee}
+                    onChange={e => setSysPrices(prev => ({ ...prev, base_fee: Number(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold font-mono text-slate-800"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">「基本料＋従量」「基本枠＋超過」の基本料金</p>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    基本枠 含まれる人数 (名)
+                  </label>
+                  <input
+                    type="number"
+                    value={sysPrices.included_users}
+                    onChange={e => setSysPrices(prev => ({ ...prev, included_users: Number(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold font-mono text-slate-800"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">「基本枠＋超過」で追加料金が発生しない上限人数</p>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    全社定額 月額料金 (円/月)
+                  </label>
+                  <input
+                    type="number"
+                    value={sysPrices.flat_monthly_price}
+                    onChange={e => setSysPrices(prev => ({ ...prev, flat_monthly_price: Number(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold font-mono text-slate-800"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">「全社定額制」選択時の月額料金</p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                <p className="text-xs text-slate-500 font-bold">
+                  ※ 保存すると、全顧客テナントの月額利用料金の算出に即座に反映されます。
+                </p>
+                <button
+                  onClick={handleSaveSettings}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shadow-md transition flex items-center gap-2 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" /> 共通料金設定を保存
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -858,6 +913,35 @@ export default function SuperAdminDashboard() {
                     onChange={e => setEditingTenant({ ...editingTenant, trial_ends_at: e.target.value })}
                     className="w-full p-2.5 border border-slate-300 rounded-xl"
                   />
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 space-y-2">
+                <h4 className="text-xs font-black text-slate-800">💼 個別カスタム課金モデル（未指定時はシステム共通設定）</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">個別課金モデル</label>
+                    <select
+                      value={editingTenant.custom_billing_model || ''}
+                      onChange={e => setEditingTenant({ ...editingTenant, custom_billing_model: e.target.value || null })}
+                      className="w-full p-2 border border-slate-300 rounded-lg text-xs"
+                    >
+                      <option value="">（システム共通設定に従う）</option>
+                      {BILLING_MODELS.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">個別1人あたり月額単価 (円)</label>
+                    <input
+                      type="number"
+                      placeholder="共通設定を使用 (300円)"
+                      value={editingTenant.custom_unit_price_per_user || ''}
+                      onChange={e => setEditingTenant({ ...editingTenant, custom_unit_price_per_user: e.target.value === '' ? null : Number(e.target.value) })}
+                      className="w-full p-2 border border-slate-300 rounded-lg text-xs font-mono font-bold"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

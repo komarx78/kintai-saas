@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock, Bot, BookOpen, Sparkles, Printer, ShieldCheck, DollarSign, Building2, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -8,6 +8,7 @@ import { PayslipManagement } from '../components/PayslipManagement';
 import AppSwitcher from '../components/AppSwitcher';
 import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 import { HelpGuideModal } from '../components/HelpGuideModal';
+import { calculateSubscriptionFee, type BillingMasterConfig } from '../lib/subscriptionBilling';
 
 // 2026年の日本の祝日（簡易モック用リスト）
 const NATIONAL_HOLIDAYS_2026 = [
@@ -346,6 +347,18 @@ ${tenantId || '（エラー：コード取得失敗）'}
       .eq('type', '有給休暇');
     
     if (data) {
+      // 大元労務マスタから退職者ステータスを取得（在籍者のみを課金対象とするため）
+      let retiredUserIds = new Set<string>();
+      try {
+        const { data: onbData } = await supabase
+          .from('employee_onboarding_profiles')
+          .select('user_id, status')
+          .eq('tenant_id', tenantId);
+        if (onbData) {
+          onbData.filter(o => o.status === 'retired').forEach(o => retiredUserIds.add(o.user_id));
+        }
+      } catch {}
+
       const mapped = data.map(u => {
         const userRequests = requestsData ? requestsData.filter(r => r.user_id === u.id) : [];
         const userTakenDates: string[] = [];
@@ -378,7 +391,8 @@ ${tenantId || '（エラー：コード取得失敗）'}
           paidLeaveBalance: parseFloat(u.paid_leave_balance || 0),
           paidLeaveCarryover: parseFloat(u.paid_leave_carryover || 0),
           has_kintai_access: u.has_kintai_access ?? true,
-          has_shift_access: u.has_shift_access ?? false
+          has_shift_access: u.has_shift_access ?? false,
+          is_retired: retiredUserIds.has(u.id) || u.status === 'retired'
         };
       });
       setEmployees(mapped);
@@ -488,39 +502,33 @@ ${tenantId || '（エラー：コード取得失敗）'}
     fetchRequests();
   }, [tenantId, activeTab]);
 
-  const currentUsers = employees.length;
-  
-  // 登録人数および設定価格に基づく正確な料金計算
-  const calculateCurrentFee = () => {
-    const count = currentUsers;
-    const isAnnual = tenantInfo?.billing_cycle === 'annual';
-    const custom = tenantInfo || {};
-    const sys = systemPrices || {};
+  // 在籍中の従業員のみを課金対象として正確にカウント（退職者は自動除外）
+  const activeEmployees = useMemo(() => employees.filter(e => !e.is_retired), [employees]);
+  const currentUsers = activeEmployees.length;
+  const retiredCount = employees.length - currentUsers;
 
-    if (count <= 0) return 0;
-    if (count === 1) {
-      return (isAnnual ? custom.custom_price_1_user_annual : custom.custom_price_1_user) ?? (isAnnual ? sys.price_1_user_annual : sys.price_1_user) ?? (isAnnual ? 2400 : 200);
-    }
-    if (count === 2) {
-      return (isAnnual ? custom.custom_price_2_users_annual : custom.custom_price_2_users) ?? (isAnnual ? sys.price_2_users_annual : sys.price_2_users) ?? (isAnnual ? 4800 : 400);
-    }
-    if (count === 3) {
-      return (isAnnual ? custom.custom_price_3_users_annual : custom.custom_price_3_users) ?? (isAnnual ? sys.price_3_users_annual : sys.price_3_users) ?? (isAnnual ? 7200 : 600);
-    }
-    if (count === 4) {
-      return (isAnnual ? custom.custom_price_4_users_annual : custom.custom_price_4_users) ?? (isAnnual ? sys.price_4_users_annual : sys.price_4_users) ?? (isAnnual ? 9600 : 800);
-    }
-    if (count === 5) {
-      return (isAnnual ? custom.custom_price_5_users_annual : custom.custom_price_5_users) ?? (isAnnual ? sys.price_5_users_annual : sys.price_5_users) ?? (isAnnual ? 12000 : 1000);
-    }
-    
-    // 6名以降
-    const base5 = (isAnnual ? custom.custom_price_5_users_annual : custom.custom_price_5_users) ?? (isAnnual ? sys.price_5_users_annual : sys.price_5_users) ?? (isAnnual ? 12000 : 1000);
-    const additionalUnit = (isAnnual ? sys.additional_user_price_annual : sys.additional_user_price) ?? (isAnnual ? 2400 : 200);
-    return base5 + ((count - 5) * additionalUnit);
-  };
+  // マスタ設定（テナント個別設定優先 ➔ システム共通設定 ➔ 規定単価300円）
+  const billingConfig: BillingMasterConfig = useMemo(() => {
+    const t = tenantInfo || {};
+    const s = systemPrices || {};
+    return {
+      billing_model: t.custom_billing_model || s.billing_model || 'per_user',
+      unit_price_per_user: t.custom_unit_price_per_user ?? s.unit_price_per_user ?? 300,
+      unit_price_per_user_annual: t.custom_unit_price_per_user_annual ?? s.unit_price_per_user_annual ?? 3600,
+      base_fee: t.custom_base_fee ?? s.base_fee ?? 0,
+      base_fee_annual: t.custom_base_fee_annual ?? s.base_fee_annual ?? 0,
+      included_users: t.custom_included_users ?? s.included_users ?? 0,
+      flat_monthly_price: t.custom_flat_monthly_price ?? s.flat_monthly_price ?? 15000,
+      flat_annual_price: t.custom_flat_annual_price ?? s.flat_annual_price ?? 150000,
+      billing_cycle: t.billing_cycle || 'monthly'
+    };
+  }, [tenantInfo, systemPrices]);
 
-  const calculatedFee = calculateCurrentFee();
+  const subscriptionResult = useMemo(() => {
+    return calculateSubscriptionFee(currentUsers, billingConfig);
+  }, [currentUsers, billingConfig]);
+
+  const calculatedFee = subscriptionResult.totalFee;
 
   const handleOpenModal = (employee: any = null) => {
     setEditingEmployee(employee);
@@ -819,11 +827,19 @@ ${tenantId || '（エラー：コード取得失敗）'}
                     )}
                   </div>
                   
-                  <p className="text-sm font-bold text-gray-800">
-                    登録従業員数: <strong>{currentUsers}</strong> 名
+                  <p className="text-sm font-bold text-gray-800 flex flex-wrap items-center gap-1.5">
+                    登録従業員数: <strong className="text-base text-slate-900">{currentUsers}</strong> 名
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      在籍中
+                    </span>
+                    {retiredCount > 0 && (
+                      <span className="text-[11px] text-slate-400 font-medium">
+                        （退職者 {retiredCount}名 課金対象外）
+                      </span>
+                    )}
                     {isPaid && (
-                      <span className="text-xs font-bold text-slate-500 ml-1.5">
-                        （{currentUsers <= 5 ? `${currentUsers}名様枠` : '5名枠＋追加分'} / {tenantInfo?.billing_cycle === 'annual' ? '年額払い' : '月額払い'}）
+                      <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
+                        {subscriptionResult.modelName}（{tenantInfo?.billing_cycle === 'annual' ? '年額' : '月額'} ¥{subscriptionResult.unitPrice.toLocaleString()}/名）
                       </span>
                     )}
                   </p>
@@ -849,9 +865,14 @@ ${tenantId || '（エラー：コード取得失敗）'}
                   </h3>
                   <div className="flex sm:justify-end items-baseline gap-1 mt-0.5">
                     {isPaid ? (
-                      <p className="text-2xl font-black text-blue-600 font-mono">
-                        ¥{calculatedFee.toLocaleString()}
-                      </p>
+                      <div className="text-right">
+                        <p className="text-2xl font-black text-blue-600 font-mono">
+                          ¥{calculatedFee.toLocaleString()}
+                        </p>
+                        <p className="text-[11px] text-slate-500 font-bold mt-0.5">
+                          内訳: {subscriptionResult.breakdownText}
+                        </p>
+                      </div>
                     ) : (
                       <div className="flex items-baseline gap-1.5">
                         <span className="text-2xl font-black text-emerald-600 font-mono">¥0</span>
