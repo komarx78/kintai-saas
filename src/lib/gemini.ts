@@ -71,8 +71,8 @@ ${companyRules || '（就業規則が登録されていません。労働基準�
   });
 
   try {
-    // 安定稼働のGemini 1.5 Flash（および 2.0 Flash / 1.5 Pro）を優先順で呼び出し
-    const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro'];
+    // 最新の Gemini 3.5 Flash を最優先で呼び出し
+    const models = ['gemini-3.5-flash', 'gemini-3.5-flash-latest', 'gemini-3.5-pro'];
     let lastError: any = null;
     let answer: string | null = null;
 

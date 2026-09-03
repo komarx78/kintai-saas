@@ -143,7 +143,7 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
                 </span>
               ) : (
                 <span className="bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" /> Gemini AI 稼働中
+                  <Sparkles className="w-3 h-3" /> Gemini 3.5 Flash 稼働中
                 </span>
               )}
             </div>
