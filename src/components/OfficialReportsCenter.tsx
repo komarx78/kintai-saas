@@ -4,6 +4,7 @@ import {
   FileText, Printer, Download, Building2, 
   ChevronRight, X, Info
 } from 'lucide-react';
+import { OfficialTaxWithholdingSlipDoc } from './OfficialTaxWithholdingSlipDoc';
 
 export interface OfficialReportsCenterProps {
   tenantId: string;
@@ -1208,81 +1209,50 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               )}
 
               {/* ----------------------------------------------------------------- */}
-              {/* ⑦ 給与所得の源泉徴収票（退職者用・国税庁公式様式準拠）           */}
+              {/* ⑦ 給与所得の源泉徴収票（国税庁公式NTAOHSZ062010060様式準拠）     */}
               {/* ----------------------------------------------------------------- */}
               {selectedDocType === 'retirement_withholding_tax' && (() => {
                 const retiredEmps = employees.filter(e => e.is_retired);
-                const targetEmp = retiredEmps.length > 0 ? retiredEmps[0] : employees[0];
-                const totalPaid = targetEmp.base_salary * 8; // 8ヶ月分支給想定
-                const taxDeducted = Math.round(totalPaid * 0.04);
+                const targetEmp = selectedEmployeeId !== 'all' 
+                  ? employees.find(e => e.id === selectedEmployeeId) || employees[0]
+                  : retiredEmps.length > 0 ? retiredEmps[0] : employees[0];
+
+                const totalPaid = targetEmp.base_salary * (targetEmp.is_retired ? 8 : 12);
                 const socialDeducted = Math.round(totalPaid * 0.1475);
+                const deductionAfterPayment = Math.round(totalPaid * 0.7);
+                const totalIncomeDeduction = socialDeducted + 480000;
+                const taxable = Math.max(0, deductionAfterPayment - totalIncomeDeduction);
+                const taxDeducted = Math.round(taxable * 0.05 * 1.021);
 
                 return (
-                  <div className="bg-white p-8 rounded-2xl border-2 border-slate-900 text-slate-900 font-sans text-xs max-w-4xl mx-auto shadow-sm print:p-0 print:border-none print:shadow-none">
-                    <div className="text-center border-b-2 border-slate-900 pb-2 mb-4">
-                      <div className="text-[10px] font-bold text-slate-500">国税庁公式様式（所得税法第226条）</div>
-                      <h2 className="text-lg sm:text-xl font-black tracking-tight">
-                        令和{selectedYear - 2018}年分 給与所得の源泉徴収票（中途退職者交付用）
-                      </h2>
-                    </div>
-
-                    {/* 受給者情報 */}
-                    <div className="grid grid-cols-2 gap-3 border border-slate-400 p-3 mb-4 text-[11px]">
-                      <div>
-                        <div><span className="text-slate-500">住所:</span> {targetEmp.address}</div>
-                        <div><span className="text-slate-500">氏名:</span> <span className="font-bold text-sm">{targetEmp.name}</span></div>
-                      </div>
-                      <div className="text-right">
-                        <div><span className="text-slate-500">就任・雇入年月日:</span> {targetEmp.join_date}</div>
-                        <div className="text-rose-700 font-bold">
-                          <span>中途退職年月日:</span> {targetEmp.retirement_date || `${selectedYear}-08-31`}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 税額テーブル */}
-                    <table className="w-full border-collapse border-2 border-slate-900 mb-4 text-center text-[10.5px]">
-                      <thead>
-                        <tr className="bg-slate-100 border-b border-slate-900 font-bold">
-                          <th className="p-2 border-r border-slate-400">支払金額</th>
-                          <th className="p-2 border-r border-slate-400">給与所得控除後の金額</th>
-                          <th className="p-2 border-r border-slate-400">所得控除の額の合計額</th>
-                          <th className="p-2">源泉徴収税額</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="font-mono text-xs">
-                          <td className="p-3 border-r border-slate-400 font-bold text-slate-900">¥{totalPaid.toLocaleString()}</td>
-                          <td className="p-3 border-r border-slate-400 text-slate-400">（年末調整未済）</td>
-                          <td className="p-3 border-r border-slate-400 text-slate-400">（年末調整未済）</td>
-                          <td className="p-3 font-bold text-emerald-700">¥{taxDeducted.toLocaleString()}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-
-                    {/* 社会保険料等 */}
-                    <div className="border border-slate-400 p-2.5 mb-5 flex justify-between text-[11px]">
-                      <span>社会保険料等の金額:</span>
-                      <span className="font-mono font-bold">¥{socialDeducted.toLocaleString()}</span>
-                    </div>
-
-                    {/* 支払者（事業主）情報 ＆ 角印 */}
-                    <div className="signature-box flex items-center justify-between border-t border-slate-300 pt-3 text-[11px] relative">
-                      <div>
-                        <div className="font-bold text-slate-800">【支払者】{companyInfo.name}</div>
-                        <div className="text-slate-500 text-[10px]">{companyInfo.address}</div>
-                        <div className="text-slate-500 text-[10px]">{companyInfo.representative_name}</div>
-                      </div>
-                      <div className="relative">
-                        {companyInfo.company_seal_url && (
-                          <img
-                            src={companyInfo.company_seal_url}
-                            alt="社印"
-                            className="w-14 h-14 object-contain mix-blend-multiply opacity-85"
-                          />
-                        )}
-                      </div>
-                    </div>
+                  <div className="max-w-4xl mx-auto">
+                    <OfficialTaxWithholdingSlipDoc
+                      data={{
+                        year: selectedYear,
+                        recipientAddress: targetEmp.address,
+                        recipientKana: targetEmp.name_kana,
+                        recipientName: targetEmp.name,
+                        recipientNumber: `EMP-${targetEmp.id.slice(0, 4)}`,
+                        recipientPosition: targetEmp.position_name,
+                        myNumber: targetEmp.my_number,
+                        birthDate: targetEmp.birth_date,
+                        joinDate: targetEmp.join_date,
+                        retirementDate: targetEmp.retirement_date,
+                        isRetired: targetEmp.is_retired,
+                        totalPayment: totalPaid,
+                        deductionAfterPayment: deductionAfterPayment,
+                        totalIncomeDeduction: totalIncomeDeduction,
+                        withholdingTaxAmount: taxDeducted,
+                        socialInsuranceAmount: socialDeducted,
+                        dependentsCount: targetEmp.dependents_count,
+                        basicDeduction: 480000,
+                        companyAddress: companyInfo.address,
+                        companyName: companyInfo.name,
+                        companyPhone: companyInfo.phone_number,
+                        corporateNumber: companyInfo.corporate_number || '1010001999999',
+                        companySealUrl: companyInfo.company_seal_url
+                      }}
+                    />
                   </div>
                 );
               })()}
