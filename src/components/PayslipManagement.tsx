@@ -524,26 +524,36 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
         const bDate = onb?.birth_date || u.birth_date || pay?.birth_date || localBackup?.birth_date || '';
         
-        // 給与形態：労務マスタ > 給与マスタ > バックアップ > 雇用形態判定
-        const salType = onb?.salary_type || pay?.salary_type || localBackup?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly');
-        // 基本給：労務マスタ > 給与マスタ > バックアップ > 250000
-        const bSalary = onb?.base_salary ?? pay?.base_salary ?? localBackup?.base_salary ?? 250000;
-        // 時給：労務マスタ > 給与マスタ > バックアップ > 1150
-        const hWage = onb?.hourly_wage ?? pay?.hourly_wage ?? localBackup?.hourly_wage ?? 1150;
+        // 最新の給与プロファイル（ローカルストレージ改定データを含む）
+        let localPayProfile: any = null;
+        try {
+          const rawPay = localStorage.getItem(`payroll_profiles_${tenantId}`);
+          if (rawPay) {
+            const parsedPay = JSON.parse(rawPay);
+            localPayProfile = parsedPay[u.id];
+          }
+        } catch (e) {}
+
+        // 給与形態：給与マスタ > 労務マスタ > バックアップ > 雇用形態判定
+        const salType = pay?.salary_type || localPayProfile?.salary_type || onb?.salary_type || localBackup?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly');
+        // 基本給：給与マスタ（最新改定） > ローカル給与 > 労務マスタ > バックアップ > 250000
+        const bSalary = pay?.base_salary ?? localPayProfile?.base_salary ?? onb?.base_salary ?? localBackup?.base_salary ?? 250000;
+        // 時給：給与マスタ > ローカル給与 > 労務マスタ > バックアップ > 1150
+        const hWage = pay?.hourly_wage ?? localPayProfile?.hourly_wage ?? onb?.hourly_wage ?? localBackup?.hourly_wage ?? 1150;
         // 役職手当
-        const posAllow = onb?.position_allowance ?? pay?.position_allowance ?? localBackup?.position_allowance ?? 0;
+        const posAllow = pay?.position_allowance ?? localPayProfile?.position_allowance ?? onb?.position_allowance ?? localBackup?.position_allowance ?? 0;
         // 資格手当
-        const qualAllow = onb?.qualification_allowance ?? pay?.qualification_allowance ?? localBackup?.qualification_allowance ?? 0;
+        const qualAllow = pay?.qualification_allowance ?? localPayProfile?.qualification_allowance ?? onb?.qualification_allowance ?? localBackup?.qualification_allowance ?? 0;
         // 住宅手当
-        const houseAllow = onb?.housing_allowance ?? pay?.housing_allowance ?? localBackup?.housing_allowance ?? 0;
+        const houseAllow = pay?.housing_allowance ?? localPayProfile?.housing_allowance ?? onb?.housing_allowance ?? localBackup?.housing_allowance ?? 0;
         // 家族手当
-        const famAllow = onb?.family_allowance ?? pay?.family_allowance ?? localBackup?.family_allowance ?? 0;
+        const famAllow = pay?.family_allowance ?? localPayProfile?.family_allowance ?? onb?.family_allowance ?? localBackup?.family_allowance ?? 0;
         // 通勤手当支給区分（月額定期 / 1日実費 / 支給なし）
-        const comType: 'monthly' | 'daily' | 'none' = onb?.commuting_type || pay?.commuting_type || localBackup?.commuting_type || (salType === 'hourly' ? 'daily' : 'monthly');
+        const comType: 'monthly' | 'daily' | 'none' = pay?.commuting_type || localPayProfile?.commuting_type || onb?.commuting_type || localBackup?.commuting_type || (salType === 'hourly' ? 'daily' : 'monthly');
         // 1日あたりの往復交通費（実費）
-        const comDailyAmount = onb?.commuting_daily_amount ?? pay?.commuting_daily_amount ?? localBackup?.commuting_daily_amount ?? 800;
+        const comDailyAmount = pay?.commuting_daily_amount ?? localPayProfile?.commuting_daily_amount ?? onb?.commuting_daily_amount ?? localBackup?.commuting_daily_amount ?? 800;
         // 通勤手当（月額定期代）
-        const comAllow = onb?.commuting_allowance ?? pay?.commuting_allowance ?? localBackup?.commuting_allowance ?? 15000;
+        const comAllow = pay?.commuting_allowance ?? localPayProfile?.commuting_allowance ?? onb?.commuting_allowance ?? localBackup?.commuting_allowance ?? 15000;
 
         // 銀行口座情報（SSOT: バックアップ > 労務マスタ > 給与マスタ）
         const bName = localBackup?.bank_name || onb?.bank_name || pay?.bank_name || '';

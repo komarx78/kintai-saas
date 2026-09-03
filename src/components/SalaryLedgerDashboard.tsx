@@ -510,9 +510,18 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
         };
         updatedProfilesMap[item.userId] = updatedProf;
 
-        // DB Upsert
+        // DB Upsert (給与プロファイル ＆ 大元労務マスタの完全同期)
         try {
           await supabase.from('employee_payroll_profiles').upsert(updatedProf, { onConflict: 'tenant_id,user_id' });
+          await supabase.from('employee_onboarding_profiles').update({
+            base_salary: item.newBase,
+            position_allowance: item.positionAllowance,
+            qualification_allowance: item.qualificationAllowance,
+            housing_allowance: item.housingAllowance,
+            commuting_allowance: item.commutingAllowance,
+            family_allowance: item.familyAllowance,
+            updated_at: new Date().toISOString()
+          }).eq('tenant_id', tenantId).eq('user_id', item.userId);
         } catch (e) {
           console.warn('Batch DB upsert notice:', e);
         }
@@ -667,6 +676,15 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
 
       try {
         await supabase.from('employee_payroll_profiles').upsert(updatedProfile, { onConflict: 'tenant_id,user_id' });
+        await supabase.from('employee_onboarding_profiles').update({
+          base_salary: formNewBaseSalary,
+          position_allowance: formPositionAllowance,
+          qualification_allowance: formQualificationAllowance,
+          housing_allowance: formHousingAllowance,
+          commuting_allowance: formCommutingAllowance,
+          family_allowance: formFamilyAllowance,
+          updated_at: new Date().toISOString()
+        }).eq('tenant_id', tenantId).eq('user_id', formUserId);
       } catch (e) {}
 
       const updatedProfiles = { ...payrollProfiles, [formUserId]: updatedProfile };
