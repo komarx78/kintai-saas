@@ -992,7 +992,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
   const modifiedBatchCount = Object.values(batchData).filter(item => item.isModified || item.newBase !== item.currentBase).length;
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${previewContractDoc ? 'print:hidden' : ''}`}>
       {/* 🏢 1. 部署別 昇給・人件費インパクト分析パネル（我が君のご提案：部署ごとにどのくらい上がったのかが即座にわかる！） */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
@@ -2248,8 +2248,8 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
 
       {/* 📄 労働条件通知書（賃金改定版）プレビュー・印刷モーダル */}
       {previewContractDoc && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 print:p-0 print:bg-white">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col border border-slate-100 overflow-hidden print:border-none print:shadow-none print:max-h-none">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 print:p-0 print:static print:bg-transparent print:z-auto print:block">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col border border-slate-100 overflow-hidden print:border-none print:shadow-none print:max-h-none print:overflow-visible print:w-full print:block">
             {/* モーダルヘッダー */}
             <div className="p-4 px-6 border-b border-slate-200 flex items-center justify-between bg-slate-50 print:hidden shrink-0">
               <div className="flex items-center gap-2">
@@ -2288,7 +2288,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
             </div>
 
             {/* 書面本文 */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100/50 print:p-0 print:bg-white">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100/50 print:p-0 print:bg-white print:overflow-visible print:h-auto print:block">
               {(() => {
                 const targetEmp = employees.find(e => e.id === previewContractDoc.user_id);
                 const prof = payrollProfiles[previewContractDoc.user_id];

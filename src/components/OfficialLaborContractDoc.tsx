@@ -168,7 +168,39 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
   })();
 
   return (
-    <div className="bg-white p-6 sm:p-10 max-w-4xl mx-auto text-slate-800 font-sans text-xs leading-relaxed select-text print:p-0 print:m-0 print:max-w-none shadow-sm rounded-2xl border border-slate-200">
+    <div className="printable-contract-document bg-white p-6 sm:p-10 max-w-4xl mx-auto text-slate-800 font-sans text-xs leading-relaxed select-text print:p-0 print:m-0 print:max-w-none shadow-sm rounded-2xl border border-slate-200">
+      {/* 印刷・PDF出力用最適化スタイル */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 8mm 10mm 8mm 10mm;
+          }
+          body {
+            background: white !important;
+            print-color-adjust: exact !important;
+            -webkit-print-color-adjust: exact !important;
+          }
+          .printable-contract-document {
+            box-shadow: none !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            background: white !important;
+          }
+          .contract-header-block,
+          table, tr, td, th,
+          .contract-signature-block {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .contract-signature-block {
+            margin-top: 12px !important;
+          }
+        }
+      `}</style>
       
       {/* 表題 */}
       <div className="text-center pb-4 border-b-2 border-slate-900 mb-6">
@@ -216,7 +248,7 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
       </div>
 
       {/* 契約当事者ヘッダー */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+      <div className="contract-header-block grid grid-cols-2 gap-4 mb-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
         <div>
           <span className="text-[10px] font-bold text-slate-500 block">【雇用者（甲）】</span>
           <div className="font-bold text-slate-800 text-sm mt-0.5">{data.companyName}</div>
@@ -449,7 +481,7 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
       </table>
 
       {/* 署名欄 */}
-      <div className="pt-4 border-t border-slate-300">
+      <div className="contract-signature-block pt-4 border-t border-slate-300">
         <p className="text-[11px] text-slate-600 mb-4">
           {isRevision
             ? '本書面の交付を受け、上記賃金改定の内容および変更後の労働条件について説明を受け合意のうえ、本変更契約を締結（同意）いたします。'

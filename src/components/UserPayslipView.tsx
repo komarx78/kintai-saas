@@ -182,7 +182,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className={`space-y-6 animate-in fade-in duration-300 ${signModalDoc ? 'print:hidden' : ''}`}>
       
       {/* 🔔 労働条件通知書（賃金改定版）の合意・電子押印依頼バナー */}
       {(() => {
@@ -329,8 +329,8 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
 
       {/* 📄 労働条件通知書（賃金改定版）合意・電子押印モーダル */}
       {signModalDoc && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 print:p-0 print:bg-white">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col border border-slate-100 overflow-hidden print:border-none print:shadow-none print:max-h-none">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 print:p-0 print:static print:bg-transparent print:z-auto print:block">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col border border-slate-100 overflow-hidden print:border-none print:shadow-none print:max-h-none print:overflow-visible print:w-full print:block">
             {/* ヘッダー */}
             <div className="p-4 px-6 border-b border-slate-200 flex items-center justify-between bg-slate-50 print:hidden shrink-0">
               <div className="flex items-center gap-2">
@@ -367,7 +367,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
             </div>
 
             {/* 書面 */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100/50 print:p-0 print:bg-white">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100/50 print:p-0 print:bg-white print:overflow-visible print:h-auto print:block">
               {(() => {
                 const tpl = getLaborContractTemplateFromStorage(tenantId || '');
                 const repName = companySettings?.representative_name || 
