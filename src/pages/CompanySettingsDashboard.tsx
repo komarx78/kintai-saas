@@ -146,6 +146,94 @@ export const saveQualificationsToStorage = (tId: string | null, quals: Qualifica
   }
 };
 
+// 🏢 本格公式角印（株式会社KAP之印）の朱肉画像（透過PNG DataURL）を自動生成するエンジン
+export const generateOfficialSealDataUrl = (companyName: string = '株式会社KAP'): string => {
+  if (typeof document === 'undefined') return '';
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 240;
+    canvas.height = 240;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    // 透明背景
+    ctx.clearRect(0, 0, 240, 240);
+
+    const sealColor = '#dc2626'; // 鮮やかな朱肉赤
+    ctx.strokeStyle = sealColor;
+    ctx.fillStyle = sealColor;
+
+    // 外枠角丸正方形
+    ctx.lineWidth = 9;
+    const r = 16;
+    const p = 14;
+    const w = 240 - p * 2;
+    const h = 240 - p * 2;
+    ctx.beginPath();
+    ctx.moveTo(p + r, p);
+    ctx.lineTo(p + w - r, p);
+    ctx.quadraticCurveTo(p + w, p, p + w, p + r);
+    ctx.lineTo(p + w, p + h - r);
+    ctx.quadraticCurveTo(p + w, p + h, p + w - r, p + h);
+    ctx.lineTo(p + r, p + h);
+    ctx.quadraticCurveTo(p, p + h, p, p + h - r);
+    ctx.lineTo(p, p + r);
+    ctx.quadraticCurveTo(p, p, p + r, p);
+    ctx.closePath();
+    ctx.stroke();
+
+    // 内枠細線（重厚な公式角印仕様）
+    ctx.lineWidth = 2;
+    const ip = p + 6;
+    const iw = w - 12;
+    const ih = h - 12;
+    const ir = 10;
+    ctx.beginPath();
+    ctx.moveTo(ip + ir, ip);
+    ctx.lineTo(ip + iw - ir, ip);
+    ctx.quadraticCurveTo(ip + iw, ip, ip + iw, ip + ir);
+    ctx.lineTo(ip + iw, ip + ih - ir);
+    ctx.quadraticCurveTo(ip + iw, ip + ih, ip + iw - ir, ip + ih);
+    ctx.lineTo(ip + ir, ip + ih);
+    ctx.quadraticCurveTo(ip, ip + ih, ip, ip + ih - ir);
+    ctx.lineTo(ip, ip + ir);
+    ctx.quadraticCurveTo(ip, ip, ip + ir, ip);
+    ctx.closePath();
+    ctx.stroke();
+
+    // 文字配置（伝統的縦書き角印スタイル）
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (companyName.includes('KAP')) {
+      // 右列: 株式会社
+      ctx.font = 'bold 36px "Hiragino Mincho ProN", "Yu Mincho", "MS PMincho", serif';
+      ctx.fillText('株', 158, 56);
+      ctx.fillText('式', 158, 98);
+      ctx.fillText('会', 158, 140);
+      ctx.fillText('社', 158, 182);
+
+      // 左列: KAP之印
+      ctx.font = '900 32px sans-serif';
+      ctx.fillText('KAP', 78, 70);
+      ctx.font = 'bold 36px "Hiragino Mincho ProN", "Yu Mincho", "MS PMincho", serif';
+      ctx.fillText('之', 78, 126);
+      ctx.fillText('印', 78, 175);
+    } else {
+      ctx.font = 'bold 38px "Hiragino Mincho ProN", "Yu Mincho", "MS PMincho", serif';
+      ctx.fillText('株', 155, 75);
+      ctx.fillText('式', 155, 160);
+      ctx.fillText('社', 85, 75);
+      ctx.fillText('印', 85, 160);
+    }
+
+    return canvas.toDataURL('image/png');
+  } catch (e) {
+    console.warn('Canvas seal generator error:', e);
+    return '';
+  }
+};
+
 export default function CompanySettingsDashboard() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -344,12 +432,53 @@ export default function CompanySettingsDashboard() {
         }
       } catch (e) {}
 
-      // 社印画像の復元
+      // 社印画像の全方位超堅牢復元（消失ゼロ設計）
       let sealLoaded = loadedBasic.company_seal_url || '';
       try {
-        const storedSeal = localStorage.getItem(`company_seal_image_${tenantIdData}`);
-        if (storedSeal) sealLoaded = storedSeal;
+        const isValid = (s?: string | null) => !!s && (s.startsWith('data:image/') || s.startsWith('http://') || s.startsWith('https://'));
+        
+        // 1. 主要キー探索
+        const candidateKeys = [
+          `company_seal_image_${tenantIdData}`,
+          'company_seal_image',
+          `company_basic_settings_${tenantIdData}`,
+          'company_basic_info',
+          `labor_contract_template_${tenantIdData}`,
+          'labor_contract_template'
+        ];
+
+        for (const k of candidateKeys) {
+          const v = localStorage.getItem(k);
+          if (!v) continue;
+          if (isValid(v)) { sealLoaded = v; break; }
+          try {
+            const p = JSON.parse(v);
+            if (isValid(p.company_seal_url)) { sealLoaded = p.company_seal_url; break; }
+          } catch {}
+        }
+
+        // 2. LocalStorage全体のワイルドカード探索
+        if (!sealLoaded) {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key) continue;
+            if (key.includes('seal') || key.includes('logo') || key.includes('inkan')) {
+              const val = localStorage.getItem(key);
+              if (isValid(val)) { sealLoaded = val!; break; }
+            }
+          }
+        }
       } catch (e) {}
+
+      // 3. それでも空の場合は、公式角印を自動生成してデフォルト適用！
+      if (!sealLoaded) {
+        sealLoaded = generateOfficialSealDataUrl(loadedBasic.name || '株式会社KAP');
+        if (tenantIdData) {
+          localStorage.setItem(`company_seal_image_${tenantIdData}`, sealLoaded);
+          localStorage.setItem('company_seal_image', sealLoaded);
+        }
+      }
+
       setCompanySealUrl(sealLoaded);
       loadedBasic.company_seal_url = sealLoaded;
 
@@ -850,6 +979,7 @@ export default function CompanySettingsDashboard() {
         await supabase.from('company_master_settings').upsert({
           tenant_id: tenantId,
           ...basicInfo,
+          company_seal_url: companySealUrl,
           updated_at: new Date().toISOString()
         }, { onConflict: 'tenant_id' });
       } catch (cmsErr) {
@@ -865,6 +995,7 @@ export default function CompanySettingsDashboard() {
           representative_name: basicInfo.representative_name,
           phone_number: basicInfo.phone_number,
           corporate_number: basicInfo.corporate_number,
+          company_seal_url: companySealUrl,
           work_calendar_settings: updatedCalendar,
           payroll_common_settings: { ...payrollSettings, prefecture_code: autoPrefCode },
           prefecture_code: autoPrefCode,
@@ -878,10 +1009,12 @@ export default function CompanySettingsDashboard() {
 
       if (!savedToTenants) {
         try {
-          // フォールバック: address, name などの安全カラムで保存
+          // フォールバック: address, name, company_seal_url などの安全カラムで保存
           const fbPayload: Record<string, any> = {
             name: basicInfo.name,
             address: basicInfo.address,
+            representative_name: basicInfo.representative_name,
+            company_seal_url: companySealUrl,
             work_calendar_settings: updatedCalendar,
             payroll_common_settings: { ...payrollSettings, prefecture_code: autoPrefCode },
             employment_rules_text: employmentRulesText
@@ -1641,7 +1774,7 @@ export default function CompanySettingsDashboard() {
                     accept="image/png,image/jpeg,image/svg+xml"
                     className="hidden"
                   />
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5 flex-wrap">
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
@@ -1649,6 +1782,27 @@ export default function CompanySettingsDashboard() {
                     >
                       <Upload className="w-4 h-4" />
                       印影画像をアップロード
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const generated = generateOfficialSealDataUrl(basicInfo.name || '株式会社KAP');
+                        if (generated) {
+                          setCompanySealUrl(generated);
+                          setContractTemplate(prev => ({ ...prev, company_seal_url: generated }));
+                          setBasicInfo(prev => ({ ...prev, company_seal_url: generated }));
+                          if (tenantId) {
+                            localStorage.setItem(`company_seal_image_${tenantId}`, generated);
+                            localStorage.setItem('company_seal_image', generated);
+                          }
+                          alert('✨ 株式会社KAPの公式朱肉角印（透過PNG）を自動生成してセットしました！\n右下の「設定を一括保存する」をクリックして保存を確定してください。');
+                        }
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-2xs"
+                      title="公式朱肉角印（株式会社KAP之印）を自動生成して登録します"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      公式角印を自動生成
                     </button>
                     {companySealUrl && (
                       <button
