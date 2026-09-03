@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2, Bell, Edit3, Sparkles } from 'lucide-react';
-import { getAnnouncementsFromStorage, type AnnouncementItem } from '../lib/announcements';
-import { getRevisionContracts, type RevisionContractDoc } from '../lib/revisionContracts';
+import { fetchAnnouncements, type AnnouncementItem } from '../lib/announcements';
+import { fetchRevisionContracts, type RevisionContractDoc } from '../lib/revisionContracts';
 
 type UserData = {
   name: string;
@@ -41,13 +41,13 @@ export default function Portal() {
       if (error) throw error;
       setUserData(data as UserData);
 
-      // お知らせ一覧のロード
-      const list = getAnnouncementsFromStorage((data as any)?.tenant_id);
+      // お知らせ一覧のロード（DB自動同期）
+      const list = await fetchAnnouncements((data as any)?.tenant_id);
       setAnnouncements(list);
 
-      // 📄 未押印の労働条件通知書チェック
+      // 📄 未押印の労働条件通知書チェック（DB自動同期）
       if (data?.tenant_id) {
-        const contracts = getRevisionContracts(data.tenant_id);
+        const contracts = await fetchRevisionContracts(data.tenant_id);
         const pending = contracts.find(c => (c.user_id === user.id || c.user_name === data.name) && c.status === 'pending_signature');
         setPendingContractDoc(pending || null);
       }

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import type { EmployeePayrollProfile } from '../lib/payrollEngine';
 import { 
-  getRevisionContracts, 
+  fetchRevisionContracts,
   addOrUpdateRevisionContract, 
   deleteRevisionContract,
   type RevisionContractDoc 
@@ -209,8 +209,8 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
       setPayrollProfiles(profilesMap);
       setRevisions(revList);
 
-      // 労働条件通知書（改定版）リスト取得
-      const contracts = getRevisionContracts(tenantId);
+      // 労働条件通知書（改定版）リスト取得（DB完全自動同期）
+      const contracts = await fetchRevisionContracts(tenantId);
       setRevisionContracts(contracts);
 
       // 会社基本情報取得（DB & LocalStorage & 社印フォールバック）
@@ -568,7 +568,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
             status: 'pending_signature',
             created_at: new Date().toISOString()
           };
-          addOrUpdateRevisionContract(tenantId, contractDoc);
+          await addOrUpdateRevisionContract(tenantId, contractDoc);
         }
 
         const updatedProf: EmployeePayrollProfile = {
@@ -628,8 +628,8 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
       setPayrollProfiles(updatedProfilesMap);
       localStorage.setItem(`payroll_profiles_${tenantId}`, JSON.stringify(updatedProfilesMap));
 
-      // 契約書一覧更新
-      setRevisionContracts(getRevisionContracts(tenantId));
+      // 契約書一覧更新（DB完全自動同期）
+      setRevisionContracts(await fetchRevisionContracts(tenantId));
 
       // バッチデータの基準値を更新
       setBatchData(prev => {
@@ -815,8 +815,8 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
           status: 'pending_signature',
           created_at: new Date().toISOString()
         };
-        addOrUpdateRevisionContract(tenantId, contractDoc);
-        setRevisionContracts(getRevisionContracts(tenantId));
+        await addOrUpdateRevisionContract(tenantId, contractDoc);
+        setRevisionContracts(await fetchRevisionContracts(tenantId));
       }
 
       setIsRevisionModalOpen(false);
@@ -900,9 +900,9 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
         }));
       }
 
-      // 4. 労働条件通知書（改定版）を削除
-      deleteRevisionContract(tenantId, rev.id);
-      setRevisionContracts(getRevisionContracts(tenantId));
+      // 4. 労働条件通知書（改定版）を削除（DB完全自動同期）
+      await deleteRevisionContract(tenantId, rev.id);
+      setRevisionContracts(await fetchRevisionContracts(tenantId));
 
       alert(`✅ ${empName} さんの給与改定を取り消しました。${isLatest ? `\n基本給を改定前の【¥${rev.previous_base_salary.toLocaleString()}】に安全に巻き戻しました。` : ''}`);
     } catch (err: any) {

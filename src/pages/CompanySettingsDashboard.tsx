@@ -517,6 +517,12 @@ export default function CompanySettingsDashboard() {
         if (tData.gemini_api_key) {
           setGeminiApiKey(tData.gemini_api_key);
         }
+        if (tData.portal_announcements_data && Array.isArray(tData.portal_announcements_data) && tData.portal_announcements_data.length > 0) {
+          setAnnouncements(tData.portal_announcements_data);
+        }
+        if (tData.labor_contract_template_data && typeof tData.labor_contract_template_data === 'object' && Object.keys(tData.labor_contract_template_data).length > 0) {
+          setContractTemplate(prev => ({ ...prev, ...tData.labor_contract_template_data }));
+        }
         if (tData.onboarding_workflow_settings && Array.isArray(tData.onboarding_workflow_settings)) {
           setOnboardingSteps(tData.onboarding_workflow_settings);
         } else {
@@ -1001,6 +1007,9 @@ export default function CompanySettingsDashboard() {
           prefecture_code: autoPrefCode,
           gemini_api_key: geminiApiKey,
           employment_rules_text: employmentRulesText,
+          portal_announcements_data: announcements,
+          labor_contract_template_data: contractTemplate,
+          qualification_masters_data: qualifications,
           onboarding_workflow_settings: onboardingSteps,
           position_settings: positions
         };
@@ -1024,8 +1033,26 @@ export default function CompanySettingsDashboard() {
         } catch (e) {}
       }
 
-      // 資格手当マスタの保存
+      // 資格手当マスタの保存（DB ＆ LocalStorage完全同期）
       saveQualificationsToStorage(tenantId, qualifications);
+      if (tenantId) {
+        try {
+          await supabase.from('company_qualification_masters').delete().eq('tenant_id', tenantId);
+          const qInserts = qualifications.map((q, idx) => ({
+            tenant_id: tenantId,
+            name: q.name,
+            default_allowance: q.default_allowance,
+            category: q.category,
+            description: q.description || '',
+            display_order: idx + 1
+          }));
+          if (qInserts.length > 0) {
+            await supabase.from('company_qualification_masters').insert(qInserts);
+          }
+        } catch (qDbErr) {
+          console.warn('company_qualification_masters DB sync warning:', qDbErr);
+        }
+      }
 
       setSaveSuccessMsg('✅ 全社共通マスタ設定を正常に保存しました！\n「組織図」「勤怠」「シフト」「給与」「資格手当」「入退社・契約書」の全システムに即座に反映されました。');
       setTimeout(() => setSaveSuccessMsg(null), 5000);

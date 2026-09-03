@@ -7,7 +7,7 @@ import {
 import { OfficialPayslipDoc } from './OfficialPayslipDoc';
 import { OfficialLaborContractDoc, type LaborContractData } from './OfficialLaborContractDoc';
 import { OfficialTaxWithholdingSlipDoc } from './OfficialTaxWithholdingSlipDoc';
-import { getRevisionContracts, signRevisionContract, type RevisionContractDoc } from '../lib/revisionContracts';
+import { fetchRevisionContracts, signRevisionContract, type RevisionContractDoc } from '../lib/revisionContracts';
 import { getLaborContractTemplateFromStorage } from '../lib/laborContractTemplate';
 
 interface UserPayslipViewProps {
@@ -220,9 +220,9 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
           setSelectedKey('');
         }
 
-        // 📄 本人の労働条件通知書（改定版）取得
+        // 📄 本人の労働条件通知書（改定版）取得（DB完全自動同期）
         if (tenantId) {
-          const allDocs = getRevisionContracts(tenantId);
+          const allDocs = await fetchRevisionContracts(tenantId);
           const mine = allDocs.filter(d => d.user_id === userId || (userName && d.user_name === userName));
           setMyContracts(mine);
 
@@ -242,13 +242,13 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
     fetchPayslips();
   }, [userId, userName, tenantId]);
 
-  const handleSignContract = (docId: string) => {
+  const handleSignContract = async (docId: string) => {
     if (!tenantId) return;
     setIsSigning(true);
     try {
-      const signed = signRevisionContract(tenantId, docId, userName || '本人');
+      const signed = await signRevisionContract(tenantId, docId, userName || '本人');
       if (signed) {
-        const allDocs = getRevisionContracts(tenantId);
+        const allDocs = await fetchRevisionContracts(tenantId);
         const mine = allDocs.filter(d => d.user_id === userId || (userName && d.user_name === userName));
         setMyContracts(mine);
         setSignModalDoc(null);

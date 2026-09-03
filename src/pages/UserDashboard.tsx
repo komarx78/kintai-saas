@@ -54,6 +54,82 @@ const UserDashboard = () => {
           if (record.check_out_time) setStatus('退勤済');
           else if (record.check_in_time) setStatus('勤務中');
         }
+
+        // 🏢 会社カレンダー休日設定 ＆ 打刻丸め単位のDB自動同期（全端末完全共有）
+        if (profile?.tenant_id) {
+          try {
+            const { data: tData } = await supabase
+              .from('tenants')
+              .select('work_calendar_settings, payroll_common_settings')
+              .eq('id', profile.tenant_id)
+              .maybeSingle();
+
+            if (tData?.payroll_common_settings?.rounding_unit) {
+              const rUnit = parseInt(tData.payroll_common_settings.rounding_unit);
+              setRoundingUnit(rUnit);
+              localStorage.setItem('mock_rounding_unit', rUnit.toString());
+            }
+
+            if (tData?.work_calendar_settings) {
+              const cal = tData.work_calendar_settings;
+              const holSet = new Set<string>();
+              const curYear = new Date().getFullYear();
+              
+              // 固定休日（日曜 0、土曜 6など）
+              const fixedHols = Array.isArray(cal.fixed_holidays) ? cal.fixed_holidays : [0, 6];
+              for (let m = 0; m < 12; m++) {
+                const daysInMonth = new Date(curYear, m + 1, 0).getDate();
+                for (let d = 1; d <= daysInMonth; d++) {
+                  const dateObj = new Date(curYear, m, d);
+                  if (fixedHols.includes(dateObj.getDay())) {
+                    holSet.add(`${curYear}-${m + 1}-${d}`);
+                  }
+                }
+              }
+
+              // 年末年始・夏季
+              if (cal.winter_vacation_start && cal.winter_vacation_end) {
+                let cur = new Date(cal.winter_vacation_start);
+                const end = new Date(cal.winter_vacation_end);
+                while (cur <= end) {
+                  holSet.add(`${cur.getFullYear()}-${cur.getMonth() + 1}-${cur.getDate()}`);
+                  cur.setDate(cur.getDate() + 1);
+                }
+              }
+              if (cal.summer_vacation_start && cal.summer_vacation_end) {
+                let cur = new Date(cal.summer_vacation_start);
+                const end = new Date(cal.summer_vacation_end);
+                while (cur <= end) {
+                  holSet.add(`${cur.getFullYear()}-${cur.getMonth() + 1}-${cur.getDate()}`);
+                  cur.setDate(cur.getDate() + 1);
+                }
+              }
+              // 独自休日
+              if (Array.isArray(cal.custom_holidays)) {
+                cal.custom_holidays.forEach((h: any) => {
+                  if (h?.date) {
+                    const [y, m, d] = h.date.split('-').map(Number);
+                    holSet.add(`${y}-${m}-${d}`);
+                  }
+                });
+              }
+              // 個別上書き
+              if (cal.individual_overrides && typeof cal.individual_overrides === 'object') {
+                Object.entries(cal.individual_overrides).forEach(([k, isHol]) => {
+                  const [y, m, d] = k.split('-').map(Number);
+                  const key = `${y}-${m}-${d}`;
+                  if (isHol) holSet.add(key);
+                  else holSet.delete(key);
+                });
+              }
+
+              setCompanyHolidays(holSet);
+              localStorage.setItem('mock_company_holidays', JSON.stringify(Array.from(holSet)));
+            }
+          } catch (calErr) {
+            console.warn('DB calendar sync notice:', calErr);
+          }
+        }
       }
     };
     fetchUserAndStatus();

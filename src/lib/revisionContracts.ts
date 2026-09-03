@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 export interface RevisionContractDoc {
   id: string;
   tenant_id: string;
@@ -26,10 +28,13 @@ export interface RevisionContractDoc {
 // ローカルストレージキー
 const getStorageKey = (tenantId: string) => `revision_contracts_${tenantId}`;
 
+/**
+ * 同期取得（LocalStorageキャッシュの即時読み出し）
+ */
 export function getRevisionContracts(tenantId: string): RevisionContractDoc[] {
   if (!tenantId) return [];
   try {
-    const raw = localStorage.getItem(getStorageKey(tenantId));
+    const raw = localStorage.getItem(getStorageKey(tenantId)) || localStorage.getItem('revision_contracts');
     if (raw) return JSON.parse(raw);
   } catch (e) {
     console.error('getRevisionContracts error:', e);
@@ -37,41 +42,84 @@ export function getRevisionContracts(tenantId: string): RevisionContractDoc[] {
   return [];
 }
 
-export function saveRevisionContracts(tenantId: string, docs: RevisionContractDoc[]): void {
+/**
+ * データベース（Supabase tenants）から全端末で同期取得
+ */
+export async function fetchRevisionContracts(tenantId: string): Promise<RevisionContractDoc[]> {
+  if (!tenantId) return [];
+  // 1. キャッシュから即時取得
+  let result = getRevisionContracts(tenantId);
+
+  // 2. データベースから最新データを取得・同期
+  try {
+    const { data: tData } = await supabase
+      .from('tenants')
+      .select('revision_contracts_data')
+      .eq('id', tenantId)
+      .maybeSingle();
+
+    if (tData?.revision_contracts_data && Array.isArray(tData.revision_contracts_data)) {
+      result = tData.revision_contracts_data;
+      localStorage.setItem(getStorageKey(tenantId), JSON.stringify(result));
+      localStorage.setItem('revision_contracts', JSON.stringify(result));
+    }
+  } catch (err) {
+    console.warn('DB fetch revision contracts warning:', err);
+  }
+
+  return result;
+}
+
+/**
+ * データベース（Supabase tenants）およびキャッシュへ保存（全端末へ即時共有）
+ */
+export async function saveRevisionContracts(tenantId: string, docs: RevisionContractDoc[]): Promise<void> {
   if (!tenantId) return;
+  // 1. ローカルキャッシュへ即時保存
   try {
     localStorage.setItem(getStorageKey(tenantId), JSON.stringify(docs));
+    localStorage.setItem('revision_contracts', JSON.stringify(docs));
   } catch (e) {
-    console.error('saveRevisionContracts error:', e);
+    console.error('saveRevisionContracts local error:', e);
+  }
+
+  // 2. データベースへ永続化（全端末即時共有）
+  try {
+    await supabase
+      .from('tenants')
+      .update({ revision_contracts_data: docs })
+      .eq('id', tenantId);
+  } catch (err) {
+    console.warn('DB save revision contracts notice:', err);
   }
 }
 
-export function addOrUpdateRevisionContract(tenantId: string, doc: RevisionContractDoc): void {
-  const list = getRevisionContracts(tenantId);
+export async function addOrUpdateRevisionContract(tenantId: string, doc: RevisionContractDoc): Promise<void> {
+  const list = await fetchRevisionContracts(tenantId);
   const index = list.findIndex(d => d.id === doc.id || (d.user_id === doc.user_id && d.applied_year_month === doc.applied_year_month));
   if (index >= 0) {
     list[index] = { ...list[index], ...doc };
   } else {
     list.unshift(doc);
   }
-  saveRevisionContracts(tenantId, list);
+  await saveRevisionContracts(tenantId, list);
 }
 
-export function signRevisionContract(tenantId: string, docId: string, signatureName: string): RevisionContractDoc | null {
-  const list = getRevisionContracts(tenantId);
+export async function signRevisionContract(tenantId: string, docId: string, signatureName: string): Promise<RevisionContractDoc | null> {
+  const list = await fetchRevisionContracts(tenantId);
   const target = list.find(d => d.id === docId);
   if (target) {
     target.status = 'signed';
     target.signed_at = new Date().toISOString();
     target.signature_name = signatureName;
-    saveRevisionContracts(tenantId, list);
+    await saveRevisionContracts(tenantId, list);
     return target;
   }
   return null;
 }
 
-export function deleteRevisionContract(tenantId: string, docIdOrRevisionId: string): void {
-  const list = getRevisionContracts(tenantId);
+export async function deleteRevisionContract(tenantId: string, docIdOrRevisionId: string): Promise<void> {
+  const list = await fetchRevisionContracts(tenantId);
   const next = list.filter(d => d.id !== docIdOrRevisionId && d.revision_id !== docIdOrRevisionId);
-  saveRevisionContracts(tenantId, next);
+  await saveRevisionContracts(tenantId, next);
 }
