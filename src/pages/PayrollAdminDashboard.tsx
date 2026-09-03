@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { PayslipManagement } from '../components/PayslipManagement';
 import { SalaryLedgerDashboard } from '../components/SalaryLedgerDashboard';
+import { OfficialReportsCenter } from '../components/OfficialReportsCenter';
 import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
-import { DollarSign, ArrowLeft, LogOut, TrendingUp } from 'lucide-react';
+import { DollarSign, ArrowLeft, LogOut, TrendingUp, FileText } from 'lucide-react';
 
 export default function PayrollAdminDashboard() {
   const navigate = useNavigate();
@@ -13,7 +14,7 @@ export default function PayrollAdminDashboard() {
   const [tenantName, setTenantName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'payslip' | 'ledger'>('ledger');
+  const [activeTab, setActiveTab] = useState<'payslip' | 'ledger' | 'reports'>('ledger');
 
   useEffect(() => {
     fetchProfile();
@@ -141,6 +142,20 @@ export default function PayrollAdminDashboard() {
               <DollarSign className="w-4 h-4" />
               月別給与計算・明細発行
             </button>
+            <button
+              onClick={() => setActiveTab('reports')}
+              className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+                activeTab === 'reports'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              労務・法定帳票発行センター（賞与・名簿・台帳）
+              <span className="text-[10px] bg-indigo-100 text-indigo-800 font-black px-1.5 py-0.2 rounded-full shadow-2xs">
+                公式帳票
+              </span>
+            </button>
           </div>
         </div>
       </div>
@@ -150,8 +165,10 @@ export default function PayrollAdminDashboard() {
         {tenantId && (
           activeTab === 'ledger' ? (
             <SalaryLedgerDashboard tenantId={tenantId} />
-          ) : (
+          ) : activeTab === 'payslip' ? (
             <PayslipManagement tenantId={tenantId} />
+          ) : (
+            <OfficialReportsCenter tenantId={tenantId} />
           )
         )}
       </main>
