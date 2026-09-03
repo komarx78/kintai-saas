@@ -75,9 +75,58 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
     ...(data.template || {})
   };
 
-  const rawSeal = data.companySealUrl || tpl.company_seal_url;
-  const isValidImage = (src?: string) => !!src && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:image/'));
-  const sealImg = isValidImage(rawSeal) ? rawSeal : undefined;
+  const isValidImage = (src?: string) => !!src && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:image/') || src.startsWith('blob:'));
+
+  // 社印画像の全方位超堅牢フォールバック
+  const sealImg = (() => {
+    if (isValidImage(data.companySealUrl)) return data.companySealUrl;
+    if (isValidImage(tpl.company_seal_url)) return tpl.company_seal_url;
+    if (typeof window !== 'undefined') {
+      try {
+        const keys = [
+          'company_seal_image',
+          ...Object.keys(localStorage).filter(k => k.startsWith('company_seal_image_')),
+          ...Object.keys(localStorage).filter(k => k.startsWith('company_basic_settings_')),
+          'company_basic_info',
+          ...Object.keys(localStorage).filter(k => k.startsWith('labor_contract_template_')),
+          'labor_contract_template'
+        ];
+        for (const k of keys) {
+          const val = localStorage.getItem(k);
+          if (!val) continue;
+          if (isValidImage(val)) return val;
+          try {
+            const parsed = JSON.parse(val);
+            if (isValidImage(parsed.company_seal_url)) return parsed.company_seal_url;
+          } catch {}
+        }
+      } catch (e) {}
+    }
+    return undefined;
+  })();
+
+  // 会社住所の全方位超堅牢フォールバック
+  const displayCompanyAddress = (() => {
+    const raw = (data.companyAddress || '').trim();
+    if (raw && raw !== '本社所在地' && raw !== '本社') return raw;
+    if (typeof window !== 'undefined') {
+      try {
+        const keys = [
+          'company_basic_info',
+          ...Object.keys(localStorage).filter(k => k.startsWith('company_basic_settings_'))
+        ];
+        for (const k of keys) {
+          const val = localStorage.getItem(k);
+          if (!val) continue;
+          try {
+            const parsed = JSON.parse(val);
+            if (parsed.address && parsed.address.trim()) return parsed.address.trim();
+          } catch {}
+        }
+      } catch (e) {}
+    }
+    return '滋賀県大津市坂本3丁目21-16';
+  })();
 
   const docDate = data.createdDate || new Date().toISOString().split('T')[0];
   const [docY, docM, docD] = docDate.split('-');
@@ -85,9 +134,30 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
   // 労働者の姓（印鑑用）
   const empLastName = (data.employeeName || '印').trim().split(/[\s　]+/)[0] || '印';
 
-  // 代表者表示名の整形（役職＋氏名を確実に結合）
+  // 代表者表示名の整形（役職＋氏名を確実に結合＆LocalStorageフォールバック）
   const displayRepName = (() => {
-    const r = (data.representativeName || '').trim();
+    let r = (data.representativeName || '').trim();
+    if (!r || r === '代表取締役' || r === '代表') {
+      if (typeof window !== 'undefined') {
+        try {
+          const keys = [
+            'company_basic_info',
+            ...Object.keys(localStorage).filter(k => k.startsWith('company_basic_settings_'))
+          ];
+          for (const k of keys) {
+            const val = localStorage.getItem(k);
+            if (!val) continue;
+            try {
+              const parsed = JSON.parse(val);
+              if (parsed.representative_name && parsed.representative_name.trim()) {
+                r = parsed.representative_name.trim();
+                break;
+              }
+            } catch {}
+          }
+        } catch (e) {}
+      }
+    }
     if (!r || r === '代表取締役' || r === '代表') {
       return '代表取締役 駒井 秀一朗';
     }
@@ -150,7 +220,7 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
         <div>
           <span className="text-[10px] font-bold text-slate-500 block">【雇用者（甲）】</span>
           <div className="font-bold text-slate-800 text-sm mt-0.5">{data.companyName}</div>
-          <div className="text-[11px] text-slate-600 mt-0.5">{data.companyAddress || '滋賀県大津市坂本3丁目21-16'}</div>
+          <div className="text-[11px] text-slate-600 mt-0.5">{displayCompanyAddress}</div>
           <div className="text-[11px] text-slate-700 font-medium">{displayRepName}</div>
         </div>
         <div>
@@ -397,11 +467,14 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
 
         <div className="grid grid-cols-2 gap-6">
           {/* 甲 署名 */}
-          <div className="border border-slate-300 p-3.5 rounded-xl relative bg-slate-50/40 min-h-[92px] flex flex-col justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-slate-500 block mb-0.5">【事業主（甲）署名捺印】</span>
-              <div className="text-xs font-bold text-slate-800">{data.companyName}</div>
-              <div className="text-xs text-slate-800 mt-1 flex items-center justify-between relative z-10 font-bold">
+          <div className="border border-slate-300 p-3.5 rounded-xl relative bg-slate-50/40 min-h-[96px] flex flex-col justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-slate-500 block">【事業主（甲）署名捺印】</span>
+              <div className="text-[11px] text-slate-600 truncate">
+                <span className="text-slate-400">ご住所:</span> {displayCompanyAddress}
+              </div>
+              <div className="text-xs font-bold text-slate-900">{data.companyName}</div>
+              <div className="text-xs text-slate-800 flex items-center justify-between relative z-10 font-bold pt-0.5">
                 <span>{displayRepName}</span>
                 <span className="text-slate-400 font-serif text-[11px] pr-2">印</span>
               </div>

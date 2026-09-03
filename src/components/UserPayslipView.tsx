@@ -372,13 +372,18 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
                 const tpl = getLaborContractTemplateFromStorage(tenantId || '');
                 const repName = companySettings?.representative_name || 
                                 (companySettings?.representative ? `代表取締役 ${companySettings.representative}` : '代表取締役 駒井 秀一朗');
-                const compSeal = companySealUrl || companySettings?.company_seal_url || tpl?.company_seal_url;
+                const sealFromLocal = companySealUrl || 
+                                      (tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null) || 
+                                      localStorage.getItem('company_seal_image') || 
+                                      companySettings?.company_seal_url || 
+                                      tpl?.company_seal_url;
+                const compAddress = companySettings?.address || '滋賀県大津市坂本3丁目21-16';
 
                 const contractData: LaborContractData = {
                   companyName: companySettings?.name || tenantName || '株式会社KAP',
-                  companyAddress: companySettings?.address || '滋賀県大津市坂本3丁目21-16',
+                  companyAddress: compAddress,
                   representativeName: repName,
-                  companySealUrl: compSeal,
+                  companySealUrl: sealFromLocal,
                   employeeName: userName,
                   employeeAddress: '滋賀県大津市',
                   joinDate: '2024-04-01',
