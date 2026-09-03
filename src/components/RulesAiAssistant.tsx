@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '../lib/supabase';
 import { askEmploymentRulesAI, type ChatMessage } from '../lib/gemini';
 import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 import { 
   Bot, Send, Sparkles, BookOpen, RefreshCw, User, HelpCircle, 
-  ChevronDown, ChevronUp, ShieldCheck 
+  ChevronDown, ChevronUp, ShieldCheck, AlertCircle
 } from 'lucide-react';
 
 interface RulesAiAssistantProps {
@@ -23,16 +24,62 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
   const [companyRules, setCompanyRules] = useState<string>(DEFAULT_EMPLOYMENT_RULES);
   const [tenantApiKey, setTenantApiKey] = useState<string>('');
   const [showFullRules, setShowFullRules] = useState(false);
+  const [isConfigLoaded, setIsConfigLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 就業規則 & テナントAPIキーの取得
+  // 就業規則 & テナントAPIキーの取得（Supabase DB ＋ LocalStorage キャッシュ完全連動）
   useEffect(() => {
-    const fetchRules = () => {
-      const saved = localStorage.getItem(`company_employment_rules_${tenantId}`) || localStorage.getItem('company_employment_rules');
+    const fetchRules = async () => {
+      let resolvedTenantId = tenantId;
+
+      // 1. まずローカルストレージのキャッシュから即時復元
+      const saved = (resolvedTenantId ? localStorage.getItem(`company_employment_rules_${resolvedTenantId}`) : null) || 
+                    localStorage.getItem('company_employment_rules');
       if (saved) setCompanyRules(saved);
-      const savedKey = localStorage.getItem(`gemini_api_key_${tenantId}`) || localStorage.getItem('gemini_api_key_custom');
+
+      const savedKey = (resolvedTenantId ? localStorage.getItem(`gemini_api_key_${resolvedTenantId}`) : null) || 
+                       localStorage.getItem('gemini_api_key_custom') ||
+                       localStorage.getItem('platform_gemini_api_key');
       if (savedKey) setTenantApiKey(savedKey);
+
+      // 2. tenantIdが未指定の場合はログインユーザーから自動解決
+      try {
+        if (!resolvedTenantId) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: uData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
+            if (uData?.tenant_id) resolvedTenantId = uData.tenant_id;
+          }
+        }
+
+        // 3. データベース（Supabase tenants テーブル）から全社共通設定を確実に取得
+        if (resolvedTenantId) {
+          const { data: tData } = await supabase
+            .from('tenants')
+            .select('employment_rules_text, gemini_api_key')
+            .eq('id', resolvedTenantId)
+            .maybeSingle();
+
+          if (tData) {
+            if (tData.employment_rules_text) {
+              setCompanyRules(tData.employment_rules_text);
+              localStorage.setItem(`company_employment_rules_${resolvedTenantId}`, tData.employment_rules_text);
+              localStorage.setItem('company_employment_rules', tData.employment_rules_text);
+            }
+            if (tData.gemini_api_key) {
+              setTenantApiKey(tData.gemini_api_key);
+              localStorage.setItem(`gemini_api_key_${resolvedTenantId}`, tData.gemini_api_key);
+              localStorage.setItem('gemini_api_key_custom', tData.gemini_api_key);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to sync rules from DB:', err);
+      } finally {
+        setIsConfigLoaded(true);
+      }
     };
+
     fetchRules();
   }, [tenantId]);
 
@@ -90,9 +137,15 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-black tracking-tight">社内規定・就業規則 AIアシスタント</h2>
-              <span className="bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                <Sparkles className="w-3 h-3" /> Gemini 3.5 Flash AI
-              </span>
+              {isConfigLoaded && !tenantApiKey ? (
+                <span className="bg-amber-500/30 text-amber-200 border border-amber-400/40 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1" title="管理者によるGemini APIキー登録が必要です">
+                  <AlertCircle className="w-3 h-3 text-amber-300" /> APIキー未登録
+                </span>
+              ) : (
+                <span className="bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" /> Gemini AI 稼働中
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-blue-100/80 font-medium">
               自社の就業規則・服務規律に基づいて24時間いつでも即答します

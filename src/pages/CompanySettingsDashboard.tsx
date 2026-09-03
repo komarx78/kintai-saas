@@ -1000,6 +1000,7 @@ export default function CompanySettingsDashboard() {
           payroll_common_settings: { ...payrollSettings, prefecture_code: autoPrefCode },
           prefecture_code: autoPrefCode,
           gemini_api_key: geminiApiKey,
+          employment_rules_text: employmentRulesText,
           onboarding_workflow_settings: onboardingSteps,
           position_settings: positions
         };

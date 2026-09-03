@@ -26,7 +26,7 @@ export async function askEmploymentRulesAI(
     '';
 
   if (!apiKey || apiKey.includes('placeholder')) {
-    return '【AI機能のご案内】現在、就業規則AI相談機能の準備中です。システム管理者にお問い合わせいただくか、就業規則の直接のご確認をお願いいたします。';
+    return '【AI機能のご案内】現在、社内規定AI相談機能のAPIキーが未設定です。\n会社管理者様のアカウントにて「会社・全社マスタ設定」または「就業規則設定」画面より、Google Gemini APIキーの登録をお願いいたします。';
   }
 
   const systemInstruction = `あなたは企業の就業規則・社内規定に精通した親切で優秀な人事労務アシスタントAIです。
@@ -71,65 +71,48 @@ ${companyRules || '（就業規則が登録されていません。労働基準�
   });
 
   try {
-    // 最新のGemini 3.5 Flashモデルを第一優先で呼び出し
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
-    
-    let res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: contents,
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 2048,
+    // 安定稼働のGemini 1.5 Flash（および 2.0 Flash / 1.5 Pro）を優先順で呼び出し
+    const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro'];
+    let lastError: any = null;
+    let answer: string | null = null;
+
+    for (const model of models) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: contents,
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens: 2048,
+            }
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          answer = data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+          if (answer) break;
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          console.warn(`Model ${model} returned status ${res.status}:`, errJson);
+          lastError = errJson.error?.message || res.statusText;
         }
-      })
-    });
-
-    // 3.5-flashが利用できない場合のフォールバック（2.5-flash / 1.5-flash）
-    if (!res.ok) {
-      console.warn('Gemini 3.5 flash returned status:', res.status, 'Retrying with 2.5 flash...');
-      const fallbackUrl25 = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-      res = await fetch(fallbackUrl25, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: contents,
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 2048,
-          }
-        })
-      });
+      } catch (e: any) {
+        lastError = e.message;
+      }
     }
 
-    if (!res.ok) {
-      console.warn('Gemini 2.5 flash returned status:', res.status, 'Retrying with 1.5 flash...');
-      const fallbackUrl15 = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-      res = await fetch(fallbackUrl15, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: contents,
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 2048,
-          }
-        })
-      });
-    }
-
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      console.error('Gemini API Error details:', errJson);
-      throw new Error(`AI API エラー (${res.status}): ${errJson.error?.message || res.statusText}`);
-    }
-
-    const data = await res.json();
-    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
     if (!answer) {
-      return 'AIからの回答を取得できませんでした。もう一度お試しください。';
+      if (lastError && (lastError.includes('API_KEY_INVALID') || lastError.includes('API key not valid'))) {
+        return '【エラー】登録されているGemini APIキーが無効です。管理者様にて正しいAPIキーを再登録してください。';
+      }
+      if (lastError && lastError.includes('Quota')) {
+        return '【エラー】Gemini APIの利用制限（クォータ）に達しました。しばらく時間をおいてから再度お試しください。';
+      }
+      return `申し訳ありません。AIの応答を取得できませんでした。\n（詳細: ${lastError || 'モデル接続エラー'}）`;
     }
 
     return answer;
