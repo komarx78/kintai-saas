@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2, Bell, Edit3 } from 'lucide-react';
+import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2, Bell, Edit3, Sparkles } from 'lucide-react';
 import { getAnnouncementsFromStorage, type AnnouncementItem } from '../lib/announcements';
+import { getRevisionContracts, type RevisionContractDoc } from '../lib/revisionContracts';
 
 type UserData = {
   name: string;
@@ -17,6 +18,7 @@ export default function Portal() {
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [pendingContractDoc, setPendingContractDoc] = useState<RevisionContractDoc | null>(null);
 
   useEffect(() => {
     fetchUserData();
@@ -42,6 +44,13 @@ export default function Portal() {
       // お知らせ一覧のロード
       const list = getAnnouncementsFromStorage((data as any)?.tenant_id);
       setAnnouncements(list);
+
+      // 📄 未押印の労働条件通知書チェック
+      if (data?.tenant_id) {
+        const contracts = getRevisionContracts(data.tenant_id);
+        const pending = contracts.find(c => (c.user_id === user.id || c.user_name === data.name) && c.status === 'pending_signature');
+        setPendingContractDoc(pending || null);
+      }
     } catch (err) {
       console.error(err);
       navigate('/');
@@ -166,7 +175,39 @@ export default function Portal() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-6 py-12">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-6 py-8 sm:py-12 space-y-8">
+        
+        {/* 🔔 労働条件通知書（賃金改定版）電子押印依頼バナー */}
+        {pendingContractDoc && (
+          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white p-5 rounded-3xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-2 border-amber-300">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shrink-0">
+                🔔
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-black text-base tracking-tight">
+                    【重要】給与改定に伴う『労働条件通知書』が届いています
+                  </h3>
+                  <span className="bg-white text-orange-700 text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs">
+                    電子押印待ち
+                  </span>
+                </div>
+                <p className="text-xs text-amber-100 mt-0.5">
+                  {pendingContractDoc.applied_year_month}分給与改定（新基本給: ¥{pendingContractDoc.base_salary.toLocaleString()}）の内容をご確認の上、電子同意・押印を行ってください。
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/payroll/user')}
+              className="px-5 py-2.5 bg-white text-orange-700 hover:bg-orange-50 rounded-2xl font-black text-xs transition shadow-md cursor-pointer shrink-0 flex items-center justify-center gap-2"
+            >
+              <Sparkles className="w-4 h-4 text-orange-600" />
+              Web給与明細で確認・押印する
+            </button>
+          </div>
+        )}
+
         <div className="mb-10 text-center animate-fade-in-up">
           <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-3">
             利用するアプリケーションを選択してください

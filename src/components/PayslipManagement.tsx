@@ -910,6 +910,61 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     }
   };
 
+  // 🔄 給与改定検知に伴う単独社員の即時再計算
+  const handleRecalculateSingle = async (userId: string) => {
+    if (!tenantId) return;
+    setIsSaving(true);
+    try {
+      const emp = employees.find(e => e.id === userId);
+      const prof = payrollProfiles[userId];
+      const existingSlip = payslips.find(p => p.user_id === userId);
+      if (!emp || !prof) return;
+
+      const attSummary: AttendanceSummary = {
+        work_days: existingSlip?.work_days || (prof.salary_type === 'hourly' ? 0 : 20),
+        actual_hours: existingSlip?.actual_hours || (prof.salary_type === 'hourly' ? 0 : 160),
+        overtime_hours: existingSlip?.overtime_hours || 0,
+        midnight_hours: existingSlip?.midnight_hours || 0,
+        holiday_hours: existingSlip?.holiday_hours || 0,
+        paid_leave_days: existingSlip?.paid_leave_days || 0,
+        absence_days: existingSlip?.absence_days || 0,
+        late_early_hours: existingSlip?.late_early_hours || 0
+      };
+
+      const activePrefecture = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '25';
+      const calculated = calculatePayroll(prof, attSummary, {
+        ...payrollSettings,
+        prefecture_code: activePrefecture
+      });
+
+      const payload: any = {
+        ...(existingSlip || {}),
+        tenant_id: tenantId,
+        user_id: userId,
+        year_month: currentYearMonth,
+        ...calculated,
+        base_salary: prof.base_salary,
+        hourly_wage: prof.hourly_wage,
+        position_allowance: prof.position_allowance,
+        qualification_allowance: prof.qualification_allowance,
+        housing_allowance: prof.housing_allowance,
+        family_allowance: prof.family_allowance,
+        commuting_allowance: prof.commuting_allowance,
+        status: existingSlip?.status || 'draft',
+        updated_at: new Date().toISOString()
+      };
+
+      await savePayslipSafe(payload);
+      await fetchData();
+      alert(`🎉 ${emp.name} さんの給与明細を最新マスタ（基本給: ¥${prof.base_salary.toLocaleString()}）で再計算しました！`);
+    } catch (err: any) {
+      console.error(err);
+      alert('再計算に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // 🪄 テスト用勤怠打刻・有給データの一括投入 ＆ 給与即時自動計算
   const handleSeedDummyAttendanceAndCalculate = async () => {
     if (!tenantId || employees.length === 0) return;
@@ -1401,6 +1456,50 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         );
       })()}
 
+      {/* ⚠️ 全社給与改定（昇給）検知アラートバナー */}
+      {(() => {
+        const revisedList = payslips.filter(slip => {
+          const prof = payrollProfiles[slip.user_id];
+          const isH = prof?.salary_type === 'hourly' || slip.salary_type === 'hourly';
+          const masterB = isH ? (prof?.hourly_wage || 0) : (prof?.base_salary || 0);
+          const slipB = isH ? (slip.hourly_wage || 0) : (slip.base_salary || 0);
+          return masterB !== slipB && slip.status !== 'published';
+        });
+
+        if (revisedList.length > 0) {
+          return (
+            <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white rounded-3xl p-5 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-4 border border-amber-300">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shrink-0">
+                  📢
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-black text-base tracking-tight">
+                      給与改定（昇給）が検知された社員が {revisedList.length} 名 います！
+                    </h4>
+                    <span className="bg-white text-orange-600 text-[10px] font-black px-2 py-0.5 rounded-full">
+                      最新マスタ反映待ち
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-100 mt-0.5">
+                    台帳で昇給された新給与（{revisedList.map(r => r.user?.name).slice(0, 3).join('、')}{revisedList.length > 3 ? ' 他' : ''}）が明細に未反映です。最新マスタで再計算を実行してください。
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleAutoGenerateFromAttendance}
+                className="px-5 py-2.5 bg-white text-orange-700 hover:bg-orange-50 rounded-2xl font-black text-xs transition shadow-md cursor-pointer shrink-0 flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4 text-orange-600" />
+                ⚡ 全員を最新マスタで一括再計算する
+              </button>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
       {/* サマリーカード */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-xs">
@@ -1587,6 +1686,41 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
               return (
                 <div key={slip.user_id} className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-xs hover:shadow-md transition">
+                  {/* 🚨 個別給与改定検知アラートバナー */}
+                  {(() => {
+                    const masterBase = isHourly ? (prof?.hourly_wage || 0) : (prof?.base_salary || 0);
+                    const slipBase = isHourly ? (slip.hourly_wage || 0) : (slip.base_salary || 0);
+                    const diff = masterBase - slipBase;
+                    if (diff !== 0 && slip.status !== 'published') {
+                      return (
+                        <div className="mb-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl p-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-xl">⚠️</span>
+                            <div>
+                              <div className="text-xs font-black text-amber-900 flex items-center gap-2 flex-wrap">
+                                給与改定（昇給）が検知されました！
+                                <span className="font-mono text-xs font-black text-emerald-800 bg-white px-2 py-0.5 rounded-lg border border-amber-200 shadow-2xs">
+                                  現在明細: ¥{slipBase.toLocaleString()} ➔ 最新マスタ: ¥{masterBase.toLocaleString()} ({diff > 0 ? '+' : ''}¥{diff.toLocaleString()})
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-amber-700 mt-0.5">
+                                この社員の給与明細に最新マスタの新基本給・新手当を反映して再計算できます。
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleRecalculateSingle(slip.user_id)}
+                            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0 ml-auto sm:ml-0"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                            最新マスタで再計算
+                          </button>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
                   {/* カード上部: 社員基本情報 & 操作 */}
                   <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
                     <div className="flex items-center gap-3">

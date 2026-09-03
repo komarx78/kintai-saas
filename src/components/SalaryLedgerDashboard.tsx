@@ -4,9 +4,16 @@ import {
   TrendingUp, DollarSign, 
   History, Plus, Download, Search, CheckCircle2, 
   FileText, X, Loader2, LayoutGrid, Table, 
-  Building2, Sparkles, Save
+  Building2, Sparkles, Save, Printer
 } from 'lucide-react';
 import type { EmployeePayrollProfile } from '../lib/payrollEngine';
+import { 
+  getRevisionContracts, 
+  addOrUpdateRevisionContract, 
+  type RevisionContractDoc 
+} from '../lib/revisionContracts';
+import { OfficialLaborContractDoc, type LaborContractData } from './OfficialLaborContractDoc';
+import { getLaborContractTemplateFromStorage } from '../lib/laborContractTemplate';
 
 interface SalaryLedgerDashboardProps {
   tenantId: string | null;
@@ -84,8 +91,12 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
   const [selectedEmployeeForTimeline, setSelectedEmployeeForTimeline] = useState<any | null>(null);
   const [isSavingRevision, setIsSavingRevision] = useState(false);
 
-  // 個別昇給登録フォームState
+  // 個別昇給登録フォームState（昇給適用月を主軸に！）
   const [formUserId, setFormUserId] = useState('');
+  const [formAppliedYearMonth, setFormAppliedYearMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+  });
   const [formRevisionDate, setFormRevisionDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [formRevisionType, setFormRevisionType] = useState('regular');
   const [formNewBaseSalary, setFormNewBaseSalary] = useState<number>(0);
@@ -97,11 +108,21 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
   const [formOtherAllowance, setFormOtherAllowance] = useState<number>(0);
   const [formReasonNote, setFormReasonNote] = useState('');
   const [formApprovedBy, setFormApprovedBy] = useState('');
+  const [autoGenerateContract, setAutoGenerateContract] = useState(true);
 
-  // 📝 エクセル風一括編集用のローカルステート
+  // 📝 エクセル風一括編集用のローカルステート（昇給適用月を主軸に！）
   const [batchData, setBatchData] = useState<Record<string, BatchEditItem>>({});
+  const [batchAppliedYearMonth, setBatchAppliedYearMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+  });
   const [batchRevisionDate, setBatchRevisionDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [isSavingBatch, setIsSavingBatch] = useState(false);
+
+  // 📄 労働条件通知書（賃金改定版）State
+  const [revisionContracts, setRevisionContracts] = useState<RevisionContractDoc[]>([]);
+  const [previewContractDoc, setPreviewContractDoc] = useState<RevisionContractDoc | null>(null);
+  const [companySettings, setCompanySettings] = useState<any>(null);
 
   // 一括シミュレーション用State
   const [simAmount, setSimAmount] = useState<number>(5000);
@@ -186,6 +207,17 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
       setEmployees(activeUsers);
       setPayrollProfiles(profilesMap);
       setRevisions(revList);
+
+      // 労働条件通知書（改定版）リスト取得
+      const contracts = getRevisionContracts(tenantId);
+      setRevisionContracts(contracts);
+
+      // 会社基本情報取得
+      try {
+        const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
+        const { data: cmsData } = await supabase.from('company_master_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
+        setCompanySettings({ ...tData, ...cmsData });
+      } catch (e) {}
 
       // エクセル風バッチ編集ステートの初期化
       const initialBatch: Record<string, BatchEditItem> = {};
@@ -434,7 +466,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
 
     setIsSavingBatch(true);
     try {
-      const appliedYearMonth = batchRevisionDate.slice(0, 7);
+      const appliedYearMonth = batchAppliedYearMonth;
       const newHistoryRecords: SalaryRevisionRecord[] = [];
       const updatedProfilesMap = { ...payrollProfiles };
 
@@ -484,6 +516,30 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
           created_at: new Date().toISOString()
         };
         newHistoryRecords.push(revRecord);
+
+        // 📄 労働条件通知書（賃金改定版）の自動発行＆本人マイページ配信
+        if (autoGenerateContract) {
+          const contractDoc: RevisionContractDoc = {
+            id: crypto.randomUUID(),
+            tenant_id: tenantId,
+            user_id: item.userId,
+            user_name: item.name,
+            revision_id: revRecord.id,
+            applied_year_month: appliedYearMonth,
+            revision_date: batchRevisionDate,
+            revision_type: item.revisionType || 'regular',
+            base_salary: item.newBase,
+            position_allowance: item.positionAllowance,
+            qualification_allowance: item.qualificationAllowance,
+            housing_allowance: item.housingAllowance,
+            commuting_allowance: item.commutingAllowance,
+            family_allowance: item.familyAllowance,
+            reason_note: item.reasonNote || '一括給与改定',
+            status: 'pending_signature',
+            created_at: new Date().toISOString()
+          };
+          addOrUpdateRevisionContract(tenantId, contractDoc);
+        }
 
         const updatedProf: EmployeePayrollProfile = {
           ...(p || {}),
@@ -542,6 +598,9 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
       setPayrollProfiles(updatedProfilesMap);
       localStorage.setItem(`payroll_profiles_${tenantId}`, JSON.stringify(updatedProfilesMap));
 
+      // 契約書一覧更新
+      setRevisionContracts(getRevisionContracts(tenantId));
+
       // バッチデータの基準値を更新
       setBatchData(prev => {
         const next = { ...prev };
@@ -554,7 +613,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
         return next;
       });
 
-      alert(`🎉 ${modifiedItems.length} 名の昇給・給与改定を一括保存しました！\n昇給履歴を記録し、大元の給与マスタへ即座に反映いたしました。`);
+      alert(`🎉 ${modifiedItems.length} 名の昇給・給与改定を一括保存しました！\n【適用開始】: ${appliedYearMonth} 分給与より\n【労働条件通知書】: 全員の個人マイページへ電子同意・押印依頼を自動配信いたしました。`);
     } catch (err: any) {
       console.error(err);
       alert('一括保存に失敗しました: ' + err.message);
@@ -607,7 +666,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
       const diffBase = formNewBaseSalary - currentBase;
       const diffTotal = newTotal - prevTotal;
       const revisionRate = currentBase > 0 ? parseFloat(((diffBase / currentBase) * 100).toFixed(2)) : 0;
-      const appliedYearMonth = formRevisionDate.slice(0, 7);
+      const appliedYearMonth = formAppliedYearMonth;
 
       const revisionPayload: SalaryRevisionRecord = {
         id: crypto.randomUUID(),
@@ -702,8 +761,33 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
         }
       }));
 
+      // 📄 労働条件通知書（賃金改定版）の自動発行＆本人マイページ配信
+      if (autoGenerateContract) {
+        const contractDoc: RevisionContractDoc = {
+          id: crypto.randomUUID(),
+          tenant_id: tenantId,
+          user_id: formUserId,
+          user_name: targetUser?.name || '未設定',
+          revision_id: revisionPayload.id,
+          applied_year_month: formAppliedYearMonth,
+          revision_date: formRevisionDate,
+          revision_type: formRevisionType,
+          base_salary: formNewBaseSalary,
+          position_allowance: formPositionAllowance,
+          qualification_allowance: formQualificationAllowance,
+          housing_allowance: formHousingAllowance,
+          commuting_allowance: formCommutingAllowance,
+          family_allowance: formFamilyAllowance,
+          reason_note: formReasonNote || '給与改定',
+          status: 'pending_signature',
+          created_at: new Date().toISOString()
+        };
+        addOrUpdateRevisionContract(tenantId, contractDoc);
+        setRevisionContracts(getRevisionContracts(tenantId));
+      }
+
       setIsRevisionModalOpen(false);
-      alert(`🎉 ${targetUser?.name} さんの給与改定（${diffBase >= 0 ? '+' : ''}¥${diffBase.toLocaleString()}）を保存しました！\n昇給履歴を記録し、大元の給与マスタへ即時反映いたしました。`);
+      alert(`🎉 ${targetUser?.name} さんの給与改定（${diffBase >= 0 ? '+' : ''}¥${diffBase.toLocaleString()}）を保存しました！\n【適用開始】: ${formAppliedYearMonth} 分給与より\n【労働条件通知書】: 本人の個人マイページへ電子同意・押印依頼を送信いたしました。`);
     } catch (err: any) {
       console.error(err);
       alert('昇給の保存に失敗しました: ' + err.message);
@@ -1180,6 +1264,25 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                         >
                           履歴閲覧
                         </button>
+                        {(() => {
+                          const doc = revisionContracts.find(c => c.user_id === emp.id);
+                          if (!doc) return null;
+                          const isSigned = doc.status === 'signed';
+                          return (
+                            <button
+                              onClick={() => setPreviewContractDoc(doc)}
+                              className={`w-full py-0.5 rounded text-[9px] font-bold transition flex items-center justify-center gap-0.5 cursor-pointer border ${
+                                isSigned 
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
+                                  : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                              }`}
+                              title={isSigned ? `合意押印済 (${doc.signed_at?.slice(0, 10)})` : '本人電子押印待ち'}
+                            >
+                              <FileText className="w-2.5 h-2.5" />
+                              {isSigned ? '✅通知書済' : '🕒通知書待'}
+                            </button>
+                          );
+                        })()}
                       </div>
                     </td>
                   ))}
@@ -1283,9 +1386,19 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                   全社員給与・昇給スプレッドシート（セル直接編集可能）
                 </h4>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-300">
+                  <span className="text-emerald-900">📅 昇給適用開始月:</span>
+                  <input
+                    type="month"
+                    value={batchAppliedYearMonth}
+                    onChange={e => setBatchAppliedYearMonth(e.target.value)}
+                    className="p-1 border border-emerald-400 rounded-lg font-mono text-xs font-black text-emerald-900 bg-white"
+                  />
+                  <span className="text-[10px] text-emerald-700">分給与〜</span>
+                </div>
                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-                  <span>改定適用日:</span>
+                  <span>改定日:</span>
                   <input
                     type="date"
                     value={batchRevisionDate}
@@ -1293,6 +1406,15 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                     className="p-1.5 border border-slate-300 rounded-lg font-mono text-xs font-bold"
                   />
                 </div>
+                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer bg-slate-100 px-2 py-1.5 rounded-lg border border-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={autoGenerateContract}
+                    onChange={e => setAutoGenerateContract(e.target.checked)}
+                    className="rounded text-emerald-600 cursor-pointer"
+                  />
+                  <span>📄 労働条件通知書を個人へ配信</span>
+                </label>
                 <button
                   type="button"
                   onClick={handleSaveBatchAll}
@@ -1531,7 +1653,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                         )}
                       </td>
                       <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
                           <button
                             onClick={() => handleOpenRevisionModal(emp)}
                             className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg border border-emerald-200 transition text-[11px] cursor-pointer flex items-center gap-1"
@@ -1546,6 +1668,25 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                             <History className="w-3.5 h-3.5" />
                             履歴 ({empRevs.length})
                           </button>
+                          {(() => {
+                            const doc = revisionContracts.find(c => c.user_id === emp.id);
+                            if (!doc) return null;
+                            const isSigned = doc.status === 'signed';
+                            return (
+                              <button
+                                onClick={() => setPreviewContractDoc(doc)}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer border ${
+                                  isSigned 
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
+                                    : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                }`}
+                                title={isSigned ? `本人押印済 (${doc.signed_at?.slice(0, 10)})` : '本人電子押印待ち'}
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                {isSigned ? '✅ 通知書済' : '🕒 押印待ち'}
+                              </button>
+                            );
+                          })()}
                         </div>
                       </td>
                     </tr>
@@ -1675,7 +1816,17 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-emerald-50/60 p-2 rounded-xl border border-emerald-300">
+                  <label className="block text-[11px] font-black text-emerald-950 mb-1">📅 昇給適用開始月</label>
+                  <input
+                    type="month"
+                    value={formAppliedYearMonth}
+                    onChange={e => setFormAppliedYearMonth(e.target.value)}
+                    className="w-full p-2 bg-white border border-emerald-400 rounded-lg text-xs font-mono font-black text-emerald-900"
+                  />
+                  <span className="text-[10px] text-emerald-700 font-bold block mt-0.5">※給与計算に反映される月</span>
+                </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">改定適用日</label>
                   <input
@@ -1698,6 +1849,22 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                   </select>
                 </div>
               </div>
+
+              {/* 📄 労働条件通知書自動発行チェック */}
+              <label className="flex items-center gap-2 p-3 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-950 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoGenerateContract}
+                  onChange={e => setAutoGenerateContract(e.target.checked)}
+                  className="rounded text-indigo-600 cursor-pointer w-4 h-4"
+                />
+                <div>
+                  <span>📄 労働条件通知書（賃金改定版）を自動発行して個人へ配信</span>
+                  <p className="text-[10px] text-indigo-600 font-normal">
+                    本人のマイページに通知書が届き、電子印鑑での同意・押印が行えるようになります。
+                  </p>
+                </div>
+              </label>
 
               {/* 基本給改定 */}
               <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200 space-y-3">
@@ -1860,6 +2027,115 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
               <button
                 onClick={() => setSelectedEmployeeForTimeline(null)}
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📄 労働条件通知書（賃金改定版）プレビュー・印刷モーダル */}
+      {previewContractDoc && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 print:p-0 print:bg-white">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[92vh] flex flex-col border border-slate-100 overflow-hidden print:border-none print:shadow-none print:max-h-none">
+            {/* モーダルヘッダー */}
+            <div className="p-4 px-6 border-b border-slate-200 flex items-center justify-between bg-slate-50 print:hidden shrink-0">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-600" />
+                <div>
+                  <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                    労働条件通知書（賃金改定版）
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                      previewContractDoc.status === 'signed' 
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}>
+                      {previewContractDoc.status === 'signed' ? '✅ 本人電子押印合意済' : '🕒 本人電子押印待ち'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {previewContractDoc.user_name} 様 / {previewContractDoc.applied_year_month} 分給与改定
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition flex items-center gap-1 cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  印刷・PDF
+                </button>
+                <button
+                  onClick={() => setPreviewContractDoc(null)}
+                  className="text-slate-400 hover:text-slate-600 p-1.5 rounded-full hover:bg-slate-200 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* 書面本文 */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100/50 print:p-0 print:bg-white">
+              {(() => {
+                const targetEmp = employees.find(e => e.id === previewContractDoc.user_id);
+                const prof = payrollProfiles[previewContractDoc.user_id];
+                const tpl = getLaborContractTemplateFromStorage(tenantId || '');
+                const contractData: LaborContractData = {
+                  companyName: companySettings?.name || '株式会社KAP',
+                  companyAddress: companySettings?.address || '滋賀県大津市坂本3丁目21-16',
+                  representativeName: companySettings?.representative || '代表取締役',
+                  employeeName: previewContractDoc.user_name,
+                  employeeAddress: targetEmp?.address || '滋賀県大津市',
+                  joinDate: targetEmp?.join_date || '2024-04-01',
+                  contractType: 'indefinite',
+                  trialPeriodMonths: 3,
+                  workLocation: companySettings?.address || '本社',
+                  jobDescription: targetEmp?.role === 'admin' ? '管理統括業務' : '通常業務',
+                  startTime: '09:00',
+                  endTime: '18:00',
+                  breakTimeMinutes: 60,
+                  overtimeWork: 'あり（労働基準法第36条に基づく協定の範囲内）',
+                  holidaysText: '土曜、日曜、祝日、年末年始休暇',
+                  paidLeaveGrantDays: 10,
+                  salaryType: prof?.salary_type === 'hourly' ? 'hourly' : 'monthly',
+                  baseSalary: previewContractDoc.base_salary,
+                  hourlyWage: prof?.hourly_wage || 1150,
+                  positionAllowance: previewContractDoc.position_allowance,
+                  qualificationAllowance: previewContractDoc.qualification_allowance,
+                  housingAllowance: previewContractDoc.housing_allowance,
+                  familyAllowance: previewContractDoc.family_allowance,
+                  commutingAllowance: previewContractDoc.commuting_allowance,
+                  fixedOvertimeHours: prof?.fixed_overtime_hours || 0,
+                  fixedOvertimeAllowance: prof?.fixed_overtime_allowance || 0,
+                  closingDayText: tpl?.closing_day_text || '毎月末日',
+                  paymentDayText: tpl?.payment_day_text || '翌月25日振込',
+                  bonusPolicy: '会社業績および個人の勤務成績により支給する（年2回）',
+                  raisePolicy: `定期昇給または業務能力の評価による給与改定（${previewContractDoc.applied_year_month}分改定: ${previewContractDoc.reason_note || '定期改定'}）`,
+                  retirementAllowance: '会社の退職金規程による',
+                  healthInsuranceJoined: true,
+                  pensionInsuranceJoined: true,
+                  employmentInsuranceJoined: true,
+                  workersCompJoined: true,
+                  createdDate: previewContractDoc.revision_date,
+                  isEmployeeSigned: previewContractDoc.status === 'signed',
+                  employeeSignedAt: previewContractDoc.signed_at,
+                  employeeSignatureImage: undefined
+                };
+
+                return <OfficialLaborContractDoc data={contractData} />;
+              })()}
+            </div>
+
+            {/* モーダルフッター */}
+            <div className="p-3 px-6 border-t border-slate-200 bg-white flex items-center justify-between text-xs font-bold text-slate-500 print:hidden shrink-0">
+              <span>
+                ステータス: {previewContractDoc.status === 'signed' ? `✅ ${previewContractDoc.signed_at?.slice(0, 16).replace('T', ' ')} 本人押印合意済` : '🕒 従業員のマイページにて電子押印待ち'}
+              </span>
+              <button
+                onClick={() => setPreviewContractDoc(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition cursor-pointer"
               >
                 閉じる
               </button>
