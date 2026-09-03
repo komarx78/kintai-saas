@@ -30,7 +30,8 @@ export interface EmployeePayrollProfile {
   pension_insurance_enabled: boolean; // 厚生年金加入
   pension_standard_monthly_remuneration?: number | null; // 厚生年金 標準報酬月額
   employment_insurance_enabled: boolean; // 雇用保険加入
-  resident_tax_monthly: number; // 住民税特別徴収額
+  resident_tax_monthly: number; // 住民税特別徴収額 (月額一律フォールバック)
+  resident_tax_details?: Record<string, number> | null; // 住民税 12ヶ月分月別特別徴収額 { "6": 14500, "7": 14000, ... }
   tax_bracket: 'kou' | 'otsu' | 'hei'; // 甲欄 / 乙欄 / 丙欄
   bank_name?: string;
   branch_name?: string;
@@ -60,6 +61,7 @@ export interface PayrollSettings {
   nursing_insurance_rate?: number; // 指定があれば上書き
   pension_insurance_rate?: number; // 指定があれば上書き
   rounding_method: 'floor' | 'round';
+  target_month?: number; // 支給対象月 (1〜12月)
 }
 
 export interface CalculatedPayslip {
@@ -276,7 +278,16 @@ export function calculatePayroll(
   const taxBase = Math.max(0, taxableGross - totalSocialInsurance);
 
   const incomeTax = calculateIncomeTax(taxBase, profile.dependents_count || 0, profile.tax_bracket || 'kou');
-  const residentTax = profile.resident_tax_monthly || 0;
+  
+  // 住民税特別徴収額（12ヶ月月別テーブルが設定されていれば対象支給月を優先適用、未設定時は一律値をフォールバック）
+  let residentTax = profile.resident_tax_monthly || 0;
+  if (profile.resident_tax_details && typeof profile.resident_tax_details === 'object') {
+    const payMonth = settings?.target_month ?? (new Date().getMonth() + 1);
+    if (profile.resident_tax_details[String(payMonth)] !== undefined) {
+      residentTax = Number(profile.resident_tax_details[String(payMonth)]) || 0;
+    }
+  }
+
   const otherDeductions = 0;
 
   // 総控除額

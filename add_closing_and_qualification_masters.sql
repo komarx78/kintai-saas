@@ -47,7 +47,8 @@ CREATE POLICY "tenant_qualifications_all" ON public.company_qualification_master
 ALTER TABLE public.employee_onboarding_profiles
     ADD COLUMN IF NOT EXISTS health_standard_monthly_remuneration INTEGER DEFAULT NULL, -- 健康保険 標準報酬月額
     ADD COLUMN IF NOT EXISTS pension_standard_monthly_remuneration INTEGER DEFAULT NULL, -- 厚生年金 標準報酬月額
-    ADD COLUMN IF NOT EXISTS resident_tax_monthly INTEGER DEFAULT 0, -- 住民税 特別徴収月額
+    ADD COLUMN IF NOT EXISTS resident_tax_monthly INTEGER DEFAULT 0, -- 住民税 特別徴収月額 (一律時フォールバック)
+    ADD COLUMN IF NOT EXISTS resident_tax_details JSONB DEFAULT '{}'::jsonb, -- 住民税 12ヶ月分月別特別徴収額 { "6": 14500, "7": 14000, ... }
     ADD COLUMN IF NOT EXISTS qualification_name TEXT DEFAULT '', -- 取得資格名
     ADD COLUMN IF NOT EXISTS qualification_certificate_url TEXT DEFAULT '', -- 合格証・証明書（写メ圧縮/PDF Base64またはURL）
     ADD COLUMN IF NOT EXISTS qualification_certificate_filename TEXT DEFAULT ''; -- 合格証ファイル名
@@ -57,6 +58,7 @@ ALTER TABLE public.employee_payroll_profiles
     ADD COLUMN IF NOT EXISTS health_standard_monthly_remuneration INTEGER DEFAULT NULL,
     ADD COLUMN IF NOT EXISTS pension_standard_monthly_remuneration INTEGER DEFAULT NULL,
     ADD COLUMN IF NOT EXISTS resident_tax_monthly INTEGER DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS resident_tax_details JSONB DEFAULT '{}'::jsonb,
     ADD COLUMN IF NOT EXISTS qualification_allowance INTEGER DEFAULT 0;
 
 NOTIFY pgrst, 'reload schema';

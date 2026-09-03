@@ -128,7 +128,7 @@ export function isNursingInsuranceApplicable(
 /**
  * 標準報酬月額表（全50等級）の等級決定テーブル
  */
-const HEALTH_REMUNERATION_TABLE = [
+export const HEALTH_REMUNERATION_TABLE = [
   { grade: 1, standard: 58000, min: 0, max: 63000 },
   { grade: 2, standard: 68000, min: 63000, max: 73000 },
   { grade: 3, standard: 78000, min: 73000, max: 83000 },
