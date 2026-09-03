@@ -16,6 +16,7 @@ export interface EmployeePayrollProfile {
   qualification_allowance: number; // 資格・職能手当
   housing_allowance: number; // 住宅手当
   family_allowance: number; // 家族・扶養手当
+  special_allowance?: number; // その他・特別手当
   commuting_type?: 'monthly' | 'daily' | 'none'; // 通勤手当支給区分: 月額固定(定期) | 日額実費(アルバイト) | 支給なし
   commuting_daily_amount?: number; // 1日あたりの往復交通費（実費）
   commuting_allowance: number; // 通勤手当（月額定期代または月合計）

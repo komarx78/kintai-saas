@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { PayslipManagement } from '../components/PayslipManagement';
+import { SalaryLedgerDashboard } from '../components/SalaryLedgerDashboard';
 import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
-import { DollarSign, ArrowLeft, LogOut } from 'lucide-react';
+import { DollarSign, ArrowLeft, LogOut, TrendingUp } from 'lucide-react';
 
 export default function PayrollAdminDashboard() {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ export default function PayrollAdminDashboard() {
   const [tenantName, setTenantName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'payslip' | 'ledger'>('ledger');
 
   useEffect(() => {
     fetchProfile();
@@ -110,9 +112,48 @@ export default function PayrollAdminDashboard() {
         </div>
       </header>
 
+      {/* 🧭 給与システム内タブナビゲーション */}
+      <div className="bg-white border-b border-slate-200 px-6 py-2.5 sticky top-[61px] z-20 shadow-2xs min-w-[1024px]">
+        <div className="max-w-7xl w-full mx-auto flex items-center justify-between">
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setActiveTab('ledger')}
+              className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+                activeTab === 'ledger'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              社員給与一覧 ＆ 昇給履歴・改定管理
+              <span className="text-[10px] bg-amber-400 text-slate-900 font-black px-1.5 py-0.2 rounded-full shadow-2xs">
+                新設
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('payslip')}
+              className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+                activeTab === 'payslip'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <DollarSign className="w-4 h-4" />
+              月別給与計算・明細発行
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 min-w-[1024px]">
-        {tenantId && <PayslipManagement tenantId={tenantId} />}
+        {tenantId && (
+          activeTab === 'ledger' ? (
+            <SalaryLedgerDashboard tenantId={tenantId} />
+          ) : (
+            <PayslipManagement tenantId={tenantId} />
+          )
+        )}
       </main>
 
       {/* ❓ 使い方ガイドモーダル */}
