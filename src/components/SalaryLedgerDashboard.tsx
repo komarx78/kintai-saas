@@ -4,12 +4,13 @@ import {
   TrendingUp, DollarSign, 
   History, Plus, Download, Search, CheckCircle2, 
   FileText, X, Loader2, LayoutGrid, Table, 
-  Building2, Sparkles, Save, Printer
+  Building2, Sparkles, Save, Printer, Trash2, Edit
 } from 'lucide-react';
 import type { EmployeePayrollProfile } from '../lib/payrollEngine';
 import { 
   getRevisionContracts, 
   addOrUpdateRevisionContract, 
+  deleteRevisionContract,
   type RevisionContractDoc 
 } from '../lib/revisionContracts';
 import { OfficialLaborContractDoc, type LaborContractData } from './OfficialLaborContractDoc';
@@ -529,6 +530,9 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
             revision_date: batchRevisionDate,
             revision_type: item.revisionType || 'regular',
             base_salary: item.newBase,
+            previous_base_salary: prevBase,
+            diff_base_salary: diffBase,
+            revision_rate: rate,
             position_allowance: item.positionAllowance,
             qualification_allowance: item.qualificationAllowance,
             housing_allowance: item.housingAllowance,
@@ -773,6 +777,9 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
           revision_date: formRevisionDate,
           revision_type: formRevisionType,
           base_salary: formNewBaseSalary,
+          previous_base_salary: currentBase,
+          diff_base_salary: diffBase,
+          revision_rate: revisionRate,
           position_allowance: formPositionAllowance,
           qualification_allowance: formQualificationAllowance,
           housing_allowance: formHousingAllowance,
@@ -794,6 +801,108 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
     } finally {
       setIsSavingRevision(false);
     }
+  };
+
+  // 🗑️ 昇給・給与改定の取り消し（元に戻すロールバック処理）
+  const handleDeleteRevision = async (rev: SalaryRevisionRecord) => {
+    if (!tenantId) return;
+
+    const empName = rev.user_name || employees.find(e => e.id === rev.user_id)?.name || '従業員';
+    const isLatest = latestRevisionByUser[rev.user_id]?.id === rev.id;
+
+    const confirmMsg = isLatest
+      ? `⚠️ 【昇給・給与改定の取り消し（巻き戻し）確認】\n\n対象社員: ${empName} 様\n改定内容: ¥${rev.previous_base_salary.toLocaleString()} ➔ ¥${rev.new_base_salary.toLocaleString()}（${rev.revision_date}）\n\nこの昇給を取り消し、給与を改定前の【¥${rev.previous_base_salary.toLocaleString()}】に自動で巻き戻しますか？\n（※発行された労働条件通知書も同時に取り消されます）`
+      : `⚠️ 【過去の昇給記録の削除確認】\n\n対象社員: ${empName} 様\n改定記録: ¥${rev.previous_base_salary.toLocaleString()} ➔ ¥${rev.new_base_salary.toLocaleString()}（${rev.revision_date}）\n\nこの過去の昇給履歴レコードを削除しますか？\n（※直近の改定ではないため、現在の基本給は変更されません）`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      // 1. Supabaseから履歴レコード削除
+      try {
+        await supabase.from('salary_revision_history').delete().eq('id', rev.id);
+      } catch (e) {
+        console.warn('DB delete notice:', e);
+      }
+
+      // 2. ローカルの履歴リスト更新
+      const updatedRevs = revisions.filter(r => r.id !== rev.id);
+      setRevisions(updatedRevs);
+      localStorage.setItem(`salary_revisions_${tenantId}`, JSON.stringify(updatedRevs));
+
+      // 3. 直近の改定を取り消した場合は、大元給与マスタを「改定前（previous）」に自動巻き戻し！
+      if (isLatest) {
+        const p = payrollProfiles[rev.user_id];
+        const rolledBackProfile: EmployeePayrollProfile = {
+          ...(p || {}),
+          user_id: rev.user_id,
+          tenant_id: tenantId,
+          salary_type: p?.salary_type || 'monthly',
+          hourly_wage: p?.hourly_wage || 0,
+          fixed_overtime_hours: p?.fixed_overtime_hours || 0,
+          fixed_overtime_allowance: p?.fixed_overtime_allowance || 0,
+          dependents_count: p?.dependents_count || 0,
+          health_insurance_enabled: p?.health_insurance_enabled ?? true,
+          pension_insurance_enabled: p?.pension_insurance_enabled ?? true,
+          employment_insurance_enabled: p?.employment_insurance_enabled ?? true,
+          resident_tax_monthly: p?.resident_tax_monthly || 0,
+          tax_bracket: p?.tax_bracket || 'kou',
+          commuting_taxable: p?.commuting_taxable ?? false,
+          base_salary: rev.previous_base_salary
+        };
+
+        try {
+          await supabase.from('employee_payroll_profiles').upsert(rolledBackProfile, { onConflict: 'tenant_id,user_id' });
+          await supabase.from('employee_onboarding_profiles').update({
+            base_salary: rev.previous_base_salary,
+            updated_at: new Date().toISOString()
+          }).eq('tenant_id', tenantId).eq('user_id', rev.user_id);
+        } catch (e) {}
+
+        const updatedProfiles = { ...payrollProfiles, [rev.user_id]: rolledBackProfile };
+        setPayrollProfiles(updatedProfiles);
+        localStorage.setItem(`payroll_profiles_${tenantId}`, JSON.stringify(updatedProfiles));
+
+        // エクセル風エディタのバッチステートも巻き戻し
+        setBatchData(prev => ({
+          ...prev,
+          [rev.user_id]: {
+            ...(prev[rev.user_id] || {}),
+            currentBase: rev.previous_base_salary,
+            newBase: rev.previous_base_salary,
+            isModified: false
+          }
+        }));
+      }
+
+      // 4. 労働条件通知書（改定版）を削除
+      deleteRevisionContract(tenantId, rev.id);
+      setRevisionContracts(getRevisionContracts(tenantId));
+
+      alert(`✅ ${empName} さんの給与改定を取り消しました。${isLatest ? `\n基本給を改定前の【¥${rev.previous_base_salary.toLocaleString()}】に安全に巻き戻しました。` : ''}`);
+    } catch (err: any) {
+      console.error(err);
+      alert('取り消し処理に失敗しました: ' + err.message);
+    }
+  };
+
+  // ✏️ 昇給・給与改定の直接修正
+  const handleEditRevision = (rev: SalaryRevisionRecord) => {
+    setFormUserId(rev.user_id);
+    setFormAppliedYearMonth(rev.applied_year_month || rev.revision_date.slice(0, 7));
+    setFormRevisionDate(rev.revision_date);
+    setFormRevisionType(rev.revision_type);
+    setFormNewBaseSalary(rev.new_base_salary);
+    setFormPositionAllowance(rev.allowance_details?.position || 0);
+    setFormQualificationAllowance(rev.allowance_details?.qualification || 0);
+    setFormHousingAllowance(rev.allowance_details?.housing || 0);
+    setFormCommutingAllowance(rev.allowance_details?.commuting || 0);
+    setFormFamilyAllowance(rev.allowance_details?.family || 0);
+    setFormOtherAllowance(rev.allowance_details?.other || 0);
+    setFormReasonNote(rev.reason_note || '');
+    setFormApprovedBy(rev.approved_by || '管理者');
+    setAutoGenerateContract(true);
+    setSelectedEmployeeForTimeline(null);
+    setIsRevisionModalOpen(true);
   };
 
   // CSVダウンロード
@@ -1754,14 +1863,50 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                     )}
                   </div>
 
-                  <div className="text-right shrink-0">
-                    <span className="text-[11px] text-slate-400">総支給額の推移</span>
-                    <p className="font-mono font-black text-sm text-slate-800">
-                      ¥{rev.new_total_salary.toLocaleString()}
-                    </p>
-                    <span className="text-[10px] font-mono text-emerald-600 font-bold">
-                      差額 {rev.diff_total_salary >= 0 ? '+' : ''}¥{rev.diff_total_salary.toLocaleString()}
-                    </span>
+                  <div className="flex flex-col sm:items-end gap-2 shrink-0">
+                    <div className="text-right">
+                      <span className="text-[11px] text-slate-400">総支給額の推移</span>
+                      <p className="font-mono font-black text-sm text-slate-800">
+                        ¥{rev.new_total_salary.toLocaleString()}
+                      </p>
+                      <span className="text-[10px] font-mono text-emerald-600 font-bold">
+                        差額 {rev.diff_total_salary >= 0 ? '+' : ''}¥{rev.diff_total_salary.toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {(() => {
+                        const doc = revisionContracts.find(c => c.revision_id === rev.id || (c.user_id === rev.user_id && c.applied_year_month === rev.applied_year_month));
+                        if (!doc) return null;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewContractDoc(doc)}
+                            className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg border border-indigo-200 text-[10px] transition flex items-center gap-1 cursor-pointer"
+                          >
+                            <FileText className="w-3 h-3" />
+                            通知書
+                          </button>
+                        );
+                      })()}
+                      <button
+                        type="button"
+                        onClick={() => handleEditRevision(rev)}
+                        className="px-2 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-300 text-[10px] transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <Edit className="w-3 h-3 text-blue-600" />
+                        修正
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRevision(rev)}
+                        className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 text-[10px] transition flex items-center gap-1 cursor-pointer"
+                        title="この昇給を取り消し、以前の給与に巻き戻します"
+                      >
+                        <Trash2 className="w-3 h-3 text-rose-600" />
+                        取消
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -2016,6 +2161,46 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                             💡 {rev.reason_note}
                           </p>
                         )}
+
+                        {/* 🛠️ アクションバー（修正・取消巻き戻し・通知書） */}
+                        <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-2 flex-wrap text-xs">
+                          <div className="flex items-center gap-1.5">
+                            {(() => {
+                              const doc = revisionContracts.find(c => c.revision_id === rev.id || (c.user_id === rev.user_id && c.applied_year_month === rev.applied_year_month));
+                              if (!doc) return null;
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewContractDoc(doc)}
+                                  className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg border border-indigo-200 text-[10px] transition flex items-center gap-1 cursor-pointer"
+                                >
+                                  <FileText className="w-3 h-3" />
+                                  通知書 ({doc.status === 'signed' ? '押印済' : '押印待'})
+                                </button>
+                              );
+                            })()}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 ml-auto">
+                            <button
+                              type="button"
+                              onClick={() => handleEditRevision(rev)}
+                              className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-bold rounded-lg border border-slate-300 text-[10px] transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                            >
+                              <Edit className="w-3 h-3 text-blue-600" />
+                              修正
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRevision(rev)}
+                              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg border border-rose-200 text-[10px] transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                              title="この昇給を取り消し、以前の給与に巻き戻します"
+                            >
+                              <Trash2 className="w-3 h-3 text-rose-600" />
+                              取消（元に戻す）
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -2121,7 +2306,15 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                   createdDate: previewContractDoc.revision_date,
                   isEmployeeSigned: previewContractDoc.status === 'signed',
                   employeeSignedAt: previewContractDoc.signed_at,
-                  employeeSignatureImage: undefined
+                  employeeSignatureImage: undefined,
+                  docCategory: 'revision',
+                  appliedYearMonth: previewContractDoc.applied_year_month,
+                  revisionDate: previewContractDoc.revision_date,
+                  revisionType: REVISION_TYPE_LABELS[previewContractDoc.revision_type]?.label || previewContractDoc.revision_type,
+                  previousBaseSalary: previewContractDoc.previous_base_salary,
+                  diffBaseSalary: previewContractDoc.diff_base_salary,
+                  revisionRate: previewContractDoc.revision_rate,
+                  revisionReasonNote: previewContractDoc.reason_note
                 };
 
                 return <OfficialLaborContractDoc data={contractData} />;

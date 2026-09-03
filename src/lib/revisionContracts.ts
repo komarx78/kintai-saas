@@ -8,6 +8,9 @@ export interface RevisionContractDoc {
   revision_date: string; // 例: '2026-09-01'
   revision_type: string; // 'regular' | 'base_up' | 'promotion' etc.
   base_salary: number;
+  previous_base_salary?: number;
+  diff_base_salary?: number;
+  revision_rate?: number;
   position_allowance: number;
   qualification_allowance: number;
   housing_allowance: number;
@@ -65,4 +68,10 @@ export function signRevisionContract(tenantId: string, docId: string, signatureN
     return target;
   }
   return null;
+}
+
+export function deleteRevisionContract(tenantId: string, docIdOrRevisionId: string): void {
+  const list = getRevisionContracts(tenantId);
+  const next = list.filter(d => d.id !== docIdOrRevisionId && d.revision_id !== docIdOrRevisionId);
+  saveRevisionContracts(tenantId, next);
 }

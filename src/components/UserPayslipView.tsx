@@ -409,7 +409,15 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
                   createdDate: signModalDoc.revision_date,
                   isEmployeeSigned: signModalDoc.status === 'signed',
                   employeeSignedAt: signModalDoc.signed_at,
-                  employeeSignatureImage: undefined
+                  employeeSignatureImage: undefined,
+                  docCategory: 'revision',
+                  appliedYearMonth: signModalDoc.applied_year_month,
+                  revisionDate: signModalDoc.revision_date,
+                  revisionType: signModalDoc.revision_type || '定期改定',
+                  previousBaseSalary: signModalDoc.previous_base_salary,
+                  diffBaseSalary: signModalDoc.diff_base_salary,
+                  revisionRate: signModalDoc.revision_rate,
+                  revisionReasonNote: signModalDoc.reason_note
                 };
 
                 return <OfficialLaborContractDoc data={contractData} />;

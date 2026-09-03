@@ -49,6 +49,16 @@ export interface LaborContractData {
   employeeSignedAt?: string; // 電子署名日時（タイムスタンプ）
   employeeSignIp?: string; // 承諾時IPアドレス
   employeeSignatureImage?: string; // 手書き署名または認印画像
+  // 📈 賃金改定（昇給）版オプション
+  docCategory?: 'initial' | 'revision'; // 'initial': 雇入れ時 / 'revision': 賃金改定時
+  appliedYearMonth?: string; // 昇給適用開始月（例: '2026-09'）
+  revisionDate?: string; // 改定発令日（例: '2026-09-01'）
+  revisionType?: string; // 改定種別（例: '定期昇給', 'ベースアップ' 等）
+  previousBaseSalary?: number; // 改定前 基本給
+  previousTotalSalary?: number; // 改定前 総支給
+  diffBaseSalary?: number; // 昇給差額
+  revisionRate?: number; // 昇給率（%）
+  revisionReasonNote?: string; // 改定理由・評価メモ
 }
 
 interface OfficialLaborContractDocProps {
@@ -58,6 +68,7 @@ interface OfficialLaborContractDocProps {
 export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> = ({ data }) => {
   const isFixedTerm = data.contractType === 'fixed_term';
   const isHourly = data.salaryType === 'hourly';
+  const isRevision = data.docCategory === 'revision' || !!data.appliedYearMonth;
 
   const tpl: LaborContractTemplate = {
     ...DEFAULT_LABOR_CONTRACT_TEMPLATE,
@@ -80,14 +91,46 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
       {/* 表題 */}
       <div className="text-center pb-4 border-b-2 border-slate-900 mb-6">
         <div className="text-[10px] font-bold text-slate-500 tracking-widest uppercase mb-1">
-          労働基準法第15条および労働基準法施行規則第5条に基づく
+          {isRevision 
+            ? '労働基準法第15条、労働契約法第8条（合意による労働条件の変更）に基づく'
+            : '労働基準法第15条および労働基準法施行規則第5条に基づく'}
         </div>
-        <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-          労働条件通知書 兼 雇用契約書
-        </h1>
+        <div className="flex items-center justify-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            {isRevision ? '労働条件変更通知書 兼 賃金改定合意書' : '労働条件通知書 兼 雇用契約書'}
+          </h1>
+          {isRevision && (
+            <span className="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full print:border print:border-emerald-800 print:text-emerald-900 print:bg-white">
+              賃金改定版
+            </span>
+          )}
+        </div>
         <p className="text-[10px] text-slate-500 mt-1">
-          {data.companyName}（以下「甲」という）と {data.employeeName}（以下「乙」という）は、以下の条件により雇用契約を締結する。
+          {isRevision
+            ? `${data.companyName}（以下「甲」という）と ${data.employeeName}（以下「乙」という）は、労働条件（賃金）の改定に関し、以下の通り合意・締結する。`
+            : `${data.companyName}（以下「甲」という）と ${data.employeeName}（以下「乙」という）は、以下の条件により雇用契約を締結する。`}
         </p>
+
+        {/* 🌟 労務法務完全準拠：3大重要日付ハイライトバー */}
+        {isRevision && (
+          <div className="mt-3 p-2.5 bg-emerald-50/80 border border-emerald-300 rounded-xl flex flex-wrap items-center justify-around gap-2 text-xs text-left">
+            <div className="flex items-center gap-1.5 font-black text-emerald-950">
+              <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded">効力発生</span>
+              <span>📅 新賃金 適用開始:</span>
+              <span className="text-sm font-black text-emerald-700 underline decoration-2">
+                {data.appliedYearMonth} 分給与より
+              </span>
+            </div>
+            {data.revisionDate && (
+              <div className="text-slate-600 font-bold text-[11px]">
+                <span>📋 改定発令日:</span> <span className="font-mono">{data.revisionDate}</span>
+              </div>
+            )}
+            <div className="text-slate-600 font-bold text-[11px]">
+              <span>✍️ 交付・締結日:</span> <span className="font-mono">{docY}年{docM}月{docD}日</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 契約当事者ヘッダー */}
@@ -200,8 +243,57 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
             </th>
             <td className="p-2.5">
               <div className="space-y-1">
+
+                {/* 📈 賃金改定時のビフォーアフター比較ハイライトパネル */}
+                {isRevision && (data.previousBaseSalary !== undefined || data.diffBaseSalary !== undefined) && (
+                  <div className="bg-emerald-50/90 border border-emerald-300 rounded-xl p-3 mb-2 space-y-1.5 shadow-2xs">
+                    <div className="flex items-center justify-between text-[11px] font-black text-emerald-950">
+                      <span className="flex items-center gap-1">📈 賃金改定（昇給）明細</span>
+                      <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded font-bold">
+                        {data.revisionType || '定期改定'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 pt-1 border-t border-emerald-200 text-xs">
+                      <div className="flex items-center gap-2">
+                        {data.previousBaseSalary !== undefined && (
+                          <span className="text-slate-500 line-through font-mono">
+                            改定前 基本給: ¥{data.previousBaseSalary.toLocaleString()}
+                          </span>
+                        )}
+                        <span className="text-emerald-700 font-bold">➔</span>
+                        <span className="font-mono font-black text-emerald-950 text-sm bg-white px-2 py-0.5 rounded border border-emerald-300">
+                          改定後 基本給: ¥{data.baseSalary.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="font-mono font-black text-emerald-700 text-xs">
+                        {data.diffBaseSalary !== undefined && (
+                          <span>
+                            {data.diffBaseSalary >= 0 ? '+' : ''}¥{data.diffBaseSalary.toLocaleString()}
+                          </span>
+                        )}
+                        {data.revisionRate !== undefined && (
+                          <span className="ml-1 bg-white text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-300 text-[10px]">
+                            +{data.revisionRate}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {data.revisionReasonNote && (
+                      <div className="text-[10px] text-emerald-800 pt-0.5">
+                        ・改定理由・評価: <span className="font-medium">{data.revisionReasonNote}</span>
+                      </div>
+                    )}
+                    <div className="text-[10px] text-emerald-950 font-black pt-0.5 flex items-center gap-1">
+                      <span>・新賃金適用開始:</span>
+                      <span className="bg-white px-1.5 py-0.2 rounded border border-emerald-400 underline decoration-2">
+                        {data.appliedYearMonth} 分給与より支給（効力発生）
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-baseline gap-2">
-                  <span className="font-bold text-slate-700">{isHourly ? '基本時給:' : '基本月給:'}</span>
+                  <span className="font-bold text-slate-700">{isHourly ? '基本時給:' : isRevision ? '改定後 基本月給:' : '基本月給:'}</span>
                   <span className="text-sm font-black text-indigo-700">
                     ¥{isHourly ? data.hourlyWage.toLocaleString() : data.baseSalary.toLocaleString()}
                   </span>
@@ -277,11 +369,18 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
       {/* 署名欄 */}
       <div className="pt-4 border-t border-slate-300">
         <p className="text-[11px] text-slate-600 mb-4">
-          本書面の交付を受け、労働条件について説明を受け合意のうえ、本雇用契約を締結いたします。
+          {isRevision
+            ? '本書面の交付を受け、上記賃金改定の内容および変更後の労働条件について説明を受け合意のうえ、本変更契約を締結（同意）いたします。'
+            : '本書面の交付を受け、労働条件について説明を受け合意のうえ、本雇用契約を締結いたします。'}
         </p>
 
-        <div className="text-right text-[11px] text-slate-600 mb-4">
-          締結日: {docY}年 {docM}月 {docD}日
+        <div className="text-right text-[11px] text-slate-600 mb-4 flex flex-wrap items-center justify-end gap-3">
+          {isRevision && data.appliedYearMonth && (
+            <span className="font-black text-emerald-900 bg-emerald-100/80 px-2.5 py-0.5 rounded-md border border-emerald-300 text-xs">
+              新賃金効力発生: {data.appliedYearMonth} 分給与より適用
+            </span>
+          )}
+          <span>締結日（合意日）: {docY}年 {docM}月 {docD}日</span>
         </div>
 
         <div className="grid grid-cols-2 gap-6">
