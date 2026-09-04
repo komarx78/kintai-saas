@@ -11,10 +11,10 @@ import OfficialCustomCanvasDoc from '../components/OfficialCustomCanvasDoc';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { 
   type CustomDocTemplate, 
-  getCustomDocTemplatesFromStorage 
+  fetchCustomDocTemplates 
 } from '../lib/customDocManager';
 import { compressImageFile } from '../lib/imageCompressor';
-import { getLaborContractTemplateFromStorage } from '../lib/laborContractTemplate';
+import { getLaborContractTemplateFromStorage, fetchLaborContractTemplate } from '../lib/laborContractTemplate';
 import { 
   type PositionMaster, 
   DEFAULT_POSITIONS, 
@@ -399,8 +399,11 @@ export default function OnboardingAdminDashboard() {
       }
       setPositions(posList);
 
-      // 資格手当マスタ取得
-      const qualList = getQualificationsFromStorage(tenantIdData);
+      // 資格手当マスタ取得（DB自動同期）
+      let qualList = getQualificationsFromStorage(tenantIdData);
+      if (tData?.qualification_masters_data && Array.isArray(tData.qualification_masters_data) && tData.qualification_masters_data.length > 0) {
+        qualList = tData.qualification_masters_data;
+      }
       setQualifications(qualList);
 
       // 就業時間パターンマスタ取得
@@ -432,9 +435,12 @@ export default function OnboardingAdminDashboard() {
         break_time_minutes: defaultBreak
       }));
 
-      // 全社カスタム公的書類テンプレート一覧の復元
-      const customTemplatesLoaded = getCustomDocTemplatesFromStorage(tenantIdData);
+      // 全社カスタム公的書類テンプレート一覧の復元（DB完全自動同期）
+      const customTemplatesLoaded = await fetchCustomDocTemplates(tenantIdData);
       setCustomDocTemplates(customTemplatesLoaded);
+
+      // 雇用契約書・労働条件通知書テンプレートの復元（DB完全自動同期）
+      await fetchLaborContractTemplate(tenantIdData);
 
       // 書類提出・申請リスト取得（先に取得して台帳に完全マージ）
       const { data: subData } = await supabase

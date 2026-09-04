@@ -12,7 +12,7 @@ import { SocialInsuranceMasterManager } from '../components/SocialInsuranceMaste
 import CustomDocDesignerModal from '../components/CustomDocDesignerModal';
 import { 
   type CustomDocTemplate, 
-  getCustomDocTemplatesFromStorage, 
+  fetchCustomDocTemplates,
   deleteCustomDocTemplateFromStorage 
 } from '../lib/customDocManager';
 import { BILLING_MODELS, type BillingModelType } from '../lib/subscriptionBilling';
@@ -64,7 +64,7 @@ export default function SuperAdminDashboard() {
     fetchSystemSettings();
     fetchTenants();
     fetchStaff();
-    setCustomDocTemplates(getCustomDocTemplatesFromStorage());
+    fetchCustomDocTemplates().then(list => setCustomDocTemplates(list));
   }, []);
 
   useEffect(() => {

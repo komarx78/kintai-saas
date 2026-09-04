@@ -8,7 +8,8 @@ ALTER TABLE public.tenants
 ADD COLUMN IF NOT EXISTS revision_contracts_data JSONB DEFAULT '[]'::jsonb,
 ADD COLUMN IF NOT EXISTS portal_announcements_data JSONB DEFAULT '[]'::jsonb,
 ADD COLUMN IF NOT EXISTS labor_contract_template_data JSONB DEFAULT '{}'::jsonb,
-ADD COLUMN IF NOT EXISTS qualification_masters_data JSONB DEFAULT '[]'::jsonb;
+ADD COLUMN IF NOT EXISTS qualification_masters_data JSONB DEFAULT '[]'::jsonb,
+ADD COLUMN IF NOT EXISTS custom_doc_templates JSONB DEFAULT '[]'::jsonb;
 
 -- スキーマキャッシュの即時リロード
 NOTIFY pgrst, 'reload schema';

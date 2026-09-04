@@ -97,6 +97,48 @@ export const getCustomDocTemplatesFromStorage = (tenantId?: string): CustomDocTe
   return [];
 };
 
+/**
+ * データベース（tenants / system_settings）から全社カスタム書類テンプレートを同期取得
+ */
+export const fetchCustomDocTemplates = async (tenantId?: string): Promise<CustomDocTemplate[]> => {
+  let list = getCustomDocTemplatesFromStorage(tenantId);
+  if (!tenantId) return list;
+
+  try {
+    // 1. tenants テーブルから取得
+    const { data: tData } = await supabase
+      .from('tenants')
+      .select('custom_doc_templates')
+      .eq('id', tenantId)
+      .maybeSingle();
+
+    if (tData?.custom_doc_templates && Array.isArray(tData.custom_doc_templates) && tData.custom_doc_templates.length > 0) {
+      list = tData.custom_doc_templates;
+      localStorage.setItem(`${STORAGE_KEY}_${tenantId}`, JSON.stringify(list));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+      return list;
+    }
+
+    // 2. system_settings テーブルから取得フォールバック
+    const { data: sData } = await supabase
+      .from('system_settings')
+      .select('custom_doc_templates')
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (sData?.custom_doc_templates && Array.isArray(sData.custom_doc_templates) && sData.custom_doc_templates.length > 0) {
+      list = sData.custom_doc_templates;
+      localStorage.setItem(`${STORAGE_KEY}_${tenantId}`, JSON.stringify(list));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+      return list;
+    }
+  } catch (err) {
+    console.warn('DB fetch custom doc templates notice:', err);
+  }
+
+  return list;
+};
+
 export const saveCustomDocTemplateToStorage = (template: CustomDocTemplate, tenantId?: string) => {
   try {
     const existing = getCustomDocTemplatesFromStorage(tenantId);
@@ -106,9 +148,15 @@ export const saveCustomDocTemplateToStorage = (template: CustomDocTemplate, tena
     localStorage.setItem(tenantId ? `${STORAGE_KEY}_${tenantId}` : STORAGE_KEY, JSON.stringify(updated));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
 
-    // Supabase バックアップ非同期保存
+    // Supabase DB永続化（tenants & system_settings の二重安全網）
     if (tenantId) {
       (async () => {
+        try {
+          await supabase.from('tenants').update({
+            custom_doc_templates: updated
+          }).eq('id', tenantId);
+        } catch (_) {}
+
         try {
           await supabase.from('system_settings').upsert({
             tenant_id: tenantId,
@@ -131,6 +179,21 @@ export const deleteCustomDocTemplateFromStorage = (templateId: string, tenantId?
     const updated = existing.filter(t => t.id !== templateId);
     localStorage.setItem(tenantId ? `${STORAGE_KEY}_${tenantId}` : STORAGE_KEY, JSON.stringify(updated));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+
+    if (tenantId) {
+      (async () => {
+        try {
+          await supabase.from('tenants').update({ custom_doc_templates: updated }).eq('id', tenantId);
+        } catch (_) {}
+        try {
+          await supabase.from('system_settings').upsert({
+            tenant_id: tenantId,
+            custom_doc_templates: updated,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'tenant_id' });
+        } catch (_) {}
+      })();
+    }
   } catch (e) {
     console.warn('Failed to delete custom doc template:', e);
   }

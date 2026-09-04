@@ -100,7 +100,7 @@ export async function detectFieldsWithAi(
 ]
 利用可能なsourceKey: company.name, company.address, company.corporate_number, company.representative_name, employee.name, employee.name_kana, employee.birth_date_wareki_y, employee.birth_date_m, employee.birth_date_d, employee.address, employee.phone, employee.my_number, employee.pension_number, employee.employment_insurance_number, employee.join_date_wareki, employee.base_salary, employee.bank_name, employee.account_number, employee.account_holder, employee.spouse_name`;
 
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

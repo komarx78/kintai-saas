@@ -150,10 +150,25 @@ ${tenantId || '（エラー：コード取得失敗）'}
     return saved ? parseInt(saved) : 15;
   });
 
-  const handleRoundingChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleRoundingChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = parseInt(e.target.value);
     setRoundingUnit(val);
     localStorage.setItem('mock_rounding_unit', val.toString());
+
+    if (tenantId) {
+      try {
+        const { data: tData } = await supabase.from('tenants').select('payroll_common_settings').eq('id', tenantId).maybeSingle();
+        const currentPayroll = tData?.payroll_common_settings || {};
+        await supabase.from('tenants').update({
+          payroll_common_settings: {
+            ...currentPayroll,
+            rounding_unit: val.toString()
+          }
+        }).eq('id', tenantId);
+      } catch (err) {
+        console.warn('Failed to update rounding_unit in tenants DB:', err);
+      }
+    }
   };
 
   const handleSaveBasicSettings = async () => {
@@ -188,7 +203,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
         try {
           const { data: tData } = await supabase
             .from('tenants')
-            .select('employment_rules_text, gemini_api_key')
+            .select('employment_rules_text, gemini_api_key, payroll_common_settings')
             .eq('id', tenantId)
             .maybeSingle();
 
@@ -200,6 +215,11 @@ ${tenantId || '（エラー：コード取得失敗）'}
             if (tData.gemini_api_key) {
               setGeminiApiKeyCustom(tData.gemini_api_key);
               localStorage.setItem(`gemini_api_key_${tenantId}`, tData.gemini_api_key);
+            }
+            if (tData.payroll_common_settings?.rounding_unit) {
+              const rUnit = parseInt(tData.payroll_common_settings.rounding_unit);
+              setRoundingUnit(rUnit);
+              localStorage.setItem('mock_rounding_unit', rUnit.toString());
             }
           }
         } catch (e) {
