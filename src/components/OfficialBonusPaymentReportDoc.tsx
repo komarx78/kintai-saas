@@ -1,5 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import { loadBonusDocCoordinates, type BonusDocFieldConfig } from '../lib/bonusDocCoordinates';
+import React, { useMemo, useState, useEffect } from 'react';
+import { 
+  loadBonusDocCoordinates, 
+  fetchBonusDocCoordinatesFromDb, 
+  BONUS_COORDS_UPDATE_EVENT, 
+  type BonusDocFieldConfig 
+} from '../lib/bonusDocCoordinates';
 import { BonusDocMasterInspector } from './BonusDocMasterInspector';
 
 export interface BonusReportEmployee {
@@ -129,6 +134,7 @@ const ExactPdfPageRenderer: React.FC<{
   commonDateParsed: { eraName: string; eraNum: string; y: string; m: string; d: string };
   symbolDigits: string;
   symbolKana: string;
+  coordsMap: Map<string, BonusDocFieldConfig>;
 }> = ({
   pageEmployees,
   pageIndex,
@@ -137,16 +143,12 @@ const ExactPdfPageRenderer: React.FC<{
   submissionDateParsed,
   commonDateParsed,
   symbolDigits,
-  symbolKana
+  symbolKana,
+  coordsMap
 }) => {
-  // 🎯 マスタ座標設定の取得（インスペクターで保存された値を即座に反映）
-  const coordsList = useMemo(() => loadBonusDocCoordinates(), []);
-  const coords = useMemo(() => {
-    return new Map<string, BonusDocFieldConfig>(coordsList.map(c => [c.id, c]));
-  }, [coordsList]);
-
+  // 🎯 親から渡された最新のマスタ座標マップ（インスペクターの変更がミリ秒単位で即時反映）
   const getF = (id: string, defX: number, defY: number, defSize: number, defWidth?: number) => {
-    const item = coords.get(id);
+    const item = coordsMap.get(id);
     return {
       x: item?.x !== undefined ? item.x : defX,
       y: item?.y !== undefined ? item.y : defY,
@@ -173,8 +175,8 @@ const ExactPdfPageRenderer: React.FC<{
   const fCommonM = getF('commonDateM', 46.0, 31.3, 12, 5.5);
   const fCommonD = getF('commonDateD', 54.5, 31.3, 12, 5.5);
 
-  const rowBaseTop = coords.get('rowBaseTop')?.y ?? 34.26;
-  const rowPitchY = coords.get('rowPitchY')?.y ?? 5.787;
+  const rowBaseTop = coordsMap.get('rowBaseTop')?.y ?? 34.26;
+  const rowPitchY = coordsMap.get('rowPitchY')?.y ?? 5.787;
 
   const fEmpNumber = getF('empInsuranceNumber', 5.2, 0.65, 12, 18.0);
   const fEmpKana = getF('empKana', 24.8, 0.35, 9, 30.2);
@@ -587,6 +589,48 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
   const [renderMode, setRenderMode] = useState<'exact_pdf' | 'web_table'>('exact_pdf');
   const [showInspectorModal, setShowInspectorModal] = useState(false);
 
+  // 🎯 マスタ印字座標State（インスペクターやDBとのリアルタイム同期）
+  const [fieldsList, setFieldsList] = useState<BonusDocFieldConfig[]>(() => loadBonusDocCoordinates());
+
+  // 初回DB（Supabase system_settings）からの読み込み
+  useEffect(() => {
+    fetchBonusDocCoordinatesFromDb().then(latest => {
+      if (latest && latest.length > 0) {
+        setFieldsList(latest);
+      }
+    });
+  }, []);
+
+  // リアルタイム更新イベント（同一タブ内）および storage イベント（別タブ）を監視
+  useEffect(() => {
+    const handleCoordsUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<BonusDocFieldConfig[]>;
+      if (customEvent.detail && Array.isArray(customEvent.detail)) {
+        setFieldsList(customEvent.detail);
+      } else {
+        setFieldsList(loadBonusDocCoordinates());
+      }
+    };
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'bonusDocMasterFields') {
+        setFieldsList(loadBonusDocCoordinates());
+      }
+    };
+
+    window.addEventListener(BONUS_COORDS_UPDATE_EVENT, handleCoordsUpdate);
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener(BONUS_COORDS_UPDATE_EVENT, handleCoordsUpdate);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
+  const coordsMap = useMemo(() => {
+    return new Map<string, BonusDocFieldConfig>(fieldsList.map(c => [c.id, c]));
+  }, [fieldsList]);
+
   return (
     <div className="official-bonus-doc-root font-sans text-black select-text">
       {/* 表示モード切替 ＆ マスタ微調整バー（印刷時は非表示） */}
@@ -652,14 +696,10 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setShowInspectorModal(false);
-                  // 画面を再レンダリングして最新座標を反映
-                  window.location.reload();
-                }}
+                onClick={() => setShowInspectorModal(false)}
                 className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1"
               >
-                ✕ 閉じて帳票に反映
+                ✕ 閉じる（即時反映済み）
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 bg-slate-950/50">
@@ -709,6 +749,7 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
               commonDateParsed={commonDateParsed}
               symbolDigits={symbolDigits}
               symbolKana={symbolKana}
+              coordsMap={coordsMap}
             />
           );
         }

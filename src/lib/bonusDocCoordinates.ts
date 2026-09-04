@@ -1,5 +1,9 @@
+import { supabase } from './supabase';
+
 // 日本年金機構「健康保険・厚生年金保険 被保険者賞与支払届（コード2265用紙）」
 // 原本マス目・枠内印字の精密座標マスター定義
+
+export const BONUS_COORDS_UPDATE_EVENT = 'bonus-doc-coords-updated';
 
 export interface BonusDocFieldConfig {
   id: string;
@@ -299,33 +303,68 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
   }
 ];
 
-// 設定をローカルまたはDBから読み込むヘルパー
+// デフォルト値とカスタム設定を安全にマージする関数
+export const mergeWithDefaultBonusFields = (customList: any[]): BonusDocFieldConfig[] => {
+  if (!Array.isArray(customList) || customList.length === 0) {
+    return DEFAULT_BONUS_FIELDS;
+  }
+  const map = new Map<string, any>(customList.map((p: any) => [p.id, p]));
+  return DEFAULT_BONUS_FIELDS.map(def => {
+    const custom = map.get(def.id);
+    if (custom) {
+      return {
+        ...def,
+        x: typeof custom.x === 'number' ? custom.x : def.x,
+        y: typeof custom.y === 'number' ? custom.y : def.y,
+        fontSize: typeof custom.fontSize === 'number' ? custom.fontSize : def.fontSize,
+        pitch: typeof custom.pitch === 'number' ? custom.pitch : def.pitch,
+        width: typeof custom.width === 'number' ? custom.width : def.width,
+        disabled: custom.disabled !== undefined ? custom.disabled : def.disabled
+      };
+    }
+    return def;
+  });
+};
+
+// 設定をローカルストレージから読み込むヘルパー
 export const loadBonusDocCoordinates = (): BonusDocFieldConfig[] => {
   try {
     const local = localStorage.getItem('bonusDocMasterFields');
     if (local) {
       const parsed = JSON.parse(local);
-      if (Array.isArray(parsed)) {
-        const map = new Map<string, any>(parsed.map((p: any) => [p.id, p]));
-        return DEFAULT_BONUS_FIELDS.map(def => {
-          const custom = map.get(def.id);
-          if (custom) {
-            return {
-              ...def,
-              x: custom.x !== undefined ? custom.x : def.x,
-              y: custom.y !== undefined ? custom.y : def.y,
-              fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
-              pitch: custom.pitch !== undefined ? custom.pitch : def.pitch,
-              width: custom.width !== undefined ? custom.width : def.width,
-              disabled: custom.disabled !== undefined ? custom.disabled : def.disabled
-            };
-          }
-          return def;
-        });
-      }
+      return mergeWithDefaultBonusFields(parsed);
     }
   } catch (e) {
-    console.error('Failed to load bonus doc coordinates:', e);
+    console.error('Failed to load bonus doc coordinates from localStorage:', e);
   }
   return DEFAULT_BONUS_FIELDS;
 };
+
+// 座標設定をlocalStorageに保存し、同一タブ・別コンポーネントへリアルタイムイベントを通知する
+export const broadcastBonusDocCoordinates = (fields: BonusDocFieldConfig[]) => {
+  try {
+    localStorage.setItem('bonusDocMasterFields', JSON.stringify(fields));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(BONUS_COORDS_UPDATE_EVENT, { detail: fields }));
+    }
+  } catch (e) {
+    console.error('Failed to broadcast bonus doc coordinates:', e);
+  }
+};
+
+// DB（Supabase system_settings）から最新座標を取得し、localStorageを更新して返す
+export const fetchBonusDocCoordinatesFromDb = async (): Promise<BonusDocFieldConfig[]> => {
+  try {
+    const { data } = await supabase.from('system_settings').select('bonus_doc_coordinates').limit(1).maybeSingle();
+    const saved = data?.bonus_doc_coordinates;
+    if (saved && Array.isArray(saved) && saved.length > 0) {
+      const merged = mergeWithDefaultBonusFields(saved);
+      broadcastBonusDocCoordinates(merged);
+      return merged;
+    }
+  } catch (err) {
+    console.warn('DBから賞与支払届座標の取得をスキップ（ローカル値を使用）:', err);
+  }
+  return loadBonusDocCoordinates();
+};
+

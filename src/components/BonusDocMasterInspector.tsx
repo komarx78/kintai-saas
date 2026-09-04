@@ -11,6 +11,8 @@ import {
 import { 
   DEFAULT_BONUS_FIELDS, 
   loadBonusDocCoordinates, 
+  broadcastBonusDocCoordinates,
+  fetchBonusDocCoordinatesFromDb,
   type BonusDocFieldConfig 
 } from '../lib/bonusDocCoordinates';
 
@@ -43,26 +45,8 @@ export const BonusDocMasterInspector: React.FC = () => {
   useEffect(() => {
     const fetchMaster = async () => {
       try {
-        const { data } = await supabase.from('system_settings').select('bonus_doc_coordinates').limit(1).single();
-        const saved = data?.bonus_doc_coordinates;
-        if (saved && Array.isArray(saved)) {
-          const parsedMap = new Map<string, any>(saved.map((f: any) => [f.id, f]));
-          setFields(DEFAULT_BONUS_FIELDS.map(def => {
-            const custom = parsedMap.get(def.id);
-            if (custom) {
-              return { 
-                ...def, 
-                x: custom.x !== undefined ? custom.x : def.x, 
-                y: custom.y !== undefined ? custom.y : def.y, 
-                fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize, 
-                pitch: custom.pitch !== undefined ? custom.pitch : def.pitch, 
-                width: custom.width !== undefined ? custom.width : def.width,
-                disabled: custom.disabled 
-              };
-            }
-            return def;
-          }));
-        }
+        const latest = await fetchBonusDocCoordinatesFromDb();
+        setFields(latest);
       } catch (err) {
         console.error('Error fetching bonus doc coordinates:', err);
       }
@@ -70,7 +54,7 @@ export const BonusDocMasterInspector: React.FC = () => {
     fetchMaster();
   }, []);
 
-  // 項目値の更新
+  // 項目値の更新（変更のたびにリアルタイムで帳票へブロードキャスト）
   const updateField = useCallback((id: string, key: keyof BonusDocFieldConfig, value: any) => {
     setFields(prev => {
       let finalVal = value;
@@ -79,7 +63,7 @@ export const BonusDocMasterInspector: React.FC = () => {
         finalVal = Math.round(value * precision) / precision;
       }
       const updated = prev.map(f => f.id === id ? { ...f, [key]: finalVal } : f);
-      localStorage.setItem('bonusDocMasterFields', JSON.stringify(updated));
+      broadcastBonusDocCoordinates(updated);
       return updated;
     });
   }, []);
@@ -211,13 +195,13 @@ export const BonusDocMasterInspector: React.FC = () => {
       } else {
         await supabase.from('system_settings').insert([{ bonus_doc_coordinates: fields }]);
       }
-      localStorage.setItem('bonusDocMasterFields', JSON.stringify(fields));
+      broadcastBonusDocCoordinates(fields);
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
     } catch (err) {
       console.error(err);
-      // DBカラム未作成等の場合でもローカル保存は必ず完了
-      localStorage.setItem('bonusDocMasterFields', JSON.stringify(fields));
+      // DBカラム未作成等の場合でもローカル保存＆即時通知は必ず完了
+      broadcastBonusDocCoordinates(fields);
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
     } finally {
@@ -229,7 +213,7 @@ export const BonusDocMasterInspector: React.FC = () => {
   const handleResetDefaults = () => {
     if (confirm('賞与支払届のすべての項目の座標・文字サイズを黄金比率マスター初期値にリセットしますか？')) {
       setFields(DEFAULT_BONUS_FIELDS);
-      localStorage.removeItem('bonusDocMasterFields');
+      broadcastBonusDocCoordinates(DEFAULT_BONUS_FIELDS);
     }
   };
 
