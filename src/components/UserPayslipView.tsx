@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   DollarSign, Printer, FileText, Loader2, CheckCircle2, Sparkles, X, Check,
-  CreditCard, UserCheck
+  CreditCard, UserCheck, Gift, ChevronDown
 } from 'lucide-react';
 import { OfficialPayslipDoc } from './OfficialPayslipDoc';
 import { OfficialLaborContractDoc, type LaborContractData } from './OfficialLaborContractDoc';
@@ -53,6 +53,10 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
   const [signModalDoc, setSignModalDoc] = useState<RevisionContractDoc | null>(null);
   const [isSigning, setIsSigning] = useState(false);
   const [companySettings, setCompanySettings] = useState<any>(null);
+
+  // 🎁 確定公開済み賞与データState
+  const [publishedBonusList, setPublishedBonusList] = useState<any[]>([]);
+  const [selectedBonusId, setSelectedBonusId] = useState<string>('');
 
   useEffect(() => {
     const fetchPayslips = async () => {
@@ -231,6 +235,40 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
             const { data: cmsData } = await supabase.from('company_master_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
             setCompanySettings({ ...tData, ...cmsData });
           } catch (e) {}
+        }
+
+        // 🎁 確定公開済み賞与データ（status === 'published'）の取得・同期
+        const bonusKey = tenantId ? `mf_bonus_campaigns_${tenantId}` : 'mf_bonus_campaigns_default';
+        const storedBonus = localStorage.getItem(bonusKey);
+        let myBonusList: any[] = [];
+        if (storedBonus) {
+          try {
+            const allCampaigns: any[] = JSON.parse(storedBonus);
+            allCampaigns.forEach(camp => {
+              if (camp.status === 'published' && Array.isArray(camp.records)) {
+                const myRec = camp.records.find((r: any) => 
+                  (userId && r.user_id === userId) ||
+                  (userName && r.user_name && r.user_name.replace(/\s+/g, '') === userName.replace(/\s+/g, ''))
+                );
+                if (myRec) {
+                  myBonusList.push({
+                    campaignId: camp.id,
+                    title: camp.title,
+                    bonusType: camp.bonus_type,
+                    paymentDate: camp.payment_date,
+                    assessmentPeriod: camp.assessment_period,
+                    record: myRec
+                  });
+                }
+              }
+            });
+          } catch (bErr) {
+            console.warn('Bonus parse error:', bErr);
+          }
+        }
+        setPublishedBonusList(myBonusList);
+        if (myBonusList.length > 0) {
+          setSelectedBonusId(myBonusList[0].campaignId);
         }
       } catch (e) {
         console.error('Fetch user payslip error:', e);
@@ -487,78 +525,131 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
       {/* ========================================================================= */}
       {/* 2. 🎁 賞与明細書ビュー                                                    */}
       {/* ========================================================================= */}
+      {/* ========================================================================= */}
+      {/* 2. 🎁 賞与明細書ビュー（確定公開実データ完全連動）                         */}
+      {/* ========================================================================= */}
       {activeDocTab === 'bonus' && (() => {
-        const base = userProfile.base_salary || 250000;
-        const bonusAmount = Math.round(base * 1.5);
-        const health = Math.round(bonusAmount * 0.05);
-        const pension = Math.round(bonusAmount * 0.0915);
-        const empIns = Math.round(bonusAmount * 0.006);
-        const social = health + pension + empIns;
-        const tax = Math.round((bonusAmount - social) * 0.05);
-        const net = bonusAmount - (social + tax);
+        const currentBonus = publishedBonusList.find(b => b.campaignId === selectedBonusId) || publishedBonusList[0];
+        const record = currentBonus?.record;
+
+        if (!currentBonus || !record) {
+          return (
+            <div className="bg-white rounded-3xl p-16 text-center space-y-4 border border-slate-200 shadow-sm max-w-2xl mx-auto">
+              <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto shadow-inner">
+                <Gift className="w-8 h-8" />
+              </div>
+              <h3 className="font-black text-slate-800 text-base">
+                現在公開されている賞与明細はありません
+              </h3>
+              <p className="text-xs font-bold text-slate-400 max-w-md mx-auto leading-relaxed">
+                管理者が賞与の査定・計算を行い「賞与を確定して全社員へ公開」すると、ここに正式な賞与支払明細書が表示され、確認・A4印刷・PDF保存が可能になります。
+              </p>
+            </div>
+          );
+        }
+
+        const base = record.base_salary || userProfile.base_salary || 250000;
+        const multiplier = record.multiplier || 1.5;
+        const adjustment = record.adjustment_amount || 0;
+        const bonusAmount = record.bonus_gross;
+        const health = record.health_insurance;
+        const pension = record.welfare_pension;
+        const empIns = record.employment_insurance;
+        const social = record.social_insurance_total;
+        const tax = record.income_tax;
+        const totalDeduction = record.deduction_total;
+        const net = record.net_pay;
 
         return (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm print:hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm print:hidden">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 text-white flex items-center justify-center shadow-lg shadow-indigo-500/25">
-                  <FileText className="w-6 h-6" />
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/20">
+                  <Gift className="w-6 h-6" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-black text-slate-800 tracking-tight">賞与明細書</h1>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-xl font-black text-slate-800 tracking-tight">賞与支払明細書</h1>
+                    <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                      確定公開済
+                    </span>
+                  </div>
                   <p className="text-xs font-bold text-slate-500 mt-0.5">
                     支給賞与額・社会保険料および源泉所得税控除・振込手取り額
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
+                {publishedBonusList.length > 1 && (
+                  <div className="relative">
+                    <select
+                      value={selectedBonusId}
+                      onChange={(e) => setSelectedBonusId(e.target.value)}
+                      className="appearance-none bg-slate-50 border border-slate-300 text-slate-800 text-xs font-black rounded-xl pl-3 pr-8 py-2 focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                    >
+                      {publishedBonusList.map(b => (
+                        <option key={b.campaignId} value={b.campaignId}>
+                          {b.title}（支給: {b.paymentDate}）
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
+                  </div>
+                )}
+
                 <button
                   onClick={() => window.print()}
-                  className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 rounded-xl text-xs font-black shadow-sm transition cursor-pointer"
+                  className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-black shadow-sm transition cursor-pointer"
                 >
-                  <Printer className="w-4 h-4 text-cyan-400" />
+                  <Printer className="w-4 h-4 text-amber-300" />
                   A4印刷 / PDF保存
                 </button>
               </div>
             </div>
 
             {/* 賞与明細カード本体 */}
-            <div className="bg-white p-8 rounded-2xl border border-slate-300 text-slate-900 font-sans text-xs max-w-4xl mx-auto shadow-sm print:shadow-none print:border-none print:p-0">
+            <div className="bg-white p-8 rounded-3xl border border-slate-300 text-slate-900 font-sans text-xs max-w-4xl mx-auto shadow-sm print:shadow-none print:border-none print:p-0">
               <div className="border-b-2 border-slate-900 pb-3 mb-5 flex items-end justify-between">
                 <div>
                   <div className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
                     OFFICIAL BONUS STATEMENT
                   </div>
                   <h2 className="text-xl font-black text-slate-950">
-                    令和{new Date().getFullYear() - 2018}年 夏季賞与支払明細書
+                    {currentBonus.title} 明細書
                   </h2>
                 </div>
                 <div className="text-right text-xs">
                   <div className="font-black text-slate-900">{tenantName}</div>
-                  <div className="text-slate-500 text-[10px]">支給日: {new Date().getFullYear()}年7月10日</div>
+                  <div className="text-slate-500 text-[10px]">支給日: {currentBonus.paymentDate}</div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 mb-5">
+              <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 mb-5">
                 <div><span className="text-slate-400 text-[10px]">氏名:</span> <span className="font-black text-sm">{userName} 殿</span></div>
-                <div><span className="text-slate-400 text-[10px]">所属:</span> <span className="font-bold">{userProfile.department}</span></div>
-                <div><span className="text-slate-400 text-[10px]">算定基準:</span> <span className="font-bold">1.5 ヶ月分</span></div>
+                <div><span className="text-slate-400 text-[10px]">所属:</span> <span className="font-bold">{record.department || userProfile.department || '本社'}</span></div>
+                <div><span className="text-slate-400 text-[10px]">算定基準:</span> <span className="font-bold text-indigo-700">{multiplier} ヶ月分</span></div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="border border-slate-300 rounded-xl overflow-hidden">
-                  <div className="bg-emerald-50 p-2 font-black text-emerald-950 border-b border-slate-300 flex justify-between">
+                <div className="border border-slate-300 rounded-2xl overflow-hidden">
+                  <div className="bg-emerald-50 p-2.5 font-black text-emerald-950 border-b border-slate-300 flex justify-between">
                     <span>支給の部</span>
                     <span className="font-mono">金額</span>
                   </div>
-                  <div className="p-3 space-y-2">
+                  <div className="p-3.5 space-y-2">
                     <div className="flex justify-between">
-                      <span>算定基準基本給</span>
+                      <span className="text-slate-600">算定基準基本給</span>
                       <span className="font-mono">¥{base.toLocaleString()}</span>
                     </div>
-                    <div className="flex justify-between font-bold">
-                      <span>賞与額面総支給額</span>
+                    {adjustment !== 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">調整手当・加算額</span>
+                        <span className="font-mono">¥{adjustment.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold pt-1 border-t border-slate-200">
+                      <span className="text-slate-900">賞与額面総支給額</span>
                       <span className="font-mono text-emerald-700">¥{bonusAmount.toLocaleString()}</span>
                     </div>
                   </div>
@@ -568,47 +659,58 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
                   </div>
                 </div>
 
-                <div className="border border-slate-300 rounded-xl overflow-hidden">
-                  <div className="bg-rose-50 p-2 font-black text-rose-950 border-b border-slate-300 flex justify-between">
+                <div className="border border-slate-300 rounded-2xl overflow-hidden">
+                  <div className="bg-rose-50 p-2.5 font-black text-rose-950 border-b border-slate-300 flex justify-between">
                     <span>控除の部</span>
                     <span className="font-mono">金額</span>
                   </div>
-                  <div className="p-3 space-y-1.5 text-[11px]">
+                  <div className="p-3.5 space-y-1.5 text-[11px]">
                     <div className="flex justify-between">
-                      <span>健康保険料</span>
+                      <span className="text-slate-600">健康保険料</span>
                       <span className="font-mono">¥{health.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>厚生年金保険料</span>
+                      <span className="text-slate-600">厚生年金保険料</span>
                       <span className="font-mono">¥{pension.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>雇用保険料</span>
+                      <span className="text-slate-600">雇用保険料</span>
                       <span className="font-mono">¥{empIns.toLocaleString()}</span>
                     </div>
+                    <div className="flex justify-between pt-1 border-t border-slate-200 font-bold text-slate-700">
+                      <span>社会保険料計</span>
+                      <span className="font-mono text-rose-600">¥{social.toLocaleString()}</span>
+                    </div>
                     <div className="flex justify-between">
-                      <span>源泉所得税</span>
+                      <span className="text-slate-600">源泉所得税</span>
                       <span className="font-mono">¥{tax.toLocaleString()}</span>
                     </div>
                   </div>
                   <div className="bg-slate-50 p-2.5 border-t border-slate-300 flex justify-between font-black">
                     <span>控除合計額</span>
-                    <span className="font-mono text-sm text-rose-700">¥{(social + tax).toLocaleString()}</span>
+                    <span className="font-mono text-sm text-rose-700">¥{totalDeduction.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-slate-900 text-white p-4 rounded-xl flex items-center justify-between mb-4">
+              <div className="bg-slate-900 text-white p-4 rounded-2xl flex items-center justify-between mb-4 shadow-sm">
                 <div>
                   <div className="text-[10px] text-slate-400">差引支給額（指定口座振込手取り額）</div>
                   <div className="text-xs font-bold text-slate-300">
-                    総支給 ¥{bonusAmount.toLocaleString()} − 総控除 ¥{(social + tax).toLocaleString()}
+                    総支給 ¥{bonusAmount.toLocaleString()} − 総控除 ¥{totalDeduction.toLocaleString()}
                   </div>
                 </div>
                 <div className="text-2xl font-black text-amber-400 font-mono">
                   ¥{net.toLocaleString()}
                 </div>
               </div>
+
+              {record.memo && (
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4 text-[11px] text-slate-600">
+                  <span className="font-bold text-slate-400 mr-2">考課・支給備考:</span>
+                  {record.memo}
+                </div>
+              )}
 
               <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-[10px] text-slate-500 relative">
                 <div>振込先: {userProfile.bank_name} {userProfile.branch_name}（{userProfile.account_type || '普通'} {userProfile.account_number}）</div>

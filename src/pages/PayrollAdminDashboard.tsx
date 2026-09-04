@@ -4,9 +4,10 @@ import { supabase } from '../lib/supabase';
 import { PayslipManagement } from '../components/PayslipManagement';
 import { SalaryLedgerDashboard } from '../components/SalaryLedgerDashboard';
 import { OfficialReportsCenter } from '../components/OfficialReportsCenter';
+import { BonusManagement } from '../components/BonusManagement';
 import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
-import { DollarSign, ArrowLeft, LogOut, TrendingUp, FileText } from 'lucide-react';
+import { DollarSign, ArrowLeft, LogOut, TrendingUp, FileText, Gift } from 'lucide-react';
 
 export default function PayrollAdminDashboard() {
   const navigate = useNavigate();
@@ -14,7 +15,7 @@ export default function PayrollAdminDashboard() {
   const [tenantName, setTenantName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'payslip' | 'ledger' | 'reports'>('ledger');
+  const [activeTab, setActiveTab] = useState<'payslip' | 'ledger' | 'reports' | 'bonus'>('ledger');
 
   useEffect(() => {
     fetchProfile();
@@ -143,6 +144,20 @@ export default function PayrollAdminDashboard() {
               月別給与計算・明細発行
             </button>
             <button
+              onClick={() => setActiveTab('bonus')}
+              className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+                activeTab === 'bonus'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Gift className="w-4 h-4 text-amber-300" />
+              賞与計算・査定 ＆ 明細発行
+              <span className="text-[10px] bg-amber-400 text-slate-900 font-black px-1.5 py-0.2 rounded-full shadow-2xs">
+                賞与
+              </span>
+            </button>
+            <button
               onClick={() => setActiveTab('reports')}
               className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
                 activeTab === 'reports'
@@ -167,6 +182,8 @@ export default function PayrollAdminDashboard() {
             <SalaryLedgerDashboard tenantId={tenantId} />
           ) : activeTab === 'payslip' ? (
             <PayslipManagement tenantId={tenantId} />
+          ) : activeTab === 'bonus' ? (
+            <BonusManagement tenantId={tenantId} />
           ) : (
             <OfficialReportsCenter tenantId={tenantId} />
           )
