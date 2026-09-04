@@ -33,8 +33,9 @@ import {
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
   FolderOpen, Settings, Clock, Smartphone, AlertCircle, ArrowRight, CornerDownLeft,
   Copy, DollarSign, Sparkles, Award, ShieldCheck, FileCheck,
-  ExternalLink
+  ExternalLink, Gift
 } from 'lucide-react';
+import { BonusPaymentReportModal } from '../components/BonusPaymentReportModal';
 import { 
   getQualificationsFromStorage, 
   type QualificationMaster 
@@ -267,6 +268,7 @@ export default function OnboardingAdminDashboard() {
 
   // 📁 年金事務所 標準報酬決定通知書 ＆ 保険料額表 全社保管庫State
   const [remunerationCabinetOpen, setRemunerationCabinetOpen] = useState(false);
+  const [bonusReportModalOpen, setBonusReportModalOpen] = useState(false);
   const [isCompressingNotice, setIsCompressingNotice] = useState(false);
   const [remunerationDocs, setRemunerationDocs] = useState<Array<{
     id: string;
@@ -6440,15 +6442,26 @@ export default function OnboardingAdminDashboard() {
                       全国健康保険協会（協会けんぽ）が発行する都道府県別公式保険料額表
                     </p>
                   </div>
-                  <a
-                    href="https://www.kyoukaikenpo.or.jp/g7/cat330/sb8200/r08/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 transition cursor-pointer self-start sm:self-auto"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    協会けんぽ 公式都道府県別額表を開く
-                  </a>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setBonusReportModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-700 hover:to-pink-700 text-white font-black text-xs rounded-xl shadow-xs transition cursor-pointer self-start sm:self-auto"
+                      title="日本年金機構公式様式コード2265に準拠した被保険者賞与支払届を作成・A4印刷"
+                    >
+                      <Gift className="w-3.5 h-3.5" />
+                      🎁 被保険者賞与支払届を作成
+                    </button>
+                    <a
+                      href="https://www.kyoukaikenpo.or.jp/g7/cat330/sb8200/r08/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 transition cursor-pointer self-start sm:self-auto"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      協会けんぽ 公式額表を開く
+                    </a>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
@@ -6683,6 +6696,39 @@ export default function OnboardingAdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* 🎁 日本年金機構公式 被保険者賞与支払届（様式コード2265）モーダル */}
+      <BonusPaymentReportModal
+        isOpen={bonusReportModalOpen}
+        onClose={() => setBonusReportModalOpen(false)}
+        tenantId={tenantId || ''}
+        tenantInfo={tenantInfo}
+        employees={employees}
+        onSaveNoticeToCabinet={fileData => {
+          if (!tenantId) return;
+          try {
+            const cabKey = `remuneration_docs_${tenantId}`;
+            const cabRaw = localStorage.getItem(cabKey);
+            const currentDocs = cabRaw ? JSON.parse(cabRaw) : [];
+            const newDoc = {
+              id: `bonus-report-${Date.now()}`,
+              fiscal_year: fileData.fiscal_year,
+              title: fileData.title,
+              doc_type: 'nenkin_notice' as const,
+              file_url: fileData.file_url,
+              filename: fileData.filename,
+              uploaded_at: new Date().toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+              uploaded_by: currentAdminName || '労務管理者',
+              note: fileData.note
+            };
+            const updated = [newDoc, ...currentDocs];
+            setRemunerationDocs(updated);
+            localStorage.setItem(cabKey, JSON.stringify(updated));
+          } catch (e) {
+            console.warn('Save bonus to cabinet failed:', e);
+          }
+        }}
+      />
 
       {/* ❓ 使い方ガイドモーダル */}
       <HelpGuideModal 

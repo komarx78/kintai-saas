@@ -6,9 +6,10 @@ import {
   Users, Sparkles, Loader2, X, FileSpreadsheet,
   Settings as SettingsIcon, Download, UserCheck, CreditCard, Building2, Save,
   ChevronDown, ChevronUp, Clock, Calendar, TrendingUp, MapPin, LayoutGrid, List, RotateCcw,
-  ShieldCheck
+  ShieldCheck, Gift
 } from 'lucide-react';
 import { OfficialPayslipDoc } from './OfficialPayslipDoc';
+import { BonusPaymentReportModal } from './BonusPaymentReportModal';
 import { 
   calculatePayroll, 
   type EmployeePayrollProfile, 
@@ -110,6 +111,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
   });
 
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [bonusReportModalOpen, setBonusReportModalOpen] = useState(false);
 
   const [editModal, setEditModal] = useState<{
     isOpen: boolean;
@@ -1626,13 +1628,26 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 </span>
               </div>
             </div>
-            <button
-              onClick={() => setSettingsModalOpen(true)}
-              className="text-[11px] bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            >
-              <SettingsIcon className="w-3.5 h-3.5 text-indigo-600" />
-              料率・事業設定を変更
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBonusReportModalOpen(true)}
+                className="text-[11px] bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-700 hover:to-pink-700 text-white font-black px-3 py-1.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                title="日本年金機構公式様式コード2265に準拠した被保険者賞与支払届を作成・A4印刷"
+              >
+                <Gift className="w-3.5 h-3.5" />
+                🎁 賞与支払届（年金機構公式）
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSettingsModalOpen(true)}
+                className="text-[11px] bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              >
+                <SettingsIcon className="w-3.5 h-3.5 text-indigo-600" />
+                料率・事業設定を変更
+              </button>
+            </div>
           </div>
         );
       })()}
@@ -3807,6 +3822,38 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           </div>
         </div>
       )}
+
+      {/* 🎁 日本年金機構公式 被保険者賞与支払届（様式コード2265）モーダル */}
+      <BonusPaymentReportModal
+        isOpen={bonusReportModalOpen}
+        onClose={() => setBonusReportModalOpen(false)}
+        tenantId={tenantId || ''}
+        tenantInfo={tenantInfo}
+        employees={employees}
+        payrollProfiles={payrollProfiles}
+        onSaveNoticeToCabinet={fileData => {
+          if (!tenantId) return;
+          try {
+            const cabKey = `remuneration_docs_${tenantId}`;
+            const cabRaw = localStorage.getItem(cabKey);
+            const currentDocs = cabRaw ? JSON.parse(cabRaw) : [];
+            const newDoc = {
+              id: `bonus-report-${Date.now()}`,
+              fiscal_year: fileData.fiscal_year,
+              title: fileData.title,
+              doc_type: 'nenkin_notice' as const,
+              file_url: fileData.file_url,
+              filename: fileData.filename,
+              uploaded_at: new Date().toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+              uploaded_by: '給与担当者',
+              note: fileData.note
+            };
+            localStorage.setItem(cabKey, JSON.stringify([newDoc, ...currentDocs]));
+          } catch (e) {
+            console.warn('Save bonus to cabinet failed:', e);
+          }
+        }}
+      />
     </div>
   );
 };
