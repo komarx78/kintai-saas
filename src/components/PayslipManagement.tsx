@@ -349,8 +349,10 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       dependents_count: 0,
       birth_date: '',
       health_insurance_enabled: true,
+      health_standard_monthly_remuneration: null,
       nursing_insurance_enabled: null,
       pension_insurance_enabled: true,
+      pension_standard_monthly_remuneration: null,
       employment_insurance_enabled: true,
       resident_tax_monthly: 0,
       tax_bracket: 'kou',
@@ -581,8 +583,10 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           dependents_count: pay?.dependents_count ?? localBackup?.dependents_count ?? 0,
           birth_date: bDate,
           health_insurance_enabled: onb?.health_insurance_joined ?? pay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? true,
+          health_standard_monthly_remuneration: pay?.health_standard_monthly_remuneration ?? localPayProfile?.health_standard_monthly_remuneration ?? null,
           nursing_insurance_enabled: pay?.nursing_insurance_enabled ?? null,
           pension_insurance_enabled: onb?.pension_insurance_joined ?? pay?.pension_insurance_enabled ?? localBackup?.pension_insurance_joined ?? true,
+          pension_standard_monthly_remuneration: pay?.pension_standard_monthly_remuneration ?? localPayProfile?.pension_standard_monthly_remuneration ?? null,
           employment_insurance_enabled: onb?.employment_insurance_joined ?? pay?.employment_insurance_enabled ?? localBackup?.employment_insurance_joined ?? true,
           resident_tax_monthly: pay?.resident_tax_monthly ?? 0,
           tax_bracket: pay?.tax_bracket || 'kou',
@@ -2295,29 +2299,56 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                     {(() => {
                                       const prefCode = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '25';
                                       const prefData = getPrefectureRate(prefCode);
+                                      const pProf = payrollProfiles[slip.user_id];
                                       return (
-                                        <div className="flex justify-between">
-                                          <span>健康保険料 ({prefData.name} {(prefData.healthRate * 50).toFixed(3)}%):</span>
-                                          <span className="font-bold text-slate-800">¥{(slip.health_insurance || 0).toLocaleString()}</span>
-                                        </div>
+                                        <>
+                                          <div className="flex justify-between">
+                                            <span>
+                                              健康保険料 ({prefData.name} {(prefData.healthRate * 50).toFixed(3)}%)
+                                              {pProf?.health_standard_monthly_remuneration ? (
+                                                <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded-md ml-1.5 font-bold">
+                                                  標報: ¥{pProf.health_standard_monthly_remuneration.toLocaleString()}
+                                                </span>
+                                              ) : null}
+                                              :
+                                            </span>
+                                            <span className="font-bold text-slate-800">¥{(slip.health_insurance || 0).toLocaleString()}</span>
+                                          </div>
+                                          {slip.nursing_insurance && slip.nursing_insurance > 0 ? (
+                                            <div className="flex justify-between text-purple-600">
+                                              <span>介護保険料（40〜64歳 0.8%）:</span>
+                                              <span>¥{slip.nursing_insurance.toLocaleString()}</span>
+                                            </div>
+                                          ) : null}
+                                          <div className="flex justify-between">
+                                            <span>
+                                              厚生年金保険料 (9.15%)
+                                              {pProf?.pension_standard_monthly_remuneration ? (
+                                                <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded-md ml-1.5 font-bold">
+                                                  標報: ¥{pProf.pension_standard_monthly_remuneration.toLocaleString()}
+                                                </span>
+                                              ) : null}
+                                              :
+                                            </span>
+                                            <span className="font-bold text-slate-800">¥{(slip.pension_insurance || 0).toLocaleString()}</span>
+                                          </div>
+                                        </>
                                       );
                                     })()}
-                                    {slip.nursing_insurance && slip.nursing_insurance > 0 ? (
-                                      <div className="flex justify-between text-purple-600">
-                                        <span>介護保険料（40〜64歳 0.8%）:</span>
-                                        <span>¥{slip.nursing_insurance.toLocaleString()}</span>
-                                      </div>
-                                    ) : null}
-                                    <div className="flex justify-between">
-                                      <span>厚生年金保険料:</span>
-                                      <span>¥{(slip.pension_insurance || 0).toLocaleString()}</span>
-                                    </div>
                                     <div className="flex justify-between">
                                       <span>雇用保険料（0.6%）:</span>
                                       <span>¥{(slip.employment_insurance || 0).toLocaleString()}</span>
                                     </div>
                                     <div className="flex justify-between text-indigo-700 font-bold">
-                                      <span>所得税（源泉徴収税額）:</span>
+                                      <span>
+                                        所得税（源泉徴収税額）
+                                        {payrollProfiles[slip.user_id]?.dependents_count !== undefined && (
+                                          <span className="text-[10px] text-indigo-500 font-normal ml-1">
+                                            [扶養: {payrollProfiles[slip.user_id]?.dependents_count || 0}人]
+                                          </span>
+                                        )}
+                                        :
+                                      </span>
                                       <span>¥{(slip.income_tax || 0).toLocaleString()}</span>
                                     </div>
                                     {slip.resident_tax && slip.resident_tax > 0 ? (
@@ -2626,6 +2657,50 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                     />
                     <span className="text-[11px] font-bold text-slate-700">雇用保険</span>
                   </label>
+                </div>
+
+                {/* 🏛️ 標準報酬月額（算定基礎届・決定通知書固定設定） */}
+                <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-200/80 mb-3 space-y-2">
+                  <div className="text-[11px] font-black text-indigo-950 flex items-center justify-between">
+                    <span>標準報酬月額（算定基礎届・決定通知書による固定設定）</span>
+                    <span className="text-[10px] text-indigo-600 font-bold">※空欄時は支給総額から自動等級判定</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">健康保険 標準報酬月額 (円)</label>
+                      <input
+                        type="number"
+                        step="1000"
+                        placeholder="例: 260000（空欄で自動判定）"
+                        value={profileModal.profile.health_standard_monthly_remuneration ?? ''}
+                        onChange={e => setProfileModal({
+                          ...profileModal,
+                          profile: { 
+                            ...profileModal.profile, 
+                            health_standard_monthly_remuneration: e.target.value !== '' ? parseInt(e.target.value, 10) : null 
+                          }
+                        })}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-mono font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">厚生年金 標準報酬月額 (円)</label>
+                      <input
+                        type="number"
+                        step="1000"
+                        placeholder="例: 260000（空欄で自動判定）"
+                        value={profileModal.profile.pension_standard_monthly_remuneration ?? ''}
+                        onChange={e => setProfileModal({
+                          ...profileModal,
+                          profile: { 
+                            ...profileModal.profile, 
+                            pension_standard_monthly_remuneration: e.target.value !== '' ? parseInt(e.target.value, 10) : null 
+                          }
+                        })}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-mono font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
