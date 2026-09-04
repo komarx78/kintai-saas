@@ -441,7 +441,27 @@ export default function SuperAdminDashboard() {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-slate-600 font-mono">
-                          {tenant.trial_ends_at ? new Date(tenant.trial_ends_at).toLocaleDateString('ja-JP') : '-'}
+                          {tenant.trial_ends_at ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span>{new Date(tenant.trial_ends_at).toLocaleDateString('ja-JP')}</span>
+                              {tenant.plan_type === 'trial' && (() => {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const target = new Date(tenant.trial_ends_at);
+                                target.setHours(0, 0, 0, 0);
+                                const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                if (diffDays < 0) {
+                                  return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-700 w-fit">期限切れ ({Math.abs(diffDays)}日経過)</span>;
+                                } else if (diffDays <= 7) {
+                                  return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 w-fit">残り{diffDays}日（要フォロー）</span>;
+                                } else {
+                                  return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 w-fit">残り{diffDays}日</span>;
+                                }
+                              })()}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-[11px]">- (無期限)</span>
+                          )}
                         </td>
                         <td className="py-3 px-4">
                           <span className="flex items-center gap-1 text-emerald-600 font-bold">
@@ -800,6 +820,20 @@ export default function SuperAdminDashboard() {
                   />
                   <p className="text-[9px] text-slate-400 mt-1">「全社定額制」選択時の月額料金</p>
                 </div>
+
+                <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200">
+                  <label className="block text-[11px] font-bold text-amber-900 mb-1 flex items-center justify-between">
+                    <span>新規登録 無料トライアル日数 (日)</span>
+                    <span className="text-amber-600 text-[10px] font-bold">★全社共通初期値</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={sysPrices.default_trial_days}
+                    onChange={e => setSysPrices(prev => ({ ...prev, default_trial_days: Number(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-amber-300 rounded-lg p-2 text-xs font-bold font-mono text-slate-800"
+                  />
+                  <p className="text-[9px] text-amber-700 mt-1">企業アカウント新規発行時の無料試用期間日数（初期値30日）</p>
+                </div>
               </div>
 
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
@@ -892,11 +926,30 @@ export default function SuperAdminDashboard() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">プラン種別</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700">プラン種別</label>
+                    {editingTenant.plan_type !== 'paid' && editingTenant.plan_type !== 'standard' && editingTenant.plan_type !== 'pro' ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditingTenant({ ...editingTenant, plan_type: 'paid' })}
+                        className="text-[10px] text-emerald-600 font-black hover:underline cursor-pointer"
+                      >
+                        ⚡有料本契約へ切替
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingTenant({ ...editingTenant, plan_type: 'trial' })}
+                        className="text-[10px] text-amber-600 font-black hover:underline cursor-pointer"
+                      >
+                        ↩トライアルへ切替
+                      </button>
+                    )}
+                  </div>
                   <select
                     value={editingTenant.plan_type || 'trial'}
                     onChange={e => setEditingTenant({ ...editingTenant, plan_type: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                    className="w-full p-2.5 border border-slate-300 rounded-xl font-bold"
                   >
                     <option value="trial">トライアル</option>
                     <option value="standard">スタンダード</option>
@@ -906,13 +959,55 @@ export default function SuperAdminDashboard() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">トライアル期限</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700">トライアル期限</label>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        title="現在の期限または本日から30日延長"
+                        onClick={() => {
+                          const base = editingTenant.trial_ends_at ? new Date(editingTenant.trial_ends_at) : new Date();
+                          const targetDate = isNaN(base.getTime()) ? new Date() : base;
+                          targetDate.setDate(targetDate.getDate() + 30);
+                          setEditingTenant({ ...editingTenant, trial_ends_at: targetDate.toISOString().slice(0, 10) });
+                        }}
+                        className="px-1.5 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded text-[10px] font-black cursor-pointer transition"
+                      >
+                        +30日延長
+                      </button>
+                      <button
+                        type="button"
+                        title="期限設定を解除（無期限化）"
+                        onClick={() => setEditingTenant({ ...editingTenant, trial_ends_at: null })}
+                        className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[10px] font-bold cursor-pointer transition"
+                      >
+                        クリア
+                      </button>
+                    </div>
+                  </div>
                   <input
                     type="date"
                     value={editingTenant.trial_ends_at ? editingTenant.trial_ends_at.slice(0, 10) : ''}
                     onChange={e => setEditingTenant({ ...editingTenant, trial_ends_at: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                    className="w-full p-2.5 border border-slate-300 rounded-xl font-mono"
                   />
+                  {editingTenant.trial_ends_at && (
+                    <div className="mt-1 text-[10px] flex items-center justify-between text-slate-500">
+                      <span>設定期限: {new Date(editingTenant.trial_ends_at).toLocaleDateString('ja-JP')}</span>
+                      {(() => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const target = new Date(editingTenant.trial_ends_at);
+                        target.setHours(0, 0, 0, 0);
+                        const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                        if (diffDays < 0) {
+                          return <span className="text-red-600 font-bold">期限切れ（{Math.abs(diffDays)}日前）</span>;
+                        } else {
+                          return <span className="text-indigo-600 font-bold">本日より残り{diffDays}日</span>;
+                        }
+                      })()}
+                    </div>
+                  )}
                 </div>
               </div>
 
