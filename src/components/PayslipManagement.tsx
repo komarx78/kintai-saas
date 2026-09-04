@@ -523,9 +523,17 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         console.warn('employee_document_submissions fetch error:', e);
       }
       const userSubMap = new Map<string, any[]>();
+      const nameSubMap = new Map<string, any[]>();
       subList.forEach(s => {
-        if (!userSubMap.has(s.user_id)) userSubMap.set(s.user_id, []);
-        userSubMap.get(s.user_id)!.push(s);
+        if (s.user_id) {
+          if (!userSubMap.has(s.user_id)) userSubMap.set(s.user_id, []);
+          userSubMap.get(s.user_id)!.push(s);
+        }
+        const sName = (s.data?.name || s.user_name || '').replace(/\s+/g, '');
+        if (sName) {
+          if (!nameSubMap.has(sName)) nameSubMap.set(sName, []);
+          nameSubMap.get(sName)!.push(s);
+        }
       });
       
       const profileMap: Record<string, EmployeePayrollProfile> = {};
@@ -543,16 +551,21 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
         const bDate = onb?.birth_date || u.birth_date || pay?.birth_date || localBackup?.birth_date || '';
         
-        // 提出書類からの扶養親族数の自動抽出（大元SSOT）
+        // 提出書類からの扶養親族数の自動抽出（大元SSOT: ユーザーID ＋ 氏名完全照合）
+        const cleanUName = (u.name || '').replace(/\s+/g, '');
         const uSubs = userSubMap.get(u.id) || [];
-        const depSub = uSubs.find(s => s.document_type === 'dependents_form' || s.document_type === 'tax_withholding');
+        const nSubs = nameSubMap.get(cleanUName) || [];
+        const combinedSubs = [...uSubs, ...nSubs];
+        const depSub = combinedSubs.find(s => s.document_type === 'dependents_form' || s.document_type === 'tax_withholding');
         const depDoc = depSub?.data || {};
         const subDepCount = depDoc.dependents_count !== undefined 
           ? Number(depDoc.dependents_count) 
           : (Array.isArray(depDoc.dependents) ? depDoc.dependents.length : undefined);
-        const resolvedDepCount = subDepCount !== undefined 
-          ? subDepCount 
-          : (pay?.dependents_count ?? onb?.dependents_count ?? localBackup?.dependents_count ?? 0);
+        const resolvedDepCount = (pay?.dependents_count !== undefined && pay?.dependents_count !== null)
+          ? pay.dependents_count
+          : (subDepCount !== undefined 
+              ? subDepCount 
+              : (onb?.dependents_count ?? localBackup?.dependents_count ?? 0));
 
         // 最新の給与プロファイル（ローカルストレージ改定データを含む）
         let localPayProfile: any = null;
@@ -978,9 +991,14 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         const { data: subData } = await supabase
           .from('employee_document_submissions')
           .select('*')
-          .eq('tenant_id', tenantId)
-          .eq('user_id', userId);
-        const depSub = (subData || []).find((s: any) => s.document_type === 'dependents_form' || s.document_type === 'tax_withholding');
+          .eq('tenant_id', tenantId);
+        const cleanEmpName = (emp.name || '').replace(/\s+/g, '');
+        const depSub = (subData || []).find((s: any) => {
+          const isUserMatch = s.user_id === userId;
+          const cleanSubName = (s.data?.name || s.user_name || '').replace(/\s+/g, '');
+          const isNameMatch = !!(cleanEmpName && cleanSubName && cleanEmpName === cleanSubName);
+          return (isUserMatch || isNameMatch) && (s.document_type === 'dependents_form' || s.document_type === 'tax_withholding');
+        });
         if (depSub?.data) {
           const d = depSub.data;
           if (d.dependents_count !== undefined) subDepCount = Number(d.dependents_count);
@@ -989,9 +1007,11 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       } catch (e) {}
 
       const cachedProf = payrollProfiles[userId];
-      const resolvedDepCount = subDepCount !== undefined
-        ? subDepCount
-        : (dbPay?.dependents_count ?? dbOnb?.dependents_count ?? localBackup?.dependents_count ?? cachedProf?.dependents_count ?? 0);
+      const resolvedDepCount = (dbPay?.dependents_count !== undefined && dbPay?.dependents_count !== null)
+        ? dbPay.dependents_count
+        : (subDepCount !== undefined
+            ? subDepCount
+            : (dbOnb?.dependents_count ?? localBackup?.dependents_count ?? cachedProf?.dependents_count ?? 0));
 
       const resolvedProf: EmployeePayrollProfile = {
         tenant_id: tenantId,
@@ -1063,6 +1083,74 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     } catch (err: any) {
       console.error(err);
       alert('再計算に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 👨‍👩‍👧 扶養親族数の即時クイック更新 ＆ 給与即時再計算（SSOT完全同期）
+  const handleQuickUpdateDependents = async (userId: string, newCount: number) => {
+    if (!tenantId) return;
+    setIsSaving(true);
+    try {
+      // 0. Reactステートを即時更新
+      setPayrollProfiles(prev => ({
+        ...prev,
+        [userId]: {
+          ...(prev[userId] || getInitialProfile(tenantId, userId)),
+          dependents_count: newCount
+        }
+      }));
+
+      // 0.5. LocalStorage の payroll_profiles を更新
+      try {
+        const rawPay = localStorage.getItem(`payroll_profiles_${tenantId}`);
+        const parsedPay = rawPay ? JSON.parse(rawPay) : {};
+        if (parsedPay[userId]) {
+          parsedPay[userId].dependents_count = newCount;
+          localStorage.setItem(`payroll_profiles_${tenantId}`, JSON.stringify(parsedPay));
+        }
+      } catch (e) {}
+
+      // 1. employee_payroll_profiles に保存
+      try {
+        await supabase
+          .from('employee_payroll_profiles')
+          .upsert({
+            tenant_id: tenantId,
+            user_id: userId,
+            dependents_count: newCount,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'tenant_id,user_id' });
+      } catch (e) {
+        console.warn('payroll profile dependents update error:', e);
+      }
+
+      // 2. employee_onboarding_profiles に保存
+      try {
+        await supabase
+          .from('employee_onboarding_profiles')
+          .upsert({
+            tenant_id: tenantId,
+            user_id: userId,
+            dependents_count: newCount,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'tenant_id,user_id' });
+      } catch (e) {}
+
+      // 3. LocalStorage バックアップに保存
+      try {
+        const key = `employee_master_backup_${userId}`;
+        const raw = localStorage.getItem(key);
+        const parsed = raw ? JSON.parse(raw) : {};
+        localStorage.setItem(key, JSON.stringify({ ...parsed, dependents_count: newCount, updated_at: new Date().toISOString() }));
+      } catch (e) {}
+
+      // 4. 即座に最新マスタで再計算を実行！
+      await handleRecalculateSingle(userId);
+    } catch (err: any) {
+      console.error('Quick update dependents error:', err);
+      alert('扶養親族数の変更に失敗しました: ' + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -1749,12 +1837,24 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       {/* 給与台帳テーブル */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-white">
-          <div className="flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-indigo-600" />
-            <h3 className="font-black text-slate-800 text-base">
-              {currentYearMonth}度 給与明細一覧
-            </h3>
-            <span className="text-xs text-slate-400 font-bold ml-1">（全{payslips.length}名）</span>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-indigo-600" />
+              <h3 className="font-black text-slate-800 text-base">
+                {currentYearMonth}度 給与明細一覧
+              </h3>
+              <span className="text-xs text-slate-400 font-bold ml-1">（全{payslips.length}名）</span>
+            </div>
+
+            <button
+              onClick={handleRecalculateAll}
+              disabled={isSaving || payslips.length === 0}
+              className="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-black text-xs rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="大元マスタ（標準報酬月額・住民税特別徴収・扶養親族等）の最新データで全員分の明細を一括再計算します"
+            >
+              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+              🔄 全員分一括再計算
+            </button>
           </div>
 
           {/* 表示形式切り替えタブ */}
@@ -1813,8 +1913,6 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             {payslips.map(slip => {
               const prof = payrollProfiles[slip.user_id];
               const isHourly = prof?.salary_type === 'hourly' || slip.salary_type === 'hourly';
-              const prefCode = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '25';
-              const prefData = getPrefectureRate(prefCode);
 
               return (
                 <div key={slip.user_id} className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-xs hover:shadow-md transition">
@@ -1899,13 +1997,27 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                             </>
                           )}
                           <span>•</span>
-                          <span 
-                            onClick={() => setProfileModal({ isOpen: true, user: slip.user, profile: prof || getInitialProfile(tenantId || '', slip.user_id) })}
-                            className="bg-amber-50 hover:bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md font-bold text-[11px] border border-amber-200 flex items-center gap-1 cursor-pointer transition shadow-2xs"
-                            title="クリックして扶養親族数や給与マスタを変更・確認"
-                          >
-                            👨‍👩‍👧 扶養: {prof?.dependents_count || 0}名
-                          </span>
+                          <div className="bg-amber-50 text-amber-900 px-2 py-0.5 rounded-lg font-bold text-[11px] border border-amber-300 flex items-center gap-1 shadow-2xs">
+                            <span>👨‍👩‍👧 扶養:</span>
+                            <select
+                              value={prof?.dependents_count ?? 0}
+                              onChange={(e) => handleQuickUpdateDependents(slip.user_id, parseInt(e.target.value, 10) || 0)}
+                              className="bg-white border border-amber-300 rounded px-1.5 py-0.5 text-[11px] font-black text-amber-950 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500"
+                              title="扶養人数を変更すると即座に源泉所得税が再計算されます"
+                            >
+                              {[0, 1, 2, 3, 4, 5, 6, 7].map(n => (
+                                <option key={n} value={n}>{n}名</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => setProfileModal({ isOpen: true, user: slip.user, profile: prof || getInitialProfile(tenantId || '', slip.user_id) })}
+                              className="text-[10px] text-amber-700 hover:text-amber-900 underline ml-0.5 cursor-pointer"
+                              title="給与マスタ詳細を開く"
+                            >
+                              詳細
+                            </button>
+                          </div>
                           {prof?.bank_name ? (
                             <span className="text-[11px] text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded-lg">
                               🏦 {prof.bank_name} {prof.branch_name} ({prof.account_type === 'current' ? '当座' : '普通'} {prof.account_number})
@@ -2113,7 +2225,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                       </div>
                       <div className="space-y-2 text-slate-700 text-xs pt-1">
                         <div className="flex justify-between">
-                          <span className="text-slate-500">健康保険 ({prefData.name} {(prefData.healthRate * 50).toFixed(3)}%):</span>
+                          <span className="text-slate-500">健康保険料:</span>
                           <span className="font-bold font-mono text-slate-800">¥{(slip.health_insurance || 0).toLocaleString()}</span>
                         </div>
                         {slip.nursing_insurance && slip.nursing_insurance > 0 ? (
@@ -2461,14 +2573,12 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                   </div>
                                   <div className="space-y-1 text-slate-600 pt-1 text-[11px]">
                                     {(() => {
-                                      const prefCode = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '25';
-                                      const prefData = getPrefectureRate(prefCode);
                                       const pProf = payrollProfiles[slip.user_id];
                                       return (
                                         <>
                                           <div className="flex justify-between">
                                             <span>
-                                              健康保険料 ({prefData.name} {(prefData.healthRate * 50).toFixed(3)}%)
+                                              健康保険料
                                               {pProf?.health_standard_monthly_remuneration ? (
                                                 <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded-md ml-1.5 font-bold">
                                                   標報: ¥{pProf.health_standard_monthly_remuneration.toLocaleString()}
