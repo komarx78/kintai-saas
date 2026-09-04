@@ -114,6 +114,384 @@ const parseDateElements = (dateStr?: string) => {
   }
 };
 
+/**
+ * 🏆 日本年金機構 公式PDF原本完全一致オーバーレイレンダラー
+ * いただいた公式原本PDF（コード2265用紙）を下敷きにし、その枠内にピクセルパーフェクトで印字
+ */
+const ExactPdfPageRenderer: React.FC<{
+  pageEmployees: (BonusReportEmployee | null)[];
+  pageIndex: number;
+  totalPages: number;
+  data: BonusPaymentReportDocProps['data'];
+  submissionDateParsed: { eraName: string; eraNum: string; y: string; m: string; d: string };
+  commonDateParsed: { eraName: string; eraNum: string; y: string; m: string; d: string };
+  symbolDigits: string;
+  symbolKana: string;
+}> = ({
+  pageEmployees,
+  pageIndex,
+  totalPages,
+  data,
+  submissionDateParsed,
+  commonDateParsed,
+  symbolDigits,
+  symbolKana
+}) => {
+  return (
+    <div
+      className={`official-bonus-page-container relative bg-white mx-auto shadow-lg print:shadow-none mb-8 ${
+        pageIndex < totalPages - 1 ? 'bonus-page-break' : ''
+      }`}
+      style={{
+        width: '100%',
+        maxWidth: '850px',
+        aspectRatio: '2480 / 3508',
+        backgroundImage: `url('/nenkin_bonus_template_page1.png')`,
+        backgroundSize: '100% 100%',
+        backgroundRepeat: 'no-repeat'
+      }}
+    >
+      {/* 提出年月日 */}
+      <div
+        className="absolute font-mono font-bold text-slate-900"
+        style={{ top: '5.25%', left: '5.2%', fontSize: 'clamp(9px, 1.25cqi, 13px)' }}
+      >
+        {submissionDateParsed.y}
+      </div>
+      <div
+        className="absolute font-mono font-bold text-slate-900"
+        style={{ top: '5.25%', left: '10.8%', fontSize: 'clamp(9px, 1.25cqi, 13px)' }}
+      >
+        {submissionDateParsed.m}
+      </div>
+      <div
+        className="absolute font-mono font-bold text-slate-900"
+        style={{ top: '5.25%', left: '16.5%', fontSize: 'clamp(9px, 1.25cqi, 13px)' }}
+      >
+        {submissionDateParsed.d}
+      </div>
+
+      {/* 事業所整理記号 (マス目印字) */}
+      {symbolDigits && (
+        <div
+          className="absolute flex items-center font-mono font-bold text-slate-950"
+          style={{ top: '6.4%', left: '10.3%', gap: '1.2cqi', fontSize: 'clamp(11px, 1.5cqi, 16px)' }}
+        >
+          {symbolDigits.split('').map((char, idx) => (
+            <span key={idx} className="w-[2.2cqi] text-center inline-block">{char}</span>
+          ))}
+        </div>
+      )}
+      {symbolKana && (
+        <div
+          className="absolute flex items-center font-sans font-bold text-slate-950 tracking-wider"
+          style={{ top: '6.4%', left: '22.8%', gap: '0.8cqi', fontSize: 'clamp(10px, 1.4cqi, 15px)' }}
+        >
+          {symbolKana.split('').map((char, idx) => (
+            <span key={idx} className="w-[2.2cqi] text-center inline-block">{char}</span>
+          ))}
+        </div>
+      )}
+
+      {/* 事業所所在地 */}
+      <div
+        className="absolute text-slate-900 font-sans font-medium leading-tight overflow-hidden"
+        style={{
+          top: '12.0%',
+          left: '11.0%',
+          width: '38.0%',
+          height: '4.8%',
+          fontSize: 'clamp(8px, 1.1cqi, 11px)'
+        }}
+      >
+        {data.companyAddress}
+      </div>
+
+      {/* 事業所名称 */}
+      <div
+        className="absolute text-slate-950 font-sans font-bold leading-tight overflow-hidden whitespace-nowrap text-ellipsis"
+        style={{
+          top: '18.0%',
+          left: '11.0%',
+          width: '38.0%',
+          fontSize: 'clamp(9px, 1.25cqi, 13px)'
+        }}
+      >
+        {data.companyName}
+      </div>
+
+      {/* 事業主氏名 */}
+      <div
+        className="absolute text-slate-950 font-sans font-bold leading-tight overflow-hidden whitespace-nowrap text-ellipsis"
+        style={{
+          top: '21.8%',
+          left: '11.0%',
+          width: '38.0%',
+          fontSize: 'clamp(9px, 1.25cqi, 13px)'
+        }}
+      >
+        {data.companyOwnerName}
+      </div>
+
+      {/* 電話番号 */}
+      <div
+        className="absolute text-slate-900 font-mono font-medium tracking-wider"
+        style={{
+          top: '24.6%',
+          left: '19.0%',
+          width: '24.0%',
+          fontSize: 'clamp(8px, 1.15cqi, 12px)'
+        }}
+      >
+        {data.companyPhone}
+      </div>
+
+      {/* 社会保険労務士記載欄 */}
+      {data.sharoushiName && (
+        <div
+          className="absolute text-slate-900 font-sans font-bold"
+          style={{
+            top: '22.5%',
+            left: '54.5%',
+            width: '38.0%',
+            fontSize: 'clamp(9px, 1.2cqi, 13px)'
+          }}
+        >
+          {data.sharoushiName}
+        </div>
+      )}
+
+      {/* 共通賞与支払年月日 */}
+      <div
+        className="absolute font-mono font-bold text-slate-950"
+        style={{ top: '31.3%', left: '37.0%', fontSize: 'clamp(10px, 1.4cqi, 15px)' }}
+      >
+        {commonDateParsed.y}
+      </div>
+      <div
+        className="absolute font-mono font-bold text-slate-950"
+        style={{ top: '31.3%', left: '44.3%', fontSize: 'clamp(10px, 1.4cqi, 15px)' }}
+      >
+        {commonDateParsed.m}
+      </div>
+      <div
+        className="absolute font-mono font-bold text-slate-950"
+        style={{ top: '31.3%', left: '51.8%', fontSize: 'clamp(10px, 1.4cqi, 15px)' }}
+      >
+        {commonDateParsed.d}
+      </div>
+
+      {/* 被保険者行 1〜10 */}
+      {pageEmployees.map((emp, i) => {
+        if (!emp) return null;
+
+        const rowTop = 34.26 + i * 5.768; // 行上端 (%)
+        const isOver70 = emp.isOver70 ?? checkIfOver70(emp.birthDate, data.commonPaymentDate);
+
+        // 生年月日フォーマット: '7-051020' 等
+        const rawBirth = formatNenkinBirthDate(emp.birthDate);
+        const birthClean = rawBirth.replace(/[^0-9]/g, ''); // 7桁数字 (元号1桁 + YYMMDD)
+
+        // 千円未満切捨て額の千円以上の数値
+        const totalGross = (emp.currencyAmount || 0) + (emp.goodsAmount || 0);
+        const thousandsOnly = Math.floor(totalGross / 1000);
+
+        return (
+          <React.Fragment key={emp.id || `row-${i}`}>
+            {/* 上段 ① 被保険者整理番号 */}
+            <div
+              className="absolute font-mono font-bold text-slate-950"
+              style={{
+                top: `${rowTop + 0.65}%`,
+                left: '5.2%',
+                width: '18.0%',
+                fontSize: 'clamp(10px, 1.35cqi, 14px)'
+              }}
+            >
+              {emp.insuranceNumber || String(pageIndex * 10 + i + 1).padStart(4, '0')}
+            </div>
+
+            {/* 上段 ② フリガナ（氏名の上） */}
+            <div
+              className="absolute font-sans font-bold text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis"
+              style={{
+                top: `${rowTop + 0.25}%`,
+                left: '24.2%',
+                width: '31.0%',
+                fontSize: 'clamp(7.5px, 0.95cqi, 10px)'
+              }}
+            >
+              {emp.nameKana || ''}
+            </div>
+
+            {/* 上段 ② 漢字氏名 */}
+            <div
+              className="absolute font-sans font-black text-slate-950 whitespace-nowrap overflow-hidden text-ellipsis"
+              style={{
+                top: `${rowTop + 1.25}%`,
+                left: '24.2%',
+                width: '31.0%',
+                fontSize: 'clamp(10.5px, 1.45cqi, 15px)'
+              }}
+            >
+              {emp.name}
+            </div>
+
+            {/* 上段 ③ 生年月日 OCRマス目印字 */}
+            {birthClean && (
+              <div
+                className="absolute flex items-center font-mono font-black text-slate-950"
+                style={{
+                  top: `${rowTop + 0.65}%`,
+                  left: '56.4%',
+                  gap: '0.85cqi',
+                  fontSize: 'clamp(10.5px, 1.45cqi, 15px)'
+                }}
+              >
+                <span className="w-[1.4cqi] text-center">{birthClean[0] || ''}</span>
+                <span className="w-[0.4cqi]"></span>
+                <span className="w-[1.4cqi] text-center">{birthClean[1] || ''}</span>
+                <span className="w-[1.4cqi] text-center">{birthClean[2] || ''}</span>
+                <span className="w-[1.4cqi] text-center">{birthClean[3] || ''}</span>
+                <span className="w-[1.4cqi] text-center">{birthClean[4] || ''}</span>
+                <span className="w-[1.4cqi] text-center">{birthClean[5] || ''}</span>
+                <span className="w-[1.4cqi] text-center">{birthClean[6] || ''}</span>
+              </div>
+            )}
+
+            {/* 上段 ⑦ 個人番号［基礎年金番号］（70歳以上時のみ） */}
+            {isOver70 && emp?.myNumber && (
+              <div
+                className="absolute flex items-center font-mono font-bold text-slate-950"
+                style={{
+                  top: `${rowTop + 0.65}%`,
+                  left: '70.8%',
+                  gap: '0.62cqi',
+                  fontSize: 'clamp(9px, 1.2cqi, 13px)'
+                }}
+              >
+                {emp.myNumber.replace(/[^0-9]/g, '').slice(0, 12).split('').map((digit, dIdx) => (
+                  <span key={dIdx} className="w-[1.3cqi] text-center">{digit}</span>
+                ))}
+              </div>
+            )}
+
+            {/* 下段 ④ 個別賞与支払日 */}
+            {emp.individualPaymentDate && (
+              <div
+                className="absolute font-mono font-bold text-slate-950"
+                style={{
+                  top: `${rowTop + 3.65}%`,
+                  left: '5.2%',
+                  fontSize: 'clamp(8.5px, 1.15cqi, 12px)'
+                }}
+              >
+                {emp.individualPaymentDate}
+              </div>
+            )}
+
+            {/* 下段 ⑤ ㋐通貨による賞与額 */}
+            <div
+              className="absolute font-mono font-bold text-slate-950 text-right pr-2"
+              style={{
+                top: `${rowTop + 3.25}%`,
+                left: '24.0%',
+                width: '14.5%',
+                fontSize: 'clamp(10px, 1.35cqi, 14px)'
+              }}
+            >
+              {emp.currencyAmount ? emp.currencyAmount.toLocaleString() : ''}
+            </div>
+
+            {/* 下段 ⑤ ㋑現物による賞与額 */}
+            {emp.goodsAmount ? (
+              <div
+                className="absolute font-mono font-bold text-slate-950 text-right pr-2"
+                style={{
+                  top: `${rowTop + 3.25}%`,
+                  left: '40.2%',
+                  width: '14.5%',
+                  fontSize: 'clamp(10px, 1.35cqi, 14px)'
+                }}
+              >
+                {emp.goodsAmount.toLocaleString()}
+              </div>
+            ) : null}
+
+            {/* 下段 ⑥ (合計㋐+㋑) 千円未満は切捨て */}
+            <div
+              className="absolute font-mono font-black text-slate-950 text-right pr-1"
+              style={{
+                top: `${rowTop + 3.25}%`,
+                left: '56.0%',
+                width: '9.8%',
+                fontSize: 'clamp(10.5px, 1.45cqi, 15px)'
+              }}
+            >
+              {thousandsOnly ? thousandsOnly.toLocaleString() : ''}
+            </div>
+
+            {/* 下段 ⑧ 備考欄（丸印） */}
+            {isOver70 && (
+              <div
+                className="absolute flex items-center justify-center font-black pointer-events-none"
+                style={{
+                  top: `${rowTop + 3.35}%`,
+                  left: '72.2%',
+                  width: '1.8cqi',
+                  height: '1.8cqi',
+                  border: '2px solid #dc2626',
+                  borderRadius: '9999px'
+                }}
+              />
+            )}
+            {emp.isDualWork && (
+              <div
+                className="absolute flex items-center justify-center font-black pointer-events-none"
+                style={{
+                  top: `${rowTop + 3.35}%`,
+                  left: '77.8%',
+                  width: '1.8cqi',
+                  height: '1.8cqi',
+                  border: '2px solid #dc2626',
+                  borderRadius: '9999px'
+                }}
+              />
+            )}
+            {emp.isMonthlyMerged && (
+              <>
+                <div
+                  className="absolute flex items-center justify-center font-black pointer-events-none"
+                  style={{
+                    top: `${rowTop + 3.35}%`,
+                    left: '83.2%',
+                    width: '1.8cqi',
+                    height: '1.8cqi',
+                    border: '2px solid #dc2626',
+                    borderRadius: '9999px'
+                  }}
+                />
+                {emp.firstPaymentDay && (
+                  <div
+                    className="absolute font-mono font-bold text-slate-950"
+                    style={{
+                      top: `${rowTop + 3.5}%`,
+                      left: '89.6%',
+                      fontSize: 'clamp(8px, 1.05cqi, 11px)'
+                    }}
+                  >
+                    {emp.firstPaymentDay}
+                  </div>
+                )}
+              </>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+};
+
 export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps> = ({ data }) => {
   const commonDateParsed = parseDateElements(data.commonPaymentDate);
   const submissionDateParsed = parseDateElements(data.submissionDate || new Date().toISOString().split('T')[0]);
@@ -143,14 +521,53 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
   const symbolDigits = symbolMatch ? symbolMatch[1].padStart(2, '0') : (data.officeCityCode || '');
   const symbolKana = symbolMatch ? symbolMatch[2] : (data.officeSymbolKana || rawSymbol);
 
+  // 表示モード切替（デフォルト: 原本PDF完全一致オーバーレイ印字）
+  const [renderMode, setRenderMode] = React.useState<'exact_pdf' | 'web_table'>('exact_pdf');
+
   return (
     <div className="official-bonus-doc-root font-sans text-black select-text">
+      {/* 表示モード切替バー（印刷時は非表示） */}
+      <div className="print:hidden mb-4 bg-white border border-slate-200 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-black text-slate-800">📄 帳票表示形式:</span>
+          <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-bold">
+            <button
+              onClick={() => setRenderMode('exact_pdf')}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                renderMode === 'exact_pdf'
+                  ? 'bg-indigo-600 text-white shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>🖼️ 日本年金機構 原本PDF完全一致（原本下敷き印字）</span>
+              <span className="text-[9px] bg-indigo-500 text-white px-1.5 py-0.2 rounded font-mono">推奨</span>
+            </button>
+            <button
+              onClick={() => setRenderMode('web_table')}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                renderMode === 'web_table'
+                  ? 'bg-indigo-600 text-white shadow-xs font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>📋 Web標準テーブル形式</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="text-[11px] text-slate-500 font-medium">
+          {renderMode === 'exact_pdf'
+            ? '※ 日本年金機構の配布PDF原本（コード2265）の上にピクセルパーフェクトで印字します。そのまま提出可能です。'
+            : '※ 通常のWebテーブル形式で内容を確認・印刷します。'}
+        </div>
+      </div>
+
       {/* 印刷・A4最適化CSS */}
       <style>{`
         @media print {
           @page {
             size: A4 portrait;
-            margin: 6mm 7mm 6mm 7mm;
+            margin: 0;
           }
           body {
             background: white !important;
@@ -161,31 +578,41 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
             page-break-after: always !important;
             break-after: page !important;
           }
-          .official-bonus-page {
-            box-shadow: none !important;
-            border: none !important;
+          .official-bonus-page-container {
+            width: 210mm !important;
+            height: 297mm !important;
             margin: 0 !important;
             padding: 0 !important;
-            width: 100% !important;
-            max-width: none !important;
-          }
-        }
-        @media screen {
-          .official-bonus-page {
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-            border: 1px solid #cbd5e1;
-            margin-bottom: 24px;
+            border: none !important;
+            box-shadow: none !important;
           }
         }
       `}</style>
 
-      {pages.map((pageEmployees, pageIndex) => (
-        <div
-          key={`page-${pageIndex}`}
-          className={`official-bonus-page bg-white p-4 sm:p-5 max-w-[800px] mx-auto text-[9px] leading-tight text-slate-900 ${
-            pageIndex < pages.length - 1 ? 'bonus-page-break' : ''
-          }`}
-        >
+      {pages.map((pageEmployees, pageIndex) => {
+        if (renderMode === 'exact_pdf') {
+          return (
+            <ExactPdfPageRenderer
+              key={`page-exact-${pageIndex}`}
+              pageEmployees={pageEmployees}
+              pageIndex={pageIndex}
+              totalPages={pages.length}
+              data={data}
+              submissionDateParsed={submissionDateParsed}
+              commonDateParsed={commonDateParsed}
+              symbolDigits={symbolDigits}
+              symbolKana={symbolKana}
+            />
+          );
+        }
+
+        return (
+          <div
+            key={`page-web-${pageIndex}`}
+            className={`official-bonus-page bg-white p-4 sm:p-5 max-w-[800px] mx-auto text-[9px] leading-tight text-slate-900 ${
+              pageIndex < pages.length - 1 ? 'bonus-page-break' : ''
+            }`}
+          >
           {/* ========================================================================= */}
           {/* ① 最上部ヘッダー（様式コード 2265 / タイトル / バーコード / 受付印）       */}
           {/* ========================================================================= */}
@@ -588,7 +1015,8 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
             </div>
           </div>
         </div>
-      ))}
+      );
+    })}
     </div>
   );
 };
