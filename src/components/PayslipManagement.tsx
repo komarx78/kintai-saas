@@ -580,15 +580,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           commuting_taxable: pay?.commuting_taxable ?? false,
           fixed_overtime_hours: pay?.fixed_overtime_hours ?? 0,
           fixed_overtime_allowance: pay?.fixed_overtime_allowance ?? 0,
-          dependents_count: pay?.dependents_count ?? localBackup?.dependents_count ?? 0,
+          dependents_count: pay?.dependents_count ?? onb?.dependents_count ?? localBackup?.dependents_count ?? 0,
           birth_date: bDate,
           health_insurance_enabled: onb?.health_insurance_joined ?? pay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? true,
-          health_standard_monthly_remuneration: pay?.health_standard_monthly_remuneration ?? localPayProfile?.health_standard_monthly_remuneration ?? null,
+          health_standard_monthly_remuneration: pay?.health_standard_monthly_remuneration ?? onb?.health_standard_monthly_remuneration ?? localPayProfile?.health_standard_monthly_remuneration ?? localBackup?.health_standard_monthly_remuneration ?? null,
           nursing_insurance_enabled: pay?.nursing_insurance_enabled ?? null,
           pension_insurance_enabled: onb?.pension_insurance_joined ?? pay?.pension_insurance_enabled ?? localBackup?.pension_insurance_joined ?? true,
-          pension_standard_monthly_remuneration: pay?.pension_standard_monthly_remuneration ?? localPayProfile?.pension_standard_monthly_remuneration ?? null,
+          pension_standard_monthly_remuneration: pay?.pension_standard_monthly_remuneration ?? onb?.pension_standard_monthly_remuneration ?? localPayProfile?.pension_standard_monthly_remuneration ?? localBackup?.pension_standard_monthly_remuneration ?? null,
           employment_insurance_enabled: onb?.employment_insurance_joined ?? pay?.employment_insurance_enabled ?? localBackup?.employment_insurance_joined ?? true,
-          resident_tax_monthly: pay?.resident_tax_monthly ?? 0,
+          resident_tax_monthly: pay?.resident_tax_monthly ?? onb?.resident_tax_monthly ?? localBackup?.resident_tax_monthly ?? 0,
+          resident_tax_details: pay?.resident_tax_details ?? onb?.resident_tax_details ?? localBackup?.resident_tax_details ?? {},
           tax_bracket: pay?.tax_bracket || 'kou',
           bank_name: bName,
           branch_name: brName,
@@ -640,7 +641,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         health_insurance_rate: Number((prefRateDataLatest.healthRate / 2).toFixed(5)),
         nursing_insurance_rate: 0.008,
         pension_insurance_rate: 0.0915,
-        rounding_method: 'floor'
+        rounding_method: 'floor',
+        target_month: currentMonth.getMonth() + 1
       };
 
       const finalPayslips = usersList.map(u => {
@@ -914,19 +916,68 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     }
   };
 
-  // 🔄 給与改定検知に伴う単独社員の即時再計算
+  // 🔄 大元マスタ・勤怠から単独社員の給与を即時再計算（SSOT完全準拠）
   const handleRecalculateSingle = async (userId: string) => {
     if (!tenantId) return;
     setIsSaving(true);
     try {
       const emp = employees.find(e => e.id === userId);
-      const prof = payrollProfiles[userId];
       const existingSlip = payslips.find(p => p.user_id === userId);
-      if (!emp || !prof) return;
+      if (!emp) return;
+
+      // 大元マスタ（DB & LocalStorageバックアップ）から最新プロファイルを取得
+      let localBackup: any = null;
+      try {
+        const raw = localStorage.getItem(`employee_master_backup_${userId}`);
+        if (raw) localBackup = JSON.parse(raw);
+      } catch (e) {}
+
+      let dbPay: any = null;
+      try {
+        const { data } = await supabase.from('employee_payroll_profiles').select('*').eq('tenant_id', tenantId).eq('user_id', userId).maybeSingle();
+        dbPay = data;
+      } catch (e) {}
+
+      let dbOnb: any = null;
+      try {
+        const { data } = await supabase.from('employee_onboarding_profiles').select('*').eq('tenant_id', tenantId).eq('user_id', userId).maybeSingle();
+        dbOnb = data;
+      } catch (e) {}
+
+      const cachedProf = payrollProfiles[userId];
+
+      const resolvedProf: EmployeePayrollProfile = {
+        tenant_id: tenantId,
+        user_id: userId,
+        salary_type: dbPay?.salary_type || dbOnb?.salary_type || localBackup?.salary_type || cachedProf?.salary_type || (emp.employment_type === 'part-time' ? 'hourly' : 'monthly'),
+        base_salary: dbPay?.base_salary ?? dbOnb?.base_salary ?? localBackup?.base_salary ?? cachedProf?.base_salary ?? 250000,
+        hourly_wage: dbPay?.hourly_wage ?? dbOnb?.hourly_wage ?? localBackup?.hourly_wage ?? cachedProf?.hourly_wage ?? 1150,
+        position_allowance: dbPay?.position_allowance ?? dbOnb?.position_allowance ?? localBackup?.position_allowance ?? cachedProf?.position_allowance ?? 0,
+        qualification_allowance: dbPay?.qualification_allowance ?? dbOnb?.qualification_allowance ?? localBackup?.qualification_allowance ?? cachedProf?.qualification_allowance ?? 0,
+        housing_allowance: dbPay?.housing_allowance ?? dbOnb?.housing_allowance ?? localBackup?.housing_allowance ?? cachedProf?.housing_allowance ?? 0,
+        family_allowance: dbPay?.family_allowance ?? dbOnb?.family_allowance ?? localBackup?.family_allowance ?? cachedProf?.family_allowance ?? 0,
+        commuting_type: dbPay?.commuting_type || dbOnb?.commuting_type || localBackup?.commuting_type || cachedProf?.commuting_type || 'monthly',
+        commuting_daily_amount: dbPay?.commuting_daily_amount ?? dbOnb?.commuting_daily_amount ?? localBackup?.commuting_daily_amount ?? cachedProf?.commuting_daily_amount ?? 800,
+        commuting_allowance: dbPay?.commuting_allowance ?? dbOnb?.commuting_allowance ?? localBackup?.commuting_allowance ?? cachedProf?.commuting_allowance ?? 15000,
+        commuting_taxable: dbPay?.commuting_taxable ?? cachedProf?.commuting_taxable ?? false,
+        fixed_overtime_hours: dbPay?.fixed_overtime_hours ?? cachedProf?.fixed_overtime_hours ?? 0,
+        fixed_overtime_allowance: dbPay?.fixed_overtime_allowance ?? cachedProf?.fixed_overtime_allowance ?? 0,
+        dependents_count: dbPay?.dependents_count ?? dbOnb?.dependents_count ?? localBackup?.dependents_count ?? cachedProf?.dependents_count ?? 0,
+        birth_date: dbPay?.birth_date || dbOnb?.birth_date || localBackup?.birth_date || emp.birth_date || cachedProf?.birth_date || null,
+        health_insurance_enabled: dbOnb?.health_insurance_joined ?? dbPay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? cachedProf?.health_insurance_enabled ?? true,
+        health_standard_monthly_remuneration: dbPay?.health_standard_monthly_remuneration ?? dbOnb?.health_standard_monthly_remuneration ?? localBackup?.health_standard_monthly_remuneration ?? cachedProf?.health_standard_monthly_remuneration ?? null,
+        nursing_insurance_enabled: dbPay?.nursing_insurance_enabled ?? cachedProf?.nursing_insurance_enabled ?? null,
+        pension_insurance_enabled: dbOnb?.pension_insurance_joined ?? dbPay?.pension_insurance_enabled ?? localBackup?.pension_insurance_joined ?? cachedProf?.pension_insurance_enabled ?? true,
+        pension_standard_monthly_remuneration: dbPay?.pension_standard_monthly_remuneration ?? dbOnb?.pension_standard_monthly_remuneration ?? localBackup?.pension_standard_monthly_remuneration ?? cachedProf?.pension_standard_monthly_remuneration ?? null,
+        employment_insurance_enabled: dbOnb?.employment_insurance_joined ?? dbPay?.employment_insurance_enabled ?? localBackup?.employment_insurance_joined ?? cachedProf?.employment_insurance_enabled ?? true,
+        resident_tax_monthly: dbPay?.resident_tax_monthly ?? dbOnb?.resident_tax_monthly ?? localBackup?.resident_tax_monthly ?? cachedProf?.resident_tax_monthly ?? 0,
+        resident_tax_details: dbPay?.resident_tax_details ?? dbOnb?.resident_tax_details ?? localBackup?.resident_tax_details ?? cachedProf?.resident_tax_details ?? {},
+        tax_bracket: dbPay?.tax_bracket || cachedProf?.tax_bracket || 'kou'
+      };
 
       const attSummary: AttendanceSummary = {
-        work_days: existingSlip?.work_days || (prof.salary_type === 'hourly' ? 0 : 20),
-        actual_hours: existingSlip?.actual_hours || (prof.salary_type === 'hourly' ? 0 : 160),
+        work_days: existingSlip?.work_days || (resolvedProf.salary_type === 'hourly' ? 0 : 20),
+        actual_hours: existingSlip?.actual_hours || (resolvedProf.salary_type === 'hourly' ? 0 : 160),
         overtime_hours: existingSlip?.overtime_hours || 0,
         midnight_hours: existingSlip?.midnight_hours || 0,
         holiday_hours: existingSlip?.holiday_hours || 0,
@@ -936,9 +987,10 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       };
 
       const activePrefecture = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '25';
-      const calculated = calculatePayroll(prof, attSummary, {
+      const calculated = calculatePayroll(resolvedProf, attSummary, {
         ...payrollSettings,
-        prefecture_code: activePrefecture
+        prefecture_code: activePrefecture,
+        target_month: currentMonth.getMonth() + 1
       });
 
       const payload: any = {
@@ -947,23 +999,42 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         user_id: userId,
         year_month: currentYearMonth,
         ...calculated,
-        base_salary: prof.base_salary,
-        hourly_wage: prof.hourly_wage,
-        position_allowance: prof.position_allowance,
-        qualification_allowance: prof.qualification_allowance,
-        housing_allowance: prof.housing_allowance,
-        family_allowance: prof.family_allowance,
-        commuting_allowance: prof.commuting_allowance,
+        base_salary: resolvedProf.base_salary,
+        hourly_wage: resolvedProf.hourly_wage,
+        position_allowance: resolvedProf.position_allowance,
+        qualification_allowance: resolvedProf.qualification_allowance,
+        housing_allowance: resolvedProf.housing_allowance,
+        family_allowance: resolvedProf.family_allowance,
+        commuting_allowance: resolvedProf.commuting_allowance,
         status: existingSlip?.status || 'draft',
         updated_at: new Date().toISOString()
       };
 
       await savePayslipSafe(payload);
       await fetchData();
-      alert(`🎉 ${emp.name} さんの給与明細を最新マスタ（基本給: ¥${prof.base_salary.toLocaleString()}）で再計算しました！`);
+      alert(`🎉 ${emp.name} さんの給与明細を最新の大元マスタ（標報・住民税・扶養${resolvedProf.dependents_count}名）に基づいて再計算しました！`);
     } catch (err: any) {
       console.error(err);
       alert('再計算に失敗しました: ' + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 🔄 大元マスタ・勤怠から当月全社員の給与を一括再計算
+  const handleRecalculateAll = async () => {
+    if (!tenantId || employees.length === 0) return;
+    if (!confirm(`【${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月度】の全従業員の給与明細を、大元労務マスタ（標準報酬月額・住民税特別徴収・扶養控除親族数・各種手当）の最新値に基づいて一括再計算します。よろしいですか？`)) return;
+
+    setIsSaving(true);
+    try {
+      for (const emp of employees) {
+        await handleRecalculateSingle(emp.id);
+      }
+      alert(`🎉 全従業員の給与明細を大元労務マスタの最新情報で一括再計算しました！`);
+    } catch (err: any) {
+      console.error('Recalculate all error:', err);
+      alert('一括再計算中にエラーが発生しました: ' + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -1578,6 +1649,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           </button>
 
           <button
+            onClick={handleRecalculateAll}
+            disabled={isSaving || payslips.length === 0}
+            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-sm px-3.5 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="大元マスタ（標準報酬月額・住民税特別徴収・扶養親族・各種手当）の最新値で当月の全明細を再計算します"
+          >
+            <RotateCcw className="w-4 h-4 text-indigo-600" />
+            🔄 最新マスタから一括再計算
+          </button>
+
+          <button
             onClick={handlePublishAll}
             disabled={isSaving || payslips.length === 0}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
@@ -1795,6 +1876,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                       >
                         {slip.status === 'published' ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
                         {slip.status === 'published' ? '公開中（下書きに戻す）' : '確定公開する'}
+                      </button>
+
+                      <button
+                        onClick={() => handleRecalculateSingle(slip.user_id)}
+                        disabled={isSaving}
+                        className="text-xs font-bold text-emerald-700 hover:text-white bg-emerald-50 hover:bg-emerald-600 border border-emerald-200 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
+                        title="大元労務マスタ（標準報酬月額・住民税特別徴収・扶養親族・各種手当）の最新値でこの社員の給与を即座に再計算します"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-emerald-600 group-hover:text-white" />
+                        🔄 再計算
                       </button>
 
                       <button
@@ -2162,6 +2253,14 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                               title={slip.status === 'published' ? '下書きに戻す' : '確定公開する'}
                             >
                               {slip.status === 'published' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                            </button>
+                            <button
+                              onClick={() => handleRecalculateSingle(slip.user_id)}
+                              disabled={isSaving}
+                              className="p-1.5 text-emerald-600 hover:text-white hover:bg-emerald-600 rounded-lg transition cursor-pointer disabled:opacity-50"
+                              title="大元マスタの最新情報（標準報酬月額・住民税特別徴収・扶養控除数）で再計算"
+                            >
+                              <RotateCcw className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => handleOpenAttendanceSheet(slip)}

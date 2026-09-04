@@ -583,6 +583,12 @@ export default function OnboardingAdminDashboard() {
         // 通勤手当（提出書類の通勤定期代から即座に抽出）
         const commAllowance = commDoc.one_month_pass_amount ?? onb?.commuting_allowance ?? pay?.commuting_allowance ?? localBackup?.commuting_allowance ?? 15000;
 
+        // 社保標準報酬月額 ＆ 住民税（特別徴収）
+        const hRemun = onb?.health_standard_monthly_remuneration ?? pay?.health_standard_monthly_remuneration ?? localBackup?.health_standard_monthly_remuneration;
+        const pRemun = onb?.pension_standard_monthly_remuneration ?? pay?.pension_standard_monthly_remuneration ?? localBackup?.pension_standard_monthly_remuneration;
+        const resTaxMonthly = onb?.resident_tax_monthly ?? pay?.resident_tax_monthly ?? localBackup?.resident_tax_monthly ?? 0;
+        const resTaxDetails = onb?.resident_tax_details ?? pay?.resident_tax_details ?? localBackup?.resident_tax_details ?? {};
+
         return {
           user_id: u.id,
           name: u.name || '従業員',
@@ -610,12 +616,19 @@ export default function OnboardingAdminDashboard() {
           hourly_wage: conDoc.hourly_wage ?? onb?.hourly_wage ?? pay?.hourly_wage ?? localBackup?.hourly_wage ?? 1150,
           position_allowance: conDoc.position_allowance ?? onb?.position_allowance ?? pay?.position_allowance ?? localBackup?.position_allowance ?? 0,
           qualification_allowance: conDoc.qualification_allowance ?? onb?.qualification_allowance ?? pay?.qualification_allowance ?? localBackup?.qualification_allowance ?? 0,
+          qualification_name: onb?.qualification_name || pay?.qualification_name || localBackup?.qualification_name || '',
+          qualification_certificate_url: onb?.qualification_certificate_url || localBackup?.qualification_certificate_url || '',
+          qualification_certificate_filename: onb?.qualification_certificate_filename || localBackup?.qualification_certificate_filename || '',
           housing_allowance: onb?.housing_allowance ?? pay?.housing_allowance ?? localBackup?.housing_allowance ?? 0,
           family_allowance: onb?.family_allowance ?? pay?.family_allowance ?? localBackup?.family_allowance ?? 0,
           commuting_allowance: commAllowance,
           health_insurance_joined: onb?.health_insurance_joined ?? pay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? true,
+          health_standard_monthly_remuneration: hRemun,
           pension_insurance_joined: onb?.pension_insurance_joined ?? pay?.pension_insurance_enabled ?? localBackup?.pension_insurance_joined ?? true,
+          pension_standard_monthly_remuneration: pRemun,
           employment_insurance_joined: onb?.employment_insurance_joined ?? pay?.employment_insurance_enabled ?? localBackup?.employment_insurance_joined ?? true,
+          resident_tax_monthly: resTaxMonthly,
+          resident_tax_details: resTaxDetails,
           bank_name: bName,
           branch_name: brName,
           account_type: accType,
@@ -1776,7 +1789,11 @@ export default function OnboardingAdminDashboard() {
           .eq('id', data.user_id);
       }
 
-      // 2. employee_payroll_profiles の更新（標準報酬月額・住民税・資格手当の100%全同期）
+      // 住民税月額（特別徴収）の解決（月別設定がある場合はそこからも確実に抽出）
+      const resolvedResidentTaxMonthly = Number(data.resident_tax_monthly) || 
+        (data.resident_tax_details ? (Number(data.resident_tax_details['7']) || Number(data.resident_tax_details['6']) || Number(Object.values(data.resident_tax_details)[0]) || 0) : 0);
+
+      // 2. employee_payroll_profiles の更新（標準報酬月額・住民税・資格手当・扶養親族の100%全同期）
       try {
         const { error: pErr } = await supabase
           .from('employee_payroll_profiles')
@@ -1799,8 +1816,11 @@ export default function OnboardingAdminDashboard() {
             pension_insurance_enabled: data.pension_insurance_joined,
             pension_standard_monthly_remuneration: data.pension_standard_monthly_remuneration || null,
             employment_insurance_enabled: data.employment_insurance_joined,
-            resident_tax_monthly: data.resident_tax_monthly || 0,
+            resident_tax_monthly: resolvedResidentTaxMonthly,
             resident_tax_details: data.resident_tax_details || {},
+            dependents_count: data.dependents_count ?? 0,
+            has_spouse: !!data.has_spouse,
+            my_number: data.my_number || '',
             bank_name: data.bank_name,
             branch_name: data.branch_name,
             account_type: data.account_type,
@@ -1828,6 +1848,7 @@ export default function OnboardingAdminDashboard() {
             health_insurance_enabled: data.health_insurance_joined,
             pension_insurance_enabled: data.pension_insurance_joined,
             employment_insurance_enabled: data.employment_insurance_joined,
+            resident_tax_monthly: resolvedResidentTaxMonthly,
             bank_name: data.bank_name,
             branch_name: data.branch_name,
             account_type: data.account_type,
@@ -1846,7 +1867,7 @@ export default function OnboardingAdminDashboard() {
           base_wage: data.salary_type === 'hourly' ? data.hourly_wage : 1150
         }, { onConflict: 'user_id' });
 
-      // 4. employee_onboarding_profiles の更新（標準報酬月額・住民税・資格証憑含む）
+      // 4. employee_onboarding_profiles の更新（標準報酬月額・住民税・資格証憑・扶養含む）
       try {
         const { error: onbErr } = await supabase
           .from('employee_onboarding_profiles')
@@ -1880,8 +1901,11 @@ export default function OnboardingAdminDashboard() {
             pension_insurance_joined: data.pension_insurance_joined,
             pension_standard_monthly_remuneration: data.pension_standard_monthly_remuneration || null,
             employment_insurance_joined: data.employment_insurance_joined,
-            resident_tax_monthly: data.resident_tax_monthly || 0,
+            resident_tax_monthly: resolvedResidentTaxMonthly,
             resident_tax_details: data.resident_tax_details || {},
+            dependents_count: data.dependents_count ?? 0,
+            has_spouse: !!data.has_spouse,
+            my_number: data.my_number || '',
             updated_at: new Date().toISOString()
           }, { onConflict: 'tenant_id,user_id' });
         if (onbErr) throw onbErr;
@@ -1940,8 +1964,11 @@ export default function OnboardingAdminDashboard() {
           pension_insurance_joined: data.pension_insurance_joined,
           pension_standard_monthly_remuneration: data.pension_standard_monthly_remuneration || null,
           employment_insurance_joined: data.employment_insurance_joined,
-          resident_tax_monthly: data.resident_tax_monthly || 0,
+          resident_tax_monthly: resolvedResidentTaxMonthly,
           resident_tax_details: data.resident_tax_details || {},
+          dependents_count: data.dependents_count ?? 0,
+          has_spouse: !!data.has_spouse,
+          my_number: data.my_number || '',
           updated_at: new Date().toISOString()
         }));
       } catch (stErr) {
