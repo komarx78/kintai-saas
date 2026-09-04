@@ -510,6 +510,23 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         console.warn('employee_payroll_profiles fetch error:', e);
       }
       const payMap = new Map(profList.map(p => [p.user_id, p]));
+
+      // 5.5 【大元提出書類 SSOT】扶養控除等申告書等の取得 (employee_document_submissions)
+      let subList: any[] = [];
+      try {
+        const { data: sData } = await supabase
+          .from('employee_document_submissions')
+          .select('*')
+          .eq('tenant_id', tenantId);
+        subList = sData || [];
+      } catch (e) {
+        console.warn('employee_document_submissions fetch error:', e);
+      }
+      const userSubMap = new Map<string, any[]>();
+      subList.forEach(s => {
+        if (!userSubMap.has(s.user_id)) userSubMap.set(s.user_id, []);
+        userSubMap.get(s.user_id)!.push(s);
+      });
       
       const profileMap: Record<string, EmployeePayrollProfile> = {};
 
@@ -526,6 +543,17 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
         const bDate = onb?.birth_date || u.birth_date || pay?.birth_date || localBackup?.birth_date || '';
         
+        // 提出書類からの扶養親族数の自動抽出（大元SSOT）
+        const uSubs = userSubMap.get(u.id) || [];
+        const depSub = uSubs.find(s => s.document_type === 'dependents_form' || s.document_type === 'tax_withholding');
+        const depDoc = depSub?.data || {};
+        const subDepCount = depDoc.dependents_count !== undefined 
+          ? Number(depDoc.dependents_count) 
+          : (Array.isArray(depDoc.dependents) ? depDoc.dependents.length : undefined);
+        const resolvedDepCount = subDepCount !== undefined 
+          ? subDepCount 
+          : (pay?.dependents_count ?? onb?.dependents_count ?? localBackup?.dependents_count ?? 0);
+
         // 最新の給与プロファイル（ローカルストレージ改定データを含む）
         let localPayProfile: any = null;
         try {
@@ -580,7 +608,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           commuting_taxable: pay?.commuting_taxable ?? false,
           fixed_overtime_hours: pay?.fixed_overtime_hours ?? 0,
           fixed_overtime_allowance: pay?.fixed_overtime_allowance ?? 0,
-          dependents_count: pay?.dependents_count ?? onb?.dependents_count ?? localBackup?.dependents_count ?? 0,
+          dependents_count: resolvedDepCount,
           birth_date: bDate,
           health_insurance_enabled: onb?.health_insurance_joined ?? pay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? true,
           health_standard_monthly_remuneration: pay?.health_standard_monthly_remuneration ?? onb?.health_standard_monthly_remuneration ?? localPayProfile?.health_standard_monthly_remuneration ?? localBackup?.health_standard_monthly_remuneration ?? null,
@@ -944,7 +972,26 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         dbOnb = data;
       } catch (e) {}
 
+      // 提出書類（扶養控除申告書）からの扶養親族数の自動抽出（大元SSOT）
+      let subDepCount: number | undefined = undefined;
+      try {
+        const { data: subData } = await supabase
+          .from('employee_document_submissions')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .eq('user_id', userId);
+        const depSub = (subData || []).find((s: any) => s.document_type === 'dependents_form' || s.document_type === 'tax_withholding');
+        if (depSub?.data) {
+          const d = depSub.data;
+          if (d.dependents_count !== undefined) subDepCount = Number(d.dependents_count);
+          else if (Array.isArray(d.dependents)) subDepCount = d.dependents.length;
+        }
+      } catch (e) {}
+
       const cachedProf = payrollProfiles[userId];
+      const resolvedDepCount = subDepCount !== undefined
+        ? subDepCount
+        : (dbPay?.dependents_count ?? dbOnb?.dependents_count ?? localBackup?.dependents_count ?? cachedProf?.dependents_count ?? 0);
 
       const resolvedProf: EmployeePayrollProfile = {
         tenant_id: tenantId,
@@ -962,7 +1009,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         commuting_taxable: dbPay?.commuting_taxable ?? cachedProf?.commuting_taxable ?? false,
         fixed_overtime_hours: dbPay?.fixed_overtime_hours ?? cachedProf?.fixed_overtime_hours ?? 0,
         fixed_overtime_allowance: dbPay?.fixed_overtime_allowance ?? cachedProf?.fixed_overtime_allowance ?? 0,
-        dependents_count: dbPay?.dependents_count ?? dbOnb?.dependents_count ?? localBackup?.dependents_count ?? cachedProf?.dependents_count ?? 0,
+        dependents_count: resolvedDepCount,
         birth_date: dbPay?.birth_date || dbOnb?.birth_date || localBackup?.birth_date || emp.birth_date || cachedProf?.birth_date || null,
         health_insurance_enabled: dbOnb?.health_insurance_joined ?? dbPay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? cachedProf?.health_insurance_enabled ?? true,
         health_standard_monthly_remuneration: dbPay?.health_standard_monthly_remuneration ?? dbOnb?.health_standard_monthly_remuneration ?? localBackup?.health_standard_monthly_remuneration ?? cachedProf?.health_standard_monthly_remuneration ?? null,
@@ -1851,6 +1898,14 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                               <span className="text-slate-400 text-[11px]">生年月日未登録</span>
                             </>
                           )}
+                          <span>•</span>
+                          <span 
+                            onClick={() => setProfileModal({ isOpen: true, user: slip.user, profile: prof || getInitialProfile(tenantId || '', slip.user_id) })}
+                            className="bg-amber-50 hover:bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md font-bold text-[11px] border border-amber-200 flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                            title="クリックして扶養親族数や給与マスタを変更・確認"
+                          >
+                            👨‍👩‍👧 扶養: {prof?.dependents_count || 0}名
+                          </span>
                           {prof?.bank_name ? (
                             <span className="text-[11px] text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded-lg">
                               🏦 {prof.bank_name} {prof.branch_name} ({prof.account_type === 'current' ? '当座' : '普通'} {prof.account_number})
@@ -2076,8 +2131,18 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                           <span className="font-mono text-slate-800">¥{(slip.employment_insurance || 0).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between text-indigo-700 font-bold">
-                          <span>所得税 (源泉徴収):</span>
+                          <span>
+                            所得税 (源泉徴収)
+                            <span className="text-[10px] text-indigo-500 font-normal ml-1">
+                              [扶養: {prof?.dependents_count || 0}人]
+                            </span>
+                            :
+                          </span>
                           <span className="font-mono">¥{(slip.income_tax || 0).toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-emerald-800 font-bold">
+                          <span>住民税 (特別徴収):</span>
+                          <span className="font-mono">¥{(slip.resident_tax || 0).toLocaleString()}</span>
                         </div>
                         <div className="border-t border-rose-200 pt-1.5 flex justify-between font-black text-rose-900 text-xs">
                           <span>控除合計額:</span>
