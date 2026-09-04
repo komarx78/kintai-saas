@@ -170,7 +170,7 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
               <span className="text-[7px] text-slate-400 font-mono">E02</span>
             </div>
             <div className="col-span-6 border-r border-b border-black p-1 font-mono text-[8px]">
-              {data.recipientKana || 'コマイ シュウイチロウ'}
+              {data.recipientKana || ''}
             </div>
             <div className="col-span-2 border-r border-b border-black p-1 bg-slate-50 flex items-center justify-between">
               <span>(受給者番号)</span>

@@ -17,6 +17,7 @@ export interface BonusPaymentReportModalProps {
   tenantInfo: any;
   employees: any[];
   payrollProfiles?: Record<string, any>;
+  initialYearMonth?: string;
   onSaveNoticeToCabinet?: (fileData: { title: string; fiscal_year: string; filename: string; file_url: string; note: string }) => void;
 }
 
@@ -27,10 +28,11 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
   tenantInfo,
   employees,
   payrollProfiles = {},
+  initialYearMonth,
   onSaveNoticeToCabinet
 }) => {
   const currentYear = new Date().getFullYear();
-  const [bonusYearMonth, setBonusYearMonth] = useState(`${currentYear}-06`); // 例: 2026-06 夏期賞与
+  const [bonusYearMonth, setBonusYearMonth] = useState(initialYearMonth || `${currentYear}-06`); // 例: 2026-06 夏期賞与
   const [bonusTitle, setBonusTitle] = useState('令和8年度 夏期賞与');
   const [commonPaymentDate, setCommonPaymentDate] = useState(`${currentYear}-06-30`);
   const [submissionDate, setSubmissionDate] = useState(new Date().toISOString().split('T')[0]);

@@ -2,9 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   FileText, Printer, Download, Building2, 
-  ChevronRight, X, Info
+  ChevronRight, X, Info, Edit3, Sparkles
 } from 'lucide-react';
 import { OfficialTaxWithholdingSlipDoc } from './OfficialTaxWithholdingSlipDoc';
+import { 
+  OfficialBonusPaymentReportDoc, 
+  type BonusReportEmployee, 
+  checkIfOver70 
+} from './OfficialBonusPaymentReportDoc';
+import { BonusPaymentReportModal } from './BonusPaymentReportModal';
 
 export interface OfficialReportsCenterProps {
   tenantId: string;
@@ -69,6 +75,12 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
   const [bonusMultiplier, setBonusMultiplier] = useState<number>(1.5); // 基本給の1.5ヶ月分
   const [selectedDocType, setSelectedDocType] = useState<string | null>(null);
 
+  // 🎁 賞与算定・一括入力詳細エディタ用State
+  const [bonusReportModalOpen, setBonusReportModalOpen] = useState(false);
+  const [officeSymbol, setOfficeSymbol] = useState<string>('01-イロハ');
+  const [tenantInfo, setTenantInfo] = useState<any>(null);
+  const [payrollProfiles, setPayrollProfiles] = useState<Record<string, any>>({});
+
   useEffect(() => {
     fetchMasterData();
   }, [tenantId]);
@@ -79,6 +91,12 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
     try {
       // 1. 会社基本情報
       const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
+      setTenantInfo(tData);
+
+      const shakai = tData?.shakai_hoken_settings || {};
+      const sym = shakai.office_symbol || tData?.shakai_hoken_office_number || '25-カア 12345';
+      setOfficeSymbol(sym);
+
       let comp = {
         name: tData?.name || '株式会社KAP',
         address: tData?.address || '滋賀県大津市坂本3丁目21-16',
@@ -99,7 +117,29 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
       } catch (e) {}
       setCompanyInfo(comp);
 
-      // 2. 従業員データ（入退社大元マスタ ＆ 給与プロファイル SSOT結合）
+      // 2. 提出書類の取得（フリガナ・住所・生年月日等の大元SSOT）
+      const { data: subData } = await supabase
+        .from('employee_document_submissions')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false });
+
+      const userDocsMap = new Map<string, Record<string, any>>();
+      const nameDocsMap = new Map<string, Record<string, any>>();
+
+      (subData || []).forEach((s: any) => {
+        const sName = (s.data?.name || '').trim();
+        if (s.user_id) {
+          if (!userDocsMap.has(s.user_id)) userDocsMap.set(s.user_id, {});
+          userDocsMap.get(s.user_id)![s.document_type] = s.data || {};
+        }
+        if (sName) {
+          if (!nameDocsMap.has(sName)) nameDocsMap.set(sName, {});
+          nameDocsMap.get(sName)![s.document_type] = s.data || {};
+        }
+      });
+
+      // 3. 従業員データ（入退社大元マスタ ＆ 給与プロファイル SSOT結合）
       const { data: usersData } = await supabase
         .from('users')
         .select('*')
@@ -126,40 +166,84 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
       const onboardMap = new Map((onboardProfiles || []).map(p => [p.user_id, p]));
       const payMap = new Map((payProfiles || []).map(p => [p.user_id, p]));
 
+      const combinedPayProfiles: Record<string, any> = {};
+      (payProfiles || []).forEach(p => {
+        combinedPayProfiles[p.user_id] = p;
+      });
+      Object.assign(combinedPayProfiles, localPay);
+      setPayrollProfiles(combinedPayProfiles);
+
       const emps: EmployeeItem[] = (usersData || []).map(u => {
         const ob = onboardMap.get(u.id) || {};
         const pp = payMap.get(u.id) || localPay[u.id] || {};
-        const base = pp.base_salary || ob.base_salary || 250000;
+        const empName = (u.name || '').trim();
+
+        const uDocs = userDocsMap.get(u.id) || {};
+        const nDocs = nameDocsMap.get(empName) || {};
+        const mergedDocs = { ...uDocs, ...nDocs };
+
+        const bankDoc = mergedDocs['bank_passbook'] || {};
+        const depDoc = mergedDocs['dependents_form'] || mergedDocs['tax_withholding'] || {};
+        const conDoc = mergedDocs['labor_contract'] || {};
+        const resDoc = mergedDocs['resident_certificate'] || {};
+        const myDoc = mergedDocs['my_number'] || {};
+
+        let localBackup: any = null;
+        try {
+          const raw = localStorage.getItem(`employee_master_backup_${u.id}`);
+          if (raw) localBackup = JSON.parse(raw);
+        } catch (e) {}
+
+        const kana = depDoc.name_kana || depDoc.nameKana || depDoc.furigana || depDoc.kana ||
+                     resDoc.name_kana || resDoc.nameKana || resDoc.furigana || resDoc.kana ||
+                     conDoc.name_kana || conDoc.nameKana || conDoc.furigana || conDoc.kana ||
+                     ob.name_kana || ob.nameKana || ob.furigana || ob.kana ||
+                     u.name_kana || u.nameKana || u.furigana || u.kana ||
+                     pp.name_kana || pp.nameKana || pp.furigana || pp.kana ||
+                     localBackup?.name_kana || localBackup?.nameKana || localBackup?.furigana || localBackup?.kana || '';
+
+        const bDate = depDoc.birth_date || depDoc.birthDate ||
+                      resDoc.birth_date || resDoc.birthDate ||
+                      conDoc.birth_date || conDoc.birthDate ||
+                      u.birth_date || u.birthDate ||
+                      ob.birth_date || pp.birth_date ||
+                      localBackup?.birth_date || '1990-05-15';
+
+        const addr = depDoc.address || resDoc.address || conDoc.address || u.address || ob.address || localBackup?.address || '滋賀県大津市';
+        const ph = depDoc.phone || depDoc.phoneNumber || conDoc.phone || u.phone || ob.phone || localBackup?.phone || '';
+        const myNum = myDoc.my_number || myDoc.myNumber || depDoc.my_number || depDoc.myNumber || ob.my_number || localBackup?.my_number || '';
+
+        const base = conDoc.base_salary || pp.base_salary || ob.base_salary || localBackup?.base_salary || 250000;
 
         return {
           id: u.id,
           name: u.name || '従業員',
-          name_kana: ob.name_kana || '',
-          department: ob.department || u.department || '本社営業部',
-          position_name: ob.position_name || '一般社員',
+          name_kana: kana,
+          department: conDoc.department || ob.department || u.department || '本社営業部',
+          position_name: conDoc.position_name || ob.position_name || '一般社員',
           role: u.role || 'employee',
-          join_date: ob.join_date || u.join_date || '2024-04-01',
+          join_date: conDoc.join_date || ob.join_date || u.join_date || '2024-04-01',
           retirement_date: ob.retirement_date || u.retirement_date,
           is_retired: u.status === 'retired' || !!ob.retirement_date,
-          birth_date: ob.birth_date || '1990-05-15',
-          address: ob.address || '滋賀県大津市',
-          phone: ob.phone || u.phone || '',
-          my_number: ob.my_number || '',
+          birth_date: bDate,
+          address: addr,
+          phone: ph,
+          my_number: myNum,
           gender: ob.gender || '男性',
           base_salary: base,
-          hourly_wage: pp.hourly_wage || ob.hourly_wage || 1200,
-          salary_type: pp.salary_type || ob.salary_type || 'monthly',
-          bank_name: ob.bank_name || pp.bank_name || '滋賀銀行',
-          branch_name: ob.branch_name || pp.branch_name || '坂本支店',
-          account_type: ob.account_type || pp.account_type || '普通',
-          account_number: ob.account_number || pp.account_number || '1234567',
-          account_holder: ob.account_holder || pp.account_holder || u.name,
-          dependents_count: ob.dependents_count || pp.dependents_count || 0,
+          hourly_wage: conDoc.hourly_wage || pp.hourly_wage || ob.hourly_wage || 1200,
+          salary_type: conDoc.salary_type || pp.salary_type || ob.salary_type || 'monthly',
+          bank_name: bankDoc.bank_name || ob.bank_name || pp.bank_name || '滋賀銀行',
+          branch_name: bankDoc.branch_name || ob.branch_name || pp.branch_name || '坂本支店',
+          account_type: bankDoc.account_type || ob.account_type || pp.account_type || '普通',
+          account_number: bankDoc.account_number || ob.account_number || pp.account_number || '1234567',
+          account_holder: bankDoc.account_holder || ob.account_holder || pp.account_holder || u.name,
+          dependents_count: depDoc.dependents_count !== undefined ? Number(depDoc.dependents_count) : (ob.dependents_count || pp.dependents_count || 0),
           health_insurance_joined: ob.health_insurance_joined !== false,
           pension_insurance_joined: ob.pension_insurance_joined !== false,
           employment_insurance_joined: ob.employment_insurance_joined !== false,
-          health_standard_monthly_remuneration: ob.health_standard_monthly_remuneration || base,
-          pension_standard_monthly_remuneration: ob.pension_standard_monthly_remuneration || base
+          health_standard_monthly_remuneration: ob.health_standard_monthly_remuneration || pp.health_standard_monthly_remuneration || base,
+          pension_standard_monthly_remuneration: ob.pension_standard_monthly_remuneration || pp.pension_standard_monthly_remuneration || base
         };
       });
 
@@ -1078,76 +1162,94 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               {/* ⑤ 日本年金機構公式様式: 被保険者賞与支払届                        */}
               {/* ----------------------------------------------------------------- */}
               {selectedDocType === 'nenkin_bonus_report' && (() => {
-                const activeEmps = employees.filter(e => !e.is_retired && (e.health_insurance_joined || e.pension_insurance_joined));
+                const targetEmps = selectedEmployeeId === 'all'
+                  ? employees.filter(e => !e.is_retired && (e.health_insurance_joined || e.pension_insurance_joined))
+                  : employees.filter(e => e.id === selectedEmployeeId);
+
+                const commonPayDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-10`;
+
+                // 過去の保存された賞与データがあれば優先反映
+                const storageKey = `bonus_report_${tenantId}_${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+                let savedRows: any[] | null = null;
+                let savedMeta: any = null;
+                try {
+                  const raw = localStorage.getItem(storageKey);
+                  if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed.bonusRows)) savedRows = parsed.bonusRows;
+                    savedMeta = parsed;
+                  }
+                } catch (e) {}
+
+                const bonusEmployees: BonusReportEmployee[] = targetEmps.map((emp, index) => {
+                  const savedRow = savedRows?.find(r => r.user_id === emp.id);
+                  const baseAmount = Math.round(emp.base_salary * bonusMultiplier);
+                  const currencyAmt = savedRow?.currencyAmount !== undefined ? Number(savedRow.currencyAmount) : baseAmount;
+                  const goodsAmt = savedRow?.goodsAmount !== undefined ? Number(savedRow.goodsAmount) : 0;
+                  const bDate = savedRow?.birthDate || emp.birth_date || '';
+                  const payDate = savedRow?.individualPaymentDate || commonPayDate;
+                  const is70 = savedRow?.isOver70 ?? checkIfOver70(bDate, payDate);
+
+                  return {
+                    id: emp.id,
+                    insuranceNumber: savedRow?.insuranceNumber || String(index + 1).padStart(4, '0'),
+                    name: emp.name,
+                    nameKana: savedRow?.nameKana || emp.name_kana || '',
+                    birthDate: bDate,
+                    individualPaymentDate: savedRow?.individualPaymentDate || '',
+                    currencyAmount: currencyAmt,
+                    goodsAmount: goodsAmt,
+                    myNumber: savedRow?.myNumber || emp.my_number || '',
+                    isOver70: is70,
+                    isDualWork: savedRow?.isDualWork || false,
+                    isMonthlyMerged: savedRow?.isMonthlyMerged || false,
+                    firstPaymentDay: savedRow?.firstPaymentDay || ''
+                  };
+                });
 
                 return (
-                  <div className="bg-white p-8 rounded-2xl border-2 border-slate-800 text-slate-900 font-sans text-xs max-w-5xl mx-auto shadow-sm print:p-0 print:border-none print:shadow-none">
-                    {/* 公的書類ヘッダー */}
-                    <div className="text-center border-b-2 border-slate-900 pb-3 mb-4">
-                      <div className="text-[10px] font-bold text-slate-600 tracking-widest uppercase">
-                        日本年金機構 / 全国健康保険協会 届出様式
+                  <div className="space-y-6">
+                    {/* 操作・連携補助バー（画面表示時のみ） */}
+                    <div className="print:hidden bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-center gap-3 text-xs text-indigo-950">
+                        <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black shrink-0 shadow-xs">
+                          <Sparkles className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-black text-sm text-indigo-900 flex items-center gap-2">
+                            日本年金機構 公式届出様式（コード2265）
+                            <span className="text-[10px] bg-indigo-200 text-indigo-800 px-2 py-0.5 rounded-full font-bold">
+                              全国標準・提出原本準拠
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-indigo-700 mt-0.5">
+                            各従業員の賞与額・支給日の個別編集や、備考（二以上勤務・月内合算等）の詳細は専用エディタで調整可能です。
+                          </p>
+                        </div>
                       </div>
-                      <h2 className="text-lg sm:text-xl font-black text-slate-950 tracking-tight">
-                        健康保険・厚生年金保険 被保険者賞与支払届
-                      </h2>
+                      <button
+                        onClick={() => setBonusReportModalOpen(true)}
+                        className="shrink-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                        賞与算定・一括入力エディタを開く
+                      </button>
                     </div>
 
-                    {/* 事業所情報 */}
-                    <div className="grid grid-cols-2 gap-4 border border-slate-400 p-3 mb-4 text-[11px]">
-                      <div>
-                        <div><span className="font-bold">事業所整理記号:</span> 25-カア 12345</div>
-                        <div><span className="font-bold">事業所所在地:</span> {companyInfo.address}</div>
-                        <div><span className="font-bold">事業所名称:</span> {companyInfo.name}</div>
-                      </div>
-                      <div className="text-right">
-                        <div><span className="font-bold">賞与支給年月日:</span> {selectedYear}年{selectedMonth}月10日</div>
-                        <div><span className="font-bold">事業主氏名:</span> {companyInfo.representative_name}</div>
-                        <div><span className="font-bold">電話番号:</span> {companyInfo.phone_number}</div>
-                      </div>
-                    </div>
-
-                    {/* 被保険者明細一覧 */}
-                    <table className="w-full border-collapse border-2 border-slate-900 text-[10px] mb-4">
-                      <thead>
-                        <tr className="bg-slate-200 border-b-2 border-slate-900 text-center font-bold">
-                          <th className="p-1.5 border-r border-slate-400 w-10">項番</th>
-                          <th className="p-1.5 border-r border-slate-400 w-28">被保険者整理番号</th>
-                          <th className="p-1.5 border-r border-slate-400">氏名（フリガナ）</th>
-                          <th className="p-1.5 border-r border-slate-400 w-24">生年月日</th>
-                          <th className="p-1.5 border-r border-slate-400 w-24">賞与支給日</th>
-                          <th className="p-1.5 border-r border-slate-400 w-28">通貨による賞与額</th>
-                          <th className="p-1.5 w-28">健保・厚年算定額<br />（千円未満切捨）</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {activeEmps.map((emp, i) => {
-                          const gross = Math.round(emp.base_salary * bonusMultiplier);
-                          const roundedBonus = Math.floor(gross / 1000) * 1000;
-
-                          return (
-                            <tr key={emp.id} className="border-b border-slate-300 text-center font-mono">
-                              <td className="p-1.5 border-r border-slate-300">{i + 1}</td>
-                              <td className="p-1.5 border-r border-slate-300 font-bold">{1000 + i + 1}</td>
-                              <td className="p-1.5 border-r border-slate-300 text-left font-sans font-bold px-2">
-                                <div className="text-[8px] text-slate-500">{emp.name_kana || 'コマイ シュウイチロウ'}</div>
-                                <div>{emp.name}</div>
-                              </td>
-                              <td className="p-1.5 border-r border-slate-300 font-sans">{emp.birth_date || '平2.5.15'}</td>
-                              <td className="p-1.5 border-r border-slate-300 font-sans">{selectedMonth}/10</td>
-                              <td className="p-1.5 border-r border-slate-300 text-right pr-2">¥{gross.toLocaleString()}</td>
-                              <td className="p-1.5 text-right pr-2 font-black text-indigo-950 bg-indigo-50/40">
-                                ¥{roundedBonus.toLocaleString()}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-
-                    <div className="text-[10px] text-slate-500 leading-relaxed space-y-0.5">
-                      <div>※ 被保険者賞与支払届は、賞与を支給した日（支給日）から<strong>5日以内</strong>に管轄の年金事務所へ提出してください。</div>
-                      <div>※ 賞与額は千円未満を切り捨てた額（標準賞与額）として各被保険者の社会保険料算定基礎となります。</div>
-                    </div>
+                    {/* 公式様式ドキュメントプレビュー本体 */}
+                    <OfficialBonusPaymentReportDoc
+                      data={{
+                        submissionDate: savedMeta?.submissionDate || new Date().toISOString().split('T')[0],
+                        officeSymbol: savedMeta?.officeSymbol || officeSymbol,
+                        companyAddress: companyInfo.address,
+                        companyName: companyInfo.name,
+                        companyOwnerName: companyInfo.representative_name,
+                        companyPhone: companyInfo.phone_number,
+                        sharoushiName: savedMeta?.sharoushiName || '',
+                        commonPaymentDate: savedMeta?.commonPaymentDate || commonPayDate,
+                        employees: bonusEmployees
+                      }}
+                    />
                   </div>
                 );
               })()}
@@ -1373,7 +1475,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                             <tr className="border-b border-slate-400">
                               <th className="bg-slate-100 p-2 text-left w-28 border-r border-slate-400">氏名（フリガナ）</th>
                               <td className="p-2 border-r border-slate-400 font-bold text-sm">
-                                <div className="text-[9px] text-slate-500">{emp.name_kana || 'コマイ シュウイチロウ'}</div>
+                                <div className="text-[9px] text-slate-500">{emp.name_kana || ''}</div>
                                 <div>{emp.name}</div>
                               </td>
                               <th className="bg-slate-100 p-2 text-left w-20 border-r border-slate-400">性別</th>
@@ -1499,6 +1601,22 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
             </div>
           </div>
         </div>
+      )}
+
+      {/* 🎁 賞与算定・一括入力詳細エディタモーダル */}
+      {bonusReportModalOpen && (
+        <BonusPaymentReportModal
+          isOpen={bonusReportModalOpen}
+          onClose={() => {
+            setBonusReportModalOpen(false);
+            fetchMasterData(); // 入力・保存したデータを再反映
+          }}
+          tenantId={tenantId}
+          tenantInfo={tenantInfo}
+          employees={employees}
+          payrollProfiles={payrollProfiles}
+          initialYearMonth={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`}
+        />
       )}
 
     </div>

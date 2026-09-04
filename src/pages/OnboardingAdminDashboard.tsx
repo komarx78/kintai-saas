@@ -603,6 +603,14 @@ export default function OnboardingAdminDashboard() {
           onb?.birth_date || pay?.birth_date || 
           localBackup?.birth_date || localBackup?.birthDate || '';
 
+        const kana = depDoc.name_kana || depDoc.nameKana || depDoc.furigana || depDoc.kana ||
+                     resDoc.name_kana || resDoc.nameKana || resDoc.furigana || resDoc.kana ||
+                     conDoc.name_kana || conDoc.nameKana || conDoc.furigana || conDoc.kana ||
+                     u.name_kana || u.nameKana || u.furigana || u.kana ||
+                     onb?.name_kana || onb?.nameKana || onb?.furigana || onb?.kana ||
+                     pay?.name_kana || pay?.nameKana || pay?.furigana || pay?.kana ||
+                     localBackup?.name_kana || localBackup?.nameKana || localBackup?.furigana || localBackup?.kana || '';
+
         const addr = depDoc.address || resDoc.address || conDoc.address || bankDoc.address || u.address || onb?.address || localBackup?.address || '';
         const ph = depDoc.phone || depDoc.phoneNumber || conDoc.phone || conDoc.phoneNumber || resDoc.phone || u.phone || onb?.phone || localBackup?.phone || '';
 
@@ -630,6 +638,7 @@ export default function OnboardingAdminDashboard() {
         return {
           user_id: u.id,
           name: u.name || '従業員',
+          name_kana: kana,
           email: u.email,
           phone: ph,
           birth_date: bDate,
