@@ -24,6 +24,7 @@ export interface EmployeePayrollProfile {
   fixed_overtime_hours: number; // 固定残業時間
   fixed_overtime_allowance: number; // 固定残業手当
   dependents_count: number; // 扶養親族等の数
+  has_spouse?: boolean; // 源泉控除対象配偶者の有無
   birth_date?: string | Date | null; // 生年月日（40〜64歳の介護保険完全自動判定用）
   health_insurance_enabled: boolean; // 健康保険加入
   health_standard_monthly_remuneration?: number | null; // 健康保険 標準報酬月額
@@ -409,7 +410,9 @@ export function calculatePayroll(
   // 税額計算基礎 = 課税支給額 - 社会保険料合計
   const taxBase = Math.max(0, taxableGross - totalSocialInsurance);
 
-  const incomeTax = calculateIncomeTax(taxBase, profile.dependents_count || 0, profile.tax_bracket || 'kou');
+  // 国税庁基準: 源泉控除対象配偶者がいる場合は扶養親族等の数に+1名として税額表適用
+  const effectiveDeps = (profile.dependents_count || 0) + (profile.has_spouse ? 1 : 0);
+  const incomeTax = calculateIncomeTax(taxBase, effectiveDeps, profile.tax_bracket || 'kou');
   
   // 住民税特別徴収額（12ヶ月月別テーブルが設定されていれば対象支給月を優先適用、未設定時は一律値をフォールバック）
   let residentTax = Number(profile.resident_tax_monthly) || 0;

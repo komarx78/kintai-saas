@@ -1855,6 +1855,9 @@ export default function OnboardingAdminDashboard() {
             pension_insurance_enabled: data.pension_insurance_joined,
             employment_insurance_enabled: data.employment_insurance_joined,
             resident_tax_monthly: resolvedResidentTaxMonthly,
+            resident_tax_details: data.resident_tax_details || {},
+            dependents_count: data.dependents_count ?? 0,
+            has_spouse: !!data.has_spouse,
             bank_name: data.bank_name,
             branch_name: data.branch_name,
             account_type: data.account_type,
@@ -1977,6 +1980,21 @@ export default function OnboardingAdminDashboard() {
           my_number: data.my_number || '',
           updated_at: new Date().toISOString()
         }));
+
+        // 給与側の payroll_profiles_${tenantId} キャッシュも即座に同期更新！
+        const payKey = `payroll_profiles_${tenantId}`;
+        const payRaw = localStorage.getItem(payKey);
+        const payCache = payRaw ? JSON.parse(payRaw) : {};
+        payCache[data.user_id] = {
+          ...(payCache[data.user_id] || {}),
+          dependents_count: data.dependents_count ?? 0,
+          has_spouse: !!data.has_spouse,
+          health_standard_monthly_remuneration: data.health_standard_monthly_remuneration || null,
+          pension_standard_monthly_remuneration: data.pension_standard_monthly_remuneration || null,
+          resident_tax_monthly: resolvedResidentTaxMonthly,
+          updated_at: new Date().toISOString()
+        };
+        localStorage.setItem(payKey, JSON.stringify(payCache));
       } catch (stErr) {
         console.warn('localStorage backup error:', stErr);
       }

@@ -564,11 +564,15 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         const subDepCount = depDoc.dependents_count !== undefined 
           ? Number(depDoc.dependents_count) 
           : (Array.isArray(depDoc.dependents) ? depDoc.dependents.length : undefined);
-        const resolvedDepCount = (pay?.dependents_count !== undefined && pay?.dependents_count !== null)
-          ? pay.dependents_count
+        // 扶養親族数の解決（SSOT絶対原則：大元労務マスタ > 提出書類 > ローカルバックアップ > 給与マスタ > 0）
+        const resolvedDepCount = (onb?.dependents_count !== undefined && onb?.dependents_count !== null)
+          ? Number(onb.dependents_count)
           : (subDepCount !== undefined 
-              ? subDepCount 
-              : (onb?.dependents_count ?? localBackup?.dependents_count ?? 0));
+              ? Number(subDepCount) 
+              : ((localBackup?.dependents_count !== undefined && localBackup?.dependents_count !== null)
+                  ? Number(localBackup.dependents_count)
+                  : (pay?.dependents_count ?? 0)));
+        const resolvedHasSpouse = onb?.has_spouse ?? localBackup?.has_spouse ?? pay?.has_spouse ?? false;
 
         // 最新の給与プロファイル（ローカルストレージ改定データを含む）
         let localPayProfile: any = null;
@@ -625,6 +629,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           fixed_overtime_hours: pay?.fixed_overtime_hours ?? 0,
           fixed_overtime_allowance: pay?.fixed_overtime_allowance ?? 0,
           dependents_count: resolvedDepCount,
+          has_spouse: resolvedHasSpouse,
           birth_date: bDate,
           health_insurance_enabled: onb?.health_insurance_joined ?? pay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? true,
           health_standard_monthly_remuneration: pay?.health_standard_monthly_remuneration ?? onb?.health_standard_monthly_remuneration ?? localPayProfile?.health_standard_monthly_remuneration ?? localBackup?.health_standard_monthly_remuneration ?? null,
@@ -681,10 +686,10 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const prefRateDataLatest = getPrefectureRate(activePrefCode);
       const latestPayrollSettings: any = {
         prefecture_code: activePrefCode,
-        employment_insurance_rate: 0.006,
+        employment_insurance_rate: setRow?.employment_insurance_rate || payrollSettings.employment_insurance_rate || 0.005,
         health_insurance_rate: Number((prefRateDataLatest.healthRate / 2).toFixed(5)),
-        nursing_insurance_rate: 0.008,
-        pension_insurance_rate: 0.0915,
+        nursing_insurance_rate: setRow?.nursing_insurance_rate ?? 0.008,
+        pension_insurance_rate: setRow?.pension_insurance_rate ?? 0.0915,
         rounding_method: 'floor',
         target_month: currentMonth.getMonth() + 1
       };
@@ -1010,11 +1015,15 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       } catch (e) {}
 
       const cachedProf = payrollProfiles[userId];
-      const resolvedDepCount = (dbPay?.dependents_count !== undefined && dbPay?.dependents_count !== null)
-        ? dbPay.dependents_count
+      // 扶養親族数の解決（SSOT絶対原則：大元労務マスタ > 提出書類 > ローカルバックアップ > 給与マスタ > 0）
+      const resolvedDepCount = (dbOnb?.dependents_count !== undefined && dbOnb?.dependents_count !== null)
+        ? Number(dbOnb.dependents_count)
         : (subDepCount !== undefined
-            ? subDepCount
-            : (dbOnb?.dependents_count ?? localBackup?.dependents_count ?? cachedProf?.dependents_count ?? 0));
+            ? Number(subDepCount)
+            : ((localBackup?.dependents_count !== undefined && localBackup?.dependents_count !== null)
+                ? Number(localBackup.dependents_count)
+                : (dbPay?.dependents_count ?? cachedProf?.dependents_count ?? 0)));
+      const resolvedHasSpouse = dbOnb?.has_spouse ?? localBackup?.has_spouse ?? dbPay?.has_spouse ?? false;
 
       const resolvedProf: EmployeePayrollProfile = {
         tenant_id: tenantId,
@@ -1033,6 +1042,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         fixed_overtime_hours: dbPay?.fixed_overtime_hours ?? cachedProf?.fixed_overtime_hours ?? 0,
         fixed_overtime_allowance: dbPay?.fixed_overtime_allowance ?? cachedProf?.fixed_overtime_allowance ?? 0,
         dependents_count: resolvedDepCount,
+        has_spouse: resolvedHasSpouse,
         birth_date: dbPay?.birth_date || dbOnb?.birth_date || localBackup?.birth_date || emp.birth_date || cachedProf?.birth_date || null,
         health_insurance_enabled: dbOnb?.health_insurance_joined ?? dbPay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? cachedProf?.health_insurance_enabled ?? true,
         health_standard_monthly_remuneration: dbPay?.health_standard_monthly_remuneration ?? dbOnb?.health_standard_monthly_remuneration ?? localBackup?.health_standard_monthly_remuneration ?? cachedProf?.health_standard_monthly_remuneration ?? null,
@@ -1079,6 +1089,15 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         status: existingSlip?.status || 'draft',
         updated_at: new Date().toISOString()
       };
+
+      try {
+        await supabase.from('employee_payroll_profiles').upsert({
+          tenant_id: tenantId,
+          user_id: userId,
+          dependents_count: resolvedProf.dependents_count,
+          has_spouse: resolvedProf.has_spouse
+        }, { onConflict: 'tenant_id,user_id' });
+      } catch (e) {}
 
       await savePayslipSafe(payload);
       if (!silent) {
@@ -1440,6 +1459,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             account_type: prof.account_type,
             account_number: prof.account_number,
             account_holder: prof.account_holder,
+            dependents_count: prof.dependents_count,
+            has_spouse: prof.has_spouse,
             updated_at: new Date().toISOString()
           })
           .eq('tenant_id', tenantId)
@@ -1952,7 +1973,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                             className="bg-amber-50 hover:bg-amber-100 text-amber-900 px-2 py-0.5 rounded-lg font-bold text-[11px] border border-amber-200 flex items-center gap-1 cursor-pointer transition shadow-2xs"
                             title="従業員マスタ連動：クリックして扶養親族数や給与マスタを確認・変更"
                           >
-                            👨‍👩‍👧 扶養: {prof?.dependents_count || 0}名
+                            👨‍👩‍👧 扶養: {prof?.dependents_count || 0}名{prof?.has_spouse ? ' (💍配偶者有)' : ''}
                             <span className="text-[9px] text-amber-700 bg-amber-100/70 px-1 py-0.2 rounded ml-0.5">マスタ連動</span>
                           </span>
                           {prof?.bank_name ? (
@@ -2183,7 +2204,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                           <span>
                             所得税 (源泉徴収)
                             <span className="text-[10px] text-indigo-500 font-normal ml-1">
-                              [扶養: {prof?.dependents_count || 0}人]
+                              [扶養: {prof?.dependents_count || 0}人{prof?.has_spouse ? ' + 💍配偶者' : ''}]
                             </span>
                             :
                           </span>
@@ -2555,7 +2576,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                         所得税（源泉徴収税額）
                                         {payrollProfiles[slip.user_id]?.dependents_count !== undefined && (
                                           <span className="text-[10px] text-indigo-500 font-normal ml-1">
-                                            [扶養: {payrollProfiles[slip.user_id]?.dependents_count || 0}人]
+                                            [扶養: {payrollProfiles[slip.user_id]?.dependents_count || 0}人{payrollProfiles[slip.user_id]?.has_spouse ? ' + 💍配偶者' : ''}]
                                           </span>
                                         )}
                                         :
@@ -2801,17 +2822,39 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                     />
                   </div>
-                  <div>
-                    <label className="text-[11px] text-slate-500 block mb-1">扶養親族等の数 (人)</label>
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      👨‍👩‍👧 扶養親族等の数 (人)
+                      <span className="text-[10px] text-amber-600 font-normal ml-1">[労務マスタ連動]</span>
+                    </label>
                     <input
                       type="number"
-                      value={profileModal.profile.dependents_count}
+                      min="0"
+                      max="15"
+                      value={profileModal.profile.dependents_count ?? 0}
                       onChange={e => setProfileModal({
                         ...profileModal,
-                        profile: { ...profileModal.profile, dependents_count: parseInt(e.target.value, 10) || 0 }
+                        profile: { ...profileModal.profile, dependents_count: Math.max(0, parseInt(e.target.value, 10) || 0) }
                       })}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                      className="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 font-bold"
                     />
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      💍 源泉控除対象配偶者
+                      <span className="text-[10px] text-amber-600 font-normal ml-1">[労務マスタ連動]</span>
+                    </label>
+                    <select
+                      value={profileModal.profile.has_spouse ? 'true' : 'false'}
+                      onChange={e => setProfileModal({
+                        ...profileModal,
+                        profile: { ...profileModal.profile, has_spouse: e.target.value === 'true' }
+                      })}
+                      className="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800 text-xs"
+                    >
+                      <option value="false">❌ なし (単身・対象外)</option>
+                      <option value="true">💍 あり (配偶者控除・所得95万以下)</option>
+                    </select>
                   </div>
                 </div>
               </div>
