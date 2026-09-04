@@ -223,7 +223,9 @@ export default function OnboardingAdminDashboard() {
     branch_name: '',
     account_type: 'ordinary',
     account_number: '',
-    account_holder: ''
+    account_holder: '',
+    dependents_count: 0,
+    has_spouse: false
   });
 
   // 編集・修正モーダルState
@@ -1680,7 +1682,9 @@ export default function OnboardingAdminDashboard() {
         branch_name: wizardData.branch_name,
         account_type: wizardData.account_type,
         account_number: wizardData.account_number,
-        account_holder: wizardData.account_holder || wizardData.name
+        account_holder: wizardData.account_holder || wizardData.name,
+        dependents_count: wizardData.dependents_count || 0,
+        has_spouse: wizardData.has_spouse || false
       }, { onConflict: 'tenant_id,user_id' });
 
       await supabase.from('employee_onboarding_profiles').upsert({
@@ -1704,7 +1708,9 @@ export default function OnboardingAdminDashboard() {
         commuting_allowance: wizardData.commuting_allowance,
         health_insurance_joined: wizardData.health_insurance_joined,
         pension_insurance_joined: wizardData.pension_insurance_joined,
-        employment_insurance_joined: wizardData.employment_insurance_joined
+        employment_insurance_joined: wizardData.employment_insurance_joined,
+        dependents_count: wizardData.dependents_count || 0,
+        has_spouse: wizardData.has_spouse || false
       }, { onConflict: 'tenant_id,user_id' });
 
       alert(`🎉 ${wizardData.name} さんの入社手続きが完了しました！\n「勤怠管理」「シフト管理」「給与計算」の全システムに即座に同期されました。`);
@@ -2586,6 +2592,9 @@ export default function OnboardingAdminDashboard() {
                               口座: {emp.bank_name || '未登録'} / 通勤: ¥{emp.commuting_allowance?.toLocaleString() || 0}
                             </div>
                             <div className="flex items-center gap-1 mt-1 text-[9px] text-slate-500 flex-wrap">
+                              <span className="bg-amber-50 text-amber-900 font-bold px-1.5 py-0.5 rounded border border-amber-200">
+                                👨‍👩‍👧 扶養: {emp.dependents_count || 0}名{emp.has_spouse ? ' (💍配偶者有)' : ''}
+                              </span>
                               {emp.health_standard_monthly_remuneration ? (
                                 <span className="bg-indigo-50 text-indigo-700 font-bold px-1 py-0.5 rounded border border-indigo-100">
                                   健保: ¥{(emp.health_standard_monthly_remuneration / 10000).toFixed(0)}万
@@ -4866,6 +4875,41 @@ export default function OnboardingAdminDashboard() {
                     />
                   </div>
                 </div>
+
+                {/* 👨‍👩‍👧 税法上の扶養親族・配偶者（源泉所得税の甲欄計算用） */}
+                <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200 space-y-2">
+                  <label className="text-[11px] font-bold text-amber-950 flex items-center gap-1.5">
+                    👨‍👩‍👧 税法上の扶養親族 ＆ 配偶者（源泉所得税 甲欄連動マスタ）
+                  </label>
+                  <p className="text-[10px] text-amber-800">
+                    ※ 従業員の扶養控除等申告書に基づく人数です。登録内容は「給与計算システム」の国税庁公式源泉徴収税額へ100%自動反映されます。
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">控除対象 扶養親族数 (名)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="15"
+                        placeholder="例: 0"
+                        value={wizardData.dependents_count || 0}
+                        onChange={e => setWizardData({ ...wizardData, dependents_count: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                        className="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">源泉控除対象配偶者</label>
+                      <select
+                        value={wizardData.has_spouse ? 'true' : 'false'}
+                        onChange={e => setWizardData({ ...wizardData, has_spouse: e.target.value === 'true' })}
+                        className="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800"
+                      >
+                        <option value="false">❌ なし (単身・対象外)</option>
+                        <option value="true">💍 あり (配偶者控除あり)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -4882,6 +4926,7 @@ export default function OnboardingAdminDashboard() {
                     <div>就業時間: <span className="font-bold text-indigo-700">{wizardData.start_time} 〜 {wizardData.end_time}</span></div>
                     <div>入社日: <span className="font-bold">{wizardData.join_date}</span></div>
                     <div>給与: <span className="font-bold">{wizardData.salary_type === 'hourly' ? `時給 ¥${wizardData.hourly_wage}` : `月給 ¥${wizardData.base_salary.toLocaleString()}`}</span></div>
+                    <div>扶養: <span className="font-bold text-amber-900">{wizardData.dependents_count || 0}名{wizardData.has_spouse ? ' (💍配偶者有)' : ''}</span></div>
                   </div>
                 </div>
 

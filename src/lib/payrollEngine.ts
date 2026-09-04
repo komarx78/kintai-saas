@@ -57,7 +57,9 @@ export interface PayrollSettings {
   payment_month: string;
   payment_day: string;
   prefecture_code?: string; // 適用都道府県（デフォルト: 13 東京都）
-  employment_insurance_rate?: number; // 指定があれば上書き
+  employment_insurance_business_type?: 'general' | 'agriculture' | 'construction' | 'custom'; // 雇用保険の事業の種類
+  employment_insurance_rate?: number; // 雇用保険 労働者負担率 (例: 一般 0.005 / 農水・建設 0.006)
+  employment_insurance_employer_rate?: number; // 雇用保険 事業主負担率 (例: 一般 0.0085 / 農水 0.0095)
   health_insurance_rate?: number; // 指定があれば上書き
   nursing_insurance_rate?: number; // 指定があれば上書き
   pension_insurance_rate?: number; // 指定があれば上書き
@@ -366,7 +368,7 @@ export function calculatePayroll(
     lateEarlyDeduction
   );
 
-  // 2. 社会保険料の計算（都道府県料率 ＆ 生年月日による40〜64歳介護保険自動判定）
+  // 2. 社会保険料の計算（都道府県料率 ＆ 会社雇用保険設定 ＆ 生年月日による40〜64歳介護保険自動判定）
   const socialResult = calculateSocialInsuranceDeduction({
     monthlySalary: totalEarnings,
     healthStandardRemuneration: profile.health_standard_monthly_remuneration,
@@ -377,6 +379,7 @@ export function calculatePayroll(
     isHealthEnabled: profile.health_insurance_enabled,
     isPensionEnabled: profile.pension_insurance_enabled,
     isEmploymentEnabled: profile.employment_insurance_enabled,
+    employmentRate: settings?.employment_insurance_rate,
     isNursingManualOverride: profile.nursing_insurance_enabled,
   });
 

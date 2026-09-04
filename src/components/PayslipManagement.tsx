@@ -5,7 +5,8 @@ import {
   Edit3, CheckCircle2, Lock, Unlock, Printer, 
   Users, Sparkles, Loader2, X, FileSpreadsheet,
   Settings as SettingsIcon, Download, UserCheck, CreditCard, Building2, Save,
-  ChevronDown, ChevronUp, Clock, Calendar, TrendingUp, MapPin, LayoutGrid, List, RotateCcw
+  ChevronDown, ChevronUp, Clock, Calendar, TrendingUp, MapPin, LayoutGrid, List, RotateCcw,
+  ShieldCheck
 } from 'lucide-react';
 import { OfficialPayslipDoc } from './OfficialPayslipDoc';
 import { 
@@ -14,7 +15,7 @@ import {
   type AttendanceSummary, 
   type PayrollSettings 
 } from '../lib/payrollEngine';
-import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress, isNursingInsuranceApplicable } from '../lib/socialInsurance';
+import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress, isNursingInsuranceApplicable, EMPLOYMENT_INSURANCE_RATES_R8 } from '../lib/socialInsurance';
 import { 
   getLaborContractTemplateFromStorage, 
   saveLaborContractTemplateToStorage, 
@@ -84,7 +85,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     payment_month: 'current',
     payment_day: '25',
     prefecture_code: '25', // デフォルト: 25 滋賀県
-    employment_insurance_rate: 0.006,
+    employment_insurance_business_type: 'general',
+    employment_insurance_rate: 0.005, // 令和8年度 一般: 5/1,000 (0.5%)
+    employment_insurance_employer_rate: 0.0085, // 令和8年度 一般: 8.5/1,000 (0.85%)
     health_insurance_rate: 0.0494, // 滋賀県 9.88% の折半 4.94%
     nursing_insurance_rate: 0.008,
     pension_insurance_rate: 0.0915,
@@ -1088,73 +1091,6 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     }
   };
 
-  // 👨‍👩‍👧 扶養親族数の即時クイック更新 ＆ 給与即時再計算（SSOT完全同期）
-  const handleQuickUpdateDependents = async (userId: string, newCount: number) => {
-    if (!tenantId) return;
-    setIsSaving(true);
-    try {
-      // 0. Reactステートを即時更新
-      setPayrollProfiles(prev => ({
-        ...prev,
-        [userId]: {
-          ...(prev[userId] || getInitialProfile(tenantId, userId)),
-          dependents_count: newCount
-        }
-      }));
-
-      // 0.5. LocalStorage の payroll_profiles を更新
-      try {
-        const rawPay = localStorage.getItem(`payroll_profiles_${tenantId}`);
-        const parsedPay = rawPay ? JSON.parse(rawPay) : {};
-        if (parsedPay[userId]) {
-          parsedPay[userId].dependents_count = newCount;
-          localStorage.setItem(`payroll_profiles_${tenantId}`, JSON.stringify(parsedPay));
-        }
-      } catch (e) {}
-
-      // 1. employee_payroll_profiles に保存
-      try {
-        await supabase
-          .from('employee_payroll_profiles')
-          .upsert({
-            tenant_id: tenantId,
-            user_id: userId,
-            dependents_count: newCount,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'tenant_id,user_id' });
-      } catch (e) {
-        console.warn('payroll profile dependents update error:', e);
-      }
-
-      // 2. employee_onboarding_profiles に保存
-      try {
-        await supabase
-          .from('employee_onboarding_profiles')
-          .upsert({
-            tenant_id: tenantId,
-            user_id: userId,
-            dependents_count: newCount,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'tenant_id,user_id' });
-      } catch (e) {}
-
-      // 3. LocalStorage バックアップに保存
-      try {
-        const key = `employee_master_backup_${userId}`;
-        const raw = localStorage.getItem(key);
-        const parsed = raw ? JSON.parse(raw) : {};
-        localStorage.setItem(key, JSON.stringify({ ...parsed, dependents_count: newCount, updated_at: new Date().toISOString() }));
-      } catch (e) {}
-
-      // 4. 即座に最新マスタで再計算を実行！
-      await handleRecalculateSingle(userId);
-    } catch (err: any) {
-      console.error('Quick update dependents error:', err);
-      alert('扶養親族数の変更に失敗しました: ' + err.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   // 🔄 大元マスタ・勤怠から当月全社員の給与を一括再計算
   const handleRecalculateAll = async () => {
@@ -1642,6 +1578,11 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       {(() => {
         const prefCode = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '13';
         const prefData = getPrefectureRate(prefCode);
+        const bType = payrollSettings.employment_insurance_business_type || 'general';
+        const eiSetting = EMPLOYMENT_INSURANCE_RATES_R8[bType];
+        const activeEmpRate = payrollSettings.employment_insurance_rate !== undefined 
+          ? payrollSettings.employment_insurance_rate 
+          : eiSetting.workerRate;
         return (
           <div className="bg-gradient-to-r from-indigo-50 via-blue-50 to-indigo-50/60 border border-indigo-200/80 rounded-2xl p-3.5 px-4.5 flex flex-wrap items-center justify-between gap-2 text-xs shadow-2xs">
             <div className="flex items-center gap-2.5">
@@ -1652,7 +1593,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 <span className="font-bold text-slate-700">適用社会保険料率: </span>
                 <span className="font-black text-indigo-800 text-sm">{prefData.name}</span>
                 <span className="text-indigo-600 font-bold ml-1.5">（健康保険 {(prefData.healthRate * 100).toFixed(2)}% / 折半 {(prefData.healthRate * 50).toFixed(3)}%）</span>
-                <span className="text-slate-400 text-[11px] ml-2 font-mono">※厚生年金 18.30% / 雇用 0.6% / 介護 1.60%</span>
+                <span className="text-slate-500 text-[11px] ml-2 font-mono">
+                  ※厚生年金 18.30% / 雇用保険: <strong className="text-emerald-700">{eiSetting.name} {(activeEmpRate * 1000).toFixed(1)}/1,000 ({(activeEmpRate * 100).toFixed(1)}%)</strong> / 介護 1.60%
+                </span>
               </div>
             </div>
             <button
@@ -1660,7 +1603,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               className="text-[11px] bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
             >
               <SettingsIcon className="w-3.5 h-3.5 text-indigo-600" />
-              都道府県・設定を変更
+              料率・事業設定を変更
             </button>
           </div>
         );
@@ -1997,27 +1940,14 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                             </>
                           )}
                           <span>•</span>
-                          <div className="bg-amber-50 text-amber-900 px-2 py-0.5 rounded-lg font-bold text-[11px] border border-amber-300 flex items-center gap-1 shadow-2xs">
-                            <span>👨‍👩‍👧 扶養:</span>
-                            <select
-                              value={prof?.dependents_count ?? 0}
-                              onChange={(e) => handleQuickUpdateDependents(slip.user_id, parseInt(e.target.value, 10) || 0)}
-                              className="bg-white border border-amber-300 rounded px-1.5 py-0.5 text-[11px] font-black text-amber-950 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500"
-                              title="扶養人数を変更すると即座に源泉所得税が再計算されます"
-                            >
-                              {[0, 1, 2, 3, 4, 5, 6, 7].map(n => (
-                                <option key={n} value={n}>{n}名</option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={() => setProfileModal({ isOpen: true, user: slip.user, profile: prof || getInitialProfile(tenantId || '', slip.user_id) })}
-                              className="text-[10px] text-amber-700 hover:text-amber-900 underline ml-0.5 cursor-pointer"
-                              title="給与マスタ詳細を開く"
-                            >
-                              詳細
-                            </button>
-                          </div>
+                          <span 
+                            onClick={() => setProfileModal({ isOpen: true, user: slip.user, profile: prof || getInitialProfile(tenantId || '', slip.user_id) })}
+                            className="bg-amber-50 hover:bg-amber-100 text-amber-900 px-2 py-0.5 rounded-lg font-bold text-[11px] border border-amber-200 flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                            title="従業員マスタ連動：クリックして扶養親族数や給与マスタを確認・変更"
+                          >
+                            👨‍👩‍👧 扶養: {prof?.dependents_count || 0}名
+                            <span className="text-[9px] text-amber-700 bg-amber-100/70 px-1 py-0.2 rounded ml-0.5">マスタ連動</span>
+                          </span>
                           {prof?.bank_name ? (
                             <span className="text-[11px] text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded-lg">
                               🏦 {prof.bank_name} {prof.branch_name} ({prof.account_type === 'current' ? '当座' : '普通'} {prof.account_number})
@@ -2239,7 +2169,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                           <span className="font-mono text-slate-800">¥{(slip.pension_insurance || 0).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-500">雇用保険料 (0.6%):</span>
+                          <span className="text-slate-500">雇用保険料 ({payrollSettings.employment_insurance_rate ? (payrollSettings.employment_insurance_rate * 100).toFixed(1) : '0.5'}%):</span>
                           <span className="font-mono text-slate-800">¥{(slip.employment_insurance || 0).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between text-indigo-700 font-bold">
@@ -2610,7 +2540,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                       );
                                     })()}
                                     <div className="flex justify-between">
-                                      <span>雇用保険料（0.6%）:</span>
+                                      <span>雇用保険料（{payrollSettings.employment_insurance_rate ? (payrollSettings.employment_insurance_rate * 100).toFixed(1) : '0.5'}%）:</span>
                                       <span>¥{(slip.employment_insurance || 0).toLocaleString()}</span>
                                     </div>
                                     <div className="flex justify-between text-indigo-700 font-bold">
@@ -3162,39 +3092,112 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 </div>
               </div>
 
+              {/* 🛡️ 雇用保険料率設定（厚生労働省 令和8年度最新公式料率対応） */}
+              <div className="bg-emerald-50/60 p-3.5 rounded-2xl border border-emerald-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    雇用保険 事業の種類 ＆ 保険料率設定
+                  </label>
+                  <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-300">
+                    厚労省 令和8年度最新
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  貴社の事業の種類を選択してください。法令通りの労働者負担率・事業主負担率が自動設定されます。
+                </p>
+
+                <div className="space-y-1.5">
+                  {(['general', 'agriculture', 'construction', 'custom'] as const).map(bType => {
+                    const r = EMPLOYMENT_INSURANCE_RATES_R8[bType];
+                    const isSelected = (payrollSettings.employment_insurance_business_type || 'general') === bType;
+                    return (
+                      <div
+                        key={bType}
+                        onClick={() => {
+                          if (bType !== 'custom') {
+                            setPayrollSettings({
+                              ...payrollSettings,
+                              employment_insurance_business_type: bType,
+                              employment_insurance_rate: r.workerRate,
+                              employment_insurance_employer_rate: r.employerRate
+                            });
+                          } else {
+                            setPayrollSettings({
+                              ...payrollSettings,
+                              employment_insurance_business_type: 'custom'
+                            });
+                          }
+                        }}
+                        className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-between ${
+                          isSelected
+                            ? 'bg-white border-emerald-500 shadow-xs ring-1 ring-emerald-400'
+                            : 'bg-white/60 hover:bg-white border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="ei_business_type"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          />
+                          <div>
+                            <div className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                              {r.name}
+                              {bType === 'general' && <span className="text-[9px] text-slate-400 font-normal">（IT・サービス・小売・製造等）</span>}
+                              {bType === 'agriculture' && <span className="text-[9px] text-slate-400 font-normal">（農業・林業・水産・清酒製造）</span>}
+                              {bType === 'construction' && <span className="text-[9px] text-slate-400 font-normal">（土木・建築・工事全般）</span>}
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">
+                              労働者負担: <span className="font-bold font-mono text-emerald-700">{(r.workerRate * 1000).toFixed(1)}/1,000 ({(r.workerRate * 100).toFixed(1)}%)</span>
+                              <span className="mx-1.5 text-slate-300">|</span>
+                              事業主負担: <span className="font-bold font-mono text-slate-700">{(r.employerRate * 1000).toFixed(1)}/1,000</span>
+                              <span className="mx-1.5 text-slate-300">|</span>
+                              合計: <span className="font-mono text-slate-600">{(r.totalRate * 1000).toFixed(1)}/1,000</span>
+                            </div>
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <span className="text-[10px] bg-emerald-600 text-white font-bold px-2 py-0.5 rounded-md shrink-0">
+                            選択中
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {payrollSettings.employment_insurance_business_type === 'custom' && (
+                  <div className="p-2.5 bg-white rounded-xl border border-emerald-300 grid grid-cols-2 gap-2 mt-1">
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-bold block mb-0.5">労働者負担率 (例: 0.005)</label>
+                      <input
+                        type="number"
+                        step="0.0005"
+                        value={payrollSettings.employment_insurance_rate}
+                        onChange={e => setPayrollSettings({ ...payrollSettings, employment_insurance_rate: parseFloat(e.target.value) || 0.005 })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 font-bold text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-bold block mb-0.5">事業主負担率 (例: 0.0085)</label>
+                      <input
+                        type="number"
+                        step="0.0005"
+                        value={payrollSettings.employment_insurance_employer_rate || 0.0085}
+                        onChange={e => setPayrollSettings({ ...payrollSettings, employment_insurance_employer_rate: parseFloat(e.target.value) || 0.0085 })}
+                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 font-bold text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2.5">
-                <h4 className="font-bold text-slate-700 text-xs">標準社会保険料率（従業員負担分）</h4>
+                <h4 className="font-bold text-slate-700 text-xs">端数処理および任意上書き設定</h4>
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">雇用保険料率</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={payrollSettings.employment_insurance_rate}
-                      onChange={e => setPayrollSettings({ ...payrollSettings, employment_insurance_rate: parseFloat(e.target.value) || 0.006 })}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1 font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">健康保険料率</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={payrollSettings.health_insurance_rate}
-                      onChange={e => setPayrollSettings({ ...payrollSettings, health_insurance_rate: parseFloat(e.target.value) || 0.05 })}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1 font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">厚生年金保険料率</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={payrollSettings.pension_insurance_rate}
-                      onChange={e => setPayrollSettings({ ...payrollSettings, pension_insurance_rate: parseFloat(e.target.value) || 0.0915 })}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1 font-bold"
-                    />
-                  </div>
                   <div>
                     <label className="text-[10px] text-slate-500 block mb-0.5">端数処理方法</label>
                     <select
@@ -3202,9 +3205,19 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                       onChange={e => setPayrollSettings({ ...payrollSettings, rounding_method: e.target.value as any })}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1 font-bold"
                     >
-                      <option value="floor">50銭未満切捨（通常）</option>
+                      <option value="floor">50銭未満切捨（通常・標準）</option>
                       <option value="round">四捨五入</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">厚生年金保険料率 (本人負担)</label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={payrollSettings.pension_insurance_rate}
+                      onChange={e => setPayrollSettings({ ...payrollSettings, pension_insurance_rate: parseFloat(e.target.value) || 0.0915 })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1 font-bold"
+                    />
                   </div>
                 </div>
               </div>

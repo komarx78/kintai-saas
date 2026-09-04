@@ -9,9 +9,59 @@ export interface PrefectureSocialRate {
   healthRate: number;      // 健康保険料率 (全額)
   nursingRate: number;     // 介護保険料率 (全額、全国一律 1.60%)
   pensionRate: number;     // 厚生年金保険料率 (全額、全国一律 18.30%)
-  employmentRate: number;  // 雇用保険料率 (本人負担 0.6%)
+  employmentRate: number;  // 雇用保険料率 (本人負担 デフォルト 0.005 または 0.006)
   childRearingRate: number;// 子ども・子育て拠出金 (会社負担 0.36%)
 }
+
+/**
+ * 厚生労働省公式 雇用保険料率（令和8年度最新・令和7年度対比）
+ */
+export type EmploymentInsuranceBusinessType = 'general' | 'agriculture' | 'construction' | 'custom';
+
+export interface EmploymentInsuranceSetting {
+  businessType: EmploymentInsuranceBusinessType;
+  name: string;
+  workerRate: number;    // 労働者負担率 (例: 0.005)
+  employerRate: number;  // 事業主負担率 (例: 0.0085)
+  totalRate: number;     // 合計料率 (例: 0.0135)
+  description: string;
+}
+
+// 令和8年度（2026年4月〜2027年3月）公式料率
+export const EMPLOYMENT_INSURANCE_RATES_R8: Record<EmploymentInsuranceBusinessType, EmploymentInsuranceSetting> = {
+  general: {
+    businessType: 'general',
+    name: '一般の事業',
+    workerRate: 0.005, // 5/1,000
+    employerRate: 0.0085, // 8.5/1,000
+    totalRate: 0.0135, // 13.5/1,000
+    description: '一般企業・IT・サービス・小売・製造等（労働者: 5/1,000 / 事業主: 8.5/1,000）'
+  },
+  agriculture: {
+    businessType: 'agriculture',
+    name: '農林水産・清酒製造の事業',
+    workerRate: 0.006, // 6/1,000
+    employerRate: 0.0095, // 9.5/1,000
+    totalRate: 0.0155, // 15.5/1,000
+    description: '農業・林業・水産業・清酒製造等（労働者: 6/1,000 / 事業主: 9.5/1,000）'
+  },
+  construction: {
+    businessType: 'construction',
+    name: '建設の事業',
+    workerRate: 0.006, // 6/1,000
+    employerRate: 0.0105, // 10.5/1,000
+    totalRate: 0.0165, // 16.5/1,000
+    description: '土木・建築・建設工事業等（労働者: 6/1,000 / 事業主: 10.5/1,000）'
+  },
+  custom: {
+    businessType: 'custom',
+    name: 'カスタム設定（任意料率入力）',
+    workerRate: 0.005,
+    employerRate: 0.0085,
+    totalRate: 0.0135,
+    description: '任意の料率をパーセントまたは千分率で手動設定'
+  }
+};
 
 // 令和7年度（2025/2026年度・最新改定値）47都道府県 協会けんぽ標準料率
 export const PREFECTURES: PrefectureSocialRate[] = [
@@ -222,6 +272,7 @@ export function calculateSocialInsuranceDeduction(params: {
   isHealthEnabled: boolean;
   isPensionEnabled: boolean;
   isEmploymentEnabled: boolean;
+  employmentRate?: number; // 会社設定の雇用保険料率（指定があれば優先、なければデフォルト）
   isNursingManualOverride?: boolean | null; // 手動で介護保険を強制ON/OFFする場合
 }) {
   const {
@@ -234,6 +285,7 @@ export function calculateSocialInsuranceDeduction(params: {
     isHealthEnabled,
     isPensionEnabled,
     isEmploymentEnabled,
+    employmentRate,
     isNursingManualOverride,
   } = params;
 
@@ -274,9 +326,10 @@ export function calculateSocialInsuranceDeduction(params: {
     ? roundHalf((pensionBase * pref.pensionRate) / 2)
     : 0;
 
-  // 雇用保険料（本人負担 ＝ 実際の総支給額 × 雇用保険料率）
+  // 雇用保険料（本人負担 ＝ 実際の総支給額 × 雇用保険料率、50銭以下切り捨て・50銭超切り上げ）
+  const activeEmpRate = employmentRate !== undefined ? employmentRate : pref.employmentRate;
   const employmentInsurance = isEmploymentEnabled
-    ? Math.floor(monthlySalary * pref.employmentRate)
+    ? roundHalf(monthlySalary * activeEmpRate)
     : 0;
 
   return {
@@ -287,6 +340,7 @@ export function calculateSocialInsuranceDeduction(params: {
     healthRate: pref.healthRate,
     nursingRate: pref.nursingRate,
     pensionRate: pref.pensionRate,
+    employmentRate: activeEmpRate,
     healthInsurance,
     nursingInsurance,
     pensionInsurance,
