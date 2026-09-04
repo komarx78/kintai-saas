@@ -1,8 +1,55 @@
 // Google Gemini API クライアント
+import { supabase } from './supabase';
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
+}
+
+/**
+ * 全デバイス・別PCで確実にGemini APIキーを取得するリゾルバ（SaaSマルチテナント対応）
+ * テナント個別 ➔ プラットフォーム共通（system_settings） ➔ キャッシュ ➔ 環境変数の順で自動解決
+ */
+export async function getResolvedGeminiApiKey(tenantId?: string): Promise<string> {
+  // 1. localStorage からの即時キャッシュ
+  const localKey = (tenantId ? localStorage.getItem(`gemini_api_key_${tenantId}`) : null) ||
+    localStorage.getItem('platform_gemini_api_key') ||
+    localStorage.getItem('gemini_api_key_custom');
+  if (localKey && localKey.trim() && !localKey.includes('placeholder')) {
+    return localKey.trim();
+  }
+
+  // 2. テナント個別設定（tenants テーブル）から取得
+  if (tenantId) {
+    try {
+      const { data: tData } = await supabase.from('tenants').select('gemini_api_key').eq('id', tenantId).maybeSingle();
+      if (tData?.gemini_api_key && tData.gemini_api_key.trim()) {
+        localStorage.setItem(`gemini_api_key_${tenantId}`, tData.gemini_api_key.trim());
+        return tData.gemini_api_key.trim();
+      }
+    } catch (e) {
+      console.warn('Failed to fetch tenant gemini_api_key:', e);
+    }
+  }
+
+  // 3. プラットフォーム統括本部設定（system_settings テーブル）から取得（別PC・全社共通の決定打）
+  try {
+    const { data: sData } = await supabase.from('system_settings').select('gemini_api_key').limit(1).maybeSingle();
+    if (sData?.gemini_api_key && sData.gemini_api_key.trim()) {
+      localStorage.setItem('platform_gemini_api_key', sData.gemini_api_key.trim());
+      return sData.gemini_api_key.trim();
+    }
+  } catch (e) {
+    console.warn('Failed to fetch system_settings gemini_api_key:', e);
+  }
+
+  // 4. 環境変数フォールバック
+  const envKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (envKey && envKey.trim() && !envKey.includes('placeholder')) {
+    return envKey.trim();
+  }
+
+  return '';
 }
 
 /**
@@ -11,22 +58,22 @@ export interface ChatMessage {
  * @param companyRules 就業規則・社内規定テキスト
  * @param chatHistory これまでのチャット履歴
  * @param tenantApiKey テナントごとの個別APIキー（任意）
+ * @param tenantId テナントID（任意）
  */
 export async function askEmploymentRulesAI(
   query: string,
   companyRules: string,
   chatHistory: ChatMessage[] = [],
-  tenantApiKey?: string
+  tenantApiKey?: string,
+  tenantId?: string
 ): Promise<string> {
-  // 1. 販売元プラットフォーム設定キー ➔ 2. 環境変数 ➔ 3. テナント個別キー
-  const apiKey = tenantApiKey ||
-    localStorage.getItem('platform_gemini_api_key') ||
-    import.meta.env.VITE_GEMINI_API_KEY ||
-    localStorage.getItem('gemini_api_key_custom') ||
-    '';
+  let apiKey = tenantApiKey?.trim() || '';
+  if (!apiKey || apiKey.includes('placeholder')) {
+    apiKey = await getResolvedGeminiApiKey(tenantId);
+  }
 
   if (!apiKey || apiKey.includes('placeholder')) {
-    return '【AI機能のご案内】現在、社内規定AI相談機能のAPIキーが未設定です。\n会社管理者様のアカウントにて「会社・全社マスタ設定」または「就業規則設定」画面より、Google Gemini APIキーの登録をお願いいたします。';
+    return '【AI機能のご案内】現在、社内規定AI相談機能のAPIキーが未設定です。\n管理者アカウントにて「特権本部」または「会社・全社マスタ設定」より、Google Gemini APIキーの登録をお願いいたします。';
   }
 
   const systemInstruction = `あなたは企業の就業規則・社内規定に精通した親切で優秀な人事労務アシスタントAIです。

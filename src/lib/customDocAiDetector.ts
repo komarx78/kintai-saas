@@ -1,4 +1,5 @@
 import { type CustomDocField } from './customDocManager';
+import { getResolvedGeminiApiKey } from './gemini';
 
 // 官公庁様式・社内文書の自動判定プリセット定義
 export interface DocumentPresetRule {
@@ -88,8 +89,9 @@ export async function detectFieldsWithAi(
 ): Promise<{ fields: CustomDocField[]; matchedPresetName: string }> {
   const combinedText = `${title} ${fileName}`.toLowerCase();
 
-  // 1. Gemini Vision APIキーがある場合、高度な視覚認識を実行
-  if (apiKey && canvasImageBase64) {
+  // 1. Gemini Vision APIキーがある場合（またはDBから自動取得）、高度な視覚認識を実行
+  const resolvedApiKey = (apiKey && apiKey.trim()) ? apiKey.trim() : await getResolvedGeminiApiKey();
+  if (resolvedApiKey && canvasImageBase64) {
     try {
       const prompt = `あなたは日本の労務・税務公的書類のOCR解析エンジンです。
 添付された官公庁PDF画像（A4用紙）を解析し、記入欄・マス目の位置（X座標%, Y座標% : 0〜100）を特定してください。
@@ -100,7 +102,7 @@ export async function detectFieldsWithAi(
 ]
 利用可能なsourceKey: company.name, company.address, company.corporate_number, company.representative_name, employee.name, employee.name_kana, employee.birth_date_wareki_y, employee.birth_date_m, employee.birth_date_d, employee.address, employee.phone, employee.my_number, employee.pension_number, employee.employment_insurance_number, employee.join_date_wareki, employee.base_salary, employee.bank_name, employee.account_number, employee.account_holder, employee.spouse_name`;
 
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${resolvedApiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

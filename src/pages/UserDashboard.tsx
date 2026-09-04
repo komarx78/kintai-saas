@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock, Calendar, LogOut, FileText, CheckCircle, UserCheck, XCircle, ChevronLeft, ChevronRight, Settings, Bot, DollarSign, ArrowLeft, RotateCcw } from 'lucide-react';
+import { Clock, Calendar, LogOut, FileText, CheckCircle, UserCheck, XCircle, ChevronLeft, ChevronRight, Settings, Bot, ArrowLeft, RotateCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { RulesAiAssistant } from '../components/RulesAiAssistant';
@@ -728,7 +728,7 @@ const UserDashboard = () => {
     const titles: Record<string, string> = {
       home: 'ホーム（打刻） | スマート勤怠',
       attendance: '月次勤怠・有給照会 | スマート勤怠',
-      payslips: 'Web給与明細 | スマート勤怠',
+      payslips: 'Web給与明細・源泉徴収票・労務書類 | スマート勤怠',
       requests: '各種申請 | スマート勤怠',
       approvals: '部下からの申請承認 | スマート勤怠',
       rules_ai: '🤖 社内規定AI相談 | スマート勤怠'
@@ -773,8 +773,8 @@ const UserDashboard = () => {
             onClick={() => setActiveTab('payslips')}
             className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'payslips' ? 'bg-emerald-700 font-bold text-white shadow-sm' : 'hover:bg-slate-700 text-emerald-300'}`}
           >
-            <DollarSign className="mr-3 h-5 w-5 text-emerald-400" />
-            Web給与明細
+            <FileText className="mr-3 h-5 w-5 text-emerald-400" />
+            📄 Web給与明細・源泉徴収票・書類
           </button>
 
           <button 
@@ -1087,8 +1087,8 @@ const UserDashboard = () => {
                     onClick={() => setActiveTab('payslips')}
                     className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg transition-all flex items-center justify-center space-x-2 text-xs whitespace-nowrap cursor-pointer shadow-md"
                   >
-                    <DollarSign className="w-4 h-4 text-emerald-200" />
-                    <span>最新の給与明細書を見る</span>
+                    <FileText className="w-4 h-4 text-emerald-200" />
+                    <span>給与明細・源泉徴収票・契約書類を確認</span>
                   </button>
                   <button 
                     onClick={() => setActiveTab('rules_ai')}

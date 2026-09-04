@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { askEmploymentRulesAI, type ChatMessage } from '../lib/gemini';
+import { askEmploymentRulesAI, getResolvedGeminiApiKey, type ChatMessage } from '../lib/gemini';
 import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 import { 
   Bot, Send, Sparkles, BookOpen, RefreshCw, User, HelpCircle, 
@@ -37,11 +37,6 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
                     localStorage.getItem('company_employment_rules');
       if (saved) setCompanyRules(saved);
 
-      const savedKey = (resolvedTenantId ? localStorage.getItem(`gemini_api_key_${resolvedTenantId}`) : null) || 
-                       localStorage.getItem('gemini_api_key_custom') ||
-                       localStorage.getItem('platform_gemini_api_key');
-      if (savedKey) setTenantApiKey(savedKey);
-
       // 2. tenantIdが未指定の場合はログインユーザーから自動解決
       try {
         if (!resolvedTenantId) {
@@ -52,7 +47,7 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
           }
         }
 
-        // 3. データベース（Supabase tenants テーブル）から全社共通設定を確実に取得
+        // 3. データベース（Supabase tenants テーブル）から就業規則を取得
         if (resolvedTenantId) {
           const { data: tData } = await supabase
             .from('tenants')
@@ -66,12 +61,13 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
               localStorage.setItem(`company_employment_rules_${resolvedTenantId}`, tData.employment_rules_text);
               localStorage.setItem('company_employment_rules', tData.employment_rules_text);
             }
-            if (tData.gemini_api_key) {
-              setTenantApiKey(tData.gemini_api_key);
-              localStorage.setItem(`gemini_api_key_${resolvedTenantId}`, tData.gemini_api_key);
-              localStorage.setItem('gemini_api_key_custom', tData.gemini_api_key);
-            }
           }
+        }
+
+        // 4. APIキーを全デバイス・別PC共通で完全自動解決（system_settings 含む）
+        const resolvedKey = await getResolvedGeminiApiKey(resolvedTenantId || undefined);
+        if (resolvedKey) {
+          setTenantApiKey(resolvedKey);
         }
       } catch (err) {
         console.warn('Failed to sync rules from DB:', err);
@@ -101,7 +97,7 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
     setIsLoading(true);
 
     try {
-      const aiResponse = await askEmploymentRulesAI(textToSend, companyRules, newMessages, tenantApiKey);
+      const aiResponse = await askEmploymentRulesAI(textToSend, companyRules, newMessages, tenantApiKey, tenantId || undefined);
       setMessages([
         ...newMessages,
         { role: 'assistant', content: aiResponse }
