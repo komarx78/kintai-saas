@@ -961,9 +961,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
   };
 
   // 🔄 大元マスタ・勤怠から単独社員の給与を即時再計算（SSOT完全準拠）
-  const handleRecalculateSingle = async (userId: string) => {
+  const handleRecalculateSingle = async (userId: string, silent: boolean = false) => {
     if (!tenantId) return;
-    setIsSaving(true);
+    if (!silent) setIsSaving(true);
     try {
       const emp = employees.find(e => e.id === userId);
       const existingSlip = payslips.find(p => p.user_id === userId);
@@ -1081,13 +1081,19 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       };
 
       await savePayslipSafe(payload);
-      await fetchData();
-      alert(`🎉 ${emp.name} さんの給与明細を最新の大元マスタ（標報・住民税・扶養${resolvedProf.dependents_count}名）に基づいて再計算しました！`);
+      if (!silent) {
+        await fetchData();
+        alert(`🎉 ${emp.name} さんの給与明細を最新の大元マスタ（標報・住民税・扶養${resolvedProf.dependents_count}名）に基づいて再計算しました！`);
+      }
     } catch (err: any) {
       console.error(err);
-      alert('再計算に失敗しました: ' + err.message);
+      if (!silent) {
+        alert('再計算に失敗しました: ' + err.message);
+      } else {
+        throw err;
+      }
     } finally {
-      setIsSaving(false);
+      if (!silent) setIsSaving(false);
     }
   };
 
@@ -1095,14 +1101,15 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
   // 🔄 大元マスタ・勤怠から当月全社員の給与を一括再計算
   const handleRecalculateAll = async () => {
     if (!tenantId || employees.length === 0) return;
-    if (!confirm(`【${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月度】の全従業員の給与明細を、大元労務マスタ（標準報酬月額・住民税特別徴収・扶養控除親族数・各種手当）の最新値に基づいて一括再計算します。よろしいですか？`)) return;
+    if (!confirm(`【${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月度】の全従業員（${employees.length}名）の給与明細を、大元労務マスタ（標準報酬月額・住民税特別徴収・扶養控除親族数・各種手当）の最新値に基づいて一括再計算します。よろしいですか？`)) return;
 
     setIsSaving(true);
     try {
       for (const emp of employees) {
-        await handleRecalculateSingle(emp.id);
+        await handleRecalculateSingle(emp.id, true);
       }
-      alert(`🎉 全従業員の給与明細を大元労務マスタの最新情報で一括再計算しました！`);
+      await fetchData();
+      alert(`🎉 全従業員（${employees.length}名）の給与明細を大元労務マスタの最新情報で一括再計算しました！`);
     } catch (err: any) {
       console.error('Recalculate all error:', err);
       alert('一括再計算中にエラーが発生しました: ' + err.message);
