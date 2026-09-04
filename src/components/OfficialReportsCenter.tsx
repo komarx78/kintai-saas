@@ -207,7 +207,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                       conDoc.birth_date || conDoc.birthDate ||
                       u.birth_date || u.birthDate ||
                       ob.birth_date || pp.birth_date ||
-                      localBackup?.birth_date || '1990-05-15';
+                      localBackup?.birth_date || '';
 
         const addr = depDoc.address || resDoc.address || conDoc.address || u.address || ob.address || localBackup?.address || '滋賀県大津市';
         const ph = depDoc.phone || depDoc.phoneNumber || conDoc.phone || u.phone || ob.phone || localBackup?.phone || '';

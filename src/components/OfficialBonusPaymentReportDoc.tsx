@@ -176,17 +176,17 @@ const ExactPdfPageRenderer: React.FC<{
   const fCommonD = getF('commonDateD', 54.5, 31.3, 12, 5.5);
 
   const rowBaseTop = coordsMap.get('rowBaseTop')?.y ?? 34.26;
-  const rowPitchY = coordsMap.get('rowPitchY')?.y ?? 5.787;
+  const rowPitchY = coordsMap.get('rowPitchY')?.y ?? 5.770;
 
-  const fEmpNumber = getF('empInsuranceNumber', 5.2, 0.65, 12, 18.0);
-  const fEmpKana = getF('empKana', 24.8, 0.35, 9, 30.2);
-  const fEmpName = getF('empName', 24.8, 1.40, 13, 30.2);
-  const fEmpBirth = getF('empBirth', 57.0, 0.55, 13, 13.0);
-  const fEmpMyNumber = getF('empMyNumber', 70.8, 0.55, 10, 17.5);
-  const fEmpPayDate = getF('empIndivPayDate', 5.2, 3.65, 10, 18.0);
-  const fEmpCurrency = getF('empCurrencyAmount', 24.0, 3.25, 12, 14.5);
-  const fEmpGoods = getF('empGoodsAmount', 41.5, 3.25, 12, 14.5);
-  const fEmpTotal = getF('empTotalThousands', 58.5, 3.25, 12, 13.5);
+  const fEmpNumber = getF('empInsuranceNumber', 4.8, 0.92, 12, 18.0);
+  const fEmpKana = getF('empKana', 23.8, 0.30, 8.5, 31.0);
+  const fEmpName = getF('empName', 23.8, 1.30, 12.5, 31.0);
+  const fEmpBirth = getF('empBirth', 55.6, 0.90, 12.5, 14.5);
+  const fEmpMyNumber = getF('empMyNumber', 70.4, 0.90, 10, 22.8);
+  const fEmpPayDate = getF('empIndivPayDate', 4.8, 3.60, 10, 18.0);
+  const fEmpCurrency = getF('empCurrencyAmount', 23.8, 3.60, 11.5, 14.6);
+  const fEmpGoods = getF('empGoodsAmount', 39.8, 3.60, 11.5, 14.6);
+  const fEmpTotal = getF('empTotalThousands', 55.8, 3.60, 11.5, 9.8);
 
   return (
     <div
@@ -371,7 +371,7 @@ const ExactPdfPageRenderer: React.FC<{
                 top: `${rowTop + fEmpNumber.y}%`,
                 left: `${fEmpNumber.x}%`,
                 width: `${fEmpNumber.width || 18.0}%`,
-                fontSize: `clamp(10px, ${(fEmpNumber.fontSize || 12) * 0.11}cqi, 15px)`
+                fontSize: `clamp(9.5px, ${(fEmpNumber.fontSize || 12) * 0.11}cqi, 14px)`
               }}
             >
               {emp.insuranceNumber || String(pageIndex * 10 + i + 1).padStart(4, '0')}
@@ -383,10 +383,10 @@ const ExactPdfPageRenderer: React.FC<{
               style={{
                 top: `${rowTop + fEmpKana.y}%`,
                 left: `${fEmpKana.x}%`,
-                width: `${fEmpKana.width || 30.2}%`,
-                fontSize: `clamp(7.5px, ${(fEmpKana.fontSize || 9) * 0.105}cqi, 11px)`,
+                width: `${fEmpKana.width || 31.0}%`,
+                fontSize: `clamp(7px, ${(fEmpKana.fontSize || 8.5) * 0.10}cqi, 10px)`,
                 lineHeight: '1.0',
-                letterSpacing: '0.04em'
+                letterSpacing: '0.02em'
               }}
             >
               {emp.nameKana || ''}
@@ -398,10 +398,10 @@ const ExactPdfPageRenderer: React.FC<{
               style={{
                 top: `${rowTop + fEmpName.y}%`,
                 left: `${fEmpName.x}%`,
-                width: `${fEmpName.width || 30.2}%`,
-                fontSize: `clamp(11px, ${(fEmpName.fontSize || 13) * 0.115}cqi, 16px)`,
+                width: `${fEmpName.width || 31.0}%`,
+                fontSize: `clamp(10px, ${(fEmpName.fontSize || 12.5) * 0.115}cqi, 15px)`,
                 lineHeight: '1.1',
-                letterSpacing: '0.06em'
+                letterSpacing: '0.04em'
               }}
             >
               {emp.name}
@@ -414,9 +414,9 @@ const ExactPdfPageRenderer: React.FC<{
                 style={{
                   top: `${rowTop + fEmpBirth.y}%`,
                   left: `${fEmpBirth.x}%`,
-                  width: `${fEmpBirth.width || 13.0}%`,
+                  width: `${fEmpBirth.width || 14.5}%`,
                   height: '1.9%',
-                  fontSize: `clamp(11px, ${(fEmpBirth.fontSize || 13) * 0.12}cqi, 17px)`
+                  fontSize: `clamp(10px, ${(fEmpBirth.fontSize || 12.5) * 0.115}cqi, 15px)`
                 }}
               >
                 <span>{rawBirth.replace('-', ' - ')}</span>
@@ -456,12 +456,13 @@ const ExactPdfPageRenderer: React.FC<{
 
             {/* 下段 ⑤ ㋐通貨による賞与額 */}
             <div
-              className="absolute font-mono font-bold text-slate-950 text-right pr-2"
+              className="absolute font-mono font-bold text-slate-950 text-right"
               style={{
                 top: `${rowTop + fEmpCurrency.y}%`,
                 left: `${fEmpCurrency.x}%`,
-                width: `${fEmpCurrency.width || 14.5}%`,
-                fontSize: `clamp(10px, ${(fEmpCurrency.fontSize || 12) * 0.11}cqi, 15px)`
+                width: `${fEmpCurrency.width || 14.6}%`,
+                paddingRight: '0.3cqi',
+                fontSize: `clamp(9.5px, ${(fEmpCurrency.fontSize || 11.5) * 0.11}cqi, 14px)`
               }}
             >
               {emp.currencyAmount ? emp.currencyAmount.toLocaleString() : ''}
@@ -470,12 +471,13 @@ const ExactPdfPageRenderer: React.FC<{
             {/* 下段 ⑤ ㋑現物による賞与額 */}
             {emp.goodsAmount ? (
               <div
-                className="absolute font-mono font-bold text-slate-950 text-right pr-2"
+                className="absolute font-mono font-bold text-slate-950 text-right"
                 style={{
                   top: `${rowTop + fEmpGoods.y}%`,
                   left: `${fEmpGoods.x}%`,
-                  width: `${fEmpGoods.width || 14.5}%`,
-                  fontSize: `clamp(10px, ${(fEmpGoods.fontSize || 12) * 0.11}cqi, 15px)`
+                  width: `${fEmpGoods.width || 14.6}%`,
+                  paddingRight: '0.3cqi',
+                  fontSize: `clamp(9.5px, ${(fEmpGoods.fontSize || 11.5) * 0.11}cqi, 14px)`
                 }}
               >
                 {emp.goodsAmount.toLocaleString()}
@@ -484,12 +486,13 @@ const ExactPdfPageRenderer: React.FC<{
 
             {/* 下段 ⑥ (合計㋐+㋑) 千円未満は切捨て */}
             <div
-              className="absolute font-mono font-black text-slate-950 text-right pr-1"
+              className="absolute font-mono font-black text-slate-950 text-right"
               style={{
                 top: `${rowTop + fEmpTotal.y}%`,
                 left: `${fEmpTotal.x}%`,
                 width: `${fEmpTotal.width || 9.8}%`,
-                fontSize: `clamp(10px, ${(fEmpTotal.fontSize || 12) * 0.11}cqi, 15px)`
+                paddingRight: '0.3cqi',
+                fontSize: `clamp(9.5px, ${(fEmpTotal.fontSize || 11.5) * 0.11}cqi, 14px)`
               }}
             >
               {thousandsOnly ? thousandsOnly.toLocaleString() : ''}
@@ -500,8 +503,8 @@ const ExactPdfPageRenderer: React.FC<{
               <div
                 className="absolute flex items-center justify-center font-black pointer-events-none"
                 style={{
-                  top: `${rowTop + 3.35}%`,
-                  left: '72.2%',
+                  top: `${rowTop + 3.2}%`,
+                  left: '73.2%',
                   width: '1.8cqi',
                   height: '1.8cqi',
                   border: '2px solid #dc2626',
@@ -513,8 +516,8 @@ const ExactPdfPageRenderer: React.FC<{
               <div
                 className="absolute flex items-center justify-center font-black pointer-events-none"
                 style={{
-                  top: `${rowTop + 3.35}%`,
-                  left: '77.8%',
+                  top: `${rowTop + 3.2}%`,
+                  left: '79.2%',
                   width: '1.8cqi',
                   height: '1.8cqi',
                   border: '2px solid #dc2626',
@@ -527,8 +530,8 @@ const ExactPdfPageRenderer: React.FC<{
                 <div
                   className="absolute flex items-center justify-center font-black pointer-events-none"
                   style={{
-                    top: `${rowTop + 3.35}%`,
-                    left: '83.2%',
+                    top: `${rowTop + 3.2}%`,
+                    left: '84.6%',
                     width: '1.8cqi',
                     height: '1.8cqi',
                     border: '2px solid #dc2626',

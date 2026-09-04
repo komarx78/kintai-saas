@@ -196,30 +196,30 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     name: '【行基準】1行あたりの高さピッチ',
     section: 'row_template',
     x: 0,
-    y: 5.787,
+    y: 5.770,
     fontSize: 0,
-    example: '5.787%',
+    example: '5.770%',
     description: '次の行までの垂直間隔（%）'
   },
   {
     id: 'empInsuranceNumber',
     name: '① 被保険者整理番号',
     section: 'row_template',
-    x: 5.2,
-    y: 0.65,
+    x: 4.8,
+    y: 0.92,
     fontSize: 12,
     width: 18.0,
     example: '0001',
-    description: '上段左端 ①整理番号'
+    description: '上段左端 ①整理番号（マス内中央）'
   },
   {
     id: 'empKana',
     name: '② 被保険者ふりがな',
     section: 'row_template',
-    x: 24.8,
-    y: 0.35,
-    fontSize: 9,
-    width: 30.2,
+    x: 23.8,
+    y: 0.30,
+    fontSize: 8.5,
+    width: 31.0,
     example: 'テスト タロウ',
     description: '上段氏名欄の「上半分（ふりがな）」'
   },
@@ -227,10 +227,10 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     id: 'empName',
     name: '② 被保険者漢字氏名',
     section: 'row_template',
-    x: 24.8,
-    y: 1.40,
-    fontSize: 13,
-    width: 30.2,
+    x: 23.8,
+    y: 1.30,
+    fontSize: 12.5,
+    width: 31.0,
     example: '山田 太郎',
     description: '上段氏名欄の「下半分（漢字）」'
   },
@@ -238,22 +238,22 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     id: 'empBirth',
     name: '③ 生年月日（公式書式 元号-YYMMDD）',
     section: 'row_template',
-    x: 57.0,
-    y: 0.55,
-    fontSize: 13,
-    width: 13.0,
+    x: 55.6,
+    y: 0.90,
+    fontSize: 12.5,
+    width: 14.5,
     example: '7 - 051020',
-    description: '上段中央 ③生年月日枠内'
+    description: '上段中央 ③生年月日枠内（中央揃え）'
   },
   {
     id: 'empMyNumber',
     name: '⑦ 個人番号［基礎年金番号］（70歳以上）',
     section: 'row_template',
-    x: 70.8,
-    y: 0.55,
+    x: 70.4,
+    y: 0.90,
     fontSize: 10,
-    pitch: 1.30,
-    width: 17.5,
+    pitch: 1.88,
+    width: 22.8,
     example: '123456789012',
     description: '上段右端 ⑦個人番号マス目'
   },
@@ -261,8 +261,8 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     id: 'empIndivPayDate',
     name: '④ 個別賞与支払日（共通と異なる場合）',
     section: 'row_template',
-    x: 5.2,
-    y: 3.65,
+    x: 4.8,
+    y: 3.60,
     fontSize: 10,
     width: 18.0,
     example: '令08.12.20',
@@ -272,34 +272,34 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     id: 'empCurrencyAmount',
     name: '⑤ ㋐ 通貨による賞与額',
     section: 'row_template',
-    x: 24.0,
-    y: 3.25,
-    fontSize: 12,
-    width: 14.5,
+    x: 23.8,
+    y: 3.60,
+    fontSize: 11.5,
+    width: 14.6,
     example: '500,000',
-    description: '下段 ⑤㋐通貨賞与額（右寄せ）'
+    description: '下段 ⑤㋐通貨賞与額（右端は「円」の左隣）'
   },
   {
     id: 'empGoodsAmount',
     name: '⑤ ㋑ 現物による賞与額',
     section: 'row_template',
-    x: 41.5,
-    y: 3.25,
-    fontSize: 12,
-    width: 14.5,
+    x: 39.8,
+    y: 3.60,
+    fontSize: 11.5,
+    width: 14.6,
     example: '0',
-    description: '下段 ⑤㋑現物賞与額（右寄せ）'
+    description: '下段 ⑤㋑現物賞与額（右端は「円」の左隣）'
   },
   {
     id: 'empTotalThousands',
     name: '⑥ 合計賞与額（千円未満切捨て、千円以上数値）',
     section: 'row_template',
-    x: 58.5,
-    y: 3.25,
-    fontSize: 12,
-    width: 13.5,
+    x: 55.8,
+    y: 3.60,
+    fontSize: 11.5,
+    width: 9.8,
     example: '500',
-    description: '下段 ⑥「,000円」の左側（右寄せ）'
+    description: '下段 ⑥「,000円」の左隣（右寄せ・備考欄への被り完全防止）'
   }
 ];
 
@@ -326,12 +326,30 @@ export const mergeWithDefaultBonusFields = (customList: any[]): BonusDocFieldCon
   });
 };
 
-// 設定をローカルストレージから読み込むヘルパー
+// 設定をローカルストレージから読み込むヘルパー（精密比率 v2_precision への自動マイグレーション付き）
+export const BONUS_DOC_COORDINATES_VERSION = 'v2_precision';
+
 export const loadBonusDocCoordinates = (): BonusDocFieldConfig[] => {
   try {
+    const savedVersion = localStorage.getItem('bonusDocMasterVersion');
     const local = localStorage.getItem('bonusDocMasterFields');
-    if (local) {
-      const parsed = JSON.parse(local);
+
+    // バージョンが古い、または未定義の場合は最新の精密測定デフォルト値へ自動マイグレーション
+    if (savedVersion !== BONUS_DOC_COORDINATES_VERSION || !local) {
+      localStorage.setItem('bonusDocMasterVersion', BONUS_DOC_COORDINATES_VERSION);
+      localStorage.setItem('bonusDocMasterFields', JSON.stringify(DEFAULT_BONUS_FIELDS));
+      return DEFAULT_BONUS_FIELDS;
+    }
+
+    const parsed = JSON.parse(local);
+    if (Array.isArray(parsed)) {
+      // 合計賞与額が備考欄に被る古い座標（x >= 57%）だった場合は自動修正
+      const totalField = parsed.find((p: any) => p.id === 'empTotalThousands');
+      if (totalField && totalField.x >= 57.0) {
+        localStorage.setItem('bonusDocMasterVersion', BONUS_DOC_COORDINATES_VERSION);
+        localStorage.setItem('bonusDocMasterFields', JSON.stringify(DEFAULT_BONUS_FIELDS));
+        return DEFAULT_BONUS_FIELDS;
+      }
       return mergeWithDefaultBonusFields(parsed);
     }
   } catch (e) {

@@ -123,7 +123,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
             const myLocalPay = localPay[userId] || {};
 
             setUserProfile({
-              birth_date: obData?.birth_date || '1990-05-15',
+              birth_date: obData?.birth_date || '',
               address: obData?.address || '滋賀県大津市',
               join_date: obData?.join_date || uData?.join_date || '2024-04-01',
               retirement_date: obData?.retirement_date || uData?.retirement_date,

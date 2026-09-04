@@ -833,6 +833,7 @@ export const BonusDocMasterInspector: React.FC = () => {
                               cursor: rowIdx === 0 ? (isDraggingThis ? 'grabbing' : 'grab') : 'pointer',
                               userSelect: 'none',
                               whiteSpace: 'nowrap',
+                              textAlign: (rf.id === 'empCurrencyAmount' || rf.id === 'empGoodsAmount' || rf.id === 'empTotalThousands') ? 'right' : rf.id === 'empBirth' ? 'center' : 'left',
                               pointerEvents: 'auto',
                               lineHeight: 1.1,
                               opacity: rowIdx === 1 ? 0.6 : 1
