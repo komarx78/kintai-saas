@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Edit3
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { TaxDocMasterInspector } from '../components/TaxDocMasterInspector';
+import { OfficialDocMasterInspector } from '../components/OfficialDocMasterInspector';
 import { SocialInsuranceMasterManager } from '../components/SocialInsuranceMasterManager';
 import CustomDocDesignerModal from '../components/CustomDocDesignerModal';
 import { 
@@ -287,7 +287,7 @@ export default function SuperAdminDashboard() {
             }`}
           >
             <FileText className="h-4 w-4 mr-2.5 text-amber-400" />
-            📄 国税庁公的帳票マスタ設定
+            📄 公的帳票・印字座標マスタ設定
           </button>
 
           <button 
@@ -580,15 +580,9 @@ export default function SuperAdminDashboard() {
               </div>
             )}
 
-            {/* 標準帳票: 令和8年分 扶養控除等申告書 公式PDFインスペクター */}
+            {/* 標準公的帳票（国税庁 扶養控除申告書 ＆ 年金機構 賞与支払届）公式原本インスペクター */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between px-1">
-                <span className="font-black text-xs text-slate-700">
-                  🏛️ 【標準公式帳票】令和8年分 給与所得者の扶養控除等申告書（全国共通インスペクター）
-                </span>
-                <span className="text-[10px] text-slate-400">※ 国税庁原本PDF（A4）印字座標設定</span>
-              </div>
-              <TaxDocMasterInspector />
+              <OfficialDocMasterInspector />
             </div>
           </div>
         )}

@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
+import { loadBonusDocCoordinates, type BonusDocFieldConfig } from '../lib/bonusDocCoordinates';
+import { BonusDocMasterInspector } from './BonusDocMasterInspector';
 
 export interface BonusReportEmployee {
   id: string;
@@ -137,6 +139,53 @@ const ExactPdfPageRenderer: React.FC<{
   symbolDigits,
   symbolKana
 }) => {
+  // 🎯 マスタ座標設定の取得（インスペクターで保存された値を即座に反映）
+  const coordsList = useMemo(() => loadBonusDocCoordinates(), []);
+  const coords = useMemo(() => {
+    return new Map<string, BonusDocFieldConfig>(coordsList.map(c => [c.id, c]));
+  }, [coordsList]);
+
+  const getF = (id: string, defX: number, defY: number, defSize: number, defWidth?: number) => {
+    const item = coords.get(id);
+    return {
+      x: item?.x !== undefined ? item.x : defX,
+      y: item?.y !== undefined ? item.y : defY,
+      fontSize: item?.fontSize !== undefined ? item.fontSize : defSize,
+      pitch: item?.pitch,
+      width: item?.width !== undefined ? item.width : defWidth
+    };
+  };
+
+  const fSubY = getF('subDateY', 7.5, 4.6, 11, 4.5);
+  const fSubM = getF('subDateM', 25.5, 4.6, 11, 5.0);
+  const fSubD = getF('subDateD', 50.0, 4.6, 11, 5.5);
+
+  const fDigits = getF('symbolDigits', 9.88, 6.16, 14);
+  const fKana = getF('symbolKana', 22.38, 6.16, 13);
+
+  const fAddress = getF('companyAddress', 11.0, 12.0, 9, 38.0);
+  const fName = getF('companyName', 11.0, 18.0, 11, 38.0);
+  const fOwner = getF('companyOwnerName', 11.0, 21.8, 11, 38.0);
+  const fPhone = getF('companyPhone', 19.0, 24.6, 10, 24.0);
+  const fSharoushi = getF('sharoushiName', 54.5, 22.5, 11, 38.0);
+
+  const fCommonY = getF('commonDateY', 37.5, 31.3, 12, 5.5);
+  const fCommonM = getF('commonDateM', 46.0, 31.3, 12, 5.5);
+  const fCommonD = getF('commonDateD', 54.5, 31.3, 12, 5.5);
+
+  const rowBaseTop = coords.get('rowBaseTop')?.y ?? 34.26;
+  const rowPitchY = coords.get('rowPitchY')?.y ?? 5.787;
+
+  const fEmpNumber = getF('empInsuranceNumber', 5.2, 0.65, 12, 18.0);
+  const fEmpKana = getF('empKana', 24.8, 0.35, 9, 30.2);
+  const fEmpName = getF('empName', 24.8, 1.40, 13, 30.2);
+  const fEmpBirth = getF('empBirth', 57.0, 0.55, 13, 13.0);
+  const fEmpMyNumber = getF('empMyNumber', 70.8, 0.55, 10, 17.5);
+  const fEmpPayDate = getF('empIndivPayDate', 5.2, 3.65, 10, 18.0);
+  const fEmpCurrency = getF('empCurrencyAmount', 24.0, 3.25, 12, 14.5);
+  const fEmpGoods = getF('empGoodsAmount', 41.5, 3.25, 12, 14.5);
+  const fEmpTotal = getF('empTotalThousands', 58.5, 3.25, 12, 13.5);
+
   return (
     <div
       className={`official-bonus-page-container relative bg-white mx-auto shadow-lg print:shadow-none mb-8 ${
@@ -153,20 +202,20 @@ const ExactPdfPageRenderer: React.FC<{
     >
       {/* 提出年月日 */}
       <div
-        className="absolute font-mono font-bold text-slate-900"
-        style={{ top: '5.25%', left: '5.2%', fontSize: 'clamp(9px, 1.25cqi, 13px)' }}
+        className="absolute font-mono font-bold text-slate-900 text-right"
+        style={{ top: `${fSubY.y}%`, left: `${fSubY.x}%`, width: `${fSubY.width}%`, fontSize: `clamp(9px, ${(fSubY.fontSize || 11) * 0.11}cqi, 15px)` }}
       >
         {submissionDateParsed.y}
       </div>
       <div
-        className="absolute font-mono font-bold text-slate-900"
-        style={{ top: '5.25%', left: '10.8%', fontSize: 'clamp(9px, 1.25cqi, 13px)' }}
+        className="absolute font-mono font-bold text-slate-900 text-right"
+        style={{ top: `${fSubM.y}%`, left: `${fSubM.x}%`, width: `${fSubM.width}%`, fontSize: `clamp(9px, ${(fSubM.fontSize || 11) * 0.11}cqi, 15px)` }}
       >
         {submissionDateParsed.m}
       </div>
       <div
-        className="absolute font-mono font-bold text-slate-900"
-        style={{ top: '5.25%', left: '16.5%', fontSize: 'clamp(9px, 1.25cqi, 13px)' }}
+        className="absolute font-mono font-bold text-slate-900 text-right"
+        style={{ top: `${fSubD.y}%`, left: `${fSubD.x}%`, width: `${fSubD.width}%`, fontSize: `clamp(9px, ${(fSubD.fontSize || 11) * 0.11}cqi, 15px)` }}
       >
         {submissionDateParsed.d}
       </div>
@@ -175,21 +224,37 @@ const ExactPdfPageRenderer: React.FC<{
       {symbolDigits && (
         <div
           className="absolute flex items-center font-mono font-bold text-slate-950"
-          style={{ top: '6.4%', left: '10.3%', gap: '1.2cqi', fontSize: 'clamp(11px, 1.5cqi, 16px)' }}
+          style={{ top: `${fDigits.y}%`, height: '2.93%', left: `${fDigits.x}%` }}
         >
-          {symbolDigits.split('').map((char, idx) => (
-            <span key={idx} className="w-[2.2cqi] text-center inline-block">{char}</span>
+          {symbolDigits.split('').slice(0, 4).map((char, idx) => (
+            <span
+              key={idx}
+              className="inline-flex items-center justify-center font-black text-center"
+              style={{ width: `${fDigits.pitch || 2.46}cqi`, height: '100%', fontSize: `clamp(11px, ${(fDigits.fontSize || 14) * 0.12}cqi, 18px)` }}
+            >
+              {char}
+            </span>
           ))}
         </div>
       )}
       {symbolKana && (
         <div
-          className="absolute flex items-center font-sans font-bold text-slate-950 tracking-wider"
-          style={{ top: '6.4%', left: '22.8%', gap: '0.8cqi', fontSize: 'clamp(10px, 1.4cqi, 15px)' }}
+          className="absolute flex items-center font-sans font-bold text-slate-950"
+          style={{ top: `${fKana.y}%`, height: '2.93%', left: `${fKana.x}%` }}
         >
-          {symbolKana.split('').map((char, idx) => (
-            <span key={idx} className="w-[2.2cqi] text-center inline-block">{char}</span>
-          ))}
+          {symbolKana.split('').slice(0, 4).map((char, idx) => {
+            const kanaWidths = ['2.46cqi', '2.34cqi', '2.38cqi', '2.34cqi'];
+            const w = fKana.pitch ? `${fKana.pitch}cqi` : (kanaWidths[idx] || '2.38cqi');
+            return (
+              <span
+                key={idx}
+                className="inline-flex items-center justify-center font-black text-center"
+                style={{ width: w, height: '100%', fontSize: `clamp(10px, ${(fKana.fontSize || 13) * 0.12}cqi, 17px)` }}
+              >
+                {char}
+              </span>
+            );
+          })}
         </div>
       )}
 
@@ -197,11 +262,11 @@ const ExactPdfPageRenderer: React.FC<{
       <div
         className="absolute text-slate-900 font-sans font-medium leading-tight overflow-hidden"
         style={{
-          top: '12.0%',
-          left: '11.0%',
-          width: '38.0%',
+          top: `${fAddress.y}%`,
+          left: `${fAddress.x}%`,
+          width: `${fAddress.width || 38.0}%`,
           height: '4.8%',
-          fontSize: 'clamp(8px, 1.1cqi, 11px)'
+          fontSize: `clamp(8px, ${(fAddress.fontSize || 9) * 0.12}cqi, 12px)`
         }}
       >
         {data.companyAddress}
@@ -211,10 +276,10 @@ const ExactPdfPageRenderer: React.FC<{
       <div
         className="absolute text-slate-950 font-sans font-bold leading-tight overflow-hidden whitespace-nowrap text-ellipsis"
         style={{
-          top: '18.0%',
-          left: '11.0%',
-          width: '38.0%',
-          fontSize: 'clamp(9px, 1.25cqi, 13px)'
+          top: `${fName.y}%`,
+          left: `${fName.x}%`,
+          width: `${fName.width || 38.0}%`,
+          fontSize: `clamp(9px, ${(fName.fontSize || 11) * 0.115}cqi, 14px)`
         }}
       >
         {data.companyName}
@@ -224,10 +289,10 @@ const ExactPdfPageRenderer: React.FC<{
       <div
         className="absolute text-slate-950 font-sans font-bold leading-tight overflow-hidden whitespace-nowrap text-ellipsis"
         style={{
-          top: '21.8%',
-          left: '11.0%',
-          width: '38.0%',
-          fontSize: 'clamp(9px, 1.25cqi, 13px)'
+          top: `${fOwner.y}%`,
+          left: `${fOwner.x}%`,
+          width: `${fOwner.width || 38.0}%`,
+          fontSize: `clamp(9px, ${(fOwner.fontSize || 11) * 0.115}cqi, 14px)`
         }}
       >
         {data.companyOwnerName}
@@ -237,10 +302,10 @@ const ExactPdfPageRenderer: React.FC<{
       <div
         className="absolute text-slate-900 font-mono font-medium tracking-wider"
         style={{
-          top: '24.6%',
-          left: '19.0%',
-          width: '24.0%',
-          fontSize: 'clamp(8px, 1.15cqi, 12px)'
+          top: `${fPhone.y}%`,
+          left: `${fPhone.x}%`,
+          width: `${fPhone.width || 24.0}%`,
+          fontSize: `clamp(8px, ${(fPhone.fontSize || 10) * 0.115}cqi, 13px)`
         }}
       >
         {data.companyPhone}
@@ -251,10 +316,10 @@ const ExactPdfPageRenderer: React.FC<{
         <div
           className="absolute text-slate-900 font-sans font-bold"
           style={{
-            top: '22.5%',
-            left: '54.5%',
-            width: '38.0%',
-            fontSize: 'clamp(9px, 1.2cqi, 13px)'
+            top: `${fSharoushi.y}%`,
+            left: `${fSharoushi.x}%`,
+            width: `${fSharoushi.width || 38.0}%`,
+            fontSize: `clamp(9px, ${(fSharoushi.fontSize || 11) * 0.11}cqi, 14px)`
           }}
         >
           {data.sharoushiName}
@@ -263,20 +328,20 @@ const ExactPdfPageRenderer: React.FC<{
 
       {/* 共通賞与支払年月日 */}
       <div
-        className="absolute font-mono font-bold text-slate-950"
-        style={{ top: '31.3%', left: '37.0%', fontSize: 'clamp(10px, 1.4cqi, 15px)' }}
+        className="absolute font-mono font-bold text-slate-950 text-center"
+        style={{ top: `${fCommonY.y}%`, left: `${fCommonY.x}%`, width: `${fCommonY.width || 5.5}%`, fontSize: `clamp(10px, ${(fCommonY.fontSize || 12) * 0.115}cqi, 16px)` }}
       >
         {commonDateParsed.y}
       </div>
       <div
-        className="absolute font-mono font-bold text-slate-950"
-        style={{ top: '31.3%', left: '44.3%', fontSize: 'clamp(10px, 1.4cqi, 15px)' }}
+        className="absolute font-mono font-bold text-slate-950 text-center"
+        style={{ top: `${fCommonM.y}%`, left: `${fCommonM.x}%`, width: `${fCommonM.width || 5.5}%`, fontSize: `clamp(10px, ${(fCommonM.fontSize || 12) * 0.115}cqi, 16px)` }}
       >
         {commonDateParsed.m}
       </div>
       <div
-        className="absolute font-mono font-bold text-slate-950"
-        style={{ top: '31.3%', left: '51.8%', fontSize: 'clamp(10px, 1.4cqi, 15px)' }}
+        className="absolute font-mono font-bold text-slate-950 text-center"
+        style={{ top: `${fCommonD.y}%`, left: `${fCommonD.x}%`, width: `${fCommonD.width || 5.5}%`, fontSize: `clamp(10px, ${(fCommonD.fontSize || 12) * 0.115}cqi, 16px)` }}
       >
         {commonDateParsed.d}
       </div>
@@ -285,12 +350,11 @@ const ExactPdfPageRenderer: React.FC<{
       {pageEmployees.map((emp, i) => {
         if (!emp) return null;
 
-        const rowTop = 34.26 + i * 5.768; // 行上端 (%)
+        const rowTop = rowBaseTop + i * rowPitchY; // 行上端 (%)
         const isOver70 = emp.isOver70 ?? checkIfOver70(emp.birthDate, data.commonPaymentDate);
 
         // 生年月日フォーマット: '7-051020' 等
         const rawBirth = formatNenkinBirthDate(emp.birthDate);
-        const birthClean = rawBirth.replace(/[^0-9]/g, ''); // 7桁数字 (元号1桁 + YYMMDD)
 
         // 千円未満切捨て額の千円以上の数値
         const totalGross = (emp.currencyAmount || 0) + (emp.goodsAmount || 0);
@@ -302,10 +366,10 @@ const ExactPdfPageRenderer: React.FC<{
             <div
               className="absolute font-mono font-bold text-slate-950"
               style={{
-                top: `${rowTop + 0.65}%`,
-                left: '5.2%',
-                width: '18.0%',
-                fontSize: 'clamp(10px, 1.35cqi, 14px)'
+                top: `${rowTop + fEmpNumber.y}%`,
+                left: `${fEmpNumber.x}%`,
+                width: `${fEmpNumber.width || 18.0}%`,
+                fontSize: `clamp(10px, ${(fEmpNumber.fontSize || 12) * 0.11}cqi, 15px)`
               }}
             >
               {emp.insuranceNumber || String(pageIndex * 10 + i + 1).padStart(4, '0')}
@@ -313,12 +377,14 @@ const ExactPdfPageRenderer: React.FC<{
 
             {/* 上段 ② フリガナ（氏名の上） */}
             <div
-              className="absolute font-sans font-bold text-slate-800 whitespace-nowrap overflow-hidden text-ellipsis"
+              className="absolute font-sans font-bold text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis"
               style={{
-                top: `${rowTop + 0.25}%`,
-                left: '24.2%',
-                width: '31.0%',
-                fontSize: 'clamp(7.5px, 0.95cqi, 10px)'
+                top: `${rowTop + fEmpKana.y}%`,
+                left: `${fEmpKana.x}%`,
+                width: `${fEmpKana.width || 30.2}%`,
+                fontSize: `clamp(7.5px, ${(fEmpKana.fontSize || 9) * 0.105}cqi, 11px)`,
+                lineHeight: '1.0',
+                letterSpacing: '0.04em'
               }}
             >
               {emp.nameKana || ''}
@@ -328,34 +394,30 @@ const ExactPdfPageRenderer: React.FC<{
             <div
               className="absolute font-sans font-black text-slate-950 whitespace-nowrap overflow-hidden text-ellipsis"
               style={{
-                top: `${rowTop + 1.25}%`,
-                left: '24.2%',
-                width: '31.0%',
-                fontSize: 'clamp(10.5px, 1.45cqi, 15px)'
+                top: `${rowTop + fEmpName.y}%`,
+                left: `${fEmpName.x}%`,
+                width: `${fEmpName.width || 30.2}%`,
+                fontSize: `clamp(11px, ${(fEmpName.fontSize || 13) * 0.115}cqi, 16px)`,
+                lineHeight: '1.1',
+                letterSpacing: '0.06em'
               }}
             >
               {emp.name}
             </div>
 
-            {/* 上段 ③ 生年月日 OCRマス目印字 */}
-            {birthClean && (
+            {/* 上段 ③ 生年月日（年金機構公式書式：元号コード - YYMMDD） */}
+            {rawBirth && (
               <div
-                className="absolute flex items-center font-mono font-black text-slate-950"
+                className="absolute flex items-center justify-center font-mono font-black text-slate-950 tracking-wider"
                 style={{
-                  top: `${rowTop + 0.65}%`,
-                  left: '56.4%',
-                  gap: '0.85cqi',
-                  fontSize: 'clamp(10.5px, 1.45cqi, 15px)'
+                  top: `${rowTop + fEmpBirth.y}%`,
+                  left: `${fEmpBirth.x}%`,
+                  width: `${fEmpBirth.width || 13.0}%`,
+                  height: '1.9%',
+                  fontSize: `clamp(11px, ${(fEmpBirth.fontSize || 13) * 0.12}cqi, 17px)`
                 }}
               >
-                <span className="w-[1.4cqi] text-center">{birthClean[0] || ''}</span>
-                <span className="w-[0.4cqi]"></span>
-                <span className="w-[1.4cqi] text-center">{birthClean[1] || ''}</span>
-                <span className="w-[1.4cqi] text-center">{birthClean[2] || ''}</span>
-                <span className="w-[1.4cqi] text-center">{birthClean[3] || ''}</span>
-                <span className="w-[1.4cqi] text-center">{birthClean[4] || ''}</span>
-                <span className="w-[1.4cqi] text-center">{birthClean[5] || ''}</span>
-                <span className="w-[1.4cqi] text-center">{birthClean[6] || ''}</span>
+                <span>{rawBirth.replace('-', ' - ')}</span>
               </div>
             )}
 
@@ -364,10 +426,10 @@ const ExactPdfPageRenderer: React.FC<{
               <div
                 className="absolute flex items-center font-mono font-bold text-slate-950"
                 style={{
-                  top: `${rowTop + 0.65}%`,
-                  left: '70.8%',
+                  top: `${rowTop + fEmpMyNumber.y}%`,
+                  left: `${fEmpMyNumber.x}%`,
                   gap: '0.62cqi',
-                  fontSize: 'clamp(9px, 1.2cqi, 13px)'
+                  fontSize: `clamp(9px, ${(fEmpMyNumber.fontSize || 10) * 0.11}cqi, 13px)`
                 }}
               >
                 {emp.myNumber.replace(/[^0-9]/g, '').slice(0, 12).split('').map((digit, dIdx) => (
@@ -381,9 +443,9 @@ const ExactPdfPageRenderer: React.FC<{
               <div
                 className="absolute font-mono font-bold text-slate-950"
                 style={{
-                  top: `${rowTop + 3.65}%`,
-                  left: '5.2%',
-                  fontSize: 'clamp(8.5px, 1.15cqi, 12px)'
+                  top: `${rowTop + fEmpPayDate.y}%`,
+                  left: `${fEmpPayDate.x}%`,
+                  fontSize: `clamp(8.5px, ${(fEmpPayDate.fontSize || 10) * 0.11}cqi, 13px)`
                 }}
               >
                 {emp.individualPaymentDate}
@@ -394,10 +456,10 @@ const ExactPdfPageRenderer: React.FC<{
             <div
               className="absolute font-mono font-bold text-slate-950 text-right pr-2"
               style={{
-                top: `${rowTop + 3.25}%`,
-                left: '24.0%',
-                width: '14.5%',
-                fontSize: 'clamp(10px, 1.35cqi, 14px)'
+                top: `${rowTop + fEmpCurrency.y}%`,
+                left: `${fEmpCurrency.x}%`,
+                width: `${fEmpCurrency.width || 14.5}%`,
+                fontSize: `clamp(10px, ${(fEmpCurrency.fontSize || 12) * 0.11}cqi, 15px)`
               }}
             >
               {emp.currencyAmount ? emp.currencyAmount.toLocaleString() : ''}
@@ -408,10 +470,10 @@ const ExactPdfPageRenderer: React.FC<{
               <div
                 className="absolute font-mono font-bold text-slate-950 text-right pr-2"
                 style={{
-                  top: `${rowTop + 3.25}%`,
-                  left: '40.2%',
-                  width: '14.5%',
-                  fontSize: 'clamp(10px, 1.35cqi, 14px)'
+                  top: `${rowTop + fEmpGoods.y}%`,
+                  left: `${fEmpGoods.x}%`,
+                  width: `${fEmpGoods.width || 14.5}%`,
+                  fontSize: `clamp(10px, ${(fEmpGoods.fontSize || 12) * 0.11}cqi, 15px)`
                 }}
               >
                 {emp.goodsAmount.toLocaleString()}
@@ -422,10 +484,10 @@ const ExactPdfPageRenderer: React.FC<{
             <div
               className="absolute font-mono font-black text-slate-950 text-right pr-1"
               style={{
-                top: `${rowTop + 3.25}%`,
-                left: '56.0%',
-                width: '9.8%',
-                fontSize: 'clamp(10.5px, 1.45cqi, 15px)'
+                top: `${rowTop + fEmpTotal.y}%`,
+                left: `${fEmpTotal.x}%`,
+                width: `${fEmpTotal.width || 9.8}%`,
+                fontSize: `clamp(10px, ${(fEmpTotal.fontSize || 12) * 0.11}cqi, 15px)`
               }}
             >
               {thousandsOnly ? thousandsOnly.toLocaleString() : ''}
@@ -522,14 +584,15 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
   const symbolKana = symbolMatch ? symbolMatch[2] : (data.officeSymbolKana || rawSymbol);
 
   // 表示モード切替（デフォルト: 原本PDF完全一致オーバーレイ印字）
-  const [renderMode, setRenderMode] = React.useState<'exact_pdf' | 'web_table'>('exact_pdf');
+  const [renderMode, setRenderMode] = useState<'exact_pdf' | 'web_table'>('exact_pdf');
+  const [showInspectorModal, setShowInspectorModal] = useState(false);
 
   return (
     <div className="official-bonus-doc-root font-sans text-black select-text">
-      {/* 表示モード切替バー（印刷時は非表示） */}
+      {/* 表示モード切替 ＆ マスタ微調整バー（印刷時は非表示） */}
       <div className="print:hidden mb-4 bg-white border border-slate-200 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-black text-slate-800">📄 帳票表示形式:</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-black text-slate-800">📄 帳票形式:</span>
           <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-bold">
             <button
               onClick={() => setRenderMode('exact_pdf')}
@@ -553,6 +616,19 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
               <span>📋 Web標準テーブル形式</span>
             </button>
           </div>
+
+          {/* 🛠️ マスタ設定・インスペクター微調整ボタン */}
+          {renderMode === 'exact_pdf' && (
+            <button
+              type="button"
+              onClick={() => setShowInspectorModal(true)}
+              className="ml-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-pink-50 to-rose-50 hover:from-pink-100 hover:to-rose-100 text-pink-700 border border-pink-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+              title="文字の印字位置を画面上でミリ単位・ピクセル単位で微調整できます"
+            >
+              <span className="text-sm">🛠️</span>
+              <span>印字座標を微調整（マスタ設定）</span>
+            </button>
+          )}
         </div>
 
         <div className="text-[11px] text-slate-500 font-medium">
@@ -561,6 +637,37 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
             : '※ 通常のWebテーブル形式で内容を確認・印刷します。'}
         </div>
       </div>
+
+      {/* 🛠️ 印字座標マスタ微調整モーダル */}
+      {showInspectorModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-7xl max-h-[94vh] overflow-hidden flex flex-col shadow-2xl">
+            <div className="p-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-pink-600 rounded-xl text-white text-sm">🌸</span>
+                <div>
+                  <h3 className="text-sm font-black text-white">被保険者賞与支払届 印字座標マスタ設定インスペクター</h3>
+                  <p className="text-[10px] text-slate-400">位置を調整して保存すると、この帳票の印字位置に即座に反映されます</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowInspectorModal(false);
+                  // 画面を再レンダリングして最新座標を反映
+                  window.location.reload();
+                }}
+                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1"
+              >
+                ✕ 閉じて帳票に反映
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-950/50">
+              <BonusDocMasterInspector />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 印刷・A4最適化CSS */}
       <style>{`
