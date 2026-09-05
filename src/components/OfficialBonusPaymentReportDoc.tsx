@@ -180,8 +180,12 @@ const ExactPdfPageRenderer: React.FC<{
   const rowPitchY = coordsMap.get('rowPitchY')?.y ?? 5.770;
 
   const fEmpNumber = getF('empInsuranceNumber', 4.8, 0.92, 12, 18.0);
-  const fEmpKana = getF('empKana', 23.8, 0.30, 8.5, 31.0);
-  const fEmpName = getF('empName', 23.8, 1.30, 12.5, 31.0);
+  // 賞与支払届はフリガナ不要のため、氏名を枠内中央（整理番号0.92・生年月日0.90と同ライン）に配置
+  const fEmpNameRaw = getF('empName', 23.8, 0.92, 13.0, 31.0);
+  const fEmpName = {
+    ...fEmpNameRaw,
+    y: (fEmpNameRaw.y === 1.30 || fEmpNameRaw.y > 1.20) ? 0.92 : fEmpNameRaw.y
+  };
   const fEmpBirth = getF('empBirth', 55.6, 0.90, 12.5, 14.5);
   const fEmpMyNumber = getF('empMyNumber', 70.4, 0.90, 10, 22.8);
   const fEmpPayDate = getF('empIndivPayDate', 4.8, 3.60, 10, 18.0);
@@ -384,30 +388,15 @@ const ExactPdfPageRenderer: React.FC<{
               {emp.insuranceNumber || String(pageIndex * 10 + i + 1).padStart(4, '0')}
             </div>
 
-            {/* 上段 ② フリガナ（氏名の上） */}
+            {/* 上段 ② 被保険者氏名（※賞与支払届にはフリガナ不要のため氏名のみを枠内中央に大きく印字） */}
             <div
-              className="absolute font-sans font-bold text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis"
-              style={{
-                top: `${rowTop + fEmpKana.y}%`,
-                left: `${fEmpKana.x}%`,
-                width: `${fEmpKana.width || 31.0}%`,
-                fontSize: `${(fEmpKana.fontSize || 8.5) * 0.11}cqi`,
-                lineHeight: '1.0',
-                letterSpacing: '0.02em'
-              }}
-            >
-              {emp.nameKana || ''}
-            </div>
-
-            {/* 上段 ② 漢字氏名 */}
-            <div
-              className="absolute font-sans font-black text-slate-950 whitespace-nowrap overflow-hidden text-ellipsis"
+              className="absolute font-sans font-black text-slate-950 whitespace-nowrap overflow-hidden text-ellipsis flex items-center"
               style={{
                 top: `${rowTop + fEmpName.y}%`,
                 left: `${fEmpName.x}%`,
                 width: `${fEmpName.width || 31.0}%`,
-                fontSize: `${(fEmpName.fontSize || 12.5) * 0.115}cqi`,
-                lineHeight: '1.1',
+                fontSize: `${(fEmpName.fontSize || 13.0) * 0.115}cqi`,
+                lineHeight: '1.2',
                 letterSpacing: '0.04em'
               }}
             >
@@ -1063,13 +1052,8 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
                       </div>
 
                       {/* ② 氏名 */}
-                      <div className="col-span-3 border-r border-slate-200 px-1">
+                      <div className="col-span-3 border-r border-slate-200 px-1 flex flex-col justify-center">
                         <span className="text-[6.5px] text-slate-400 block -mb-0.5">②</span>
-                        {hasData && emp.nameKana && (
-                          <div className="text-[6.5px] text-slate-500 truncate leading-none">
-                            {emp.nameKana}
-                          </div>
-                        )}
                         <div className="font-black text-[9px] text-slate-900 truncate">
                           {hasData ? emp.name : ''}
                         </div>

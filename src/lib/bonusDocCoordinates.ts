@@ -213,26 +213,15 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     description: '上段左端 ①整理番号（マス内中央）'
   },
   {
-    id: 'empKana',
-    name: '② 被保険者ふりがな',
-    section: 'row_template',
-    x: 23.8,
-    y: 0.30,
-    fontSize: 8.5,
-    width: 31.0,
-    example: 'テスト タロウ',
-    description: '上段氏名欄の「上半分（ふりがな）」'
-  },
-  {
     id: 'empName',
-    name: '② 被保険者漢字氏名',
+    name: '② 被保険者氏名',
     section: 'row_template',
     x: 23.8,
-    y: 1.30,
-    fontSize: 12.5,
+    y: 0.92,
+    fontSize: 13.0,
     width: 31.0,
     example: '山田 太郎',
-    description: '上段氏名欄の「下半分（漢字）」'
+    description: '上段 ②氏名欄（枠内中央・賞与支払届にはフリガナ不要のため氏名のみ印字）'
   },
   {
     id: 'empBirth',
@@ -326,8 +315,8 @@ export const mergeWithDefaultBonusFields = (customList: any[]): BonusDocFieldCon
   });
 };
 
-// 設定をローカルストレージから読み込むヘルパー（精密比率 v4_pixel_perfect_final への自動マイグレーション付き）
-export const BONUS_DOC_COORDINATES_VERSION = 'v4_pixel_perfect_final';
+// 設定をローカルストレージから読み込むヘルパー（フリガナ除去・公式様式準拠 v5 への自動マイグレーション付き）
+export const BONUS_DOC_COORDINATES_VERSION = 'v5_no_furigana_official';
 
 export const loadBonusDocCoordinates = (): BonusDocFieldConfig[] => {
   try {
