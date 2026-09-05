@@ -67,7 +67,7 @@ export default function PayrollAdminDashboard() {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans overflow-x-auto">
       {/* Header */}
-      <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs min-w-[1024px]">
+      <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs min-w-[1024px] print:hidden">
         <div className="flex items-center space-x-3">
           <button
             onClick={() => navigate('/portal')}
@@ -115,7 +115,7 @@ export default function PayrollAdminDashboard() {
       </header>
 
       {/* 🧭 給与システム内タブナビゲーション */}
-      <div className="bg-white border-b border-slate-200 px-6 py-2.5 sticky top-[61px] z-20 shadow-2xs min-w-[1024px]">
+      <div className="bg-white border-b border-slate-200 px-6 py-2.5 sticky top-[61px] z-20 shadow-2xs min-w-[1024px] print:hidden">
         <div className="max-w-7xl w-full mx-auto flex items-center justify-between">
           <div className="flex space-x-2">
             <button

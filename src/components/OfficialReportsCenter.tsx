@@ -372,8 +372,8 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
       <style>{`
         @media print {
           @page {
-            size: A4 portrait;
-            margin: 8mm 10mm 8mm 10mm;
+            size: ${selectedDocType === 'wage_ledger' ? 'landscape' : 'A4 portrait'};
+            margin: ${selectedDocType === 'wage_ledger' ? '4mm 6mm' : '8mm 10mm 8mm 10mm'};
           }
           body {
             background: white !important;
@@ -817,7 +817,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
       {/* ========================================================================= */}
       {selectedDocType === 'wage_ledger' ? (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col print:p-0 print:static print:bg-transparent print:z-auto print:block">
-          <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden">
+          <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden print:overflow-visible print:bg-white print:h-auto print:block">
             <WageLedgerViewer
               tenantId={tenantId}
               employees={employees}
