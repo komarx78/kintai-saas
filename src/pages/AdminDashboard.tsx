@@ -30,6 +30,13 @@ const AdminDashboard = () => {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        // ロール検証（一般従業員の場合は /kintai/user へ即時リダイレクト）
+        const { data: userData } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle();
+        if (userData && userData.role !== 'admin' && userData.role !== 'superadmin') {
+          navigate('/kintai/user');
+          return;
+        }
+
         const { data: tenantIdData, error } = await supabase.rpc('get_user_tenant_id');
         if (tenantIdData) {
           setTenantId(tenantIdData);
@@ -146,13 +153,15 @@ ${tenantId || '（エラー：コード取得失敗）'}
 
   // 打刻の丸め単位（1分、15分、30分）
   const [roundingUnit, setRoundingUnit] = useState<number>(() => {
-    const saved = localStorage.getItem('mock_rounding_unit');
-    return saved ? parseInt(saved) : 15;
+    return 15;
   });
 
   const handleRoundingChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = parseInt(e.target.value);
     setRoundingUnit(val);
+    if (tenantId) {
+      localStorage.setItem(`mock_rounding_unit_${tenantId}`, val.toString());
+    }
     localStorage.setItem('mock_rounding_unit', val.toString());
 
     if (tenantId) {
@@ -219,6 +228,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
             if (tData.payroll_common_settings?.rounding_unit) {
               const rUnit = parseInt(tData.payroll_common_settings.rounding_unit);
               setRoundingUnit(rUnit);
+              localStorage.setItem(`mock_rounding_unit_${tenantId}`, rUnit.toString());
               localStorage.setItem('mock_rounding_unit', rUnit.toString());
             }
           }
@@ -651,6 +661,53 @@ ${tenantId || '（エラー：コード取得失敗）'}
     }
   };
 
+  const handleToggleRetireEmployee = async (emp: any) => {
+    if (!emp || !tenantId) return;
+    const isCurrentlyRetired = emp.is_retired || emp.status === 'retired';
+    
+    if (isCurrentlyRetired) {
+      if (!window.confirm(`【復職確認】「${emp.name}」さんを在籍（アクティブ）に戻しますか？\n※勤怠・シフトへのアクセスが再開され、課金対象人数に再カウントされます。`)) return;
+      try {
+        const { error } = await supabase
+          .from('users')
+          .update({
+            status: 'active',
+            is_retired: false,
+            has_kintai_access: true,
+            has_shift_access: true
+          })
+          .eq('id', emp.id);
+
+        if (error) throw error;
+        alert(`「${emp.name}」さんを在籍状態へ復帰しました。`);
+        await fetchEmployees();
+      } catch (err: any) {
+        console.error('Reactivate Error:', err);
+        alert('復帰処理に失敗しました: ' + (err.message || ''));
+      }
+    } else {
+      if (!window.confirm(`【退職処理確認】「${emp.name}」さんを退職（無効化）処理しますか？\n※勤怠打刻やシフト申請が停止され、課金対象人数からも自動除外されます。過去の出勤簿・有給台帳・給与記録は法定保管のため安全に保持されます。`)) return;
+      try {
+        const { error } = await supabase
+          .from('users')
+          .update({
+            status: 'retired',
+            is_retired: true,
+            has_kintai_access: false,
+            has_shift_access: false
+          })
+          .eq('id', emp.id);
+
+        if (error) throw error;
+        alert(`「${emp.name}」さんを退職処理いたしました。`);
+        await fetchEmployees();
+      } catch (err: any) {
+        console.error('Retire Error:', err);
+        alert('退職処理に失敗しました: ' + (err.message || ''));
+      }
+    }
+  };
+
   const handleAddLeaveType = async () => {
     if (!tenantId) return;
     const nameInput = document.getElementById('newLeaveName') as HTMLInputElement;
@@ -799,8 +856,11 @@ ${tenantId || '（エラー：コード取得失敗）'}
         </nav>
         <div className="p-4 border-t border-blue-800 hidden md:block">
           <button 
-            onClick={() => navigate('/')}
-            className="flex items-center w-full p-2 hover:bg-blue-800 rounded transition-colors"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              navigate('/');
+            }}
+            className="flex items-center w-full p-2 hover:bg-blue-800 rounded transition-colors cursor-pointer"
           >
             <LogOut className="mr-3 h-5 w-5" />
             ログアウト
@@ -1006,13 +1066,24 @@ ${tenantId || '（エラー：コード取得失敗）'}
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{emp.join_date}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{emp.manager}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${emp.role === '管理者' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${emp.role === '管理者' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'} mr-1.5`}>
                             {emp.role}
                           </span>
+                          {emp.is_retired && (
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-slate-100 text-slate-600 border border-slate-300">
+                              退職済
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-medium">
-                          <button onClick={() => handleOpenModal(emp)} className="text-blue-600 hover:text-blue-900 mr-3">編集</button>
-                          <button className="text-red-600 hover:text-red-900">削除</button>
+                          <button onClick={() => handleOpenModal(emp)} className="text-blue-600 hover:text-blue-900 mr-3 cursor-pointer">編集</button>
+                          <button 
+                            onClick={() => handleToggleRetireEmployee(emp)} 
+                            className={`cursor-pointer font-bold ${emp.is_retired ? 'text-emerald-600 hover:text-emerald-800' : 'text-rose-600 hover:text-rose-800'}`}
+                            title={emp.is_retired ? '在籍へ戻す（復職）' : '退職処理する'}
+                          >
+                            {emp.is_retired ? '復職' : '退職'}
+                          </button>
                         </td>
                       </tr>
                     ))}

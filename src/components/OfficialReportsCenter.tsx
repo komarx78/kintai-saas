@@ -374,8 +374,8 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
       <style>{`
         @media print {
           @page {
-            size: ${selectedDocType === 'wage_ledger' ? 'landscape' : 'A4 portrait'};
-            margin: ${selectedDocType === 'wage_ledger' ? '4mm 6mm' : '8mm 10mm 8mm 10mm'};
+            size: ${(selectedDocType === 'wage_ledger' || selectedDocType === 'withholding_tax_ledger') ? 'landscape' : 'A4 portrait'};
+            margin: ${(selectedDocType === 'wage_ledger' || selectedDocType === 'withholding_tax_ledger') ? '4mm 6mm' : '8mm 10mm 8mm 10mm'};
           }
           body {
             background: white !important;

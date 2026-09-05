@@ -54,10 +54,18 @@ const PrivateRoute = ({ children, requiredRole }: { children: React.ReactNode, r
       }
 
       // Check role
-      if (requiredRole && userData.role !== requiredRole) {
-        setAuthorized(false);
-        setLoading(false);
-        return;
+      if (requiredRole) {
+        if (requiredRole === 'admin') {
+          if (userData.role !== 'admin' && userData.role !== 'superadmin') {
+            setAuthorized(false);
+            setLoading(false);
+            return;
+          }
+        } else if (userData.role !== requiredRole) {
+          setAuthorized(false);
+          setLoading(false);
+          return;
+        }
       }
 
       // Check trial lock (Superadmins bypass this)
@@ -148,7 +156,7 @@ function App() {
           </PrivateRoute>
         } />
         <Route path="/kintai/admin/*" element={
-          <PrivateRoute>
+          <PrivateRoute requiredRole="admin">
             <AdminDashboard />
           </PrivateRoute>
         } />

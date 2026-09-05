@@ -46,7 +46,7 @@ interface MonthlyWageItem {
 }
 
 export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
-  tenantId: _tenantId,
+  tenantId,
   employees,
   companyInfo,
   initialYear = new Date().getFullYear(),
@@ -125,18 +125,35 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
       const prevM = m === 1 ? 12 : m - 1;
       const period = `${prevM}/21 - ${m}/20`;
 
+      // 対象月度の給与確定データを探索（SSOT連携）
+      const targetYM = `${selectedYear}-${String(m).padStart(2, '0')}`;
+      let actualPayslip: any = null;
+      try {
+        if (tenantId) {
+          const raw = localStorage.getItem(`saved_payslips_${tenantId}_${targetYM}`);
+          if (raw) {
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+              actualPayslip = list.find((p: any) => p.user_id === currentEmployee.id);
+            }
+          }
+        }
+      } catch (_) {}
+
       // 勤怠シミュレーション・実績
-      const workDays = isPartTime ? 16.0 : (20 + (m % 3 === 0 ? 2 : m % 2 === 0 ? 1 : 0));
+      const workDays = actualPayslip?.work_days ?? (isPartTime ? 16.0 : (20 + (m % 3 === 0 ? 2 : m % 2 === 0 ? 1 : 0)));
       const prescribedHours = isPartTime ? workDays * 6 : workDays * 8;
-      const otHours = (!isExecutive && !isPartTime && m % 2 === 0) ? 12 : 0;
-      const totalWorkHours = prescribedHours + otHours;
-      const paidLeaveRemaining = Math.max(0, 10.0 - Math.floor(m / 4));
+      const otHours = actualPayslip?.overtime_hours ?? ((!isExecutive && !isPartTime && m % 2 === 0) ? 12 : 0);
+      const totalWorkHours = actualPayslip?.actual_hours ?? (prescribedHours + otHours);
+      const paidLeaveRemaining = actualPayslip?.paid_leave_remaining ?? Math.max(0, 10.0 - Math.floor(m / 4));
 
       // 支給項目
-      let basePay = isPartTime ? Math.round(base * totalWorkHours) : base;
-      const overtimePay = otHours > 0 ? Math.round((base / 160) * 1.25 * otHours) : 0;
-      const allowanceTotal = (!isPartTime && !isExecutive) ? 15000 : 0; // 通勤手当等
-      const gross = basePay + overtimePay + allowanceTotal;
+      let basePay = actualPayslip?.base_salary ?? (isPartTime ? Math.round(base * totalWorkHours) : base);
+      const overtimePay = actualPayslip?.overtime_allowance ?? (otHours > 0 ? Math.round((base / 160) * 1.25 * otHours) : 0);
+      const allowanceTotal = actualPayslip 
+        ? ((actualPayslip.commuting_allowance || 0) + (actualPayslip.position_allowance || 0) + (actualPayslip.housing_allowance || 0) + (actualPayslip.qualification_allowance || 0) + (actualPayslip.family_allowance || 0) + (actualPayslip.special_allowance || 0))
+        : ((!isPartTime && !isExecutive) ? 15000 : 0); // 通勤手当等
+      const gross = actualPayslip?.total_earnings ?? (basePay + overtimePay + allowanceTotal);
       const taxable = gross;
 
       // 控除項目（社会保険・税金）
@@ -144,22 +161,22 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
       const pensionJoined = currentEmployee.pension_insurance_joined !== false;
       const empInsJoined = currentEmployee.employment_insurance_joined !== false;
 
-      const health = healthJoined ? Math.round(gross * 0.0494) : 0;
-      const nursing = (healthJoined && currentEmployee.birth_date && new Date().getFullYear() - new Date(currentEmployee.birth_date).getFullYear() >= 40)
+      const health = actualPayslip?.health_insurance ?? (healthJoined ? Math.round(gross * 0.0494) : 0);
+      const nursing = actualPayslip?.nursing_insurance ?? ((healthJoined && currentEmployee.birth_date && new Date().getFullYear() - new Date(currentEmployee.birth_date).getFullYear() >= 40)
         ? Math.round(gross * 0.008)
-        : 0;
-      const pension = pensionJoined ? Math.round(gross * 0.0915) : 0;
-      const empIns = (empInsJoined && !isExecutive) ? Math.round(gross * 0.006) : 0;
+        : 0);
+      const pension = actualPayslip?.pension_insurance ?? (pensionJoined ? Math.round(gross * 0.0915) : 0);
+      const empIns = actualPayslip?.employment_insurance ?? ((empInsJoined && !isExecutive) ? Math.round(gross * 0.006) : 0);
       const childCare = isExecutive ? 925 : 0;
 
       const socTotal = health + nursing + pension + empIns;
       const depCount = currentEmployee.dependents_count || 0;
       const taxableForIncomeTax = Math.max(0, gross - socTotal);
       const taxRate = Math.max(0.02, 0.05 - (depCount * 0.01));
-      const incomeTax = Math.round(taxableForIncomeTax * taxRate);
-      const dedTotal = socTotal + incomeTax + childCare;
+      const incomeTax = actualPayslip?.income_tax ?? Math.round(taxableForIncomeTax * taxRate);
+      const dedTotal = actualPayslip?.total_deductions ?? (socTotal + incomeTax + childCare);
       const afterSoc = gross - socTotal;
-      const net = gross - dedTotal;
+      const net = actualPayslip?.net_salary ?? (gross - dedTotal);
 
       return {
         month: m,
@@ -190,7 +207,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
         bankTransferRemaining: net
       };
     });
-  }, [currentEmployee]);
+  }, [currentEmployee, selectedYear, tenantId]);
 
   // 年間合計の算出
   const annualTotal = useMemo(() => {

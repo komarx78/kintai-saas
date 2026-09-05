@@ -23,13 +23,6 @@ const UserDashboard = () => {
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    
-    const storedHolidays = localStorage.getItem('mock_company_holidays');
-    if (storedHolidays) setCompanyHolidays(new Set(JSON.parse(storedHolidays)));
-
-    const storedRounding = localStorage.getItem('mock_rounding_unit');
-    if (storedRounding) setRoundingUnit(parseInt(storedRounding));
-    
     return () => clearInterval(timer);
   }, []);
 
@@ -57,6 +50,14 @@ const UserDashboard = () => {
 
         // 🏢 会社カレンダー休日設定 ＆ 打刻丸め単位のDB自動同期（全端末完全共有）
         if (profile?.tenant_id) {
+          // 初期ローカルキャッシュ復元
+          const storedHols = localStorage.getItem(`mock_company_holidays_${profile.tenant_id}`) || localStorage.getItem('mock_company_holidays');
+          if (storedHols) {
+            try { setCompanyHolidays(new Set(JSON.parse(storedHols))); } catch (_) {}
+          }
+          const storedRound = localStorage.getItem(`mock_rounding_unit_${profile.tenant_id}`) || localStorage.getItem('mock_rounding_unit');
+          if (storedRound) setRoundingUnit(parseInt(storedRound));
+
           try {
             const { data: tData } = await supabase
               .from('tenants')
@@ -67,6 +68,7 @@ const UserDashboard = () => {
             if (tData?.payroll_common_settings?.rounding_unit) {
               const rUnit = parseInt(tData.payroll_common_settings.rounding_unit);
               setRoundingUnit(rUnit);
+              localStorage.setItem(`mock_rounding_unit_${profile.tenant_id}`, rUnit.toString());
               localStorage.setItem('mock_rounding_unit', rUnit.toString());
             }
 
@@ -124,6 +126,7 @@ const UserDashboard = () => {
               }
 
               setCompanyHolidays(holSet);
+              localStorage.setItem(`mock_company_holidays_${profile.tenant_id}`, JSON.stringify(Array.from(holSet)));
               localStorage.setItem('mock_company_holidays', JSON.stringify(Array.from(holSet)));
             }
           } catch (calErr) {
