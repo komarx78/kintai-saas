@@ -81,10 +81,11 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
   const [officeSymbol, setOfficeSymbol] = useState<string>('01-イロハ');
   const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [payrollProfiles, setPayrollProfiles] = useState<Record<string, any>>({});
+  const [bonusUpdateTick, setBonusUpdateTick] = useState(0);
 
   useEffect(() => {
     fetchMasterData();
-  }, [tenantId]);
+  }, [tenantId, bonusUpdateTick]);
 
   const fetchMasterData = async () => {
     if (!tenantId) return;
@@ -257,6 +258,94 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
     }
   };
 
+  // 共通賞与データ解決ヘルパー（SSOT連携・雇用形態別対応）
+  const resolveEmployeeBonusData = (emp: EmployeeItem, targetYearMonth: string) => {
+    // 1. 指定年月の届出保存データ
+    let savedRow: any = null;
+    try {
+      const raw = localStorage.getItem(`bonus_report_${tenantId}_${targetYearMonth}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.bonusRows)) {
+          savedRow = parsed.bonusRows.find((r: any) => r.user_id === emp.id);
+        }
+      }
+    } catch (_) {}
+
+    // 2. 指定月になければ他年月（直近）の届出保存データ
+    if (!savedRow) {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith(`bonus_report_${tenantId}_`)) {
+            const raw = localStorage.getItem(k);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed.bonusRows)) {
+                const found = parsed.bonusRows.find((r: any) => r.user_id === emp.id);
+                if (found && found.currencyAmount !== undefined) {
+                  savedRow = found;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 3. クラウド給与計算（賞与管理）の最新キャンペーンレコード
+    let mfBonusGross: number | undefined = undefined;
+    try {
+      const mfRaw = localStorage.getItem(`mf_bonus_campaigns_${tenantId}`);
+      if (mfRaw) {
+        const camps = JSON.parse(mfRaw);
+        if (Array.isArray(camps) && camps.length > 0) {
+          const rec = (camps[0].records || []).find((r: any) => r.user_id === emp.id);
+          if (rec && rec.bonus_gross !== undefined) {
+            mfBonusGross = rec.bonus_gross;
+          }
+        }
+      }
+    } catch (_) {}
+
+    const isPartTime = emp.employment_type === 'part-time' || emp.salary_type === 'hourly';
+
+    let currencyAmount = 0;
+    let goodsAmount = 0;
+
+    if (savedRow && savedRow.currencyAmount !== undefined) {
+      currencyAmount = Number(savedRow.currencyAmount);
+      goodsAmount = Number(savedRow.goodsAmount || 0);
+    } else if (mfBonusGross !== undefined) {
+      currencyAmount = mfBonusGross;
+      goodsAmount = 0;
+    } else {
+      // フォールバック（実務標準）：パートは一律5万円、正社員は基本給×倍率
+      currencyAmount = isPartTime ? 50000 : Math.round(emp.base_salary * (bonusMultiplier || 1.0));
+      goodsAmount = 0;
+    }
+
+    const bonusGross = currencyAmount + goodsAmount;
+    const standardBonus = Math.floor(bonusGross / 1000) * 1000;
+
+    return {
+      currencyAmount,
+      goodsAmount,
+      bonusGross,
+      standardBonus,
+      insuranceNumber: savedRow?.insuranceNumber,
+      nameKana: savedRow?.nameKana || emp.name_kana,
+      birthDate: savedRow?.birthDate || emp.birth_date,
+      individualPaymentDate: savedRow?.individualPaymentDate,
+      isOver70: savedRow?.isOver70,
+      isDualWork: savedRow?.isDualWork,
+      isMonthlyMerged: savedRow?.isMonthlyMerged,
+      firstPaymentDay: savedRow?.firstPaymentDay,
+      include: savedRow?.include ?? true
+    };
+  };
+
   // CSVダウンロードヘルパー
   const downloadCsv = (filename: string, headers: string[], rows: (string | number)[][]) => {
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -423,13 +512,22 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
 
         {/* 🎁 カテゴリ1: 賞与を支給した際に確認するもの */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h4 className="font-black text-slate-800 text-sm flex items-center gap-2">
               <span className="text-emerald-600">■</span> 賞与を支給した際に確認するもの
             </h4>
-            <span className="text-[11px] text-slate-400 font-bold">
-              {selectedYear}年 {selectedMonth}月度（基準支給）
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-400 font-bold">
+                {selectedYear}年 {selectedMonth}月度（基準支給）
+              </span>
+              <button
+                onClick={() => setBonusReportModalOpen(true)}
+                className="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs flex items-center gap-1 transition cursor-pointer shadow-2xs"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                賞与算定・一括入力
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -744,6 +842,15 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               </div>
 
               <div className="flex items-center gap-2">
+                {selectedDocType && ['bonus_slip', 'bonus_transfer_list', 'bonus_summary_all', 'bonus_summary_dept', 'nenkin_bonus_report'].includes(selectedDocType) && (
+                  <button
+                    onClick={() => setBonusReportModalOpen(true)}
+                    className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs transition flex items-center gap-1 cursor-pointer print:hidden shadow-2xs"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    賞与算定・編集
+                  </button>
+                )}
                 <button
                   onClick={() => window.print()}
                   className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
@@ -770,11 +877,14 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                 const targetEmps = selectedEmployeeId === 'all' 
                   ? employees.filter(e => !e.is_retired) 
                   : employees.filter(e => e.id === selectedEmployeeId);
+                const targetMonthKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
 
                 return (
                   <div className="space-y-8">
                     {targetEmps.map((emp, idx) => {
-                      const bonusAmount = Math.round(emp.base_salary * bonusMultiplier);
+                      const bonusData = resolveEmployeeBonusData(emp, targetMonthKey);
+                      const bonusAmount = bonusData.bonusGross;
+                      const isPartTime = emp.employment_type === 'part-time' || emp.salary_type === 'hourly';
                       // 賞与時の社保・税金概算
                       const healthBonus = emp.health_insurance_joined ? Math.round(bonusAmount * 0.05) : 0;
                       const pensionBonus = emp.pension_insurance_joined ? Math.round(bonusAmount * 0.0915) : 0;
@@ -804,7 +914,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                             </div>
                             <div className="text-right text-xs">
                               <div className="font-black text-slate-900">{companyInfo.name}</div>
-                              <div className="text-slate-500 text-[10px]">支給日: {selectedYear}年{selectedMonth}月10日</div>
+                              <div className="text-slate-500 text-[10px]">支給日: {bonusData.individualPaymentDate || `${selectedYear}年${selectedMonth}月10日`}</div>
                             </div>
                           </div>
 
@@ -812,7 +922,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                           <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 mb-5">
                             <div><span className="text-slate-400 text-[10px]">氏名:</span> <span className="font-black text-sm">{emp.name} 殿</span></div>
                             <div><span className="text-slate-400 text-[10px]">所属:</span> <span className="font-bold">{emp.department}</span></div>
-                            <div><span className="text-slate-400 text-[10px]">支給月数:</span> <span className="font-bold">{bonusMultiplier} ヶ月</span></div>
+                            <div><span className="text-slate-400 text-[10px]">算定区分:</span> <span className="font-bold">{isPartTime ? 'パート一律算定' : `${bonusMultiplier} ヶ月`}</span></div>
                           </div>
 
                           {/* 支給・控除テーブル */}
@@ -825,7 +935,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                               </div>
                               <div className="p-3 space-y-2">
                                 <div className="flex justify-between">
-                                  <span>算定基準基本給</span>
+                                  <span>{isPartTime ? '所定/基準給' : '算定基準基本給'}</span>
                                   <span className="font-mono">¥{emp.base_salary.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between font-bold">
@@ -911,8 +1021,10 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               {/* ----------------------------------------------------------------- */}
               {selectedDocType === 'bonus_transfer_list' && (() => {
                 const activeEmps = employees.filter(e => !e.is_retired);
+                const targetMonthKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
                 const rows = activeEmps.map(emp => {
-                  const bonusAmount = Math.round(emp.base_salary * bonusMultiplier);
+                  const bonusData = resolveEmployeeBonusData(emp, targetMonthKey);
+                  const bonusAmount = bonusData.bonusGross;
                   const healthBonus = emp.health_insurance_joined ? Math.round(bonusAmount * 0.05) : 0;
                   const pensionBonus = emp.pension_insurance_joined ? Math.round(bonusAmount * 0.0915) : 0;
                   const empInsBonus = emp.employment_insurance_joined ? Math.round(bonusAmount * 0.006) : 0;
@@ -1005,8 +1117,10 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               {/* ----------------------------------------------------------------- */}
               {selectedDocType === 'bonus_summary_all' && (() => {
                 const activeEmps = employees.filter(e => !e.is_retired);
+                const targetMonthKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
                 const list = activeEmps.map(emp => {
-                  const gross = Math.round(emp.base_salary * bonusMultiplier);
+                  const bonusData = resolveEmployeeBonusData(emp, targetMonthKey);
+                  const gross = bonusData.bonusGross;
                   const h = emp.health_insurance_joined ? Math.round(gross * 0.05) : 0;
                   const p = emp.pension_insurance_joined ? Math.round(gross * 0.0915) : 0;
                   const e = emp.employment_insurance_joined ? Math.round(gross * 0.006) : 0;
@@ -1099,6 +1213,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               {/* ----------------------------------------------------------------- */}
               {selectedDocType === 'bonus_summary_dept' && (() => {
                 const activeEmps = employees.filter(e => !e.is_retired);
+                const targetMonthKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
                 const deptMap = new Map<string, EmployeeItem[]>();
                 activeEmps.forEach(e => {
                   const d = e.department || '本社営業部';
@@ -1117,7 +1232,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
 
                     <div className="space-y-6">
                       {Array.from(deptMap.entries()).map(([deptName, deptEmps]) => {
-                        const deptGross = deptEmps.reduce((s, e) => s + Math.round(e.base_salary * bonusMultiplier), 0);
+                        const deptGross = deptEmps.reduce((s, e) => s + resolveEmployeeBonusData(e, targetMonthKey).bonusGross, 0);
                         const deptSocial = Math.round(deptGross * 0.1475);
                         const deptTax = Math.round((deptGross - deptSocial) * 0.05);
                         const deptNet = deptGross - (deptSocial + deptTax);
@@ -1168,46 +1283,41 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                   ? employees.filter(e => !e.is_retired && (e.health_insurance_joined || e.pension_insurance_joined))
                   : employees.filter(e => e.id === selectedEmployeeId);
 
+                const targetMonthKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
                 const commonPayDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-10`;
 
-                // 過去の保存された賞与データがあれば優先反映
-                const storageKey = `bonus_report_${tenantId}_${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
-                let savedRows: any[] | null = null;
+                // 過去の保存された賞与メタデータがあれば取得
                 let savedMeta: any = null;
                 try {
-                  const raw = localStorage.getItem(storageKey);
-                  if (raw) {
-                    const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed.bonusRows)) savedRows = parsed.bonusRows;
-                    savedMeta = parsed;
-                  }
+                  const raw = localStorage.getItem(`bonus_report_${tenantId}_${targetMonthKey}`);
+                  if (raw) savedMeta = JSON.parse(raw);
                 } catch (e) {}
 
-                const bonusEmployees: BonusReportEmployee[] = targetEmps.map((emp, index) => {
-                  const savedRow = savedRows?.find(r => r.user_id === emp.id);
-                  const baseAmount = Math.round(emp.base_salary * bonusMultiplier);
-                  const currencyAmt = savedRow?.currencyAmount !== undefined ? Number(savedRow.currencyAmount) : baseAmount;
-                  const goodsAmt = savedRow?.goodsAmount !== undefined ? Number(savedRow.goodsAmount) : 0;
-                  const bDate = savedRow?.birthDate || emp.birth_date || '';
-                  const payDate = savedRow?.individualPaymentDate || commonPayDate;
-                  const is70 = savedRow?.isOver70 ?? checkIfOver70(bDate, payDate);
+                const bonusEmployees: BonusReportEmployee[] = targetEmps
+                  .map((emp, index) => {
+                    const res = resolveEmployeeBonusData(emp, targetMonthKey);
+                    const bDate = res.birthDate || emp.birth_date || '';
+                    const payDate = res.individualPaymentDate || commonPayDate;
+                    const is70 = res.isOver70 ?? checkIfOver70(bDate, payDate);
 
-                  return {
-                    id: emp.id,
-                    insuranceNumber: savedRow?.insuranceNumber || String(index + 1).padStart(4, '0'),
-                    name: emp.name,
-                    nameKana: savedRow?.nameKana || emp.name_kana || '',
-                    birthDate: bDate,
-                    individualPaymentDate: savedRow?.individualPaymentDate || '',
-                    currencyAmount: currencyAmt,
-                    goodsAmount: goodsAmt,
-                    myNumber: savedRow?.myNumber || emp.my_number || '',
-                    isOver70: is70,
-                    isDualWork: savedRow?.isDualWork || false,
-                    isMonthlyMerged: savedRow?.isMonthlyMerged || false,
-                    firstPaymentDay: savedRow?.firstPaymentDay || ''
-                  };
-                });
+                    return {
+                      id: emp.id,
+                      insuranceNumber: res.insuranceNumber || String(index + 1).padStart(4, '0'),
+                      name: emp.name,
+                      nameKana: res.nameKana || emp.name_kana || '',
+                      birthDate: bDate,
+                      individualPaymentDate: res.individualPaymentDate || '',
+                      currencyAmount: res.currencyAmount,
+                      goodsAmount: res.goodsAmount,
+                      myNumber: emp.my_number || '',
+                      isOver70: is70,
+                      isDualWork: res.isDualWork || false,
+                      isMonthlyMerged: res.isMonthlyMerged || false,
+                      firstPaymentDay: res.firstPaymentDay || '',
+                      include: res.include
+                    };
+                  })
+                  .filter(e => e.include);
 
                 return (
                   <div className="space-y-6">
@@ -1611,7 +1721,12 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           isOpen={bonusReportModalOpen}
           onClose={() => {
             setBonusReportModalOpen(false);
+            setBonusUpdateTick(t => t + 1);
             fetchMasterData(); // 入力・保存したデータを再反映
+          }}
+          onSaveSuccess={() => {
+            setBonusUpdateTick(t => t + 1);
+            fetchMasterData();
           }}
           tenantId={tenantId}
           tenantInfo={tenantInfo}

@@ -19,6 +19,7 @@ export interface BonusPaymentReportModalProps {
   payrollProfiles?: Record<string, any>;
   initialYearMonth?: string;
   onSaveNoticeToCabinet?: (fileData: { title: string; fiscal_year: string; filename: string; file_url: string; note: string }) => void;
+  onSaveSuccess?: (savedRows: any[]) => void;
 }
 
 export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = ({
@@ -29,7 +30,8 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
   employees,
   payrollProfiles = {},
   initialYearMonth,
-  onSaveNoticeToCabinet
+  onSaveNoticeToCabinet,
+  onSaveSuccess
 }) => {
   const currentYear = new Date().getFullYear();
   const [bonusYearMonth, setBonusYearMonth] = useState(initialYearMonth || `${currentYear}-06`); // 例: 2026-06 夏期賞与
@@ -76,6 +78,11 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
   useEffect(() => {
     if (!isOpen) return;
 
+    const targetMonth = initialYearMonth || bonusYearMonth;
+    if (initialYearMonth && bonusYearMonth !== initialYearMonth) {
+      setBonusYearMonth(initialYearMonth);
+    }
+
     // 会社情報の初期化
     setCompanyName(tenantInfo?.name || '');
     setCompanyAddress(tenantInfo?.address || '');
@@ -87,9 +94,37 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
     const sym = shakai.office_symbol || tenantInfo?.shakai_hoken_office_number || '01-イロハ';
     setOfficeSymbol(sym);
 
-    // 過去の保存データがあればロード、無ければ従業員一覧から初期生成
-    const storageKey = `bonus_report_${tenantId}_${bonusYearMonth}`;
-    const saved = localStorage.getItem(storageKey);
+    // 過去の保存データがあればロード、無ければ他年月やクラウド給与計算から引き継ぎ
+    const storageKey = `bonus_report_${tenantId}_${targetMonth}`;
+    let saved = localStorage.getItem(storageKey);
+
+    // 該当月のデータがまだ無い場合、過去に保存された別月の最新データを探す
+    if (!saved) {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(`bonus_report_${tenantId}_`)) {
+          saved = localStorage.getItem(k);
+          if (saved) break;
+        }
+      }
+    }
+
+    // クラウド給与計算（賞与管理）のキャンペーンデータも確認
+    let mfCampaignRecordMap: Record<string, number> = {};
+    try {
+      const mfRaw = localStorage.getItem(`mf_bonus_campaigns_${tenantId}`);
+      if (mfRaw) {
+        const camps = JSON.parse(mfRaw);
+        if (Array.isArray(camps) && camps.length > 0) {
+          const latestCamp = camps[0];
+          (latestCamp.records || []).forEach((r: any) => {
+            if (r.user_id && r.bonus_gross !== undefined) {
+              mfCampaignRecordMap[r.user_id] = r.bonus_gross;
+            }
+          });
+        }
+      }
+    } catch (_) {}
 
     if (saved) {
       try {
@@ -147,8 +182,11 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
       // 社保加入している正社員等をデフォルトで対象
       const isJoined = prof.health_insurance_enabled ?? localMaster.health_insurance_joined ?? true;
 
-      // 初期賞与額：パートは一律5万円、正社員等は基本給1ヶ月分
-      const defaultAmount = isPartTime ? 50000 : Math.round(baseSalary * 1.0);
+      // 初期賞与額：給与計算賞与管理のデータ > パート一律5万 / 正社員1ヶ月分
+      let defaultAmount = mfCampaignRecordMap[emp.id];
+      if (defaultAmount === undefined) {
+        defaultAmount = isPartTime ? 50000 : Math.round(baseSalary * 1.0);
+      }
 
       return {
         user_id: emp.id,
@@ -171,38 +209,52 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
     });
 
     setBonusRows(rows);
-  }, [isOpen, tenantId, bonusYearMonth]);
+  }, [isOpen, tenantId, bonusYearMonth, initialYearMonth]);
 
   if (!isOpen) return null;
 
-  // データ保存
-  const handleSaveData = () => {
+  // データ保存（手動保存またはサイレントオートセーブ）
+  const handleSaveData = (showToast = true, rowsToSave?: typeof bonusRows) => {
     try {
-      const storageKey = `bonus_report_${tenantId}_${bonusYearMonth}`;
+      const rows = rowsToSave || bonusRows;
+      const targetMonth = bonusYearMonth || initialYearMonth || `${currentYear}-06`;
+      const storageKey = `bonus_report_${tenantId}_${targetMonth}`;
       const payload = {
-        bonusYearMonth,
+        bonusYearMonth: targetMonth,
         bonusTitle,
         commonPaymentDate,
         submissionDate,
         officeSymbol,
         sharoushiName,
-        bonusRows,
+        bonusRows: rows,
         updatedAt: new Date().toISOString()
       };
       localStorage.setItem(storageKey, JSON.stringify(payload));
-      alert('✨ 賞与支払届のデータを保存しました！いつでも再開・再印刷できます。');
+      
+      // 親画面の年月キーにも二重同期（キーのズレを完全解消）
+      if (initialYearMonth && initialYearMonth !== targetMonth) {
+        localStorage.setItem(`bonus_report_${tenantId}_${initialYearMonth}`, JSON.stringify(payload));
+      }
+
+      if (onSaveSuccess) {
+        onSaveSuccess(rows);
+      }
+
+      if (showToast) {
+        alert('✨ 賞与支払届のデータを保存しました！いつでも再開・再印刷できます。');
+      }
     } catch (err: any) {
-      alert('保存に失敗しました: ' + err.message);
+      if (showToast) alert('保存に失敗しました: ' + err.message);
     }
   };
 
   // 全社キャビネットへの自動ファイリング
   const handleSaveToCabinet = () => {
     if (!onSaveNoticeToCabinet) {
-      handleSaveData();
+      handleSaveData(true);
       return;
     }
-    handleSaveData();
+    handleSaveData(false);
 
     const [y] = bonusYearMonth.split('-');
     const reiwaY = parseInt(y, 10) - 2018;
@@ -216,11 +268,11 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
     alert('📁 全社保管庫（キャビネット）に賞与支払届の控えを保管登録しました！');
   };
 
-  // 1. 【正社員のみ】一括反映（月数掛け）
+  // 1. 【正社員のみ】一括反映（月数掛け ＆ 即時オートセーブ）
   const handleApplyFullTimeMultiplier = () => {
     if (fullTimeMultiplier === '' || Number(fullTimeMultiplier) < 0) return;
     const m = Number(fullTimeMultiplier);
-    setBonusRows(prev => prev.map(row => {
+    const updated = bonusRows.map(row => {
       const isPart = row.employment_type === 'part-time' || row.salary_type === 'hourly';
       if (isPart) return row; // パートは変更しない
       const prof = payrollProfiles[row.user_id] || {};
@@ -229,29 +281,33 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
         ...row,
         currencyAmount: Math.round(base * m)
       };
-    }));
+    });
+    setBonusRows(updated);
+    handleSaveData(false, updated);
   };
 
-  // 2. 【パート・アルバイトのみ】一括反映（一律定額）
+  // 2. 【パート・アルバイトのみ】一括反映（一律定額 ＆ 即時オートセーブ）
   const handleApplyPartTimeAmount = () => {
     if (partTimeAmount === '' || Number(partTimeAmount) < 0) return;
     const amt = Number(partTimeAmount);
-    setBonusRows(prev => prev.map(row => {
+    const updated = bonusRows.map(row => {
       const isPart = row.employment_type === 'part-time' || row.salary_type === 'hourly';
       if (!isPart) return row; // 正社員は変更しない
       return {
         ...row,
         currencyAmount: amt
       };
-    }));
+    });
+    setBonusRows(updated);
+    handleSaveData(false, updated);
   };
 
-  // 3. 【一括全自動算定】正社員○ヶ月 ＆ パート一律○万を同時にワンクリックで全員反映！
+  // 3. 【一括全自動算定】正社員○ヶ月 ＆ パート一律○万を同時にワンクリックで全員反映 ＆ 即時オートセーブ！
   const handleApplyAutoBonusByEmploymentType = () => {
     const m = fullTimeMultiplier === '' ? 1.0 : Number(fullTimeMultiplier);
     const pAmt = partTimeAmount === '' ? 50000 : Number(partTimeAmount);
 
-    setBonusRows(prev => prev.map(row => {
+    const updated = bonusRows.map(row => {
       const isPart = row.employment_type === 'part-time' || row.salary_type === 'hourly';
       if (isPart) {
         return {
@@ -266,7 +322,9 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
           currencyAmount: Math.round(base * m)
         };
       }
-    }));
+    });
+    setBonusRows(updated);
+    handleSaveData(false, updated);
   };
 
   // 公式コンポーネント用データへ変換
@@ -357,7 +415,10 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                handleSaveData(false);
+                onClose();
+              }}
               className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition cursor-pointer ml-2"
             >
               <X className="w-4 h-4" />
@@ -668,7 +729,9 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
                                   value={row.currencyAmount || ''}
                                   onChange={e => {
                                     const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
-                                    setBonusRows(prev => prev.map((r, i) => i === idx ? { ...r, currencyAmount: val } : r));
+                                    const updated = bonusRows.map((r, i) => i === idx ? { ...r, currencyAmount: val } : r);
+                                    setBonusRows(updated);
+                                    handleSaveData(false, updated);
                                   }}
                                   disabled={!row.include}
                                   className="w-28 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 font-bold font-mono text-slate-900 focus:bg-white"
@@ -685,7 +748,9 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
                                   value={row.goodsAmount || ''}
                                   onChange={e => {
                                     const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
-                                    setBonusRows(prev => prev.map((r, i) => i === idx ? { ...r, goodsAmount: val } : r));
+                                    const updated = bonusRows.map((r, i) => i === idx ? { ...r, goodsAmount: val } : r);
+                                    setBonusRows(updated);
+                                    handleSaveData(false, updated);
                                   }}
                                   disabled={!row.include}
                                   className="w-24 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 font-mono text-slate-700 focus:bg-white"
@@ -774,7 +839,7 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleSaveData}
+              onClick={() => handleSaveData(true)}
               className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition flex items-center gap-1.5 cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" />
@@ -806,7 +871,10 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                handleSaveData(false);
+                onClose();
+              }}
               className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition cursor-pointer"
             >
               閉じる
