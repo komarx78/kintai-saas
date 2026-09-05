@@ -12,6 +12,7 @@ import {
 } from './OfficialBonusPaymentReportDoc';
 import { BonusPaymentReportModal } from './BonusPaymentReportModal';
 import { WageLedgerViewer } from './WageLedgerViewer';
+import { EmployeeRosterViewer } from './EmployeeRosterViewer';
 
 export interface OfficialReportsCenterProps {
   tenantId: string;
@@ -829,6 +830,19 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
             />
           </div>
         </div>
+      ) : selectedDocType === 'employee_roster' ? (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col print:static print:p-0 print:m-0 print:bg-white print:z-auto print:block print:h-auto print:overflow-hidden">
+          <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden print:overflow-hidden print:bg-white print:h-auto print:block print:p-0 print:m-0">
+            <EmployeeRosterViewer
+              tenantId={tenantId}
+              employees={employees as any}
+              companyInfo={companyInfo}
+              initialEmployeeId={selectedEmployeeId}
+              onBackToReports={() => setSelectedDocType(null)}
+              isModalMode={true}
+            />
+          </div>
+        </div>
       ) : selectedDocType && (
         <div className="reports-modal-wrapper fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 print:p-0 print:static print:bg-transparent print:z-auto print:block">
           <div className="reports-printable-card bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col border border-slate-100 overflow-hidden print:border-none print:shadow-none print:max-h-none print:overflow-visible print:w-full print:block">
@@ -1488,94 +1502,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
 
               {/* ----------------------------------------------------------------- */}
               {/* ⑧ 賃金台帳（労働基準法第108条 法定帳簿・MFクラウド給与準拠）      */}
-              {/* ----------------------------------------------------------------- */}
-              {selectedDocType === 'wage_ledger' && (
-                <WageLedgerViewer
-                  tenantId={tenantId}
-                  employees={employees}
-                  companyInfo={companyInfo}
-                  initialYear={selectedYear}
-                  initialEmployeeId={selectedEmployeeId}
-                  onBackToReports={() => setSelectedDocType(null)}
-                />
-              )}
 
-              {/* ----------------------------------------------------------------- */}
-              {/* ⑨ 労働者名簿（労働基準法第107条 法定帳簿）                          */}
-              {/* ----------------------------------------------------------------- */}
-              {selectedDocType === 'employee_roster' && (() => {
-                const targetEmps = selectedEmployeeId === 'all' ? employees : employees.filter(e => e.id === selectedEmployeeId);
-
-                return (
-                  <div className="space-y-6">
-                    {targetEmps.map((emp, idx) => (
-                      <div
-                        key={emp.id}
-                        className="bg-white p-8 rounded-2xl border-2 border-slate-900 text-slate-900 font-sans text-xs max-w-4xl mx-auto shadow-sm print:p-0 print:border-none print:shadow-none"
-                        style={{ pageBreakAfter: idx < targetEmps.length - 1 ? 'always' : 'auto' }}
-                      >
-                        <div className="text-center border-b-2 border-slate-900 pb-2 mb-4">
-                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                            労働基準法第107条・労働基準法施行規則第53条 法定様式
-                          </div>
-                          <h2 className="text-xl font-black text-slate-950">
-                            労 働 者 名 簿
-                          </h2>
-                        </div>
-
-                        <table className="w-full border-collapse border-2 border-slate-900 text-xs mb-4">
-                          <tbody>
-                            <tr className="border-b border-slate-400">
-                              <th className="bg-slate-100 p-2 text-left w-28 border-r border-slate-400">氏名（フリガナ）</th>
-                              <td className="p-2 border-r border-slate-400 font-bold text-sm">
-                                <div className="text-[9px] text-slate-500">{emp.name_kana || ''}</div>
-                                <div>{emp.name}</div>
-                              </td>
-                              <th className="bg-slate-100 p-2 text-left w-20 border-r border-slate-400">性別</th>
-                              <td className="p-2">{emp.gender || '男性'}</td>
-                            </tr>
-                            <tr className="border-b border-slate-400">
-                              <th className="bg-slate-100 p-2 text-left border-r border-slate-400">生年月日</th>
-                              <td className="p-2 border-r border-slate-400 font-mono">{emp.birth_date}</td>
-                              <th className="bg-slate-100 p-2 text-left border-r border-slate-400">電話番号</th>
-                              <td className="p-2 font-mono">{emp.phone || '090-0000-0000'}</td>
-                            </tr>
-                            <tr className="border-b border-slate-400">
-                              <th className="bg-slate-100 p-2 text-left border-r border-slate-400">現住所</th>
-                              <td colSpan={3} className="p-2">{emp.address}</td>
-                            </tr>
-                            <tr className="border-b border-slate-400">
-                              <th className="bg-slate-100 p-2 text-left border-r border-slate-400">雇入年月日</th>
-                              <td className="p-2 border-r border-slate-400 font-mono font-bold text-emerald-700">{emp.join_date}</td>
-                              <th className="bg-slate-100 p-2 text-left border-r border-slate-400">従事業務</th>
-                              <td className="p-2">{emp.department}（{emp.position_name}）</td>
-                            </tr>
-                            <tr className="border-b border-slate-400">
-                              <th className="bg-slate-100 p-2 text-left border-r border-slate-400">契約形態</th>
-                              <td className="p-2 border-r border-slate-400">正社員（無期雇用）</td>
-                              <th className="bg-slate-100 p-2 text-left border-r border-slate-400">退職年月日</th>
-                              <td className="p-2 font-mono text-rose-700 font-bold">
-                                {emp.retirement_date || '在籍中'}
-                              </td>
-                            </tr>
-                            <tr>
-                              <th className="bg-slate-100 p-2 text-left border-r border-slate-400">退職・解雇の事由</th>
-                              <td colSpan={3} className="p-2 text-slate-600">
-                                {emp.is_retired ? '自己都合退職' : '-'}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-
-                        <div className="signature-box flex items-center justify-between border-t border-slate-300 pt-2 text-[10px] text-slate-500">
-                          <div>事業所名: {companyInfo.name} / 調製者: {companyInfo.representative_name}</div>
-                          <div>※ 労働者が退職・死亡した日から5年間の保存が義務付けられています。</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
 
               {/* ----------------------------------------------------------------- */}
               {/* ⑩ 給与所得・退職所得に対する源泉徴収簿（国税庁様式）               */}
