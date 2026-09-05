@@ -11,6 +11,7 @@ import {
   checkIfOver70 
 } from './OfficialBonusPaymentReportDoc';
 import { BonusPaymentReportModal } from './BonusPaymentReportModal';
+import { WageLedgerViewer } from './WageLedgerViewer';
 
 export interface OfficialReportsCenterProps {
   tenantId: string;
@@ -814,7 +815,21 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
       {/* ========================================================================= */}
       {/* 3. 各帳票の公式A4プレビュー ＆ 印刷・CSVモーダル                          */}
       {/* ========================================================================= */}
-      {selectedDocType && (
+      {selectedDocType === 'wage_ledger' ? (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col print:p-0 print:static print:bg-transparent print:z-auto print:block">
+          <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden">
+            <WageLedgerViewer
+              tenantId={tenantId}
+              employees={employees}
+              companyInfo={companyInfo}
+              initialYear={selectedYear}
+              initialEmployeeId={selectedEmployeeId}
+              onBackToReports={() => setSelectedDocType(null)}
+              isModalMode={true}
+            />
+          </div>
+        </div>
+      ) : selectedDocType && (
         <div className="reports-modal-wrapper fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 print:p-0 print:static print:bg-transparent print:z-auto print:block">
           <div className="reports-printable-card bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col border border-slate-100 overflow-hidden print:border-none print:shadow-none print:max-h-none print:overflow-visible print:w-full print:block">
             
@@ -1472,92 +1487,18 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               })()}
 
               {/* ----------------------------------------------------------------- */}
-              {/* ⑧ 賃金台帳（労働基準法第108条 法定帳簿）                          */}
+              {/* ⑧ 賃金台帳（労働基準法第108条 法定帳簿・MFクラウド給与準拠）      */}
               {/* ----------------------------------------------------------------- */}
-              {selectedDocType === 'wage_ledger' && (() => {
-                const targetEmps = selectedEmployeeId === 'all' ? employees : employees.filter(e => e.id === selectedEmployeeId);
-
-                return (
-                  <div className="space-y-6">
-                    {targetEmps.map((emp, idx) => (
-                      <div
-                        key={emp.id}
-                        className="bg-white p-8 rounded-2xl border-2 border-slate-900 text-slate-900 font-sans text-xs max-w-5xl mx-auto shadow-sm print:p-0 print:border-none print:shadow-none"
-                        style={{ pageBreakAfter: idx < targetEmps.length - 1 ? 'always' : 'auto' }}
-                      >
-                        <div className="text-center border-b-2 border-slate-900 pb-2 mb-4">
-                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                            労働基準法第108条・労働基準法施行規則第54条 法定様式
-                          </div>
-                          <h2 className="text-xl font-black text-slate-950">
-                            令和{selectedYear - 2018}年度 賃 金 台 帳
-                          </h2>
-                        </div>
-
-                        {/* 労働者情報 */}
-                        <div className="grid grid-cols-4 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-300 mb-4 text-[11px]">
-                          <div><span className="text-slate-400">氏名:</span> <span className="font-bold">{emp.name}</span></div>
-                          <div><span className="text-slate-400">雇入年月日:</span> <span className="font-mono">{emp.join_date}</span></div>
-                          <div><span className="text-slate-400">所属:</span> <span>{emp.department}</span></div>
-                          <div><span className="text-slate-400">基本給:</span> <span className="font-mono font-bold">¥{emp.base_salary.toLocaleString()}</span></div>
-                        </div>
-
-                        {/* 各月支給明細一覧 */}
-                        <table className="w-full border-collapse border border-slate-400 text-[10px] mb-4">
-                          <thead>
-                            <tr className="bg-slate-100 font-bold border-b border-slate-400 text-center">
-                              <th className="p-1.5 border-r border-slate-300 w-10">月度</th>
-                              <th className="p-1.5 border-r border-slate-300 w-12">出勤日</th>
-                              <th className="p-1.5 border-r border-slate-300 w-14">労働時間</th>
-                              <th className="p-1.5 border-r border-slate-300 w-14">残業時間</th>
-                              <th className="p-1.5 border-r border-slate-300 text-right">基本給</th>
-                              <th className="p-1.5 border-r border-slate-300 text-right">総支給額</th>
-                              <th className="p-1.5 border-r border-slate-300 text-right">健保・厚年</th>
-                              <th className="p-1.5 border-r border-slate-300 text-right">所得税</th>
-                              <th className="p-1.5 border-r border-slate-300 text-right">控除合計</th>
-                              <th className="p-1.5 text-right font-black">差引支給額</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {Array.from({ length: 12 }, (_, i) => {
-                              const m = i + 1;
-                              const days = 21;
-                              const hours = 168;
-                              const ot = m % 2 === 0 ? 10 : 0;
-                              const otPay = ot * 2000;
-                              const gross = emp.base_salary + otPay;
-                              const soc = Math.round(gross * 0.1475);
-                              const tax = Math.round((gross - soc) * 0.03);
-                              const ded = soc + tax;
-                              const net = gross - ded;
-
-                              return (
-                                <tr key={m} className="border-b border-slate-200 text-center font-mono">
-                                  <td className="p-1 border-r border-slate-300 font-bold">{m}月</td>
-                                  <td className="p-1 border-r border-slate-300">{days}</td>
-                                  <td className="p-1 border-r border-slate-300">{hours}</td>
-                                  <td className="p-1 border-r border-slate-300">{ot}</td>
-                                  <td className="p-1 border-r border-slate-300 text-right pr-1">¥{emp.base_salary.toLocaleString()}</td>
-                                  <td className="p-1 border-r border-slate-300 text-right pr-1 font-bold text-emerald-700">¥{gross.toLocaleString()}</td>
-                                  <td className="p-1 border-r border-slate-300 text-right pr-1">¥{soc.toLocaleString()}</td>
-                                  <td className="p-1 border-r border-slate-300 text-right pr-1">¥{tax.toLocaleString()}</td>
-                                  <td className="p-1 border-r border-slate-300 text-right pr-1 text-rose-700">¥{ded.toLocaleString()}</td>
-                                  <td className="p-1 text-right pr-1 font-black text-slate-900">¥{net.toLocaleString()}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-
-                        <div className="signature-box flex items-center justify-between border-t border-slate-300 pt-2 text-[10px] text-slate-500">
-                          <div>事業所名: {companyInfo.name} / 賃金締切日: 末日 / 支払日: 毎月25日</div>
-                          <div>※ 労働基準法第109条に基づき、最後の記入をした日から5年間の保存が義務付けられています。</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
+              {selectedDocType === 'wage_ledger' && (
+                <WageLedgerViewer
+                  tenantId={tenantId}
+                  employees={employees}
+                  companyInfo={companyInfo}
+                  initialYear={selectedYear}
+                  initialEmployeeId={selectedEmployeeId}
+                  onBackToReports={() => setSelectedDocType(null)}
+                />
+              )}
 
               {/* ----------------------------------------------------------------- */}
               {/* ⑨ 労働者名簿（労働基準法第107条 法定帳簿）                          */}
