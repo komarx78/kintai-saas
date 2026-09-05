@@ -816,8 +816,8 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
       {/* 3. 各帳票の公式A4プレビュー ＆ 印刷・CSVモーダル                          */}
       {/* ========================================================================= */}
       {selectedDocType === 'wage_ledger' ? (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col print:p-0 print:static print:bg-transparent print:z-auto print:block">
-          <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden print:overflow-visible print:bg-white print:h-auto print:block">
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col print:static print:p-0 print:m-0 print:bg-white print:z-auto print:block print:h-auto print:overflow-hidden">
+          <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden print:overflow-hidden print:bg-white print:h-auto print:block print:p-0 print:m-0">
             <WageLedgerViewer
               tenantId={tenantId}
               employees={employees}

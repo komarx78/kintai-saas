@@ -294,28 +294,36 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
   };
 
   return (
-    <div className={`bg-slate-50 min-h-screen text-slate-800 font-sans flex flex-col ${isFullscreen ? 'fixed inset-0 z-50 overflow-y-auto' : ''}`}>
+    <div className={`mf-wage-ledger-root bg-slate-50 min-h-screen text-slate-800 font-sans flex flex-col print:min-h-0 print:h-auto print:bg-white print:overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 overflow-y-auto' : ''}`}>
       
-      {/* 印刷用CSS（A4横向き・1枚完結超美麗レイアウト） */}
+      {/* 印刷用CSS（A4横向き・1枚完結黄金比ピッタリ収束レイアウト） */}
       <style>{`
         @media print {
           @page {
             size: landscape !important;
-            margin: 4mm 6mm 4mm 6mm !important;
+            margin: 4.5mm 6mm 4.5mm 6mm !important;
           }
           *, *::before, *::after {
             box-sizing: border-box !important;
           }
-          html, body, #root {
+          html, body {
             width: 100% !important;
-            height: auto !important;
-            min-height: auto !important;
+            height: 100% !important;
+            max-height: 100% !important;
+            overflow: hidden !important;
             background: white !important;
             margin: 0 !important;
             padding: 0 !important;
-            overflow: visible !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+          }
+          #root, .mf-wage-ledger-root {
+            height: 100% !important;
+            max-height: 100% !important;
+            overflow: hidden !important;
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
           header, nav, aside, .mf-wage-ledger-sidebar, .mf-wage-ledger-header-actions, .mf-app-nav, .print\\:hidden, [role="navigation"] {
             display: none !important;
@@ -333,21 +341,23 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
           }
           .mf-table-container {
             overflow: visible !important;
-            border: 1px solid #64748b !important;
+            border: 1px solid #475569 !important;
             border-radius: 0 !important;
             box-shadow: none !important;
             margin: 0 !important;
             padding: 0 !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
           }
           table {
             width: 100% !important;
             min-width: 0 !important;
             max-width: 100% !important;
             border-collapse: collapse !important;
-            font-size: 7.2pt !important;
-            line-height: 1.05 !important;
+            font-size: 8pt !important;
+            line-height: 1.2 !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
@@ -358,21 +368,25 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
           }
           th, td {
             min-width: 0 !important;
-            padding-top: 1.5px !important;
-            padding-bottom: 1.5px !important;
-            padding-left: 2px !important;
-            padding-right: 2px !important;
-            font-size: 7.2pt !important;
-            line-height: 1.05 !important;
+            padding-top: 3.2px !important;
+            padding-bottom: 3.2px !important;
+            padding-left: 3px !important;
+            padding-right: 3px !important;
+            font-size: 8pt !important;
+            line-height: 1.2 !important;
             border: 1px solid #64748b !important;
             white-space: nowrap !important;
           }
           th div {
-            font-size: 6.8pt !important;
-            line-height: 1.05 !important;
+            font-size: 7.2pt !important;
+            line-height: 1.15 !important;
           }
           .sticky {
             position: static !important;
+          }
+          .mf-wage-ledger-footer {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
           }
         }
       `}</style>
@@ -409,7 +423,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {/* ② メイン2カラムコンテンツ（左: 社員選択サイドバー / 右: 賃金台帳） */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden print:block print:overflow-visible print:h-auto">
         
         {/* ◀ 左側：社員選択サイドバー（一人ずつ見れるセレクター） */}
         <aside className="mf-wage-ledger-sidebar w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 p-3 space-y-3 select-none print:hidden">
@@ -526,7 +540,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
         </aside>
 
         {/* ▶ 右側：賃金台帳メインエリア（MFクラウド給与スタイル） */}
-        <main className="mf-wage-ledger-main flex-1 bg-white flex flex-col overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="mf-wage-ledger-main flex-1 bg-white flex flex-col overflow-y-auto p-4 sm:p-6 lg:p-8 print:p-0 print:m-0 print:overflow-visible print:h-auto print:block">
           
           {/* 上部タイトル ＆ アクションバー */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4 mb-4 print:hidden">
@@ -585,27 +599,27 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
           {/* 選択中の社員ヘッダー ＆ 個別操作バー */}
           {currentEmployee ? (
             <div>
-              {/* 🖨️ 印刷専用スリム法定ヘッダー（A4横1枚ピッタリ収束仕様・高さ約12mm） */}
-              <div className="hidden print:block mb-1.5 pb-1 border-b-2 border-slate-800">
+              {/* 🖨️ 印刷専用スリム法定ヘッダー（A4横1枚ピッタリ収束仕様） */}
+              <div className="hidden print:block mb-2 pb-1 border-b-2 border-slate-900">
                 <div className="flex justify-between items-end mb-1">
-                  <div className="flex items-baseline gap-2">
-                    <h1 className="text-sm font-black text-slate-900 tracking-wider">
+                  <div className="flex items-baseline gap-3">
+                    <h1 className="text-base font-black text-slate-900 tracking-wider">
                       令和{selectedYear - 2018}年度 賃金台帳
                     </h1>
-                    <span className="text-[7.5pt] text-slate-600 font-sans">
+                    <span className="text-[8pt] text-slate-600 font-sans">
                       （労働基準法第108条・施行規則第54条 準拠）
                     </span>
                   </div>
-                  <div className="text-[7.5pt] text-slate-600 font-sans text-right">
+                  <div className="text-[8pt] text-slate-600 font-sans text-right">
                     <span>対象期間: {selectedYear}年01月01日 〜 {selectedYear}年12月31日</span>
-                    <span className="ml-3 font-bold text-slate-800">事業所名: {companyInfo?.name || '株式会社KAP'}</span>
+                    <span className="ml-3 font-bold text-slate-900">事業所名: {companyInfo?.name || '株式会社KAP'}</span>
                   </div>
                 </div>
 
                 {/* 社員情報スリム枠 */}
-                <div className="bg-slate-100 border border-slate-400 px-2.5 py-1 flex items-center justify-between text-[7.5pt] font-sans">
+                <div className="bg-slate-100 border border-slate-400 px-3 py-1.5 flex items-center justify-between text-[8pt] font-sans">
                   <div className="flex items-center gap-4">
-                    <span><strong className="text-slate-600 font-bold">氏名:</strong> <strong className="text-slate-950 font-black text-[8.5pt]">{currentEmployee.name}</strong> {currentEmployee.name_kana && <span className="text-slate-500 font-normal">（{currentEmployee.name_kana}）</span>}</span>
+                    <span><strong className="text-slate-600 font-bold">氏名:</strong> <strong className="text-slate-950 font-black text-[9pt]">{currentEmployee.name}</strong> {currentEmployee.name_kana && <span className="text-slate-500 font-normal">（{currentEmployee.name_kana}）</span>}</span>
                     <span><strong className="text-slate-600 font-bold">社員番号:</strong> <span className="font-mono font-bold">{currentEmployee.employee_number || '0001'}</span></span>
                     <span><strong className="text-slate-600 font-bold">所属:</strong> <span className="font-bold">{currentEmployee.department || '本社'}</span></span>
                     <span><strong className="text-slate-600 font-bold">役職:</strong> <span>{currentEmployee.position_name || (currentEmployee.is_executive ? '役員' : '一般社員')}</span></span>
@@ -787,7 +801,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
               </div>
 
               {/* 🖨️ 印刷専用法定フッター注記（保存義務・発行元） */}
-              <div className="hidden print:flex justify-between items-center text-[7pt] text-slate-500 pt-1 font-sans">
+              <div className="mf-wage-ledger-footer hidden print:flex justify-between items-center text-[7.5pt] text-slate-500 pt-1.5 font-sans">
                 <div>
                   ※ 労働基準法第109条に基づき、本台帳は最後の記入をした日から起算して5年間（当面の間3年間）適切に保存する義務があります。
                 </div>
