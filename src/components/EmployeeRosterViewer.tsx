@@ -1086,24 +1086,21 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                   </tbody>
                 </table>
 
-                {/* 法定保存義務 ＆ 署名押印枠フッター（高さ約32mm） */}
-                <div className="mt-4 pt-2.5 border-t border-slate-400 flex items-center justify-between text-[7.5pt] text-slate-600">
+                {/* 法定保存義務 ＆ 調製事業所・代表者署名フッター */}
+                <div className="mt-4 pt-2.5 border-t border-slate-400 flex items-end justify-between text-[7.5pt] text-slate-600">
                   <div className="leading-relaxed">
                     <div className="font-bold text-slate-700">※ 労働基準法第109条に基づき、労働者の退職、解雇又は死亡の日から起算して5年間（当面の間3年間）適切に保存する義務があります。</div>
                     <div className="text-slate-500 mt-0.5">上記記載事項は事実に相違ないことを証明する。</div>
                   </div>
-                  <div className="flex items-center gap-4 shrink-0 ml-4 font-sans">
-                    <div className="text-right">
-                      <div className="font-black text-slate-950 text-[8.5pt]">
-                        {companyInfo?.name || '株式会社KAP'}
-                      </div>
-                      <div className="text-slate-700 mt-0.5">
-                        代表者: {companyInfo?.representative_name || '駒井 秀一朗'}
-                      </div>
+                  <div className="text-right shrink-0 ml-4 font-sans leading-tight">
+                    <div className="text-[7.5pt] text-slate-600">
+                      {companyInfo?.address || '京都府京都市山科区大塚西浦町３−５７'}
                     </div>
-                    {/* 事業主印・調製者印 押印枠 */}
-                    <div className="w-11 h-11 border-2 border-dashed border-slate-400 rounded-lg flex items-center justify-center text-[7.5pt] text-slate-400 font-bold">
-                      事業主印
+                    <div className="font-black text-slate-950 text-[9pt] mt-1">
+                      {companyInfo?.name || '株式会社KAP'}
+                    </div>
+                    <div className="text-slate-900 text-[8.5pt] font-medium mt-1">
+                      代表取締役　{companyInfo?.representative_name || '駒井 秀一朗'}　　　　印
                     </div>
                   </div>
                 </div>
