@@ -257,6 +257,18 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
   const warekiJoin = formatToWareki(currentEmployee?.join_date);
   const workPeriod = calculateWorkYears(currentEmployee?.join_date, currentEmployee?.retirement_date);
 
+  // 代表者職氏名の正規化（「代表取締役」の重複を防止）
+  const rawRep = companyInfo?.representative_name || '駒井 秀一朗';
+  const cleanRepName = rawRep.replace(/^(代表取締役|代表|社長|取締役|役員)\s*/, '');
+
+  // 会社電子印鑑（localStorage およびフォールバック）
+  const companySealImg = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return (tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null) ||
+           localStorage.getItem('company_seal_image') ||
+           '';
+  }, [tenantId]);
+
   return (
     <div className={`roster-root-container bg-slate-50 min-h-screen text-slate-800 font-sans flex flex-col print:min-h-0 print:h-auto print:bg-white print:overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 overflow-y-auto' : ''}`}>
       
@@ -1086,21 +1098,53 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                   </tbody>
                 </table>
 
-                {/* 法定保存義務 ＆ 調製事業所・代表者署名フッター */}
+                {/* 法定保存義務 ＆ 調製事業所・代表者署名・電子印鑑フッター */}
                 <div className="mt-4 pt-2.5 border-t border-slate-400 flex items-end justify-between text-[7.5pt] text-slate-600">
                   <div className="leading-relaxed">
                     <div className="font-bold text-slate-700">※ 労働基準法第109条に基づき、労働者の退職、解雇又は死亡の日から起算して5年間（当面の間3年間）適切に保存する義務があります。</div>
                     <div className="text-slate-500 mt-0.5">上記記載事項は事実に相違ないことを証明する。</div>
                   </div>
-                  <div className="text-right shrink-0 ml-4 font-sans leading-tight">
-                    <div className="text-[7.5pt] text-slate-600">
-                      {companyInfo?.address || '京都府京都市山科区大塚西浦町３−５７'}
+                  
+                  {/* 右側：事業所情報 ＆ 朱色電子印鑑 */}
+                  <div className="flex items-center gap-3 shrink-0 ml-4 font-sans">
+                    <div className="text-right leading-tight">
+                      <div className="text-[7.5pt] text-slate-600">
+                        {companyInfo?.address || '京都府京都市山科区大塚西浦町３−５７'}
+                      </div>
+                      <div className="font-black text-slate-950 text-[9pt] mt-1">
+                        {companyInfo?.name || '株式会社KAP'}
+                      </div>
+                      <div className="text-slate-900 text-[8.5pt] font-bold mt-1">
+                        代表取締役　{cleanRepName}
+                      </div>
                     </div>
-                    <div className="font-black text-slate-950 text-[9pt] mt-1">
-                      {companyInfo?.name || '株式会社KAP'}
-                    </div>
-                    <div className="text-slate-900 text-[8.5pt] font-medium mt-1">
-                      代表取締役　{companyInfo?.representative_name || '駒井 秀一朗'}　　　　印
+
+                    {/* 💮 電子印鑑（登録社印画像または伝統的朱色印影グラフィック） */}
+                    <div className="w-13 h-13 shrink-0 relative flex items-center justify-center select-none pointer-events-none">
+                      {companySealImg ? (
+                        <img 
+                          src={companySealImg} 
+                          alt="会社印" 
+                          className="max-w-full max-h-full object-contain mix-blend-multiply opacity-90 drop-shadow-xs rotate-[-2deg]" 
+                        />
+                      ) : (
+                        <div 
+                          className="w-12 h-12 rounded-full border-2 border-red-600 p-0.5 flex items-center justify-center rotate-[-2deg] opacity-90 shadow-2xs"
+                          style={{ borderColor: '#dc2626' }}
+                        >
+                          <div 
+                            className="w-full h-full rounded-full border border-red-600 flex flex-col items-center justify-center font-serif leading-none bg-red-50/20"
+                            style={{ borderColor: '#dc2626' }}
+                          >
+                            <span className="text-[5.5pt] font-black text-red-600 tracking-tighter scale-90 mb-0.5">
+                              {companyInfo?.name || '株式会社KAP'}
+                            </span>
+                            <span className="text-[6.5pt] font-black text-red-600 tracking-wider">
+                              代表之印
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
