@@ -700,7 +700,8 @@ export const BonusDocMasterInspector: React.FC = () => {
                           position: 'absolute',
                           left: `${f.x}%`,
                           top: `${f.y}%`,
-                          height: '2.93%',
+                          height: '2.90%',
+                          width: f.width ? `${f.width}%` : undefined,
                           display: 'flex',
                           alignItems: 'center',
                           cursor: isDraggingThis ? 'grabbing' : 'grab',
@@ -713,7 +714,7 @@ export const BonusDocMasterInspector: React.FC = () => {
                           <span
                             key={i}
                             className="inline-flex items-center justify-center font-mono font-black text-slate-950 text-center"
-                            style={{ width: `${f.pitch || 2.58}cqw`, fontSize: `${(f.fontSize || 14) * 0.11}cqw` }}
+                            style={{ width: `${f.pitch || 4.92}cqw`, height: '100%', fontSize: `${(f.fontSize || 14) * 0.115}cqw` }}
                           >
                             {c}
                           </span>
@@ -736,7 +737,8 @@ export const BonusDocMasterInspector: React.FC = () => {
                           position: 'absolute',
                           left: `${f.x}%`,
                           top: `${f.y}%`,
-                          height: '2.93%',
+                          height: '2.90%',
+                          width: f.width ? `${f.width}%` : undefined,
                           display: 'flex',
                           alignItems: 'center',
                           cursor: isDraggingThis ? 'grabbing' : 'grab',
@@ -749,7 +751,7 @@ export const BonusDocMasterInspector: React.FC = () => {
                           <span
                             key={i}
                             className="inline-flex items-center justify-center font-sans font-black text-slate-950 text-center"
-                            style={{ width: `${f.pitch || 2.42}cqw`, fontSize: `${(f.fontSize || 13) * 0.11}cqw` }}
+                            style={{ width: `${f.pitch || 2.39}cqw`, height: '100%', fontSize: `${(f.fontSize || 13) * 0.115}cqw` }}
                           >
                             {c}
                           </span>
@@ -757,6 +759,8 @@ export const BonusDocMasterInspector: React.FC = () => {
                       </div>
                     );
                   }
+
+                  const isCentered = f.section === 'submission' || f.section === 'common_payment';
 
                   return (
                     <div
@@ -778,9 +782,13 @@ export const BonusDocMasterInspector: React.FC = () => {
                         userSelect: 'none',
                         whiteSpace: 'nowrap',
                         pointerEvents: 'auto',
-                        lineHeight: 1.1
+                        lineHeight: 1,
+                        display: isCentered ? 'flex' : 'block',
+                        alignItems: isCentered ? 'center' : undefined,
+                        justifyContent: isCentered ? 'center' : undefined,
+                        textAlign: isCentered ? 'center' : 'left'
                       }}
-                      className={`px-1 py-0.5 rounded transition-all ${
+                      className={`px-0.5 py-0.2 rounded transition-all ${
                         isSelected
                           ? 'ring-2 ring-pink-500 bg-pink-500/20 text-pink-700 shadow-2xl z-30 font-black'
                           : 'hover:ring-1 hover:ring-pink-400 hover:bg-pink-100/60 z-10 bg-white/60 text-slate-950'

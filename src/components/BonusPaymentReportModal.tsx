@@ -647,7 +647,7 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
 
               {/* 帳票コンポーネント本体 */}
               <div className="bg-slate-100 p-4 rounded-3xl overflow-x-auto flex justify-center">
-                <OfficialBonusPaymentReportDoc data={reportData} />
+                <OfficialBonusPaymentReportDoc data={reportData} canEditCoordinates={false} />
               </div>
             </div>
           )}
