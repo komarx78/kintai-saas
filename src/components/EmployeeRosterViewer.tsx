@@ -260,12 +260,12 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
   return (
     <div className={`roster-root-container bg-slate-50 min-h-screen text-slate-800 font-sans flex flex-col print:min-h-0 print:h-auto print:bg-white print:overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 overflow-y-auto' : ''}`}>
       
-      {/* 🖨️ 印刷用CSS（A4縦向き・労働基準法第107条 法定様式・1枚完結） */}
+      {/* 🖨️ 印刷用CSS（A4縦向き・労働基準法第107条 法定様式・1枚ピッタリ黄金比収束設計） */}
       <style>{`
         @media print {
           @page {
             size: portrait !important;
-            margin: 6mm 10mm 6mm 10mm !important;
+            margin: 8mm 12mm 8mm 12mm !important;
           }
           *, *::before, *::after {
             box-sizing: border-box !important;
@@ -281,45 +281,53 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          #root, .roster-root-container {
+          #root, .roster-root-container, .roster-main-content {
             height: 100% !important;
             max-height: 100% !important;
             overflow: hidden !important;
             background: white !important;
             margin: 0 !important;
             padding: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            display: block !important;
           }
           header, nav, aside, .roster-sidebar, .roster-screen-header, .roster-tab-nav, .print\\:hidden, [role="navigation"] {
             display: none !important;
-          }
-          .roster-main-content {
-            width: 100% !important;
-            max-width: 100% !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            border: none !important;
-            box-shadow: none !important;
-            overflow: visible !important;
-            display: block !important;
-            height: auto !important;
           }
           .roster-screen-view {
             display: none !important;
           }
           .roster-print-view {
             display: block !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-          table {
             width: 100% !important;
-            border-collapse: collapse !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
-          tr, th, td {
+          table.roster-official-table {
+            width: 100% !important;
+            table-layout: fixed !important;
+            border-collapse: collapse !important;
+            border: 2px solid #0f172a !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
+          }
+          table.roster-official-table th, 
+          table.roster-official-table td {
+            border: 1px solid #475569 !important;
+            padding: 6.5px 8px !important;
+            line-height: 1.3 !important;
+            font-size: 9pt !important;
+            vertical-align: middle !important;
+            word-break: break-word !important;
+          }
+          table.roster-official-table th {
+            background-color: #f1f5f9 !important;
+            font-weight: bold !important;
+            color: #0f172a !important;
           }
           .sticky {
             position: static !important;
@@ -924,127 +932,159 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
               {/* ═════════════════════════════════════════════════════════════ */}
               {/* 🖨️ 印刷専用ビュー（労働基準法第107条 公式法定様式・A4縦1枚）  */}
               {/* ═════════════════════════════════════════════════════════════ */}
-              <div className="roster-print-view hidden print:block text-slate-950 font-sans text-xs">
+              {/* ═════════════════════════════════════════════════════════════ */}
+              {/* 🖨️ 印刷専用ビュー（労働基準法第107条 公式法定様式・A4縦1枚ジャストフィット） */}
+              {/* ═════════════════════════════════════════════════════════════ */}
+              <div className="roster-print-view hidden print:block text-slate-950 font-sans text-xs w-full">
                 
-                {/* 最上部：法定タイトル ＆ 根拠法令 */}
-                <div className="border-b-2 border-slate-900 pb-2 mb-3 flex items-end justify-between">
+                {/* 最上部：法定タイトル ＆ 根拠法令（高さ約26mm） */}
+                <div className="border-b-2 border-slate-900 pb-1.5 mb-2.5 flex items-end justify-between">
                   <div>
-                    <span className="text-[8pt] text-slate-600 font-bold block">
+                    <span className="text-[7.5pt] text-slate-600 font-bold block mb-0.5">
                       労働基準法第107条・労働基準法施行規則第53条 様式第十九号準拠
                     </span>
                     <h1 className="text-xl font-black tracking-widest text-slate-950">
                       労 働 者 名 簿
                     </h1>
                   </div>
-                  <div className="text-right text-[8pt] text-slate-700">
+                  <div className="text-right text-[7.5pt] text-slate-700 leading-tight">
                     <div>調製年月日: {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-                    <div className="font-bold">事業所名: {companyInfo?.name || '株式会社KAP'}</div>
+                    <div className="font-bold text-slate-900 mt-0.5">事業所名: {companyInfo?.name || '株式会社KAP'}</div>
                   </div>
                 </div>
 
-                {/* 法定名簿テーブル（枠囲み・A4縦1枚ジャスト収束設計） */}
-                <table className="w-full border-collapse border-2 border-slate-900 text-[8.5pt]">
+                {/* 法定名簿テーブル（固定4列レイアウト: 20% / 30% / 20% / 30% = 100%） */}
+                <table className="roster-official-table w-full border-collapse border-2 border-slate-900 text-[8.5pt]">
+                  <colgroup>
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '30%' }} />
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '30%' }} />
+                  </colgroup>
                   <tbody>
-                    {/* 氏名・性別 */}
-                    <tr className="border-b border-slate-400">
-                      <th className="bg-slate-100 p-2 text-left font-bold w-28 border-r border-slate-400">
-                        氏名（フリガナ）
-                      </th>
-                      <td className="p-2 border-r border-slate-400">
-                        <div className="text-[7.5pt] text-slate-600">{currentEmployee.name_kana || 'コマイシュウイチロウ'}</div>
-                        <div className="text-[11pt] font-black">{currentEmployee.name}</div>
+                    {/* 1. 氏名・性別 */}
+                    <tr>
+                      <th>氏名（フリガナ）</th>
+                      <td>
+                        <div className="text-[7pt] text-slate-500 font-normal">{currentEmployee.name_kana || 'コマイシュウイチロウ'}</div>
+                        <div className="text-[12pt] font-black tracking-wider text-slate-950">{currentEmployee.name}</div>
                       </td>
-                      <th className="bg-slate-100 p-2 text-left font-bold w-20 border-r border-slate-400">性別</th>
-                      <td className="p-2 font-bold w-28">{currentEmployee.gender || '男'}</td>
+                      <th>性別</th>
+                      <td className="font-bold text-center text-sm">{currentEmployee.gender || '男'}</td>
                     </tr>
 
-                    {/* 生年月日・電話 */}
-                    <tr className="border-b border-slate-400">
-                      <th className="bg-slate-100 p-2 text-left font-bold border-r border-slate-400">生年月日</th>
-                      <td className="p-2 border-r border-slate-400 font-mono">
+                    {/* 2. 生年月日・電話 */}
+                    <tr>
+                      <th>生年月日</th>
+                      <td className="font-mono">
                         {warekiBirth} {age !== null && <span className="font-sans font-bold">（満{age}歳）</span>}
                       </td>
-                      <th className="bg-slate-100 p-2 text-left font-bold border-r border-slate-400">電話番号</th>
-                      <td className="p-2 font-mono">{currentEmployee.phone || '090-0000-0000'}</td>
+                      <th>電話番号</th>
+                      <td className="font-mono">{currentEmployee.phone || '090-0000-0000'}</td>
                     </tr>
 
-                    {/* 現住所 */}
-                    <tr className="border-b border-slate-400">
-                      <th className="bg-slate-100 p-2 text-left font-bold border-r border-slate-400">現住所</th>
-                      <td colSpan={3} className="p-2">
-                        <span className="text-[7.5pt] text-slate-500 font-mono mr-2">〒{currentEmployee.postal_code || '607-8125'}</span>
-                        <span className="font-bold">{currentEmployee.address || '京都府京都市山科区大塚西浦町３−５７'}</span>
+                    {/* 3. 現住所 */}
+                    <tr>
+                      <th>現住所</th>
+                      <td colSpan={3}>
+                        <div className="text-[7pt] text-slate-500 font-mono">〒{currentEmployee.postal_code || '607-8125'}</div>
+                        <div className="font-bold">{currentEmployee.address || '京都府京都市山科区大塚西浦町３−５７'}</div>
                       </td>
                     </tr>
 
-                    {/* 履歴（学歴・職歴・社内異動） */}
-                    <tr className="border-b border-slate-400">
-                      <th className="bg-slate-100 p-2 text-left font-bold border-r border-slate-400 align-top h-20">
-                        履歴
+                    {/* 4. 家族・緊急連絡先（実務法定項目） */}
+                    <tr>
+                      <th>家族・扶養親族</th>
+                      <td>扶養親族数: <span className="font-bold font-mono">{currentEmployee.dependents_count || 0}</span> 名</td>
+                      <th>緊急連絡先</th>
+                      <td className="font-mono text-[8pt]">{currentEmployee.phone || '同上（本人携帯）'}</td>
+                    </tr>
+
+                    {/* 5. 履歴（学歴・職歴・社内異動・昇格） ※高さを広げて用紙全体を満たす */}
+                    <tr>
+                      <th className="align-top py-4">
+                        履　歴<br />
+                        <span className="text-[6.5pt] font-normal text-slate-500">（学歴・職歴・異動・昇給等）</span>
                       </th>
-                      <td colSpan={3} className="p-2 align-top text-[8pt] text-slate-700">
-                        <div className="space-y-1">
-                          <div>・{warekiJoin} 当社入社（{currentEmployee.department || '本社'} 配属）</div>
-                          <div>・{currentEmployee.is_executive ? '役員就任' : '現在に至る'}</div>
+                      <td colSpan={3} className="align-top py-3 text-[8pt] text-slate-800 h-28">
+                        <div className="space-y-1.5 font-mono text-[7.5pt]">
+                          <div className="flex items-center gap-3">
+                            <span className="text-slate-500">{warekiJoin}</span>
+                            <span className="font-sans font-bold">当社入社（{currentEmployee.department || '本社'} 配属）</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-slate-500">{warekiJoin}</span>
+                            <span className="font-sans">役職: {currentEmployee.position_name || (currentEmployee.is_executive ? '役員就任' : '一般社員')}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-slate-400">
+                            <span>-</span>
+                            <span className="font-sans">現在に至る</span>
+                          </div>
                         </div>
                       </td>
                     </tr>
 
-                    {/* 雇入年月日・従事業務 */}
-                    <tr className="border-b border-slate-400">
-                      <th className="bg-slate-100 p-2 text-left font-bold border-r border-slate-400">雇入年月日</th>
-                      <td className="p-2 border-r border-slate-400 font-mono font-bold">
+                    {/* 6. 雇入年月日・従事業務 */}
+                    <tr>
+                      <th>雇入年月日</th>
+                      <td className="font-mono font-bold text-slate-900">
                         {warekiJoin}
                       </td>
-                      <th className="bg-slate-100 p-2 text-left font-bold border-r border-slate-400">従事業務</th>
-                      <td className="p-2 font-bold">{currentEmployee.department || '本社'}（{currentEmployee.position_name || '一般業務'}）</td>
+                      <th>従事業務</th>
+                      <td className="font-bold">{currentEmployee.department || '本社'}（{currentEmployee.position_name || '一般業務'}）</td>
                     </tr>
 
-                    {/* 契約種別・役職 */}
-                    <tr className="border-b border-slate-400">
-                      <th className="bg-slate-100 p-2 text-left font-bold border-r border-slate-400">契約種別</th>
-                      <td className="p-2 border-r border-slate-400 font-bold">
+                    {/* 7. 契約種別・役職 */}
+                    <tr>
+                      <th>契約種別</th>
+                      <td className="font-bold">
                         {currentEmployee.is_executive ? '役員（委任契約）' : (currentEmployee.salary_type === 'hourly' ? '有期雇用（パート・アルバイト）' : '無期雇用（正社員）')}
                       </td>
-                      <th className="bg-slate-100 p-2 text-left font-bold border-r border-slate-400">役職・等級</th>
-                      <td className="p-2">{currentEmployee.position_name || '一般社員'}</td>
+                      <th>役職・職種</th>
+                      <td>{currentEmployee.position_name || (currentEmployee.is_executive ? '役員' : '一般職')}</td>
                     </tr>
 
-                    {/* 労働保険・社会保険 */}
-                    <tr className="border-b border-slate-400">
-                      <th className="bg-slate-100 p-2 text-left font-bold border-r border-slate-400">社会保険</th>
-                      <td className="p-2 border-r border-slate-400">健康保険・厚生年金 適用済</td>
-                      <th className="bg-slate-100 p-2 text-left font-bold border-r border-slate-400">雇用保険</th>
-                      <td className="p-2">適用済（被保険者）</td>
+                    {/* 8. 社会保険・労働保険 */}
+                    <tr>
+                      <th>社会保険</th>
+                      <td>健康保険・厚生年金 適用済</td>
+                      <th>労働保険</th>
+                      <td>雇用保険・労災保険 適用済</td>
                     </tr>
 
-                    {/* 退職年月日・事由 */}
-                    <tr className="border-b border-slate-400">
-                      <th className="bg-slate-100 p-2 text-left font-bold border-r border-slate-400">退職年月日</th>
-                      <td className="p-2 border-r border-slate-400 font-mono font-bold">
+                    {/* 9. 退職年月日・事由 */}
+                    <tr>
+                      <th>退職年月日</th>
+                      <td className="font-mono font-bold">
                         {currentEmployee.retirement_date ? formatToWareki(currentEmployee.retirement_date) : '在籍中'}
                       </td>
-                      <th className="bg-slate-100 p-2 text-left font-bold border-r border-slate-400">退職の事由</th>
-                      <td className="p-2">
+                      <th>退職の事由</th>
+                      <td>
                         {currentEmployee.is_retired ? '自己都合退職（合意解約）' : '-'}
                       </td>
                     </tr>
 
-                    {/* 死亡年月日・原因 */}
+                    {/* 10. 死亡年月日・原因 */}
                     <tr>
-                      <th className="bg-slate-100 p-2 text-left font-bold border-r border-slate-400">死亡年月日・原因</th>
-                      <td colSpan={3} className="p-2 text-slate-500">-</td>
+                      <th>死亡年月日・原因</th>
+                      <td colSpan={3} className="text-slate-400">-</td>
                     </tr>
                   </tbody>
                 </table>
 
-                {/* 法定保存義務 ＆ 発行事業所フッター */}
-                <div className="mt-3 pt-2 border-t border-slate-400 flex items-center justify-between text-[7.5pt] text-slate-600">
-                  <div>
-                    ※ 労働基準法第109条に基づき、労働者の退職、解雇又は死亡の日から起算して5年間（当面の間3年間）適切に保存する義務があります。
+                {/* 法定保存義務 ＆ 署名押印枠フッター（高さ約18mm） */}
+                <div className="mt-2.5 pt-1.5 border-t border-slate-400 flex items-center justify-between text-[7pt] text-slate-600">
+                  <div className="leading-relaxed">
+                    <div>※ 労働基準法第109条に基づき、労働者の退職、解雇又は死亡の日から起算して5年間（当面の間3年間）適切に保存する義務があります。</div>
+                    <div className="text-slate-400 mt-0.5">上記記載事項は事実に相違ないことを証明する。</div>
                   </div>
-                  <div className="font-bold text-slate-900">
-                    調製事業所: {companyInfo?.name || '株式会社KAP'}（代表者: {companyInfo?.representative_name || '駒井 秀一朗'}）
+                  <div className="text-right shrink-0 ml-4 font-sans">
+                    <div className="font-bold text-slate-950 text-[8pt]">
+                      事業所: {companyInfo?.name || '株式会社KAP'}
+                    </div>
+                    <div className="text-slate-700">
+                      調製代表者: {companyInfo?.representative_name || '駒井 秀一朗'} <span className="inline-block border border-slate-400 rounded-full px-1 text-[6.5pt] ml-1">印</span>
+                    </div>
                   </div>
                 </div>
 
