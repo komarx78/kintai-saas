@@ -7,6 +7,7 @@ import { OfficialCompanyCalendarDoc } from '../components/OfficialCompanyCalenda
 import { OrgChartPrintModal } from '../components/OrgChartPrintModal';
 import { OfficialLaborContractDoc } from '../components/OfficialLaborContractDoc';
 import { HelpGuideModal } from '../components/HelpGuideModal';
+import { BonusDocMasterInspector } from '../components/BonusDocMasterInspector';
 import { 
   type LaborContractTemplate, 
   DEFAULT_LABOR_CONTRACT_TEMPLATE, 
@@ -262,6 +263,7 @@ export default function CompanySettingsDashboard() {
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiNotesInput, setAiNotesInput] = useState('');
   const [aiGeneratedResult, setAiGeneratedResult] = useState<Partial<LaborContractTemplate> | null>(null);
+  const [showBonusInspectorModal, setShowBonusInspectorModal] = useState(false);
   const [aiIsGenerating, setAiIsGenerating] = useState(false);
 
   // 入社手続きワークフローステップState
@@ -2738,6 +2740,36 @@ export default function CompanySettingsDashboard() {
               );
             })()}
 
+            {/* 📜 日本年金機構 公式届出帳票 印字座標マスタ（軍律第23条：最高権限者専管） */}
+            <div className="bg-gradient-to-r from-pink-50/60 via-purple-50/40 to-slate-50 p-5 rounded-2xl border border-pink-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
+              <div className="flex items-start gap-3">
+                <span className="p-2.5 bg-pink-600 rounded-2xl text-white shadow-xs">
+                  <FileText className="w-5 h-5" />
+                </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-black text-slate-800 text-sm">
+                      日本年金機構 被保険者賞与支払届（コード2265用紙）印字座標マスタ
+                    </h4>
+                    <span className="text-[10px] bg-pink-100 text-pink-700 px-2 py-0.5 rounded-full font-bold border border-pink-200">
+                      最高管理者専管
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    日本年金機構の配布PDF原本用紙の上に印字する全項目の座標・文字サイズ・マス目ピッチを、画面上の原本プレビューでミリ単位・ピクセル単位で微調整・全社一括保存できます。
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowBonusInspectorModal(true)}
+                className="shrink-0 px-4 py-2.5 bg-pink-600 hover:bg-pink-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>🛠️ 印字座標インスペクターを開く</span>
+              </button>
+            </div>
+
             {renderSaveFooter()}
           </div>
         )}
@@ -4306,6 +4338,33 @@ export default function CompanySettingsDashboard() {
                 <Save className="w-3.5 h-3.5" />
                 登録して組織図へ反映
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🛠️ 賞与支払届 印字座標マスタ微調整モーダル（最高権限者専用） */}
+      {showBonusInspectorModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-7xl max-h-[94vh] overflow-hidden flex flex-col shadow-2xl">
+            <div className="p-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-pink-600 rounded-xl text-white text-sm">🌸</span>
+                <div>
+                  <h3 className="text-sm font-black text-white">被保険者賞与支払届 印字座標マスタ設定インスペクター</h3>
+                  <p className="text-[10px] text-slate-400">位置を調整して保存すると、全社の帳票印字位置に即座に反映されます</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBonusInspectorModal(false)}
+                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1"
+              >
+                ✕ 閉じる
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-950/50">
+              <BonusDocMasterInspector />
             </div>
           </div>
         </div>

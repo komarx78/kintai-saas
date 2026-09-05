@@ -28,34 +28,34 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     id: 'subDateY',
     name: '提出年（和暦数字）',
     section: 'submission',
-    x: 7.5,
-    y: 4.6,
+    x: 5.2,
+    y: 4.5,
     fontSize: 11,
-    width: 4.5,
+    width: 2.4,
     example: '8',
-    description: '最上部「年」の左側'
+    description: '最上部「令和」と「年」の間の空欄'
   },
   {
     id: 'subDateM',
     name: '提出月（数字）',
     section: 'submission',
-    x: 25.5,
-    y: 4.6,
+    x: 10.0,
+    y: 4.5,
     fontSize: 11,
-    width: 5.0,
+    width: 3.0,
     example: '12',
-    description: '最上部「月」の左側'
+    description: '最上部「年」と「月」の間の空欄'
   },
   {
     id: 'subDateD',
     name: '提出日（数字）',
     section: 'submission',
-    x: 50.0,
-    y: 4.6,
+    x: 15.6,
+    y: 4.5,
     fontSize: 11,
-    width: 5.5,
+    width: 4.0,
     example: '15',
-    description: '最上部「日提出」の左側'
+    description: '最上部「月」と「日提出」の間の空欄'
   },
 
   // ══════════════════════════════════════════════════════════════════════
@@ -63,27 +63,27 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
   // ══════════════════════════════════════════════════════════════════════
   {
     id: 'symbolDigits',
-    name: '事業所整理記号（数字4マス）',
+    name: '事業所整理記号（数字2マス）',
     section: 'office',
-    x: 9.88,
+    x: 10.00,
     y: 6.16,
     fontSize: 14,
-    pitch: 2.46,
-    width: 9.84,
+    pitch: 2.58,
+    width: 5.16,
     example: '25',
-    description: '整理記号左側4マス（数字）'
+    description: '整理記号左側2マス（数字、ハイフンの左）'
   },
   {
     id: 'symbolKana',
     name: '事業所整理記号（カタカナ4マス）',
     section: 'office',
-    x: 22.38,
+    x: 17.42,
     y: 6.16,
     fontSize: 13,
-    pitch: 2.38,
-    width: 9.52,
+    pitch: 2.42,
+    width: 9.68,
     example: 'カア',
-    description: '整理記号右側4マス（カタカナ）'
+    description: '整理記号右側4マス（カタカナ、ハイフンの右）'
   },
   {
     id: 'companyAddress',
@@ -326,8 +326,8 @@ export const mergeWithDefaultBonusFields = (customList: any[]): BonusDocFieldCon
   });
 };
 
-// 設定をローカルストレージから読み込むヘルパー（精密比率 v2_precision への自動マイグレーション付き）
-export const BONUS_DOC_COORDINATES_VERSION = 'v2_precision';
+// 設定をローカルストレージから読み込むヘルパー（精密比率 v3_pixel_perfect_2026 への自動マイグレーション付き）
+export const BONUS_DOC_COORDINATES_VERSION = 'v3_pixel_perfect_2026';
 
 export const loadBonusDocCoordinates = (): BonusDocFieldConfig[] => {
   try {
@@ -343,9 +343,11 @@ export const loadBonusDocCoordinates = (): BonusDocFieldConfig[] => {
 
     const parsed = JSON.parse(local);
     if (Array.isArray(parsed)) {
-      // 合計賞与額が備考欄に被る古い座標（x >= 57%）だった場合は自動修正
+      // 提出月や整理記号カタカナがズレている古い座標だった場合は最新値に自動更新
+      const subM = parsed.find((p: any) => p.id === 'subDateM');
+      const kanaF = parsed.find((p: any) => p.id === 'symbolKana');
       const totalField = parsed.find((p: any) => p.id === 'empTotalThousands');
-      if (totalField && totalField.x >= 57.0) {
+      if ((subM && subM.x > 18.0) || (kanaF && kanaF.x > 20.0) || (totalField && totalField.x >= 57.0)) {
         localStorage.setItem('bonusDocMasterVersion', BONUS_DOC_COORDINATES_VERSION);
         localStorage.setItem('bonusDocMasterFields', JSON.stringify(DEFAULT_BONUS_FIELDS));
         return DEFAULT_BONUS_FIELDS;

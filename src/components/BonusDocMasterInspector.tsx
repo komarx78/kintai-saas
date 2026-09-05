@@ -713,7 +713,7 @@ export const BonusDocMasterInspector: React.FC = () => {
                           <span
                             key={i}
                             className="inline-flex items-center justify-center font-mono font-black text-slate-950 text-center"
-                            style={{ width: `${f.pitch || 2.46}cqw`, fontSize: `${(f.fontSize || 14) * 0.11}cqw` }}
+                            style={{ width: `${f.pitch || 2.58}cqw`, fontSize: `${(f.fontSize || 14) * 0.11}cqw` }}
                           >
                             {c}
                           </span>
@@ -749,7 +749,7 @@ export const BonusDocMasterInspector: React.FC = () => {
                           <span
                             key={i}
                             className="inline-flex items-center justify-center font-sans font-black text-slate-950 text-center"
-                            style={{ width: `${f.pitch || 2.38}cqw`, fontSize: `${(f.fontSize || 13) * 0.11}cqw` }}
+                            style={{ width: `${f.pitch || 2.42}cqw`, fontSize: `${(f.fontSize || 13) * 0.11}cqw` }}
                           >
                             {c}
                           </span>

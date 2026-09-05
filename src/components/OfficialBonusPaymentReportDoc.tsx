@@ -45,6 +45,7 @@ export interface BonusPaymentReportDocProps {
     // 対象被保険者リスト（何名でも可、自動で10名ずつページ分割）
     employees: BonusReportEmployee[];
   };
+  canEditCoordinates?: boolean; // 会社管理者・マスタ設定画面からのみ編集許可（軍律第23条 権限分離）
 }
 
 /**
@@ -158,12 +159,12 @@ const ExactPdfPageRenderer: React.FC<{
     };
   };
 
-  const fSubY = getF('subDateY', 7.5, 4.6, 11, 4.5);
-  const fSubM = getF('subDateM', 25.5, 4.6, 11, 5.0);
-  const fSubD = getF('subDateD', 50.0, 4.6, 11, 5.5);
+  const fSubY = getF('subDateY', 5.2, 4.5, 11, 2.4);
+  const fSubM = getF('subDateM', 10.0, 4.5, 11, 3.0);
+  const fSubD = getF('subDateD', 15.6, 4.5, 11, 4.0);
 
-  const fDigits = getF('symbolDigits', 9.88, 6.16, 14);
-  const fKana = getF('symbolKana', 22.38, 6.16, 13);
+  const fDigits = getF('symbolDigits', 10.00, 6.16, 14, 5.16);
+  const fKana = getF('symbolKana', 17.42, 6.16, 13, 9.68);
 
   const fAddress = getF('companyAddress', 11.0, 12.0, 9, 38.0);
   const fName = getF('companyName', 11.0, 18.0, 11, 38.0);
@@ -190,63 +191,69 @@ const ExactPdfPageRenderer: React.FC<{
 
   return (
     <div
-      className={`official-bonus-page-container relative bg-white mx-auto shadow-lg print:shadow-none mb-8 ${
+      className={`official-bonus-page-container relative bg-white mx-auto shadow-lg print:shadow-none mb-8 select-none ${
         pageIndex < totalPages - 1 ? 'bonus-page-break' : ''
       }`}
       style={{
         width: '100%',
         maxWidth: '850px',
         aspectRatio: '2480 / 3508',
-        backgroundImage: `url('/nenkin_bonus_template_page1.png')`,
-        backgroundSize: '100% 100%',
-        backgroundRepeat: 'no-repeat'
+        containerType: 'inline-size',
+        position: 'relative'
       }}
     >
-      {/* 提出年月日 */}
+      {/* 📄 日本年金機構原本用紙（下敷き原本：画面・印刷共通で100%確実に表示） */}
+      <img
+        src="/nenkin_bonus_template_page1.png"
+        alt="日本年金機構公式届出用紙（コード2265）"
+        className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none z-0 print:w-full print:h-full"
+        draggable={false}
+      />
+      {/* 提出年月日（原本「令和」「年」「月」「日提出」の各空欄に中央配置） */}
       <div
-        className="absolute font-mono font-bold text-slate-900 text-right"
+        className="absolute font-mono font-bold text-slate-900 text-center flex items-center justify-center z-10"
         style={{ top: `${fSubY.y}%`, left: `${fSubY.x}%`, width: `${fSubY.width}%`, fontSize: `clamp(9px, ${(fSubY.fontSize || 11) * 0.11}cqi, 15px)` }}
       >
         {submissionDateParsed.y}
       </div>
       <div
-        className="absolute font-mono font-bold text-slate-900 text-right"
+        className="absolute font-mono font-bold text-slate-900 text-center flex items-center justify-center z-10"
         style={{ top: `${fSubM.y}%`, left: `${fSubM.x}%`, width: `${fSubM.width}%`, fontSize: `clamp(9px, ${(fSubM.fontSize || 11) * 0.11}cqi, 15px)` }}
       >
         {submissionDateParsed.m}
       </div>
       <div
-        className="absolute font-mono font-bold text-slate-900 text-right"
+        className="absolute font-mono font-bold text-slate-900 text-center flex items-center justify-center z-10"
         style={{ top: `${fSubD.y}%`, left: `${fSubD.x}%`, width: `${fSubD.width}%`, fontSize: `clamp(9px, ${(fSubD.fontSize || 11) * 0.11}cqi, 15px)` }}
       >
         {submissionDateParsed.d}
       </div>
 
-      {/* 事業所整理記号 (マス目印字) */}
+      {/* 事業所整理記号 (左側2マス: 数字) */}
       {symbolDigits && (
         <div
-          className="absolute flex items-center font-mono font-bold text-slate-950"
+          className="absolute flex items-center font-mono font-bold text-slate-950 z-10"
           style={{ top: `${fDigits.y}%`, height: '2.93%', left: `${fDigits.x}%` }}
         >
-          {symbolDigits.split('').slice(0, 4).map((char, idx) => (
+          {symbolDigits.split('').slice(0, 2).map((char, idx) => (
             <span
               key={idx}
               className="inline-flex items-center justify-center font-black text-center"
-              style={{ width: `${fDigits.pitch || 2.46}cqi`, height: '100%', fontSize: `clamp(11px, ${(fDigits.fontSize || 14) * 0.12}cqi, 18px)` }}
+              style={{ width: `${fDigits.pitch || 2.58}cqi`, height: '100%', fontSize: `clamp(11px, ${(fDigits.fontSize || 14) * 0.12}cqi, 18px)` }}
             >
               {char}
             </span>
           ))}
         </div>
       )}
+      {/* 事業所整理記号 (右側4マス: カタカナ、ハイフン枠の右隣から開始) */}
       {symbolKana && (
         <div
-          className="absolute flex items-center font-sans font-bold text-slate-950"
+          className="absolute flex items-center font-sans font-bold text-slate-950 z-10"
           style={{ top: `${fKana.y}%`, height: '2.93%', left: `${fKana.x}%` }}
         >
           {symbolKana.split('').slice(0, 4).map((char, idx) => {
-            const kanaWidths = ['2.46cqi', '2.34cqi', '2.38cqi', '2.34cqi'];
-            const w = fKana.pitch ? `${fKana.pitch}cqi` : (kanaWidths[idx] || '2.38cqi');
+            const w = fKana.pitch ? `${fKana.pitch}cqi` : '2.42cqi';
             return (
               <span
                 key={idx}
@@ -559,7 +566,10 @@ const ExactPdfPageRenderer: React.FC<{
   );
 };
 
-export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps> = ({ data }) => {
+export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps> = ({ 
+  data, 
+  canEditCoordinates = false 
+}) => {
   const commonDateParsed = parseDateElements(data.commonPaymentDate);
   const submissionDateParsed = parseDateElements(data.submissionDate || new Date().toISOString().split('T')[0]);
 
@@ -582,11 +592,14 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
     }
   }
 
-  // 事業所整理記号の分解 (例: "01-イロハ" または "01イロハ")
+  // 事業所整理記号の分解 (例: "01-イロハ", "25-カア 12345", "01イロハ", "25-カア")
   const rawSymbol = (data.officeSymbol || '').trim();
-  const symbolMatch = rawSymbol.match(/^(\d{1,2})[-ー\s]*(.+)$/);
-  const symbolDigits = symbolMatch ? symbolMatch[1].padStart(2, '0') : (data.officeCityCode || '');
-  const symbolKana = symbolMatch ? symbolMatch[2] : (data.officeSymbolKana || rawSymbol);
+  // 数字部分（左端の数字列：最大2文字）
+  const numMatch = rawSymbol.match(/^(\d{1,2})/);
+  const symbolDigits = numMatch ? numMatch[1] : (data.officeCityCode || '').slice(0, 2);
+  // カナ部分（カタカナ・漢字・ひらがなのみを厳密抽出。数字や空白、記号の混入を100%防止）
+  const kanaMatch = rawSymbol.replace(/^[\d\-ー\s]+/, '').match(/[ァ-ヴー\u4E00-\u9FFFぁ-ん]+/);
+  const symbolKana = (kanaMatch ? kanaMatch[0] : (data.officeSymbolKana || '')).slice(0, 4);
 
   // 表示モード切替（デフォルト: 原本PDF完全一致オーバーレイ印字）
   const [renderMode, setRenderMode] = useState<'exact_pdf' | 'web_table'>('exact_pdf');
@@ -664,8 +677,8 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
             </button>
           </div>
 
-          {/* 🛠️ マスタ設定・インスペクター微調整ボタン */}
-          {renderMode === 'exact_pdf' && (
+          {/* 🛠️ マスタ設定・インスペクター微調整ボタン（軍律第23条：管理者専用画面でのみ表示） */}
+          {canEditCoordinates && renderMode === 'exact_pdf' && (
             <button
               type="button"
               onClick={() => setShowInspectorModal(true)}
@@ -731,10 +744,23 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
           .official-bonus-page-container {
             width: 210mm !important;
             height: 297mm !important;
+            max-width: none !important;
             margin: 0 !important;
             padding: 0 !important;
             border: none !important;
             box-shadow: none !important;
+            container-type: inline-size !important;
+            position: relative !important;
+          }
+          .official-bonus-page-container img {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: contain !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
         }
       `}</style>
