@@ -60,14 +60,17 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
     isDualWork?: boolean;
     isMonthlyMerged?: boolean;
     firstPaymentDay?: string;
+    employment_type?: string;
+    salary_type?: string;
+    base_salary?: number;
   }>>([]);
 
   // 表示ビュー: 'edit' (入力テーブル) | 'preview' (公式帳票A4プレビュー)
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
 
-  // 一括入力補助ステート
-  const [bulkAmount, setBulkAmount] = useState<number | ''>('');
-  const [bulkMultiplier, setBulkMultiplier] = useState<number | ''>(1.0); // 基本給の◯ヶ月分
+  // 雇用形態別・一括入力補助ステート
+  const [fullTimeMultiplier, setFullTimeMultiplier] = useState<number | ''>(1.0); // 正社員: 基本給の◯ヶ月分
+  const [partTimeAmount, setPartTimeAmount] = useState<number | ''>(50000); // パート・アルバイト: 一律◯◯円
 
   // 初期ロード・従業員リストの構築
   useEffect(() => {
@@ -97,7 +100,24 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
         if (parsed.officeSymbol) setOfficeSymbol(parsed.officeSymbol);
         if (parsed.sharoushiName) setSharoushiName(parsed.sharoushiName);
         if (Array.isArray(parsed.bonusRows)) {
-          setBonusRows(parsed.bonusRows);
+          const supplemented = parsed.bonusRows.map((r: any) => {
+            const emp = employees.find(e => e.id === r.user_id) || {};
+            const prof = payrollProfiles[r.user_id] || {};
+            let localMaster: any = {};
+            try {
+              const raw = localStorage.getItem(`employee_master_backup_${r.user_id}`);
+              if (raw) localMaster = JSON.parse(raw);
+            } catch (_) {}
+            const empType = r.employment_type || emp.employment_type || localMaster.employment_type || prof.employment_type || 
+              (emp.salary_type === 'hourly' || prof.salary_type === 'hourly' ? 'part-time' : 'full-time');
+            return {
+              ...r,
+              employment_type: empType,
+              salary_type: r.salary_type || emp.salary_type || prof.salary_type || 'monthly',
+              base_salary: r.base_salary || prof.base_salary || localMaster.base_salary || emp.base_salary || 250000,
+            };
+          });
+          setBonusRows(supplemented);
           return;
         }
       } catch (e) {
@@ -116,10 +136,19 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
 
       const bDate = prof.birth_date || emp.birth_date || localMaster.birth_date || '';
       const myNum = localMaster.my_number || emp.my_number || '';
-      const baseSalary = prof.base_salary || localMaster.base_salary || 250000;
+      const baseSalary = prof.base_salary || localMaster.base_salary || emp.base_salary || 250000;
+
+      // 雇用形態と給与体系の判別（SSOT大元連携）
+      const empType = emp.employment_type || localMaster.employment_type || prof.employment_type || 
+        (emp.salary_type === 'hourly' || prof.salary_type === 'hourly' ? 'part-time' : 'full-time');
+      const salaryType = emp.salary_type || prof.salary_type || (empType === 'part-time' ? 'hourly' : 'monthly');
+      const isPartTime = empType === 'part-time' || salaryType === 'hourly';
 
       // 社保加入している正社員等をデフォルトで対象
       const isJoined = prof.health_insurance_enabled ?? localMaster.health_insurance_joined ?? true;
+
+      // 初期賞与額：パートは一律5万円、正社員等は基本給1ヶ月分
+      const defaultAmount = isPartTime ? 50000 : Math.round(baseSalary * 1.0);
 
       return {
         user_id: emp.id,
@@ -129,12 +158,15 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
         birthDate: bDate,
         insuranceNumber: String(index + 1).padStart(4, '0'),
         myNumber: myNum,
-        currencyAmount: Math.round(baseSalary * 1.0), // 初期値: 基本給1ヶ月分
+        currencyAmount: defaultAmount,
         goodsAmount: 0,
         individualPaymentDate: '',
         isDualWork: false,
         isMonthlyMerged: false,
-        firstPaymentDay: ''
+        firstPaymentDay: '',
+        employment_type: empType,
+        salary_type: salaryType,
+        base_salary: baseSalary
       };
     });
 
@@ -184,13 +216,15 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
     alert('📁 全社保管庫（キャビネット）に賞与支払届の控えを保管登録しました！');
   };
 
-  // 一括反映（月数掛け）
-  const handleApplyMultiplier = () => {
-    if (bulkMultiplier === '' || Number(bulkMultiplier) < 0) return;
-    const m = Number(bulkMultiplier);
+  // 1. 【正社員のみ】一括反映（月数掛け）
+  const handleApplyFullTimeMultiplier = () => {
+    if (fullTimeMultiplier === '' || Number(fullTimeMultiplier) < 0) return;
+    const m = Number(fullTimeMultiplier);
     setBonusRows(prev => prev.map(row => {
+      const isPart = row.employment_type === 'part-time' || row.salary_type === 'hourly';
+      if (isPart) return row; // パートは変更しない
       const prof = payrollProfiles[row.user_id] || {};
-      const base = prof.base_salary || 250000;
+      const base = row.base_salary || prof.base_salary || 250000;
       return {
         ...row,
         currencyAmount: Math.round(base * m)
@@ -198,14 +232,41 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
     }));
   };
 
-  // 一括反映（定額）
-  const handleApplyBulkAmount = () => {
-    if (bulkAmount === '' || Number(bulkAmount) < 0) return;
-    const amt = Number(bulkAmount);
-    setBonusRows(prev => prev.map(row => ({
-      ...row,
-      currencyAmount: amt
-    })));
+  // 2. 【パート・アルバイトのみ】一括反映（一律定額）
+  const handleApplyPartTimeAmount = () => {
+    if (partTimeAmount === '' || Number(partTimeAmount) < 0) return;
+    const amt = Number(partTimeAmount);
+    setBonusRows(prev => prev.map(row => {
+      const isPart = row.employment_type === 'part-time' || row.salary_type === 'hourly';
+      if (!isPart) return row; // 正社員は変更しない
+      return {
+        ...row,
+        currencyAmount: amt
+      };
+    }));
+  };
+
+  // 3. 【一括全自動算定】正社員○ヶ月 ＆ パート一律○万を同時にワンクリックで全員反映！
+  const handleApplyAutoBonusByEmploymentType = () => {
+    const m = fullTimeMultiplier === '' ? 1.0 : Number(fullTimeMultiplier);
+    const pAmt = partTimeAmount === '' ? 50000 : Number(partTimeAmount);
+
+    setBonusRows(prev => prev.map(row => {
+      const isPart = row.employment_type === 'part-time' || row.salary_type === 'hourly';
+      if (isPart) {
+        return {
+          ...row,
+          currencyAmount: pAmt
+        };
+      } else {
+        const prof = payrollProfiles[row.user_id] || {};
+        const base = row.base_salary || prof.base_salary || 250000;
+        return {
+          ...row,
+          currencyAmount: Math.round(base * m)
+        };
+      }
+    }));
   };
 
   // 公式コンポーネント用データへ変換
@@ -408,73 +469,106 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
                 </div>
               </div>
 
-              {/* 2. 一括反映アシスト ＆ 集計バー */}
-              <div className="bg-gradient-to-r from-fuchsia-50 via-purple-50 to-fuchsia-50 p-3.5 rounded-2xl border border-fuchsia-200 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-fuchsia-600" />
-                    <span className="font-bold text-fuchsia-950">一括算定アシスト:</span>
+              {/* 2. 雇用形態別スマート一括算定 ＆ 集計バー */}
+              <div className="bg-gradient-to-r from-fuchsia-50 via-purple-50 to-fuchsia-50 p-4 rounded-2xl border border-fuchsia-200 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-fuchsia-600 text-white flex items-center justify-center shadow-xs">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-xs text-fuchsia-950 block">
+                        雇用形態別スマート一括算定アシスト
+                      </span>
+                      <span className="text-[10px] text-fuchsia-700">
+                        「正社員（月給者）は○ヶ月分」「パート・アルバイトは一律○万円」ワンクリック同時算定
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-xl border border-fuchsia-200">
+                  {/* 集計メトリクス */}
+                  <div className="flex items-center gap-3 bg-white px-3.5 py-1.5 rounded-xl border border-fuchsia-200 font-mono shadow-2xs text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block -mb-0.5">対象人数</span>
+                      <span className="font-black text-fuchsia-950 text-sm">{includedRows.length} 名</span>
+                    </div>
+                    <div className="h-6 w-px bg-slate-200"></div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block -mb-0.5">賞与支払総額</span>
+                      <span className="font-bold text-slate-700 text-sm">¥{totalGross.toLocaleString()}</span>
+                    </div>
+                    <div className="h-6 w-px bg-slate-200"></div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block -mb-0.5">標準賞与総額 (切捨後)</span>
+                      <span className="font-black text-fuchsia-700 text-sm">¥{totalStandard.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 算定コントロール群 */}
+                <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-fuchsia-200/60 text-xs">
+                  {/* 正社員設定 */}
+                  <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-blue-200 shadow-2xs">
+                    <span className="text-[11px] font-bold text-blue-900 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                      👔 正社員:
+                    </span>
                     <span className="text-[10px] text-slate-500">基本給の</span>
                     <input
                       type="number"
                       step="0.1"
-                      value={bulkMultiplier}
-                      onChange={e => setBulkMultiplier(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                      className="w-12 text-center font-bold border-b border-fuchsia-300"
+                      min="0"
+                      value={fullTimeMultiplier}
+                      onChange={e => setFullTimeMultiplier(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      className="w-14 text-center font-bold font-mono border-b border-blue-400 bg-blue-50/30 text-blue-950 px-1 py-0.5"
                     />
-                    <span className="text-[10px] text-slate-500">ヶ月分を全員に反映</span>
+                    <span className="text-[10px] text-slate-500">ヶ月分</span>
                     <button
                       type="button"
-                      onClick={handleApplyMultiplier}
-                      className="ml-1 px-2 py-0.5 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-lg text-[10px] font-bold transition cursor-pointer"
+                      onClick={handleApplyFullTimeMultiplier}
+                      className="ml-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold transition cursor-pointer shadow-2xs"
+                      title="正社員のみに適用"
                     >
-                      適用
+                      正社員に適用
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-xl border border-fuchsia-200">
-                    <span className="text-[10px] text-slate-500">全員一律</span>
+                  {/* パート・アルバイト設定 */}
+                  <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-amber-200 shadow-2xs">
+                    <span className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                      🕒 パート・バイト:
+                    </span>
+                    <span className="text-[10px] text-slate-500">一律</span>
                     <input
                       type="number"
                       step="10000"
-                      value={bulkAmount}
-                      onChange={e => setBulkAmount(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-                      placeholder="例: 300000"
-                      className="w-24 text-right font-bold border-b border-fuchsia-300"
+                      min="0"
+                      value={partTimeAmount}
+                      onChange={e => setPartTimeAmount(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                      className="w-24 text-right font-bold font-mono border-b border-amber-400 bg-amber-50/30 text-amber-950 px-1 py-0.5"
                     />
                     <span className="text-[10px] text-slate-500">円</span>
                     <button
                       type="button"
-                      onClick={handleApplyBulkAmount}
-                      className="ml-1 px-2 py-0.5 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-lg text-[10px] font-bold transition cursor-pointer"
+                      onClick={handleApplyPartTimeAmount}
+                      className="ml-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-bold transition cursor-pointer shadow-2xs"
+                      title="パート・アルバイトのみに適用"
                     >
-                      適用
+                      パートに適用
                     </button>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-4 bg-white px-3.5 py-1.5 rounded-xl border border-fuchsia-200 font-mono">
-                  <div>
-                    <span className="text-[10px] text-slate-400 block -mb-0.5">対象人数</span>
-                    <span className="font-black text-fuchsia-950 text-sm">
-                      {includedRows.length} 名
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block -mb-0.5">賞与支払総額</span>
-                    <span className="font-bold text-slate-700 text-sm">
-                      ¥{totalGross.toLocaleString()}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 block -mb-0.5">標準賞与総額 (切捨後)</span>
-                    <span className="font-black text-fuchsia-700 text-sm">
-                      ¥{totalStandard.toLocaleString()}
-                    </span>
-                  </div>
+                  {/* まとめてワンクリック一括算定ボタン */}
+                  <button
+                    type="button"
+                    onClick={handleApplyAutoBonusByEmploymentType}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-700 hover:to-purple-700 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm hover:shadow"
+                    title="正社員は指定月数、パートは一律金額を全員にまとめて一度に自動適用します"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    ⚡ 雇用形態別にまとめて一括算定
+                  </button>
                 </div>
               </div>
 
@@ -526,19 +620,37 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
                             </td>
 
                             <td className="py-2 px-3">
-                              <div className="font-bold text-slate-900">{row.name}</div>
-                              <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono">
-                                <span>No.</span>
-                                <input
-                                  type="text"
-                                  value={row.insuranceNumber || ''}
-                                  onChange={e => {
-                                    const val = e.target.value;
-                                    setBonusRows(prev => prev.map((r, i) => i === idx ? { ...r, insuranceNumber: val } : r));
-                                  }}
-                                  className="w-16 border-b border-slate-300 font-bold text-slate-700 px-0.5"
-                                  placeholder="0001"
-                                />
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-slate-900">{row.name}</span>
+                                {row.employment_type === 'part-time' || row.salary_type === 'hourly' ? (
+                                  <span className="text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded-md">
+                                    パート
+                                  </span>
+                                ) : row.employment_type === 'contract' ? (
+                                  <span className="text-[9px] font-black bg-purple-100 text-purple-800 border border-purple-300 px-1.5 py-0.5 rounded-md">
+                                    契約
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] font-black bg-blue-100 text-blue-800 border border-blue-300 px-1.5 py-0.5 rounded-md">
+                                    正社員
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono mt-0.5">
+                                <div className="flex items-center gap-0.5">
+                                  <span>No.</span>
+                                  <input
+                                    type="text"
+                                    value={row.insuranceNumber || ''}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setBonusRows(prev => prev.map((r, i) => i === idx ? { ...r, insuranceNumber: val } : r));
+                                    }}
+                                    className="w-14 border-b border-slate-300 font-bold text-slate-700 px-0.5 text-center"
+                                    placeholder="0001"
+                                  />
+                                </div>
+                                <span>基準給: ¥{(row.base_salary || 0).toLocaleString()}</span>
                               </div>
                             </td>
 

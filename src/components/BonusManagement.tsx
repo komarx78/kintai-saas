@@ -24,6 +24,8 @@ export interface BonusEmployeeRecord {
   deduction_total: number; // 控除合計
   net_pay: number; // 差引手取額
   memo?: string; // 考課・支給備考
+  employment_type?: string; // 雇用形態 (full-time | part-time | contract 等)
+  salary_type?: string; // 給与体系 (monthly | hourly | daily)
 }
 
 export interface BonusCampaign {
@@ -53,8 +55,9 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
   const [companyName, setCompanyName] = useState<string>('株式会社KAP');
   const [companySealUrl, setCompanySealUrl] = useState<string>('');
 
-  // 一括倍率入力用のState
-  const [bulkMultiplier, setBulkMultiplier] = useState<string>('1.5');
+  // 一括倍率・金額入力用のState
+  const [fullTimeMultiplier, setFullTimeMultiplier] = useState<string>('2.0'); // 正社員: 基本給の◯ヶ月分
+  const [partTimeAmount, setPartTimeAmount] = useState<string>('50000'); // パート・アルバイト: 一律◯◯円
   const [showNewCampaignModal, setShowNewCampaignModal] = useState<boolean>(false);
   const [newCampaignTitle, setNewCampaignTitle] = useState<string>('');
   const [newCampaignType, setNewCampaignType] = useState<'summer' | 'winter' | 'fiscal_end' | 'special'>('summer');
@@ -83,12 +86,12 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
       // 全従業員の取得（SSOT大元マスタ連携）
       const { data: usersData } = await supabase
         .from('users')
-        .select('id, name, department, role')
+        .select('id, name, department, role, employment_type')
         .eq('tenant_id', tenantId);
 
       const { data: onboardingData } = await supabase
         .from('employee_onboarding_profiles')
-        .select('user_id, base_salary, department, position_name')
+        .select('user_id, base_salary, department, position_name, employment_type, salary_type')
         .eq('tenant_id', tenantId);
 
       const obMap: Record<string, any> = {};
@@ -120,14 +123,26 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
         const currentYear = new Date().getFullYear();
         const initialRecords: BonusEmployeeRecord[] = (usersData || []).map(u => {
           const profile = obMap[u.id] || {};
-          const baseSalary = Number(profile.base_salary) || 250000;
-          const mult = 1.5;
-          const gross = Math.round(baseSalary * mult);
+          let localMaster: any = {};
+          try {
+            const raw = localStorage.getItem(`employee_master_backup_${u.id}`);
+            if (raw) localMaster = JSON.parse(raw);
+          } catch (_) {}
+
+          const baseSalary = Number(profile.base_salary) || Number(localMaster.base_salary) || 250000;
+          const empType = profile.employment_type || u.employment_type || localMaster.employment_type || 
+            (profile.salary_type === 'hourly' || localMaster.salary_type === 'hourly' ? 'part-time' : 'full-time');
+          const salaryType = profile.salary_type || localMaster.salary_type || (empType === 'part-time' ? 'hourly' : 'monthly');
+          const isPartTime = empType === 'part-time' || salaryType === 'hourly';
+
+          // 正社員は2.0ヶ月分、パートは一律50,000円を標準初期値
+          const mult = isPartTime ? (baseSalary > 0 ? parseFloat((50000 / baseSalary).toFixed(2)) : 0) : 2.0;
+          const gross = isPartTime ? 50000 : Math.round(baseSalary * mult);
           const health = Math.round(gross * 0.05);
           const pension = Math.round(gross * 0.0915);
           const emp = Math.round(gross * 0.006);
           const soc = health + pension + emp;
-          const tax = Math.round((gross - soc) * 0.05);
+          const tax = Math.round((gross - soc) * 0.05105);
           const net = gross - (soc + tax);
 
           return {
@@ -147,7 +162,9 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
             income_tax: tax,
             deduction_total: soc + tax,
             net_pay: net,
-            memo: '業績査定標準'
+            memo: isPartTime ? 'パート一律支給' : '業績査定標準',
+            employment_type: empType,
+            salary_type: salaryType
           };
         });
 
@@ -167,23 +184,56 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
         loadedCampaigns = [initialCampaign];
         localStorage.setItem(localKey, JSON.stringify(loadedCampaigns));
       } else {
-        // 既存キャンペーンに対して、新規追加された社員がいれば自動補完
+        // 既存キャンペーンに対して、新規追加された社員の補完および雇用形態プロパティの補正
         const activeUsers = usersData || [];
         loadedCampaigns = loadedCampaigns.map(camp => {
           const existingUserIds = new Set(camp.records.map(r => r.user_id));
           const missingUsers = activeUsers.filter(u => !existingUserIds.has(u.id));
           
+          // 既存レコードに employment_type / salary_type を補完
+          const updatedExistingRecords = camp.records.map(r => {
+            const profile = obMap[r.user_id] || {};
+            const u = activeUsers.find(user => user.id === r.user_id);
+            let localMaster: any = {};
+            try {
+              const raw = localStorage.getItem(`employee_master_backup_${r.user_id}`);
+              if (raw) localMaster = JSON.parse(raw);
+            } catch (_) {}
+
+            const empType = r.employment_type || profile.employment_type || u?.employment_type || localMaster.employment_type || 
+              (profile.salary_type === 'hourly' || localMaster.salary_type === 'hourly' ? 'part-time' : 'full-time');
+            const salType = r.salary_type || profile.salary_type || localMaster.salary_type || (empType === 'part-time' ? 'hourly' : 'monthly');
+
+            return {
+              ...r,
+              employment_type: empType,
+              salary_type: salType,
+              base_salary: r.base_salary || profile.base_salary || localMaster.base_salary || 250000
+            };
+          });
+
           if (missingUsers.length > 0) {
             const addedRecords: BonusEmployeeRecord[] = missingUsers.map(u => {
               const profile = obMap[u.id] || {};
-              const baseSalary = Number(profile.base_salary) || 250000;
-              const mult = 1.5;
-              const gross = Math.round(baseSalary * mult);
+              let localMaster: any = {};
+              try {
+                const raw = localStorage.getItem(`employee_master_backup_${u.id}`);
+                if (raw) localMaster = JSON.parse(raw);
+              } catch (_) {}
+
+              const baseSalary = Number(profile.base_salary) || Number(localMaster.base_salary) || 250000;
+              const empType = profile.employment_type || u.employment_type || localMaster.employment_type || 
+                (profile.salary_type === 'hourly' || localMaster.salary_type === 'hourly' ? 'part-time' : 'full-time');
+              const salaryType = profile.salary_type || localMaster.salary_type || (empType === 'part-time' ? 'hourly' : 'monthly');
+              const isPartTime = empType === 'part-time' || salaryType === 'hourly';
+
+              const mult = isPartTime ? (baseSalary > 0 ? parseFloat((50000 / baseSalary).toFixed(2)) : 0) : 2.0;
+              const gross = isPartTime ? 50000 : Math.round(baseSalary * mult);
               const health = Math.round(gross * 0.05);
               const pension = Math.round(gross * 0.0915);
               const emp = Math.round(gross * 0.006);
               const soc = health + pension + emp;
-              const tax = Math.round((gross - soc) * 0.05);
+              const tax = Math.round((gross - soc) * 0.05105);
               const net = gross - (soc + tax);
 
               return {
@@ -203,15 +253,20 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
                 income_tax: tax,
                 deduction_total: soc + tax,
                 net_pay: net,
-                memo: ''
+                memo: isPartTime ? 'パート一律支給' : '',
+                employment_type: empType,
+                salary_type: salaryType
               };
             });
             return {
               ...camp,
-              records: [...camp.records, ...addedRecords]
+              records: [...updatedExistingRecords, ...addedRecords]
             };
           }
-          return camp;
+          return {
+            ...camp,
+            records: updatedExistingRecords
+          };
         });
       }
 
@@ -314,20 +369,18 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
     setCampaigns(updatedCampaigns);
   };
 
-  // 5. 全員一括倍率適用
-  const handleApplyBulkMultiplier = () => {
+  // 5-1. 【正社員のみ】一括査定倍率適用
+  const handleApplyFullTimeMultiplier = () => {
     if (!currentCampaign) return;
-    const mult = parseFloat(bulkMultiplier) || 0;
+    const mult = parseFloat(fullTimeMultiplier) || 0;
     if (mult <= 0) {
       alert('0より大きい査定倍率を入力してください。');
       return;
     }
 
-    if (!confirm(`全従業員に一括で【${mult} ヶ月分】を適用しますか？\n（個別の調整額は維持されます）`)) {
-      return;
-    }
-
     const updatedRecords = currentCampaign.records.map(rec => {
+      const isPart = rec.employment_type === 'part-time' || rec.salary_type === 'hourly';
+      if (isPart) return rec; // パート・アルバイトはスキップ
       const recalc = recalculateRecord(rec.base_salary, mult, rec.adjustment_amount);
       return { ...rec, ...recalc };
     });
@@ -336,7 +389,92 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
       c.id === currentCampaign.id ? { ...c, records: updatedRecords, updated_at: new Date().toISOString() } : c
     );
     setCampaigns(updatedCampaigns);
-    showNotice(`全員に ${mult} ヶ月分を一括適用しました。`);
+    showNotice(`👔 正社員に ${mult} ヶ月分を一括適用しました。`);
+  };
+
+  // 5-2. 【パート・アルバイトのみ】一括定額支給適用
+  const handleApplyPartTimeAmount = () => {
+    if (!currentCampaign) return;
+    const amt = parseInt(partTimeAmount, 10) || 0;
+    if (amt < 0) {
+      alert('0円以上の金額を入力してください。');
+      return;
+    }
+
+    const updatedRecords = currentCampaign.records.map(rec => {
+      const isPart = rec.employment_type === 'part-time' || rec.salary_type === 'hourly';
+      if (!isPart) return rec; // 正社員はスキップ
+      const mult = rec.base_salary > 0 ? parseFloat((amt / rec.base_salary).toFixed(2)) : 0;
+      const health = Math.round(amt * 0.05);
+      const pension = Math.round(amt * 0.0915);
+      const emp = Math.round(amt * 0.006);
+      const soc = health + pension + emp;
+      const tax = Math.round(Math.max(0, amt - soc) * 0.05105);
+      const ded = soc + tax;
+      return {
+        ...rec,
+        bonus_gross: amt,
+        multiplier: mult,
+        adjustment_amount: 0,
+        health_insurance: health,
+        welfare_pension: pension,
+        employment_insurance: emp,
+        social_insurance_total: soc,
+        income_tax: tax,
+        deduction_total: ded,
+        net_pay: amt - ded,
+        memo: 'パート一律支給'
+      };
+    });
+
+    const updatedCampaigns = campaigns.map(c => 
+      c.id === currentCampaign.id ? { ...c, records: updatedRecords, updated_at: new Date().toISOString() } : c
+    );
+    setCampaigns(updatedCampaigns);
+    showNotice(`🕒 パート・アルバイトに一律 ¥${amt.toLocaleString()} を一括適用しました。`);
+  };
+
+  // 5-3. 【一括全自動算定】正社員○ヶ月 ＆ パート一律○万を同時にまとめて全員へ反映！
+  const handleApplyAutoBonusByEmploymentType = () => {
+    if (!currentCampaign) return;
+    const mult = parseFloat(fullTimeMultiplier) || 2.0;
+    const amt = parseInt(partTimeAmount, 10) || 50000;
+
+    const updatedRecords = currentCampaign.records.map(rec => {
+      const isPart = rec.employment_type === 'part-time' || rec.salary_type === 'hourly';
+      if (isPart) {
+        const m = rec.base_salary > 0 ? parseFloat((amt / rec.base_salary).toFixed(2)) : 0;
+        const health = Math.round(amt * 0.05);
+        const pension = Math.round(amt * 0.0915);
+        const emp = Math.round(amt * 0.006);
+        const soc = health + pension + emp;
+        const tax = Math.round(Math.max(0, amt - soc) * 0.05105);
+        const ded = soc + tax;
+        return {
+          ...rec,
+          bonus_gross: amt,
+          multiplier: m,
+          adjustment_amount: 0,
+          health_insurance: health,
+          welfare_pension: pension,
+          employment_insurance: emp,
+          social_insurance_total: soc,
+          income_tax: tax,
+          deduction_total: ded,
+          net_pay: amt - ded,
+          memo: 'パート一律支給'
+        };
+      } else {
+        const recalc = recalculateRecord(rec.base_salary, mult, rec.adjustment_amount);
+        return { ...rec, ...recalc };
+      }
+    });
+
+    const updatedCampaigns = campaigns.map(c => 
+      c.id === currentCampaign.id ? { ...c, records: updatedRecords, updated_at: new Date().toISOString() } : c
+    );
+    setCampaigns(updatedCampaigns);
+    showNotice(`⚡ 雇用形態別にまとめて一括算定しました（正社員: ${mult}ヶ月 / パート: ¥${amt.toLocaleString()}）`);
   };
 
   // 6. 保存処理（LocalStorage & DB 二重同期）
@@ -614,65 +752,118 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
         </div>
       )}
 
-      {/* ⚡ 操作アクションバー：一括査定倍率設定 ＆ 下書き保存 ＆ 確定・確定解除 */}
+      {/* ⚡ 操作アクションバー：雇用形態別スマート一括算定 ＆ 下書き保存 ＆ 確定・確定解除 */}
       {currentCampaign && (
-        <div className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80 flex flex-col md:flex-row items-center justify-between gap-4">
-          {/* 左側：一括査定倍率設定 */}
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <span className="text-xs font-black text-slate-700 whitespace-nowrap flex items-center gap-1.5">
-              <Award className="w-4 h-4 text-amber-500" />
-              一括算定倍率:
-            </span>
-            <div className="flex items-center gap-1.5">
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                value={bulkMultiplier}
-                onChange={(e) => setBulkMultiplier(e.target.value)}
-                className="w-20 bg-white border border-slate-300 text-slate-900 text-xs font-black rounded-xl px-2.5 py-1.5 text-center focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                placeholder="1.5"
-              />
-              <span className="text-xs font-bold text-slate-500">ヶ月分</span>
+        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+            {/* 雇用形態別スマート算定コントロール */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5 text-xs font-black text-slate-800">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                  <Award className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="block font-black text-slate-900">スマート一括算定</span>
+                  <span className="text-[10px] text-slate-400 font-bold">雇用形態別の支給基準をワンクリック反映</span>
+                </div>
+              </div>
+
+              {/* 正社員設定 */}
+              <div className="flex items-center gap-1.5 bg-blue-50/70 border border-blue-200 px-3 py-1.5 rounded-2xl shadow-2xs">
+                <span className="text-xs font-black text-blue-900 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  👔 正社員:
+                </span>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={fullTimeMultiplier}
+                  onChange={(e) => setFullTimeMultiplier(e.target.value)}
+                  className="w-16 bg-white border border-blue-300 text-blue-950 text-xs font-black rounded-xl px-2 py-1 text-center focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  placeholder="2.0"
+                />
+                <span className="text-xs font-bold text-blue-800">ヶ月分</span>
+                <button
+                  type="button"
+                  onClick={handleApplyFullTimeMultiplier}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-black px-2.5 py-1 rounded-xl shadow-2xs transition cursor-pointer"
+                  title="正社員のみに適用"
+                >
+                  正社員に適用
+                </button>
+              </div>
+
+              {/* パート・アルバイト設定 */}
+              <div className="flex items-center gap-1.5 bg-amber-50/70 border border-amber-200 px-3 py-1.5 rounded-2xl shadow-2xs">
+                <span className="text-xs font-black text-amber-900 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                  🕒 パート・バイト:
+                </span>
+                <span className="text-[11px] font-bold text-amber-800">一律</span>
+                <input
+                  type="number"
+                  step="10000"
+                  min="0"
+                  value={partTimeAmount}
+                  onChange={(e) => setPartTimeAmount(e.target.value)}
+                  className="w-24 bg-white border border-amber-300 text-amber-950 text-xs font-black rounded-xl px-2 py-1 text-right font-mono focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                  placeholder="50000"
+                />
+                <span className="text-xs font-bold text-amber-800">円</span>
+                <button
+                  type="button"
+                  onClick={handleApplyPartTimeAmount}
+                  className="bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-black px-2.5 py-1 rounded-xl shadow-2xs transition cursor-pointer"
+                  title="パート・アルバイトのみに適用"
+                >
+                  パートに適用
+                </button>
+              </div>
+
+              {/* ワンクリックまとめて全員自動算定ボタン */}
               <button
-                onClick={handleApplyBulkMultiplier}
-                className="bg-white hover:bg-slate-100 text-slate-800 text-xs font-black border border-slate-300 px-3 py-1.5 rounded-xl shadow-2xs transition cursor-pointer"
+                type="button"
+                onClick={handleApplyAutoBonusByEmploymentType}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black px-4 py-2 rounded-2xl shadow-md shadow-emerald-600/20 transition cursor-pointer"
+                title="正社員には指定月数、パートには一律定額をワンクリックで同時に全員へ反映します"
               >
-                全員に一括適用
+                <Award className="w-4 h-4 text-amber-300" />
+                ⚡ 雇用形態別にまとめて一括算定
               </button>
             </div>
-          </div>
 
-          {/* 右側：確定 ⇄ 確定解除 ＆ 下書き保存 */}
-          <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-            <button
-              onClick={() => saveCampaignsData(campaigns)}
-              disabled={isSaving}
-              className="flex items-center gap-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-black border border-slate-300 px-4 py-2 rounded-2xl shadow-2xs transition cursor-pointer disabled:opacity-50"
-            >
-              <Save className="w-4 h-4 text-slate-500" />
-              {isSaving ? '保存中...' : '下書き保存'}
-            </button>
+            {/* 右側：下書き保存 ＆ 確定・公開 */}
+            <div className="flex items-center gap-3 w-full xl:w-auto justify-end pt-2 xl:pt-0 border-t xl:border-t-0 border-slate-100">
+              <button
+                onClick={() => saveCampaignsData(campaigns)}
+                disabled={isSaving}
+                className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-black border border-slate-300 px-4 py-2 rounded-2xl shadow-2xs transition cursor-pointer disabled:opacity-50"
+              >
+                <Save className="w-4 h-4 text-slate-500" />
+                {isSaving ? '保存中...' : '下書き保存'}
+              </button>
 
-            {currentCampaign.status === 'published' ? (
-              <button
-                onClick={handleUnpublishBonus}
-                className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black px-4 py-2 rounded-2xl shadow-md shadow-amber-500/20 transition cursor-pointer"
-                title="確定を解除して下書き状態に戻し、再計算・編集可能にします"
-              >
-                <RotateCcw className="w-4 h-4" />
-                確定解除（下書きへ戻す）
-              </button>
-            ) : (
-              <button
-                onClick={handlePublishBonus}
-                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-5 py-2 rounded-2xl shadow-md shadow-emerald-600/20 transition cursor-pointer"
-                title="賞与を確定し、全社員マイページの賞与明細へ反映・公開します"
-              >
-                <Send className="w-4 h-4 text-emerald-200" />
-                賞与を確定して全社員へ公開
-              </button>
-            )}
+              {currentCampaign.status === 'published' ? (
+                <button
+                  onClick={handleUnpublishBonus}
+                  className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black px-4 py-2 rounded-2xl shadow-md shadow-amber-500/20 transition cursor-pointer"
+                  title="確定を解除して下書き状態に戻し、再計算・編集可能にします"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  確定解除（下書きへ戻す）
+                </button>
+              ) : (
+                <button
+                  onClick={handlePublishBonus}
+                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-5 py-2 rounded-2xl shadow-md shadow-emerald-600/20 transition cursor-pointer"
+                  title="賞与を確定し、全社員マイページの賞与明細へ反映・公開します"
+                >
+                  <Send className="w-4 h-4 text-emerald-200" />
+                  賞与を確定して全社員へ公開
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -713,10 +904,25 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
               <tbody className="divide-y divide-slate-200/70">
                 {currentCampaign.records.map((rec) => (
                   <tr key={rec.user_id} className="hover:bg-slate-50/80 transition">
-                    {/* 社員名・部署 */}
+                    {/* 社員名・部署・雇用区分バッジ */}
                     <td className="py-3 px-4">
-                      <div className="font-black text-slate-900 text-sm">{rec.user_name}</div>
-                      <div className="text-[10px] font-bold text-slate-400">{rec.department || '未所属'}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-black text-slate-900 text-sm">{rec.user_name}</div>
+                        {rec.employment_type === 'part-time' || rec.salary_type === 'hourly' ? (
+                          <span className="text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-md">
+                            パート
+                          </span>
+                        ) : rec.employment_type === 'contract' ? (
+                          <span className="text-[9px] font-black bg-purple-100 text-purple-800 border border-purple-300 px-2 py-0.5 rounded-md">
+                            契約
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-black bg-blue-100 text-blue-800 border border-blue-300 px-2 py-0.5 rounded-md">
+                            正社員
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] font-bold text-slate-400 mt-0.5">{rec.department || '未所属'}</div>
                     </td>
 
                     {/* 算定基準給与（大元マスタ連携） */}
@@ -750,9 +956,19 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
                       />
                     </td>
 
-                    {/* 額面総支給額 */}
-                    <td className="py-3 px-3 text-right font-mono font-black text-slate-900 text-sm">
-                      ¥{rec.bonus_gross.toLocaleString()}
+                    {/* 額面総支給額（直接編集可能・社保税金即時再計算） */}
+                    <td className="py-3 px-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <span className="text-slate-400 text-[10px] font-bold">¥</span>
+                        <input
+                          type="number"
+                          step="1000"
+                          value={rec.bonus_gross}
+                          onChange={(e) => handleRecordChange(rec.user_id, 'bonus_gross', e.target.value)}
+                          className="w-28 text-right font-mono font-black text-xs bg-slate-50 border border-slate-300 rounded-lg py-1 px-1.5 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-900"
+                          title="額面を直接変更できます（社保・所得税・手取額が即時自動計算されます）"
+                        />
+                      </div>
                     </td>
 
                     {/* 社保控除計 */}

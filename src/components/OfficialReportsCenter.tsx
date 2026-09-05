@@ -34,6 +34,7 @@ interface EmployeeItem {
   base_salary: number;
   hourly_wage?: number;
   salary_type: 'monthly' | 'hourly' | 'daily';
+  employment_type?: 'full-time' | 'part-time' | 'contract' | 'executive' | string;
   bank_name?: string;
   branch_name?: string;
   account_type?: string;
@@ -233,6 +234,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           base_salary: base,
           hourly_wage: conDoc.hourly_wage || pp.hourly_wage || ob.hourly_wage || 1200,
           salary_type: conDoc.salary_type || pp.salary_type || ob.salary_type || 'monthly',
+          employment_type: conDoc.employment_type || ob.employment_type || u.employment_type || localBackup?.employment_type || (conDoc.salary_type === 'hourly' || pp.salary_type === 'hourly' || ob.salary_type === 'hourly' ? 'part-time' : 'full-time'),
           bank_name: bankDoc.bank_name || ob.bank_name || pp.bank_name || '滋賀銀行',
           branch_name: bankDoc.branch_name || ob.branch_name || pp.branch_name || '坂本支店',
           account_type: bankDoc.account_type || ob.account_type || pp.account_type || '普通',
