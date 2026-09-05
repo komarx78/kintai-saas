@@ -13,6 +13,7 @@ import {
 import { BonusPaymentReportModal } from './BonusPaymentReportModal';
 import { WageLedgerViewer } from './WageLedgerViewer';
 import { EmployeeRosterViewer } from './EmployeeRosterViewer';
+import { WithholdingTaxLedgerViewer } from './WithholdingTaxLedgerViewer';
 
 export interface OfficialReportsCenterProps {
   tenantId: string;
@@ -843,6 +844,20 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
             />
           </div>
         </div>
+      ) : selectedDocType === 'withholding_tax_ledger' ? (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col print:static print:p-0 print:m-0 print:bg-white print:z-auto print:block print:h-auto print:overflow-visible print:w-full print:min-w-0">
+          <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden print:overflow-visible print:bg-white print:h-auto print:block print:p-0 print:m-0 print:w-full print:min-w-0">
+            <WithholdingTaxLedgerViewer
+              tenantId={tenantId}
+              employees={employees as any}
+              companyInfo={companyInfo}
+              initialYear={selectedYear}
+              initialEmployeeId={selectedEmployeeId}
+              onBackToReports={() => setSelectedDocType(null)}
+              isModalMode={true}
+            />
+          </div>
+        </div>
       ) : selectedDocType && (
         <div className="reports-modal-wrapper fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 print:p-0 print:static print:bg-transparent print:z-auto print:block">
           <div className="reports-printable-card bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[92vh] flex flex-col border border-slate-100 overflow-hidden print:border-none print:shadow-none print:max-h-none print:overflow-visible print:w-full print:block">
@@ -1504,79 +1519,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               {/* ⑧ 賃金台帳（労働基準法第108条 法定帳簿・MFクラウド給与準拠）      */}
 
 
-              {/* ----------------------------------------------------------------- */}
-              {/* ⑩ 給与所得・退職所得に対する源泉徴収簿（国税庁様式）               */}
-              {/* ----------------------------------------------------------------- */}
-              {selectedDocType === 'withholding_tax_ledger' && (() => {
-                const targetEmps = selectedEmployeeId === 'all' ? employees : employees.filter(e => e.id === selectedEmployeeId);
 
-                return (
-                  <div className="space-y-6">
-                    {targetEmps.map((emp, idx) => (
-                      <div
-                        key={emp.id}
-                        className="bg-white p-8 rounded-2xl border-2 border-slate-900 text-slate-900 font-sans text-xs max-w-5xl mx-auto shadow-sm print:p-0 print:border-none print:shadow-none"
-                        style={{ pageBreakAfter: idx < targetEmps.length - 1 ? 'always' : 'auto' }}
-                      >
-                        <div className="text-center border-b-2 border-slate-900 pb-2 mb-4">
-                          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                            国税庁所定様式
-                          </div>
-                          <h2 className="text-xl font-black text-slate-950">
-                            令和{selectedYear - 2018}年分 給与所得に対する源泉徴収簿
-                          </h2>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-300 mb-4 text-[11px]">
-                          <div><span className="text-slate-400">氏名:</span> <span className="font-bold">{emp.name}</span></div>
-                          <div><span className="text-slate-400">住所:</span> <span>{emp.address}</span></div>
-                          <div><span className="text-slate-400">扶養親族等の数:</span> <span className="font-bold">{emp.dependents_count || 0}名</span></div>
-                        </div>
-
-                        <table className="w-full border-collapse border border-slate-400 text-[10px] mb-4 font-mono">
-                          <thead>
-                            <tr className="bg-slate-100 font-bold border-b border-slate-400 text-center font-sans">
-                              <th className="p-1 border-r border-slate-300 w-10">月度</th>
-                              <th className="p-1 border-r border-slate-300 w-20">支給日</th>
-                              <th className="p-1 border-r border-slate-300 text-right">総支給額</th>
-                              <th className="p-1 border-r border-slate-300 text-right">社会保険料等</th>
-                              <th className="p-1 border-r border-slate-300 text-right">社保控除後給与</th>
-                              <th className="p-1 border-r border-slate-300 text-right">算出税額</th>
-                              <th className="p-1 text-right">差引徴収税額</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {Array.from({ length: 12 }, (_, i) => {
-                              const m = i + 1;
-                              const gross = emp.base_salary;
-                              const soc = Math.round(gross * 0.1475);
-                              const afterSoc = gross - soc;
-                              const tax = Math.round(afterSoc * 0.03);
-
-                              return (
-                                <tr key={m} className="border-b border-slate-200 text-right">
-                                  <td className="p-1 border-r border-slate-300 text-center font-bold font-sans">{m}月</td>
-                                  <td className="p-1 border-r border-slate-300 text-center">{selectedYear}.{m}.25</td>
-                                  <td className="p-1 border-r border-slate-300 font-bold">¥{gross.toLocaleString()}</td>
-                                  <td className="p-1 border-r border-slate-300">¥{soc.toLocaleString()}</td>
-                                  <td className="p-1 border-r border-slate-300">¥{afterSoc.toLocaleString()}</td>
-                                  <td className="p-1 border-r border-slate-300 text-emerald-700">¥{tax.toLocaleString()}</td>
-                                  <td className="p-1 font-bold text-slate-900">¥{tax.toLocaleString()}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-
-                        <div className="signature-box flex items-center justify-between border-t border-slate-300 pt-2 text-[10px] text-slate-500 font-sans">
-                          <div>給与支払者: {companyInfo.name}（{companyInfo.address}）</div>
-                          <div>※ 年末調整の基礎台帳として会社において適切に保管してください。</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
 
             </div>
           </div>
