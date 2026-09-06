@@ -424,19 +424,19 @@ function RealKintaiClockPreview() {
 }
 
 /**
- * 🌴 2. 【有給休暇・半休申請フロー】（3ステップ）
+ * 🌴 2. 【有給休暇・半休・特別休暇（慶弔等）・代休申請フロー】（3ステップ）
  */
 function RealLeaveBalancePreview() {
   return (
     <MultiStepGuideContainer
-      title="有給休暇・半休の申請から残数自動控除の流れ"
+      title="有給休暇・半休・特別休暇（慶弔等）・代休の申請から反映の流れ"
       steps={[
         {
           number: 1,
           label: '① 場所と残数確認',
           badge: '画面の場所',
-          title: 'ホーム画面で残日数を確認し、左メニュー「各種申請」を開く',
-          desc: '有休残数カードで残日数を確認し、左メニューの【各種申請】または勤怠照会の【申請する】をクリックします。',
+          title: 'ホーム画面で有休・代休残数を確認し、左メニュー「各種申請」を開く',
+          desc: 'ホーム画面の【有給休暇・代休 残数】カードで残日数を確認し、左メニューの【各種申請】（または勤怠照会の【申請する】）をクリックします。',
           render: () => (
             <div className="max-w-md mx-auto space-y-3">
               <AuthenticLeaveBalanceWidget highlight={true} />
@@ -453,8 +453,8 @@ function RealLeaveBalancePreview() {
           number: 2,
           label: '② 申請フォーム入力',
           badge: '入力作業',
-          title: '全休・午前半休・午後半休を選択して送信',
-          desc: '申請種類から「有給休暇（全休）」または「午前半休」「午後半休」を選択し、取得日と事由を入力します。',
+          title: '有給・半休・代休・特別休暇（慶弔）を選択して送信',
+          desc: '申請種類プルダウンから有給休暇（全休/半休）、代休、または特別休暇（慶弔など）を選択し、対象日程と申請理由を入力します。',
           render: () => (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-lg mx-auto space-y-5 text-xs">
               <div className="flex items-center space-x-2 border-b pb-3">
@@ -473,6 +473,10 @@ function RealLeaveBalancePreview() {
                   <option>代休（午後半休）</option>
                   <option>特別休暇（慶弔など）</option>
                 </select>
+                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-[11px] text-blue-900 font-bold flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span>有休（全休・半休）のほか、慶弔休暇（忌引き・結婚等）や代休も同一フォームから申請可能です</span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -488,7 +492,7 @@ function RealLeaveBalancePreview() {
 
               <div>
                 <label className="block font-bold text-gray-700 mb-1">事由・備考</label>
-                <textarea rows={2} defaultValue="私用のため（役所手続き）" className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm text-xs" />
+                <textarea rows={2} defaultValue="私用のため（役所手続き）／ 慶弔（本人結婚・忌引き等）" className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm text-xs" />
               </div>
 
               <button
@@ -502,15 +506,15 @@ function RealLeaveBalancePreview() {
         },
         {
           number: 3,
-          label: '③ 承認と残数消化',
+          label: '③ 承認と残数・カレンダー反映',
           badge: '反映結果',
-          title: '承認完了と同時に残日数が自動的にマイナスされる',
-          desc: '上長または管理者が承認すると、カレンダーに有休が反映され、合計残数から正確に日数（1日または0.5日）が減算されます。',
+          title: '承認完了と同時に残日数が自動計算されカレンダーに反映',
+          desc: '上長または管理者が承認すると、カレンダーに休暇が即時反映され、有休残数や代休残数が自動的に更新されます。',
           render: () => (
             <div className="max-w-md mx-auto space-y-4">
               <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center gap-2 text-emerald-900 font-bold text-xs">
                 <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-                <span>🎉 有休申請が承認され、残日数・取得義務メーターが自動更新されました！</span>
+                <span>🎉 申請が承認され、有休・代休残数やカレンダー実績が自動更新されました！</span>
               </div>
 
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
