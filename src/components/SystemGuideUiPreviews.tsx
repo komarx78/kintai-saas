@@ -5,7 +5,7 @@ import {
   Lock, Unlock, CheckCheck,
   Sparkles, MousePointerClick,
   DollarSign, Printer, Upload, CreditCard, Train, Shield, Users, Mail, LogIn, Send,
-  Smartphone, MapPin
+  Smartphone, MapPin, AlertTriangle, XCircle
 } from 'lucide-react';
 
 interface GuideUiPreviewProps {
@@ -37,6 +37,8 @@ export const SystemGuideUiPreview: React.FC<GuideUiPreviewProps> = ({
       return <RealMonthlyAttendancePreview />;
     case 'kintai_clock':
       return <RealKintaiClockPreview />;
+    case 'kintai_gps_help':
+      return <RealGpsHelpPreview />;
     case 'leave_request':
       return <RealLeaveBalancePreview />;
     case 'shift_submit':
@@ -429,6 +431,115 @@ function RealKintaiClockPreview() {
                 status="退勤済"
                 checkInTime="11:33"
                 checkOutTime="11:33"
+              />
+            </div>
+          )
+        }
+      ]}
+    />
+  );
+}
+
+/**
+ * 📍 1-2. 【スマホGPS位置情報エラー対処 ＆ 設定許可手順】（3ステップ）
+ * UserDashboard.tsx の gpsErrorModal 実画面と100%同一のJSX・Tailwindクラス
+ */
+function RealGpsHelpPreview() {
+  return (
+    <MultiStepGuideContainer
+      title="スマホGPS位置情報エラーの原因と設定許可（iPhone/Android）の手順"
+      steps={[
+        {
+          number: 1,
+          label: '① 打刻操作（エラー検知）',
+          badge: '出退勤操作',
+          title: 'スマホから「出勤」または「退勤」を押した際に位置情報を自動確認',
+          desc: 'スマートフォンからの打刻は、虚偽の遠隔打刻（不正打刻）を防止するためGPS位置情報の取得が必須です。端末やブラウザの位置情報がOFFになっていると検知されます。',
+          render: () => (
+            <div className="max-w-md mx-auto space-y-3">
+              <div className="text-center text-xs text-slate-500 font-bold">
+                ※スマホアクセス時は「📱 スマホ打刻モード」が自動適用されます
+              </div>
+              <AuthenticClockWidget
+                time="08:59:10"
+                status="未出勤"
+                checkInTime=""
+                checkOutTime=""
+                highlightPunchIn={true}
+              />
+            </div>
+          )
+        },
+        {
+          number: 2,
+          label: '② GPSエラー画面と設定手順',
+          badge: '実際のエラー画面',
+          title: '画面上に表示される「📍 位置情報（GPS）の取得エラー」モーダル',
+          desc: '位置情報が取得できない場合に自動表示される本物の警告モーダルです。お使いの端末（iPhone Safari / Android Chrome）に合わせて許可設定を行ってください。',
+          render: () => (
+            <div className="max-w-md mx-auto">
+              <div className="bg-white rounded-3xl w-full shadow-xl overflow-hidden border border-slate-200">
+                <div className="p-4 bg-gradient-to-r from-rose-600 to-red-600 text-white flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                      <MapPin className="w-5 h-5 text-white" />
+                    </div>
+                    <h3 className="font-black text-sm sm:text-base">位置情報（GPS）の取得エラー</h3>
+                  </div>
+                  <button type="button" className="text-white/80 hover:text-white cursor-pointer">
+                    <XCircle className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="p-5 space-y-4 text-xs text-slate-700">
+                  <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-950 font-medium whitespace-pre-wrap leading-relaxed">
+                    スマートフォンからの打刻は、不正防止のため位置情報（GPS）の取得が必須となります。
+ブラウザまたは端末の位置情報サービスがOFFになっているか、許可が拒否されています。
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5">
+                    <div className="font-black text-slate-900 text-xs flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-500" />
+                      <span>スマートフォンでの許可設定手順</span>
+                    </div>
+                    <ul className="space-y-1.5 list-disc list-inside text-slate-600 font-medium text-[11px] leading-relaxed">
+                      <li><strong>iPhone (Safari):</strong> 「設定」＞「プライバシーとセキュリティ」＞「位置情報サービス」をONにし、SafariのWebサイトで「このAppの使用中のみ許可」を選択。</li>
+                      <li><strong>Android (Chrome):</strong> 画面右上の3点メニュー ＞「設定」＞「サイトの設定」＞「位置情報」を「許可」に設定。</li>
+                      <li>画面を再読み込みし、上部に表示される「位置情報の利用を許可しますか？」で<strong>「許可」</strong>を選択してください。</li>
+                    </ul>
+                  </div>
+
+                  <div className="text-[11px] text-slate-500">
+                    ※ 本システムは不正打刻（虚偽の遠隔打刻）防止のため、スマートフォンからの打刻時に正確な位置情報の取得を必須としております。
+                  </div>
+
+                  <button
+                    type="button"
+                    className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-black text-xs shadow-md"
+                  >
+                    閉じる
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 3,
+          label: '③ 許可完了と正常打刻',
+          badge: '打刻完了',
+          title: '位置情報を「許可」して打刻完了（📍 GPS位置確認リンクが表示）',
+          desc: '位置情報を許可して再度「出勤」または「退勤」を押すと打刻が即座に完了します。記録された位置情報は「📍 GPS位置確認」からGoogleマップで確認できます。',
+          render: () => (
+            <div className="max-w-md mx-auto space-y-3">
+              <div className="text-center text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 py-1.5 px-3 rounded-xl">
+                ✓ 位置情報が正常に記録され、打刻が完了しました
+              </div>
+              <AuthenticClockWidget
+                time="09:00:00"
+                status="勤務中"
+                checkInTime="09:00"
+                checkOutTime=""
               />
             </div>
           )
