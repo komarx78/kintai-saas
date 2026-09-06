@@ -20,6 +20,7 @@ import OnboardingAdminDashboard from './pages/OnboardingAdminDashboard';
 import EmployeeOnboardingSubmission from './pages/EmployeeOnboardingSubmission';
 import EmployeeOnboardingWelcome from './pages/EmployeeOnboardingWelcome';
 import CompanySettingsDashboard from './pages/CompanySettingsDashboard';
+import CommunitySupportDashboard from './pages/CommunitySupportDashboard';
 import TrialEnded from './pages/TrialEnded';
 import { supabase } from './lib/supabase';
 
@@ -196,6 +197,12 @@ function App() {
             <CompanySettingsDashboard />
           </PrivateRoute>
         } />
+        <Route path="/support" element={
+          <PrivateRoute>
+            <CommunitySupportDashboard />
+          </PrivateRoute>
+        } />
+        <Route path="/community" element={<Navigate to="/support" replace />} />
         {/* 旧URLや未定義ルートへのアクセス対策リダイレクト */}
         <Route path="/admin/*" element={<Navigate to="/kintai/admin" replace />} />
         <Route path="/user/*" element={<Navigate to="/kintai/user" replace />} />

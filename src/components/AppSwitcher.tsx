@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Grid, Clock, CalendarDays, LayoutDashboard, DollarSign, UserCheck, Building2, Database } from 'lucide-react';
+import { Grid, Clock, CalendarDays, LayoutDashboard, DollarSign, UserCheck, Building2, Database, HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 type AppSwitcherProps = {
-  currentApp: 'kintai' | 'shift' | 'payroll' | 'onboarding' | 'portal';
+  currentApp: 'kintai' | 'shift' | 'payroll' | 'onboarding' | 'portal' | 'support';
   role: 'admin' | 'user';
 };
 
@@ -47,6 +47,14 @@ export default function AppSwitcher({ currentApp, role }: AppSwitcherProps) {
       path: (role === 'admin' || role === ('superadmin' as any)) ? '/shift/admin' : '/shift/user',
       description: 'シフトの作成と確認',
       iconBg: 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-sm ring-1 ring-white/30'
+    },
+    {
+      id: 'support',
+      name: '社内Q&A・目安箱',
+      icon: <HelpCircle className="w-4 h-4 text-white drop-shadow-sm" />,
+      path: '/support',
+      description: '社内FAQ・AI相談・目安箱',
+      iconBg: 'bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 shadow-sm ring-1 ring-white/30'
     },
     ...(role === 'admin' || role === ('superadmin' as any) ? [
       {

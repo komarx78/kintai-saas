@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2, Sparkles } from 'lucide-react';
+import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2, Sparkles, Bell, Edit3, HelpCircle } from 'lucide-react';
 import { fetchAnnouncements, type AnnouncementItem } from '../lib/announcements';
 import { fetchRevisionContracts, type RevisionContractDoc } from '../lib/revisionContracts';
-import { PortalCommunityHub } from '../components/PortalCommunityHub';
-import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 
 type UserData = {
   id: string;
@@ -22,7 +20,6 @@ export default function Portal() {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [pendingContractDoc, setPendingContractDoc] = useState<RevisionContractDoc | null>(null);
-  const [companyRulesText, setCompanyRulesText] = useState<string>(DEFAULT_EMPLOYMENT_RULES);
 
   useEffect(() => {
     fetchUserData();
@@ -62,23 +59,6 @@ export default function Portal() {
         const contracts = await fetchRevisionContracts(data.tenant_id);
         const pending = contracts.find(c => (c.user_id === user.id || c.user_name === data.name) && c.status === 'pending_signature');
         setPendingContractDoc(pending || null);
-
-        // 📘 就業規則の読み込み（LocalStorageキャッシュ または tenantsテーブル）
-        const cachedRules = localStorage.getItem(`company_employment_rules_${data.tenant_id}`) || localStorage.getItem('company_employment_rules');
-        if (cachedRules) {
-          setCompanyRulesText(cachedRules);
-        }
-
-        const { data: tData } = await supabase
-          .from('tenants')
-          .select('employment_rules_text')
-          .eq('id', data.tenant_id)
-          .maybeSingle();
-
-        if (tData?.employment_rules_text) {
-          setCompanyRulesText(tData.employment_rules_text);
-          localStorage.setItem(`company_employment_rules_${data.tenant_id}`, tData.employment_rules_text);
-        }
       }
     } catch (err) {
       console.error(err);
@@ -122,6 +102,15 @@ export default function Portal() {
       path: (role === 'admin' || role === 'superadmin') ? '/shift/admin' : '/shift/user',
       color: 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-md ring-1 ring-white/40',
       hoverColor: 'hover:border-indigo-300 hover:shadow-[0_15px_30px_-10px_rgba(99,102,241,0.3)]',
+    },
+    {
+      id: 'support',
+      title: '社内Q&A・目安箱',
+      description: '社内FAQ・就業規則AI自動相談デスク、改善目安箱（回収ボックス）を利用できます。',
+      icon: <HelpCircle className="w-7 h-7 text-white drop-shadow-md" />,
+      path: '/support',
+      color: 'bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 shadow-md ring-1 ring-white/40',
+      hoverColor: 'hover:border-purple-300 hover:shadow-[0_15px_30px_-10px_rgba(147,51,234,0.3)]',
     },
     {
       id: 'payroll',
@@ -246,20 +235,22 @@ export default function Portal() {
           </p>
         </div>
 
-        <div className={`grid gap-6 ${role === 'admin' || role === 'superadmin' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 max-w-4xl mx-auto'}`}>
+        <div className={`grid gap-6 ${role === 'admin' || role === 'superadmin' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 md:grid-cols-3 max-w-6xl mx-auto'}`}>
           {apps.filter(app => {
             if (role === 'superadmin') return true;
             if (role === 'admin') {
               if (app.id === 'kintai') return true;
               if (app.id === 'shift') return true;
+              if (app.id === 'support') return true;
               if (app.id === 'payroll') return true;
               if (app.id === 'onboarding') return true;
               if (app.id === 'settings') return true;
               return false;
             }
-            // 従業員が利用できるものは「勤怠・有給管理」「シフト管理」のみ
+            // 従業員が利用できるものは「勤怠・有給管理」「シフト管理」「社内Q&A・目安箱」
             if (app.id === 'kintai') return userData?.has_kintai_access !== false;
             if (app.id === 'shift') return userData?.has_shift_access !== false;
+            if (app.id === 'support') return true;
             return false;
           }).map((app, index) => (
             <button
@@ -293,15 +284,68 @@ export default function Portal() {
           ))}
         </div>
         
-        {/* 📢 社内ポータル コミュニティ＆サポートハブ（お知らせ・社内Q&A/AI相談・改善目安箱） */}
-        <PortalCommunityHub
-          tenantId={userData?.tenant_id || ''}
-          role={role}
-          userName={userData?.name || 'ゲスト'}
-          userId={userData?.id || ''}
-          announcements={announcements}
-          companyRulesText={companyRulesText}
-        />
+        {/* 📢 社内お知らせ掲示板 */}
+        <div className="mt-16 bg-white rounded-3xl shadow-sm border border-gray-200 p-6 sm:p-8 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+          <div className="flex items-center justify-between mb-6 pb-3 border-b border-gray-100">
+            <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
+              <span className="w-2.5 h-6 bg-gradient-to-b from-blue-600 to-indigo-600 rounded-full"></span>
+              <Bell className="w-5 h-5 text-indigo-600" />
+              社内お知らせ・アップデート
+            </h3>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/support')}
+                className="text-xs font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                社内Q&A・目安箱を開く
+              </button>
+              {(role === 'admin' || role === 'superadmin') && (
+                <button
+                  onClick={() => navigate('/settings/company')}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                  title="会社マスタ設定でお知らせを管理・編集"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  お知らせを管理
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            {announcements.length === 0 ? (
+              <p className="text-xs text-gray-400 py-4 text-center">現在新しいお知らせはありません</p>
+            ) : (
+              announcements.map((item) => (
+                <div key={item.id} className="py-3.5 hover:bg-slate-50/60 transition rounded-xl px-2 sm:px-3">
+                  <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-3">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                        {item.date}
+                      </span>
+                      {item.tag && (
+                        <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                          {item.tag}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-bold text-slate-800">
+                        {item.title}
+                      </h4>
+                      {item.content && (
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed whitespace-pre-line">
+                          {item.content}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </main>
     </div>
   );
