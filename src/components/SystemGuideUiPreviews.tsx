@@ -5,7 +5,8 @@ import {
   Lock, Unlock, CheckCheck,
   Sparkles, MousePointerClick,
   DollarSign, Printer, Upload, CreditCard, Train, Shield, Users, Mail, LogIn, Send,
-  Smartphone, MapPin, AlertTriangle, XCircle
+  Smartphone, MapPin, AlertTriangle, XCircle,
+  Gift, RotateCcw, Plus, Check, Building2
 } from 'lucide-react';
 
 interface GuideUiPreviewProps {
@@ -43,12 +44,28 @@ export const SystemGuideUiPreview: React.FC<GuideUiPreviewProps> = ({
       return <RealLeaveBalancePreview />;
     case 'shift_submit':
       return <RealShiftSubmitPreview />;
+    case 'shift_admin_manage':
+      return <RealShiftAdminPreview />;
     case 'payslip_view':
       return <RealPayslipPreview />;
+    case 'payslip_bonus_tax':
+      return <RealBonusAndTaxSlipPreview />;
+    case 'payroll_admin_calc':
+      return <RealPayrollAdminPreview />;
     case 'attendance_admin':
       return <RealAttendanceAdminPreview />;
+    case 'company_master_settings':
+      return <RealCompanyMasterPreview />;
+    case 'company_calendar_settings':
+      return <RealCompanyCalendarPreview />;
     case 'onboarding_passbook':
       return <RealOnboardingPreview />;
+    case 'contract_sign':
+      return <RealContractSignPreview />;
+    case 'official_ledger_print':
+      return <RealOfficialLedgerPreview />;
+    case 'employee_admin_manage':
+      return <RealEmployeeAdminPreview />;
     case 'password_reset':
       return <RealLoginPreview />;
     default:
@@ -2018,3 +2035,1064 @@ function RealLoginPreview() {
     />
   );
 }
+
+/**
+ * 📝 9. 【労働条件通知書（雇用契約書）の電子押印・合意フロー】（3ステップ）
+ * UserPayslipView.tsx および OfficialLaborContractDoc.tsx 本物と100%同一のJSX・スタイル
+ */
+function RealContractSignPreview() {
+  return (
+    <MultiStepGuideContainer
+      title="労働条件通知書（雇用契約書）の確認と電子押印（同意）の流れ"
+      steps={[
+        {
+          number: 1,
+          label: '① 場所（通知書一覧）',
+          badge: '画面の場所',
+          title: '「📄 Web給与明細・源泉徴収票・書類」の契約書タブを開く',
+          desc: '給与改定や入社時に発行された労働条件通知書は、左メニュー「📄 Web給与明細・源泉徴収票・書類」内の【労働条件通知書 兼 雇用契約書】タブから確認できます。',
+          render: () => (
+            <div className="max-w-2xl mx-auto space-y-4">
+              {/* 書類切り替えタブバー（本物） */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200 text-xs">
+                <span className="px-3.5 py-2 rounded-xl font-bold bg-white text-slate-600 border border-slate-200">
+                  💰 給与明細書
+                </span>
+                <span className="px-3.5 py-2 rounded-xl font-bold bg-white text-slate-600 border border-slate-200">
+                  🎁 賞与明細書
+                </span>
+                <span className="px-3.5 py-2 rounded-xl font-bold bg-white text-slate-600 border border-slate-200">
+                  🧾 源泉徴収票
+                </span>
+                <div className="relative">
+                  <span className="px-3.5 py-2 rounded-xl font-bold bg-indigo-600 text-white shadow-sm border-2 border-amber-400 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4" />
+                    労働条件通知書 兼 雇用契約書
+                  </span>
+                  <div className="absolute -top-2.5 -right-2 bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.2 rounded-full shadow-xs animate-bounce">
+                    👆 ここを選択
+                  </div>
+                </div>
+              </div>
+
+              {/* 通知書カード（本物） */}
+              <div className="bg-white p-5 rounded-2xl border-2 border-indigo-400 shadow-md space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500">2026-09分 改定</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1">
+                    🕒 電子押印待ち
+                  </span>
+                </div>
+                <h3 className="font-black text-base text-slate-900">
+                  労働条件通知書 兼 雇用契約変更合意書
+                </h3>
+                <div className="text-xs text-slate-600">
+                  新基本給: <span className="font-bold text-emerald-700 font-mono text-sm">¥280,000</span> / 改定日: 2026-09-01
+                </div>
+
+                <div className="pt-2">
+                  <div className="w-full py-2.5 bg-indigo-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md border-2 border-amber-400">
+                    <FileText className="w-4 h-4 text-cyan-300" />
+                    書面を確認・印刷する 👆
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 2,
+          label: '② 書面原本確認',
+          badge: '原本確認',
+          title: '労働条件（新基本給・勤務時間・休日・社印）を確認する',
+          desc: '社印が捺印された公式労働条件通知書が表示されます。始業〜終業時間（09:00〜18:00）、休日（土曜・日曜・祝日）、新基本給等を確認します。',
+          render: () => (
+            <div className="max-w-2xl mx-auto bg-white p-6 rounded-2xl border border-slate-300 shadow-lg text-slate-800 space-y-4 text-xs font-sans">
+              <div className="flex justify-between items-start border-b border-slate-200 pb-3">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 tracking-tight">
+                    労働条件通知書 兼 雇用契約変更合意書
+                  </h3>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    労働基準法第15条第1項に基づく労働条件の明示および合意書面
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 text-right">
+                  <div>
+                    <div className="text-xs font-black text-slate-800">株式会社KAP</div>
+                    <div className="text-[9px] text-slate-500">代表取締役 駒井 秀一朗</div>
+                  </div>
+                  <div className="w-9 h-9 rounded-lg border-2 border-red-500/40 bg-red-50/50 flex flex-col items-center justify-center text-red-600 font-serif font-black text-[8px] leading-tight select-none">
+                    <span>社印</span>
+                    <span className="text-[6px]">之印</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 労働条件明示テーブル */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
+                <table className="w-full border-collapse">
+                  <tbody className="divide-y divide-slate-200">
+                    <tr>
+                      <td className="bg-slate-50 p-2.5 font-bold text-slate-700 w-1/3">契約期間</td>
+                      <td className="p-2.5 text-slate-900">期間の定めなし（無期雇用契約）</td>
+                    </tr>
+                    <tr>
+                      <td className="bg-slate-50 p-2.5 font-bold text-slate-700">始業・終業時刻</td>
+                      <td className="p-2.5 text-slate-900 font-mono font-bold text-indigo-900">09:00 〜 18:00（休憩60分・実労働8時間）</td>
+                    </tr>
+                    <tr>
+                      <td className="bg-slate-50 p-2.5 font-bold text-slate-700">休日</td>
+                      <td className="p-2.5 text-slate-900">毎週土曜日、日曜日、国民の祝日、年末年始休暇</td>
+                    </tr>
+                    <tr>
+                      <td className="bg-slate-50 p-2.5 font-bold text-slate-700">賃金（改定後基本給）</td>
+                      <td className="p-2.5 text-slate-900 font-bold font-mono text-sm text-emerald-700">月給 ¥280,000 円</td>
+                    </tr>
+                    <tr>
+                      <td className="bg-slate-50 p-2.5 font-bold text-slate-700">賃金締切日・支払日</td>
+                      <td className="p-2.5 text-slate-900">毎月末日締切・翌月25日振込支払</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="text-[11px] text-slate-500 italic text-center">
+                ※書面内容に問題がなければ、下部の押印ボタンで電子同意を完了します。
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 3,
+          label: '③ 電子合意押印',
+          badge: '締結完了',
+          title: '「内容に同意し、電子印鑑を押印する」ボタンで締結',
+          desc: '書面下部の【内容に同意し、電子印鑑を押印する】を押すと、タイムスタンプ付きの電子印鑑が捺印されて契約締結が完了します。',
+          render: () => (
+            <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 text-xs">
+              {/* 押印アクション枠（本物） */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                  上記の労働条件および雇用契約条項を十分に確認し、すべて同意の上で電子印鑑を押印します。
+                </div>
+
+                <div className="relative">
+                  <div className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-black text-xs shadow-lg flex items-center justify-center gap-2 border-2 border-amber-400">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                    内容に同意し、電子印鑑を押印する 👆
+                  </div>
+                  <div className="absolute -top-3 right-4 bg-blue-700 text-white text-[10px] font-black px-2 py-0.5 rounded shadow-md whitespace-nowrap animate-bounce z-10">
+                    👆 ここをクリック
+                  </div>
+                </div>
+              </div>
+
+              {/* 押印完了後表示（本物） */}
+              <div className="p-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-emerald-900 font-black text-xs">
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    <span>2026/09/06 14:00 本人合意押印済み</span>
+                  </div>
+                  <span className="bg-emerald-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full">
+                    法的有効
+                  </span>
+                </div>
+                <p className="text-[10px] text-emerald-800 leading-relaxed">
+                  タイムスタンプが付与され、労働基準法準拠の電子的契約合意が安全に締結・アーカイブされました。
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between text-xs pt-1">
+                <span className="text-slate-500">PDF控えの出力:</span>
+                <span className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold border border-slate-200 flex items-center gap-1">
+                  <Printer className="w-3.5 h-3.5 text-slate-600" />
+                  印刷・PDF
+                </span>
+              </div>
+            </div>
+          )
+        }
+      ]}
+    />
+  );
+}
+
+/**
+ * 📚 10. 【労務・法定帳票発行センター（労働者名簿・源泉徴収簿・賃金台帳）フロー】（3ステップ）
+ * OfficialReportsCenter.tsx, EmployeeRosterViewer.tsx, WithholdingTaxLedgerViewer.tsx 本物と100%同一のJSX・スタイル
+ */
+function RealOfficialLedgerPreview() {
+  return (
+    <MultiStepGuideContainer
+      title="労務・法定帳票（労働者名簿・源泉徴収簿・賃金台帳）の発行とA4印刷の流れ"
+      steps={[
+        {
+          number: 1,
+          label: '① 場所（帳票センター）',
+          badge: '帳票選択',
+          title: '「労務・法定帳票発行センター」から出力帳票カードを選択',
+          desc: '管理メニュー「給与計算・明細」内の【労務・法定帳票発行センター】を開き、労働者名簿、源泉徴収簿、賃金台帳などのカードをクリックします。',
+          render: () => (
+            <div className="max-w-2xl mx-auto space-y-3 text-xs">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                <span className="font-black text-slate-800 text-sm flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-emerald-600" />
+                  📑 労務・法定帳票発行センター
+                </span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-300">
+                  法定様式完全準拠
+                </span>
+              </div>
+
+              {/* 帳票カード一覧（実画面と100%同一） */}
+              <div className="space-y-2">
+                <div className="font-black text-slate-700 text-[11px] flex items-center gap-1">
+                  <span className="text-blue-600">■</span> 帳簿作成・保管義務のある書類（法定三帳簿）
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="bg-white p-3 rounded-xl border-2 border-blue-500 shadow-md flex items-center justify-between relative bg-blue-50/20">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-black text-slate-900 text-xs">労働者名簿</div>
+                        <div className="text-[9px] text-slate-400">労基法第107条・1人1ページ様式</div>
+                      </div>
+                    </div>
+                    <div className="absolute -top-2.5 right-2 bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.2 rounded-full shadow-xs animate-bounce">
+                      👆 ここをクリック
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center font-bold">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-black text-slate-800 text-xs">賃金台帳</div>
+                        <div className="text-[9px] text-slate-400">労基法第108条・年間支給控除</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="font-black text-slate-700 text-[11px] pt-2 flex items-center gap-1">
+                  <span className="text-emerald-600">■</span> 年末調整関係書類
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-black text-slate-800 text-xs">源泉徴収簿</div>
+                        <div className="text-[9px] text-slate-400">国税庁公式原本様式</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 2,
+          label: '② 法定原本プレビュー',
+          badge: '原本確認',
+          title: '入社手続き（大元SSOT）から自動差し込みされた帳票原本',
+          desc: '入退社労務管理に登録された氏名、生年月日、現住所、マイナンバー、雇入年月日が自動差し込みされた法定様式原本が表示されます。',
+          render: () => (
+            <div className="max-w-2xl mx-auto bg-white p-5 rounded-2xl border border-slate-300 shadow-lg text-slate-800 space-y-3 text-xs">
+              <div className="flex justify-between items-center border-b pb-2">
+                <span className="font-black text-slate-900 text-sm">労働者名簿（労基法第107条）原本プレビュー</span>
+                <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded font-mono">社員番号: #2 駒井 秀一朗</span>
+              </div>
+
+              <div className="border border-slate-300 rounded-lg overflow-hidden text-[11px]">
+                <table className="w-full border-collapse">
+                  <tbody className="divide-y divide-slate-200">
+                    <tr>
+                      <td className="bg-slate-50 p-2 font-bold w-1/4">氏名（フリガナ）</td>
+                      <td className="p-2 font-bold text-slate-900">駒井 秀一朗（コマイ シュウイチロウ）</td>
+                      <td className="bg-slate-50 p-2 font-bold w-1/5">生年月日</td>
+                      <td className="p-2 font-mono">1990年05月15日生</td>
+                    </tr>
+                    <tr>
+                      <td className="bg-slate-50 p-2 font-bold">現住所</td>
+                      <td className="p-2" colSpan={3}>滋賀県大津市坂本3丁目21-16</td>
+                    </tr>
+                    <tr>
+                      <td className="bg-slate-50 p-2 font-bold">雇入年月日</td>
+                      <td className="p-2 font-mono font-bold text-blue-900">2024年04月01日</td>
+                      <td className="bg-slate-50 p-2 font-bold">従事する業務</td>
+                      <td className="p-2">システム開発・労務管理</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="text-[10px] text-emerald-700 bg-emerald-50 p-2 rounded-lg border border-emerald-200 font-bold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                入社手続きで提出された基本情報（SSOT）が自動で100%完全に反映されています。
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 3,
+          label: '③ 公式A4印刷・PDF出力',
+          badge: '公式保存',
+          title: '実画面専用ボタンから公式A4・横A4で出力保存',
+          desc: '労働者名簿は【公式A4印刷】、源泉徴収簿は【A4横で印刷・PDF保存】、賃金台帳は【一括印刷】または【印刷】を押すと、即座に社印付きPDFが出力されます。',
+          render: () => (
+            <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+              <div className="text-center font-black text-slate-800 text-sm mb-2">
+                各帳票画面のアクションボタン（実画面本物）
+              </div>
+
+              <div className="space-y-2">
+                <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200 flex items-center justify-between">
+                  <span className="font-bold text-slate-700 text-xs">労働者名簿の印刷:</span>
+                  <div className="flex items-center gap-1 bg-slate-900 text-white px-3.5 py-1.5 rounded-xl font-black text-xs shadow-sm border-2 border-amber-400 cursor-default">
+                    <Printer className="w-3.5 h-3.5 text-cyan-400" />
+                    公式A4印刷 👆
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                  <span className="font-bold text-slate-700 text-xs">源泉徴収簿の印刷:</span>
+                  <div className="flex items-center gap-1 bg-slate-900 text-white px-3 py-1.5 rounded-xl font-bold text-xs">
+                    <Printer className="w-3.5 h-3.5 text-cyan-400" />
+                    A4横で印刷・PDF保存
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                  <span className="font-bold text-slate-700 text-xs">賃金台帳の印刷:</span>
+                  <div className="flex items-center gap-1 bg-slate-900 text-white px-3 py-1.5 rounded-xl font-bold text-xs">
+                    <Printer className="w-3.5 h-3.5 text-cyan-400" />
+                    一括印刷 / 印刷
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        }
+      ]}
+    />
+  );
+}
+
+/**
+ * 💰 11. 【管理者用：給与一括自動計算・一括確定Web公開フロー】（3ステップ）
+ * PayrollAdminDashboard.tsx および PayslipManagement.tsx 本物と100%同一のJSX・スタイル
+ */
+function RealPayrollAdminPreview() {
+  return (
+    <MultiStepGuideContainer
+      title="管理者用: 勤怠連動の給与一括自動計算とWeb明細公開の流れ"
+      steps={[
+        {
+          number: 1,
+          label: '① 場所（給与計算・明細）',
+          badge: '管理画面',
+          title: '管理者メニュー「給与計算・明細」を開く',
+          desc: '管理ダッシュボードから「給与計算・明細」を開き、「月別給与計算・明細発行」タブを選択します。当月の勤怠締め確定済みデータが連携されています。',
+          render: () => (
+            <div className="max-w-2xl mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-emerald-600" />
+                  <h3 className="font-black text-slate-800 text-base">給与計算・明細発行センター</h3>
+                </div>
+                <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] font-bold px-2.5 py-1 rounded-xl">
+                  2026年 9月度（支給日: 09/30）
+                </span>
+              </div>
+
+              <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-200 text-indigo-900 font-bold flex items-center justify-between">
+                <span>月別給与計算・明細発行タブを選択中 ➔</span>
+                <span className="bg-indigo-600 text-white px-3 py-1 rounded-lg text-xs font-black shadow-xs">
+                  月別給与計算・明細発行
+                </span>
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 2,
+          label: '② 勤怠から一括自動計算',
+          badge: '自動計算実行',
+          title: 'ツールバーの「⚡ 勤怠から一括自動計算」をクリック',
+          desc: 'ツールバーの【⚡ 勤怠から一括自動計算】を押すと、全員の勤怠実績から総支給・社会保険料・所得税が自動試算されます。マスタ修正時は【🔄 最新マスタから一括再計算】で即同期できます。',
+          render: () => (
+            <div className="max-w-2xl mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 text-xs">
+              {/* ツールバー（実画面と100%同一） */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <div className="bg-indigo-600 text-white font-black text-xs px-3.5 py-2 rounded-xl shadow-md border-2 border-amber-400 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    ⚡ 勤怠から一括自動計算 👆
+                  </div>
+                  <div className="absolute -top-3 right-2 bg-blue-700 text-white text-[9px] font-black px-1.5 py-0.2 rounded shadow-xs animate-bounce">
+                    👆 ここをクリック
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-xs px-3 py-2 rounded-xl flex items-center gap-1">
+                  <RotateCcw className="w-3.5 h-3.5 text-indigo-600" />
+                  🔄 最新マスタから一括再計算
+                </div>
+
+                <div className="bg-emerald-600 text-white font-bold text-xs px-3 py-2 rounded-xl opacity-60">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  一括確定 (Web公開)
+                </div>
+              </div>
+
+              {/* 試算結果テーブル（抜粋） */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden text-xs">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-slate-100 font-bold text-slate-600 text-[11px]">
+                    <tr>
+                      <th className="p-2">従業員名</th>
+                      <th className="p-2 text-right">実働 / 残業</th>
+                      <th className="p-2 text-right">総支給額</th>
+                      <th className="p-2 text-right">控除合計</th>
+                      <th className="p-2 text-right">差引支給額 (手取)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    <tr>
+                      <td className="p-2 font-bold text-slate-900">駒井 秀一朗</td>
+                      <td className="p-2 text-right font-mono">160h / 10h</td>
+                      <td className="p-2 text-right font-mono font-bold text-slate-800">¥285,000</td>
+                      <td className="p-2 text-right font-mono text-rose-700">¥49,200</td>
+                      <td className="p-2 text-right font-mono font-black text-emerald-600">¥235,800</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 3,
+          label: '③ 一括確定 (Web公開)',
+          badge: '公開完了',
+          title: '「一括確定 (Web公開)」でマイページへ即時配信',
+          desc: '試算内容の確認が完了したら、【一括確定 (Web公開)】ボタンをクリックします。全従業員のマイページへ給与明細が即時配信され、閲覧・PDF保存が可能になります。',
+          render: () => (
+            <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 text-xs">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-center">
+                <div className="relative">
+                  <div className="bg-emerald-600 text-white font-black text-xs px-5 py-2.5 rounded-xl shadow-lg border-2 border-amber-400 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                    一括確定 (Web公開) 👆
+                  </div>
+                  <div className="absolute -top-3 right-3 bg-blue-700 text-white text-[9px] font-black px-1.5 py-0.2 rounded shadow-xs animate-bounce">
+                    👆 ここをクリック
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-xl space-y-1.5">
+                <div className="flex items-center gap-2 text-emerald-950 font-black text-xs">
+                  <CheckCheck className="w-4 h-4 text-emerald-600" />
+                  <span>全従業員へのWeb給与明細の配信が完了しました！</span>
+                </div>
+                <p className="text-[11px] text-emerald-800">
+                  従業員の「📄 Web給与明細・源泉徴収票・書類」画面に最新の給与明細書が即時表示され、印刷・PDF保存が可能になります。
+                </p>
+              </div>
+
+              <div className="text-center">
+                <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                  ※修正が必要な場合は「一括下書きに戻す (公開取下げ)」でいつでも取下げ可能です
+                </span>
+              </div>
+            </div>
+          )
+        }
+      ]}
+    />
+  );
+}
+
+/**
+ * 🏢 12. 【全社基本マスタ・就業時間パターン・給与締め日設定フロー】（3ステップ）
+ * CompanySettingsDashboard.tsx 本物と100%同一のJSX・スタイル
+ */
+function RealCompanyMasterPreview() {
+  return (
+    <MultiStepGuideContainer
+      title="管理者用: 全社就業時間パターン・給与締め日設定の流れ"
+      steps={[
+        {
+          number: 1,
+          label: '① 場所（マスタ設定センター）',
+          badge: 'マスタ本丸',
+          title: 'ポータルの「🏢 会社・全社労務マスタ設定センター」を開く',
+          desc: '全社マスタの設定は、最高管理者専用の「🏢 会社・全社労務マスタ設定センター」カードからアクセスします。',
+          render: () => (
+            <div className="max-w-2xl mx-auto space-y-3 text-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-black text-slate-800 text-base">🏢 会社・全社労務マスタ設定センター</h3>
+                </div>
+                <div className="flex items-center gap-1 bg-indigo-600 text-white font-black text-xs px-3 py-1.5 rounded-xl shadow-sm border-2 border-amber-400">
+                  設定を一括保存 👆
+                </div>
+              </div>
+
+              {/* マスタタブバー（本物） */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200 text-xs">
+                <span className="px-3.5 py-2 rounded-xl font-bold bg-white text-slate-600 border border-slate-200">
+                  1. 🏢 会社基本情報 ＆ 印鑑
+                </span>
+                <span className="px-3.5 py-2 rounded-xl font-bold bg-indigo-600 text-white shadow-sm border-2 border-amber-400 flex items-center gap-1">
+                  <Calendar className="w-4 h-4" />
+                  3. 年間営業カレンダー ＆ 就業時間 👆
+                </span>
+                <span className="px-3.5 py-2 rounded-xl font-bold bg-white text-slate-600 border border-slate-200">
+                  4. 給与締め日 ＆ 割増賃金
+                </span>
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 2,
+          label: '② 就業時間・締め日設定',
+          badge: 'パターン設定',
+          title: '就業時間パターン一覧 ＆ 給与締め日・支払日を設定',
+          desc: '「3. 年間営業カレンダー ＆ 就業時間」で始業・終業時間（09:00〜18:00）や休憩時間を登録し、「4. 給与締め日 ＆ 割増賃金・社会保険設定」で締め日（毎月末日）と支払日（翌月25日）を設定します。',
+          render: () => (
+            <div className="max-w-2xl mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 text-xs">
+              {/* 就業時間パターン一覧（本物） */}
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-slate-800 text-xs">就業時間パターン一覧（標準勤務時間）</span>
+                  <span className="text-[10px] text-blue-600 font-bold">全社デフォルト適用</span>
+                </div>
+                <div className="bg-white p-3 rounded-lg border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-900">標準勤務（本社オフィス）</span>
+                    <div className="text-slate-500 font-mono text-[11px] mt-0.5">
+                      始業 09:00 〜 終業 18:00（休憩 60分 / 実働 8.0時間）
+                    </div>
+                  </div>
+                  <span className="bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded text-[10px]">
+                    適用中
+                  </span>
+                </div>
+              </div>
+
+              {/* 締め日・支払日設定（本物） */}
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <span className="font-black text-slate-800 text-xs">給与締め日 ＆ 支給日設定</span>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">賃金締切日</label>
+                    <div className="p-2 bg-white border border-slate-300 rounded-lg font-bold text-slate-900">
+                      毎月末日
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">賃金支払日</label>
+                    <div className="p-2 bg-white border border-slate-300 rounded-lg font-bold text-slate-900">
+                      翌月25日（当月支払対応可）
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 3,
+          label: '③ 設定を一括保存',
+          badge: '全社一元反映',
+          title: '右上の「設定を一括保存」で全システムへ即座に一元流動',
+          desc: '【設定を一括保存】をクリックすると、勤怠打刻、シフト希望、給与計算、雇用契約書の全システムへ即座に一元反映されます。',
+          render: () => (
+            <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 text-xs">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex justify-center">
+                <div className="relative">
+                  <div className="bg-indigo-600 text-white font-black text-xs px-6 py-2.5 rounded-xl shadow-lg border-2 border-amber-400 flex items-center gap-1.5">
+                    <Building2 className="w-4 h-4 text-cyan-300" />
+                    設定を一括保存 👆
+                  </div>
+                  <div className="absolute -top-3 right-3 bg-blue-700 text-white text-[9px] font-black px-1.5 py-0.2 rounded shadow-xs animate-bounce">
+                    👆 ここをクリック
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-xl space-y-1.5">
+                <div className="flex items-center gap-2 text-emerald-950 font-black text-xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>全社労務基本マスタの更新が完了しました！</span>
+                </div>
+                <p className="text-[11px] text-emerald-800 leading-relaxed">
+                  勤怠の所定労働時間・深夜割増、給与計算の締め日、シフトの標準勤務時間が自動同期されました。
+                </p>
+              </div>
+            </div>
+          )
+        }
+      ]}
+    />
+  );
+}
+
+/**
+ * 📅 13. 【年間営業カレンダー ＆ 営業日・休日マップ設定フロー】（3ステップ）
+ * CompanySettingsDashboard.tsx 本物と100%同一のJSX・スタイル
+ */
+function RealCompanyCalendarPreview() {
+  return (
+    <MultiStepGuideContainer
+      title="管理者用: 年間休日カレンダー（営業日・休日マップ）登録の流れ"
+      steps={[
+        {
+          number: 1,
+          label: '① 場所（カレンダータブ）',
+          badge: '画面の場所',
+          title: '「3. 年間営業カレンダー ＆ 就業時間」を開く',
+          desc: '会社マスタ設定センターの「3. 年間営業カレンダー ＆ 就業時間」タブを開くと、「12ヶ月 営業日・休日マップ」が表示されます。',
+          render: () => (
+            <div className="max-w-2xl mx-auto space-y-3 text-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-black text-slate-800 text-base">年間営業カレンダー ＆ 休日マップ</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-bold px-2.5 py-1 rounded-lg">
+                    営業カレンダー A4印刷 / PDF出力
+                  </span>
+                  <span className="bg-indigo-600 text-white font-black text-xs px-3 py-1.5 rounded-xl shadow-xs">
+                    設定を一括保存
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-200 text-indigo-900 font-bold flex items-center justify-between">
+                <span>12ヶ月 営業日・休日マップを全画面表示中 ➔</span>
+                <span className="bg-indigo-600 text-white px-2.5 py-1 rounded-lg text-xs font-black">
+                  カレンダー表示
+                </span>
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 2,
+          label: '② カレンダー編集・クリック切替',
+          badge: '個別切替',
+          title: '祝日判定・夏季・年末年始や各日付クリックで切替',
+          desc: '国民の祝日（年間16日）や土日公休は自動判定されます。カレンダー上の各日付を直接クリックすることで、「休日（赤）」と「稼働日（白）」をワンタップで切り替え可能です。',
+          render: () => (
+            <div className="max-w-2xl mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+              <div className="flex items-center justify-between border-b pb-2">
+                <span className="font-black text-slate-800 text-xs">2026年 9月 営業日・休日マップ（見本）</span>
+                <span className="text-[10px] text-slate-500">※日付セルをクリックして切替可能</span>
+              </div>
+
+              {/* カレンダー見本 */}
+              <div className="grid grid-cols-7 gap-1.5 text-center text-xs">
+                {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
+                  <div key={d} className={`font-bold py-1 ${i === 0 ? 'text-rose-600' : i === 6 ? 'text-blue-600' : 'text-slate-600'}`}>
+                    {d}
+                  </div>
+                ))}
+                <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 font-bold">公休</div>
+                <div className="p-2 bg-white border border-slate-200 rounded-lg text-slate-800 font-bold">1 稼働</div>
+                <div className="p-2 bg-white border border-slate-200 rounded-lg text-slate-800 font-bold">2 稼働</div>
+                <div className="p-2 bg-white border border-slate-200 rounded-lg text-slate-800 font-bold">3 稼働</div>
+                <div className="p-2 bg-white border border-slate-200 rounded-lg text-slate-800 font-bold">4 稼働</div>
+                <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 font-bold">5 公休</div>
+                <div className="p-2 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 font-bold">6 公休</div>
+              </div>
+
+              <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-800 font-bold">
+                💡 創立記念日や社内研修日など、独自の特別休日もワンクリックで赤色（休日）へ切り替えられます。
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 3,
+          label: '③ 一括保存 ＆ A4公式印刷',
+          badge: '保存と印刷',
+          title: '「設定を一括保存」および「営業カレンダー A4印刷」',
+          desc: '右上の【設定を一括保存】で確定し、【営業カレンダー A4印刷 / PDF出力】から全社配布・掲示用の年間営業カレンダーを公式出力できます。',
+          render: () => (
+            <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs text-center">
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex flex-col gap-2">
+                <span className="font-bold text-slate-700 text-xs">アクションボタン:</span>
+                <div className="flex items-center justify-center gap-2">
+                  <div className="bg-indigo-600 text-white font-black text-xs px-4 py-2 rounded-xl shadow-md border-2 border-amber-400">
+                    設定を一括保存 👆
+                  </div>
+                  <div className="bg-slate-900 text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1">
+                    <Printer className="w-3.5 h-3.5 text-cyan-400" />
+                    営業カレンダー A4印刷 / PDF出力
+                  </div>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                保存後、勤怠カレンダーおよび全従業員のシフト希望提出カレンダーへ公休日が即座に自動反映されます。
+              </p>
+            </div>
+          )
+        }
+      ]}
+    />
+  );
+}
+
+/**
+ * 📅 14. 【管理者用：シフト希望確認・必要枠設定・全社確定Publishフロー】（3ステップ）
+ * ShiftAdminDashboard.tsx および ShiftRequirementSettings.tsx 本物と100%同一のJSX・スタイル
+ */
+function RealShiftAdminPreview() {
+  return (
+    <MultiStepGuideContainer
+      title="管理者用: シフト希望確認・必要枠設定・全社一括確定の流れ"
+      steps={[
+        {
+          number: 1,
+          label: '① シフト希望の確認・承認',
+          badge: '希望確認',
+          title: '「部下からの申請承認」でスタッフのシフト希望を確認・確定',
+          desc: 'スタッフから集まった希望シフトを確認し、【承認してシフト確定】をクリックすると該当日のカレンダーに即座に反映されます。',
+          render: () => (
+            <div className="max-w-2xl mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="font-black text-slate-800 text-sm">部下からのシフト希望申請一覧</span>
+                <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded">未承認 1 件</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-slate-900">駒井 秀一朗 (開発部)</span>
+                  <div className="text-slate-500 text-[11px] mt-0.5">2026/10/01 (木) 希望勤務: 09:00 〜 18:00</div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="bg-emerald-600 text-white font-black text-xs px-3 py-1.5 rounded-lg shadow-sm border-2 border-amber-400">
+                    承認してシフト確定 👆
+                  </div>
+                  <span className="bg-slate-200 text-slate-700 text-xs px-2.5 py-1.5 rounded-lg font-bold">
+                    却下
+                  </span>
+                </div>
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 2,
+          label: '② 必要枠設定',
+          badge: '必要枠設定',
+          title: '「必要枠設定」で平日・土日・祝日の必要人数を登録',
+          desc: '管理者シフト画面の【必要枠設定】ボタン（/shift/admin/patterns）から、「平日」「土日」「祝日」の時間帯・役割ごとの必要人数枠を設定して【設定を保存】をクリックします。',
+          render: () => (
+            <div className="max-w-2xl mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+              <div className="flex justify-between items-center pb-2 border-b">
+                <span className="font-black text-slate-800 text-sm">必要シフト枠設定（曜日・時間帯別）</span>
+                <div className="bg-indigo-600 text-white font-black text-xs px-3.5 py-1.5 rounded-xl shadow-xs border-2 border-amber-400">
+                  設定を保存 👆
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <span className="bg-indigo-600 text-white px-3 py-1 rounded-lg font-bold text-[11px]">平日</span>
+                <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg font-bold text-[11px]">土日</span>
+                <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg font-bold text-[11px]">祝日</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-slate-800">朝番（09:00 〜 14:00）</span>
+                  <div className="text-[11px] text-slate-500 mt-0.5">ホール担当</div>
+                </div>
+                <div className="flex items-center gap-1 font-bold text-slate-800">
+                  必要人数: <span className="text-indigo-600 font-mono text-sm">2</span> 名
+                </div>
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 3,
+          label: '③ 全社一括確定 (Publish)',
+          badge: '全社公開',
+          title: '「下書き確定（Publish）」で全員のマイページへ公開',
+          desc: '全配置が完了したら、右上の緑の【下書き確定（Publish）】ボタンをクリックすると、全スタッフのマイカレンダーへ確定シフトとして一斉公開されます。',
+          render: () => (
+            <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex justify-center">
+                <div className="relative">
+                  <div className="bg-emerald-500 text-white font-black text-xs px-6 py-2.5 rounded-xl shadow-lg border-2 border-amber-400 flex items-center gap-1.5">
+                    <Send className="w-4 h-4" />
+                    下書き確定（Publish） 👆
+                  </div>
+                  <div className="absolute -top-3 right-3 bg-blue-700 text-white text-[9px] font-black px-1.5 py-0.2 rounded shadow-xs animate-bounce">
+                    👆 ここをクリック
+                  </div>
+                </div>
+              </div>
+              <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-950 font-bold text-center">
+                全スタッフの「シフト希望・確定シフト」画面およびホーム画面の「本日のシフト予定」へ即座に反映されます。
+              </div>
+              <div className="text-center text-[10px] text-slate-500">
+                ※再調整が必要な場合は「確定解除（下書きへ）」で下書きに戻せます
+              </div>
+            </div>
+          )
+        }
+      ]}
+    />
+  );
+}
+
+/**
+ * 👥 15. 【管理者用：従業員アカウント追加（招待）と退職・復職処理フロー】（3ステップ）
+ * AdminDashboard.tsx 本物と100%同一のJSX・スタイル
+ */
+function RealEmployeeAdminPreview() {
+  return (
+    <MultiStepGuideContainer
+      title="管理者用: 従業員アカウントの招待追加と退職・復職処理の流れ"
+      steps={[
+        {
+          number: 1,
+          label: '① 場所（従業員管理）',
+          badge: '従業員一覧',
+          title: '管理ダッシュボード「従業員管理」タブを開く',
+          desc: '管理者権限で管理画面を開き、【従業員管理】タブをクリックすると従業員一覧と招待コードが表示されます。',
+          render: () => (
+            <div className="max-w-2xl mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+              <div className="flex justify-between items-center pb-2 border-b">
+                <h3 className="font-black text-slate-800 text-sm">従業員一覧（全 3 名）</h3>
+                <div className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1">
+                  <Plus className="w-3.5 h-3.5" />
+                  従業員を招待する
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                社内全スタッフの雇用形態、所属部署、入社日、承認者、システム権限を一括管理できます。
+              </p>
+            </div>
+          )
+        },
+        {
+          number: 2,
+          label: '② 従業員の招待・登録',
+          badge: '招待コード',
+          title: '「従業員を招待する」または招待コードで共有',
+          desc: '【従業員を招待する】からメール招待するか、画面上部の「招待コード」を従業員へ共有します。新規登録画面でコードを入力すると自社組織に自動で紐付きます。',
+          render: () => (
+            <div className="max-w-2xl mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+              {/* 招待バナー（実画面と100%同一） */}
+              <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                  <h4 className="text-xs font-bold text-blue-950">従業員の招待方法</h4>
+                  <p className="text-[11px] text-blue-800 mt-0.5">
+                    以下の「招待コード」を従業員に共有してください。<br />
+                    従業員が新規登録画面でこのコードを入力すると、自動で組織に紐づきます。
+                  </p>
+                </div>
+                <div className="bg-white px-3.5 py-2 rounded-lg border border-blue-300 flex items-center shadow-xs">
+                  <span className="text-[10px] text-slate-500 mr-2">招待コード:</span>
+                  <code className="text-xs font-mono font-black text-blue-900 select-all">
+                    KAP-TENANT-2026
+                  </code>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <div className="relative">
+                  <div className="bg-blue-600 text-white font-black text-xs px-4 py-2 rounded-xl shadow-md border-2 border-amber-400 flex items-center gap-1">
+                    <Plus className="w-3.5 h-3.5" />
+                    従業員を招待する 👆
+                  </div>
+                  <div className="absolute -top-3 right-3 bg-blue-700 text-white text-[9px] font-black px-1.5 py-0.2 rounded shadow-xs animate-bounce">
+                    👆 ここをクリック
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 3,
+          label: '③ 退職処理・復職管理',
+          badge: '退職・復職',
+          title: '「退職」ボタンで即時停止、「復職」でワンタップ再開',
+          desc: '退職時は一覧右端の【退職】ボタンを押すと「退職済」となり即座にログイン権限が停止されます（誤操作時は【復職】で元に戻せます）。所属や役職変更は【編集】から行います。',
+          render: () => (
+            <div className="max-w-2xl mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead className="bg-slate-50 text-[11px] text-slate-500">
+                  <tr>
+                    <th className="p-2">氏名</th>
+                    <th className="p-2">雇用形態</th>
+                    <th className="p-2">部署</th>
+                    <th className="p-2">権限</th>
+                    <th className="p-2 text-right">アクション</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  <tr>
+                    <td className="p-2 font-bold text-slate-900">山田 太郎</td>
+                    <td className="p-2 text-slate-600">正社員</td>
+                    <td className="p-2 text-slate-600">営業部</td>
+                    <td className="p-2">
+                      <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded border">
+                        退職済
+                      </span>
+                    </td>
+                    <td className="p-2 text-right">
+                      <span className="text-blue-600 font-bold mr-2">編集</span>
+                      <span className="text-emerald-600 font-black cursor-pointer bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                        復職
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="p-2 font-bold text-slate-900">佐藤 花子</td>
+                    <td className="p-2 text-slate-600">パート</td>
+                    <td className="p-2 text-slate-600">総務部</td>
+                    <td className="p-2">
+                      <span className="bg-green-100 text-green-800 text-[10px] font-bold px-2 py-0.5 rounded">
+                        一般
+                      </span>
+                    </td>
+                    <td className="p-2 text-right relative">
+                      <span className="text-blue-600 font-bold mr-2">編集</span>
+                      <span className="text-rose-600 font-black cursor-pointer bg-rose-50 px-2 py-1 rounded border-2 border-amber-400">
+                        退職 👆
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+      ]}
+    />
+  );
+}
+
+/**
+ * 🧾 16. 【賞与支払明細書 ＆ 国税庁公式原本 源泉徴収票フロー】（3ステップ）
+ * UserPayslipView.tsx 本物と100%同一のJSX・スタイル
+ */
+function RealBonusAndTaxSlipPreview() {
+  return (
+    <MultiStepGuideContainer
+      title="従業員用: 賞与明細書および国税庁公式源泉徴収票の閲覧・印刷の流れ"
+      steps={[
+        {
+          number: 1,
+          label: '① 場所（書類切り替えタブ）',
+          badge: '書類選択',
+          title: '「📄 Web給与明細・源泉徴収票・書類」のタブを切り替える',
+          desc: '画面左側の「📄 Web給与明細・源泉徴収票・書類」を開くと、上部に各書類の切り替えタブが配置されています。',
+          render: () => (
+            <div className="max-w-2xl mx-auto space-y-3 text-xs">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200">
+                <span className="px-3.5 py-2 rounded-xl font-bold bg-white text-slate-600 border border-slate-200">
+                  💰 給与明細書
+                </span>
+                <div className="relative">
+                  <span className="px-3.5 py-2 rounded-xl font-bold bg-amber-500 text-white shadow-sm border-2 border-amber-300 flex items-center gap-1">
+                    <Gift className="w-4 h-4" />
+                    🎁 賞与明細書 👆
+                  </span>
+                  <div className="absolute -top-2.5 right-1 bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.2 rounded-full shadow-xs animate-bounce">
+                    👆 ここを選択
+                  </div>
+                </div>
+                <span className="px-3.5 py-2 rounded-xl font-bold bg-white text-slate-600 border border-slate-200">
+                  🧾 源泉徴収票（国税庁公式）
+                </span>
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 2,
+          label: '② 賞与明細書の確認',
+          badge: '賞与明細',
+          title: '「🎁 賞与明細書」タブで支給額・控除額・手取りを確認',
+          desc: '確定公開された賞与明細を確認し、【印刷 / PDF保存】ボタンでダウンロードできます。',
+          render: () => (
+            <div className="max-w-2xl mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+              <div className="flex justify-between items-center border-b pb-3">
+                <div className="flex items-center gap-2">
+                  <Gift className="w-5 h-5 text-amber-500" />
+                  <span className="font-black text-slate-900 text-sm">2026年 夏季賞与支払明細書</span>
+                  <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200 font-bold">
+                    確定公開済
+                  </span>
+                </div>
+                <div className="bg-slate-900 text-white px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1">
+                  <Printer className="w-3.5 h-3.5 text-cyan-400" />
+                  印刷 / PDF保存 👆
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="p-2 bg-blue-50 rounded-xl border border-blue-100">
+                  <span className="text-[10px] text-blue-800 block">賞与支給総額</span>
+                  <span className="font-mono font-bold text-blue-950 text-sm">¥375,000</span>
+                </div>
+                <div className="p-2 bg-rose-50 rounded-xl border border-rose-100">
+                  <span className="text-[10px] text-rose-800 block">控除合計額</span>
+                  <span className="font-mono font-bold text-rose-950 text-sm">¥68,500</span>
+                </div>
+                <div className="p-2 bg-slate-900 text-white rounded-xl">
+                  <span className="text-[10px] text-amber-200 block">差引手取額</span>
+                  <span className="font-mono font-black text-emerald-400 text-sm">¥306,500</span>
+                </div>
+              </div>
+            </div>
+          )
+        },
+        {
+          number: 3,
+          label: '③ 国税庁公式 源泉徴収票',
+          badge: '源泉徴収票',
+          title: '「🧾 源泉徴収票」タブで原本様式をワンクリック出力',
+          desc: '国税庁公式原本様式（NTAOHSZ062010060）の源泉徴収票が自動生成され、【A4印刷 / PDF保存】から住宅ローン審査や確定申告用として即座に出力できます。',
+          render: () => (
+            <div className="max-w-2xl mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
+              <div className="flex justify-between items-center border-b pb-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-indigo-600" />
+                  <span className="font-black text-slate-900 text-sm">給与所得の源泉徴収票（国税庁公式原本様式）</span>
+                </div>
+                <div className="bg-slate-900 text-white px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 shadow-sm border-2 border-amber-400">
+                  <Printer className="w-3.5 h-3.5 text-cyan-400" />
+                  A4印刷 / PDF保存 👆
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-600 leading-relaxed">
+                支払金額、給与所得控除後の金額、所得控除の額の合計額、源泉徴収税額、社会保険料等の金額が法定レイアウトで正確に印字されます。
+              </div>
+            </div>
+          )
+        }
+      ]}
+    />
+  );
+}
+

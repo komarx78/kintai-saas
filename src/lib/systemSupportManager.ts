@@ -74,9 +74,17 @@ export const SYSTEM_GUIDE_PREVIEW_TYPES = {
   kintai_gps_help: '📍 スマホGPS位置情報エラー・端末設定許可画面',
   leave_request: '🌴 有給休暇・代休 残数ウィジェット（保有残数・年間5日義務）',
   shift_submit: '📅 シフト希望・確定シフト画面（月間カレンダー希望入力・確定シフト）',
+  shift_admin_manage: '📅 管理者: シフト管理（部下申請承認・必要枠設定・下書き確定Publish）',
   payslip_view: '📄 Web給与明細・源泉徴収票画面（支給・控除・差引支給額）',
+  payslip_bonus_tax: '🎁 賞与支払明細書 ＆ 国税庁公式源泉徴収票画面',
+  payroll_admin_calc: '💰 管理者: 給与計算・明細（勤怠から一括自動計算・一括確定Web公開）',
   attendance_admin: '🏢 管理者: 月間勤怠・出勤簿管理（打刻・休憩直接修正・締め確定）',
-  onboarding_passbook: '📄 入退社労務画面（通帳写真撮影・電子契約押印）',
+  company_master_settings: '🏢 管理者: 会社・全社労務マスタ設定（就業時間パターン・給与締め日設定）',
+  company_calendar_settings: '📅 管理者: 年間営業カレンダー ＆ 休日マップ（営業日・休日・A4印刷）',
+  onboarding_passbook: '📄 入社手続き・通帳写真提出と口座登録画面',
+  contract_sign: '📝 労働条件通知書 兼 雇用契約書 電子押印・同意画面',
+  official_ledger_print: '📚 労務・法定帳票発行センター（労働者名簿・源泉徴収簿・賃金台帳の公式A4印刷）',
+  employee_admin_manage: '👥 管理者: 従業員管理（招待コード・追加・退職・復職管理）',
   password_reset: '⚙️ ログイン・パスワード再設定画面'
 } as const;
 
@@ -85,14 +93,21 @@ export function resolveGuidePreviewType(item: Partial<SystemFaqItem>): string {
   if (item.preview_type) return item.preview_type;
   
   const q = `${item.question || ''} ${item.keyword || ''} ${item.answer || ''}`;
+  if (q.includes('契約書') || q.includes('電子押印') || q.includes('電子署名') || q.includes('同意') || q.includes('労働条件通知書')) return 'contract_sign';
+  if (q.includes('名簿') || q.includes('名ぼ') || q.includes('源泉徴収簿') || q.includes('賃金台帳') || q.includes('法定帳票') || q.includes('公式A4印刷')) return 'official_ledger_print';
+  if (q.includes('営業カレンダー') || q.includes('営業日・休日マップ') || q.includes('年間休日')) return 'company_calendar_settings';
+  if (q.includes('所定時間') || q.includes('締め日') || q.includes('会社マスタ') || q.includes('全社労務マスタ')) return 'company_master_settings';
+  if (q.includes('勤怠から一括自動計算') || q.includes('給与計算') || q.includes('一括確定')) return 'payroll_admin_calc';
+  if (q.includes('賞与明細') || q.includes('源泉徴収票')) return 'payslip_bonus_tax';
+  if (q.includes('必要枠') || q.includes('Publish') || q.includes('シフト確定') || q.includes('シフト管理')) return 'shift_admin_manage';
+  if (q.includes('招待コード') || q.includes('退職') || q.includes('復職') || q.includes('従業員管理')) return 'employee_admin_manage';
   if (q.includes('GPS') || q.includes('位置情報')) return 'kintai_gps_help';
-  if (q.includes('出勤簿') || q.includes('締め確定') || q.includes('月次締め') || q.includes('全社集計') || q.includes('打刻編集') || q.includes('所定時間') || q.includes('年間休日') || q.includes('会社マスタ')) return 'attendance_admin';
+  if (q.includes('出勤簿') || q.includes('締め確定') || q.includes('月次締め') || q.includes('全社集計') || q.includes('打刻編集')) return 'attendance_admin';
   if (q.includes('特別休暇') || q.includes('慶弔') || q.includes('忌引き') || q.includes('結婚') || q.includes('代休') || q.includes('有給') || q.includes('有休') || q.includes('残数') || q.includes('有給残') || q.includes('保有日数') || q.includes('5日義務') || q.includes('半休') || q.includes('休暇')) return 'leave_request';
   if (q.includes('月次勤怠') || q.includes('月間勤怠') || q.includes('照会') || q.includes('修正申請') || q.includes('打刻忘れ') || q.includes('押し忘れ') || q.includes('間違え') || q.includes('CSV') || q.includes('PDF出力') || q.includes('印刷') || q.includes('申請する') || q.includes('休憩時間')) return 'monthly_attendance';
   if (q.includes('打刻') || q.includes('出勤') || q.includes('退勤') || q.includes('ステータス') || q.includes('夜勤') || q.includes('時計')) return 'kintai_clock';
-  if (q.includes('シフト') || q.includes('希望提出') || q.includes('勤務パターン')) return 'shift_submit';
-  if (q.includes('給与') || q.includes('明細') || q.includes('源泉') || q.includes('賞与') || q.includes('試算')) return 'payslip_view';
-  if (q.includes('通帳') || q.includes('入社') || q.includes('契約書') || q.includes('電子署名') || q.includes('押印') || q.includes('名ぼ') || q.includes('名簿') || q.includes('労働条件')) return 'onboarding_passbook';
+  if (q.includes('シフト') || q.includes('希望提出')) return 'shift_submit';
+  if (q.includes('通帳') || q.includes('入社')) return 'onboarding_passbook';
   if (q.includes('パスワード') || q.includes('ログイン') || q.includes('再設定')) return 'password_reset';
 
   switch (item.category) {
@@ -102,7 +117,7 @@ export function resolveGuidePreviewType(item: Partial<SystemFaqItem>): string {
     case 'payroll': return 'payslip_view';
     case 'onboarding': return 'onboarding_passbook';
     case 'general': return 'password_reset';
-    case 'settings': return 'attendance_admin';
+    case 'settings': return 'company_master_settings';
     default: return 'monthly_attendance';
   }
 }
@@ -246,7 +261,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '【管理者】スタッフから集まったシフト希望の確認と承認はどうやりますか？',
     answer: '【シフト希望の確認・承認手順】\n1. 左メニューの「部下からの申請承認」を開きます（または管理者メニュー「シフト管理」を開きます）。\n2. 提出されたシフト希望一覧が表示されますので、内容を確認して「承認してシフト確定」または「却下」をクリックします。\n3. 承認を実行すると、該当従業員の月間カレンダーおよびホーム画面へ「確定シフト」として即時反映されます。',
     keyword: 'シフト希望確認 承認 部下からの申請承認 管理者 確定反映',
-    preview_type: 'shift_submit',
+    preview_type: 'shift_admin_manage',
     updated_at: '2026-09-06'
   },
   {
@@ -255,7 +270,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '【管理者】完成した全社シフトを一括確定・公開するにはどうしますか？',
     answer: '【シフト確定・公開の手順】\n1. 管理者用「シフト管理」画面（/shift/admin）の月間マトリクスで全員のシフト配置を完了します。\n2. 画面右上の緑の「下書き確定（Publish）」ボタンをクリックします。公開を実行した瞬間に全従業員のマイカレンダー（「シフト希望・確定シフト」）へ確定シフトとして即時反映されます。\n3. 再調整が必要になった場合は、隣の「確定解除（下書きへ）」ボタンをクリックすればいつでも下書き状態に戻せます。',
     keyword: 'シフト確定 下書き確定 Publish 確定解除 公開 通知 全社 反映 管理者',
-    preview_type: 'shift_submit',
+    preview_type: 'shift_admin_manage',
     updated_at: '2026-09-06'
   },
   {
@@ -264,7 +279,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '【管理者】新しい勤務パターンや各時間帯の必要人数枠を設定・追加するには？',
     answer: '【必要シフト枠 ＆ 勤務パターンの設定手順】\n1. シフトの必要人数枠を設定する場合:\n管理者「シフト管理」画面右上の「必要枠設定」ボタン（/shift/admin/patterns）をクリックします。「平日」「土日」「祝日」タブを選択し、役割（ホール/キッチン等）と時間帯・必要人数を設定して「設定を保存」をクリックします。\n\n2. 全社基本の就業時間パターン（標準勤務時間等）を登録する場合:\nポータルの「🏢 会社・全社労務マスタ設定センター」を開き、「3. 年間営業カレンダー ＆ 就業時間」タブの「就業時間パターン一覧」から新規パターン（始業〜終業時刻・休憩時間）を追加し、「設定を一括保存」をクリックします。',
     keyword: '必要枠設定 必要シフト枠設定 勤務パターン シフトパターン 追加 設定 設定を保存 設定を一括保存',
-    preview_type: 'shift_submit',
+    preview_type: 'shift_admin_manage',
     updated_at: '2026-09-06'
   },
 
@@ -284,7 +299,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '源泉徴収票や過去の賞与明細はどこから確認できますか？',
     answer: '【賞与明細・源泉徴収票の確認手順】\n1. 賞与明細書: 左メニューの「📄 Web給与明細・源泉徴収票・書類」を開き、上部の「🎁 賞与明細書」タブを選択すると、確定支給された賞与明細を確認・「印刷 / PDF保存」できます。\n2. 源泉徴収票: 同画面の上部「🧾 源泉徴収票（国税庁公式）」タブを選択し、対象年度を選択すると、国税庁法定様式の源泉徴収票が自動生成され、ワンクリックで「印刷 / PDF保存」が可能です。',
     keyword: 'Web給与明細・源泉徴収票 源泉徴収票 賞与明細 ボーナス 過去 国税庁公式 印刷',
-    preview_type: 'payslip_view',
+    preview_type: 'payslip_bonus_tax',
     updated_at: '2026-09-06'
   },
   {
@@ -293,7 +308,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '【管理者】勤怠の打刻データから給与を自動計算・試算する手順は？',
     answer: '【給与自動試算の手順】\n1. 管理ダッシュボードの「給与計算・明細」を開き、「月別給与計算・明細発行」タブを選択します。\n2. 対象月度を確認し、ツールバーの「⚡ 勤怠から一括自動計算」ボタンをクリックします。\n3. 実労働時間、法定外残業、深夜労働、休日労働時間、有給消化日数に、基本給や時給・各種手当が自動掛け合わされて総支給額および社会保険料・源泉所得税が瞬時に自動試算されます。\n※ 従業員マスタの設定（手当や扶養親族等）を修正した場合は「🔄 最新マスタから一括再計算」で即座に同期できます。\n4. 内容確認後、緑の「一括確定 (Web公開)」ボタンを押すと全従業員のマイページへWeb給与明細が一括配信されます（「一括下書きに戻す (公開取下げ)」も可能）。',
     keyword: '給与計算 自動計算 勤怠から一括自動計算 最新マスタから一括再計算 一括確定 Web公開 勤怠連動 試算 管理者',
-    preview_type: 'payslip_view',
+    preview_type: 'payroll_admin_calc',
     updated_at: '2026-09-06'
   },
 
@@ -311,9 +326,9 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     id: 'sfaq-o-2',
     category: 'onboarding',
     question: '労働条件通知書（雇用契約書）の電子押印・電子同意のやり方は？',
-    answer: '【労働条件通知書の電子押印手順】\n1. 管理者から給与改定通知書が発行されると、「📄 Web給与明細・源泉徴収票・書類」またはポータルの上部に「【重要】給与改定に伴う『労働条件通知書』が届いています」という黄色い通知バッジが表示されます。\n2. 「書面を確認して電子押印する」をクリックし、労働条件（勤務時間・新基本給・休日・契約期間等）の内容を確認します。\n3. 書面下部の「電子署名・同意する」ボタンをクリックすると、タイムスタンプ付きの電子印鑑が自動押印され、契約締結が完了します。PDF控えはいつでもダウンロードできます。',
-    keyword: '労働条件通知書 雇用契約書 電子押印 電子署名 同意 契約締結 給与改定',
-    preview_type: 'onboarding_passbook',
+    answer: '【労働条件通知書の電子押印手順】\n1. 管理者から給与改定や入社時に通知書が発行されると、左メニューの「📄 Web給与明細・源泉徴収票・書類」内の「労働条件通知書 兼 雇用契約書」タブに「🕒 電子押印待ち」として届きます。\n2. 「書面を確認・印刷する」をクリックし、労働条件（就業場所・勤務時間・新基本給・休日・契約期間等）の内容および会社印を確認します。\n3. 書面下部の「内容に同意し、電子印鑑を押印する」ボタンをクリックすると、タイムスタンプ付きの電子印鑑が自動押印され、「本人合意押印済み」となって契約締結が完了します。PDF控えは「印刷・PDF」からいつでもダウンロードできます。',
+    keyword: '労働条件通知書 雇用契約書 電子押印 電子署名 同意 契約締結 給与改定 書面を確認・印刷する 内容に同意し、電子印鑑を押印する 本人合意押印済み',
+    preview_type: 'contract_sign',
     updated_at: '2026-09-06'
   },
   {
@@ -322,7 +337,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '【管理者】労働者名簿や国税庁様式源泉徴収簿の出力方法は？',
     answer: '【公的帳票出力の手順】\n1. 管理メニューの「給与計算・明細」を開き、「労務・法定帳票発行センター（賞与・名簿・台帳）」タブをクリックします（または入退社労務管理からアクセス）。\n2. 「■ 帳簿作成・保管義務のある書類」の「労働者名簿」（労基法第107条）や「賃金台帳」、または「■ 年末調整関係書類」の「源泉徴収簿」（国税庁様式）カードをクリックします。\n3. 入社手続きで登録された全基本台帳データ（氏名、生年月日、現住所、雇入年月日、マイナンバー等）が完全に差し込まれた法定レイアウト帳票（電子印鑑捺印済み）がプレビュー表示されます。\n4. 各帳票画面の印刷ボタン（労働者名簿は「公式A4印刷」、源泉徴収簿は「A4横で印刷・PDF保存」、賃金台帳は「一括印刷」または「印刷」）を押すと、即座に公式PDFが生成・保存されます。',
     keyword: '労働者名簿 賃金台帳 源泉徴収簿 法定帳簿 労務・法定帳票発行センター PDF出力 印刷 管理者 公式A4印刷 A4横で印刷・PDF保存 一括印刷',
-    preview_type: 'onboarding_passbook',
+    preview_type: 'official_ledger_print',
     updated_at: '2026-09-06'
   },
 
@@ -333,7 +348,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '【管理者】会社の所定労働時間、休憩時間、締め日・支払日を設定するには？',
     answer: '【全社基本マスタの設定手順】\n1. ポータルの「🏢 会社・全社労務マスタ設定センター」カード（管理者専用）をクリックします。\n2. 就業時間・休憩時間: 「3. 年間営業カレンダー ＆ 就業時間」タブを開き、「就業時間パターン一覧（部署紐付け ＆ 個別調整対応）」で始業・終業時間（例: 09:00〜18:00）や休憩時間を設定・追加します。\n3. 締め日・支払日: 「4. 給与締め日 ＆ 割増賃金・社会保険設定」タブ（または「5. 労働条件通知書 ＆ 雇用契約書」の賃金締切日・支払日欄）で、締め日（毎月末日/20日/25日/15日等）と支給日を設定します。\n4. 右上の「設定を一括保存」（または画面下の「設定を一括保存する」）をクリックします。勤怠・シフト・給与・雇用契約書の全システムへ即座に一元反映されます。',
     keyword: '会社・全社労務マスタ設定センター 所定時間 締め日 支払日 休憩時間 年間営業カレンダー ＆ 就業時間 給与締め日 ＆ 割増賃金・社会保険設定 設定を一括保存 管理者',
-    preview_type: 'attendance_admin',
+    preview_type: 'company_master_settings',
     updated_at: '2026-09-06'
   },
   {
@@ -342,7 +357,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '【管理者】年間休日カレンダー（会社の所定休日）の登録・変更方法は？',
     answer: '【年間休日カレンダーの手順】\n1. ポータルの「🏢 会社・全社労務マスタ設定センター」を開き、「3. 年間営業カレンダー ＆ 就業時間」タブをクリックします。\n2. 「12ヶ月 営業日・休日マップ」が表示されます。国民の祝日（年間16日）や土日公休は自動判定されます。自社の夏季休暇（お盆休み）、年末年始休暇のチェックボックスや、創立記念日等の独自休日を追加設定できます。\n3. カレンダー上の各日付を直接クリックすることで、個別に「休日（赤）」と「稼働営業日（白）」をワンタップで切り替えることも可能です。\n4. 最後に右上の「設定を一括保存」をクリックします（「営業カレンダー A4印刷 / PDF出力」ボタンから年間カレンダーの公式印刷も可能です）。',
     keyword: '年間休日 営業日・休日マップ カレンダー 所定休日 祝日 盆休み 年末年始 年間営業カレンダー ＆ 就業時間 設定を一括保存 営業カレンダー A4印刷 / PDF出力 管理者',
-    preview_type: 'attendance_admin',
+    preview_type: 'company_calendar_settings',
     updated_at: '2026-09-06'
   },
 
@@ -371,7 +386,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '【管理者】新しい従業員のアカウント追加や退職処理はどう行いますか？',
     answer: '【従業員アカウント管理の手順】\n1. 左メニューまたは管理画面の「従業員管理」タブを開きます。\n2. 【従業員の追加・招待】:\n   右上の「従業員を招待する」ボタンをクリックするか、画面上部に表示されている「招待コード」を従業員へ共有します。\n   従業員が新規登録画面（ログイン画面の「初めての方はこちら（新規登録）」）で招待コードを入力してアカウント作成すると、自社組織に自動で紐付きます。\n3. 【退職処理】:\n   従業員一覧テーブルの該当者の右端にある「退職」ボタンをクリックします。即座に「退職済」ステータスとなり、システムのログイン権限が安全に停止されます。\n   ※ 誤って退職にした場合や再雇用の場合は「復職」ボタンをクリックすればワンクリックで在籍状態へ復帰できます。所属部署や役職、承認者を変更したい場合は「編集」ボタンをクリックします。',
     keyword: '従業員管理 従業員を招待する 招待コード 退職 復職 編集 アカウント発行 退職処理 招待 管理者 ユーザー管理',
-    preview_type: 'onboarding_passbook',
+    preview_type: 'employee_admin_manage',
     updated_at: '2026-09-06'
   }
 ];
@@ -426,12 +441,12 @@ export async function fetchSystemFaqs(): Promise<SystemFaqItem[]> {
         }
       });
 
-      localStorage.setItem('kap_system_faqs_v11', JSON.stringify(merged));
+      localStorage.setItem('kap_system_faqs_v12', JSON.stringify(merged));
       return merged;
     }
 
     // Supabaseが空またはエラーの場合
-    const local = localStorage.getItem('kap_system_faqs_v11');
+    const local = localStorage.getItem('kap_system_faqs_v12');
     if (local) {
       try {
         const parsed = JSON.parse(local);
@@ -467,7 +482,7 @@ export async function saveSystemFaq(item: Omit<SystemFaqItem, 'id' | 'updated_at
 
     if (!error && data) {
       const updated = [data, ...currentList.filter(f => f.id !== id)];
-      localStorage.setItem('kap_system_faqs_v11', JSON.stringify(updated));
+      localStorage.setItem('kap_system_faqs_v12', JSON.stringify(updated));
       return data;
     }
   } catch (err) {
@@ -482,7 +497,7 @@ export async function saveSystemFaq(item: Omit<SystemFaqItem, 'id' | 'updated_at
   } else {
     updatedList = [fullItem, ...currentList];
   }
-  localStorage.setItem('kap_system_faqs_v11', JSON.stringify(updatedList));
+  localStorage.setItem('kap_system_faqs_v12', JSON.stringify(updatedList));
   return fullItem;
 }
 
@@ -494,7 +509,7 @@ export async function deleteSystemFaq(id: string): Promise<boolean> {
   }
   const currentList = await fetchSystemFaqs();
   const updated = currentList.filter(f => f.id !== id);
-  localStorage.setItem('kap_system_faqs_v11', JSON.stringify(updated));
+  localStorage.setItem('kap_system_faqs_v12', JSON.stringify(updated));
   return true;
 }
 
