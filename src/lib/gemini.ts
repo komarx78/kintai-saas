@@ -197,7 +197,7 @@ ${faqKnowledge}
 `;
 
   try {
-    const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    const models = ['gemini-3.5-flash', 'gemini-3.5-flash-latest', 'gemini-3.5-pro'];
     let answer: string | null = null;
     let lastError: string | null = null;
 
