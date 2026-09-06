@@ -217,14 +217,20 @@ export default function Portal() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+        <div className={`grid gap-6 ${role === 'admin' || role === 'superadmin' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 max-w-4xl mx-auto'}`}>
           {apps.filter(app => {
             if (role === 'superadmin') return true;
-            if (app.id === 'kintai') return userData?.has_kintai_access;
-            if (app.id === 'shift') return userData?.has_shift_access;
-            if (app.id === 'payroll') return userData?.has_kintai_access !== false;
-            if (app.id === 'onboarding') return true;
-            if (app.id === 'settings') return role === 'admin';
+            if (role === 'admin') {
+              if (app.id === 'kintai') return true;
+              if (app.id === 'shift') return true;
+              if (app.id === 'payroll') return true;
+              if (app.id === 'onboarding') return true;
+              if (app.id === 'settings') return true;
+              return false;
+            }
+            // 従業員が利用できるものは「勤怠・有給管理」「シフト管理」のみ
+            if (app.id === 'kintai') return userData?.has_kintai_access !== false;
+            if (app.id === 'shift') return userData?.has_shift_access !== false;
             return false;
           }).map((app, index) => (
             <button

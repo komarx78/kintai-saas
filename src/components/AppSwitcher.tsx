@@ -48,37 +48,40 @@ export default function AppSwitcher({ currentApp, role }: AppSwitcherProps) {
       description: 'シフトの作成と確認',
       iconBg: 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-sm ring-1 ring-white/30'
     },
-    {
-      id: 'payroll',
-      name: '給与計算・明細',
-      icon: <DollarSign className="w-4 h-4 text-white drop-shadow-sm" />,
-      path: (role === 'admin' || role === ('superadmin' as any)) ? '/payroll/admin' : '/payroll/user',
-      description: '給与の自動試算と明細',
-      iconBg: 'bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 shadow-sm ring-1 ring-white/30'
-    },
-    {
-      id: 'onboarding',
-      name: '入退社・労務',
-      icon: <UserCheck className="w-4 h-4 text-white drop-shadow-sm" />,
-      path: (role === 'admin' || role === ('superadmin' as any)) ? '/onboarding/admin' : '/onboarding/my',
-      description: '契約書作成と全マスタ同期',
-      iconBg: 'bg-gradient-to-br from-cyan-600 via-blue-600 to-indigo-700 shadow-sm ring-1 ring-white/30'
-    },
-    ...(role === 'admin' || role === ('superadmin' as any) ? [{
-      id: 'settings',
-      name: '会社・労務マスタ設定',
-      icon: <Building2 className="w-4 h-4 text-white drop-shadow-sm" />,
-      path: '/settings/company',
-      description: '全システム共通の基本設定',
-      iconBg: 'bg-gradient-to-br from-indigo-600 to-purple-600 shadow-sm ring-1 ring-white/30'
-    }, {
-      id: 'superadmin',
-      name: '販売者・特権本部',
-      icon: <Database className="w-4 h-4 text-white drop-shadow-sm" />,
-      path: '/super-admin',
-      description: 'テナント監視・帳票マスタ設定',
-      iconBg: 'bg-gradient-to-br from-slate-800 to-slate-950 shadow-sm ring-1 ring-white/30'
-    }] : [])
+    ...(role === 'admin' || role === ('superadmin' as any) ? [
+      {
+        id: 'payroll',
+        name: '給与計算・明細',
+        icon: <DollarSign className="w-4 h-4 text-white drop-shadow-sm" />,
+        path: '/payroll/admin',
+        description: '給与の自動試算と明細',
+        iconBg: 'bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 shadow-sm ring-1 ring-white/30'
+      },
+      {
+        id: 'onboarding',
+        name: '入退社・労務',
+        icon: <UserCheck className="w-4 h-4 text-white drop-shadow-sm" />,
+        path: '/onboarding/admin',
+        description: '契約書作成と全マスタ同期',
+        iconBg: 'bg-gradient-to-br from-cyan-600 via-blue-600 to-indigo-700 shadow-sm ring-1 ring-white/30'
+      },
+      {
+        id: 'settings',
+        name: '会社・労務マスタ設定',
+        icon: <Building2 className="w-4 h-4 text-white drop-shadow-sm" />,
+        path: '/settings/company',
+        description: '全システム共通の基本設定',
+        iconBg: 'bg-gradient-to-br from-indigo-600 to-purple-600 shadow-sm ring-1 ring-white/30'
+      },
+      {
+        id: 'superadmin',
+        name: '販売者・特権本部',
+        icon: <Database className="w-4 h-4 text-white drop-shadow-sm" />,
+        path: '/super-admin',
+        description: 'テナント監視・帳票マスタ設定',
+        iconBg: 'bg-gradient-to-br from-slate-800 to-slate-950 shadow-sm ring-1 ring-white/30'
+      }
+    ] : [])
   ];
 
   return (
