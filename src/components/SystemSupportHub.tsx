@@ -367,12 +367,14 @@ export const SystemSupportHub: React.FC<SystemSupportHubProps> = ({
                               {faq.answer}
                             </div>
 
-                            {/* 📱 実際の操作画面（埋め込みプレビュー） */}
-                            <div className="pl-9">
+                            {/* 📱 実際の操作画面（プレビュー） */}
+                            <div className="pl-9 pt-1">
+                              <div className="text-[11px] font-bold text-slate-500 mb-1 flex items-center gap-1.5">
+                                <span>📱 実際の操作画面イメージ:</span>
+                              </div>
                               <SystemGuideUiPreview
                                 previewType={resolveGuidePreviewType(faq)}
                                 htmlPreview={faq.html_preview}
-                                title={faq.question}
                               />
                             </div>
                           </div>
