@@ -106,7 +106,7 @@ export default function Portal() {
     {
       id: 'support',
       title: 'システム操作Q&A・改善要望',
-      description: '本システムの使い方マニュアル、Gemini AI操作サポート、機能改善リクエスト（回収ボックス）はこちら',
+      description: '本システムの初心者向け公式操作ガイド、機能改善リクエスト（回収ボックス）はこちら',
       icon: <HelpCircle className="w-7 h-7 text-white drop-shadow-md" />,
       path: '/support',
       color: 'bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-700 shadow-md ring-1 ring-white/40',

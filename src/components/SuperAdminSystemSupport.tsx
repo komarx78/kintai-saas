@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
-  HelpCircle, Inbox, Sparkles, Plus, Edit3, Trash2, CheckCircle2, 
-  MessageSquare, Save, X, Search, Filter, ThumbsUp, Building2, 
+  HelpCircle, Inbox, Plus, Edit3, Trash2, 
+  MessageSquare, Save, X, Search, Filter, Building2, 
   RefreshCw, Bell
 } from 'lucide-react';
 import { 
@@ -16,6 +16,7 @@ import {
   deleteSystemFaq,
   fetchSystemSuggestions, 
   updateSystemSuggestionStatus,
+  deleteSystemSuggestion,
   fetchSystemReleaseNotes,
   saveSystemReleaseNote
 } from '../lib/systemSupportManager';
@@ -74,13 +75,21 @@ export function SuperAdminSystemSupport() {
     setSuggestions(updated);
   };
 
+  // 📬 改善要望の削除
+  const handleDeleteSuggestion = async (id: string) => {
+    if (!window.confirm('この改善要望を削除しますか？')) return;
+    await deleteSystemSuggestion(id);
+    const updated = await fetchSystemSuggestions();
+    setSuggestions(updated);
+  };
+
   // 💡 FAQの保存
   const handleSaveFaq = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingFaq?.question || !editingFaq?.answer) return;
     await saveSystemFaq({
       id: editingFaq.id,
-      category: (editingFaq.category as any) || 'general',
+      category: (editingFaq.category as any) || 'kintai',
       question: editingFaq.question,
       answer: editingFaq.answer,
       keyword: editingFaq.keyword || ''
@@ -92,7 +101,7 @@ export function SuperAdminSystemSupport() {
 
   // 💡 FAQの削除
   const handleDeleteFaq = async (id: string) => {
-    if (!window.confirm('このシステム操作Q&Aを削除してもよろしいですか？全テナントのAI参照からも除外されます。')) return;
+    if (!window.confirm('この操作Q&Aを削除してもよろしいですか？全契約企業の画面からも除外されます。')) return;
     await deleteSystemFaq(id);
     const updated = await fetchSystemFaqs();
     setFaqs(updated);
@@ -104,7 +113,7 @@ export function SuperAdminSystemSupport() {
     if (!editingRelease?.title || !editingRelease?.content) return;
     await saveSystemReleaseNote({
       id: editingRelease.id,
-      version: editingRelease.version || 'Ver 2.2.0',
+      version: editingRelease.version || 'Ver 2.3.0',
       title: editingRelease.title,
       content: editingRelease.content,
       category: (editingRelease.category as any) || 'update',
@@ -136,16 +145,15 @@ export function SuperAdminSystemSupport() {
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 rounded-3xl text-white shadow-xl border border-indigo-500/20 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 mb-2">
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            全契約テナント統制 ＆ サービス品質向上ハブ
+            特権管理者専管（販売・開発統括）
           </div>
           <h2 className="text-2xl font-black tracking-tight flex items-center gap-3">
             <HelpCircle className="w-7 h-7 text-indigo-400" />
-            システム操作Q&A ＆ 改善要望回収ボックス統括
+            システム公式操作Q&A ＆ 改善要望回収デスク統制
           </h2>
           <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
-            全契約企業（テナント）から届く<strong>「システム機能改善リクエスト・不具合報告」</strong>を回収・一元管理し、
-            全テナントの画面およびシステムAIサポートデスクが参照する<strong>「公式操作マニュアル・Q&A」</strong>を配信・統制します。
+            各企業から届いた<strong>「システムへの改善要望・機能リクエスト」をこのSuperAdmin画面でのみ一元管理</strong>します。
+            また、初心者がつまずきやすい<strong>「公式操作マニュアル・Q&A」</strong>を全契約企業へ配信・一括統制します。
           </p>
         </div>
 
@@ -169,7 +177,7 @@ export function SuperAdminSystemSupport() {
           }`}
         >
           <Inbox className="w-4 h-4" />
-          📬 全テナント改善要望ボックス
+          📬 全テナント改善要望ボックス（回収一覧）
           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
             subTab === 'suggestions' ? 'bg-white/20 text-white' : 'bg-indigo-50 text-indigo-700'
           }`}>
@@ -262,7 +270,7 @@ export function SuperAdminSystemSupport() {
               <Inbox className="w-12 h-12 text-slate-300 mx-auto" />
               <h3 className="text-sm font-black text-slate-700">該当する改善要望はありません</h3>
               <p className="text-xs text-slate-400">
-                各テナントの従業員・管理者が「システム改善要望ボックス」から投稿すると、ここにリアルタイムで届きます。
+                各企業の従業員・管理者が「改善要望送信フォーム」から投稿すると、ここにリアルタイムで届きます。
               </p>
             </div>
           ) : (
@@ -279,41 +287,35 @@ export function SuperAdminSystemSupport() {
                       </span>
                       <span className="text-xs font-bold text-indigo-600 flex items-center gap-1">
                         <Building2 className="w-3.5 h-3.5" />
-                        {item.tenant_name || 'テナント'}
+                        {item.tenant_name || '企業名不明'}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-3 text-xs text-slate-400">
-                      <span>投稿者: <strong className="text-slate-700">{item.is_anonymous ? '匿名ユーザー' : item.user_name}</strong></span>
+                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                      <span>送信者: <strong className="text-slate-800">{item.user_name}</strong></span>
                       <span>{new Date(item.created_at).toLocaleDateString('ja-JP')}</span>
-                      <span className="flex items-center gap-1 text-pink-600 font-bold bg-pink-50 px-2 py-0.5 rounded-md">
-                        <ThumbsUp className="w-3 h-3" /> {item.likes_count || 0}
-                      </span>
+                      <button
+                        onClick={() => handleDeleteSuggestion(item.id)}
+                        className="p-1 text-slate-400 hover:text-red-600 transition"
+                        title="要望を削除"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
 
                   <div>
                     <h4 className="text-base font-black text-slate-900">{item.title}</h4>
-                    <p className="text-xs text-slate-600 mt-1.5 leading-relaxed whitespace-pre-line bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+                    <p className="text-xs text-slate-700 mt-1.5 leading-relaxed whitespace-pre-line bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                       {item.content}
                     </p>
                   </div>
 
-                  {/* 本部からの回答コメント表示 */}
+                  {/* 社内メモ・回答 */}
                   {item.admin_reply && (
-                    <div className="bg-indigo-50/80 p-3.5 rounded-xl border border-indigo-200/80 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-black text-indigo-900 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
-                          特権管理者・開発本部からの回答
-                        </span>
-                        <span className="text-[10px] text-indigo-500 font-mono">
-                          {item.updated_at ? new Date(item.updated_at).toLocaleDateString('ja-JP') : ''}
-                        </span>
-                      </div>
-                      <p className="text-xs text-indigo-950 whitespace-pre-line leading-relaxed">
-                        {item.admin_reply}
-                      </p>
+                    <div className="bg-indigo-50/80 p-3 rounded-xl border border-indigo-200/80 space-y-0.5">
+                      <span className="text-[11px] font-bold text-indigo-900">開発メモ / 返答方針:</span>
+                      <p className="text-xs text-indigo-950 whitespace-pre-line">{item.admin_reply}</p>
                     </div>
                   )}
 
@@ -328,7 +330,7 @@ export function SuperAdminSystemSupport() {
                       className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
-                      ステータス更新・公式回答を記入
+                      ステータス更新・開発メモ記入
                     </button>
                   </div>
                 </div>
@@ -362,7 +364,7 @@ export function SuperAdminSystemSupport() {
                 onChange={e => setFaqCategoryFilter(e.target.value)}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 cursor-pointer"
               >
-                <option value="all">すべてのカテゴリ</option>
+                <option value="all">すべてのカテゴリ ({faqs.length})</option>
                 {Object.entries(SYSTEM_FAQ_CATEGORIES).map(([key, label]) => (
                   <option key={key} value={key}>{label}</option>
                 ))}
@@ -374,7 +376,7 @@ export function SuperAdminSystemSupport() {
               className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-black transition shadow-sm flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <Plus className="w-4 h-4" />
-              新規Q&Aを登録する
+              新規操作Q&Aを追加する
             </button>
           </div>
 
@@ -388,7 +390,6 @@ export function SuperAdminSystemSupport() {
             <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center space-y-3">
               <HelpCircle className="w-12 h-12 text-slate-300 mx-auto" />
               <h3 className="text-sm font-black text-slate-700">該当するQ&Aがありません</h3>
-              <p className="text-xs text-slate-400">「新規Q&Aを登録する」ボタンからマニュアルを追加してください。</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3.5">
@@ -421,17 +422,10 @@ export function SuperAdminSystemSupport() {
                     <span>{faq.question}</span>
                   </h4>
 
-                  <div className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-start gap-2">
+                  <div className="text-xs text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-start gap-2">
                     <span className="text-emerald-600 font-bold shrink-0">A.</span>
                     <span className="whitespace-pre-line">{faq.answer}</span>
                   </div>
-
-                  {faq.keyword && (
-                    <div className="text-[10px] text-slate-400 flex items-center gap-1 pt-1">
-                      <span>検索キーワード:</span>
-                      <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-600">{faq.keyword}</span>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -446,10 +440,10 @@ export function SuperAdminSystemSupport() {
         <div className="space-y-4">
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-between">
             <p className="text-xs text-slate-500">
-              ここで登録したシステムアップデート情報は、<strong>全契約企業ポータルの「お知らせ」や「リリースノート」タブへ即時配信</strong>されます。
+              ここで登録したアップデート情報は、<strong>全契約企業ポータルの「リリース情報」タブへ即時配信</strong>されます。
             </p>
             <button
-              onClick={() => setEditingRelease({ version: 'Ver 2.2.0', title: '', content: '', category: 'update', released_at: new Date().toISOString().split('T')[0] })}
+              onClick={() => setEditingRelease({ version: 'Ver 2.3.0', title: '', content: '', category: 'update', released_at: new Date().toISOString().split('T')[0] })}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shadow-sm flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <Plus className="w-4 h-4" />
@@ -485,14 +479,14 @@ export function SuperAdminSystemSupport() {
         </div>
       )}
 
-      {/* ─── モーダル：改善要望の返信・ステータス更新 ─── */}
+      {/* ─── モーダル：改善要望のステータス更新・開発メモ ─── */}
       {replyingSuggestion && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in">
           <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-indigo-600" />
-                改善要望への公式返答 ＆ ステータス更新
+                改善要望ステータス更新 ＆ 開発メモ
               </h3>
               <button onClick={() => setReplyingSuggestion(null)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
                 <X className="w-5 h-5" />
@@ -500,13 +494,16 @@ export function SuperAdminSystemSupport() {
             </div>
 
             <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs space-y-1">
-              <div className="font-bold text-slate-800">【{replyingSuggestion.tenant_name}】{replyingSuggestion.title}</div>
-              <p className="text-slate-600 line-clamp-3">{replyingSuggestion.content}</p>
+              <div className="font-bold text-slate-800">
+                【{replyingSuggestion.tenant_name}】{replyingSuggestion.title}
+                <span className="ml-2 font-normal text-slate-500">（送信者: {replyingSuggestion.user_name}）</span>
+              </div>
+              <p className="text-slate-600 line-clamp-3 whitespace-pre-line">{replyingSuggestion.content}</p>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">現在の開発・検討ステータス</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">開発・検討ステータス</label>
                 <select
                   value={replyStatus}
                   onChange={e => setReplyStatus(e.target.value as any)}
@@ -520,13 +517,13 @@ export function SuperAdminSystemSupport() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  開発元からの回答・進捗コメント（全テナント・投稿者へ公開されます）
+                  開発元メモ / 対応方針
                 </label>
                 <textarea
                   value={replyText}
                   onChange={e => setReplyText(e.target.value)}
                   rows={4}
-                  placeholder="例: ご提案ありがとうございます。本件は次期アップデート（Ver.2.3）にて実装を予定しております。"
+                  placeholder="例: Ver 2.4アップデートにて実装予定。カレンダーUIのドラッグ＆ドロップ対応を進める。"
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                 />
               </div>
@@ -546,7 +543,7 @@ export function SuperAdminSystemSupport() {
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition shadow-md flex items-center gap-1.5"
               >
                 <Save className="w-4 h-4" />
-                回答を登録・反映する
+                ステータスを更新する
               </button>
             </div>
           </div>
@@ -569,9 +566,9 @@ export function SuperAdminSystemSupport() {
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">対象アプリケーション・カテゴリ</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">対象カテゴリ</label>
                 <select
-                  value={editingFaq.category || 'general'}
+                  value={editingFaq.category || 'kintai'}
                   onChange={e => setEditingFaq({ ...editingFaq, category: e.target.value as any })}
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500"
                 >
@@ -594,25 +591,14 @@ export function SuperAdminSystemSupport() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">操作手順・回答 (Answer)</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">操作手順・解決方法 (Answer)</label>
                 <textarea
                   required
                   rows={5}
                   value={editingFaq.answer || ''}
                   onChange={e => setEditingFaq({ ...editingFaq, answer: e.target.value })}
-                  placeholder="操作手順や注意点を丁寧に記入してください。システムAIサポートデスクもこの回答を参照します。"
+                  placeholder="初心者が迷わないよう、具体的な画面名や操作ステップ（1. 2. 3.）を丁寧に記入してください。"
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">検索キーワード (スペース区切り)</label>
-                <input
-                  type="text"
-                  value={editingFaq.keyword || ''}
-                  onChange={e => setEditingFaq({ ...editingFaq, keyword: e.target.value })}
-                  placeholder="例: 打刻 忘れ 修正 申請 承認"
-                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
             </div>

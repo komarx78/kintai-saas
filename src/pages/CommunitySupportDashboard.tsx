@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { 
-  ArrowLeft, LogOut, Sparkles, HelpCircle 
+  ArrowLeft, LogOut, HelpCircle 
 } from 'lucide-react';
 import AppSwitcher from '../components/AppSwitcher';
 import { SystemSupportHub } from '../components/SystemSupportHub';
@@ -98,15 +98,11 @@ export default function CommunitySupportDashboard() {
               <HelpCircle className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-base sm:text-lg font-black text-slate-900 leading-none flex items-center gap-1.5">
-                システム操作サポート ＆ 改善要望デスク
-                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-xs">
-                  <Sparkles className="w-2.5 h-2.5" />
-                  Gemini AI連動
-                </span>
+              <h1 className="text-base sm:text-lg font-black text-slate-900 leading-none flex items-center gap-2">
+                システム公式操作ガイド ＆ 改善要望窓口
               </h1>
-              <p className="text-[11px] text-slate-500 mt-0.5 hidden sm:block">
-                KAP勤怠・シフトシステムの公式操作ガイド、AI即時相談、システム機能改善リクエスト（回収ボックス）
+              <p className="text-[11px] text-slate-500 mt-1 hidden sm:block">
+                KAP勤怠・シフトシステムの公式操作マニュアル、システム機能改善リクエスト受付
               </p>
             </div>
           </div>
@@ -140,16 +136,15 @@ export default function CommunitySupportDashboard() {
         <div className="mb-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white shadow-xl border border-indigo-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 mb-1.5">
-              <Sparkles className="w-3 h-3 text-cyan-400" />
-              KAP Cloud 公式ヘルプ ＆ サービス改善プラットフォーム
+              KAP Cloud 公式ヘルプ ＆ サービス改善窓口
             </div>
             <h2 className="text-lg font-black tracking-tight flex items-center gap-2">
-              システム公式操作Q&A ＆ 改善要望ボックス（全社回収デスク）
+              システム公式操作Q&A ＆ 改善要望受付ボックス
             </h2>
             <p className="text-xs text-slate-300 mt-1 leading-relaxed max-w-2xl">
-              打刻やシフト申請など、本システムの操作手順は公式Q&AやAIサポートデスクでいつでも確認できます。
+              打刻やシフト申請など、本システムの操作手順は初心者向け公式ガイドでいつでも確認できます。
               また、「こんな機能を追加してほしい」「ここをもっと改善してほしい」というご意見・機能リクエストは、
-              <strong>「改善要望ボックス」</strong>からいつでも開発元へ直接お寄せいただけます。
+              <strong>「改善要望フォーム」</strong>からいつでも開発元へ直接お寄せいただけます。
             </p>
           </div>
         </div>

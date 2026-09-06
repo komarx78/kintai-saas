@@ -53,7 +53,7 @@ export default function AppSwitcher({ currentApp, role }: AppSwitcherProps) {
       name: 'システムQ&A・改善要望',
       icon: <HelpCircle className="w-4 h-4 text-white drop-shadow-sm" />,
       path: '/support',
-      description: '操作ガイド・AI相談・改善箱',
+      description: '公式操作ガイド・改善要望受付',
       iconBg: 'bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-700 shadow-sm ring-1 ring-white/30'
     },
     ...(role === 'admin' || role === ('superadmin' as any) ? [
