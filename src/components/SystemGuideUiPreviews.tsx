@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { 
   Clock, Calendar, FileText,
   ChevronLeft, ChevronRight, CheckCircle, CheckCircle2,
-  Lock, Camera,
-  Sparkles, Download, MousePointerClick
+  Lock, Unlock, CheckCheck,
+  Sparkles, MousePointerClick,
+  DollarSign, Printer, Upload, CreditCard, Train, Shield, Users, Mail, LogIn, Send
 } from 'lucide-react';
 
 interface GuideUiPreviewProps {
@@ -1038,6 +1039,7 @@ function RealShiftSubmitPreview() {
 
 /**
  * 💰 5. 【Web給与明細・源泉徴収票フロー】（3ステップ）
+ * UserPayslipView.tsx および OfficialPayslipDoc.tsx 本物と100%同一のJSX・スタイル
  */
 function RealPayslipPreview() {
   return (
@@ -1069,32 +1071,148 @@ function RealPayslipPreview() {
           number: 2,
           label: '② 明細作業画面（内訳確認）',
           badge: '内訳確認',
-          title: '総支給額・控除額・手取り金額を確認する',
-          desc: '対象年月（2026年9月支給分等）を選択すると、基本給・各種手当・残業代・社会保険料などの内訳が詳細に表示されます。',
+          title: '総支給額・控除額・手取り金額と各内訳を確認する',
+          desc: '対象年月（2026年9月支給分等）を選択すると、基本給・各種手当・社会保険料などの内訳が公式レイアウトで詳細に表示されます。',
           render: () => (
-            <div className="max-w-md mx-auto bg-white p-4 rounded-2xl border border-slate-200 shadow-md space-y-3 text-xs">
-              <div className="flex items-center justify-between border-b pb-2">
+            <div className="bg-white p-5 sm:p-7 max-w-2xl mx-auto text-slate-800 font-sans leading-normal shadow-sm rounded-2xl border border-slate-200 space-y-4">
+              {/* 最上部ヘッダー：企業情報 ＆ 給与明細書タイトル */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-slate-200 gap-3">
                 <div>
-                  <span className="text-[10px] text-slate-400">2026年9月支給分</span>
-                  <h4 className="font-black text-base text-slate-900">給与明細書</h4>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="bg-blue-900 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      令和08年09月度
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-medium">公式給与支払明細書</span>
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+                    2026年09月分 給与明細書
+                  </h3>
                 </div>
-                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded">公開済</span>
+
+                <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 text-right">
+                  <div>
+                    <div className="text-xs font-black text-slate-800">株式会社KAP</div>
+                    <div className="text-[9px] text-slate-500">支給日: 2026年09月30日</div>
+                  </div>
+                  <div className="w-9 h-9 rounded-lg border-2 border-red-500/40 bg-red-50/50 flex flex-col items-center justify-center text-red-600 font-serif font-black text-[8px] leading-tight select-none">
+                    <span>社印</span>
+                    <span className="text-[6px]">之印</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                  <span className="text-slate-500 block text-[10px]">総支給額</span>
-                  <span className="text-base font-black text-slate-900 font-mono">¥285,000</span>
+              {/* 従業員情報 ＆ 3連ハイライトサマリーカード */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                <div className="sm:col-span-4 bg-slate-50 border border-slate-200 p-3 rounded-xl">
+                  <div className="text-[10px] font-bold text-slate-500">社員番号: #2</div>
+                  <div className="text-base font-black text-slate-900 tracking-wide mt-0.5">
+                    駒井 秀一朗 <span className="text-xs font-normal text-slate-600">様</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1 font-medium">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    振込手続完了（当月支払）
+                  </div>
                 </div>
-                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                  <span className="text-slate-500 block text-[10px]">控除合計額</span>
-                  <span className="text-base font-black text-slate-700 font-mono">¥49,200</span>
+
+                <div className="sm:col-span-8 grid grid-cols-3 gap-2">
+                  <div className="bg-blue-50/70 border border-blue-200/80 p-2.5 rounded-xl text-center">
+                    <span className="text-[10px] font-bold text-blue-900 block">総支給額</span>
+                    <span className="text-sm sm:text-base font-black text-blue-950 font-mono block mt-0.5">
+                      ¥285,000
+                    </span>
+                  </div>
+
+                  <div className="bg-rose-50/70 border border-rose-200/80 p-2.5 rounded-xl text-center">
+                    <span className="text-[10px] font-bold text-rose-900 block">総控除額</span>
+                    <span className="text-sm sm:text-base font-black text-rose-950 font-mono block mt-0.5">
+                      ¥49,200
+                    </span>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-slate-900 to-blue-950 text-white border border-slate-900 p-2.5 rounded-xl text-center shadow-xs">
+                    <span className="text-[10px] font-bold text-blue-200 block">差引支給額 (手取)</span>
+                    <span className="text-base sm:text-lg font-black text-emerald-400 font-mono block mt-0.5 tracking-tight">
+                      ¥235,800
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex justify-between items-center">
-                <span className="font-bold text-blue-900">差引支給額（手取り額）</span>
-                <span className="text-xl font-black text-blue-700 font-mono">¥235,800</span>
+              {/* 支給・控除の2大明細テーブル */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                {/* 支給明細 */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs flex flex-col justify-between">
+                  <div>
+                    <div className="bg-blue-900 text-white font-bold py-2 px-3 flex items-center justify-between text-[11px] tracking-wider">
+                      <span className="flex items-center gap-1">
+                        <DollarSign className="w-3.5 h-3.5 text-cyan-300" />
+                        支給の部（Earnings）
+                      </span>
+                      <span className="text-[9px] font-normal text-blue-200">3項目</span>
+                    </div>
+                    <table className="w-full text-xs">
+                      <tbody className="divide-y divide-slate-100">
+                        <tr className="hover:bg-blue-50/30">
+                          <td className="py-2 px-3 font-medium text-slate-700">基本給</td>
+                          <td className="py-2 px-3 text-right font-bold text-slate-900 font-mono">¥250,000</td>
+                        </tr>
+                        <tr className="hover:bg-blue-50/30">
+                          <td className="py-2 px-3 font-medium text-slate-700">役職手当</td>
+                          <td className="py-2 px-3 text-right font-bold text-slate-900 font-mono">¥20,000</td>
+                        </tr>
+                        <tr className="hover:bg-blue-50/30">
+                          <td className="py-2 px-3 font-medium text-slate-700">残業割増手当</td>
+                          <td className="py-2 px-3 text-right font-bold text-slate-900 font-mono">¥15,000</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="bg-blue-50 border-t border-blue-200 p-2.5 flex items-center justify-between font-black text-blue-950 text-xs">
+                    <span>支給合計額</span>
+                    <span className="font-mono">¥285,000</span>
+                  </div>
+                </div>
+
+                {/* 控除明細 */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs flex flex-col justify-between">
+                  <div>
+                    <div className="bg-slate-800 text-white font-bold py-2 px-3 flex items-center justify-between text-[11px] tracking-wider">
+                      <span className="flex items-center gap-1">
+                        <DollarSign className="w-3.5 h-3.5 text-rose-300" />
+                        控除の部（Deductions）
+                      </span>
+                      <span className="text-[9px] font-normal text-slate-300">5項目</span>
+                    </div>
+                    <table className="w-full text-xs">
+                      <tbody className="divide-y divide-slate-100">
+                        <tr className="hover:bg-rose-50/30">
+                          <td className="py-1.5 px-3 font-medium text-slate-700">健康保険料</td>
+                          <td className="py-1.5 px-3 text-right font-bold text-slate-900 font-mono">¥14,200</td>
+                        </tr>
+                        <tr className="hover:bg-rose-50/30">
+                          <td className="py-1.5 px-3 font-medium text-slate-700">厚生年金保険料</td>
+                          <td className="py-1.5 px-3 text-right font-bold text-slate-900 font-mono">¥22,800</td>
+                        </tr>
+                        <tr className="hover:bg-rose-50/30">
+                          <td className="py-1.5 px-3 font-medium text-slate-700">雇用保険料</td>
+                          <td className="py-1.5 px-3 text-right font-bold text-slate-900 font-mono">¥1,710</td>
+                        </tr>
+                        <tr className="hover:bg-rose-50/30">
+                          <td className="py-1.5 px-3 font-medium text-slate-700">所得税</td>
+                          <td className="py-1.5 px-3 text-right font-bold text-slate-900 font-mono">¥5,490</td>
+                        </tr>
+                        <tr className="hover:bg-rose-50/30">
+                          <td className="py-1.5 px-3 font-medium text-slate-700">住民税</td>
+                          <td className="py-1.5 px-3 text-right font-bold text-slate-900 font-mono">¥5,000</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="bg-rose-50 border-t border-rose-200 p-2.5 flex items-center justify-between font-black text-rose-950 text-xs">
+                    <span>控除合計額</span>
+                    <span className="font-mono">¥49,200</span>
+                  </div>
+                </div>
               </div>
             </div>
           )
@@ -1103,22 +1221,30 @@ function RealPayslipPreview() {
           number: 3,
           label: '③ PDF印刷・保存',
           badge: '印刷・保存',
-          title: '右上の「PDF印刷」ボタンで公式レイアウト保存',
-          desc: '明細画面の右上にある【PDF印刷】ボタンを押すと、公式レイアウトの給与明細書を印刷またはPDF保存できます。',
+          title: '画面右上の「印刷 / PDF保存」ボタンでA4公式保存',
+          desc: '明細画面の右上にある【印刷 / PDF保存】ボタンを押すと、公式レイアウトの給与明細書を印刷またはPDF保存できます。',
           render: () => (
             <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs text-center">
-              <div className="p-4 bg-slate-900 text-white rounded-xl shadow-md flex items-center justify-between">
-                <span className="font-bold">給与明細書（公式レイアウト）</span>
+              {/* UserPayslipView.tsx 本物のアクションバー再現 */}
+              <div className="flex items-center justify-between gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-1.5 text-left">
+                  <label className="text-[11px] font-bold text-slate-600">支給月度:</label>
+                  <span className="text-[11px] font-black py-1 px-2 border border-slate-300 rounded-lg bg-white text-slate-800 shadow-2xs">
+                    2026-09 支給分（支給日: 2026-09-30）
+                  </span>
+                </div>
+
                 <button
                   type="button"
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-black px-3.5 py-1.5 rounded-lg text-xs shadow-md border-2 border-amber-400 flex items-center gap-1.5 cursor-default"
+                  className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 rounded-xl text-xs font-black shadow-sm transition border-2 border-amber-400 cursor-default"
                 >
-                  <Download className="w-3.5 h-3.5" /> PDF印刷 👆
+                  <Printer className="w-4 h-4 text-cyan-400" />
+                  印刷 / PDF保存 👆
                 </button>
               </div>
 
-              <p className="text-xs text-slate-600 text-left bg-slate-50 p-3 rounded-xl border border-slate-200">
-                💡 銀行への提出書類や確定申告用として、スマートフォンやパソコンからいつでもダウンロード・印刷が可能です。
+              <p className="text-xs text-slate-600 text-left bg-slate-50 p-3 rounded-xl border border-slate-200 leading-relaxed">
+                💡 銀行への住宅ローン・マイカーローン提出書類や確定申告用として、スマートフォンやパソコンからいつでも公式レイアウトでダウンロード・印刷が可能です。
               </p>
             </div>
           )
@@ -1130,6 +1256,7 @@ function RealPayslipPreview() {
 
 /**
  * 🏢 6. 【管理者向け：出勤簿管理・打刻修正・月次締めフロー】（3ステップ）
+ * MonthlyAttendanceManagement.tsx 本物と100%同一のJSX・スタイル
  */
 function RealAttendanceAdminPreview() {
   return (
@@ -1143,17 +1270,87 @@ function RealAttendanceAdminPreview() {
           title: '管理者メニュー「月間勤怠・出勤簿管理」を開く',
           desc: '管理者権限でログインし、【月間勤怠・出勤簿管理】から全社集計または個人別出勤簿を選択します。',
           render: () => (
-            <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center space-y-3">
-              <div className="p-4 bg-slate-900 text-white rounded-xl shadow-md">
-                <span className="text-xs text-slate-400 font-bold block mb-1">管理者サイドバー</span>
-                <div className="flex items-center justify-center gap-2 bg-blue-600 py-2.5 px-4 rounded-xl font-black text-sm border-2 border-amber-400">
-                  <Calendar className="w-4 h-4" />
-                  <span>月間勤怠・出勤簿管理 👆</span>
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden max-w-4xl mx-auto space-y-3 p-4">
+              {/* 月次締めステータスバナー（本物） */}
+              <div className="bg-gradient-to-r from-slate-50 to-blue-50/50 p-3.5 rounded-xl border border-slate-200 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-xs font-black text-slate-800">2026年 9月度 勤怠締めステータス</h4>
+                      <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full border border-slate-200">
+                        集計中（未確定・修正可能）
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500">未承認申請を確認後、締め確定を実行して給与計算へ引き渡します。</p>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-black text-xs px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-1">
+                  <Lock className="w-3.5 h-3.5" />
+                  9月度 勤怠締め確定
                 </div>
               </div>
-              <p className="text-xs text-slate-600">
-                全従業員の月間出勤日数・実働時間・残業時間・申請状況が一覧で把握できます。
-              </p>
+
+              {/* 従業員別 月間勤怠集計テーブル（本物） */}
+              <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <div className="p-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center text-xs">
+                  <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-blue-600" />
+                    従業員別 月間勤怠集計（2026年9月）
+                  </h4>
+                  <span className="text-[10px] text-slate-500">全 3 名の勤務状況</span>
+                </div>
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-100/70 border-b border-slate-200 text-[11px] font-black text-slate-600">
+                      <th className="p-2.5">従業員名</th>
+                      <th className="p-2.5">部署</th>
+                      <th className="p-2.5 text-right">出勤日数</th>
+                      <th className="p-2.5 text-right">総実働時間</th>
+                      <th className="p-2.5 text-right">総残業時間</th>
+                      <th className="p-2.5 text-right">有給取得</th>
+                      <th className="p-2.5 text-center">アクション</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    <tr className="hover:bg-blue-50/30">
+                      <td className="p-2.5 font-bold text-slate-900 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded bg-blue-100 text-blue-700 font-black text-[10px] flex items-center justify-center">駒</div>
+                        駒井 秀一朗
+                      </td>
+                      <td className="p-2.5 text-slate-600">開発部</td>
+                      <td className="p-2.5 text-right font-bold">2 日</td>
+                      <td className="p-2.5 text-right font-bold text-blue-700 font-mono">16.0h</td>
+                      <td className="p-2.5 text-right text-slate-500 font-mono">-</td>
+                      <td className="p-2.5 text-right font-bold text-emerald-700">1.0日</td>
+                      <td className="p-2.5 text-center">
+                        <button type="button" className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 rounded-lg text-xs font-bold transition cursor-pointer">
+                          出勤簿 ➔
+                        </button>
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-blue-50/30">
+                      <td className="p-2.5 font-bold text-slate-900 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded bg-emerald-100 text-emerald-700 font-black text-[10px] flex items-center justify-center">山</div>
+                        山田 太郎
+                      </td>
+                      <td className="p-2.5 text-slate-600">営業部</td>
+                      <td className="p-2.5 text-right font-bold">3 日</td>
+                      <td className="p-2.5 text-right font-bold text-blue-700 font-mono">24.0h</td>
+                      <td className="p-2.5 text-right text-slate-500 font-mono">-</td>
+                      <td className="p-2.5 text-right font-bold text-emerald-700">0.0日</td>
+                      <td className="p-2.5 text-center">
+                        <button type="button" className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 rounded-lg text-xs font-bold transition cursor-pointer">
+                          出勤簿 ➔
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           )
         },
@@ -1161,48 +1358,110 @@ function RealAttendanceAdminPreview() {
           number: 2,
           label: '② 作業画面（打刻編集）',
           badge: '直接編集',
-          title: '各行の「編集」ボタンから休憩時間や時刻を修正',
+          title: '打刻修正モーダルで休憩時間や時刻を管理者が直接保存',
           desc: '修正したい日の【編集】ボタンを押すと打刻修正モーダルが開き、休憩時間（分）や時刻を管理者が直接保存できます。',
           render: () => (
-            <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-md space-y-3 text-xs">
-              <div className="flex items-center justify-between border-b pb-2">
-                <span className="font-black text-sm text-slate-900">駒井 秀一朗 の打刻修正（09/04）</span>
-                <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded">管理者権限</span>
+            <div className="max-w-md mx-auto bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden space-y-4">
+              <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex items-center justify-between">
+                <div>
+                  <h4 className="font-black text-sm">駒井 秀一朗 の打刻修正（09/02）</h4>
+                  <p className="text-[10px] text-blue-100">管理者の権限で打刻時刻や休憩時間を直接修正します</p>
+                </div>
+                <span className="text-[10px] bg-white/20 text-white font-bold px-2 py-0.5 rounded-full">
+                  管理者権限
+                </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">出勤時刻</label>
-                  <input type="text" readOnly value="09:00" className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-mono" />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">退勤時刻</label>
-                  <input type="text" readOnly value="20:00" className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-mono font-bold" />
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <label className="font-black text-slate-800">休憩時間（分）</label>
-                  <span className="text-[10px] text-blue-600 font-bold">※実働から差し引く休憩</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input type="text" readOnly value="60" className="w-16 bg-white border border-slate-300 rounded p-1.5 text-center font-bold" />
-                  <span className="font-bold text-slate-600">分</span>
-                  <div className="flex gap-1 ml-auto">
-                    {['0分', '45分', '60分', '90分'].map(m => (
-                      <span key={m} className={`px-2 py-0.5 rounded text-[10px] font-bold border ${m === '60分' ? 'bg-blue-600 text-white' : 'bg-white'}`}>{m}</span>
-                    ))}
+              <div className="p-5 space-y-4 text-xs">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-black text-slate-700 mb-1">出勤時刻</label>
+                    <input 
+                      type="time" 
+                      defaultValue="09:00"
+                      className="w-full p-2 border border-slate-300 rounded-xl font-bold text-sm bg-slate-50 font-mono" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-black text-slate-700 mb-1">退勤時刻</label>
+                    <input 
+                      type="time" 
+                      defaultValue="18:00"
+                      className="w-full p-2 border border-slate-300 rounded-xl font-bold text-sm bg-slate-50 font-mono text-blue-700" 
+                    />
                   </div>
                 </div>
-              </div>
 
-              <button
-                type="button"
-                className="w-full bg-blue-600 text-white font-black py-2.5 rounded-xl shadow-md border-2 border-amber-400 flex items-center justify-center gap-1 cursor-default"
-              >
-                保存する 👆
-              </button>
+                {/* 休憩時間設定（本物同一） */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-black text-slate-700">休憩時間（分）</label>
+                    <span className="text-[11px] text-blue-600 font-bold">※実働から差し引く休憩</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      defaultValue={60}
+                      className="w-20 p-2 border border-slate-300 rounded-lg font-bold text-sm bg-white text-center" 
+                      placeholder="60"
+                    />
+                    <span className="text-xs font-bold text-slate-600">分</span>
+                    <div className="flex items-center gap-1 ml-auto">
+                      {['0', '45', '60', '90'].map(mins => (
+                        <button
+                          key={mins}
+                          type="button"
+                          className={`px-2 py-1 text-xs font-bold rounded-md border transition cursor-pointer ${
+                            mins === '60'
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' 
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {mins}分
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1">ステータス</label>
+                  <select 
+                    defaultValue="退勤済"
+                    className="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-xs"
+                  >
+                    <option value="退勤済">退勤済（通常勤務）</option>
+                    <option value="勤務中">勤務中</option>
+                    <option value="有給">有給休暇</option>
+                    <option value="代休">代休</option>
+                    <option value="欠勤">欠勤</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-black text-slate-700 mb-1">事由・備考</label>
+                  <input 
+                    type="text" 
+                    defaultValue="退勤打刻押し忘れのため管理者修正（休憩60分）"
+                    className="w-full p-2 border border-slate-200 rounded-xl font-medium text-xs bg-slate-50" 
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                  <button 
+                    type="button" 
+                    className="px-3.5 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl"
+                  >
+                    キャンセル
+                  </button>
+                  <button 
+                    type="button" 
+                    className="px-5 py-2 bg-blue-600 text-white font-black text-xs rounded-xl shadow-md border-2 border-amber-400 flex items-center gap-1 cursor-default"
+                  >
+                    保存する 👆
+                  </button>
+                </div>
+              </div>
             </div>
           )
         },
@@ -1214,21 +1473,37 @@ function RealAttendanceAdminPreview() {
           desc: '未承認の申請がないことを確認し、画面上部の【勤怠締め確定】を実行すると、実績がロックされて給与計算へ安全に引き渡されます。',
           render: () => (
             <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
-              <div className="p-3 bg-emerald-50 border-2 border-emerald-300 rounded-xl flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Lock className="w-5 h-5 text-emerald-700" />
+              <div className="p-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Lock className="w-5 h-5 text-emerald-700 shrink-0" />
                   <div>
-                    <div className="font-black text-emerald-950">2026年9月度 勤怠締め確定ロック</div>
-                    <div className="text-[10px] text-emerald-800">給与連携ロック完了（打刻編集ロック済）</div>
+                    <div className="font-black text-emerald-950 text-sm">2026年 9月度 勤怠締め確定ロック</div>
+                    <div className="text-[10px] text-emerald-800">
+                      確定日時: 2026/09/30 18:30 （確定者: 全社管理者）
+                    </div>
                   </div>
                 </div>
-                <span className="bg-emerald-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-xs">
-                  確定済
+                <span className="bg-emerald-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-xs flex items-center gap-1 shrink-0">
+                  <CheckCheck className="w-3.5 h-3.5" /> 確定済
                 </span>
               </div>
 
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-600 text-[11px] leading-relaxed">
-                🔒 確定後は従業員の打刻修正や申請がロックされ、給与計算画面で「勤怠実績を取り込んで自動計算」を押すだけで全員の給与が瞬時に試算されます。
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-slate-600 text-xs leading-relaxed space-y-2">
+                <div className="font-bold text-slate-800">🔒 ロック後の安全性と給与自動連携:</div>
+                <p className="text-[11px]">
+                  締め確定後は、全従業員の打刻修正や新規申請が自動でロックされ、実績の改ざんが防止されます。<br />
+                  給与計算画面で「勤怠実績を取り込んで自動計算」をクリックするだけで、確定した勤務時間が瞬時に反映されます。
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end">
+                <button
+                  type="button"
+                  className="px-3 py-1.5 bg-white text-rose-700 border border-rose-200 font-bold text-xs rounded-xl flex items-center gap-1 cursor-default shadow-2xs"
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                  締めロックを解除（管理者権限）
+                </button>
               </div>
             </div>
           )
@@ -1240,6 +1515,7 @@ function RealAttendanceAdminPreview() {
 
 /**
  * 📄 7. 【入退社労務・通帳提出フロー】（3ステップ）
+ * EmployeeOnboardingSubmission.tsx 本物と100%同一のJSX・スタイル
  */
 function RealOnboardingPreview() {
   return (
@@ -1248,65 +1524,195 @@ function RealOnboardingPreview() {
       steps={[
         {
           number: 1,
-          label: '① 場所（初期案内）',
-          badge: '案内メール',
-          title: '入社手続きメールまたはマイページの案内を開く',
-          desc: '入社時に届く案内メールのリンク、またはマイページの初期手続きバナーをクリックして開始します。',
+          label: '① 場所（提出フォーム）',
+          badge: '画面の場所',
+          title: 'ポータルから「入退社・労務手続き」を開く',
+          desc: 'ポータルの「入退社・労務手続き」または案内メールから書類提出フォームを開きます。',
           render: () => (
-            <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center space-y-3">
-              <div className="p-4 bg-blue-50/60 rounded-xl border border-blue-200 text-left">
-                <span className="text-[10px] bg-blue-600 text-white font-bold px-2 py-0.5 rounded">入社手続き案内</span>
-                <h4 className="text-xs font-black text-slate-900 mt-2 mb-1">【重要】給与振込先口座および入社書類のご提出</h4>
-                <p className="text-[11px] text-slate-600">下記リンクより、通帳写真の撮影と基本情報の入力を行ってください。</p>
-                <div className="mt-3 bg-blue-600 text-white font-bold py-2 rounded-lg text-xs text-center border-2 border-amber-400">
-                  入社手続きを開始する 👆
+            <div className="max-w-2xl mx-auto space-y-4">
+              {/* EmployeeOnboardingSubmission.tsx 本物ヘッダーバナー */}
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-4 sm:p-5 text-white shadow-md shadow-blue-100">
+                <h3 className="text-sm sm:text-base font-black tracking-tight flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-cyan-300" />
+                  入社・労務手続き 書類提出フォーム
+                </h3>
+                <p className="text-xs text-blue-100 mt-1 leading-relaxed">
+                  スマホから通帳の写真や通勤経路を入力して送信するだけで完了します。写真は自動で軽量化されて送信されます。
+                </p>
+              </div>
+
+              {/* 本物タブバー */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200">
+                <div className="relative">
+                  <div className="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap bg-blue-600 text-white shadow-sm border-2 border-amber-400">
+                    <CreditCard className="w-4 h-4" />
+                    給与振込口座・通帳写真
+                  </div>
+                  <div className="absolute -top-2.5 -right-2 bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.2 rounded-full shadow-xs animate-bounce">
+                    👆 ここを選択
+                  </div>
+                </div>
+
+                <div className="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap bg-white text-slate-600 border border-slate-200">
+                  <Train className="w-4 h-4" />
+                  通勤交通費申請
+                </div>
+
+                <div className="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap bg-white text-slate-600 border border-slate-200">
+                  <Shield className="w-4 h-4" />
+                  本人確認・マイナ
+                </div>
+
+                <div className="px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap bg-white text-slate-600 border border-slate-200">
+                  <Users className="w-4 h-4" />
+                  扶養控除等申告
                 </div>
               </div>
+
+              <p className="text-xs text-slate-500 text-center">
+                ※提出したい手続きのタブを選択して、スマホから手軽に入力できます。
+              </p>
             </div>
           )
         },
         {
           number: 2,
-          label: '② 作業画面（通帳撮影）',
-          badge: '書類提出',
-          title: '通帳の見開き面を撮影・アップロードする',
-          desc: '金融機関名・支店名・口座番号・名義人（カナ）がはっきりと確認できる写真を撮影して提出します。',
+          label: '② 作業画面（口座＆通帳撮影）',
+          badge: '入力・撮影',
+          title: '銀行口座の入力と通帳の見開き写真をアップロード',
+          desc: '給与の振込先口座情報を入力し、通帳またはキャッシュカードの写真を撮影・選択して送信します。',
           render: () => (
-            <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-md space-y-3 text-xs">
-              <h4 className="font-black text-sm text-slate-900 border-b pb-2">給与振込先口座の登録</h4>
-              
-              <div className="border-2 border-dashed border-blue-300 rounded-xl p-5 text-center bg-blue-50/40 space-y-2">
-                <Camera className="w-8 h-8 text-blue-600 mx-auto" />
-                <div className="font-bold text-slate-800">通帳の見開き面を撮影</div>
-                <p className="text-[10px] text-slate-500">支店名・口座番号・カタカナ名義が読めるように撮影してください</p>
-                <button type="button" className="px-3.5 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-xs shadow-xs cursor-default">
-                  カメラを起動または写真選択
-                </button>
+            <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4 max-w-xl mx-auto text-xs">
+              <div>
+                <h4 className="font-bold text-slate-800 text-sm sm:text-base flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-blue-600" />
+                  給与振込口座の登録 ＆ 通帳コピー写真提出
+                </h4>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  給与のお振込み先となる銀行口座をご入力いただき、通帳の表紙・見開き（またはキャッシュカード）の写真をご添付ください。
+                </p>
               </div>
 
-              <button
-                type="button"
-                className="w-full bg-blue-600 text-white font-black py-2.5 rounded-xl shadow-md border-2 border-amber-400 flex items-center justify-center gap-1 cursor-default"
-              >
-                書類を提出する 👆
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    銀行名 <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value="三菱UFJ銀行"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    支店名 <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value="新宿支店"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">口座種別</label>
+                  <select
+                    disabled
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold"
+                  >
+                    <option>普通預金</option>
+                    <option>当座預金</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    口座番号 (7桁) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value="1234567"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold tracking-wider font-mono"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    口座名義人（カタカナ） <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value="コマイ シュウイチロウ"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* 通帳写真アップロード枠（本物） */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border-2 border-dashed border-slate-300 text-center space-y-2">
+                <div className="flex flex-col items-center justify-center gap-1 py-1">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                    <Upload className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-bold text-slate-700">通帳の見開きまたはキャッシュカードの写真を選択</span>
+                  <span className="text-[10px] text-slate-400">※ 写真は自動で最適なサイズに軽量化（圧縮）されます</span>
+                </div>
+
+                <div className="p-2 bg-white rounded-lg border border-slate-200 flex items-center justify-between text-left">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded bg-blue-50 border border-blue-200 flex items-center justify-center text-xs font-bold text-blue-700">
+                      📄
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-800">passbook_copy.jpg</div>
+                      <div className="text-[10px] text-emerald-600 font-bold">自動軽量化完了: 2.4MB ➔ 320KB</div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded">
+                    添付済
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl shadow-md border-2 border-amber-400 flex items-center gap-1.5 cursor-default"
+                >
+                  <Send className="w-4 h-4" />
+                  口座情報を提出する 👆
+                </button>
+              </div>
             </div>
           )
         },
         {
           number: 3,
-          label: '③ 完了・口座登録',
+          label: '③ 完了・大元台帳への自動反映',
           badge: '登録完了',
-          title: '人事管理者が確認・承認して振込口座に正式登録',
-          desc: '提出した画像をもとに人事担当者が確認・承認を行い、給与振込先として正式にマスター連携されます。',
+          title: '提出完了と同時に労務大元台帳（SSOT）へ自動登録',
+          desc: '提出された口座情報は人事管理者が確認し、即座に給与振込先マスターへと一元連動されます。',
           render: () => (
             <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs">
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-emerald-900 font-bold">
-                <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-                <span>🎉 通帳書類の審査・口座登録が完了しました！</span>
+              <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center gap-2.5 text-emerald-950 font-bold">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span>✨ 「給与振込口座 申請」の提出が完了しました！</span>
               </div>
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-slate-600 text-[11px]">
-                次回のお給料日より、ご登録いただいた口座へ給与が自動振込されます。
+
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-slate-600 text-xs leading-relaxed space-y-1.5">
+                <div className="font-bold text-slate-800 flex items-center gap-1">
+                  <span>🏢 全システム（SSOT）自動流動完了:</span>
+                </div>
+                <p className="text-[11px]">
+                  提出された銀行口座情報は【入退社労務管理システム】を起点に、毎月の【給与計算システム】へ二重入力なしで自動流動します。<br />
+                  次回の給与支給日に、登録した口座へ自動振込が行われます。
+                </p>
               </div>
             </div>
           )
@@ -1318,6 +1724,7 @@ function RealOnboardingPreview() {
 
 /**
  * ⚙️ 8. 【ログイン・パスワード再設定フロー】（3ステップ）
+ * Login.tsx 本物と100%同一のJSX・スタイル
  */
 function RealLoginPreview() {
   return (
@@ -1328,27 +1735,94 @@ function RealLoginPreview() {
           number: 1,
           label: '① ログイン画面',
           badge: '入口',
-          title: 'ログイン画面下部の「パスワードをお忘れの方」を押す',
-          desc: 'パスワードを忘れてログインできない場合は、ログインボタン下のリンクをクリックします。',
+          title: 'ログイン画面下部の「パスワードを忘れた場合」を押す',
+          desc: 'パスワードを忘れてログインできない場合は、ログインフォーム内のリンクをクリックします。',
           render: () => (
-            <div className="max-w-xs mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-md space-y-3 text-xs">
-              <h4 className="font-black text-center text-slate-800 text-sm mb-2">スマート勤怠 ログイン</h4>
-              <div>
-                <label className="block text-slate-600 text-[10px] font-bold mb-1">メールアドレス</label>
-                <input type="email" readOnly value="employee@example.com" className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2" />
+            <div className="max-w-sm mx-auto bg-gray-50 p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4 text-xs">
+              <div className="text-center space-y-1">
+                <div className="flex justify-center text-blue-600">
+                  <LogIn size={40} />
+                </div>
+                <h3 className="text-xl font-extrabold text-gray-900 tracking-tight">
+                  システムにログイン
+                </h3>
+                <p className="text-xs text-gray-600 font-medium">
+                  勤怠・有給管理システム
+                </p>
               </div>
-              <div>
-                <label className="block text-slate-600 text-[10px] font-bold mb-1">パスワード</label>
-                <input type="password" readOnly value="••••••••" className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2" />
+
+              {/* Login.tsx 本物フォーム枠 */}
+              <div className="bg-white py-5 px-5 shadow-sm rounded-xl border border-gray-200 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    メールアドレス
+                  </label>
+                  <div className="relative rounded-md shadow-2xs">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                      <Mail className="h-4 w-4" />
+                    </div>
+                    <input
+                      type="email"
+                      readOnly
+                      value="you@example.com"
+                      className="block w-full pl-9 text-xs border-gray-300 rounded-md py-2 border font-mono bg-slate-50"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    パスワード
+                  </label>
+                  <div className="relative rounded-md shadow-2xs">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                      <Lock className="h-4 w-4" />
+                    </div>
+                    <input
+                      type="password"
+                      readOnly
+                      value="••••••••"
+                      className="block w-full pl-9 text-xs border-gray-300 rounded-md py-2 border bg-slate-50"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      defaultChecked
+                      disabled
+                      className="h-3.5 w-3.5 text-blue-600 border-gray-300 rounded"
+                    />
+                    <span className="ml-1.5 text-gray-700 text-[11px]">
+                      ログイン状態を保存
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <span className="font-bold text-blue-600 underline cursor-default bg-amber-100 text-slate-950 px-1.5 py-0.5 rounded border border-amber-300 shadow-2xs">
+                      パスワードを忘れた場合 👆
+                    </span>
+                    <div className="absolute -top-3 right-0 bg-blue-700 text-white text-[9px] font-black px-1.5 py-0.2 rounded shadow-xs whitespace-nowrap animate-bounce">
+                      👆 ここをクリック
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <button
+                    type="button"
+                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors cursor-default"
+                  >
+                    ログイン
+                  </button>
+                </div>
+
+                <div className="text-center text-[11px] pt-1 border-t border-gray-100 text-blue-600 font-medium">
+                  初めての方はこちら（新規登録）
+                </div>
               </div>
-              <div className="text-right">
-                <span className="text-blue-600 font-black text-[11px] underline cursor-default bg-amber-50 px-1 py-0.5 rounded border border-amber-300">
-                  パスワードをお忘れの方はこちら 👆
-                </span>
-              </div>
-              <button type="button" className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg cursor-default">
-                ログイン
-              </button>
             </div>
           )
         },
@@ -1359,13 +1833,34 @@ function RealLoginPreview() {
           title: '登録メールアドレス宛に再設定用リンクを送信',
           desc: '登録済みのメールアドレスを入力して送信すると、数秒でパスワード再設定用のURLが届きます。',
           render: () => (
-            <div className="max-w-xs mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-md space-y-3 text-xs">
-              <h4 className="font-black text-slate-800 text-sm">パスワード再設定</h4>
-              <p className="text-[11px] text-slate-500">ご登録のメールアドレスを入力してください。</p>
-              <div>
-                <input type="email" readOnly value="employee@example.com" className="w-full bg-white border border-blue-400 rounded-lg p-2" />
+            <div className="max-w-sm mx-auto bg-white p-6 rounded-2xl border border-slate-200 shadow-md space-y-4 text-xs">
+              <div className="text-center space-y-1 border-b pb-3">
+                <h4 className="font-black text-slate-900 text-base">パスワード再設定</h4>
+                <p className="text-[11px] text-slate-500">
+                  ご登録のメールアドレスへ再設定用リンクをお送りします。
+                </p>
               </div>
-              <button type="button" className="w-full bg-blue-600 text-white font-bold py-2 rounded-lg border-2 border-amber-400 cursor-default">
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  登録メールアドレス
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input 
+                    type="email" 
+                    readOnly 
+                    value="you@example.com" 
+                    className="w-full pl-9 pr-3 py-2 bg-white border-2 border-blue-400 rounded-lg text-xs font-mono font-bold" 
+                  />
+                </div>
+              </div>
+
+              <button 
+                type="button" 
+                className="w-full bg-blue-600 text-white font-black py-2.5 rounded-xl shadow-md border-2 border-amber-400 flex items-center justify-center gap-1.5 cursor-default text-xs"
+              >
+                <Send className="w-3.5 h-3.5" />
                 再設定リンクを送信 👆
               </button>
             </div>
@@ -1378,12 +1873,13 @@ function RealLoginPreview() {
           title: '届いたメールのリンクから新しいパスワードを設定',
           desc: 'メール内のリンクを開き、新しいパスワードを入力して保存すればすぐに新しいパスワードでログインできます。',
           render: () => (
-            <div className="max-w-xs mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs text-center">
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 font-bold">
-                ✓ 新しいパスワードを設定完了！
+            <div className="max-w-sm mx-auto bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs text-center">
+              <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-950 font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <span>✓ 新しいパスワードを設定完了しました！</span>
               </div>
-              <p className="text-[11px] text-slate-500">
-                新しいパスワードを使って安全にログインしてください。
+              <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
+                新しいパスワードを使って安全にログインしてください。ログイン後は以前と同じデータでご利用いただけます。
               </p>
             </div>
           )
