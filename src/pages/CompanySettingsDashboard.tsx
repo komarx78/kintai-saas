@@ -1677,13 +1677,23 @@ export default function CompanySettingsDashboard() {
           </button>
 
           <button
+            onClick={() => setActiveTab('payroll')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'payroll' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <DollarSign className="w-4 h-4" />
+            4. 給与締め日 ＆ 割増賃金・社会保険設定
+          </button>
+
+          <button
             onClick={() => setActiveTab('contract')}
             className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'contract' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
             <FileText className="w-4 h-4" />
-            4. 労働条件通知書 ＆ 雇用契約書
+            5. 労働条件通知書 ＆ 雇用契約書
           </button>
 
           <button
@@ -1693,7 +1703,7 @@ export default function CompanySettingsDashboard() {
             }`}
           >
             <UserCheck className="w-4 h-4" />
-            5. 入社手続きステップ ＆ 承認者マスタ
+            6. 入社手続きステップ ＆ 承認者マスタ
           </button>
 
           <button
@@ -1703,7 +1713,7 @@ export default function CompanySettingsDashboard() {
             }`}
           >
             <BookOpen className="w-4 h-4" />
-            6. 就業規則（AI連動）
+            7. 就業規則（AI連動）
           </button>
 
           <button
@@ -1713,7 +1723,7 @@ export default function CompanySettingsDashboard() {
             }`}
           >
             <Bell className="w-4 h-4" />
-            7. 📢 全社お知らせ管理
+            8. 📢 全社お知らせ管理
           </button>
 
           <button
@@ -1723,7 +1733,7 @@ export default function CompanySettingsDashboard() {
             }`}
           >
             <Award className="w-4 h-4" />
-            8. 📜 資格手当マスタ
+            9. 📜 資格手当マスタ
           </button>
         </div>
 
