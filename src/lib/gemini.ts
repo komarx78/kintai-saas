@@ -179,7 +179,7 @@ export async function askSystemOperationAI(
 ): Promise<string> {
   const apiKey = await getResolvedGeminiApiKey(tenantId);
   if (!apiKey) {
-    return '【お知らせ】AIサポートデスクのAPIキーが未設定です。特権管理者（super-admin）にてAIプラットフォーム設定よりGemini APIキーをご登録いただくか、下記の操作FAQ一覧をご参照ください。';
+    return '【お知らせ】AIサポートデスクのAPIキーが未設定です。特権管理者（super-admin）にてAIプラットフォーム設定をご確認いただくか、下記の操作FAQ一覧をご参照ください。';
   }
 
   const systemInstruction = `

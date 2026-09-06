@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { 
-  ArrowLeft, LogOut, HelpCircle 
+  ArrowLeft, LogOut, HelpCircle, Bot 
 } from 'lucide-react';
 import AppSwitcher from '../components/AppSwitcher';
 import { SystemSupportHub } from '../components/SystemSupportHub';
@@ -136,7 +136,8 @@ export default function CommunitySupportDashboard() {
         <div className="mb-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white shadow-xl border border-indigo-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 mb-1.5">
-              KAP Cloud 公式ヘルプ ＆ サービス改善窓口
+              <Bot className="w-3 h-3 text-indigo-300" />
+              <span>AI自動即答サポート ＆ サービス改善窓口</span>
             </div>
             <h2 className="text-lg font-black tracking-tight flex items-center gap-2">
               システム公式操作Q&A ＆ 改善要望受付ボックス
