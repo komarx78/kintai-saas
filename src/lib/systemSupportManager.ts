@@ -302,8 +302,8 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     id: 'sfaq-o-1',
     category: 'onboarding',
     question: '新入社員が入社手続き（口座写真・マイナンバー等）を提出する手順は？',
-    answer: '【入社書類提出の手順】\n1. ポータル画面から「入退社・労務手続き」カードをクリックします（マイページへ移動）。\n2. 上部の申請タブから各項目を選択し、写真・必要事項を入力して送信します。\n   ①「口座情報」: 銀行名・支店・口座番号と、通帳見開きまたはキャッシュカード写真を撮影・添付して「口座情報を申請する」をクリック。\n   ②「通勤交通費」: 出発駅・到着駅・定期券または検索結果スクショを添付して「通勤費を申請する」をクリック。\n   ③「本人確認・マイナンバー」: 生年月日・現住所・電話番号・マイナンバー・身分証写真を添付して「本人確認書類を申請する」をクリック。\n   ④「扶養控除等申告」: 扶養親族の有無・人数を入力して送信。\n3. 提出されたデータは会社管理者の「入退社・労務手続き管理」へリアルタイム送信され、大元マスタ（SSOT）へ即時反映されます。',
-    keyword: '入社手続き 通帳写真 口座登録 マイナンバー 通勤手当 提出 新入社員 SSOT 口座情報を申請する',
+    answer: '【入社書類提出の手順】\n1. ポータル画面から「入退社・労務手続き」カードをクリックします（マイページへ移動）。\n2. 上部の申請タブから各項目を選択し、写真・必要事項を入力して送信します。\n   ①「口座情報」: 銀行名・支店・口座番号と、通帳見開きまたはキャッシュカード写真を撮影・添付して「口座情報を提出する」をクリック。\n   ②「通勤交通費」: 出発駅・到着駅・定期券または検索結果スクショを添付して「通勤費を申請する」をクリック。\n   ③「本人確認・マイナンバー」: 生年月日・現住所・電話番号・マイナンバー・身分証写真を添付して「身分証を提出する」をクリック。\n   ④「扶養控除等申告」: 扶養親族の有無・人数を入力して送信（前職源泉票がある場合は「源泉徴収票を提出する」）。\n3. 提出されたデータは会社管理者の「入退社・労務手続き管理」へリアルタイム送信され、大元マスタ（SSOT）へ即時反映されます。',
+    keyword: '入社手続き 通帳写真 口座登録 マイナンバー 通勤手当 提出 新入社員 SSOT 口座情報を提出する 身分証を提出する 通勤費を申請する',
     preview_type: 'onboarding_passbook',
     updated_at: '2026-09-06'
   },
@@ -426,12 +426,12 @@ export async function fetchSystemFaqs(): Promise<SystemFaqItem[]> {
         }
       });
 
-      localStorage.setItem('kap_system_faqs_v7', JSON.stringify(merged));
+      localStorage.setItem('kap_system_faqs_v8', JSON.stringify(merged));
       return merged;
     }
 
     // Supabaseが空またはエラーの場合
-    const local = localStorage.getItem('kap_system_faqs_v7');
+    const local = localStorage.getItem('kap_system_faqs_v8');
     if (local) {
       try {
         const parsed = JSON.parse(local);
@@ -467,7 +467,7 @@ export async function saveSystemFaq(item: Omit<SystemFaqItem, 'id' | 'updated_at
 
     if (!error && data) {
       const updated = [data, ...currentList.filter(f => f.id !== id)];
-      localStorage.setItem('kap_system_faqs_v7', JSON.stringify(updated));
+      localStorage.setItem('kap_system_faqs_v8', JSON.stringify(updated));
       return data;
     }
   } catch (err) {
@@ -482,7 +482,7 @@ export async function saveSystemFaq(item: Omit<SystemFaqItem, 'id' | 'updated_at
   } else {
     updatedList = [fullItem, ...currentList];
   }
-  localStorage.setItem('kap_system_faqs_v7', JSON.stringify(updatedList));
+  localStorage.setItem('kap_system_faqs_v8', JSON.stringify(updatedList));
   return fullItem;
 }
 
@@ -494,7 +494,7 @@ export async function deleteSystemFaq(id: string): Promise<boolean> {
   }
   const currentList = await fetchSystemFaqs();
   const updated = currentList.filter(f => f.id !== id);
-  localStorage.setItem('kap_system_faqs_v7', JSON.stringify(updated));
+  localStorage.setItem('kap_system_faqs_v8', JSON.stringify(updated));
   return true;
 }
 
