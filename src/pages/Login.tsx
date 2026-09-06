@@ -118,13 +118,38 @@ const Login = () => {
 
     try {
       const redirectUrl = window.location.origin;
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      console.log('Attempting password reset with redirectTo:', redirectUrl);
+
+      // 1. まず redirectTo を指定して試行
+      let res = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo: redirectUrl
       });
-      if (resetError) throw resetError;
+
+      // 2. もし redirectTo が原因（URL未許可等）でエラーになった場合は redirectTo なしで再試行
+      if (res.error) {
+        console.warn('First attempt with redirectTo failed, trying without redirectTo:', res.error);
+        res = await supabase.auth.resetPasswordForEmail(email.trim());
+      }
+
+      if (res.error) {
+        throw res.error;
+      }
+
       setResetSuccess(true);
     } catch (err: any) {
-      setError(err.message || 'パスワード再設定メールの送信に失敗しました');
+      console.error('Password reset error detail:', err);
+      const rawMsg = err.message || '';
+      let userMsg = 'パスワード再設定メールの送信に失敗しました。';
+
+      if (rawMsg.includes('Error sending recovery email') || rawMsg.includes('rate limit') || rawMsg.includes('security purposes')) {
+        userMsg = '【メール送信エラー】Supabaseのメール送信制限（レートリミット: 1時間3通まで）に達しているか、SMTP設定（カスタムメール送信）が必要です。しばらく時間を置いてから再度お試しいただくか、Supabaseダッシュボード（Authentication > Users）から直接パスワードを変更してください。';
+      } else if (rawMsg.includes('User not found')) {
+        userMsg = '指定されたメールアドレスのアカウントが見つかりませんでした。アドレスをお確かめください。';
+      } else if (rawMsg) {
+        userMsg = `メール送信エラー: ${rawMsg}`;
+      }
+
+      setError(userMsg);
     } finally {
       setLoading(false);
     }
@@ -262,7 +287,18 @@ const Login = () => {
                     </button>
                   </div>
 
-                  <div className="text-center pt-2">
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1.5">
+                    <p className="font-bold flex items-center gap-1 text-amber-950">
+                      <span>💡</span>
+                      <span>メールが届かない・送信エラーになる場合:</span>
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-amber-800">
+                      Supabase無料枠のレート制限（1時間3通）やSMTP設定によりメール送信が制限される場合があります。<br />
+                      管理者・オーナー様は <strong>Supabase管理画面 ➔「Authentication」➔「Users」</strong> より、該当ユーザーの「...」メニューから直接パスワードを再設定（Edit User）することも可能です。
+                    </p>
+                  </div>
+
+                  <div className="text-center pt-1">
                     <button
                       type="button"
                       onClick={() => {
