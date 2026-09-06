@@ -168,3 +168,71 @@ ${companyRules || '（就業規則が登録されていません。労働基準�
     return `申し訳ありません。AIの応答中にエラーが発生しました。\n（詳細: ${error.message}）`;
   }
 }
+
+/**
+ * システム公式操作マニュアル＆FAQをもとにGemini AIに質問する（システムAIサポートデスク）
+ */
+export async function askSystemOperationAI(
+  query: string,
+  faqKnowledge: string,
+  tenantId?: string
+): Promise<string> {
+  const apiKey = await getResolvedGeminiApiKey(tenantId);
+  if (!apiKey) {
+    return '【お知らせ】AIサポートデスクのAPIキーが未設定です。特権管理者（super-admin）にてAIプラットフォーム設定よりGemini APIキーをご登録いただくか、下記の操作FAQ一覧をご参照ください。';
+  }
+
+  const systemInstruction = `
+あなたは「KAP 勤怠・シフト・労務管理クラウドシステム」の公式AIサポートデスク担当者です。
+利用企業（テナント）の従業員および管理者からの「システムの操作方法・機能の使い方・困りごと」に対して、親切・丁寧・的確に操作手順を回答してください。
+
+【システム公式操作マニュアル・FAQ知識ベース】
+${faqKnowledge}
+
+【回答ガイドライン】
+1. 礼儀正しく、親身で分かりやすい日本語で回答してください。
+2. 画面のどこを押せばよいか、操作の具体的な手順（1. 2. 3.）をステップ形式で示してください。
+3. 知識ベースにない特殊な設定や自社独自の就業規則に関しては、「自社の管理者様または開発元サポート窓口へお問い合わせください」と案内してください。
+4. 箇条書きや絵文字を適度に使って、読みやすく構成してください。
+`;
+
+  try {
+    const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    let answer: string | null = null;
+    let lastError: string | null = null;
+
+    for (const model of models) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const body = {
+          contents: [{ role: 'user', parts: [{ text: `${systemInstruction}\n\nユーザーの質問: ${query}` }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+        };
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          answer = data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+          if (answer) break;
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          lastError = errJson.error?.message || res.statusText;
+        }
+      } catch (e: any) {
+        lastError = e.message;
+      }
+    }
+
+    if (!answer) {
+      return `申し訳ありません。AI応答を取得できませんでした。（詳細: ${lastError || '接続エラー'}）下記のFAQ一覧もあわせてご参照ください。`;
+    }
+    return answer;
+  } catch (error: any) {
+    return `申し訳ありません。エラーが発生しました。（詳細: ${error.message}）`;
+  }
+}

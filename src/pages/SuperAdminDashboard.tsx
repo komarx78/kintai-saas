@@ -4,12 +4,13 @@ import {
   Settings, Users, Save, Database, Edit, X, Sparkles, 
   CheckCircle2, Loader2, Building2, FileText, 
   Activity, ShieldAlert, RefreshCw, ExternalLink, Shield,
-  Plus, Trash2, Edit3
+  Plus, Trash2, Edit3, HelpCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { OfficialDocMasterInspector } from '../components/OfficialDocMasterInspector';
 import { SocialInsuranceMasterManager } from '../components/SocialInsuranceMasterManager';
 import CustomDocDesignerModal from '../components/CustomDocDesignerModal';
+import { SuperAdminSystemSupport } from '../components/SuperAdminSystemSupport';
 import { 
   type CustomDocTemplate, 
   fetchCustomDocTemplates,
@@ -73,6 +74,7 @@ export default function SuperAdminDashboard() {
       social_rates: '🏥 社会保険料率マスタ設定 | 特権管理者運用本部',
       tax_docs: '📄 国税庁公的帳票マスタ設定 | 特権管理者運用本部',
       system_health: '🚨 システムヘルス＆エラー監視 | 特権管理者運用本部',
+      system_support: '💡 システム操作Q&A ＆ 改善要望統括 | 特権管理者運用本部',
       billing: 'プラン＆価格管理 | 特権管理者運用本部',
       ai_settings: '✨ AIプラットフォーム設定 | 特権管理者運用本部',
       staff: '運営スタッフ管理 | 特権管理者運用本部'
@@ -298,6 +300,16 @@ export default function SuperAdminDashboard() {
           >
             <Activity className="h-4 w-4 mr-2.5 text-emerald-400" />
             🚨 システムエラー・ログ監視
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('system_support')}
+            className={`w-full flex items-center px-3.5 py-3 rounded-xl transition cursor-pointer ${
+              activeTab === 'system_support' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <HelpCircle className="h-4 w-4 mr-2.5 text-cyan-400" />
+            💡 システムQ&A ＆ 改善要望統括
           </button>
 
           <div className="pt-3 pb-1 border-t border-slate-800 my-1 text-[10px] text-slate-500 uppercase tracking-wider px-2">
@@ -658,6 +670,13 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════════════════════ */}
+        {/* 💡 タブ：システム操作Q&A ＆ 改善要望回収統括 */}
+        {/* ══════════════════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'system_support' && (
+          <SuperAdminSystemSupport />
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════════════════ */}

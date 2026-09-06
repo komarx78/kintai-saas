@@ -105,12 +105,12 @@ export default function Portal() {
     },
     {
       id: 'support',
-      title: '社内Q&A・目安箱',
-      description: '社内FAQ・就業規則AI自動相談デスク、改善目安箱（回収ボックス）を利用できます。',
+      title: 'システム操作Q&A・改善要望',
+      description: '本システムの使い方マニュアル、Gemini AI操作サポート、機能改善リクエスト（回収ボックス）はこちら',
       icon: <HelpCircle className="w-7 h-7 text-white drop-shadow-md" />,
       path: '/support',
-      color: 'bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 shadow-md ring-1 ring-white/40',
-      hoverColor: 'hover:border-purple-300 hover:shadow-[0_15px_30px_-10px_rgba(147,51,234,0.3)]',
+      color: 'bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-700 shadow-md ring-1 ring-white/40',
+      hoverColor: 'hover:border-indigo-300 hover:shadow-[0_15px_30px_-10px_rgba(99,102,241,0.3)]',
     },
     {
       id: 'payroll',
@@ -298,7 +298,7 @@ export default function Portal() {
                 className="text-xs font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
               >
                 <HelpCircle className="w-3.5 h-3.5" />
-                社内Q&A・目安箱を開く
+                システムQ&A・改善要望
               </button>
               {(role === 'admin' || role === 'superadmin') && (
                 <button

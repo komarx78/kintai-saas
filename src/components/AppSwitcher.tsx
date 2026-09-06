@@ -50,11 +50,11 @@ export default function AppSwitcher({ currentApp, role }: AppSwitcherProps) {
     },
     {
       id: 'support',
-      name: '社内Q&A・目安箱',
+      name: 'システムQ&A・改善要望',
       icon: <HelpCircle className="w-4 h-4 text-white drop-shadow-sm" />,
       path: '/support',
-      description: '社内FAQ・AI相談・目安箱',
-      iconBg: 'bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 shadow-sm ring-1 ring-white/30'
+      description: '操作ガイド・AI相談・改善箱',
+      iconBg: 'bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-700 shadow-sm ring-1 ring-white/30'
     },
     ...(role === 'admin' || role === ('superadmin' as any) ? [
       {
