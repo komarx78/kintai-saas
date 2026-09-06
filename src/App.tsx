@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
+import ResetPassword from './pages/ResetPassword';
 import SuperAdminLogin from './pages/SuperAdminLogin';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import Portal from './pages/Portal';
@@ -109,6 +110,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/master-login" element={<SuperAdminLogin />} />
         <Route path="/trial-ended" element={<TrialEnded />} />
         <Route path="/super-admin/*" element={

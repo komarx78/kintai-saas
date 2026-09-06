@@ -3,15 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { LogIn, Mail, Lock, UserPlus, ArrowLeft, CheckCircle2, KeyRound } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-type AuthMode = 'login' | 'signup' | 'forgot' | 'reset_password';
+type AuthMode = 'login' | 'signup' | 'forgot';
 
 const Login = () => {
   const [mode, setMode] = useState<AuthMode>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [isEmployeeSignup, setIsEmployeeSignup] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
@@ -28,14 +26,15 @@ const Login = () => {
       setRememberMe(true);
     }
 
-    // パスワードリセット用リカバリーURL検知
-    if (window.location.hash.includes('type=recovery')) {
-      setMode('reset_password');
+    // パスワードリセット用リカバリーURL検知（過去リンクやcodeパラメータも確実に新設画面へ自動転送）
+    if (window.location.hash.includes('type=recovery') || window.location.search.includes('type=recovery') || window.location.search.includes('code=')) {
+      navigate('/reset-password' + window.location.search + window.location.hash, { replace: true });
+      return;
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
       if (event === 'PASSWORD_RECOVERY') {
-        setMode('reset_password');
+        navigate('/reset-password', { replace: true });
       }
     });
 
@@ -117,7 +116,7 @@ const Login = () => {
     setResetSuccess(false);
 
     try {
-      const redirectUrl = window.location.origin;
+      const redirectUrl = `${window.location.origin}/reset-password`;
       console.log('Attempting password reset with redirectTo:', redirectUrl);
 
       // 1. まず redirectTo を指定して試行
@@ -141,43 +140,17 @@ const Login = () => {
       const rawMsg = err.message || '';
       let userMsg = 'パスワード再設定メールの送信に失敗しました。';
 
-      if (rawMsg.includes('Error sending recovery email') || rawMsg.includes('rate limit') || rawMsg.includes('security purposes')) {
-        userMsg = '現在メール送信サーバーが混み合っているか、一時的にご利用いただけません。恐れ入りますが少し時間を置いてから再度お試しいただくか、社内管理者までお問い合わせください。';
+      if (rawMsg.includes('Error sending recovery email')) {
+        userMsg = 'メール送信処理に失敗いたしました。恐れ入りますが、しばらく時間をおいて再度お試しいただくか、システム管理者までお問い合わせください。';
+      } else if (rawMsg.includes('rate limit') || rawMsg.includes('security purposes')) {
+        userMsg = 'セキュリティ保護のため、短時間の連続送信が制限されております。しばらく時間をおいてから再度お試しください。';
       } else if (rawMsg.includes('User not found')) {
         userMsg = 'ご入力いただいたメールアドレスのアカウントが見つかりませんでした。アドレスをお確かめください。';
       } else {
-        userMsg = 'メールの送信に失敗しました。恐れ入りますが少し時間を置いて再度お試しください。';
+        userMsg = 'パスワード再設定メールの送信に失敗いたしました。恐れ入りますが、しばらく時間をおいて再度お試しください。';
       }
 
       setError(userMsg);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 🔑 新しいパスワードの更新処理（リカバリーリンクからアクセス時）
-  const handleUpdateNewPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      setError('パスワードが一致しません');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setError('パスワードは6文字以上で入力してください');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: newPassword
-      });
-      if (updateError) throw updateError;
-      alert('パスワードの再設定が完了しました。ポータル画面へログインします。');
-      navigate('/portal');
-    } catch (err: any) {
-      setError(err.message || 'パスワードの更新に失敗しました');
     } finally {
       setLoading(false);
     }
@@ -190,19 +163,16 @@ const Login = () => {
           {mode === 'signup' && <UserPlus size={48} className="text-green-600" />}
           {mode === 'login' && <LogIn size={48} />}
           {mode === 'forgot' && <KeyRound size={48} className="text-indigo-600" />}
-          {mode === 'reset_password' && <Lock size={48} className="text-indigo-600" />}
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
           {mode === 'signup' && '新規アカウント作成'}
           {mode === 'login' && 'システムにログイン'}
           {mode === 'forgot' && 'パスワードの再設定'}
-          {mode === 'reset_password' && '新しいパスワードの設定'}
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
           {mode === 'signup' && '新しくアカウントを登録します'}
           {mode === 'login' && '勤怠・有給管理システム'}
           {mode === 'forgot' && 'ご登録済みのメールアドレスに再設定用リンクをお送りします'}
-          {mode === 'reset_password' && '新しいパスワードを入力してください'}
         </p>
       </div>
 
@@ -305,64 +275,7 @@ const Login = () => {
             </div>
           )}
 
-          {/* ─────────────────────────────────────────────────────────────
-              🔒 新しいパスワードの設定画面（リカバリーリンクからアクセス時）
-             ───────────────────────────────────────────────────────────── */}
-          {mode === 'reset_password' && (
-            <form className="space-y-6" onSubmit={handleUpdateNewPassword}>
-              <div>
-                <label className="block text-sm font-medium text-gray-700" htmlFor="new-password">
-                  新しいパスワード（6文字以上）
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="new-password"
-                    type="password"
-                    required
-                    minLength={6}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 border"
-                    placeholder="新しいパスワード"
-                  />
-                </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700" htmlFor="confirm-password">
-                  新しいパスワード（確認用）
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    id="confirm-password"
-                    type="password"
-                    required
-                    minLength={6}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 border"
-                    placeholder="もう一度入力してください"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition cursor-pointer"
-                >
-                  {loading ? '更新中...' : 'パスワードを更新してログイン'}
-                </button>
-              </div>
-            </form>
-          )}
 
           {/* ─────────────────────────────────────────────────────────────
               👤 通常ログイン ＆ 新規アカウント作成 画面
