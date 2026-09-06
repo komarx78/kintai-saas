@@ -625,7 +625,7 @@ function RealLeaveBalancePreview() {
                 type="button"
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm shadow-md transition cursor-pointer"
               >
-                申請を送信する 👆
+                申請を送信 👆
               </button>
             </div>
           )
@@ -714,7 +714,7 @@ function RealMonthlyAttendancePreview() {
                     </div>
                     <div className="flex items-center gap-2 px-2.5 py-1.5 rounded text-slate-400">
                       <FileText className="w-3.5 h-3.5" />
-                      <span>Web給与明細・源泉徴収票</span>
+                      <span>📄 Web給与明細・源泉徴収票・書類</span>
                     </div>
                     <div className="flex items-center gap-2 px-2.5 py-1.5 rounded text-slate-400">
                       <FileText className="w-3.5 h-3.5" />
@@ -846,7 +846,7 @@ function RealMonthlyAttendancePreview() {
           label: '③ 入力作業画面',
           badge: '入力・指定',
           title: '正しい時刻と「休憩時間（分）」を入力して送信',
-          desc: '各種申請フォームが開きます。区分、正しい時刻、そして休憩時間（分）を選択して【申請を送信する】を押します。',
+          desc: '各種申請フォームが開きます。区分、正しい時刻、そして休憩時間（分）を選択して【申請を送信】を押します。',
           render: () => (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-xl mx-auto space-y-5">
               <div className="flex items-center space-x-2 border-b pb-3">
@@ -940,7 +940,7 @@ function RealMonthlyAttendancePreview() {
                   type="button"
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm shadow-md transition cursor-pointer"
                 >
-                  申請を送信する 👆
+                  申請を送信 👆
                 </button>
               </div>
             </div>
@@ -1180,15 +1180,15 @@ function RealPayslipPreview() {
           number: 1,
           label: '① 場所（メニュー）',
           badge: '画面の場所',
-          title: '左メニューから「Web給与明細・源泉徴収票」を開く',
-          desc: '画面左側メニューにある【Web給与明細・源泉徴収票】をクリックして給与明細画面を開きます。',
+          title: '左メニューから「📄 Web給与明細・源泉徴収票・書類」を開く',
+          desc: '画面左側メニューにある【📄 Web給与明細・源泉徴収票・書類】をクリックして給与明細画面を開きます。',
           render: () => (
             <div className="max-w-md mx-auto bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center space-y-3">
               <div className="p-4 bg-emerald-50/60 rounded-xl border-2 border-emerald-400 shadow-sm relative">
                 <span className="text-xs text-emerald-700 font-bold block mb-1">左サイドバーメニュー</span>
                 <div className="flex items-center justify-center gap-2 bg-emerald-600 text-white py-2.5 px-4 rounded-xl font-black text-sm shadow-md">
                   <FileText className="w-4 h-4" />
-                  <span>Web給与明細・源泉徴収票 👆</span>
+                  <span>📄 Web給与明細・源泉徴収票・書類 👆</span>
                 </div>
               </div>
               <p className="text-xs text-slate-600">

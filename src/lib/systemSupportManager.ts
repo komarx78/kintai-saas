@@ -426,12 +426,12 @@ export async function fetchSystemFaqs(): Promise<SystemFaqItem[]> {
         }
       });
 
-      localStorage.setItem('kap_system_faqs_v9', JSON.stringify(merged));
+      localStorage.setItem('kap_system_faqs_v11', JSON.stringify(merged));
       return merged;
     }
 
     // Supabaseが空またはエラーの場合
-    const local = localStorage.getItem('kap_system_faqs_v9');
+    const local = localStorage.getItem('kap_system_faqs_v11');
     if (local) {
       try {
         const parsed = JSON.parse(local);
@@ -467,7 +467,7 @@ export async function saveSystemFaq(item: Omit<SystemFaqItem, 'id' | 'updated_at
 
     if (!error && data) {
       const updated = [data, ...currentList.filter(f => f.id !== id)];
-      localStorage.setItem('kap_system_faqs_v9', JSON.stringify(updated));
+      localStorage.setItem('kap_system_faqs_v11', JSON.stringify(updated));
       return data;
     }
   } catch (err) {
@@ -482,7 +482,7 @@ export async function saveSystemFaq(item: Omit<SystemFaqItem, 'id' | 'updated_at
   } else {
     updatedList = [fullItem, ...currentList];
   }
-  localStorage.setItem('kap_system_faqs_v9', JSON.stringify(updatedList));
+  localStorage.setItem('kap_system_faqs_v11', JSON.stringify(updatedList));
   return fullItem;
 }
 
@@ -494,7 +494,7 @@ export async function deleteSystemFaq(id: string): Promise<boolean> {
   }
   const currentList = await fetchSystemFaqs();
   const updated = currentList.filter(f => f.id !== id);
-  localStorage.setItem('kap_system_faqs_v9', JSON.stringify(updated));
+  localStorage.setItem('kap_system_faqs_v11', JSON.stringify(updated));
   return true;
 }
 
