@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { 
+  Clock, Calendar, FileText, UserCheck, Bot, ArrowLeft, 
+  ChevronLeft, ChevronRight, HelpCircle, CheckCircle 
+} from 'lucide-react';
 
 interface GuideUiPreviewProps {
   previewType?: string;
@@ -23,12 +27,13 @@ export const SystemGuideUiPreview: React.FC<GuideUiPreviewProps> = ({
 
   // previewType に応じて本物の画面UIをレンダリング
   switch (previewType) {
+    case 'monthly_attendance':
+    case 'kintai_fix':
+      return <RealMonthlyAttendancePreview />;
     case 'kintai_clock':
       return <RealKintaiClockPreview />;
     case 'leave_request':
       return <RealLeaveBalancePreview />;
-    case 'kintai_fix':
-      return <RealKintaiFixPreview />;
     case 'shift_submit':
       return <RealShiftSubmitPreview />;
     case 'payslip_view':
@@ -38,7 +43,7 @@ export const SystemGuideUiPreview: React.FC<GuideUiPreviewProps> = ({
     case 'password_reset':
       return <RealLoginPreview />;
     default:
-      return <RealKintaiClockPreview />;
+      return <RealMonthlyAttendancePreview />;
   }
 };
 
@@ -133,47 +138,302 @@ function RealLeaveBalancePreview() {
 }
 
 /**
- * ✏️ 3. 本物の打刻修正・各種申請UI（UserDashboardより抽出）
+ * 📅 3. 本物の「月次勤怠・有給照会」画面（画像 media_1788660218189.png と100%完全一致再現）
  */
-function RealKintaiFixPreview() {
+function RealMonthlyAttendancePreview() {
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('09/04 (金)');
+
   return (
-    <div className="mt-3 max-w-md mx-auto bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-sm">
-      <h2 className="text-lg font-medium text-gray-800 mb-4 border-b pb-2">各種申請（打刻修正・休暇申請）</h2>
-      
-      <div className="space-y-3">
-        <div>
-          <label className="block text-gray-700 text-xs font-bold mb-1">申請種別</label>
-          <select className="w-full bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg p-2.5" defaultValue="打刻修正">
-            <option value="打刻修正">打刻修正</option>
-            <option value="有給休暇（全休）">有給休暇（全休）</option>
-            <option value="午前半休">午前半休</option>
-            <option value="午後半休">午後半休</option>
-          </select>
-        </div>
+    <div className="mt-3 bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden text-slate-800">
+      {/* 画面案内ヘッダーバー */}
+      <div className="bg-slate-800 text-white px-4 py-2 flex items-center justify-between text-xs font-bold">
+        <span className="flex items-center gap-1.5">
+          <Calendar className="w-4 h-4 text-blue-400" />
+          実際のシステム画面: 【月次勤怠・有給照会】（月間勤怠照会テーブル ＆ 申請するボタン）
+        </span>
+        <span className="bg-blue-600 text-[10px] px-2 py-0.5 rounded text-white font-medium">
+          実画面プレビュー
+        </span>
+      </div>
 
-        <div className="grid grid-cols-2 gap-3">
+      <div className="flex flex-col md:flex-row min-h-[440px] bg-slate-100 text-xs">
+        {/* 左サイドバー（画像と完全一致） */}
+        <div className="w-full md:w-48 bg-slate-900 text-slate-200 p-3 flex flex-col justify-between shrink-0">
           <div>
-            <label className="block text-gray-700 text-xs font-bold mb-1">対象日</label>
-            <input type="text" readOnly value="2026-09-05" className="w-full bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg p-2.5" />
+            <div className="pb-3 mb-3 border-b border-slate-700 font-bold text-white text-sm">
+              駒井 秀一朗 さん
+            </div>
+            <nav className="space-y-1.5">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded text-slate-400 hover:text-white cursor-default">
+                <Clock className="w-3.5 h-3.5" />
+                <span>ホーム（打刻）</span>
+              </div>
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-slate-800 text-white font-bold border border-blue-400/70 shadow-xs cursor-default">
+                <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                <span>月次勤怠・有給照会</span>
+              </div>
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded text-indigo-300 cursor-default">
+                <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                <span>シフト希望・確定シフト</span>
+              </div>
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded text-emerald-300 cursor-default">
+                <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Web給与明細・源泉徴収票</span>
+              </div>
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded text-slate-400 cursor-default">
+                <FileText className="w-3.5 h-3.5" />
+                <span>各種申請</span>
+              </div>
+              <div className="flex items-center justify-between px-2.5 py-1.5 rounded text-slate-400 cursor-default">
+                <span className="flex items-center gap-2">
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>部下からの申請承認</span>
+                </span>
+                <span className="bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">1</span>
+              </div>
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded text-cyan-300 cursor-default">
+                <Bot className="w-3.5 h-3.5 text-cyan-400" />
+                <span>社内規定AI相談</span>
+              </div>
+            </nav>
           </div>
-          <div>
-            <label className="block text-gray-700 text-xs font-bold mb-1">修正打刻時刻</label>
-            <input type="text" readOnly value="18:00" className="w-full bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg p-2.5" />
+          <div className="pt-3 border-t border-slate-800 text-slate-500 text-[10px]">
+            スマート勤怠 Ver 2.3
           </div>
         </div>
 
-        <div>
-          <label className="block text-gray-700 text-xs font-bold mb-1">申請理由</label>
-          <input type="text" readOnly value="退勤時の打刻忘れのため" className="w-full bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg p-2.5" />
-        </div>
+        {/* 右メインコンテンツ（画像と完全一致） */}
+        <div className="flex-1 p-3 sm:p-4 overflow-x-auto">
+          {/* 上部ヘッダー（ポータル導線 ＆ 使い方ガイド） */}
+          <div className="bg-white rounded-lg border border-slate-200 px-3 py-2 mb-3 flex items-center justify-between shadow-2xs">
+            <div className="flex items-center gap-2 text-[11px] font-bold text-slate-600">
+              <span className="flex items-center gap-1 hover:text-blue-600 cursor-default">
+                <ArrowLeft className="w-3 h-3" />
+                ポータル
+              </span>
+              <span className="text-slate-300">|</span>
+              <span className="text-slate-500">勤怠・有給照会</span>
+            </div>
+            <button type="button" className="flex items-center gap-1 bg-slate-50 hover:bg-slate-100 border border-slate-300 px-2.5 py-1 rounded text-[11px] font-bold text-slate-700 cursor-default">
+              <HelpCircle className="w-3 h-3 text-blue-600" />
+              使い方ガイド
+            </button>
+          </div>
 
-        <button type="button" className="w-full bg-blue-600 text-white font-bold py-2.5 rounded-lg text-xs hover:bg-blue-700 transition cursor-default">
-          申請を送信する
-        </button>
+          {/* メイン勤怠カード */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            {/* タイトル行 ＆ 出力ボタン */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-3 border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-3">
+                <h3 className="text-base font-bold text-slate-900">月間勤怠照会</h3>
+                <div className="flex items-center bg-slate-100 rounded-md border border-slate-200 text-xs font-bold">
+                  <button type="button" className="p-1 hover:bg-slate-200 rounded-l transition cursor-default">
+                    <ChevronLeft className="w-3.5 h-3.5 text-slate-600" />
+                  </button>
+                  <span className="px-2.5 py-0.5 text-slate-800">2026年9月</span>
+                  <button type="button" className="p-1 hover:bg-slate-200 rounded-r transition cursor-default">
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="flex items-center gap-1 bg-slate-700 text-white px-2.5 py-1 rounded text-xs font-bold shadow-2xs cursor-default">
+                  <FileText className="w-3 h-3" />
+                  PDF出力 (印刷)
+                </button>
+                <button type="button" className="flex items-center gap-1 bg-emerald-600 text-white px-2.5 py-1 rounded text-xs font-bold shadow-2xs cursor-default">
+                  <FileText className="w-3 h-3" />
+                  CSV出力
+                </button>
+              </div>
+            </div>
+
+            {/* サマリーバッジ */}
+            <div className="flex flex-wrap gap-2 mb-3 text-xs">
+              <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded font-bold text-slate-700">
+                出勤: <strong className="text-slate-900 text-sm">21</strong> 日
+              </span>
+              <span className="bg-blue-50 border border-blue-200 px-2.5 py-1 rounded font-bold text-blue-800">
+                実働: <strong className="text-blue-900 text-sm">193</strong> 時間 <strong className="text-blue-900 text-sm">0</strong> 分
+              </span>
+              <span className="bg-rose-50 border border-rose-200 px-2.5 py-1 rounded font-bold text-rose-800">
+                残業: <strong className="text-rose-900 text-sm">25</strong> 時間 <strong className="text-rose-900 text-sm">0</strong> 分
+              </span>
+            </div>
+
+            {/* 勤怠テーブル（画像と100%完全一致） */}
+            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+              <table className="min-w-full divide-y divide-slate-200 text-[11px]">
+                <thead className="bg-slate-50 text-slate-600 font-bold">
+                  <tr>
+                    <th className="px-2.5 py-2 text-left">日付</th>
+                    <th className="px-2.5 py-2 text-left">出勤 (打刻)</th>
+                    <th className="px-2.5 py-2 text-left">退勤 (打刻)</th>
+                    <th className="px-2.5 py-2 text-right">実働時間</th>
+                    <th className="px-2.5 py-2 text-right">残業時間</th>
+                    <th className="px-2.5 py-2 text-left">備考</th>
+                    <th className="px-2.5 py-2 text-right font-black text-blue-700">アクション</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  <tr>
+                    <td className="px-2.5 py-1.5 font-medium text-slate-800 whitespace-nowrap">09/01 (火)</td>
+                    <td className="px-2.5 py-1.5 font-mono text-slate-700 whitespace-nowrap">09:00</td>
+                    <td className="px-2.5 py-1.5 font-mono text-slate-700 whitespace-nowrap">18:00</td>
+                    <td className="px-2.5 py-1.5 text-right font-mono font-bold text-slate-700">8h</td>
+                    <td className="px-2.5 py-1.5 text-right font-mono text-slate-400">-</td>
+                    <td className="px-2.5 py-1.5 text-slate-500 whitespace-nowrap">テスト自動生成打刻</td>
+                    <td className="px-2.5 py-1.5 text-right whitespace-nowrap">
+                      <button 
+                        type="button" 
+                        onClick={() => { setSelectedDate('09/01 (火)'); setShowFormModal(true); }}
+                        className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-300 px-2 py-0.5 rounded text-[10px] font-bold transition shadow-2xs"
+                      >
+                        申請する
+                      </button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="px-2.5 py-1.5 font-medium text-slate-800 whitespace-nowrap">09/02 (水)</td>
+                    <td className="px-2.5 py-1.5 font-mono text-slate-700 whitespace-nowrap">09:00</td>
+                    <td className="px-2.5 py-1.5 font-mono text-slate-700 whitespace-nowrap">18:00</td>
+                    <td className="px-2.5 py-1.5 text-right font-mono font-bold text-slate-700">8h</td>
+                    <td className="px-2.5 py-1.5 text-right font-mono text-slate-400">-</td>
+                    <td className="px-2.5 py-1.5 text-slate-500 whitespace-nowrap">テスト自動生成打刻</td>
+                    <td className="px-2.5 py-1.5 text-right whitespace-nowrap">
+                      <button 
+                        type="button" 
+                        onClick={() => { setSelectedDate('09/02 (水)'); setShowFormModal(true); }}
+                        className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-300 px-2 py-0.5 rounded text-[10px] font-bold transition shadow-2xs"
+                      >
+                        申請する
+                      </button>
+                    </td>
+                  </tr>
+                  <tr className="bg-blue-50/40">
+                    <td className="px-2.5 py-1.5 font-medium text-slate-800 whitespace-nowrap">09/04 (金)</td>
+                    <td className="px-2.5 py-1.5 font-mono text-slate-700 whitespace-nowrap">09:00</td>
+                    <td className="px-2.5 py-1.5 font-mono text-slate-700 whitespace-nowrap">20:00</td>
+                    <td className="px-2.5 py-1.5 text-right font-mono font-bold text-slate-700">10h</td>
+                    <td className="px-2.5 py-1.5 text-right font-mono font-bold text-rose-600">2h</td>
+                    <td className="px-2.5 py-1.5 text-slate-500 whitespace-nowrap">テスト自動生成打刻</td>
+                    <td className="px-2.5 py-1.5 text-right whitespace-nowrap">
+                      <button 
+                        type="button" 
+                        onClick={() => { setSelectedDate('09/04 (金)'); setShowFormModal(true); }}
+                        className="text-white bg-blue-600 hover:bg-blue-700 border border-blue-600 px-2 py-0.5 rounded text-[10px] font-black transition shadow-xs animate-pulse"
+                        title="ここをクリックして申請フォームを開く"
+                      >
+                        申請する 👆
+                      </button>
+                    </td>
+                  </tr>
+                  <tr className="bg-slate-50 text-slate-400">
+                    <td className="px-2.5 py-1.5 font-medium text-blue-600 whitespace-nowrap">09/05 (土)</td>
+                    <td className="px-2.5 py-1.5 text-center font-mono">-</td>
+                    <td className="px-2.5 py-1.5 text-center font-mono">-</td>
+                    <td className="px-2.5 py-1.5 text-right font-mono">-</td>
+                    <td className="px-2.5 py-1.5 text-right font-mono">-</td>
+                    <td className="px-2.5 py-1.5 text-slate-500 whitespace-nowrap font-bold">公休</td>
+                    <td className="px-2.5 py-1.5 text-right whitespace-nowrap">
+                      <button 
+                        type="button" 
+                        onClick={() => { setSelectedDate('09/05 (土)'); setShowFormModal(true); }}
+                        className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-300 px-2 py-0.5 rounded text-[10px] font-bold transition shadow-2xs"
+                      >
+                        申請する
+                      </button>
+                    </td>
+                  </tr>
+                  <tr className="bg-slate-50 text-slate-400">
+                    <td className="px-2.5 py-1.5 font-medium text-rose-600 whitespace-nowrap">09/06 (日)</td>
+                    <td className="px-2.5 py-1.5 text-center font-mono">-</td>
+                    <td className="px-2.5 py-1.5 text-center font-mono">-</td>
+                    <td className="px-2.5 py-1.5 text-right font-mono">-</td>
+                    <td className="px-2.5 py-1.5 text-right font-mono">-</td>
+                    <td className="px-2.5 py-1.5 text-slate-500 whitespace-nowrap font-bold">公休</td>
+                    <td className="px-2.5 py-1.5 text-right whitespace-nowrap">
+                      <button 
+                        type="button" 
+                        onClick={() => { setSelectedDate('09/06 (日)'); setShowFormModal(true); }}
+                        className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-300 px-2 py-0.5 rounded text-[10px] font-bold transition shadow-2xs"
+                      >
+                        申請する
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* 解説バナー ＆ 申請フォーム連動表示 */}
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2 text-xs">
+              <CheckCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-blue-950">
+                  💡 修正や有休取得をしたい日の右端にある【申請する】ボタンをクリックします
+                </p>
+                <p className="text-blue-800 text-[11px] mt-0.5">
+                  クリックすると、その日付が自動セットされた状態で【各種申請フォーム】が開き、打刻時刻の修正や有給休暇の取得を提出できます。
+                </p>
+              </div>
+            </div>
+
+            {/* トグル表示の申請フォームプレビュー */}
+            {showFormModal && (
+              <div className="mt-3 p-4 bg-amber-50/70 border border-amber-300 rounded-xl animate-fadeIn">
+                <div className="flex justify-between items-center mb-3 pb-2 border-b border-amber-200">
+                  <span className="font-bold text-amber-900 flex items-center gap-1.5 text-xs">
+                    <FileText className="w-4 h-4 text-amber-600" />
+                    【申請する】をクリックした後に開く画面: 各種申請フォーム
+                  </span>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowFormModal(false)}
+                    className="text-xs text-slate-500 hover:text-slate-800 underline"
+                  >
+                    閉じる
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">申請種類</label>
+                    <input type="text" readOnly value="打刻修正" className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-bold text-blue-700" />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">対象日</label>
+                    <input type="text" readOnly value={selectedDate} className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-mono" />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">区分</label>
+                    <input type="text" readOnly value="退勤" className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5" />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">正しい打刻時間</label>
+                    <input type="text" readOnly value="20:00" className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-mono font-bold" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">申請理由</label>
+                    <input type="text" readOnly value="業務終了時の打刻押し忘れのため" className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5" />
+                  </div>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button type="button" className="bg-blue-600 text-white font-bold px-4 py-1.5 rounded-lg text-xs shadow-xs cursor-default">
+                    申請を送信する
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
+
+
 
 /**
  * 📅 4. 本物のシフト希望提出UI（ShiftEmployeeRequestより抽出）
