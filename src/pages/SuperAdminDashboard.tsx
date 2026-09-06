@@ -17,12 +17,14 @@ import {
   deleteCustomDocTemplateFromStorage 
 } from '../lib/customDocManager';
 import { BILLING_MODELS, type BillingModelType } from '../lib/subscriptionBilling';
+import { fetchSystemSuggestions } from '../lib/systemSupportManager';
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
   
   // タブ: 'tenants_monitor', 'tax_docs', 'system_health', 'billing', 'ai_settings', 'staff'
   const [activeTab, setActiveTab] = useState('tenants_monitor');
+  const [pendingSuggestionsCount, setPendingSuggestionsCount] = useState(0);
 
   // Settings State
   const [settingsId, setSettingsId] = useState<string | null>(null);
@@ -66,7 +68,17 @@ export default function SuperAdminDashboard() {
     fetchTenants();
     fetchStaff();
     fetchCustomDocTemplates().then(list => setCustomDocTemplates(list));
+    refreshPendingCount();
   }, []);
+
+  const refreshPendingCount = async () => {
+    try {
+      const list = await fetchSystemSuggestions();
+      setPendingSuggestionsCount(list.filter(s => s.status === 'pending').length);
+    } catch (e) {
+      console.warn('Failed to refresh pending count:', e);
+    }
+  };
 
   useEffect(() => {
     const titles: Record<string, string> = {
@@ -304,12 +316,19 @@ export default function SuperAdminDashboard() {
 
           <button 
             onClick={() => setActiveTab('system_support')}
-            className={`w-full flex items-center px-3.5 py-3 rounded-xl transition cursor-pointer ${
+            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition cursor-pointer ${
               activeTab === 'system_support' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
-            <HelpCircle className="h-4 w-4 mr-2.5 text-cyan-400" />
-            💡 システムQ&A ＆ 改善要望統括
+            <div className="flex items-center">
+              <HelpCircle className="h-4 w-4 mr-2.5 text-cyan-400" />
+              <span>💡 システムQ&A ＆ 改善要望統括</span>
+            </div>
+            {pendingSuggestionsCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white animate-pulse">
+                {pendingSuggestionsCount}
+              </span>
+            )}
           </button>
 
           <div className="pt-3 pb-1 border-t border-slate-800 my-1 text-[10px] text-slate-500 uppercase tracking-wider px-2">

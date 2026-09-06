@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { sendSuggestionNotification } from './systemSupportNotification';
 
 // 💡 システム操作FAQ（Q&A）の型定義
 export interface SystemFaqItem {
@@ -10,14 +11,14 @@ export interface SystemFaqItem {
   updated_at: string;
 }
 
-// 📬 システム改善要望（全契約企業から回収するご意見・機能リクエスト）
+// 📬 システム改善要望（全契約企業から回収するご意見・機能リクエスト・Q&A相談）
 export interface SystemImprovementSuggestion {
   id: string;
   tenant_id: string;
   tenant_name: string;
   user_id: string;
   user_name: string;
-  category: 'feature' | 'ui_ux' | 'bug' | 'performance' | 'other';
+  category: 'feature' | 'ui_ux' | 'bug' | 'performance' | 'qa_help' | 'other';
   title: string;
   content: string;
   status: 'pending' | 'reviewing' | 'planned' | 'completed' | 'declined';
@@ -52,6 +53,7 @@ export const SYSTEM_SUGGESTION_CATEGORIES = {
   ui_ux: '🎨 画面・使いやすさ改善',
   bug: '🐛 不具合・動作報告',
   performance: '⚡ 表示速度・快適化',
+  qa_help: '❓ 操作の質問・Q&A相談',
   other: '💬 その他ご意見・ご要望'
 } as const;
 
@@ -417,7 +419,7 @@ export async function submitSystemSuggestion(data: {
   tenant_name: string;
   user_id: string;
   user_name: string;
-  category: 'feature' | 'ui_ux' | 'bug' | 'performance' | 'other';
+  category: 'feature' | 'ui_ux' | 'bug' | 'performance' | 'qa_help' | 'other';
   title: string;
   content: string;
 }): Promise<SystemImprovementSuggestion> {
@@ -429,6 +431,8 @@ export async function submitSystemSuggestion(data: {
     updated_at: new Date().toISOString()
   };
 
+  let finalItem = newItem;
+
   try {
     const { data: inserted, error } = await supabase
       .from('system_improvement_suggestions')
@@ -437,18 +441,27 @@ export async function submitSystemSuggestion(data: {
       .single();
 
     if (!error && inserted) {
+      finalItem = inserted;
       const current = await fetchSystemSuggestions();
       localStorage.setItem('kap_system_suggestions_v2', JSON.stringify([inserted, ...current.filter(c => c.id !== inserted.id)]));
-      return inserted;
+    } else {
+      const current = await fetchSystemSuggestions();
+      const updated = [newItem, ...current];
+      localStorage.setItem('kap_system_suggestions_v2', JSON.stringify(updated));
     }
   } catch (e) {
     console.warn('Failed to insert suggestion to DB, saving locally:', e);
+    const current = await fetchSystemSuggestions();
+    const updated = [newItem, ...current];
+    localStorage.setItem('kap_system_suggestions_v2', JSON.stringify(updated));
   }
 
-  const current = await fetchSystemSuggestions();
-  const updated = [newItem, ...current];
-  localStorage.setItem('kap_system_suggestions_v2', JSON.stringify(updated));
-  return newItem;
+  // 📬 メール通知・お知らせ自動発火（非同期バックグラウンド実行・UIを待たせない）
+  sendSuggestionNotification(finalItem).catch(err => {
+    console.warn('Failed to send suggestion notification email:', err);
+  });
+
+  return finalItem;
 }
 
 export async function updateSystemSuggestionStatus(

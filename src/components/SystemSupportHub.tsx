@@ -152,7 +152,7 @@ export const SystemSupportHub: React.FC<SystemSupportHubProps> = ({
           }`}
         >
           <Inbox className="w-4 h-4 text-violet-600" />
-          📬 システム改善要望・機能リクエスト送信
+          📬 システム改善要望・Q&A送信
         </button>
 
         <button
@@ -384,11 +384,11 @@ export const SystemSupportHub: React.FC<SystemSupportHubProps> = ({
               <div>
                 <h4 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
                   <Inbox className="w-5 h-5 text-violet-600" />
-                  システムへの改善要望・機能リクエスト
+                  システムへの改善要望 ＆ Q&A操作相談窓口
                 </h4>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  本システムをより使いやすくするための機能要望、操作画面の改善案、不具合のご報告などを承っております。
-                  送信いただいたご意見は、開発統括本部（SuperAdmin）へ直接送信され、今後のアップデート開発の検討資料とさせていただきます。
+                  本システムをより使いやすくするための機能リクエスト、操作画面の改善案、操作に関するQ&A・ご質問、不具合のご報告を承っております。
+                  送信いただいた内容は、<strong>システム管理者にメールで即時通知</strong>され、開発統括本部（SuperAdmin）にて迅速に確認・対応いたします。
                 </p>
               </div>
 
@@ -409,9 +409,9 @@ export const SystemSupportHub: React.FC<SystemSupportHubProps> = ({
                 <div className="bg-emerald-50 text-emerald-800 p-4 rounded-2xl text-xs font-bold border border-emerald-200 flex items-center gap-2.5 animate-fade-in">
                   <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
                   <div>
-                    <div className="font-black text-emerald-900">ご意見・ご要望を送信いたしました！</div>
+                    <div className="font-black text-emerald-900">ご意見・ご質問を送信いたしました！</div>
                     <div className="text-[11px] text-emerald-700 mt-0.5">
-                      KAPシステム開発本部（SuperAdmin）へ直接届きました。今後の機能改善・アップデートに活用させていただきます。
+                      管理者にメール通知が送信され、開発統括本部（SuperAdmin）へ直接届きました。迅速に確認・対応させていただきます。
                     </div>
                   </div>
                 </div>

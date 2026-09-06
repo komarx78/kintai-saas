@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { 
   HelpCircle, Inbox, Plus, Edit3, Trash2, 
   MessageSquare, Save, X, Search, Filter, Building2, 
-  RefreshCw, Bell
+  RefreshCw, Bell, Mail, Send, CheckCircle2, AlertCircle, 
+  Copy, BellRing, ExternalLink, Check
 } from 'lucide-react';
 import { 
   type SystemFaqItem, 
@@ -20,9 +21,18 @@ import {
   fetchSystemReleaseNotes,
   saveSystemReleaseNote
 } from '../lib/systemSupportManager';
+import {
+  type SystemNotificationSettings,
+  DEFAULT_NOTIFICATION_SETTINGS,
+  fetchNotificationSettings,
+  saveNotificationSettings,
+  sendTestNotificationEmail,
+  triggerDesktopNotification,
+  GAS_MAIL_SCRIPT_TEMPLATE
+} from '../lib/systemSupportNotification';
 
 export function SuperAdminSystemSupport() {
-  const [subTab, setSubTab] = useState<'suggestions' | 'faqs' | 'releases'>('suggestions');
+  const [subTab, setSubTab] = useState<'suggestions' | 'faqs' | 'releases' | 'notifications'>('suggestions');
 
   // Suggestions State
   const [suggestions, setSuggestions] = useState<SystemImprovementSuggestion[]>([]);
@@ -31,6 +41,21 @@ export function SuperAdminSystemSupport() {
   const [replyingSuggestion, setReplyingSuggestion] = useState<SystemImprovementSuggestion | null>(null);
   const [replyText, setReplyText] = useState('');
   const [replyStatus, setReplyStatus] = useState<SystemImprovementSuggestion['status']>('reviewing');
+
+  // Notifications & Email Settings State
+  const [notificationSettings, setNotificationSettings] = useState<SystemNotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
+  const [recipientEmailsText, setRecipientEmailsText] = useState('');
+  const [gasWebhookUrlText, setGasWebhookUrlText] = useState('');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsSavedAlert, setSettingsSavedAlert] = useState(false);
+  const [testEmailAddress, setTestEmailAddress] = useState('');
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [copiedGasScript, setCopiedGasScript] = useState(false);
+  const [showGasScriptModal, setShowGasScriptModal] = useState(false);
+  const [desktopPermission, setDesktopPermission] = useState<string>(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
+  );
 
   // FAQs State
   const [faqs, setFaqs] = useState<SystemFaqItem[]>([]);
@@ -51,18 +76,94 @@ export function SuperAdminSystemSupport() {
     setLoadingSuggestions(true);
     setLoadingFaqs(true);
     try {
-      const [sList, fList, rList] = await Promise.all([
+      const [sList, fList, rList, nSettings] = await Promise.all([
         fetchSystemSuggestions(),
         fetchSystemFaqs(),
-        fetchSystemReleaseNotes()
+        fetchSystemReleaseNotes(),
+        fetchNotificationSettings()
       ]);
       setSuggestions(sList);
       setFaqs(fList);
       setReleases(rList);
+      setNotificationSettings(nSettings);
+      setRecipientEmailsText(nSettings.recipient_emails.join('\n'));
+      setGasWebhookUrlText(nSettings.gas_webhook_url || '');
+      if (nSettings.recipient_emails[0]) {
+        setTestEmailAddress(nSettings.recipient_emails[0]);
+      }
     } finally {
       setLoadingSuggestions(false);
       setLoadingFaqs(false);
     }
+  };
+
+  // 📧 通知設定の保存
+  const handleSaveNotificationSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSettings(true);
+    try {
+      const emails = recipientEmailsText
+        .split(/[\n,]/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0 && s.includes('@'));
+
+      const newSettings: SystemNotificationSettings = {
+        ...notificationSettings,
+        recipient_emails: emails.length > 0 ? emails : ['support@kap-cocotte.com'],
+        gas_webhook_url: gasWebhookUrlText.trim()
+      };
+
+      await saveNotificationSettings(newSettings);
+      setNotificationSettings(newSettings);
+      setSettingsSavedAlert(true);
+      setTimeout(() => setSettingsSavedAlert(false), 4000);
+    } catch (err) {
+      console.error(err);
+      alert('通知設定の保存に失敗しました');
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  // 🔔 テストメールの送信
+  const handleSendTestEmail = async () => {
+    if (!testEmailAddress || !testEmailAddress.includes('@')) {
+      alert('テスト送信先のメールアドレスを正しく入力してください');
+      return;
+    }
+    setIsSendingTest(true);
+    setTestResult(null);
+    try {
+      const res = await sendTestNotificationEmail(testEmailAddress.trim(), gasWebhookUrlText.trim());
+      setTestResult(res);
+    } catch (err: any) {
+      setTestResult({ success: false, message: err.message || '送信エラー' });
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
+  // 💻 デスクトップ通知許可リクエスト
+  const handleEnableDesktopNotification = async () => {
+    if (!('Notification' in window)) {
+      alert('お使いのブラウザはデスクトップ通知に対応していません');
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    setDesktopPermission(perm);
+    if (perm === 'granted') {
+      triggerDesktopNotification(
+        '🔔 KAP勤怠 デスクトップ通知設定完了',
+        '改善要望やQ&Aが届いた際にブラウザ通知でお知らせします。'
+      );
+    }
+  };
+
+  // 📋 GASスクリプトのコピー
+  const handleCopyGasScript = () => {
+    navigator.clipboard.writeText(GAS_MAIL_SCRIPT_TEMPLATE);
+    setCopiedGasScript(true);
+    setTimeout(() => setCopiedGasScript(false), 3000);
   };
 
   // 📬 改善要望の返信・ステータス更新
@@ -139,8 +240,53 @@ export function SuperAdminSystemSupport() {
     return matchCat && matchQuery;
   });
 
+  const pendingCount = suggestions.filter(s => s.status === 'pending').length;
+
   return (
     <div className="space-y-6">
+      {/* 🔔 新着お知らせ・未対応アラートバナー */}
+      {pendingCount > 0 && (
+        <div className="bg-gradient-to-r from-amber-500 via-rose-500 to-indigo-600 text-white p-4 sm:p-5 rounded-3xl shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-white/20">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/20 backdrop-blur-md rounded-2xl shrink-0">
+              <BellRing className="w-6 h-6 text-white animate-bounce" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-white text-rose-600 uppercase tracking-wider">
+                  新着お知らせ
+                </span>
+                <span className="text-sm sm:text-base font-black">
+                  未対応の改善要望・Q&Aが <strong className="text-amber-200 text-lg sm:text-xl underline decoration-amber-300 decoration-2">{pendingCount}</strong> 件届いています！
+                </span>
+              </div>
+              <p className="text-xs text-white/90 mt-1">
+                利用企業から届いた改善要望・操作質問です。内容を確認し、ステータス更新または返信対応を行ってください。
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              onClick={() => setSubTab('suggestions')}
+              className="px-4 py-2 bg-white text-slate-900 hover:bg-slate-100 font-black text-xs rounded-xl shadow-md transition cursor-pointer"
+            >
+              今すぐ確認する
+            </button>
+            {desktopPermission !== 'granted' && (
+              <button
+                onClick={handleEnableDesktopNotification}
+                className="px-3.5 py-2 bg-black/20 hover:bg-black/30 text-white font-bold text-xs rounded-xl border border-white/30 transition flex items-center gap-1.5 cursor-pointer"
+                title="ブラウザのデスクトップ通知を有効化"
+              >
+                <Bell className="w-3.5 h-3.5" />
+                デスクトップ通知ON
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ヘッダーバナー */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 rounded-3xl text-white shadow-xl border border-indigo-500/20 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
@@ -157,13 +303,27 @@ export function SuperAdminSystemSupport() {
           </p>
         </div>
 
-        <button
-          onClick={loadAll}
-          className="px-4 py-2.5 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-2 border border-slate-700 shrink-0 self-start md:self-auto cursor-pointer"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          最新データ再取得
-        </button>
+        <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+          <button
+            onClick={() => setSubTab('notifications')}
+            className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 border cursor-pointer ${
+              subTab === 'notifications'
+                ? 'bg-amber-500 text-white border-amber-400 shadow-md'
+                : 'bg-slate-800/80 hover:bg-slate-700 text-slate-200 border-slate-700'
+            }`}
+          >
+            <Mail className="w-3.5 h-3.5 text-amber-400" />
+            メール通知設定
+          </button>
+
+          <button
+            onClick={loadAll}
+            className="px-4 py-2.5 bg-slate-800/80 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-2 border border-slate-700 cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            最新データ再取得
+          </button>
+        </div>
       </div>
 
       {/* サブタブ切り替え */}
@@ -183,8 +343,10 @@ export function SuperAdminSystemSupport() {
           }`}>
             {suggestions.length}件
           </span>
-          {suggestions.filter(s => s.status === 'pending').length > 0 && (
-            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+          {pendingCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-500 text-white animate-pulse">
+              未対応 {pendingCount}
+            </span>
           )}
         </button>
 
@@ -220,6 +382,21 @@ export function SuperAdminSystemSupport() {
           }`}>
             {releases.length}件
           </span>
+        </button>
+
+        <button
+          onClick={() => setSubTab('notifications')}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+            subTab === 'notifications'
+              ? 'bg-amber-600 text-white shadow-md'
+              : 'bg-white text-amber-700 hover:bg-amber-50 border border-amber-200'
+          }`}
+        >
+          <Mail className="w-4 h-4 text-amber-600" />
+          📧 メール通知 ＆ お知らせ設定
+          {notificationSettings.enabled && (
+            <span className="w-2 h-2 rounded-full bg-emerald-500" title="通知有効" />
+          )}
         </button>
       </div>
 
@@ -320,7 +497,16 @@ export function SuperAdminSystemSupport() {
                   )}
 
                   {/* アクションボタン */}
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <a
+                      href={`mailto:?subject=${encodeURIComponent(`【KAP勤怠】${item.tenant_name}様からの改善要望・Q&Aへのご案内（${item.title}）`)}&body=${encodeURIComponent(`【送信元企業】: ${item.tenant_name}\n【送信者】: ${item.user_name} 様\n【カテゴリ】: ${SYSTEM_SUGGESTION_CATEGORIES[item.category] || item.category}\n【タイトル】: ${item.title}\n\n【ご要望・質問内容】:\n${item.content}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【KAP勤怠サポート本部より】\nいつもご利用ありがとうございます。\nいただいたご要望・ご質問につきまして、以下の通りご案内申し上げます。\n\n`)}`}
+                      className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                      title="メーラーを起動して返信下書きを作成"
+                    >
+                      <Mail className="w-3.5 h-3.5 text-slate-500" />
+                      メーラーで返信
+                    </a>
+
                     <button
                       onClick={() => {
                         setReplyingSuggestion(item);
@@ -475,6 +661,162 @@ export function SuperAdminSystemSupport() {
                 </p>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════════ */}
+      {/* 📧 タブ④：メール通知 ＆ お知らせ自動化設定 */}
+      {/* ══════════════════════════════════════════════════════════════════════════ */}
+      {subTab === 'notifications' && (
+        <div className="space-y-6 max-w-4xl">
+          {/* 設定保存成功トースト */}
+          {settingsSavedAlert && (
+            <div className="bg-emerald-50 text-emerald-800 p-4 rounded-2xl text-xs font-bold border border-emerald-200 flex items-center gap-2.5 animate-fade-in">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span>通知設定を保存いたしました。次回より新しい要望・Q&Aが届いた際に設定先へ自動通知されます。</span>
+            </div>
+          )}
+
+          {/* メイン設定カード */}
+          <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+            <div className="border-b border-slate-100 pb-4">
+              <h3 className="text-lg font-black text-slate-900 flex items-center gap-2.5">
+                <Mail className="w-5 h-5 text-amber-500" />
+                システム改善要望 ＆ Q&A受付 メール通知・お知らせ自動化設定
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                全国の契約企業・現場スタッフから新しい改善要望やQ&A問い合わせが投稿された際、
+                管理者のメールアドレス宛てにメール通知を自動配信する設定です。
+                Google Apps Script (GAS) Webhook と連携することで、ご自身のGmailから確実に綺麗なHTMLメールが自動送信されます。
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveNotificationSettings} className="space-y-6">
+              {/* 有効・無効スイッチ */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <div>
+                  <div className="font-bold text-sm text-slate-800">新着メール通知機能</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    要望やQ&Aが届いた際に、登録メールアドレス宛てに自動でメール通知を送信します。
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notificationSettings.enabled}
+                    onChange={e => setNotificationSettings({ ...notificationSettings, enabled: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                </label>
+              </div>
+
+              {/* 通知先メールアドレス */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>📧 通知先メールアドレス（受信アドレス）</span>
+                  <span className="text-[11px] font-normal text-slate-400">複数指定可（改行またはカンマ区切り）</span>
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={recipientEmailsText}
+                  onChange={e => setRecipientEmailsText(e.target.value)}
+                  placeholder="例: komai@kap-cocotte.com&#10;support@kap-cocotte.com"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  新しい要望やQ&Aが投稿された際、上記のアドレスすべてにメール通知が届きます。
+                </p>
+              </div>
+
+              {/* Google Apps Script (GAS) Webhook URL 設定 */}
+              <div className="p-5 bg-gradient-to-br from-amber-50/60 to-orange-50/40 rounded-2xl border border-amber-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded bg-amber-500 text-white text-[10px] font-black">推奨</span>
+                    Google Apps Script (GAS) Webhook URL
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowGasScriptModal(true)}
+                    className="text-xs text-amber-700 hover:text-amber-900 font-bold underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    GAS送信コードを見る・コピー
+                  </button>
+                </div>
+
+                <input
+                  type="url"
+                  value={gasWebhookUrlText}
+                  onChange={e => setGasWebhookUrlText(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                  className="w-full px-3.5 py-2.5 bg-white border border-amber-300 rounded-xl text-xs font-mono text-slate-800 focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                />
+                <p className="text-[11px] text-amber-800/80 leading-relaxed">
+                  GASのウェブアプリとしてデプロイしたURL（末尾が <code className="bg-amber-100/80 px-1 py-0.5 rounded font-mono font-bold">/exec</code>）を貼り付けると、GAS経由でGmailから高品位なHTMLメールが自動送信されます。
+                </p>
+              </div>
+
+              {/* 保存ボタン */}
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={isSavingSettings}
+                  className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  {isSavingSettings ? '保存中...' : '通知設定を保存する'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* 🔔 テスト送信・動作確認カード */}
+          <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+            <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+              <Send className="w-4 h-4 text-indigo-600" />
+              🔔 メール送信の動作確認（テスト送信）
+            </h4>
+            <p className="text-xs text-slate-500">
+              設定したGAS Webhook URLおよび受信先アドレスへ、実際にテスト通知メールが届くか今すぐ確認できます。
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <input
+                type="email"
+                value={testEmailAddress}
+                onChange={e => setTestEmailAddress(e.target.value)}
+                placeholder="テスト送信先メールアドレス"
+                className="w-full sm:flex-1 px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleSendTestEmail}
+                disabled={isSendingTest || !testEmailAddress}
+                className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                <Send className="w-3.5 h-3.5" />
+                {isSendingTest ? 'テスト送信中...' : 'テストメールを送信'}
+              </button>
+            </div>
+
+            {testResult && (
+              <div className={`p-4 rounded-2xl text-xs font-bold border flex items-center gap-2.5 animate-fade-in ${
+                testResult.success
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-rose-50 text-rose-800 border-rose-200'
+              }`}>
+                {testResult.success ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                )}
+                <span>{testResult.message}</span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -702,6 +1044,93 @@ export function SuperAdminSystemSupport() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* ─── モーダル：GASスクリプトの表示・コピー ─── */}
+      {showGasScriptModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-amber-500 rounded-xl text-white">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    Google Apps Script (GAS) 自動メール送信スクリプト
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Gmailから高品位なHTMLメールを自動配信するためのGASコードです
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowGasScriptModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-xl transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 flex-1">
+              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 text-xs text-amber-900 space-y-1.5 leading-relaxed">
+                <div className="font-bold flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-black">1</span>
+                  設定手順（わずか1分で完了）
+                </div>
+                <ol className="list-decimal pl-5 space-y-1 text-amber-800">
+                  <li><a href="https://script.google.com" target="_blank" rel="noreferrer" className="underline font-bold text-amber-900">Google Apps Script (script.google.com)</a> を開き、「新しいプロジェクト」を作成</li>
+                  <li>エディタの内容を全消去し、下のコードをそのまま貼り付けて保存（Ctrl + S）</li>
+                  <li>画面右上の<strong>「デプロイ」＞「新しいデプロイ」</strong>をクリック</li>
+                  <li>歯車アイコンから<strong>「ウェブアプリ」</strong>を選択し、以下の通り設定：
+                    <ul className="list-disc pl-4 mt-0.5 font-bold">
+                      <li>次のユーザーとして実行: <strong>自分</strong></li>
+                      <li>アクセスできるユーザー: <strong>全員 (Anyone)</strong></li>
+                    </ul>
+                  </li>
+                  <li>「デプロイ」を押し、発行された<strong>「ウェブアプリのURL」</strong>をコピーして本画面のURL欄に貼り付けて保存！</li>
+                </ol>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-bold text-slate-700 font-mono">コード (Code.gs)</span>
+                  <button
+                    onClick={handleCopyGasScript}
+                    className="px-3 py-1 bg-slate-900 hover:bg-indigo-600 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    {copiedGasScript ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        コピーしました！
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        コードを全コピー
+                      </>
+                    )}
+                  </button>
+                </div>
+                <pre className="bg-slate-900 text-slate-100 p-4 rounded-2xl text-[11px] font-mono overflow-x-auto max-h-72 leading-relaxed border border-slate-800">
+                  {GAS_MAIL_SCRIPT_TEMPLATE}
+                </pre>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                ※ GAS経由のため外部メールサーバー料金不要・完全無料でご利用いただけます。
+              </span>
+              <button
+                onClick={() => setShowGasScriptModal(false)}
+                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
