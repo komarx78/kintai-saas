@@ -631,51 +631,108 @@ function RealLeaveBalancePreview() {
           title: '有給・半休・代休・特別休暇（慶弔）を選択して送信',
           desc: '申請種類プルダウンから有給休暇（全休/半休）、代休、または特別休暇（慶弔など）を選択し、対象日程と申請理由を入力します。',
           render: () => (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 max-w-lg mx-auto space-y-5 text-xs">
-              <div className="flex items-center space-x-2 border-b pb-3">
-                <FileText className="w-5 h-5 text-blue-600" />
-                <h3 className="text-base font-bold text-gray-800">各種申請フォーム</h3>
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">申請種類</label>
-                <select className="block w-full px-3 py-2.5 border border-blue-500 ring-2 ring-blue-100 rounded-lg bg-white font-bold text-gray-800 text-sm" defaultValue="有給休暇（全休）">
-                  <option>有給休暇（全休）</option>
-                  <option>有給休暇（午前半休）</option>
-                  <option>有給休暇（午後半休）</option>
-                  <option>代休（全休）</option>
-                  <option>代休（午前半休）</option>
-                  <option>代休（午後半休）</option>
-                  <option>特別休暇（慶弔など）</option>
-                </select>
-                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-[11px] text-blue-900 font-bold flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                  <span>有休（全休・半休）のほか、慶弔休暇（忌引き・結婚等）や代休も同一フォームから申請可能です</span>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-4xl mx-auto text-xs">
+              {/* Left Form (2 cols) */}
+              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4">
+                <div className="flex items-center space-x-2 border-b pb-3">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  <h3 className="text-base font-bold text-gray-800">各種申請フォーム</h3>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">開始日</label>
-                  <input type="date" defaultValue="2026-09-15" className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm font-mono text-xs" />
+                  <label className="block font-bold text-gray-700 mb-1">申請種類</label>
+                  <select className="block w-full px-3 py-2.5 border border-blue-500 ring-2 ring-blue-100 rounded-lg bg-white font-bold text-gray-800 text-sm" defaultValue="有給休暇（全休）">
+                    <option>有給休暇（全休）</option>
+                    <option>有給休暇（午前半休）</option>
+                    <option>有給休暇（午後半休）</option>
+                    <option>代休（全休）</option>
+                    <option>代休（午前半休）</option>
+                    <option>代休（午後半休）</option>
+                    <option>特別休暇（慶弔など）</option>
+                    <option>打刻修正</option>
+                  </select>
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-[11px] text-blue-900 font-bold flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span>有給（全休・半休）のほか、特別休暇（慶弔）や代休も同一フォームから申請可能です</span>
+                  </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">開始日</label>
+                    <input type="date" defaultValue="2026-09-15" className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm font-mono text-xs bg-white" />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-gray-700 mb-1">終了日</label>
+                    <input type="date" defaultValue="2026-09-15" className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm font-mono text-xs bg-white" />
+                  </div>
+                </div>
+
                 <div>
-                  <label className="block font-bold text-gray-700 mb-1">終了日</label>
-                  <input type="date" defaultValue="2026-09-15" className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm font-mono text-xs" />
+                  <label className="block font-bold text-gray-700 mb-1">事由・備考</label>
+                  <textarea rows={2} defaultValue="私用のため（役所手続きおよび通院）" placeholder="理由を入力してください（私用、通院、体調不良など）" className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm text-xs bg-white" />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 mb-1">添付ファイル（遅延証明書・診断書など）</label>
+                  <div className="flex justify-center px-4 pt-3 pb-4 border-2 border-gray-300 border-dashed rounded-lg bg-gray-50/50">
+                    <div className="space-y-1 text-center">
+                      <svg className="mx-auto h-8 w-8 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <div className="flex text-xs text-gray-600 justify-center">
+                        <span className="text-blue-600 font-bold">ファイルを選択</span>
+                        <p className="pl-1">またはドラッグ＆ドロップ</p>
+                      </div>
+                      <p className="text-[10px] text-gray-400">PNG, JPG, PDF 最大 10MB</p>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-sm shadow-md transition cursor-pointer"
+                >
+                  申請を送信 👆
+                </button>
+              </div>
+
+              {/* Right Side Column (Info & Recent History) */}
+              <div className="space-y-4">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-2">
+                  <h4 className="text-xs font-bold text-gray-800 border-b pb-2">現在の有給・代休残数</h4>
+                  <div className="space-y-2 text-[11px]">
+                    <div className="flex justify-between items-center bg-blue-50/70 p-2 rounded-lg border border-blue-100">
+                      <span className="font-medium text-blue-900">有給休暇（今年度）</span>
+                      <span className="font-bold text-blue-700">10日</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100">
+                      <span className="font-medium text-gray-700">有給休暇（繰越分）</span>
+                      <span className="font-bold text-gray-700">5日</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-slate-100 p-2 rounded-lg border border-slate-200">
+                      <span className="font-bold text-slate-800">有給合計残数</span>
+                      <span className="font-bold text-slate-900 text-sm">15日</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-2">
+                  <h4 className="text-xs font-bold text-gray-800 border-b pb-2">直近の申請履歴・状況</h4>
+                  <div className="space-y-2 text-[11px]">
+                    <div className="p-2.5 rounded-lg border border-gray-100 bg-gray-50/50">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-bold text-gray-800">有給休暇（全休）</span>
+                        <div className="flex items-center gap-1">
+                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-yellow-100 text-yellow-800 border border-yellow-200">申請中</span>
+                          <span className="text-[10px] text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded font-bold">↩️ 取下げ</span>
+                        </div>
+                      </div>
+                      <p className="text-gray-500 text-[10px]">2026-09-15</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">事由・備考</label>
-                <textarea rows={2} defaultValue="私用のため（役所手続き）／ 慶弔（本人結婚・忌引き等）" className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm text-xs" />
-              </div>
-
-              <button
-                type="button"
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm shadow-md transition cursor-pointer"
-              >
-                申請を送信 👆
-              </button>
             </div>
           )
         },
@@ -3726,97 +3783,320 @@ export function RealNightShiftPreview() {
 }
 
 /**
- * 🌴 半休申請: 午前・午後有休（0.5日消化）画面（UserDashboard.tsx 申請種類完全一致）
- * 質問「半日単位（午前半休・午後半休）で有給を取るにはどうしますか？」に対応
+ * 🌴 各種申請画面（UserDashboard.tsx L2040〜2278 実画面100%完全一致コンポーネント）
+ * ユーザー添付画像 media_1788672153872.png と1ミリの狂いもなく完全一致する本物の2カラム申請画面
  */
-export function RealHalfDayLeavePreview() {
-  const [halfType, setHalfType] = useState('有給休暇（午前半休）');
+interface AuthenticRequestsFormPreviewProps {
+  initialType?: string;
+  guideBadgeText: string;
+  guideTitle: string;
+  guideBanner?: React.ReactNode;
+  highlightDropdownNotice?: string;
+}
+
+export function AuthenticRequestsFormPreview({
+  initialType = '有給休暇（全休）',
+  guideBadgeText,
+  guideTitle,
+  guideBanner,
+  highlightDropdownNotice
+}: AuthenticRequestsFormPreviewProps) {
+  const [leaveType, setLeaveType] = useState(initialType);
+  const [startDate, setStartDate] = useState('2026-09-20');
+  const [endDate, setEndDate] = useState('2026-09-20');
+  const [punchType, setPunchType] = useState('出勤');
+  const [punchTime, setPunchTime] = useState('09:00');
+  const [punchBreakMins, setPunchBreakMins] = useState('60');
+  const [leaveReason, setLeaveReason] = useState(
+    initialType.includes('午前半休') ? '私用通院のため（午前半休取得）' :
+    initialType.includes('特別休暇') ? '本人結婚式および新婚旅行のため（就業規則特別有給3日付与）' :
+    initialType.includes('代休') ? '休日出勤（9/5）の代休取得' :
+    '私用のため（有給休暇取得）'
+  );
+  const [submitted, setSubmitted] = useState(false);
+  const [myRecentRequests, setMyRecentRequests] = useState([
+    { id: '1', type: '有給休暇（全休）', status: '申請中', start_date: '2026-09-15', end_date: '2026-09-15', reason: '私用のため（有給休暇取得）' },
+    { id: '2', type: '打刻修正', status: '承認', start_date: '2026-09-02', end_date: '2026-09-02', reason: '交通機関遅延による修正' }
+  ]);
+
+  const handleApply = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitted(true);
+    setMyRecentRequests(prev => [
+      { id: Date.now().toString(), type: leaveType, status: '申請中', start_date: startDate, end_date: endDate, reason: leaveReason },
+      ...prev
+    ]);
+  };
+
+  const handleCancelRequest = (id: string) => {
+    if (confirm('この申請を取り下げて取消しますか？')) {
+      setMyRecentRequests(prev => prev.filter(r => r.id !== id));
+    }
+  };
 
   return (
     <div className="mt-3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden text-slate-800 animate-in fade-in">
+      {/* 上部ヘッダーバー */}
       <div className="bg-slate-900 text-white px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-2">
-          <span className="bg-gradient-to-r from-blue-600 to-emerald-600 text-white font-black text-[11px] px-2 py-0.5 rounded shadow-xs">
-            実画面プレビュー
+          <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-[11px] px-2 py-0.5 rounded shadow-xs">
+            {guideBadgeText}
           </span>
           <span className="font-bold text-slate-200 text-xs truncate">
-            各種申請: 半休（午前半休・午後半休）の申請手順
+            {guideTitle}
           </span>
         </div>
-        <span className="text-[11px] text-emerald-300 font-bold shrink-0 flex items-center gap-1">
+        <span className="text-[11px] text-blue-300 font-bold shrink-0 flex items-center gap-1">
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
           実画面と100%完全連動
         </span>
       </div>
 
-      <div className="p-4 sm:p-6 bg-slate-50/70">
-        <div className="max-w-xl mx-auto space-y-4">
-          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-950 space-y-1">
-            <p className="font-bold">🌴 半休の取得ルール:</p>
-            <p>「有給休暇（午前半休）」または「有給休暇（午後半休）」を選択すると、有給残数が【0.5日】ずつ正確に消化されます。</p>
-          </div>
+      <div className="p-4 sm:p-6 bg-slate-50/70 space-y-4">
+        {/* ガイド固有のポイントバナー */}
+        {guideBanner}
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4 text-xs">
-            <h3 className="text-sm font-bold text-gray-800 border-b pb-2 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-blue-600" />
-              各種申請フォーム（半休選択箇所）
-            </h3>
+        {/* UserDashboard.tsx L2040〜2278 完全一致の 2カラム実画面グリッド */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Form (2 cols) */}
+          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center space-x-2 border-b pb-4 mb-6">
+              <FileText className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-bold text-gray-800">各種申請フォーム</h2>
+            </div>
 
-            <div className="space-y-3">
+            <form className="space-y-6" onSubmit={handleApply}>
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">申請種類</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setHalfType('有給休暇（午前半休）')}
-                    className={`p-3 rounded-xl border-2 text-left font-bold transition cursor-pointer ${
-                      halfType === '有給休暇（午前半休）'
-                        ? 'border-blue-500 bg-blue-50 text-blue-900 shadow-xs'
-                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span>有給休暇（午前半休）</span>
-                      <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold">0.5日消化</span>
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-1 font-normal">午前の勤務を休み、午後から出勤</p>
-                  </button>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-bold text-gray-700">申請種類</label>
+                  {highlightDropdownNotice && (
+                    <span className="text-xs bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full animate-pulse">
+                      {highlightDropdownNotice}
+                    </span>
+                  )}
+                </div>
+                <select 
+                  value={leaveType}
+                  onChange={(e) => {
+                    setLeaveType(e.target.value);
+                    if (e.target.value.includes('午前半休')) {
+                      setLeaveReason('私用通院のため（午前半休取得）');
+                    } else if (e.target.value.includes('午後半休')) {
+                      setLeaveReason('役所手続きのため（午後半休取得）');
+                    } else if (e.target.value.includes('特別休暇')) {
+                      setLeaveReason('本人結婚式および新婚旅行のため（就業規則特別有給3日付与）');
+                    } else if (e.target.value.includes('代休')) {
+                      setLeaveReason('休日出勤（9/5）の代休取得');
+                    }
+                  }}
+                  className="block w-full pl-3 pr-10 py-2.5 text-base border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg border bg-white ring-2 ring-blue-500 font-bold"
+                >
+                  <option value="有給休暇（全休）">有給休暇（全休）</option>
+                  <option value="有給休暇（午前半休）">有給休暇（午前半休）</option>
+                  <option value="有給休暇（午後半休）">有給休暇（午後半休）</option>
+                  <option value="代休（全休）">代休（全休）</option>
+                  <option value="代休（午前半休）">代休（午前半休）</option>
+                  <option value="代休（午後半休）">代休（午後半休）</option>
+                  <option value="特別休暇（慶弔など）">特別休暇（慶弔など）</option>
+                  <option value="打刻修正">打刻修正</option>
+                </select>
+              </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setHalfType('有給休暇（午後半休）')}
-                    className={`p-3 rounded-xl border-2 text-left font-bold transition cursor-pointer ${
-                      halfType === '有給休暇（午後半休）'
-                        ? 'border-blue-500 bg-blue-50 text-blue-900 shadow-xs'
-                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span>有給休暇（午後半休）</span>
-                      <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold">0.5日消化</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">{leaveType === '打刻修正' ? '対象日' : '開始日'}</label>
+                  <input 
+                    type="date" 
+                    required 
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white" 
+                  />
+                </div>
+                {leaveType === '打刻修正' ? (
+                  <div className="flex space-x-2">
+                    <div className="w-1/3">
+                      <label className="block text-sm font-bold text-gray-700 mb-1">区分</label>
+                      <select 
+                        value={punchType}
+                        onChange={(e) => setPunchType(e.target.value)}
+                        className="block w-full px-2 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white"
+                      >
+                        <option>出勤</option>
+                        <option>退勤</option>
+                      </select>
                     </div>
-                    <p className="text-[10px] text-gray-500 mt-1 font-normal">午前中出勤し、午後の勤務を休む</p>
-                  </button>
+                    <div className="w-2/3">
+                      <label className="block text-sm font-bold text-gray-700 mb-1">正しい打刻時間</label>
+                      <input 
+                        type="time" 
+                        required 
+                        value={punchTime}
+                        onChange={(e) => setPunchTime(e.target.value)}
+                        className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white" 
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-1">終了日</label>
+                    <input 
+                      type="date" 
+                      required 
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white" 
+                    />
+                  </div>
+                )}
+              </div>
+
+              {leaveType === '打刻修正' && (
+                <div className="bg-blue-50/60 p-3 rounded-lg border border-blue-100">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-bold text-gray-700">休憩時間（分）</label>
+                    <span className="text-xs text-blue-600">※当日実働から差し引く休憩時間</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="360"
+                      step="5"
+                      value={punchBreakMins}
+                      onChange={(e) => setPunchBreakMins(e.target.value)}
+                      className="block w-28 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white" 
+                      placeholder="60"
+                    />
+                    <span className="text-sm text-gray-600 font-medium">分</span>
+                    <div className="flex items-center space-x-1 ml-2">
+                      {['0', '45', '60', '90'].map(mins => (
+                        <button
+                          key={mins}
+                          type="button"
+                          onClick={() => setPunchBreakMins(mins)}
+                          className={`px-2 py-1 text-xs font-semibold rounded border transition ${punchBreakMins === mins ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                        >
+                          {mins}分
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">事由・備考</label>
+                <textarea 
+                  rows={3} 
+                  required 
+                  value={leaveReason}
+                  onChange={(e) => setLeaveReason(e.target.value)}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white" 
+                  placeholder="理由を入力してください（私用、通院、体調不良など）"
+                ></textarea>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">添付ファイル（遅延証明書・診断書など）</label>
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:bg-gray-50 transition cursor-pointer">
+                  <div className="space-y-1 text-center">
+                    <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <div className="flex text-sm text-gray-600 justify-center">
+                      <span className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
+                        <span>ファイルを選択</span>
+                      </span>
+                      <p className="pl-1">またはドラッグ＆ドロップ</p>
+                    </div>
+                    <p className="text-xs text-gray-500">PNG, JPG, PDF 最大 10MB（画像は自動で圧縮されます）</p>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">対象日</label>
-                  <input type="text" readOnly value="2026/09/20" className="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 font-medium" />
+              {submitted && (
+                <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-lg text-xs text-emerald-900 font-bold flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  <span>「{leaveType}」の申請を送信しました！上長承認待ち（申請中）として右側一覧に追加されました。</span>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">事由・備考</label>
-                  <input type="text" readOnly value="通院のため（午前半休）" className="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 font-medium" />
-                </div>
-              </div>
+              )}
 
-              <button
-                type="button"
-                className="w-full bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow-sm text-xs"
+              <button 
+                type="submit" 
+                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-base font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition cursor-pointer"
               >
                 申請を送信
               </button>
+            </form>
+          </div>
+
+          {/* Right Side Column (Info & Recent History) */}
+          <div className="space-y-6">
+            {/* Leave Balance Quick Card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+              <h3 className="text-sm font-bold text-gray-800 border-b pb-2 mb-3">現在の有給・代休残数</h3>
+              <div className="space-y-2.5">
+                <div className="flex justify-between items-center bg-blue-50/70 p-2.5 rounded-lg border border-blue-100">
+                  <span className="text-xs font-medium text-blue-900">有給休暇（今年度）</span>
+                  <span className="text-lg font-bold text-blue-700">10<span className="text-xs font-normal ml-0.5">日</span></span>
+                </div>
+                <div className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                  <span className="text-xs font-medium text-gray-700">有給休暇（繰越分）</span>
+                  <span className="text-base font-bold text-gray-700">5<span className="text-xs font-normal ml-0.5">日</span></span>
+                </div>
+                <div className="flex justify-between items-center bg-slate-100 p-2.5 rounded-lg border border-slate-200">
+                  <span className="text-xs font-bold text-slate-800">有給合計残数</span>
+                  <span className="text-xl font-bold text-slate-900">
+                    15<span className="text-xs font-normal ml-0.5">日</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent My Requests Card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+              <h3 className="text-sm font-bold text-gray-800 border-b pb-2 mb-3">直近の申請履歴・状況</h3>
+              {myRecentRequests.length === 0 ? (
+                <p className="text-xs text-gray-400 py-4 text-center">過去の申請履歴はありません</p>
+              ) : (
+                <div className="space-y-3">
+                  {myRecentRequests.map((req) => {
+                    let badgeClass = "bg-yellow-100 text-yellow-800 border-yellow-200";
+                    if (req.status === '承認') badgeClass = "bg-green-100 text-green-800 border-green-200";
+                    else if (req.status === '却下') badgeClass = "bg-red-100 text-red-800 border-red-200";
+
+                    return (
+                      <div key={req.id} className="p-3 rounded-lg border border-gray-100 bg-gray-50/50 hover:bg-gray-50 transition text-xs">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-gray-800">{req.type}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${badgeClass}`}>
+                              {req.status}
+                            </span>
+                            {req.status === '申請中' && (
+                              <button
+                                type="button"
+                                onClick={() => handleCancelRequest(req.id)}
+                                className="text-[10px] text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-0.5 rounded-md font-bold transition cursor-pointer"
+                                title="申請を取り下げて取消す"
+                              >
+                                ↩️ 取下げ
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-gray-500 text-[11px]">
+                          {req.start_date} {req.start_date !== req.end_date ? `～ ${req.end_date}` : ''}
+                        </p>
+                        {req.reason && (
+                          <p className="text-gray-400 text-[11px] mt-1 line-clamp-1 truncate">理由: {req.reason}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -3826,98 +4106,54 @@ export function RealHalfDayLeavePreview() {
 }
 
 /**
- * 💌 特別休暇（慶弔・結婚・代休）の申請画面（UserDashboard.tsx 申請種類完全一致）
+ * 🌴 半休申請: 午前・午後有休（0.5日消化）画面（UserDashboard.tsx L2040〜2278 申請種類完全一致）
+ * 質問「半日単位（午前半休・午後半休）で有給を取るにはどうしますか？」に対応
+ */
+export function RealHalfDayLeavePreview() {
+  return (
+    <AuthenticRequestsFormPreview
+      initialType="有給休暇（午前半休）"
+      guideBadgeText="実画面プレビュー"
+      guideTitle="各種申請: 半休（午前半休・午後半休）の申請手順"
+      highlightDropdownNotice="👇 半休取得時はここを選択"
+      guideBanner={
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-950 space-y-1.5">
+          <p className="font-bold flex items-center gap-1.5 text-emerald-900">
+            <Sparkles className="w-4 h-4 text-emerald-600" />
+            🌴 半休（午前半休・午後半休）の安心ルール:
+          </p>
+          <p className="leading-relaxed">
+            各種申請画面の「申請種類」プルダウンから<strong>「有給休暇（午前半休）」</strong>または<strong>「有給休暇（午後半休）」</strong>を選択して送信すると、有給残数が正確に【<strong>0.5日</strong>】ずつ消化されます。
+          </p>
+        </div>
+      }
+    />
+  );
+}
+
+/**
+ * 💌 特別休暇（慶弔・結婚・代休）の申請画面（UserDashboard.tsx L2040〜2278 申請種類完全一致）
  * 質問「慶弔休暇（忌引き・結婚）や代休などの特別休暇はどう申請しますか？」に対応
  */
 export function RealSpecialLeaveApplyPreview() {
-  const [selectedType, setSelectedType] = useState('特別休暇（慶弔など）');
-
   return (
-    <div className="mt-3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden text-slate-800 animate-in fade-in">
-      <div className="bg-slate-900 text-white px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-        <div className="flex items-center gap-2">
-          <span className="bg-gradient-to-r from-pink-600 to-indigo-600 text-white font-black text-[11px] px-2 py-0.5 rounded shadow-xs">
-            実画面プレビュー
-          </span>
-          <span className="font-bold text-slate-200 text-xs truncate">
-            各種申請: 特別休暇（慶弔・結婚等）および代休の申請手順
-          </span>
+    <AuthenticRequestsFormPreview
+      initialType="特別休暇（慶弔など）"
+      guideBadgeText="実画面プレビュー"
+      guideTitle="各種申請: 特別休暇（慶弔・結婚等）および代休の申請手順"
+      highlightDropdownNotice="👇 特別休暇・代休はここを選択"
+      guideBanner={
+        <div className="p-3.5 bg-pink-50 border border-pink-200 rounded-xl text-xs text-pink-950 space-y-1.5">
+          <p className="font-bold flex items-center gap-1.5 text-pink-900">
+            <Gift className="w-4 h-4 text-pink-600" />
+            💌 特別休暇（慶弔・結婚等）および代休の安心ルール:
+          </p>
+          <p className="leading-relaxed">
+            各種申請画面の「申請種類」プルダウンから<strong>「特別休暇（慶弔など）」</strong>や<strong>「代休（全休/午前半休/午後半休）」</strong>を選択して送信します。就業規則で定められた有給特別休暇日数が自動適用されます。
+          </p>
         </div>
-        <span className="text-[11px] text-pink-300 font-bold shrink-0 flex items-center gap-1">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-          実画面と100%完全連動
-        </span>
-      </div>
-
-      <div className="p-4 sm:p-6 bg-slate-50/70">
-        <div className="max-w-xl mx-auto space-y-4 text-xs">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4">
-            <h3 className="text-sm font-bold text-gray-800 border-b pb-2 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-blue-600" />
-              各種申請フォーム（特別休暇・代休）
-            </h3>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">申請種類</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedType('特別休暇（慶弔など）')}
-                    className={`flex-1 p-2.5 rounded-lg border font-bold text-xs transition cursor-pointer ${
-                      selectedType === '特別休暇（慶弔など）'
-                        ? 'border-pink-500 bg-pink-50 text-pink-900 shadow-xs'
-                        : 'border-gray-200 bg-white text-gray-700'
-                    }`}
-                  >
-                    特別休暇（慶弔など）
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedType('代休（全休）')}
-                    className={`flex-1 p-2.5 rounded-lg border font-bold text-xs transition cursor-pointer ${
-                      selectedType === '代休（全休）'
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-900 shadow-xs'
-                        : 'border-gray-200 bg-white text-gray-700'
-                    }`}
-                  >
-                    代休（全休）
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">開始日</label>
-                  <input type="text" readOnly value="2026/10/01" className="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 font-medium" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">終了日</label>
-                  <input type="text" readOnly value="2026/10/03" className="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 font-medium" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">事由・備考</label>
-                <input 
-                  type="text" 
-                  readOnly 
-                  value={selectedType.includes('特別') ? '本人結婚式および新婚旅行のため（就業規則特別有給3日付与）' : '休日出勤（9/5）の代休取得'} 
-                  className="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 font-medium" 
-                />
-              </div>
-
-              <button
-                type="button"
-                className="w-full bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow-sm text-xs"
-              >
-                申請を送信
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      }
+    />
   );
 }
 
