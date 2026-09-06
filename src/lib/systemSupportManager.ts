@@ -70,10 +70,18 @@ export const SYSTEM_SUGGESTION_STATUSES = {
 // 📱 操作ガイドに自動埋め込みする実際のシステム画面プレビュー定義
 export const SYSTEM_GUIDE_PREVIEW_TYPES = {
   monthly_attendance: '📅 月次勤怠・有給照会画面（月間勤怠照会テーブル・「申請する」ボタン）',
+  monthly_attendance_summary_export: '📊 月次勤怠サマリーバッジ ＆ PDF・CSV出力画面',
   kintai_clock: '⏰ ホーム（打刻）画面（出退勤ボタン・現在時刻・ステータス）',
+  kintai_break_time: '☕ 休憩時間登録・打刻修正画面（自動控除・分数プリセット）',
+  kintai_night_shift: '🌙 夜勤・日跨ぎ勤務打刻画面（翌朝退勤・深夜割増連動）',
   kintai_gps_help: '📍 スマホGPS位置情報エラー・端末設定許可画面',
   leave_request: '🌴 有給休暇・代休 残数ウィジェット（保有残数・年間5日義務）',
+  leave_request_cancel: '↩️ 各種申請: 直近の申請履歴・状況一覧 ＆ 「↩️ 取下げ」ボタン画面',
+  leave_half_day: '🌴 午前・午後半休（0.5日消化）申請画面',
+  leave_balance_check: '🌴 有給残数 ＆ 年間5日取得義務カード',
+  special_leave_apply: '💌 特別休暇（慶弔・結婚等）および代休申請画面',
   shift_submit: '📅 シフト希望・確定シフト画面（月間カレンダー希望入力・確定シフト）',
+  shift_confirmed_view: '📅 確定シフトの確認（ホーム予定 ＆ カレンダー確定バッジ）',
   shift_admin_manage: '📅 管理者: シフト管理（部下申請承認・必要枠設定・下書き確定Publish）',
   payslip_view: '📄 Web給与明細・源泉徴収票画面（支給・控除・差引支給額）',
   payslip_bonus_tax: '🎁 賞与支払明細書 ＆ 国税庁公式源泉徴収票画面',
@@ -85,7 +93,8 @@ export const SYSTEM_GUIDE_PREVIEW_TYPES = {
   contract_sign: '📝 労働条件通知書 兼 雇用契約書 電子押印・同意画面',
   official_ledger_print: '📚 労務・法定帳票発行センター（労働者名簿・源泉徴収簿・賃金台帳の公式A4印刷）',
   employee_admin_manage: '👥 管理者: 従業員管理（招待コード・追加・退職・復職管理）',
-  password_reset: '⚙️ ログイン・パスワード再設定画面'
+  password_reset: '⚙️ ログイン・パスワード再設定画面',
+  pwa_install: '📱 スマートフォン: ホーム画面アプリアイコン追加（PWA）'
 } as const;
 
 // 💡 カテゴリやキーワードに応じて最適な画面UIモックタイプを自動判定するヘルパー
@@ -93,6 +102,15 @@ export function resolveGuidePreviewType(item: Partial<SystemFaqItem>): string {
   if (item.preview_type) return item.preview_type;
   
   const q = `${item.question || ''} ${item.keyword || ''} ${item.answer || ''}`;
+  if (q.includes('取下げ') || q.includes('取消') || q.includes('取り消したい') || q.includes('変更したい時')) return 'leave_request_cancel';
+  if (q.includes('確定したシフト') || q.includes('確定シフト') || q.includes('本日のシフト予定')) return 'shift_confirmed_view';
+  if (q.includes('出勤日数や労働時間を確認') || q.includes('PDF・CSV出力') || q.includes('CSV出力') || q.includes('PDF出力')) return 'monthly_attendance_summary_export';
+  if (q.includes('休憩時間')) return 'kintai_break_time';
+  if (q.includes('夜勤') || q.includes('日またぎ') || q.includes('日跨ぎ')) return 'kintai_night_shift';
+  if (q.includes('半日') || q.includes('半休') || q.includes('午前半休') || q.includes('午後半休')) return 'leave_half_day';
+  if (q.includes('残り日数') || q.includes('残数') || q.includes('有効期限') || q.includes('5日義務')) return 'leave_balance_check';
+  if (q.includes('特別休暇') || q.includes('慶弔') || q.includes('忌引き') || q.includes('結婚') || q.includes('代休')) return 'special_leave_apply';
+  if (q.includes('ホーム画面にアイコン') || q.includes('PWA') || q.includes('アプリアイコン')) return 'pwa_install';
   if (q.includes('契約書') || q.includes('電子押印') || q.includes('電子署名') || q.includes('同意') || q.includes('労働条件通知書')) return 'contract_sign';
   if (q.includes('名簿') || q.includes('名ぼ') || q.includes('源泉徴収簿') || q.includes('賃金台帳') || q.includes('法定帳票') || q.includes('公式A4印刷')) return 'official_ledger_print';
   if (q.includes('営業カレンダー') || q.includes('営業日・休日マップ') || q.includes('年間休日')) return 'company_calendar_settings';
@@ -103,9 +121,9 @@ export function resolveGuidePreviewType(item: Partial<SystemFaqItem>): string {
   if (q.includes('招待コード') || q.includes('退職') || q.includes('復職') || q.includes('従業員管理')) return 'employee_admin_manage';
   if (q.includes('GPS') || q.includes('位置情報')) return 'kintai_gps_help';
   if (q.includes('出勤簿') || q.includes('締め確定') || q.includes('月次締め') || q.includes('全社集計') || q.includes('打刻編集')) return 'attendance_admin';
-  if (q.includes('特別休暇') || q.includes('慶弔') || q.includes('忌引き') || q.includes('結婚') || q.includes('代休') || q.includes('有給') || q.includes('有休') || q.includes('残数') || q.includes('有給残') || q.includes('保有日数') || q.includes('5日義務') || q.includes('半休') || q.includes('休暇')) return 'leave_request';
-  if (q.includes('月次勤怠') || q.includes('月間勤怠') || q.includes('照会') || q.includes('修正申請') || q.includes('打刻忘れ') || q.includes('押し忘れ') || q.includes('間違え') || q.includes('CSV') || q.includes('PDF出力') || q.includes('印刷') || q.includes('申請する') || q.includes('休憩時間')) return 'monthly_attendance';
-  if (q.includes('打刻') || q.includes('出勤') || q.includes('退勤') || q.includes('ステータス') || q.includes('夜勤') || q.includes('時計')) return 'kintai_clock';
+  if (q.includes('有給') || q.includes('有休') || q.includes('休暇')) return 'leave_request';
+  if (q.includes('月次勤怠') || q.includes('月間勤怠') || q.includes('照会') || q.includes('修正申請') || q.includes('打刻忘れ') || q.includes('押し忘れ') || q.includes('間違え') || q.includes('申請する')) return 'monthly_attendance';
+  if (q.includes('打刻') || q.includes('出勤') || q.includes('退勤') || q.includes('ステータス') || q.includes('時計')) return 'kintai_clock';
   if (q.includes('シフト') || q.includes('希望提出')) return 'shift_submit';
   if (q.includes('通帳') || q.includes('入社')) return 'onboarding_passbook';
   if (q.includes('パスワード') || q.includes('ログイン') || q.includes('再設定')) return 'password_reset';
@@ -149,7 +167,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '「月次勤怠・有給照会」画面で自分の出勤日数や労働時間を確認したり、PDF・CSV出力するには？',
     answer: '【勤怠実績の確認・出力手順】\n1. 左メニューの「月次勤怠・有給照会」をクリックします。\n2. 画面上部の「月間勤怠照会」にある左右の矢印ボタン（< 2026年9月 >）で確認したい年月を切り替えます。\n3. 上部のサマリーバッジに「出勤: 〇日」「実働: 〇時間〇分」「残業: 〇時間〇分」の月次集計が自動表示されます。\n4. 右上の「📄 PDF出力 (印刷)」ボタンを押すと公式レイアウトで印刷・PDF保存でき、「📊 CSV出力」ボタンを押すと勤怠実績のCSVデータを即座にダウンロードできます。',
     keyword: '月次勤怠・有給照会 月間勤怠照会 PDF出力 印刷 CSV出力 出勤日数 実働時間 残業時間',
-    preview_type: 'monthly_attendance',
+    preview_type: 'monthly_attendance_summary_export',
     updated_at: '2026-09-06'
   },
   {
@@ -158,7 +176,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '休憩時間はどのように登録・確認・修正できますか？',
     answer: '【休憩時間の登録と修正方法】\n1. 通常時（自動控除）:\n打刻時刻に基づき、法定の所定休憩時間（実労働6時間超で45分、8時間超で60分）が自動控除されて実働・残業時間が計算されます。\n\n2. 個別の休憩時間を登録・修正したい場合:\n左メニュー「月次勤怠・有給照会」の該当日右端にある「申請する」をクリックし、申請種類「打刻修正」を選択します。\n「休憩時間（分）」欄に希望の分数（0分/45分/60分/90分のプリセット選択、または直接入力）を入力し、事由・備考を添えて「申請を送信」をクリックします。\n承認されると、指定した休憩時間が実績に反映され、実働・残業時間が自動再計算されます。\n\n3. 管理者による直接修正:\n管理者の「月間勤怠・出勤簿管理」画面からも、各日の「編集」ボタンから休憩時間を直接入力・保存できます。',
     keyword: '休憩 休憩時間 登録 修正 打刻修正 自動控除 60分 45分 0分 90分 申請 管理者',
-    preview_type: 'monthly_attendance',
+    preview_type: 'kintai_break_time',
     updated_at: '2026-09-06'
   },
   {
@@ -167,7 +185,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '日付をまたぐ夜勤（徹夜勤務・24時以降の退勤）はどう打刻しますか？',
     answer: '【夜勤の打刻ルール】\n本システムは24時を超える勤務（日跨ぎ勤務）に自動対応しています。\n前日に「出勤」を押した後、翌朝にそのまま「退勤」を押すと、自動的に前日の出勤データと紐付いた一連の勤務として実働時間・深夜割増時間が自動計算されます。日をまたいだからといって深夜0時に再打刻する必要はありません。',
     keyword: '夜勤 深夜 日跨ぎ 日付またぐ 徹夜 24時',
-    preview_type: 'kintai_clock',
+    preview_type: 'kintai_night_shift',
     updated_at: '2026-09-06'
   },
   {
@@ -205,7 +223,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '半日単位（午前半休・午後半休）で有給を取るにはどうしますか？',
     answer: '【半休の申請手順】\n左メニューの「各種申請」を開き、「申請種類」のドロップダウンを選択します。\n・午前の勤務を休む場合 ➔「有給休暇（午前半休）」を選択（0.5日消化）\n・午後の勤務を休む場合 ➔「有給休暇（午後半休）」を選択（0.5日消化）\n開始日・終了日と「事由・備考」を入力して「申請を送信」をクリックしてください。',
     keyword: '半休 半日有休 午前半休 午後半休 0.5日 各種申請',
-    preview_type: 'leave_request',
+    preview_type: 'leave_half_day',
     updated_at: '2026-09-06'
   },
   {
@@ -214,7 +232,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '自分の有給休暇の残り日数（残日数）や有効期限はどこで確認できますか？',
     answer: '【残日数の確認方法】\n左メニューの「ホーム（打刻）」を開くと、打刻時計の隣に「有給休暇・代休 残数」カードが常時表示されています。\n・有給休暇（今年度付与分）\n・有給休暇（前年度繰越分）\n・有給休暇（合計残数）\n・利用可能な代休\nが一目で確認できます。また、法律で義務付けられている「年間5日取得義務」に対する取得済み日数と残り日数もアラート表示されます。',
     keyword: '有給残日数 残り ホーム 有給休暇・代休 残数 有効期限 付与 失効 5日義務',
-    preview_type: 'leave_request',
+    preview_type: 'leave_balance_check',
     updated_at: '2026-09-06'
   },
   {
@@ -223,7 +241,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '慶弔休暇（忌引き・結婚）や代休などの特別休暇はどう申請しますか？',
     answer: '【特別休暇・代休の申請手順】\n左メニューの「各種申請」を開き、「申請種類」プルダウンから「特別休暇（慶弔など）」または「代休（全休）」「代休（午前半休）」「代休（午後半休）」を選択します。\n開始日・終了日と「事由・備考」（忌引き、本人結婚など）を入力して「申請を送信」をクリックしてください。就業規則で定められた有給特別休暇日数が自動適用されます。',
     keyword: '慶弔 忌引き 結婚 特別休暇 代休 各種申請',
-    preview_type: 'leave_request',
+    preview_type: 'special_leave_apply',
     updated_at: '2026-09-06'
   },
   {
@@ -232,7 +250,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '一度提出した有給申請や打刻修正を取り消したい、または変更したい時は？',
     answer: '【申請の取消手順】\n左メニューの「各種申請」を開き、画面下部の「直近の申請履歴・状況」一覧を確認します。\n・上長が承認する前 ➔ 該当申請の右側にある「↩️ 取下げ」ボタンをクリックすれば即座に取下げ・キャンセルできます。\n・既に承認された後の変更 ➔ 社内の上長または管理者へ連絡し、管理者画面から勤怠データの直接修正を依頼してください。',
     keyword: '有給取消 取消 取り消し 変更 キャンセル 各種申請 申請履歴 取下げ',
-    preview_type: 'leave_request',
+    preview_type: 'leave_request_cancel',
     updated_at: '2026-09-06'
   },
 
@@ -252,7 +270,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '【従業員】確定したシフトはどこで見られますか？',
     answer: '【確定シフトの確認手順】\n1. 左メニューの「シフト希望・確定シフト」を開くと、上長に承認されたシフトが藍色の「確定」バッジ付きでカレンダーに即時反映されます。\n2. また、左メニューの「ホーム（打刻）」の「本日のシフト予定」欄にも、本日の確定勤務時間（例: 09:00 〜 18:00）や公休日が自動表示されます。',
     keyword: '確定シフト シフト希望・確定シフト ホーム 本日のシフト予定 カレンダー 確認',
-    preview_type: 'shift_submit',
+    preview_type: 'shift_confirmed_view',
     updated_at: '2026-09-06'
   },
   {
@@ -377,7 +395,7 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: 'スマートフォンのホーム画面にアイコンを追加してアプリのように使うには？',
     answer: '【ホーム画面追加手順（PWA対応）】\n・iPhone（Safari）の場合: 画面下の共有ボタン（四角から上矢印）をタップし、「ホーム画面に追加」を選択します。\n・Android（Chrome）の場合: 画面右上のメニュー（3点リーダー）をタップし、「ホーム画面に追加」または「アプリをインストール」を選択します。\nホーム画面にアイコンが作成され、次回からワンタップで全画面起動できます。',
     keyword: 'スマホ ホーム画面 アプリアイコン 追加 PWA iPhone Android ショートカット',
-    preview_type: 'kintai_clock',
+    preview_type: 'pwa_install',
     updated_at: '2026-09-06'
   },
   {
@@ -441,12 +459,12 @@ export async function fetchSystemFaqs(): Promise<SystemFaqItem[]> {
         }
       });
 
-      localStorage.setItem('kap_system_faqs_v12', JSON.stringify(merged));
+      localStorage.setItem('kap_system_faqs_v13', JSON.stringify(merged));
       return merged;
     }
 
     // Supabaseが空またはエラーの場合
-    const local = localStorage.getItem('kap_system_faqs_v12');
+    const local = localStorage.getItem('kap_system_faqs_v13');
     if (local) {
       try {
         const parsed = JSON.parse(local);
@@ -482,7 +500,7 @@ export async function saveSystemFaq(item: Omit<SystemFaqItem, 'id' | 'updated_at
 
     if (!error && data) {
       const updated = [data, ...currentList.filter(f => f.id !== id)];
-      localStorage.setItem('kap_system_faqs_v12', JSON.stringify(updated));
+      localStorage.setItem('kap_system_faqs_v13', JSON.stringify(updated));
       return data;
     }
   } catch (err) {
@@ -497,7 +515,7 @@ export async function saveSystemFaq(item: Omit<SystemFaqItem, 'id' | 'updated_at
   } else {
     updatedList = [fullItem, ...currentList];
   }
-  localStorage.setItem('kap_system_faqs_v12', JSON.stringify(updatedList));
+  localStorage.setItem('kap_system_faqs_v13', JSON.stringify(updatedList));
   return fullItem;
 }
 
@@ -509,7 +527,7 @@ export async function deleteSystemFaq(id: string): Promise<boolean> {
   }
   const currentList = await fetchSystemFaqs();
   const updated = currentList.filter(f => f.id !== id);
-  localStorage.setItem('kap_system_faqs_v12', JSON.stringify(updated));
+  localStorage.setItem('kap_system_faqs_v13', JSON.stringify(updated));
   return true;
 }
 

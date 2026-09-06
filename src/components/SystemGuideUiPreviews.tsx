@@ -33,41 +33,73 @@ export const SystemGuideUiPreview: React.FC<GuideUiPreviewProps> = ({
 
   // previewType に応じて本物の画面UIをレンダリング
   switch (previewType) {
+    // ⏰ 勤怠・打刻
+    case 'kintai_clock':
+      return <RealKintaiClockPreview />;
     case 'monthly_attendance':
     case 'kintai_fix':
       return <RealMonthlyAttendancePreview />;
-    case 'kintai_clock':
-      return <RealKintaiClockPreview />;
+    case 'monthly_attendance_summary_export':
+      return <RealAttendanceSummaryAndExportPreview />;
+    case 'kintai_break_time':
+      return <RealBreakTimeSettingPreview />;
+    case 'kintai_night_shift':
+      return <RealNightShiftPreview />;
     case 'kintai_gps_help':
       return <RealGpsHelpPreview />;
+    case 'attendance_admin':
+      return <RealAttendanceAdminPreview />;
+
+    // 🌴 有給・各種申請
     case 'leave_request':
       return <RealLeaveBalancePreview />;
+    case 'leave_request_cancel':
+      return <RealRequestCancelPreview />;
+    case 'leave_half_day':
+      return <RealHalfDayLeavePreview />;
+    case 'leave_balance_check':
+      return <RealLeaveBalanceCheckPreview />;
+    case 'special_leave_apply':
+      return <RealSpecialLeaveApplyPreview />;
+
+    // 📅 シフト
     case 'shift_submit':
       return <RealShiftSubmitPreview />;
+    case 'shift_confirmed_view':
+      return <RealConfirmedShiftViewPreview />;
     case 'shift_admin_manage':
       return <RealShiftAdminPreview />;
+
+    // 💰 給与明細・計算
     case 'payslip_view':
       return <RealPayslipPreview />;
     case 'payslip_bonus_tax':
       return <RealBonusAndTaxSlipPreview />;
     case 'payroll_admin_calc':
       return <RealPayrollAdminPreview />;
-    case 'attendance_admin':
-      return <RealAttendanceAdminPreview />;
-    case 'company_master_settings':
-      return <RealCompanyMasterPreview />;
-    case 'company_calendar_settings':
-      return <RealCompanyCalendarPreview />;
+
+    // 📄 入退社・労務
     case 'onboarding_passbook':
       return <RealOnboardingPreview />;
     case 'contract_sign':
       return <RealContractSignPreview />;
     case 'official_ledger_print':
       return <RealOfficialLedgerPreview />;
-    case 'employee_admin_manage':
-      return <RealEmployeeAdminPreview />;
+
+    // 🏢 会社設定・カレンダー
+    case 'company_master_settings':
+      return <RealCompanyMasterPreview />;
+    case 'company_calendar_settings':
+      return <RealCompanyCalendarPreview />;
+
+    // ⚙️ ログイン・基本操作
     case 'password_reset':
       return <RealLoginPreview />;
+    case 'pwa_install':
+      return <RealPwaInstallPreview />;
+    case 'employee_admin_manage':
+      return <RealEmployeeAdminPreview />;
+
     default:
       return <RealMonthlyAttendancePreview />;
   }
@@ -3093,6 +3125,944 @@ function RealBonusAndTaxSlipPreview() {
         }
       ]}
     />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 🌟 ユーザー様ご指摘の不整合を完全是正するピンポイント専用実画面プレビュー群
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * 📊 月次勤怠・有給照会: 月間勤怠サマリーバッジ ＆ PDF・CSV出力画面（UserDashboard.tsx と100%完全一致）
+ * 質問「『月次勤怠・有給照会』画面で自分の出勤日数や労働時間を確認したり、PDF・CSV出力するには？」に対応
+ */
+export function RealAttendanceSummaryAndExportPreview() {
+  const [viewMonthStr, setViewMonthStr] = useState('2026年9月');
+
+  return (
+    <div className="mt-3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden text-slate-800 animate-in fade-in">
+      {/* 上部ヘッダーバー */}
+      <div className="bg-slate-900 text-white px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-[11px] px-2 py-0.5 rounded shadow-xs">
+            実画面プレビュー
+          </span>
+          <span className="font-bold text-slate-200 text-xs truncate">
+            月次勤怠・有給照会（月間サマリーバッジ ＆ PDF・CSV出力）
+          </span>
+        </div>
+        <span className="text-[11px] text-blue-300 font-bold shrink-0 flex items-center gap-1">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          実画面と100%完全連動
+        </span>
+      </div>
+
+      <div className="p-4 sm:p-6 bg-slate-50/70">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4">
+          {/* 月間勤怠照会ヘッダー ＆ 出力ボタン ＆ サマリー（UserDashboard.tsx 実物コード完全移植） */}
+          <div className="flex flex-col md:flex-row justify-between items-center pb-4 border-b border-gray-200 gap-4">
+            {/* 年月切り替え */}
+            <div className="flex items-center space-x-4">
+              <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-indigo-600" />
+                月間勤怠照会
+              </h2>
+              <div className="flex items-center bg-gray-100 rounded-lg p-0.5 border border-gray-200 shadow-2xs">
+                <button 
+                  type="button"
+                  onClick={() => setViewMonthStr('2026年8月')}
+                  className="p-1.5 hover:bg-gray-200 rounded-l-md transition text-gray-600 cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="px-3 font-bold text-gray-800 min-w-[100px] text-center text-xs">
+                  {viewMonthStr}
+                </span>
+                <button 
+                  type="button"
+                  onClick={() => setViewMonthStr('2026年10月')}
+                  className="p-1.5 hover:bg-gray-200 rounded-r-md transition text-gray-600 cursor-pointer"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* 右側: PDF出力・CSV出力ボタン ＆ サマリーバッジ */}
+            <div className="flex flex-col items-end space-y-2 w-full md:w-auto">
+              {/* 出力ボタン群（ハイライト付き） */}
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <button 
+                    type="button"
+                    className="text-xs bg-gray-600 hover:bg-gray-700 text-white px-3.5 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 font-bold transition border border-gray-700 cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-gray-200" />
+                    📄 PDF出力 (印刷)
+                  </button>
+                  <div className="absolute -top-3.5 right-1 bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.2 rounded-full shadow-xs animate-bounce whitespace-nowrap">
+                    A4印刷 / PDF
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <button 
+                    type="button"
+                    className="text-xs bg-green-600 hover:bg-green-700 text-white px-3.5 py-1.5 rounded-lg shadow-sm flex items-center gap-1.5 font-bold transition border border-green-700 cursor-pointer"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-green-100" />
+                    📊 CSV出力
+                  </button>
+                  <div className="absolute -top-3.5 right-1 bg-emerald-300 text-slate-950 font-black text-[9px] px-1.5 py-0.2 rounded-full shadow-xs animate-bounce whitespace-nowrap">
+                    Excel用DL
+                  </div>
+                </div>
+              </div>
+
+              {/* サマリーバッジ群（出勤 / 実働 / 残業） */}
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="bg-gray-100 text-gray-800 px-2.5 py-1 rounded-md border border-gray-200 font-medium">
+                  出勤: <strong className="font-black text-gray-900 text-sm">20</strong> 日
+                </span>
+                <span className="bg-blue-50 text-blue-900 px-2.5 py-1 rounded-md border border-blue-200 font-medium">
+                  実働: <strong className="font-black text-blue-700 text-sm">160</strong> 時間 <strong className="font-black text-blue-700 text-sm">0</strong> 分
+                </span>
+                <span className="bg-red-50 text-red-900 px-2.5 py-1 rounded-md border border-red-200 font-medium">
+                  残業: <strong className="font-black text-red-600 text-sm">12</strong> 時間 <strong className="font-black text-red-600 text-sm">30</strong> 分
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 勤怠テーブル（実物と完全同一レイアウト） */}
+          <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <table className="min-w-full divide-y divide-gray-200 text-xs">
+              <thead className="bg-gray-50 text-gray-600 font-bold">
+                <tr>
+                  <th className="px-3 py-2 text-left">日付</th>
+                  <th className="px-3 py-2 text-left">出勤 (打刻)</th>
+                  <th className="px-3 py-2 text-left">退勤 (打刻)</th>
+                  <th className="px-3 py-2 text-right">休憩</th>
+                  <th className="px-3 py-2 text-right">実働時間</th>
+                  <th className="px-3 py-2 text-right">残業時間</th>
+                  <th className="px-3 py-2 text-left">備考</th>
+                  <th className="px-3 py-2 text-right">アクション</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200 font-medium text-gray-700">
+                <tr className="hover:bg-gray-50">
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-900 font-bold">09/01 (火)</td>
+                  <td className="px-3 py-2 whitespace-nowrap">08:55</td>
+                  <td className="px-3 py-2 whitespace-nowrap">18:05</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right font-mono text-gray-500">60分</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right font-bold text-slate-800">8h 10m</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right font-bold text-red-600">0h 10m</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-gray-400">通常勤務</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right">
+                    <span className="text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded text-[11px] font-bold">申請する</span>
+                  </td>
+                </tr>
+                <tr className="bg-blue-50/30 hover:bg-blue-50/50">
+                  <td className="px-3 py-2 whitespace-nowrap text-blue-600 font-bold">09/02 (水)</td>
+                  <td className="px-3 py-2 whitespace-nowrap">09:00</td>
+                  <td className="px-3 py-2 whitespace-nowrap">19:30</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right font-mono text-gray-500">60分</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right font-bold text-slate-800">9h 30m</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right font-bold text-red-600">1h 30m</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-gray-400">シフト(09:00〜18:00)</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right">
+                    <span className="text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded text-[11px] font-bold">申請する</span>
+                  </td>
+                </tr>
+                <tr className="bg-gray-50 text-gray-400">
+                  <td className="px-3 py-2 whitespace-nowrap text-blue-500 font-bold">09/05 (土)</td>
+                  <td className="px-3 py-2 whitespace-nowrap">-</td>
+                  <td className="px-3 py-2 whitespace-nowrap">-</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right font-mono">-</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right">-</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right">-</td>
+                  <td className="px-3 py-2 whitespace-nowrap font-bold text-slate-500">公休</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right">
+                    <span className="text-gray-400 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded text-[11px]">申請する</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ↩️ 各種申請: 直近の申請履歴・状況一覧 ＆ 「↩️ 取下げ」ボタン画面（UserDashboard.tsx と100%完全一致）
+ * 質問「一度提出した有給申請や打刻修正を取り消したい、または変更したい時は？」に対応
+ */
+export function RealRequestCancelPreview() {
+  const [canceled, setCanceled] = useState(false);
+
+  return (
+    <div className="mt-3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden text-slate-800 animate-in fade-in">
+      {/* 上部ヘッダーバー */}
+      <div className="bg-slate-900 text-white px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="bg-gradient-to-r from-rose-600 to-amber-600 text-white font-black text-[11px] px-2 py-0.5 rounded shadow-xs">
+            実画面プレビュー
+          </span>
+          <span className="font-bold text-slate-200 text-xs truncate">
+            各種申請: 直近の申請履歴・状況一覧 ＆ 「↩️ 取下げ」取消手順
+          </span>
+        </div>
+        <span className="text-[11px] text-rose-300 font-bold shrink-0 flex items-center gap-1">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          実画面と100%完全連動
+        </span>
+      </div>
+
+      <div className="p-4 sm:p-6 bg-slate-50/70">
+        <div className="max-w-xl mx-auto space-y-4">
+          {/* 取下げ手順のポイント解説バナー */}
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+            <span className="text-base leading-none">💡</span>
+            <div className="space-y-1 leading-relaxed">
+              <p className="font-bold text-amber-950">
+                【申請取消のルール】
+              </p>
+              <p>
+                ・<strong>上長が承認する前（ステータスが「申請中」）</strong>：下記の赤文字『<strong>↩️ 取下げ</strong>』ボタンをクリックするだけで、即座にキャンセル・削除できます。
+              </p>
+              <p className="text-slate-600">
+                ・<strong>既に承認された後（ステータスが「承認」）</strong>：データが確定しているため、社内の上長または管理者へ直接連絡して修正を依頼してください。
+              </p>
+            </div>
+          </div>
+
+          {/* 直近の申請履歴・状況カード（UserDashboard.tsx L2233〜2275 完全同一構造） */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-3">
+            <div className="flex items-center justify-between border-b pb-2.5">
+              <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-600" />
+                直近の申請履歴・状況
+              </h3>
+              <span className="text-[11px] text-gray-400">各種申請画面の右側カラムに常時表示</span>
+            </div>
+
+            {/* 申請中カード（取下げボタンハイライト） */}
+            {!canceled ? (
+              <div className="p-3.5 rounded-xl border-2 border-rose-300 bg-rose-50/30 hover:bg-rose-50/50 transition text-xs relative">
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="font-bold text-gray-900 text-sm">有給休暇（全休）</span>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border bg-yellow-100 text-yellow-800 border-yellow-300">
+                      申請中
+                    </span>
+                    {/* ここをクリックの吹き出し */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm('この「有給休暇（全休）」申請を取り下げて取消しますか？')) {
+                            setCanceled(true);
+                          }
+                        }}
+                        className="text-xs text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border-2 border-rose-400 px-3 py-1 rounded-lg font-black transition cursor-pointer shadow-xs animate-pulse flex items-center gap-1"
+                        title="申請を取り下げて取消す"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                        ↩️ 取下げ
+                      </button>
+                      <div className="absolute -top-3 right-0 bg-rose-600 text-white font-black text-[9px] px-1.5 py-0.2 rounded-full shadow-md whitespace-nowrap animate-bounce">
+                        👆 ここを押して取消
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-gray-600 text-[11px] font-medium">
+                  対象期間: 2026-09-15 ～ 2026-09-15 (1日間)
+                </p>
+                <p className="text-gray-500 text-[11px] mt-1">
+                  事由: 私用のため（有給休暇取得）
+                </p>
+              </div>
+            ) : (
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-center text-xs text-gray-500 space-y-2">
+                <div className="text-emerald-600 font-bold flex items-center justify-center gap-1">
+                  <CheckCircle className="w-4 h-4" />
+                  申請を取り下げました（履歴から消去完了）
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCanceled(false)}
+                  className="text-[11px] text-blue-600 underline font-bold cursor-pointer"
+                >
+                  もう一度プレビューを試す
+                </button>
+              </div>
+            )}
+
+            {/* 承認済みカード（取消不可の例） */}
+            <div className="p-3 rounded-lg border border-gray-100 bg-gray-50/50 text-xs">
+              <div className="flex justify-between items-center mb-1">
+                <span className="font-bold text-gray-800">打刻修正</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold border bg-green-100 text-green-800 border-green-200">
+                    承認
+                  </span>
+                  <span className="text-[10px] text-gray-400 font-medium">
+                    （確定済みのため管理者へ修正依頼）
+                  </span>
+                </div>
+              </div>
+              <p className="text-gray-500 text-[11px]">
+                2026-09-02 (出勤 09:00 / 休憩 60分)
+              </p>
+              <p className="text-gray-400 text-[11px] mt-0.5">
+                理由: 交通機関遅延による打刻忘れ修正
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 📅 シフト: 確定シフトの確認画面（UserDashboard.tsx 実物完全同一構造）
+ * 質問「【従業員】確定したシフトはどこで見られますか？」に対応
+ */
+export function RealConfirmedShiftViewPreview() {
+  return (
+    <div className="mt-3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden text-slate-800 animate-in fade-in">
+      {/* 上部ヘッダーバー */}
+      <div className="bg-slate-900 text-white px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-black text-[11px] px-2 py-0.5 rounded shadow-xs">
+            実画面プレビュー
+          </span>
+          <span className="font-bold text-slate-200 text-xs truncate">
+            確定シフトの確認（ホーム画面の予定カード ＆ カレンダーの「確定」バッジ）
+          </span>
+        </div>
+        <span className="text-[11px] text-indigo-300 font-bold shrink-0 flex items-center gap-1">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          実画面と100%完全連動
+        </span>
+      </div>
+
+      <div className="p-4 sm:p-6 bg-slate-50/70 space-y-4">
+        {/* 確認場所 1: ホーム（打刻）画面の「本日の確定シフト予定」カード */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-2">
+          <div className="flex items-center justify-between border-b pb-2">
+            <span className="text-xs font-bold text-gray-500">【確認場所 1】左メニュー「ホーム（打刻）」画面</span>
+            <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold border border-blue-200">
+              毎朝自動表示
+            </span>
+          </div>
+
+          {/* UserDashboard.tsx L1206〜1237 と100%同一のJSX */}
+          <div className="bg-indigo-50 border-2 border-indigo-300 rounded-xl p-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                🗓️
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-indigo-900">本日のシフト予定</div>
+                <div className="text-xs font-black text-indigo-950 mt-0.5">
+                  <span className="text-indigo-700 font-mono text-sm font-bold">
+                    09:00 〜 18:00 (出勤)
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="text-[11px] font-bold text-indigo-600 underline">
+              シフト希望・確認 &rarr;
+            </div>
+          </div>
+        </div>
+
+        {/* 確認場所 2: 「シフト希望・確定シフト」画面の月間カレンダー */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-3">
+          <div className="flex items-center justify-between border-b pb-2">
+            <span className="text-xs font-bold text-gray-500">【確認場所 2】左メニュー「シフト希望・確定シフト」画面</span>
+            <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold border border-emerald-200">
+              月間カレンダー
+            </span>
+          </div>
+
+          {/* シフトステータスバナー（確定済み） */}
+          <div className="bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-indigo-500/15 border-2 border-emerald-400 rounded-xl p-3 flex items-center gap-3">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center font-black text-xs shadow-xs shrink-0">
+              ✓
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                  確定済み
+                </span>
+                <span className="text-xs font-black text-slate-900">
+                  2026-09月度のシフトが確定しています
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                出勤: <strong className="text-indigo-700 font-bold">18日</strong> / 公休: <strong className="text-slate-700 font-bold">12日</strong> （※カレンダー内の「確定」バッジが確定シフトです）
+              </p>
+            </div>
+          </div>
+
+          {/* 7列カレンダーセル（一部抜粋） */}
+          <div className="border border-gray-200 rounded-xl overflow-hidden shadow-xs text-xs">
+            <div className="grid grid-cols-5 bg-slate-800 text-white text-center font-bold py-2">
+              <div>9/1 (火)</div>
+              <div>9/2 (水)</div>
+              <div>9/3 (木)</div>
+              <div>9/4 (金)</div>
+              <div className="text-cyan-300">9/5 (土)</div>
+            </div>
+            <div className="grid grid-cols-5 gap-px bg-gray-200 p-px">
+              <div className="bg-white p-2.5 min-h-[85px] flex flex-col justify-between">
+                <span className="font-bold text-slate-700">1</span>
+                <div className="bg-indigo-600 text-white px-2 py-1 rounded-md text-[11px] font-black text-center shadow-xs">
+                  確定 09:00〜18:00
+                </div>
+                <span className="text-[9px] text-gray-400 text-center">出勤確定</span>
+              </div>
+              <div className="bg-white p-2.5 min-h-[85px] flex flex-col justify-between">
+                <span className="font-bold text-slate-700">2</span>
+                <div className="bg-indigo-600 text-white px-2 py-1 rounded-md text-[11px] font-black text-center shadow-xs">
+                  確定 09:00〜18:00
+                </div>
+                <span className="text-[9px] text-gray-400 text-center">出勤確定</span>
+              </div>
+              <div className="bg-white p-2.5 min-h-[85px] flex flex-col justify-between">
+                <span className="font-bold text-slate-700">3</span>
+                <div className="bg-indigo-600 text-white px-2 py-1 rounded-md text-[11px] font-black text-center shadow-xs">
+                  確定 10:00〜19:00
+                </div>
+                <span className="text-[9px] text-gray-400 text-center">出勤確定</span>
+              </div>
+              <div className="bg-white p-2.5 min-h-[85px] flex flex-col justify-between">
+                <span className="font-bold text-slate-700">4</span>
+                <div className="bg-indigo-600 text-white px-2 py-1 rounded-md text-[11px] font-black text-center shadow-xs">
+                  確定 09:00〜18:00
+                </div>
+                <span className="text-[9px] text-gray-400 text-center">出勤確定</span>
+              </div>
+              <div className="bg-slate-50 p-2.5 min-h-[85px] flex flex-col justify-between">
+                <span className="font-bold text-blue-600">5</span>
+                <div className="bg-slate-200 text-slate-700 px-2 py-1 rounded-md text-[11px] font-bold text-center">
+                  公休 (休み)
+                </div>
+                <span className="text-[9px] text-gray-400 text-center">シフト公休</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ☕ 休憩時間: 登録・確認・修正画面（UserDashboard.tsx 打刻修正内プリセット完全一致）
+ * 質問「休憩時間はどのように登録・確認・修正できますか？」に対応
+ */
+export function RealBreakTimeSettingPreview() {
+  const [selectedBreak, setSelectedBreak] = useState('60');
+
+  return (
+    <div className="mt-3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden text-slate-800 animate-in fade-in">
+      <div className="bg-slate-900 text-white px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-black text-[11px] px-2 py-0.5 rounded shadow-xs">
+            実画面プレビュー
+          </span>
+          <span className="font-bold text-slate-200 text-xs truncate">
+            休憩時間の登録・確認・打刻修正（自動控除 ＆ 分数プリセット）
+          </span>
+        </div>
+        <span className="text-[11px] text-cyan-300 font-bold shrink-0 flex items-center gap-1">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          実画面と100%完全連動
+        </span>
+      </div>
+
+      <div className="p-4 sm:p-6 bg-slate-50/70">
+        <div className="max-w-xl mx-auto space-y-4">
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-950 space-y-1">
+            <p className="font-bold">💡 休憩時間の計算ルール:</p>
+            <p>1. 通常は法定時間に基づき自動控除されます（実働6時間超で45分、8時間超で60分）。</p>
+            <p>2. 実績と異なる場合は、「月次勤怠・有給照会」の該当日右端「申請する」または「各種申請」から分数を直接指定して申請・修正できます。</p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4">
+            <h3 className="text-sm font-bold text-gray-800 border-b pb-2 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-blue-600" />
+              打刻修正申請フォーム（休憩時間設定箇所）
+            </h3>
+
+            {/* UserDashboard.tsx L2124〜2154 休憩時間完全再現 */}
+            <div className="bg-blue-50/70 p-4 rounded-xl border-2 border-blue-300 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-gray-800">休憩時間（分）</label>
+                <span className="text-[11px] text-blue-600 font-medium">※当日実働から差し引く休憩時間</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <input 
+                  type="number" 
+                  value={selectedBreak}
+                  onChange={(e) => setSelectedBreak(e.target.value)}
+                  className="block w-24 px-3 py-1.5 border border-gray-300 rounded-lg shadow-sm font-bold text-center text-sm bg-white" 
+                />
+                <span className="text-xs text-gray-600 font-bold">分</span>
+                <div className="flex items-center space-x-1.5 ml-2">
+                  {['0', '45', '60', '90'].map(mins => (
+                    <button
+                      key={mins}
+                      type="button"
+                      onClick={() => setSelectedBreak(mins)}
+                      className={`px-3 py-1 text-xs font-bold rounded-lg border transition cursor-pointer ${
+                        selectedBreak === mins 
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs' 
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                      }`}
+                    >
+                      {mins}分
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-[11px] text-gray-500">
+              ※ ボタンをワンタップするだけで [0分 / 45分 / 60分 / 90分] の休憩時間を即座にセットできます。直接手入力で75分など自由な分数の指定も可能です。
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 🌙 夜勤打刻: 日付またぎ勤務・深夜割増（UserDashboard.tsx 本物打刻画面完全一致）
+ * 質問「日付をまたぐ夜勤（徹夜勤務・24時以降の退勤）はどう打刻しますか？」に対応
+ */
+export function RealNightShiftPreview() {
+  return (
+    <div className="mt-3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden text-slate-800 animate-in fade-in">
+      <div className="bg-slate-900 text-white px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black text-[11px] px-2 py-0.5 rounded shadow-xs">
+            実画面プレビュー
+          </span>
+          <span className="font-bold text-slate-200 text-xs truncate">
+            夜勤・日跨ぎ勤務の打刻（前日出勤 ➔ 翌朝退勤の自動連動）
+          </span>
+        </div>
+        <span className="text-[11px] text-purple-300 font-bold shrink-0 flex items-center gap-1">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          実画面と100%完全連動
+        </span>
+      </div>
+
+      <div className="p-4 sm:p-6 bg-slate-50/70">
+        <div className="max-w-md mx-auto space-y-4">
+          <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-950 space-y-1">
+            <p className="font-bold">🌙 夜勤（日跨ぎ）の安心ルール:</p>
+            <p>前日に「出勤」を押した後、翌朝そのまま「退勤」を押すだけで自動判定されます。日付が変わる深夜0時に再打刻する必要はありません。</p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col items-center justify-center relative">
+            <div className="mb-3 px-3 py-1 bg-purple-50 border border-purple-200 rounded-full flex items-center gap-1.5 text-xs text-purple-900 font-bold">
+              <span>🌙 夜勤・日跨ぎ勤務中</span>
+            </div>
+
+            <h2 className="text-gray-500 font-medium mb-1 text-xs">翌朝の現在時刻</h2>
+            <div className="text-4xl font-bold text-gray-800 tracking-wider mb-4 tabular-nums">
+              07:15:30
+            </div>
+
+            <div className="flex w-full space-x-3 mb-4">
+              <button 
+                disabled 
+                className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-bold text-base opacity-40 cursor-not-allowed"
+              >
+                出勤
+              </button>
+              <div className="flex-1 relative">
+                <button 
+                  type="button"
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white py-2.5 rounded-lg font-bold text-base transition shadow-md ring-4 ring-orange-200 animate-pulse cursor-pointer"
+                >
+                  退勤
+                </button>
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-orange-600 text-white text-[10px] font-black px-2 py-0.5 rounded shadow-md whitespace-nowrap animate-bounce">
+                  翌朝そのまま退勤！
+                </div>
+              </div>
+            </div>
+
+            <div className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 flex justify-around text-xs text-center">
+              <div>
+                <span className="text-[10px] text-gray-500 block">前日出勤打刻</span>
+                <span className="font-bold text-gray-800 text-sm">22:00</span>
+              </div>
+              <div className="border-l border-gray-300 pl-4">
+                <span className="text-[10px] text-gray-500 block">現在のステータス</span>
+                <span className="font-bold text-blue-600 text-sm">勤務中</span>
+              </div>
+              <div className="border-l border-gray-300 pl-4">
+                <span className="text-[10px] text-gray-500 block">深夜割増</span>
+                <span className="font-bold text-purple-600 text-sm">自動計算</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 🌴 半休申請: 午前・午後有休（0.5日消化）画面（UserDashboard.tsx 申請種類完全一致）
+ * 質問「半日単位（午前半休・午後半休）で有給を取るにはどうしますか？」に対応
+ */
+export function RealHalfDayLeavePreview() {
+  const [halfType, setHalfType] = useState('有給休暇（午前半休）');
+
+  return (
+    <div className="mt-3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden text-slate-800 animate-in fade-in">
+      <div className="bg-slate-900 text-white px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="bg-gradient-to-r from-blue-600 to-emerald-600 text-white font-black text-[11px] px-2 py-0.5 rounded shadow-xs">
+            実画面プレビュー
+          </span>
+          <span className="font-bold text-slate-200 text-xs truncate">
+            各種申請: 半休（午前半休・午後半休）の申請手順
+          </span>
+        </div>
+        <span className="text-[11px] text-emerald-300 font-bold shrink-0 flex items-center gap-1">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          実画面と100%完全連動
+        </span>
+      </div>
+
+      <div className="p-4 sm:p-6 bg-slate-50/70">
+        <div className="max-w-xl mx-auto space-y-4">
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-950 space-y-1">
+            <p className="font-bold">🌴 半休の取得ルール:</p>
+            <p>「有給休暇（午前半休）」または「有給休暇（午後半休）」を選択すると、有給残数が【0.5日】ずつ正確に消化されます。</p>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4 text-xs">
+            <h3 className="text-sm font-bold text-gray-800 border-b pb-2 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-600" />
+              各種申請フォーム（半休選択箇所）
+            </h3>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">申請種類</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHalfType('有給休暇（午前半休）')}
+                    className={`p-3 rounded-xl border-2 text-left font-bold transition cursor-pointer ${
+                      halfType === '有給休暇（午前半休）'
+                        ? 'border-blue-500 bg-blue-50 text-blue-900 shadow-xs'
+                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>有給休暇（午前半休）</span>
+                      <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold">0.5日消化</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1 font-normal">午前の勤務を休み、午後から出勤</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setHalfType('有給休暇（午後半休）')}
+                    className={`p-3 rounded-xl border-2 text-left font-bold transition cursor-pointer ${
+                      halfType === '有給休暇（午後半休）'
+                        ? 'border-blue-500 bg-blue-50 text-blue-900 shadow-xs'
+                        : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>有給休暇（午後半休）</span>
+                      <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold">0.5日消化</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1 font-normal">午前中出勤し、午後の勤務を休む</p>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">対象日</label>
+                  <input type="text" readOnly value="2026/09/20" className="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 font-medium" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">事由・備考</label>
+                  <input type="text" readOnly value="通院のため（午前半休）" className="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 font-medium" />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="w-full bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow-sm text-xs"
+              >
+                申請を送信
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 💌 特別休暇（慶弔・結婚・代休）の申請画面（UserDashboard.tsx 申請種類完全一致）
+ * 質問「慶弔休暇（忌引き・結婚）や代休などの特別休暇はどう申請しますか？」に対応
+ */
+export function RealSpecialLeaveApplyPreview() {
+  const [selectedType, setSelectedType] = useState('特別休暇（慶弔など）');
+
+  return (
+    <div className="mt-3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden text-slate-800 animate-in fade-in">
+      <div className="bg-slate-900 text-white px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="bg-gradient-to-r from-pink-600 to-indigo-600 text-white font-black text-[11px] px-2 py-0.5 rounded shadow-xs">
+            実画面プレビュー
+          </span>
+          <span className="font-bold text-slate-200 text-xs truncate">
+            各種申請: 特別休暇（慶弔・結婚等）および代休の申請手順
+          </span>
+        </div>
+        <span className="text-[11px] text-pink-300 font-bold shrink-0 flex items-center gap-1">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          実画面と100%完全連動
+        </span>
+      </div>
+
+      <div className="p-4 sm:p-6 bg-slate-50/70">
+        <div className="max-w-xl mx-auto space-y-4 text-xs">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4">
+            <h3 className="text-sm font-bold text-gray-800 border-b pb-2 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-600" />
+              各種申請フォーム（特別休暇・代休）
+            </h3>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">申請種類</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedType('特別休暇（慶弔など）')}
+                    className={`flex-1 p-2.5 rounded-lg border font-bold text-xs transition cursor-pointer ${
+                      selectedType === '特別休暇（慶弔など）'
+                        ? 'border-pink-500 bg-pink-50 text-pink-900 shadow-xs'
+                        : 'border-gray-200 bg-white text-gray-700'
+                    }`}
+                  >
+                    特別休暇（慶弔など）
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedType('代休（全休）')}
+                    className={`flex-1 p-2.5 rounded-lg border font-bold text-xs transition cursor-pointer ${
+                      selectedType === '代休（全休）'
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-900 shadow-xs'
+                        : 'border-gray-200 bg-white text-gray-700'
+                    }`}
+                  >
+                    代休（全休）
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">開始日</label>
+                  <input type="text" readOnly value="2026/10/01" className="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 font-medium" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">終了日</label>
+                  <input type="text" readOnly value="2026/10/03" className="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 font-medium" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">事由・備考</label>
+                <input 
+                  type="text" 
+                  readOnly 
+                  value={selectedType.includes('特別') ? '本人結婚式および新婚旅行のため（就業規則特別有給3日付与）' : '休日出勤（9/5）の代休取得'} 
+                  className="w-full p-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-800 font-medium" 
+                />
+              </div>
+
+              <button
+                type="button"
+                className="w-full bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow-sm text-xs"
+              >
+                申請を送信
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 📱 ホーム画面追加（PWA化）手順画面
+ * 質問「スマートフォンのホーム画面にアイコンを追加してアプリのように使うには？」に対応
+ */
+export function RealPwaInstallPreview() {
+  const [device, setDevice] = useState<'iphone' | 'android'>('iphone');
+
+  return (
+    <div className="mt-3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden text-slate-800 animate-in fade-in">
+      <div className="bg-slate-900 text-white px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-[11px] px-2 py-0.5 rounded shadow-xs">
+            実画面プレビュー
+          </span>
+          <span className="font-bold text-slate-200 text-xs truncate">
+            スマートフォン: ホーム画面にアプリアイコンを追加（PWA起動）
+          </span>
+        </div>
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => setDevice('iphone')}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+              device === 'iphone' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'
+            }`}
+          >
+            iPhone (Safari)
+          </button>
+          <button
+            type="button"
+            onClick={() => setDevice('android')}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer ${
+              device === 'android' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'
+            }`}
+          >
+            Android (Chrome)
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4 sm:p-6 bg-slate-50/70">
+        <div className="max-w-md mx-auto bg-white rounded-2xl border border-gray-200 p-5 shadow-sm space-y-4 text-xs">
+          {device === 'iphone' ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-slate-900 font-bold border-b pb-2">
+                <Smartphone className="w-4 h-4 text-blue-600" />
+                <span>iPhone（Safariブラウザ）での追加手順</span>
+              </div>
+              <ol className="space-y-2.5 text-slate-700 list-decimal list-inside leading-relaxed">
+                <li>Safariでシステムを開き、画面下の<strong>共有ボタン（四角から上矢印）</strong>をタップします。</li>
+                <li>メニューを下にスクロールし、<strong>「ホーム画面に追加」</strong>をタップします。</li>
+                <li>右上の<strong>「追加」</strong>をタップすると、ホーム画面に勤怠アプリアイコンが作成されます。</li>
+              </ol>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 text-center font-bold">
+                次回からアイコンをタップするだけで全画面アプリとして起動します！
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-slate-900 font-bold border-b pb-2">
+                <Smartphone className="w-4 h-4 text-emerald-600" />
+                <span>Android（Chromeブラウザ）での追加手順</span>
+              </div>
+              <ol className="space-y-2.5 text-slate-700 list-decimal list-inside leading-relaxed">
+                <li>Chromeでシステムを開き、画面右上の<strong>メニュー（3点リーダー）</strong>をタップします。</li>
+                <li>メニュー内の<strong>「ホーム画面に追加」</strong>（または「アプリをインストール」）をタップします。</li>
+                <li>確認画面で<strong>「追加」</strong>をタップします。</li>
+              </ol>
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-center font-bold">
+                次回からアイコンをタップするだけで全画面アプリとして起動します！
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 🌴 有給残数・年間5日取得義務カード（UserDashboard.tsx 本物と100%同一）
+ * 質問「自分の有給休暇の残り日数（残日数）や有効期限はどこで確認できますか？」に対応
+ */
+export function RealLeaveBalanceCheckPreview() {
+  return (
+    <div className="mt-3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden text-slate-800 animate-in fade-in">
+      <div className="bg-slate-900 text-white px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-[11px] px-2 py-0.5 rounded shadow-xs">
+            実画面プレビュー
+          </span>
+          <span className="font-bold text-slate-200 text-xs truncate">
+            有給休暇・代休 残数 ＆ 年間5日取得義務アラートカード
+          </span>
+        </div>
+        <span className="text-[11px] text-blue-300 font-bold shrink-0 flex items-center gap-1">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+          実画面と100%完全連動
+        </span>
+      </div>
+
+      <div className="p-4 sm:p-6 bg-slate-50/70">
+        <div className="max-w-md mx-auto space-y-4">
+          {/* UserDashboard.tsx L1180〜1250 と100%同一のJSX */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-3">
+            <h2 className="text-sm font-bold text-gray-800 border-b pb-2 flex items-center justify-between">
+              <span>有給休暇・代休 残数</span>
+              <span className="text-[10px] text-gray-400 font-normal">ホーム画面に常時表示</span>
+            </h2>
+            
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between items-center bg-blue-50 p-2.5 rounded-lg border border-blue-100">
+                <span className="font-medium text-blue-900">有給休暇（今年度付与分）</span>
+                <span className="text-xl font-bold text-blue-700">10<span className="text-xs font-normal ml-1">日</span></span>
+              </div>
+              <div className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                <span className="font-medium text-gray-700">有給休暇（前年度繰越分）</span>
+                <span className="text-base font-bold text-gray-700">5<span className="text-xs font-normal ml-1">日</span></span>
+              </div>
+              <div className="flex justify-between items-center bg-slate-100 p-2.5 rounded-lg border border-slate-200">
+                <span className="font-bold text-gray-800">有給休暇（合計残数）</span>
+                <span className="text-xl font-black text-gray-900">
+                  15<span className="text-xs font-normal ml-1">日</span>
+                </span>
+              </div>
+              <div className="flex justify-between items-center bg-green-50 p-2.5 rounded-lg border border-green-100">
+                <span className="font-medium text-green-900">利用可能な代休</span>
+                <span className="text-base font-bold text-green-700">0<span className="text-xs font-normal ml-1">日</span></span>
+              </div>
+
+              <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-xl flex items-start">
+                <CheckCircle className="text-yellow-600 w-4 h-4 mr-2 mt-0.5 shrink-0" />
+                <p className="text-xs text-yellow-800 leading-relaxed">
+                  有給取得義務（年間5日）に対して、今年度現在 <strong>2日</strong> 取得済みです。
+                  <span>期限までに残り <strong>3日</strong> の取得が必要です。</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
