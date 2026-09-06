@@ -320,8 +320,8 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     id: 'sfaq-o-3',
     category: 'onboarding',
     question: '【管理者】労働者名簿や国税庁様式源泉徴収簿の出力方法は？',
-    answer: '【公的帳票出力の手順】\n1. 管理メニューの「給与計算・明細」を開き、「労務・法定帳票発行センター（賞与・名簿・台帳）」タブをクリックします（または入退社労務管理からアクセス）。\n2. 「■ 帳簿作成・保管義務のある書類」の「労働者名簿」（労基法第107条）や「賃金台帳」、または「■ 年末調整関係書類」の「源泉徴収簿」（国税庁様式）カードをクリックします。\n3. 入社手続きで登録された全基本台帳データ（氏名、生年月日、現住所、雇入年月日、マイナンバー等）が完全に差し込まれた法定レイアウト帳票（電子印鑑捺印済み）がプレビュー表示されます。\n4. 右上の「📄 A4印刷 / PDF出力」ボタンを押すと、即座に公式PDFが生成・保存されます。',
-    keyword: '労働者名簿 賃金台帳 源泉徴収簿 法定帳簿 労務・法定帳票発行センター PDF出力 印刷 管理者 A4印刷 / PDF出力',
+    answer: '【公的帳票出力の手順】\n1. 管理メニューの「給与計算・明細」を開き、「労務・法定帳票発行センター（賞与・名簿・台帳）」タブをクリックします（または入退社労務管理からアクセス）。\n2. 「■ 帳簿作成・保管義務のある書類」の「労働者名簿」（労基法第107条）や「賃金台帳」、または「■ 年末調整関係書類」の「源泉徴収簿」（国税庁様式）カードをクリックします。\n3. 入社手続きで登録された全基本台帳データ（氏名、生年月日、現住所、雇入年月日、マイナンバー等）が完全に差し込まれた法定レイアウト帳票（電子印鑑捺印済み）がプレビュー表示されます。\n4. 各帳票画面の印刷ボタン（労働者名簿は「公式A4印刷」、源泉徴収簿は「A4横で印刷・PDF保存」、賃金台帳は「一括印刷」または「印刷」）を押すと、即座に公式PDFが生成・保存されます。',
+    keyword: '労働者名簿 賃金台帳 源泉徴収簿 法定帳簿 労務・法定帳票発行センター PDF出力 印刷 管理者 公式A4印刷 A4横で印刷・PDF保存 一括印刷',
     preview_type: 'onboarding_passbook',
     updated_at: '2026-09-06'
   },
@@ -426,12 +426,12 @@ export async function fetchSystemFaqs(): Promise<SystemFaqItem[]> {
         }
       });
 
-      localStorage.setItem('kap_system_faqs_v8', JSON.stringify(merged));
+      localStorage.setItem('kap_system_faqs_v9', JSON.stringify(merged));
       return merged;
     }
 
     // Supabaseが空またはエラーの場合
-    const local = localStorage.getItem('kap_system_faqs_v8');
+    const local = localStorage.getItem('kap_system_faqs_v9');
     if (local) {
       try {
         const parsed = JSON.parse(local);
@@ -467,7 +467,7 @@ export async function saveSystemFaq(item: Omit<SystemFaqItem, 'id' | 'updated_at
 
     if (!error && data) {
       const updated = [data, ...currentList.filter(f => f.id !== id)];
-      localStorage.setItem('kap_system_faqs_v8', JSON.stringify(updated));
+      localStorage.setItem('kap_system_faqs_v9', JSON.stringify(updated));
       return data;
     }
   } catch (err) {
@@ -482,7 +482,7 @@ export async function saveSystemFaq(item: Omit<SystemFaqItem, 'id' | 'updated_at
   } else {
     updatedList = [fullItem, ...currentList];
   }
-  localStorage.setItem('kap_system_faqs_v8', JSON.stringify(updatedList));
+  localStorage.setItem('kap_system_faqs_v9', JSON.stringify(updatedList));
   return fullItem;
 }
 
@@ -494,7 +494,7 @@ export async function deleteSystemFaq(id: string): Promise<boolean> {
   }
   const currentList = await fetchSystemFaqs();
   const updated = currentList.filter(f => f.id !== id);
-  localStorage.setItem('kap_system_faqs_v8', JSON.stringify(updated));
+  localStorage.setItem('kap_system_faqs_v9', JSON.stringify(updated));
   return true;
 }
 
