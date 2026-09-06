@@ -4,7 +4,8 @@ import {
   ChevronLeft, ChevronRight, CheckCircle, CheckCircle2,
   Lock, Unlock, CheckCheck,
   Sparkles, MousePointerClick,
-  DollarSign, Printer, Upload, CreditCard, Train, Shield, Users, Mail, LogIn, Send
+  DollarSign, Printer, Upload, CreditCard, Train, Shield, Users, Mail, LogIn, Send,
+  Smartphone, MapPin
 } from 'lucide-react';
 
 interface GuideUiPreviewProps {
@@ -189,9 +190,15 @@ function AuthenticClockWidget({
   const isPunchOutDisabled = status !== '勤務中';
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col items-center justify-center max-w-sm mx-auto w-full">
-      <h2 className="text-gray-500 font-medium mb-2">現在時刻</h2>
-      <div className="text-5xl font-bold text-gray-800 tracking-wider mb-6 tabular-nums">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col items-center justify-center max-w-sm mx-auto w-full relative">
+      {/* 端末打刻モードバッジ（本物と100%同一） */}
+      <div className="mb-3 px-3 py-1 bg-indigo-50 border border-indigo-200 rounded-full flex items-center gap-1.5 text-xs text-indigo-900 font-bold shadow-2xs">
+        <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
+        <span>📱 スマホ打刻モード（📍 GPS位置情報・不正防止連動）</span>
+      </div>
+
+      <h2 className="text-gray-500 font-medium mb-1">現在時刻</h2>
+      <div className="text-5xl font-bold text-gray-800 tracking-wider mb-5 tabular-nums">
         {time}
       </div>
 
@@ -206,7 +213,7 @@ function AuthenticClockWidget({
             type="button"
             disabled={isPunchInDisabled}
             className={`w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-lg transition ${
-              isPunchInDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700 cursor-pointer'
+              isPunchInDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700 cursor-pointer shadow-sm'
             } ${highlightPunchIn ? 'ring-4 ring-blue-300 animate-pulse' : ''}`}
           >
             出勤
@@ -223,7 +230,7 @@ function AuthenticClockWidget({
             type="button"
             disabled={isPunchOutDisabled}
             className={`w-full bg-orange-500 text-white py-3 rounded-lg font-bold text-lg transition ${
-              isPunchOutDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-orange-600 cursor-pointer'
+              isPunchOutDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-orange-600 cursor-pointer shadow-sm'
             } ${highlightPunchOut ? 'ring-4 ring-orange-300 animate-pulse' : ''}`}
           >
             退勤
@@ -231,7 +238,7 @@ function AuthenticClockWidget({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col space-y-3 items-center text-sm text-gray-600">
+      <div className="mt-4 flex flex-col space-y-3 items-center text-sm text-gray-600 w-full">
         <div className="flex items-center">
           <span className="mr-2">現在のステータス:</span>
           <span className={`px-3 py-1 rounded-full font-bold ${
@@ -244,17 +251,25 @@ function AuthenticClockWidget({
         </div>
 
         {(checkInTime || checkOutTime) && (
-          <div className="flex space-x-6 bg-gray-50 px-4 py-2 rounded-md border border-gray-100">
+          <div className="flex space-x-6 bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 w-full justify-center">
             {checkInTime && (
               <div className="flex flex-col items-center">
-                <span className="text-xs text-gray-400">出勤時間</span>
-                <span className="font-bold text-gray-800 text-lg">{checkInTime}</span>
+                <span className="text-xs text-gray-500 font-medium">出勤時間</span>
+                <span className="font-black text-gray-900 text-lg">{checkInTime}</span>
+                <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 shadow-2xs">
+                  <MapPin className="w-3 h-3 text-blue-600" />
+                  <span>📍 GPS位置確認</span>
+                </span>
               </div>
             )}
             {checkOutTime && (
-              <div className="flex flex-col items-center border-l pl-6 border-gray-200">
-                <span className="text-xs text-gray-400">退勤時間</span>
-                <span className="font-bold text-gray-800 text-lg">{checkOutTime}</span>
+              <div className="flex flex-col items-center border-l pl-6 border-gray-300">
+                <span className="text-xs text-gray-500 font-medium">退勤時間</span>
+                <span className="font-black text-gray-900 text-lg">{checkOutTime}</span>
+                <span className="mt-1 inline-flex items-center gap-1 text-[11px] text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200 shadow-2xs">
+                  <MapPin className="w-3 h-3 text-orange-600" />
+                  <span>📍 GPS位置確認</span>
+                </span>
               </div>
             )}
           </div>
@@ -342,14 +357,14 @@ function AuthenticLeaveBalanceWidget({
 function RealKintaiClockPreview() {
   return (
     <MultiStepGuideContainer
-      title="日々の出勤・退勤打刻とステータス変化の流れ"
+      title="出勤・退勤打刻とスマホGPS不正防止連動の流れ"
       steps={[
         {
           number: 1,
           label: '① 場所（ホーム画面）',
           badge: '画面の場所',
           title: 'ホーム画面（打刻）の左側に大きく配置されています',
-          desc: '毎日の出勤時・退勤時は、ログイン後のホーム画面左側にある打刻時計ウィジェットを使います。',
+          desc: '毎日の出勤時・退勤時は、ログイン後のホーム画面左側にある打刻時計ウィジェットを使います。スマホアクセス時は自動で「📱 スマホ打刻モード」となり、GPSによる不正防止が連動します。',
           render: () => (
             <div className="max-w-4xl mx-auto space-y-4">
               <div className="text-xs font-bold text-slate-500 flex items-center gap-2">
@@ -382,7 +397,7 @@ function RealKintaiClockPreview() {
           label: '② 出勤打刻の作業',
           badge: '出勤操作',
           title: '出社時に青い「出勤」ボタンをタップする',
-          desc: '出社時に【出勤】ボタンを押すと、ステータスが「勤務中」に変わり、本日の打刻履歴が出勤済として記録されます。',
+          desc: '出社時に【出勤】ボタンを押すと、スマホのGPS位置情報（緯度・経度）を自動測定・記録し、ステータスが「勤務中」に変わります（不正打刻を防止）。',
           render: () => (
             <div className="max-w-md mx-auto space-y-3">
               <div className="text-center text-xs text-slate-500 font-bold">
@@ -403,7 +418,7 @@ function RealKintaiClockPreview() {
           label: '③ 退勤打刻と集計',
           badge: '退勤操作',
           title: '業務終了時にオレンジ色の「退勤」ボタンを押す',
-          desc: '退社時に【退勤】ボタンを押すと「退勤済」に切り替わり、自動的に当日の実働時間と所定休憩が計算されます。',
+          desc: '退社時に【退勤】ボタンを押すと「退勤済」に切り替わり、位置情報とともに当日の実働時間が自動計算されます。「📍 GPS位置確認」からGoogleマップで確認も可能です。',
           render: () => (
             <div className="max-w-md mx-auto space-y-3">
               <div className="text-center text-xs text-slate-500 font-bold">

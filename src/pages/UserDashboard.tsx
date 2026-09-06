@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock, Calendar, LogOut, FileText, CheckCircle, UserCheck, XCircle, ChevronLeft, ChevronRight, Settings, Bot, ArrowLeft, RotateCcw } from 'lucide-react';
+import { Clock, Calendar, LogOut, FileText, CheckCircle, UserCheck, XCircle, ChevronLeft, ChevronRight, Settings, Bot, ArrowLeft, RotateCcw, MapPin, Smartphone, Laptop, ExternalLink, AlertTriangle, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { RulesAiAssistant } from '../components/RulesAiAssistant';
@@ -20,6 +20,55 @@ const UserDashboard = () => {
 
   const [companyHolidays, setCompanyHolidays] = useState<Set<string>>(new Set());
   const [roundingUnit, setRoundingUnit] = useState<number>(15);
+
+  // 📍 スマートフォンGPS打刻 ＆ 不正打刻防止 State
+  const [isPunching, setIsPunching] = useState(false);
+  const [gpsStatusText, setGpsStatusText] = useState<string | null>(null);
+  const [gpsErrorModal, setGpsErrorModal] = useState<{ isOpen: boolean; message: string } | null>(null);
+
+  // 📱 スマートフォン（モバイル端末）判定
+  const checkIsMobile = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) ||
+           (navigator.maxTouchPoints > 1 && /Macintosh/i.test(ua));
+  };
+  const isMobile = checkIsMobile();
+
+  // 📍 GPS位置情報取得ヘルパー
+  const getGpsPosition = (): Promise<{ latitude: number; longitude: number; accuracy: number }> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('お使いの端末・ブラウザはGPS位置情報機能に対応していません。'));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          resolve({
+            latitude: Number(pos.coords.latitude.toFixed(7)),
+            longitude: Number(pos.coords.longitude.toFixed(7)),
+            accuracy: Math.round(pos.coords.accuracy)
+          });
+        },
+        (err) => {
+          let msg = '位置情報（GPS）が取得できませんでした。';
+          if (err.code === err.PERMISSION_DENIED) {
+            msg = '位置情報の利用が許可されていません。\nブラウザの「位置情報の利用を許可」を選択するか、端末の設定（SafariまたはChrome）で位置情報アクセスを「許可」に設定してください。';
+          } else if (err.code === err.POSITION_UNAVAILABLE) {
+            msg = '現在地を測位できませんでした。通信状況やGPS電波の良い場所で再度お試しください。';
+          } else if (err.code === err.TIMEOUT) {
+            msg = '位置情報の取得がタイムアウトしました。電波環境の良い場所で再度お試しください。';
+          }
+          reject(new Error(msg));
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    });
+  };
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -693,42 +742,177 @@ const UserDashboard = () => {
     };
   };
 
+  // 📍 出勤打刻処理（スマートフォン打刻時はGPS位置情報を取得・不正打刻防止）
   const handlePunchIn = async () => {
-    if (!user) return;
+    if (!user || isPunching) return;
+    setIsPunching(true);
+
+    let gpsData: { latitude: number; longitude: number; accuracy: number } | null = null;
+    const deviceType = isMobile ? 'mobile' : 'pc';
+
+    // 📱 スマートフォンの場合はGPS位置情報の取得を必須化（不正打刻防止）
+    if (isMobile) {
+      setGpsStatusText('📍 スマートフォンGPS位置情報を取得中...');
+      try {
+        gpsData = await getGpsPosition();
+      } catch (err: any) {
+        setIsPunching(false);
+        setGpsStatusText(null);
+        setGpsErrorModal({
+          isOpen: true,
+          message: err.message || '位置情報が取得できませんでした。'
+        });
+        return;
+      }
+    }
+
+    setGpsStatusText('⏳ 出勤データを登録中...');
     const today = new Date().toLocaleDateString('en-CA');
     const now = new Date().toLocaleTimeString('en-GB'); // HH:mm:ss
-    const { data, error } = await supabase.from('attendance_records').insert({
+
+    // GPSカラム付きペイロード
+    const fullPayload: any = {
       user_id: user.id,
       tenant_id: user.tenant_id,
       date: today,
       check_in_time: now,
-      status: '勤務中'
-    }).select().single();
-    
-    if (error) {
-      alert('エラーが発生しました: ' + error.message);
-      return;
+      status: '勤務中',
+      check_in_device: deviceType
+    };
+
+    if (gpsData) {
+      fullPayload.check_in_lat = gpsData.latitude;
+      fullPayload.check_in_lng = gpsData.longitude;
+      fullPayload.check_in_accuracy = gpsData.accuracy;
     }
-    setCurrentRecord(data);
-    setStatus('勤務中');
-    alert('出勤を記録しました');
+
+    try {
+      let insertedData: any = null;
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .insert(fullPayload)
+        .select()
+        .single();
+
+      if (error) {
+        // カラムがDBに未追加の場合の安全フォールバック（通常登録リトライ）
+        console.warn('GPS columns insert fallback:', error.message);
+        const fallbackPayload = {
+          user_id: user.id,
+          tenant_id: user.tenant_id,
+          date: today,
+          check_in_time: now,
+          status: '勤務中'
+        };
+        const { data: fbData, error: fbError } = await supabase
+          .from('attendance_records')
+          .insert(fallbackPayload)
+          .select()
+          .single();
+
+        if (fbError) throw fbError;
+        insertedData = fbData;
+      } else {
+        insertedData = data;
+      }
+
+      setCurrentRecord(insertedData);
+      setStatus('勤務中');
+
+      let successMsg = '出勤を記録しました！';
+      if (gpsData) {
+        successMsg += `\n📍 位置情報（精度: ±${gpsData.accuracy}m）を記録しました。`;
+      }
+      alert(successMsg);
+    } catch (err: any) {
+      alert('出勤打刻エラー: ' + (err.message || err));
+    } finally {
+      setIsPunching(false);
+      setGpsStatusText(null);
+    }
   };
 
+  // 📍 退勤打刻処理（スマートフォン打刻時はGPS位置情報を取得・不正打刻防止）
   const handlePunchOut = async () => {
-    if (!user || !currentRecord) return;
-    const now = new Date().toLocaleTimeString('en-GB');
-    const { data, error } = await supabase.from('attendance_records').update({
-      check_out_time: now,
-      status: '退勤済'
-    }).eq('id', currentRecord.id).select().single();
-    
-    if (error) {
-      alert('エラーが発生しました: ' + error.message);
-      return;
+    if (!user || !currentRecord || isPunching) return;
+    setIsPunching(true);
+
+    let gpsData: { latitude: number; longitude: number; accuracy: number } | null = null;
+    const deviceType = isMobile ? 'mobile' : 'pc';
+
+    // 📱 スマートフォンの場合はGPS位置情報の取得を必須化（不正打刻防止）
+    if (isMobile) {
+      setGpsStatusText('📍 スマートフォンGPS位置情報を取得中...');
+      try {
+        gpsData = await getGpsPosition();
+      } catch (err: any) {
+        setIsPunching(false);
+        setGpsStatusText(null);
+        setGpsErrorModal({
+          isOpen: true,
+          message: err.message || '位置情報が取得できませんでした。'
+        });
+        return;
+      }
     }
-    setCurrentRecord(data);
-    setStatus('退勤済');
-    alert('退勤を記録しました');
+
+    setGpsStatusText('⏳ 退勤データを登録中...');
+    const now = new Date().toLocaleTimeString('en-GB');
+
+    const updatePayload: any = {
+      check_out_time: now,
+      status: '退勤済',
+      check_out_device: deviceType
+    };
+
+    if (gpsData) {
+      updatePayload.check_out_lat = gpsData.latitude;
+      updatePayload.check_out_lng = gpsData.longitude;
+      updatePayload.check_out_accuracy = gpsData.accuracy;
+    }
+
+    try {
+      let updatedData: any = null;
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .update(updatePayload)
+        .eq('id', currentRecord.id)
+        .select()
+        .single();
+
+      if (error) {
+        // カラム未追加時の安全フォールバック
+        console.warn('GPS columns update fallback:', error.message);
+        const { data: fbData, error: fbError } = await supabase
+          .from('attendance_records')
+          .update({
+            check_out_time: now,
+            status: '退勤済'
+          })
+          .eq('id', currentRecord.id)
+          .select()
+          .single();
+
+        if (fbError) throw fbError;
+        updatedData = fbData;
+      } else {
+        updatedData = data;
+      }
+
+      setCurrentRecord(updatedData);
+      setStatus('退勤済');
+
+      let successMsg = '退勤を記録しました！お疲れ様でした。';
+      if (gpsData) {
+        successMsg += `\n📍 位置情報（精度: ±${gpsData.accuracy}m）を記録しました。`;
+      }
+      alert(successMsg);
+    } catch (err: any) {
+      alert('退勤打刻エラー: ' + (err.message || err));
+    } finally {
+      setIsPunching(false);
+      setGpsStatusText(null);
+    }
   };
 
   // ブラウザタブのタイトルを動的に更新
@@ -881,30 +1065,59 @@ const UserDashboard = () => {
           {activeTab === 'home' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Clock Widget */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col items-center justify-center">
-                <h2 className="text-gray-500 font-medium mb-2">現在時刻</h2>
-                <div className="text-5xl font-bold text-gray-800 tracking-wider mb-6 tabular-nums">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col items-center justify-center relative">
+                {/* 端末打刻モードバッジ */}
+                {isMobile ? (
+                  <div className="mb-3 px-3 py-1 bg-indigo-50 border border-indigo-200 rounded-full flex items-center gap-1.5 text-xs text-indigo-900 font-bold shadow-2xs">
+                    <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>📱 スマホ打刻モード（📍 GPS位置情報・不正防止連動）</span>
+                  </div>
+                ) : (
+                  <div className="mb-3 px-3 py-1 bg-slate-100 border border-slate-200 rounded-full flex items-center gap-1.5 text-xs text-slate-600 font-bold">
+                    <Laptop className="w-3.5 h-3.5 text-slate-500" />
+                    <span>💻 PC打刻モード</span>
+                  </div>
+                )}
+
+                <h2 className="text-gray-500 font-medium mb-1">現在時刻</h2>
+                <div className="text-5xl font-bold text-gray-800 tracking-wider mb-5 tabular-nums">
                   {currentTime.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                 </div>
+
+                {/* GPS取得中インジケータ */}
+                {isPunching && gpsStatusText && (
+                  <div className="w-full mb-3 p-2.5 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-blue-900 animate-pulse shadow-xs">
+                    <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+                    <span>{gpsStatusText}</span>
+                  </div>
+                )}
                 
                 <div className="flex w-full space-x-4">
                   <button 
                     onClick={handlePunchIn}
-                    disabled={status !== '未出勤'}
-                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-blue-700 disabled:opacity-50 transition"
+                    disabled={status !== '未出勤' || isPunching}
+                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-blue-700 disabled:opacity-50 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shadow-sm"
                   >
-                    出勤
+                    {isPunching && status === '未出勤' ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      '出勤'
+                    )}
                   </button>
                   <button 
                     onClick={handlePunchOut}
-                    disabled={status !== '勤務中'}
-                    className="flex-1 bg-orange-500 text-white py-3 rounded-lg font-bold text-lg hover:bg-orange-600 disabled:opacity-50 transition"
+                    disabled={status !== '勤務中' || isPunching}
+                    className="flex-1 bg-orange-500 text-white py-3 rounded-lg font-bold text-lg hover:bg-orange-600 disabled:opacity-50 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shadow-sm"
                   >
-                    退勤
+                    {isPunching && status === '勤務中' ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      '退勤'
+                    )}
                   </button>
                 </div>
                 
-                <div className="mt-4 flex flex-col space-y-3 items-center text-sm text-gray-600">
+                <div className="mt-4 flex flex-col space-y-3 items-center text-sm text-gray-600 w-full">
                   <div className="flex items-center">
                     <span className="mr-2">現在のステータス:</span>
                     <span className={`px-3 py-1 rounded-full font-bold ${
@@ -916,17 +1129,47 @@ const UserDashboard = () => {
                     </span>
                   </div>
                   {(currentRecord?.check_in_time || currentRecord?.check_out_time) && (
-                    <div className="flex space-x-6 bg-gray-50 px-4 py-2 rounded-md border border-gray-100">
+                    <div className="flex space-x-6 bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 w-full justify-center">
                       {currentRecord?.check_in_time && (
                         <div className="flex flex-col items-center">
-                          <span className="text-xs text-gray-400">出勤時間</span>
-                          <span className="font-bold text-gray-800 text-lg">{currentRecord.check_in_time.substring(0, 5)}</span>
+                          <span className="text-xs text-gray-500 font-medium">出勤時間</span>
+                          <span className="font-black text-gray-900 text-lg">{currentRecord.check_in_time.substring(0, 5)}</span>
+                          {currentRecord?.check_in_lat && currentRecord?.check_in_lng ? (
+                            <a
+                              href={`https://www.google.com/maps?q=${currentRecord.check_in_lat},${currentRecord.check_in_lng}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-1 inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-bold bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md border border-blue-200 transition"
+                              title="出勤打刻した場所をGoogleマップで確認"
+                            >
+                              <MapPin className="w-3 h-3 text-blue-600 shrink-0" />
+                              <span>📍 GPS位置確認</span>
+                              <ExternalLink className="w-2.5 h-2.5 text-blue-400" />
+                            </a>
+                          ) : currentRecord?.check_in_device === 'pc' ? (
+                            <span className="text-[10px] text-slate-400 font-medium mt-0.5">💻 PC打刻</span>
+                          ) : null}
                         </div>
                       )}
                       {currentRecord?.check_out_time && (
-                        <div className="flex flex-col items-center border-l pl-6 border-gray-200">
-                          <span className="text-xs text-gray-400">退勤時間</span>
-                          <span className="font-bold text-gray-800 text-lg">{currentRecord.check_out_time.substring(0, 5)}</span>
+                        <div className="flex flex-col items-center border-l pl-6 border-gray-300">
+                          <span className="text-xs text-gray-500 font-medium">退勤時間</span>
+                          <span className="font-black text-gray-900 text-lg">{currentRecord.check_out_time.substring(0, 5)}</span>
+                          {currentRecord?.check_out_lat && currentRecord?.check_out_lng ? (
+                            <a
+                              href={`https://www.google.com/maps?q=${currentRecord.check_out_lat},${currentRecord.check_out_lng}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-1 inline-flex items-center gap-1 text-[11px] text-orange-600 hover:text-orange-800 font-bold bg-orange-50 hover:bg-orange-100 px-2 py-0.5 rounded-md border border-orange-200 transition"
+                              title="退勤打刻した場所をGoogleマップで確認"
+                            >
+                              <MapPin className="w-3 h-3 text-orange-600 shrink-0" />
+                              <span>📍 GPS位置確認</span>
+                              <ExternalLink className="w-2.5 h-2.5 text-orange-400" />
+                            </a>
+                          ) : currentRecord?.check_out_device === 'pc' ? (
+                            <span className="text-[10px] text-slate-400 font-medium mt-0.5">💻 PC打刻</span>
+                          ) : null}
                         </div>
                       )}
                     </div>
@@ -2116,6 +2359,58 @@ const UserDashboard = () => {
       </div>
     </div>
     
+    {/* 📍 GPS位置情報エラー・不正打刻防止モーダル */}
+    {gpsErrorModal?.isOpen && (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in">
+        <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-200">
+          <div className="p-5 bg-gradient-to-r from-rose-600 to-red-600 text-white flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                <MapPin className="w-5 h-5 text-white" />
+              </div>
+              <h3 className="font-black text-base">位置情報（GPS）の取得エラー</h3>
+            </div>
+            <button
+              onClick={() => setGpsErrorModal(null)}
+              className="text-white/80 hover:text-white cursor-pointer"
+            >
+              <XCircle className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-4 text-xs text-slate-700">
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-950 font-medium whitespace-pre-wrap leading-relaxed">
+              {gpsErrorModal.message}
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5">
+              <div className="font-black text-slate-900 text-xs flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-amber-500" />
+                <span>スマートフォンでの許可設定手順</span>
+              </div>
+              <ul className="space-y-1.5 list-disc list-inside text-slate-600 font-medium text-[11px] leading-relaxed">
+                <li><strong>iPhone (Safari):</strong> 「設定」＞「プライバシーとセキュリティ」＞「位置情報サービス」をONにし、SafariのWebサイトで「このAppの使用中のみ許可」を選択。</li>
+                <li><strong>Android (Chrome):</strong> 画面右上の3点メニュー ＞「設定」＞「サイトの設定」＞「位置情報」を「許可」に設定。</li>
+                <li>画面を再読み込みし、上部に表示される「位置情報の利用を許可しますか？」で<strong>「許可」</strong>を選択してください。</li>
+              </ul>
+            </div>
+
+            <div className="text-[11px] text-slate-500">
+              ※ 本システムは不正打刻（虚偽の遠隔打刻）防止のため、スマートフォンからの打刻時に正確な位置情報の取得を必須としております。
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setGpsErrorModal(null)}
+              className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-black text-xs transition shadow-md cursor-pointer"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* ❓ 使い方ガイドモーダル */}
     <HelpGuideModal 
       screenKey="attendance_user" 

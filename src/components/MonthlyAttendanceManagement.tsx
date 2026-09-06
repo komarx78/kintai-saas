@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { 
   Calendar, Download, ChevronLeft, ChevronRight, Users, Loader2, 
   FileText, ArrowLeft, Edit3, X, CheckCircle, AlertCircle,
-  Lock, Unlock, CheckCheck
+  Lock, Unlock, CheckCheck, MapPin, ExternalLink
 } from 'lucide-react';
 
 interface MonthlyAttendanceManagementProps {
@@ -44,6 +44,8 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     breakMinutes: string;
     status: string;
     note: string;
+    checkInGps?: { lat: number | null; lng: number | null; accuracy: number | null; device: string | null } | null;
+    checkOutGps?: { lat: number | null; lng: number | null; accuracy: number | null; device: string | null } | null;
   }>({
     isOpen: false,
     userId: '',
@@ -54,7 +56,9 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     checkOut: '',
     breakMinutes: '60',
     status: '退勤済',
-    note: ''
+    note: '',
+    checkInGps: null,
+    checkOutGps: null
   });
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -664,7 +668,19 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       checkOut: row.record?.check_out_time || '',
       breakMinutes: breakMinutesStr,
       status: row.record?.status || '退勤済',
-      note: row.record?.note || ''
+      note: row.record?.note || '',
+      checkInGps: row.record?.check_in_lat && row.record?.check_in_lng ? {
+        lat: row.record.check_in_lat,
+        lng: row.record.check_in_lng,
+        accuracy: row.record.check_in_accuracy,
+        device: row.record.check_in_device
+      } : null,
+      checkOutGps: row.record?.check_out_lat && row.record?.check_out_lng ? {
+        lat: row.record.check_out_lat,
+        lng: row.record.check_out_lng,
+        accuracy: row.record.check_out_accuracy,
+        device: row.record.check_out_device
+      } : null
     });
   };
 
@@ -1320,14 +1336,48 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                             </td>
                             <td className="p-3.5 font-bold text-slate-800 text-xs">
                               {row.checkIn !== '-' ? (
-                                <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200">{row.checkIn}</span>
+                                <div className="flex flex-col items-start gap-1">
+                                  <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono">{row.checkIn}</span>
+                                  {row.record?.check_in_lat && row.record?.check_in_lng ? (
+                                    <a
+                                      href={`https://www.google.com/maps?q=${row.record.check_in_lat},${row.record.check_in_lng}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 hover:text-blue-800 font-bold bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 transition"
+                                      title={`出勤GPS: 精度±${row.record.check_in_accuracy || 0}m (Googleマップで表示)`}
+                                    >
+                                      <MapPin className="w-2.5 h-2.5 text-blue-600 shrink-0" />
+                                      <span>GPS</span>
+                                      <ExternalLink className="w-2 h-2 text-blue-400" />
+                                    </a>
+                                  ) : row.record?.check_in_device === 'pc' ? (
+                                    <span className="text-[10px] text-slate-400 font-normal">💻 PC</span>
+                                  ) : null}
+                                </div>
                               ) : (
                                 <span className="text-slate-300">-</span>
                               )}
                             </td>
                             <td className="p-3.5 font-bold text-slate-800 text-xs">
                               {row.checkOut !== '-' ? (
-                                <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200">{row.checkOut}</span>
+                                <div className="flex flex-col items-start gap-1">
+                                  <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono">{row.checkOut}</span>
+                                  {row.record?.check_out_lat && row.record?.check_out_lng ? (
+                                    <a
+                                      href={`https://www.google.com/maps?q=${row.record.check_out_lat},${row.record.check_out_lng}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-0.5 text-[10px] text-orange-600 hover:text-orange-800 font-bold bg-orange-50 hover:bg-orange-100 px-1.5 py-0.5 rounded border border-orange-200 transition"
+                                      title={`退勤GPS: 精度±${row.record.check_out_accuracy || 0}m (Googleマップで表示)`}
+                                    >
+                                      <MapPin className="w-2.5 h-2.5 text-orange-600 shrink-0" />
+                                      <span>GPS</span>
+                                      <ExternalLink className="w-2 h-2 text-orange-400" />
+                                    </a>
+                                  ) : row.record?.check_out_device === 'pc' ? (
+                                    <span className="text-[10px] text-slate-400 font-normal">💻 PC</span>
+                                  ) : null}
+                                </div>
                               ) : (
                                 <span className="text-slate-300">-</span>
                               )}
@@ -1479,6 +1529,46 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                   />
                 </div>
               </div>
+
+              {/* 📍 GPS位置情報（記録がある場合） */}
+              {(editModal.checkInGps || editModal.checkOutGps) && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
+                  <div className="font-black text-slate-800 flex items-center gap-1.5 text-xs">
+                    <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                    <span>打刻時 GPS位置情報（不正打刻防止ログ）</span>
+                  </div>
+                  {editModal.checkInGps && (
+                    <div className="flex items-center justify-between text-[11px] bg-white p-2 rounded-lg border border-slate-200">
+                      <span className="font-medium text-slate-700">
+                        出勤: 緯度 {editModal.checkInGps.lat}, 経度 {editModal.checkInGps.lng} (精度 ±{editModal.checkInGps.accuracy}m)
+                      </span>
+                      <a
+                        href={`https://www.google.com/maps?q=${editModal.checkInGps.lat},${editModal.checkInGps.lng}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-0.5 shrink-0 ml-2"
+                      >
+                        地図で確認 <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </div>
+                  )}
+                  {editModal.checkOutGps && (
+                    <div className="flex items-center justify-between text-[11px] bg-white p-2 rounded-lg border border-slate-200">
+                      <span className="font-medium text-slate-700">
+                        退勤: 緯度 {editModal.checkOutGps.lat}, 経度 {editModal.checkOutGps.lng} (精度 ±{editModal.checkOutGps.accuracy}m)
+                      </span>
+                      <a
+                        href={`https://www.google.com/maps?q=${editModal.checkOutGps.lat},${editModal.checkOutGps.lng}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-orange-600 hover:text-orange-800 font-bold flex items-center gap-0.5 shrink-0 ml-2"
+                      >
+                        地図で確認 <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between mb-1">
