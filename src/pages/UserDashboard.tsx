@@ -197,6 +197,7 @@ const UserDashboard = () => {
   const [leaveReason, setLeaveReason] = useState('');
   const [punchTime, setPunchTime] = useState('');
   const [punchType, setPunchType] = useState('出勤');
+  const [punchBreakMins, setPunchBreakMins] = useState<string>('60');
   const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
   const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
 
@@ -493,8 +494,10 @@ const UserDashboard = () => {
       if (status === '承認' && targetReq && targetReq.type === '打刻修正' && targetReq.reason) {
         const punchTypeMatch = targetReq.reason.match(/【修正区分:\s*([^】]+)】/);
         const punchTimeMatch = targetReq.reason.match(/【修正時刻:\s*([^】]+)】/);
+        const breakMatch = targetReq.reason.match(/【休憩時間:\s*(\d+)分】/);
         const pType = punchTypeMatch ? punchTypeMatch[1].trim() : '';
         const pTime = punchTimeMatch ? punchTimeMatch[1].trim() : '';
+        const pBreak = breakMatch ? parseInt(breakMatch[1], 10) : null;
 
         if (pType && pTime && user?.tenant_id) {
           const targetDate = targetReq.start_date;
@@ -513,6 +516,7 @@ const UserDashboard = () => {
               updatePayload.check_out_time = pTime;
               updatePayload.status = '退勤済';
             }
+            if (pBreak !== null) updatePayload.break_minutes = pBreak;
             await supabase
               .from('attendance_records')
               .update(updatePayload)
@@ -526,6 +530,7 @@ const UserDashboard = () => {
             };
             if (pType === '出勤') insertPayload.check_in_time = pTime;
             if (pType === '退勤') insertPayload.check_out_time = pTime;
+            if (pBreak !== null) insertPayload.break_minutes = pBreak;
 
             await supabase
               .from('attendance_records')
@@ -610,7 +615,7 @@ const UserDashboard = () => {
         start_date: startDate,
         end_date: leaveType === '打刻修正' ? startDate : endDate,
         type: leaveType,
-        reason: leaveType === '打刻修正' ? `【修正区分: ${punchType}】【修正時刻: ${punchTime}】\n${leaveReason}` : leaveReason,
+        reason: leaveType === '打刻修正' ? `【修正区分: ${punchType}】【修正時刻: ${punchTime}】${punchBreakMins !== '' ? `【休憩時間: ${punchBreakMins}分】` : ''}\n${leaveReason}` : leaveReason,
         status: '申請中'
       });
 
@@ -1031,7 +1036,9 @@ const UserDashboard = () => {
                               const [inH, inM] = r.check_in_time.split(':').map(Number);
                               const [outH, outM] = r.check_out_time.split(':').map(Number);
                               const total = Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
-                              let breakM = total >= 480 ? 60 : (total >= 360 ? 45 : 0);
+                              let breakM = r.break_minutes !== undefined && r.break_minutes !== null 
+                                ? Number(r.break_minutes) 
+                                : (total >= 480 ? 60 : (total >= 360 ? 45 : 0));
                               mins += Math.max(0, total - breakM);
                             }
                           });
@@ -1049,7 +1056,9 @@ const UserDashboard = () => {
                               const [inH, inM] = r.check_in_time.split(':').map(Number);
                               const [outH, outM] = r.check_out_time.split(':').map(Number);
                               const total = Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
-                              let breakM = total >= 480 ? 60 : (total >= 360 ? 45 : 0);
+                              let breakM = r.break_minutes !== undefined && r.break_minutes !== null 
+                                ? Number(r.break_minutes) 
+                                : (total >= 480 ? 60 : (total >= 360 ? 45 : 0));
                               const work = Math.max(0, total - breakM);
                               otMins += Math.max(0, work - 480);
                             }
@@ -1159,6 +1168,7 @@ const UserDashboard = () => {
 
                     let actualMins = 0;
                     let overtimeMins = 0;
+                    let breakMins = record?.break_minutes != null ? Number(record.break_minutes) : 0;
                     let roundedIn = rawInTime;
                     let roundedOut = rawOutTime;
 
@@ -1181,9 +1191,13 @@ const UserDashboard = () => {
                       roundedOut = `${Math.floor(outM / 60).toString().padStart(2, '0')}:${(outM % 60).toString().padStart(2, '0')}`;
 
                       const totalMins = Math.max(0, outM - inM);
-                      let breakMins = 0;
-                      if (totalMins >= 8 * 60) breakMins = 60;
-                      else if (totalMins >= 6 * 60) breakMins = 45;
+                      if (record?.break_minutes !== undefined && record?.break_minutes !== null) {
+                        breakMins = Number(record.break_minutes);
+                      } else {
+                        if (totalMins >= 8 * 60) breakMins = 60;
+                        else if (totalMins >= 6 * 60) breakMins = 45;
+                        else breakMins = 0;
+                      }
 
                       actualMins = Math.max(0, totalMins - breakMins);
                       overtimeMins = Math.max(0, actualMins - 8 * 60);
@@ -1203,18 +1217,21 @@ const UserDashboard = () => {
                     return {
                       day, date, dayOfWeekStr, trClass, isPaidLeave,
                       rawInTime, rawOutTime, roundedIn, roundedOut, note,
+                      breakMins,
+                      breakMinsStr: isWorkingDay && rawInTime !== '-' ? `${breakMins}m` : '-',
                       actualStr: formatHM(actualMins), overtimeStr: formatHM(overtimeMins),
                       overtimeMins
                     };
                   });
 
                   const handleExportCSV = () => {
-                    const headers = ['日付', '曜日', '出勤時間', '退勤時間', '実働時間', '残業時間', '備考'];
+                    const headers = ['日付', '曜日', '出勤時間', '退勤時間', '休憩時間', '実働時間', '残業時間', '備考'];
                     const csvRows = rows.map(r => [
                       `${r.date.getFullYear()}/${r.date.getMonth() + 1}/${r.day}`,
                       r.dayOfWeekStr,
                       r.roundedIn !== '-' ? r.roundedIn : '',
                       r.roundedOut !== '-' ? r.roundedOut : '',
+                      r.breakMinsStr !== '-' ? r.breakMinsStr : '',
                       r.actualStr !== '-' ? r.actualStr : '',
                       r.overtimeStr !== '-' ? r.overtimeStr : '',
                       r.note
@@ -1283,6 +1300,7 @@ const UserDashboard = () => {
                             <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">日付</th>
                             <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">出勤 (打刻)</th>
                             <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">退勤 (打刻)</th>
+                            <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase">休憩</th>
                             <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase">実働時間</th>
                             <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase">残業時間</th>
                             <th className="px-3 py-3 print:py-1.5 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">備考</th>
@@ -1307,6 +1325,9 @@ const UserDashboard = () => {
                                   <span className="ml-2 text-xs print:text-[9px] text-gray-400">({r.rawOutTime})</span>
                                 )}
                               </td>
+                              <td className="px-3 py-2 print:py-1.5 whitespace-nowrap text-sm print:text-[11px] text-right font-mono text-gray-500">
+                                {r.breakMinsStr}
+                              </td>
                               <td className="px-3 py-2 print:py-1.5 whitespace-nowrap text-sm print:text-[11px] text-right font-medium text-gray-700">
                                 {r.actualStr}
                               </td>
@@ -1323,9 +1344,10 @@ const UserDashboard = () => {
                                     const ds = `${y}-${m}-${d}`;
                                     setStartDate(ds);
                                     setEndDate(ds);
+                                    setPunchBreakMins((r.breakMins || 60).toString());
                                     setActiveTab('requests');
                                   }}
-                                  className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition text-xs border border-blue-200"
+                                  className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition text-xs border border-blue-200 font-bold"
                                 >
                                   申請する
                                 </button>
@@ -1855,6 +1877,40 @@ const UserDashboard = () => {
                       </div>
                     )}
                   </div>
+
+                  {leaveType === '打刻修正' && (
+                    <div className="bg-blue-50/60 p-3 rounded-lg border border-blue-100">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-sm font-bold text-gray-700">休憩時間（分）</label>
+                        <span className="text-xs text-blue-600">※当日実働から差し引く休憩時間</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input 
+                          type="number" 
+                          min="0"
+                          max="360"
+                          step="5"
+                          value={punchBreakMins}
+                          onChange={(e) => setPunchBreakMins(e.target.value)}
+                          className="block w-28 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-white" 
+                          placeholder="60"
+                        />
+                        <span className="text-sm text-gray-600 font-medium">分</span>
+                        <div className="flex items-center space-x-1 ml-2">
+                          {['0', '45', '60', '90'].map(mins => (
+                            <button
+                              key={mins}
+                              type="button"
+                              onClick={() => setPunchBreakMins(mins)}
+                              className={`px-2 py-1 text-xs font-semibold rounded border transition ${punchBreakMins === mins ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                            >
+                              {mins}分
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div>
                     <label className="block text-sm font-bold text-gray-700 mb-1">事由・備考</label>

@@ -134,9 +134,9 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
   {
     id: 'sfaq-k-3',
     category: 'kintai',
-    question: '休憩時間はどのように記録・計算されますか？休憩ボタンがない場合は？',
-    answer: '【休憩時間の自動控除ルール】\n本システムでは、労働基準法に基づき実労働時間から所定の休憩時間（実働6時間超で45分、8時間超で60分など）が自動控除・計算されます。\n※ 個別に休憩時間を調整・修正したい場合や特殊な控除が必要な場合は、左メニュー「月次勤怠・有給照会」の該当日の「申請する」ボタン（または左メニュー「各種申請」）から理由欄に休憩時間を明記して申請してください。',
-    keyword: '休憩 休憩時間 自動控除 60分 45分 労働基準法 ランチ 修正',
+    question: '休憩時間はどのように登録・確認・修正できますか？',
+    answer: '【休憩時間の登録と修正方法】\n1. 通常時（自動控除）:\n打刻時刻に基づき、法定の所定休憩時間（実労働6時間超で45分、8時間超で60分）が自動控除されて実働・残業時間が計算されます。\n\n2. 個別の休憩時間を登録・修正したい場合:\n左メニュー「月次勤怠・有給照会」の該当日右端にある「申請する」をクリックし、申請種類「打刻修正」を選択します。\n「休憩時間（分）」欄に希望の分数（0分/45分/60分/90分のプリセット選択、または直接入力）を入力して申請します。\n承認されると、指定した休憩時間が実績に反映され、実働・残業時間が自動再計算されます。\n\n3. 管理者による直接修正:\n管理者の「月間勤怠・出勤簿管理」画面からも、各日の「編集」ボタンから休憩時間を直接入力・保存できます。',
+    keyword: '休憩 休憩時間 登録 修正 打刻修正 自動控除 60分 45分 0分 90分 申請 管理者',
     updated_at: '2026-09-06'
   },
   {
@@ -387,12 +387,12 @@ export async function fetchSystemFaqs(): Promise<SystemFaqItem[]> {
         }
       });
 
-      localStorage.setItem('kap_system_faqs_v3', JSON.stringify(merged));
+      localStorage.setItem('kap_system_faqs_v4', JSON.stringify(merged));
       return merged;
     }
 
     // Supabaseが空またはエラーの場合
-    const local = localStorage.getItem('kap_system_faqs_v3');
+    const local = localStorage.getItem('kap_system_faqs_v4');
     if (local) {
       try {
         const parsed = JSON.parse(local);
@@ -428,7 +428,7 @@ export async function saveSystemFaq(item: Omit<SystemFaqItem, 'id' | 'updated_at
 
     if (!error && data) {
       const updated = [data, ...currentList.filter(f => f.id !== id)];
-      localStorage.setItem('kap_system_faqs_v2', JSON.stringify(updated));
+      localStorage.setItem('kap_system_faqs_v4', JSON.stringify(updated));
       return data;
     }
   } catch (err) {
@@ -443,7 +443,7 @@ export async function saveSystemFaq(item: Omit<SystemFaqItem, 'id' | 'updated_at
   } else {
     updatedList = [fullItem, ...currentList];
   }
-  localStorage.setItem('kap_system_faqs_v2', JSON.stringify(updatedList));
+  localStorage.setItem('kap_system_faqs_v4', JSON.stringify(updatedList));
   return fullItem;
 }
 
@@ -455,7 +455,7 @@ export async function deleteSystemFaq(id: string): Promise<boolean> {
   }
   const currentList = await fetchSystemFaqs();
   const updated = currentList.filter(f => f.id !== id);
-  localStorage.setItem('kap_system_faqs_v2', JSON.stringify(updated));
+  localStorage.setItem('kap_system_faqs_v4', JSON.stringify(updated));
   return true;
 }
 

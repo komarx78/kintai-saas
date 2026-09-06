@@ -41,6 +41,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     recordId: string | null;
     checkIn: string;
     checkOut: string;
+    breakMinutes: string;
     status: string;
     note: string;
   }>({
@@ -51,6 +52,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     recordId: null,
     checkIn: '',
     checkOut: '',
+    breakMinutes: '60',
     status: '退勤済',
     note: ''
   });
@@ -299,14 +301,16 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         }
       }
 
-      // 打刻修正申請の場合、attendance_records に打刻時刻を自動反映
+      // 打刻修正申請の場合、attendance_records に打刻時刻および休憩時間を自動反映
       if (req.type === '打刻修正' && req.start_date) {
         const reasonText = req.reason || '';
         const punchTypeMatch = reasonText.match(/【修正区分:\s*([^】]+)】/);
         const punchTimeMatch = reasonText.match(/【修正時刻:\s*([^】]+)】/);
+        const breakMatch = reasonText.match(/【休憩時間:\s*(\d+)分】/);
 
         const pType = punchTypeMatch ? punchTypeMatch[1].trim() : '';
         const pTime = punchTimeMatch ? punchTimeMatch[1].trim() : '';
+        const parsedBreak = breakMatch ? parseInt(breakMatch[1], 10) : null;
         const targetDate = req.start_date;
 
         if (pType && pTime) {
@@ -325,6 +329,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
               updatePayload.check_out_time = pTime;
               updatePayload.status = '退勤済';
             }
+            if (parsedBreak !== null) updatePayload.break_minutes = parsedBreak;
             await supabase
               .from('attendance_records')
               .update(updatePayload)
@@ -338,6 +343,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
             };
             if (pType === '出勤') insertPayload.check_in_time = pTime;
             if (pType === '退勤') insertPayload.check_out_time = pTime;
+            if (parsedBreak !== null) insertPayload.break_minutes = parsedBreak;
 
             await supabase
               .from('attendance_records')
@@ -393,8 +399,11 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           const reasonText = req.reason || '';
           const punchTypeMatch = reasonText.match(/【修正区分:\s*([^】]+)】/);
           const punchTimeMatch = reasonText.match(/【修正時刻:\s*([^】]+)】/);
+          const breakMatch = reasonText.match(/【休憩時間:\s*(\d+)分】/);
+
           const pType = punchTypeMatch ? punchTypeMatch[1].trim() : '';
           const pTime = punchTimeMatch ? punchTimeMatch[1].trim() : '';
+          const parsedBreak = breakMatch ? parseInt(breakMatch[1], 10) : null;
           const targetDate = req.start_date;
 
           if (pType && pTime) {
@@ -413,6 +422,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                 updatePayload.check_out_time = pTime;
                 updatePayload.status = '退勤済';
               }
+              if (parsedBreak !== null) updatePayload.break_minutes = parsedBreak;
               await supabase.from('attendance_records').update(updatePayload).eq('id', existRec.id);
             } else {
               const insertPayload: any = {
@@ -423,6 +433,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
               };
               if (pType === '出勤') insertPayload.check_in_time = pTime;
               if (pType === '退勤') insertPayload.check_out_time = pTime;
+              if (parsedBreak !== null) insertPayload.break_minutes = parsedBreak;
               await supabase.from('attendance_records').insert(insertPayload);
             }
           }
@@ -471,10 +482,16 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           const outTotal = outH * 60 + outM;
 
           if (outTotal > inTotal) {
-            let actual = outTotal - inTotal;
-            if (actual >= 360) actual -= 60; // 6時間以上で1時間休憩
-            else if (actual >= 240) actual -= 30; // 4時間以上で30分休憩
-            actual = Math.max(0, actual);
+            const rawDiff = outTotal - inTotal;
+            let breakMins = 0;
+            if (r.break_minutes !== null && r.break_minutes !== undefined) {
+              breakMins = Number(r.break_minutes) || 0;
+            } else {
+              if (rawDiff >= 480) breakMins = 60;
+              else if (rawDiff >= 360) breakMins = 45;
+              else if (rawDiff >= 240) breakMins = 30;
+            }
+            const actual = Math.max(0, rawDiff - breakMins);
 
             totalActualMins += actual;
             if (actual > 480) { // 8時間超過で残業
@@ -568,8 +585,10 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
 
       let actualStr = '-';
       let overtimeStr = '-';
+      let breakStr = '-';
       let actualMins = 0;
       let overtimeMins = 0;
+      let breakMins = 0;
 
       if (record?.check_in_time && record?.check_out_time) {
         const [inH, inM] = record.check_in_time.split(':').map(Number);
@@ -578,11 +597,18 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         const outTotal = outH * 60 + outM;
 
         if (outTotal > inTotal) {
-          actualMins = outTotal - inTotal;
-          if (actualMins >= 360) actualMins -= 60;
-          else if (actualMins >= 240) actualMins -= 30;
-          actualMins = Math.max(0, actualMins);
+          const rawDiff = outTotal - inTotal;
+          if (record.break_minutes !== null && record.break_minutes !== undefined) {
+            breakMins = Number(record.break_minutes) || 0;
+          } else {
+            if (rawDiff >= 480) breakMins = 60;
+            else if (rawDiff >= 360) breakMins = 45;
+            else if (rawDiff >= 240) breakMins = 30;
+            else breakMins = 0;
+          }
+          breakStr = `${breakMins}m`;
 
+          actualMins = Math.max(0, rawDiff - breakMins);
           actualStr = `${Math.floor(actualMins / 60)}h ${(actualMins % 60).toString().padStart(2, '0')}m`;
 
           if (actualMins > 480) {
@@ -590,6 +616,9 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
             overtimeStr = `${Math.floor(overtimeMins / 60)}h ${(overtimeMins % 60).toString().padStart(2, '0')}m`;
           }
         }
+      } else if (record?.break_minutes !== null && record?.break_minutes !== undefined) {
+        breakMins = Number(record.break_minutes) || 0;
+        breakStr = `${breakMins}m`;
       }
 
       rows.push({
@@ -605,6 +634,8 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         monthlyShiftReq,
         checkIn: record?.check_in_time || '-',
         checkOut: record?.check_out_time || '-',
+        breakStr,
+        breakMins,
         actualStr,
         overtimeStr,
         overtimeMins,
@@ -619,6 +650,10 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
   // 打刻編集モーダルを開く
   const handleOpenEditModal = (row: any) => {
     const user = users.find(u => u.id === selectedUserId);
+    const breakMinutesStr = row.record?.break_minutes != null 
+      ? String(row.record.break_minutes) 
+      : (row.breakMins ? String(row.breakMins) : '60');
+
     setEditModal({
       isOpen: true,
       userId: selectedUserId || '',
@@ -627,6 +662,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       recordId: row.record?.id || null,
       checkIn: row.record?.check_in_time || '',
       checkOut: row.record?.check_out_time || '',
+      breakMinutes: breakMinutesStr,
       status: row.record?.status || '退勤済',
       note: row.record?.note || ''
     });
@@ -642,6 +678,9 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       return;
     }
 
+    const breakMinsNum = editModal.breakMinutes !== '' ? parseInt(editModal.breakMinutes, 10) : null;
+    const breakMinsVal = breakMinsNum !== null && !isNaN(breakMinsNum) ? breakMinsNum : null;
+
     try {
       if (editModal.recordId) {
         // 更新
@@ -650,6 +689,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           .update({
             check_in_time: editModal.checkIn || null,
             check_out_time: editModal.checkOut || null,
+            break_minutes: breakMinsVal,
             status: editModal.status,
             note: editModal.note || null
           })
@@ -665,6 +705,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
             date: editModal.date,
             check_in_time: editModal.checkIn || null,
             check_out_time: editModal.checkOut || null,
+            break_minutes: breakMinsVal,
             status: editModal.status,
             note: editModal.note || null
           });
@@ -718,12 +759,13 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     } else {
       const user = users.find(u => u.id === selectedUserId);
       const filename = `出勤簿_${user?.name || '従業員'}_${year}年${month}月.csv`;
-      const headers = ['日付', '曜日', '出勤時刻', '退勤時刻', '実働時間', '残業時間', 'ステータス', '備考'];
+      const headers = ['日付', '曜日', '出勤時刻', '退勤時刻', '休憩時間', '実働時間', '残業時間', 'ステータス', '備考'];
       const rows = selectedUserRows.map(r => [
         r.dateStr,
         r.dayOfWeekStr,
         r.checkIn,
         r.checkOut,
+        r.breakStr,
         r.actualStr,
         r.overtimeStr,
         r.status,
@@ -1248,6 +1290,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                         <th className="p-3.5 w-28">日付</th>
                         <th className="p-3.5 w-28">出勤打刻</th>
                         <th className="p-3.5 w-28">退勤打刻</th>
+                        <th className="p-3.5 text-center w-20">休憩</th>
                         <th className="p-3.5 text-right w-24">実働時間</th>
                         <th className="p-3.5 text-right w-24">残業時間</th>
                         <th className="p-3.5">事由・申請・備考</th>
@@ -1285,6 +1328,13 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                             <td className="p-3.5 font-bold text-slate-800 text-xs">
                               {row.checkOut !== '-' ? (
                                 <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200">{row.checkOut}</span>
+                              ) : (
+                                <span className="text-slate-300">-</span>
+                              )}
+                            </td>
+                            <td className="p-3.5 text-center font-medium text-xs">
+                              {row.breakStr !== '-' ? (
+                                <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200 font-bold">{row.breakStr}</span>
                               ) : (
                                 <span className="text-slate-300">-</span>
                               )}
@@ -1427,6 +1477,44 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                     onChange={e => setEditModal({ ...editModal, checkOut: e.target.value })} 
                     className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-sm disabled:bg-slate-100 disabled:text-slate-400" 
                   />
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-black text-slate-700">休憩時間（分）</label>
+                  <span className="text-[11px] text-blue-600 font-bold">※実働から差し引く休憩</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="number"
+                    min="0"
+                    max="360"
+                    step="5"
+                    disabled={closingInfo?.isClosed}
+                    value={editModal.breakMinutes} 
+                    onChange={e => setEditModal({ ...editModal, breakMinutes: e.target.value })} 
+                    className="w-24 p-2 border border-slate-300 rounded-lg font-bold text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400" 
+                    placeholder="60"
+                  />
+                  <span className="text-xs font-bold text-slate-600">分</span>
+                  <div className="flex items-center gap-1 ml-auto">
+                    {['0', '45', '60', '90'].map(mins => (
+                      <button
+                        key={mins}
+                        type="button"
+                        disabled={closingInfo?.isClosed}
+                        onClick={() => setEditModal(prev => ({ ...prev, breakMinutes: mins }))}
+                        className={`px-2 py-1 text-xs font-bold rounded-md border transition cursor-pointer ${
+                          editModal.breakMinutes === mins 
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' 
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {mins}分
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

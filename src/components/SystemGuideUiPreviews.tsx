@@ -271,6 +271,7 @@ function RealMonthlyAttendancePreview() {
                     <th className="px-2.5 py-2 text-left">日付</th>
                     <th className="px-2.5 py-2 text-left">出勤 (打刻)</th>
                     <th className="px-2.5 py-2 text-left">退勤 (打刻)</th>
+                    <th className="px-2.5 py-2 text-center">休憩</th>
                     <th className="px-2.5 py-2 text-right">実働時間</th>
                     <th className="px-2.5 py-2 text-right">残業時間</th>
                     <th className="px-2.5 py-2 text-left">備考</th>
@@ -282,6 +283,7 @@ function RealMonthlyAttendancePreview() {
                     <td className="px-2.5 py-1.5 font-medium text-slate-800 whitespace-nowrap">09/01 (火)</td>
                     <td className="px-2.5 py-1.5 font-mono text-slate-700 whitespace-nowrap">09:00</td>
                     <td className="px-2.5 py-1.5 font-mono text-slate-700 whitespace-nowrap">18:00</td>
+                    <td className="px-2.5 py-1.5 text-center font-mono text-slate-600">60m</td>
                     <td className="px-2.5 py-1.5 text-right font-mono font-bold text-slate-700">8h</td>
                     <td className="px-2.5 py-1.5 text-right font-mono text-slate-400">-</td>
                     <td className="px-2.5 py-1.5 text-slate-500 whitespace-nowrap">テスト自動生成打刻</td>
@@ -299,6 +301,7 @@ function RealMonthlyAttendancePreview() {
                     <td className="px-2.5 py-1.5 font-medium text-slate-800 whitespace-nowrap">09/02 (水)</td>
                     <td className="px-2.5 py-1.5 font-mono text-slate-700 whitespace-nowrap">09:00</td>
                     <td className="px-2.5 py-1.5 font-mono text-slate-700 whitespace-nowrap">18:00</td>
+                    <td className="px-2.5 py-1.5 text-center font-mono text-slate-600">60m</td>
                     <td className="px-2.5 py-1.5 text-right font-mono font-bold text-slate-700">8h</td>
                     <td className="px-2.5 py-1.5 text-right font-mono text-slate-400">-</td>
                     <td className="px-2.5 py-1.5 text-slate-500 whitespace-nowrap">テスト自動生成打刻</td>
@@ -316,6 +319,7 @@ function RealMonthlyAttendancePreview() {
                     <td className="px-2.5 py-1.5 font-medium text-slate-800 whitespace-nowrap">09/04 (金)</td>
                     <td className="px-2.5 py-1.5 font-mono text-slate-700 whitespace-nowrap">09:00</td>
                     <td className="px-2.5 py-1.5 font-mono text-slate-700 whitespace-nowrap">20:00</td>
+                    <td className="px-2.5 py-1.5 text-center font-mono text-slate-600">60m</td>
                     <td className="px-2.5 py-1.5 text-right font-mono font-bold text-slate-700">10h</td>
                     <td className="px-2.5 py-1.5 text-right font-mono font-bold text-rose-600">2h</td>
                     <td className="px-2.5 py-1.5 text-slate-500 whitespace-nowrap">テスト自動生成打刻</td>
@@ -334,6 +338,7 @@ function RealMonthlyAttendancePreview() {
                     <td className="px-2.5 py-1.5 font-medium text-blue-600 whitespace-nowrap">09/05 (土)</td>
                     <td className="px-2.5 py-1.5 text-center font-mono">-</td>
                     <td className="px-2.5 py-1.5 text-center font-mono">-</td>
+                    <td className="px-2.5 py-1.5 text-center font-mono">-</td>
                     <td className="px-2.5 py-1.5 text-right font-mono">-</td>
                     <td className="px-2.5 py-1.5 text-right font-mono">-</td>
                     <td className="px-2.5 py-1.5 text-slate-500 whitespace-nowrap font-bold">公休</td>
@@ -349,6 +354,7 @@ function RealMonthlyAttendancePreview() {
                   </tr>
                   <tr className="bg-slate-50 text-slate-400">
                     <td className="px-2.5 py-1.5 font-medium text-rose-600 whitespace-nowrap">09/06 (日)</td>
+                    <td className="px-2.5 py-1.5 text-center font-mono">-</td>
                     <td className="px-2.5 py-1.5 text-center font-mono">-</td>
                     <td className="px-2.5 py-1.5 text-center font-mono">-</td>
                     <td className="px-2.5 py-1.5 text-right font-mono">-</td>
@@ -414,9 +420,16 @@ function RealMonthlyAttendancePreview() {
                     <label className="block font-bold text-slate-700 mb-1 text-[11px]">正しい打刻時間</label>
                     <input type="text" readOnly value="20:00" className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5 font-mono font-bold" />
                   </div>
+                  <div className="sm:col-span-2 bg-blue-50/80 p-2.5 rounded-lg border border-blue-100">
+                    <label className="block font-bold text-slate-700 mb-1 text-[11px]">休憩時間（分）※当日実働から控除</label>
+                    <div className="flex items-center gap-2">
+                      <input type="text" readOnly value="60分" className="w-20 bg-white border border-slate-300 rounded px-2.5 py-1 font-bold text-center text-blue-800" />
+                      <span className="text-[10px] text-blue-700 font-bold">（0分 / 45分 / 60分 / 90分 ワンクリック選択対応）</span>
+                    </div>
+                  </div>
                   <div className="sm:col-span-2">
                     <label className="block font-bold text-slate-700 mb-1 text-[11px]">申請理由</label>
-                    <input type="text" readOnly value="業務終了時の打刻押し忘れのため" className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5" />
+                    <input type="text" readOnly value="業務終了時の打刻押し忘れのため 【休憩時間: 60分】" className="w-full bg-white border border-slate-300 rounded px-2.5 py-1.5" />
                   </div>
                 </div>
                 <div className="mt-3 flex justify-end">
