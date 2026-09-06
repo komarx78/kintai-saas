@@ -74,6 +74,7 @@ export const SYSTEM_GUIDE_PREVIEW_TYPES = {
   leave_request: '🌴 有給休暇・代休 残数ウィジェット（保有残数・年間5日義務）',
   shift_submit: '📅 シフト希望・確定シフト画面（月間カレンダー希望入力・確定シフト）',
   payslip_view: '📄 Web給与明細・源泉徴収票画面（支給・控除・差引支給額）',
+  attendance_admin: '🏢 管理者: 月間勤怠・出勤簿管理（打刻・休憩直接修正・締め確定）',
   onboarding_passbook: '📄 入退社労務画面（通帳写真撮影・電子契約押印）',
   password_reset: '⚙️ ログイン・パスワード再設定画面'
 } as const;
@@ -83,13 +84,14 @@ export function resolveGuidePreviewType(item: Partial<SystemFaqItem>): string {
   if (item.preview_type) return item.preview_type;
   
   const q = `${item.question || ''} ${item.keyword || ''} ${item.answer || ''}`;
+  if (q.includes('出勤簿') || q.includes('締め確定') || q.includes('月次締め') || q.includes('全社集計') || q.includes('打刻編集')) return 'attendance_admin';
   if (q.includes('月次勤怠') || q.includes('月間勤怠') || q.includes('照会') || q.includes('修正申請') || q.includes('打刻忘れ') || q.includes('押し忘れ') || q.includes('間違え') || q.includes('CSV') || q.includes('PDF出力') || q.includes('印刷') || q.includes('申請する')) return 'monthly_attendance';
   if (q.includes('打刻') || q.includes('出勤') || q.includes('退勤') || q.includes('ステータス') || q.includes('夜勤') || q.includes('GPS') || q.includes('時計')) return 'kintai_clock';
   if (q.includes('残数') || q.includes('有給残') || q.includes('保有日数') || q.includes('5日義務')) return 'leave_request';
   if (q.includes('有給') || q.includes('有休') || q.includes('休暇') || q.includes('半休') || q.includes('年休') || q.includes('慶弔')) return 'monthly_attendance';
   if (q.includes('シフト') || q.includes('希望提出') || q.includes('勤務パターン')) return 'shift_submit';
   if (q.includes('給与') || q.includes('明細') || q.includes('源泉') || q.includes('賞与') || q.includes('試算')) return 'payslip_view';
-  if (q.includes('通帳') || q.includes('入社') || q.includes('契約書') || q.includes('電子署名') || q.includes('押印') || q.includes('名簿')) return 'onboarding_passbook';
+  if (q.includes('通帳') || q.includes('入社') || q.includes('契約書') || q.includes('電子署名') || q.includes('押印') || q.includes('名ぼ') || q.includes('名簿')) return 'onboarding_passbook';
   if (q.includes('パスワード') || q.includes('ログイン') || q.includes('再設定')) return 'password_reset';
 
   switch (item.category) {
@@ -153,6 +155,15 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     question: '位置情報（GPS）が取得できない、打刻ボタンが押せない時の対処法は？',
     answer: '【GPSエラーの解決手順】\n1. スマートフォンの「設定」＞「プライバシーとセキュリティ」＞「位置情報サービス」がONになっているか確認します。\n2. お使いのブラウザ（SafariまたはChrome）の位置情報アクセス権限が「許可」または「このAppの使用中のみ許可」になっているか確認します。\n3. 画面を再読み込み（リロード）し、ブラウザ上部に「位置情報の利用を許可しますか？」と表示されたら「許可」を選択してください。',
     keyword: 'GPS 位置情報 エラー 押せない 許可 設定 スマホ',
+    updated_at: '2026-09-06'
+  },
+  {
+    id: 'sfaq-k-7',
+    category: 'kintai',
+    question: '【管理者】全従業員の出勤簿確認、打刻・休憩時間の直接修正、月次締め確定の手順は？',
+    answer: '【管理者出勤簿・締め確定の手順】\n1. 管理メニューの「月間勤怠・出勤簿管理」を開きます。\n2. 全従業員の出勤日数、実労働時間、残業時間、休憩時間の一覧マトリクスが表示されます。\n3. 各従業員・日付の「編集」ボタンをクリックすると、打刻時間や休憩時間の直接修正が可能です。\n4. 月末の確認が完了したら、右上の「月次締め確定（データロック）」ボタンをクリックしてデータをロックし、改ざんを防止します。',
+    keyword: '月間勤怠・出勤簿管理 出勤簿 締め確定 月次締め 全社集計 打刻編集 休憩時間直接修正 管理者 ロック',
+    preview_type: 'attendance_admin',
     updated_at: '2026-09-06'
   },
 
