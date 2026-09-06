@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2, Bell, Edit3, Sparkles } from 'lucide-react';
+import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2, Sparkles } from 'lucide-react';
 import { fetchAnnouncements, type AnnouncementItem } from '../lib/announcements';
 import { fetchRevisionContracts, type RevisionContractDoc } from '../lib/revisionContracts';
+import { PortalCommunityHub } from '../components/PortalCommunityHub';
+import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 
 type UserData = {
+  id: string;
   name: string;
   role: 'superadmin' | 'admin' | 'user';
   tenant_id: string;
@@ -19,6 +22,7 @@ export default function Portal() {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [pendingContractDoc, setPendingContractDoc] = useState<RevisionContractDoc | null>(null);
+  const [companyRulesText, setCompanyRulesText] = useState<string>(DEFAULT_EMPLOYMENT_RULES);
 
   useEffect(() => {
     fetchUserData();
@@ -39,10 +43,18 @@ export default function Portal() {
         .single();
 
       if (error) throw error;
-      setUserData(data as UserData);
+      const fullUserData: UserData = {
+        id: user.id,
+        name: data.name,
+        role: data.role,
+        tenant_id: data.tenant_id,
+        has_kintai_access: data.has_kintai_access,
+        has_shift_access: data.has_shift_access,
+      };
+      setUserData(fullUserData);
 
       // お知らせ一覧のロード（DB自動同期）
-      const list = await fetchAnnouncements((data as any)?.tenant_id);
+      const list = await fetchAnnouncements(data?.tenant_id);
       setAnnouncements(list);
 
       // 📄 未押印の労働条件通知書チェック（DB自動同期）
@@ -50,6 +62,23 @@ export default function Portal() {
         const contracts = await fetchRevisionContracts(data.tenant_id);
         const pending = contracts.find(c => (c.user_id === user.id || c.user_name === data.name) && c.status === 'pending_signature');
         setPendingContractDoc(pending || null);
+
+        // 📘 就業規則の読み込み（LocalStorageキャッシュ または tenantsテーブル）
+        const cachedRules = localStorage.getItem(`company_employment_rules_${data.tenant_id}`) || localStorage.getItem('company_employment_rules');
+        if (cachedRules) {
+          setCompanyRulesText(cachedRules);
+        }
+
+        const { data: tData } = await supabase
+          .from('tenants')
+          .select('employment_rules_text')
+          .eq('id', data.tenant_id)
+          .maybeSingle();
+
+        if (tData?.employment_rules_text) {
+          setCompanyRulesText(tData.employment_rules_text);
+          localStorage.setItem(`company_employment_rules_${data.tenant_id}`, tData.employment_rules_text);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -264,55 +293,15 @@ export default function Portal() {
           ))}
         </div>
         
-        {/* 📢 全社お知らせ掲示板（動的レンダリング） */}
-        <div className="mt-16 bg-white rounded-3xl shadow-sm border border-gray-200 p-6 sm:p-8 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
-          <div className="flex items-center justify-between mb-6 pb-3 border-b border-gray-100">
-            <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
-              <span className="w-2.5 h-6 bg-gradient-to-b from-blue-600 to-indigo-600 rounded-full"></span>
-              <Bell className="w-5 h-5 text-indigo-600" />
-              社内お知らせ・アップデート
-            </h3>
-            {(role === 'admin' || role === 'superadmin') && (
-              <button
-                onClick={() => navigate('/settings/company')}
-                className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-                title="会社マスタ設定でお知らせを管理・編集"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                お知らせを管理・追加
-              </button>
-            )}
-          </div>
-
-          <div className="divide-y divide-gray-100">
-            {announcements.map((item) => (
-              <div key={item.id} className="py-3.5 hover:bg-slate-50/60 transition rounded-xl px-2 sm:px-3">
-                <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-3">
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
-                      {item.date}
-                    </span>
-                    {item.tag && (
-                      <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
-                        {item.tag}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-sm font-bold text-slate-800">
-                      {item.title}
-                    </h4>
-                    {item.content && (
-                      <p className="text-xs text-slate-500 mt-1 leading-relaxed whitespace-pre-line">
-                        {item.content}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* 📢 社内ポータル コミュニティ＆サポートハブ（お知らせ・社内Q&A/AI相談・改善目安箱） */}
+        <PortalCommunityHub
+          tenantId={userData?.tenant_id || ''}
+          role={role}
+          userName={userData?.name || 'ゲスト'}
+          userId={userData?.id || ''}
+          announcements={announcements}
+          companyRulesText={companyRulesText}
+        />
       </main>
     </div>
   );
