@@ -8,6 +8,8 @@ export interface SystemFaqItem {
   question: string;
   answer: string;
   keyword: string;
+  preview_type?: string; // 画面UIモックタイプ: 'kintai_clock' | 'kintai_fix' | 'leave_request' | 'shift_submit' | 'payslip_view' | 'onboarding_passbook' | 'password_reset'
+  html_preview?: string; // 実際の画面HTMLコード（直接埋め込み用）
   updated_at: string;
 }
 
@@ -64,6 +66,42 @@ export const SYSTEM_SUGGESTION_STATUSES = {
   completed: { label: '実装・改善完了', color: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
   declined: { label: '検討見送り', color: 'bg-rose-50 text-rose-700 border-rose-300' }
 } as const;
+
+// 📱 操作ガイドに自動埋め込みする実際のシステム画面プレビュー定義
+export const SYSTEM_GUIDE_PREVIEW_TYPES = {
+  kintai_clock: '⏰ 勤怠打刻画面（出退勤・休憩ボタン・現在時刻）',
+  kintai_fix: '✏️ 打刻修正申請画面（日別勤怠・申請モーダル）',
+  leave_request: '🌴 有給休暇・各種申請画面（残日数カード・申請フォーム）',
+  shift_submit: '📅 シフト希望提出画面（カレンダー希望入力・確定）',
+  payslip_view: '💰 Web給与明細画面（支給・控除・PDF印刷ボタン）',
+  onboarding_passbook: '📄 入退社労務画面（通帳写真撮影・電子契約押印）',
+  password_reset: '⚙️ ログイン・パスワード再設定画面'
+} as const;
+
+// 💡 カテゴリやキーワードに応じて最適な画面UIモックタイプを自動判定するヘルパー
+export function resolveGuidePreviewType(item: Partial<SystemFaqItem>): string {
+  if (item.preview_type) return item.preview_type;
+  
+  const q = `${item.question || ''} ${item.keyword || ''} ${item.answer || ''}`;
+  if (q.includes('修正申請') || q.includes('打刻忘れ') || q.includes('押し忘れ') || q.includes('間違え')) return 'kintai_fix';
+  if (q.includes('打刻') || q.includes('出勤') || q.includes('退勤') || q.includes('休憩') || q.includes('夜勤') || q.includes('GPS')) return 'kintai_clock';
+  if (q.includes('有給') || q.includes('有休') || q.includes('休暇') || q.includes('半休') || q.includes('年休')) return 'leave_request';
+  if (q.includes('シフト') || q.includes('希望提出') || q.includes('勤務パターン')) return 'shift_submit';
+  if (q.includes('給与') || q.includes('明細') || q.includes('源泉') || q.includes('賞与') || q.includes('試算')) return 'payslip_view';
+  if (q.includes('通帳') || q.includes('入社') || q.includes('契約書') || q.includes('電子署名') || q.includes('押印') || q.includes('名簿')) return 'onboarding_passbook';
+  if (q.includes('パスワード') || q.includes('ログイン') || q.includes('再設定')) return 'password_reset';
+
+  switch (item.category) {
+    case 'kintai': return 'kintai_clock';
+    case 'leave': return 'leave_request';
+    case 'shift': return 'shift_submit';
+    case 'payroll': return 'payslip_view';
+    case 'onboarding': return 'onboarding_passbook';
+    case 'general': return 'password_reset';
+    case 'settings': return 'kintai_clock';
+    default: return 'kintai_clock';
+  }
+}
 
 // 🌟 初心者がつまずきやすいポイントを完全網羅した公式操作マニュアル・FAQ一覧
 export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [

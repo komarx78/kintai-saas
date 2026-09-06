@@ -11,9 +11,11 @@ import {
   SYSTEM_SUGGESTION_CATEGORIES, 
   fetchSystemFaqs, 
   submitSystemSuggestion, 
-  fetchSystemReleaseNotes
+  fetchSystemReleaseNotes,
+  resolveGuidePreviewType
 } from '../lib/systemSupportManager';
 import { askSystemOperationAI } from '../lib/gemini';
+import { SystemGuideUiPreview } from './SystemGuideUiPreviews';
 
 interface SystemSupportHubProps {
   tenantId: string;
@@ -359,10 +361,19 @@ export const SystemSupportHub: React.FC<SystemSupportHubProps> = ({
                         </button>
 
                         {isExpanded && (
-                          <div className="px-5 pb-5 pt-1 animate-fade-in">
+                          <div className="px-5 pb-5 pt-1 animate-fade-in space-y-3">
                             <div className="pl-9 pr-4 py-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-line font-normal">
                               <span className="font-bold text-indigo-700 block mb-1.5">【操作手順・解決方法】</span>
                               {faq.answer}
+                            </div>
+
+                            {/* 📱 実際の操作画面（埋め込みプレビュー） */}
+                            <div className="pl-9">
+                              <SystemGuideUiPreview
+                                previewType={resolveGuidePreviewType(faq)}
+                                htmlPreview={faq.html_preview}
+                                title={faq.question}
+                              />
                             </div>
                           </div>
                         )}

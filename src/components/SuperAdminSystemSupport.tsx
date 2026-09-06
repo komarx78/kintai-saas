@@ -12,6 +12,7 @@ import {
   SYSTEM_FAQ_CATEGORIES, 
   SYSTEM_SUGGESTION_CATEGORIES, 
   SYSTEM_SUGGESTION_STATUSES,
+  SYSTEM_GUIDE_PREVIEW_TYPES,
   fetchSystemFaqs, 
   saveSystemFaq, 
   deleteSystemFaq,
@@ -193,7 +194,9 @@ export function SuperAdminSystemSupport() {
       category: (editingFaq.category as any) || 'kintai',
       question: editingFaq.question,
       answer: editingFaq.answer,
-      keyword: editingFaq.keyword || ''
+      keyword: editingFaq.keyword || '',
+      preview_type: editingFaq.preview_type || '',
+      html_preview: editingFaq.html_preview || ''
     });
     setEditingFaq(null);
     const updated = await fetchSystemFaqs();
@@ -936,11 +939,57 @@ export function SuperAdminSystemSupport() {
                 <label className="block text-xs font-bold text-slate-700 mb-1">操作手順・解決方法 (Answer)</label>
                 <textarea
                   required
-                  rows={5}
+                  rows={4}
                   value={editingFaq.answer || ''}
                   onChange={e => setEditingFaq({ ...editingFaq, answer: e.target.value })}
                   placeholder="初心者が迷わないよう、具体的な画面名や操作ステップ（1. 2. 3.）を丁寧に記入してください。"
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    📱 画面UIプレビュー種別（自動貼り付け）
+                  </label>
+                  <select
+                    value={editingFaq.preview_type || ''}
+                    onChange={e => setEditingFaq({ ...editingFaq, preview_type: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">✨ 自動判定（カテゴリ・キーワードから自動選択）</option>
+                    {Object.entries(SYSTEM_GUIDE_PREVIEW_TYPES).map(([pk, plabel]) => (
+                      <option key={pk} value={pk}>{plabel}</option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-0.5">未選択の場合は質問内容から最適な画面を自動表示します</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    検索キーワード
+                  </label>
+                  <input
+                    type="text"
+                    value={editingFaq.keyword || ''}
+                    onChange={e => setEditingFaq({ ...editingFaq, keyword: e.target.value })}
+                    placeholder="例: 打刻 出勤 退勤 修正"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>💻 カスタムHTML画面コード（任意・上書き用）</span>
+                  <span className="text-[10px] text-slate-400 font-normal">HTMLを直接貼り付けて表示したい場合に入力</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={editingFaq.html_preview || ''}
+                  onChange={e => setEditingFaq({ ...editingFaq, html_preview: e.target.value })}
+                  placeholder="<div class='...'>実際の画面HTMLコード</div>"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                 />
               </div>
             </div>
