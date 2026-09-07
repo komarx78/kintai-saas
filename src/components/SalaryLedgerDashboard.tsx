@@ -4,11 +4,13 @@ import {
   TrendingUp, DollarSign, 
   History, Plus, Download, Search, CheckCircle2, 
   FileText, X, Loader2, LayoutGrid, Table, 
-  Building2, Sparkles, Save, Printer, Trash2, Edit
+  Building2, Sparkles, Save, Printer, Trash2, Edit, RefreshCw
 } from 'lucide-react';
 import type { EmployeePayrollProfile } from '../lib/payrollEngine';
 import { 
   fetchRevisionContracts,
+  saveRevisionContracts,
+  getRevisionContracts,
   addOrUpdateRevisionContract, 
   deleteRevisionContract,
   type RevisionContractDoc 
@@ -91,6 +93,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
   const [isRevisionModalOpen, setIsRevisionModalOpen] = useState(false);
   const [selectedEmployeeForTimeline, setSelectedEmployeeForTimeline] = useState<any | null>(null);
   const [isSavingRevision, setIsSavingRevision] = useState(false);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
 
   // 個別昇給登録フォームState（昇給適用月を主軸に！）
   const [formUserId, setFormUserId] = useState('');
@@ -173,6 +176,16 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
         try {
           const parsed = JSON.parse(savedProfiles);
           profilesMap = { ...parsed, ...profilesMap };
+
+          // クラウドに存在しないローカルプロファイルを自動救済UPSERT
+          const localProfList = Object.values(parsed);
+          if (localProfList.length > 0) {
+            try {
+              await supabase.from('employee_payroll_profiles').upsert(localProfList, { onConflict: 'tenant_id,user_id' });
+            } catch (profSyncErr) {
+              console.warn('[Auto-Sync] Profiles upsert notice:', profSyncErr);
+            }
+          }
         } catch {}
       }
 
@@ -192,11 +205,28 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
       const savedRev = localStorage.getItem(`salary_revisions_${tenantId}`);
       if (savedRev) {
         try {
-          const parsedRev = JSON.parse(savedRev);
+          const parsedRev: SalaryRevisionRecord[] = JSON.parse(savedRev);
           const existingIds = new Set(revList.map(r => r.id));
-          parsedRev.forEach((r: any) => {
-            if (!existingIds.has(r.id)) revList.push(r);
-          });
+          const missingInDb = parsedRev.filter((r: any) => !existingIds.has(r.id));
+
+          if (missingInDb.length > 0) {
+            console.log(`[Auto-Sync] Uploading ${missingInDb.length} local revision records to Supabase...`);
+            try {
+              const { error: insErr } = await supabase.from('salary_revision_history').insert(missingInDb);
+              if (!insErr) {
+                revList = [...missingInDb, ...revList];
+              } else {
+                console.warn('Auto-sync revisions to DB notice:', insErr);
+                parsedRev.forEach((r: any) => {
+                  if (!existingIds.has(r.id)) revList.push(r);
+                });
+              }
+            } catch {
+              parsedRev.forEach((r: any) => {
+                if (!existingIds.has(r.id)) revList.push(r);
+              });
+            }
+          }
         } catch {}
       }
 
@@ -833,6 +863,56 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
     }
   };
 
+  // 🔄 クラウド強制同期処理（手元のPCの全データをSupabaseへ一括プッシュし、他端末・全社員へ即時共有）
+  const handleForceSyncToCloud = async () => {
+    if (!tenantId) return;
+    setIsSyncingCloud(true);
+    try {
+      // 1. 労働条件通知書（賃金改定版）の同期
+      const localDocs = getRevisionContracts(tenantId);
+      if (localDocs.length > 0) {
+        await saveRevisionContracts(tenantId, localDocs);
+      }
+
+      // 2. 昇給履歴テーブルの同期
+      const savedRev = localStorage.getItem(`salary_revisions_${tenantId}`);
+      if (savedRev) {
+        try {
+          const parsedRev = JSON.parse(savedRev);
+          if (Array.isArray(parsedRev) && parsedRev.length > 0) {
+            const { error: revErr } = await supabase
+              .from('salary_revision_history')
+              .upsert(parsedRev, { onConflict: 'id' });
+            if (revErr) console.warn('Revision history upsert error:', revErr);
+          }
+        } catch (e) {}
+      }
+
+      // 3. 給与プロファイル（基本給・手当）の同期
+      const savedProfiles = localStorage.getItem(`payroll_profiles_${tenantId}`);
+      if (savedProfiles) {
+        try {
+          const parsedProf = JSON.parse(savedProfiles);
+          const profList = Object.values(parsedProf);
+          if (profList.length > 0) {
+            const { error: profErr } = await supabase
+              .from('employee_payroll_profiles')
+              .upsert(profList, { onConflict: 'tenant_id,user_id' });
+            if (profErr) console.warn('Profiles upsert error:', profErr);
+          }
+        } catch (e) {}
+      }
+
+      alert('✅ クラウドデータベースへの全社完全同期が完了しました！\n手元のPCに保存されていた昇給データ・労働条件通知書がSupabaseへ反映されました。\n他のPCや従業員マイページでも最新データが閲覧可能です。');
+      await fetchData();
+    } catch (err: any) {
+      console.error('Force sync error:', err);
+      alert('同期処理中にエラーが発生しました: ' + (err.message || ''));
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
+
   // 🗑️ 昇給・給与改定の取り消し（元に戻すロールバック処理）
   const handleDeleteRevision = async (rev: SalaryRevisionRecord) => {
     if (!tenantId) return;
@@ -1171,6 +1251,16 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
           >
             <Download className="w-3.5 h-3.5" />
             CSV
+          </button>
+
+          <button
+            onClick={handleForceSyncToCloud}
+            disabled={isSyncingCloud}
+            className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="手元のPCにある昇給・労働条件通知書データをクラウドデータベースへ即座に完全反映します"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+            {isSyncingCloud ? 'クラウド同期中...' : 'クラウド全社同期'}
           </button>
 
           <button

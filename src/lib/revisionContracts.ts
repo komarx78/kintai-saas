@@ -44,24 +44,35 @@ export function getRevisionContracts(tenantId: string): RevisionContractDoc[] {
 
 /**
  * データベース（Supabase tenants）から全端末で同期取得
+ * ※ DBが空でローカルにデータがある場合は、クラウドへ自動アップロードして全PC共有化
  */
 export async function fetchRevisionContracts(tenantId: string): Promise<RevisionContractDoc[]> {
   if (!tenantId) return [];
   // 1. キャッシュから即時取得
-  let result = getRevisionContracts(tenantId);
+  const localDocs = getRevisionContracts(tenantId);
+  let result = localDocs;
 
   // 2. データベースから最新データを取得・同期
   try {
-    const { data: tData } = await supabase
+    const { data: tData, error: fetchErr } = await supabase
       .from('tenants')
       .select('revision_contracts_data')
       .eq('id', tenantId)
       .maybeSingle();
 
-    if (tData?.revision_contracts_data && Array.isArray(tData.revision_contracts_data)) {
-      result = tData.revision_contracts_data;
-      localStorage.setItem(getStorageKey(tenantId), JSON.stringify(result));
-      localStorage.setItem('revision_contracts', JSON.stringify(result));
+    if (!fetchErr && tData?.revision_contracts_data && Array.isArray(tData.revision_contracts_data)) {
+      if (tData.revision_contracts_data.length > 0) {
+        result = tData.revision_contracts_data;
+        localStorage.setItem(getStorageKey(tenantId), JSON.stringify(result));
+        localStorage.setItem('revision_contracts', JSON.stringify(result));
+      } else if (localDocs.length > 0) {
+        // クラウド側が空でローカルにのみデータがある場合、クラウドへ自動アップロード（全端末同期）
+        console.log(`[Auto-Sync] Uploading ${localDocs.length} local revision contracts to Supabase...`);
+        await saveRevisionContracts(tenantId, localDocs);
+      }
+    } else if (localDocs.length > 0) {
+      // カラムが存在して初期状態の場合もアップロード試行
+      await saveRevisionContracts(tenantId, localDocs);
     }
   } catch (err) {
     console.warn('DB fetch revision contracts warning:', err);
