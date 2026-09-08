@@ -384,10 +384,10 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     id: 'sfaq-g-1',
     category: 'general',
     question: 'パスワードを忘れてしまった、ログインできない場合の再設定方法は？',
-    answer: '【パスワード再設定手順】\n1. ログイン画面のパスワード入力欄の下にある「パスワードを忘れた場合」をクリックします。\n2. ご登録のメールアドレスを入力して「送信」を押します。\n3. 届いたメール内の「パスワード再設定リンク」をクリックし、新しいパスワードを設定してください。\n※ メールが届かない場合は、迷惑メールフォルダをご確認いただくか、自社の管理者へご相談ください。',
-    keyword: 'パスワード パスワードを忘れた場合 ログインできない 再設定 メール リセット',
+    answer: '【パスワード再設定手順】\n1. ログイン画面のパスワード入力欄の下にある「パスワードを忘れた場合」をクリックします。\n2. ご登録のメールアドレスを入力して「再設定リンクを送信」を押します。\n3. 届いたメール内のリンクをクリックすると、専用の「新しいパスワードの設定」画面（/reset-password）が開きます。\n4. 6文字以上の新しいパスワードを2回入力し、「パスワードを変更してログイン」をクリックすると再設定が完了し、そのままシステムへ安全にログインできます。\n※ メールが届かない場合は、迷惑メールフォルダをご確認いただくか、自社の管理者へご相談ください。',
+    keyword: 'パスワード パスワードを忘れた場合 ログインできない 再設定 メール リセット 新しいパスワードの設定 パスワードを変更してログイン',
     preview_type: 'password_reset',
-    updated_at: '2026-09-06'
+    updated_at: '2026-09-08'
   },
   {
     id: 'sfaq-g-2',
@@ -459,12 +459,12 @@ export async function fetchSystemFaqs(): Promise<SystemFaqItem[]> {
         }
       });
 
-      localStorage.setItem('kap_system_faqs_v13', JSON.stringify(merged));
+      localStorage.setItem('kap_system_faqs_v14', JSON.stringify(merged));
       return merged;
     }
 
     // Supabaseが空またはエラーの場合
-    const local = localStorage.getItem('kap_system_faqs_v13');
+    const local = localStorage.getItem('kap_system_faqs_v14');
     if (local) {
       try {
         const parsed = JSON.parse(local);

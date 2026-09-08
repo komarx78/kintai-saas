@@ -6,7 +6,8 @@ import {
   Sparkles, MousePointerClick,
   DollarSign, Printer, Upload, CreditCard, Train, Shield, Users, Mail, LogIn, Send,
   Smartphone, MapPin, AlertTriangle, XCircle,
-  Gift, RotateCcw, Plus, Check, Building2
+  Gift, RotateCcw, Plus, Check, Building2,
+  KeyRound, Eye, ArrowRight
 } from 'lucide-react';
 
 interface GuideUiPreviewProps {
@@ -2104,24 +2105,135 @@ function RealLoginPreview() {
         },
         {
           number: 3,
-          label: '③ 新パスワード設定',
+          label: '③ 新パスワード設定（専用画面）',
           badge: '再設定完了',
-          title: '届いたメールのリンクから新しいパスワードを設定',
-          desc: 'メール内のリンクを開き、新しいパスワードを入力して保存すればすぐに新しいパスワードでログインできます。',
-          render: () => (
-            <div className="max-w-sm mx-auto bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-3 text-xs text-center">
-              <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-950 font-bold flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                <span>✓ 新しいパスワードを設定完了しました！</span>
-              </div>
-              <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
-                新しいパスワードを使って安全にログインしてください。ログイン後は以前と同じデータでご利用いただけます。
-              </p>
-            </div>
-          )
+          title: 'メール内のリンクから専用の「新しいパスワードの設定」画面で再設定',
+          desc: '届いたメールのリンクをクリックすると専用のパスワード設定画面が開きます。新しいパスワードを2回入力し、【パスワードを変更してログイン】を押すと即座に完了しログインできます。',
+          render: () => <ResetPasswordStepPreview />
         }
       ]}
     />
+  );
+}
+
+/**
+ * 🔑 パスワード再設定実画面（ResetPassword.tsx と100%同一のJSX・スタイル）
+ */
+function ResetPasswordStepPreview() {
+  const [success, setSuccess] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
+
+  return (
+    <div className="max-w-sm mx-auto bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50/50 p-5 rounded-2xl border border-slate-200 shadow-sm text-xs">
+      <div className="text-center space-y-1 mb-4">
+        <div className="flex justify-center">
+          <div className="w-12 h-12 rounded-xl bg-blue-600 shadow-lg shadow-blue-500/20 flex items-center justify-center text-white">
+            <KeyRound className="w-6 h-6" />
+          </div>
+        </div>
+        <h3 className="mt-2 text-center text-base font-black text-slate-800 tracking-tight">
+          新しいパスワードの設定
+        </h3>
+        <p className="text-center text-[11px] text-slate-500 font-medium">
+          勤怠・有給管理システム 安全なパスワードをご登録ください
+        </p>
+      </div>
+
+      <div className="bg-white/95 backdrop-blur-md p-5 shadow-sm rounded-xl border border-slate-200">
+        {success ? (
+          <div className="space-y-4 text-center py-2">
+            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600 animate-bounce">
+              <CheckCircle2 className="w-7 h-7" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-slate-800">
+                パスワードを再設定しました
+              </h4>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                新しいパスワードの更新が正常に完了いたしました。<br />
+                そのままシステムをご利用いただけます。
+              </p>
+            </div>
+
+            <div className="pt-2 space-y-2">
+              <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl shadow-md text-xs font-bold">
+                ポータル画面へ進む
+                <ArrowRight className="w-3.5 h-3.5" />
+              </div>
+              <button
+                type="button"
+                onClick={() => setSuccess(false)}
+                className="text-[11px] text-blue-600 underline font-semibold cursor-pointer"
+              >
+                入力フォームに戻る（再確認）
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3.5">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                新しいパスワード <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative rounded-lg shadow-2xs">
+                <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <input
+                  type={showPwd ? 'text' : 'password'}
+                  readOnly
+                  value="newpassword2026"
+                  className="w-full pl-8 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwd(!showPwd)}
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                新しいパスワード（確認用） <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative rounded-lg shadow-2xs">
+                <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <input
+                  type={showPwd ? 'text' : 'password'}
+                  readOnly
+                  value="newpassword2026"
+                  className="w-full pl-8 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="pt-1 relative">
+              <button
+                type="button"
+                onClick={() => setSuccess(true)}
+                className="w-full flex justify-center items-center gap-1.5 py-2.5 px-3 rounded-xl shadow-md border-2 border-amber-400 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition cursor-pointer"
+              >
+                パスワードを変更してログイン 👆
+              </button>
+              <div className="absolute -top-3.5 right-2 bg-blue-700 text-white text-[9px] font-black px-1.5 py-0.2 rounded shadow-xs animate-bounce whitespace-nowrap">
+                👆 ここをクリック
+              </div>
+            </div>
+
+            <div className="text-center pt-1">
+              <span className="text-[11px] font-semibold text-slate-500">
+                ← ログイン画面へ戻る
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
