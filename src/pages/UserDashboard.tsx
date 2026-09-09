@@ -2066,6 +2066,8 @@ const UserDashboard = () => {
                           <option>代休（午前半休）</option>
                           <option>代休（午後半休）</option>
                           <option>特別休暇（慶弔など）</option>
+                          <option>休職申請（私傷病・産休・育休）</option>
+                          <option>復職申請</option>
                         </>
                       )}
                       <option>打刻修正</option>

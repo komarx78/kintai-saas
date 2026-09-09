@@ -14,6 +14,10 @@ import { BonusPaymentReportModal } from './BonusPaymentReportModal';
 import { WageLedgerViewer } from './WageLedgerViewer';
 import { EmployeeRosterViewer } from './EmployeeRosterViewer';
 import { WithholdingTaxLedgerViewer } from './WithholdingTaxLedgerViewer';
+import { OfficialSocialInsuranceDoc } from './OfficialSocialInsuranceDoc';
+import { OfficialEmploymentInsuranceDoc } from './OfficialEmploymentInsuranceDoc';
+import { OfficialLaborInsuranceReportDoc } from './OfficialLaborInsuranceReportDoc';
+import { OfficialLeaveProcedureDoc } from './OfficialLeaveProcedureDoc';
 
 export interface OfficialReportsCenterProps {
   tenantId: string;
@@ -812,6 +816,162 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           </div>
         </div>
 
+        {/* 🏛️ カテゴリ6: 公的届出書類（日本年金機構・ハローワーク） */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-black text-slate-800 text-sm flex items-center gap-2">
+              <span className="text-indigo-600">■</span> 公的届出書類（日本年金機構・ハローワーク）
+            </h4>
+            <span className="text-[11px] text-slate-400 font-bold">公式提出様式準拠</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* 1. 社会保険 資格取得・喪失届 */}
+            <button
+              onClick={() => setSelectedDocType('social_insurance_doc')}
+              className="bg-white hover:bg-slate-50/80 p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition flex items-center justify-between text-left group cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-indigo-50 text-slate-500 group-hover:text-indigo-600 flex items-center justify-center transition">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-black text-slate-800 group-hover:text-indigo-700 transition flex items-center gap-1.5">
+                    社会保険 資格取得・喪失届
+                    <span className="text-[9px] bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded font-bold border border-indigo-200">
+                      健保・厚年
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    入社時取得届・退職時喪失届（70歳以上被用者届対応）
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 transition" />
+            </button>
+
+            {/* 2. 雇用保険 資格取得・喪失届 */}
+            <button
+              onClick={() => setSelectedDocType('employment_insurance_doc')}
+              className="bg-white hover:bg-slate-50/80 p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition flex items-center justify-between text-left group cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-emerald-50 text-slate-500 group-hover:text-emerald-600 flex items-center justify-center transition">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-black text-slate-800 group-hover:text-emerald-700 transition flex items-center gap-1.5">
+                    雇用保険 資格取得・喪失届
+                    <span className="text-[9px] bg-emerald-50 text-emerald-700 px-1.5 py-0.2 rounded font-bold border border-emerald-200">
+                      ハローワーク
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    雇入・離職時の雇用保険被保険者届出様式
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600 transition" />
+            </button>
+
+            {/* 3. 離職証明書（離職票） */}
+            <button
+              onClick={() => setSelectedDocType('employment_separation_doc')}
+              className="bg-white hover:bg-slate-50/80 p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition flex items-center justify-between text-left group cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-amber-50 text-slate-500 group-hover:text-amber-600 flex items-center justify-center transition">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-black text-slate-800 group-hover:text-amber-700 transition flex items-center gap-1.5">
+                    離職証明書（離職票）
+                    <span className="text-[9px] bg-amber-50 text-amber-700 px-1.5 py-0.2 rounded font-bold border border-amber-200">
+                      給与台帳自動集計
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    直近6ヶ月賃金支払基礎日数・支給額・離職理由自動算定
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-amber-600 transition" />
+            </button>
+          </div>
+        </div>
+
+        {/* 📊 カテゴリ7: 労働保険年度更新 申告資料 */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-black text-slate-800 text-sm flex items-center gap-2">
+              <span className="text-cyan-600">■</span> 労働保険年度更新 申告資料
+            </h4>
+            <span className="text-[11px] text-slate-400 font-bold">労働基準監督署・労働局提出用</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* 労働保険料算定基礎資料 */}
+            <button
+              onClick={() => setSelectedDocType('labor_insurance_report')}
+              className="bg-white hover:bg-slate-50/80 p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition flex items-center justify-between text-left group cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-cyan-50 text-slate-500 group-hover:text-cyan-600 flex items-center justify-center transition">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-black text-slate-800 group-hover:text-cyan-700 transition flex items-center gap-1.5">
+                    労働保険料 概算・確定保険料算定資料
+                    <span className="text-[9px] bg-cyan-50 text-cyan-700 px-1.5 py-0.2 rounded font-bold border border-cyan-200">
+                      年1回 6〜7月申告
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    全社賃金総額、労災・雇用保険料率、一般拠出金の一撃自動計算シート
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-cyan-600 transition" />
+            </button>
+          </div>
+        </div>
+
+        {/* 🌿 カテゴリ8: 休職・復職手続き ＆ 社内労務資料 */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-black text-slate-800 text-sm flex items-center gap-2">
+              <span className="text-rose-600">■</span> 休職・復職手続き ＆ 社内労務資料
+            </h4>
+            <span className="text-[11px] text-slate-400 font-bold">社内規程・公的給付連動</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* 休職・復職手続き書類 */}
+            <button
+              onClick={() => setSelectedDocType('leave_procedure_doc')}
+              className="bg-white hover:bg-slate-50/80 p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition flex items-center justify-between text-left group cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-slate-100 group-hover:bg-rose-50 text-slate-500 group-hover:text-rose-600 flex items-center justify-center transition">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-black text-slate-800 group-hover:text-rose-700 transition flex items-center gap-1.5">
+                    休職・復職手続き書類 ＆ 傷病手当金証明
+                    <span className="text-[9px] bg-rose-50 text-rose-700 px-1.5 py-0.2 rounded font-bold border border-rose-200">
+                      社内公式書式
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    休職承認通知書、休職届、復職願、傷病手当金申請（事業主証明欄）
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-rose-600 transition" />
+            </button>
+          </div>
+        </div>
+
       </div>
 
       {/* ========================================================================= */}
@@ -855,6 +1015,58 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               initialEmployeeId={selectedEmployeeId}
               onBackToReports={() => setSelectedDocType(null)}
               isModalMode={true}
+            />
+          </div>
+        </div>
+      ) : selectedDocType === 'social_insurance_doc' ? (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col p-2 sm:p-6 overflow-y-auto print:static print:p-0 print:m-0 print:bg-white print:z-auto print:block print:h-auto print:overflow-visible print:w-full print:min-w-0">
+          <div className="max-w-5xl mx-auto w-full">
+            <OfficialSocialInsuranceDoc
+              type="acquisition"
+              companyInfo={companyInfo}
+              officeSymbol={officeSymbol}
+              employees={employees as any}
+              selectedEmployeeId={selectedEmployeeId === 'all' ? (employees[0]?.id || '') : selectedEmployeeId}
+              onSelectEmployee={(id) => setSelectedEmployeeId(id)}
+              onBack={() => setSelectedDocType(null)}
+            />
+          </div>
+        </div>
+      ) : (selectedDocType === 'employment_insurance_doc' || selectedDocType === 'employment_separation_doc') ? (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col p-2 sm:p-6 overflow-y-auto print:static print:p-0 print:m-0 print:bg-white print:z-auto print:block print:h-auto print:overflow-visible print:w-full print:min-w-0">
+          <div className="max-w-5xl mx-auto w-full">
+            <OfficialEmploymentInsuranceDoc
+              initialType={selectedDocType === 'employment_separation_doc' ? 'separation' : 'acquisition'}
+              companyInfo={companyInfo}
+              officeNumber="2501-123456-7"
+              employees={employees as any}
+              selectedEmployeeId={selectedEmployeeId === 'all' ? (employees[0]?.id || '') : selectedEmployeeId}
+              onSelectEmployee={(id) => setSelectedEmployeeId(id)}
+              onBack={() => setSelectedDocType(null)}
+            />
+          </div>
+        </div>
+      ) : selectedDocType === 'labor_insurance_report' ? (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col p-2 sm:p-6 overflow-y-auto print:static print:p-0 print:m-0 print:bg-white print:z-auto print:block print:h-auto print:overflow-visible print:w-full print:min-w-0">
+          <div className="max-w-5xl mx-auto w-full">
+            <OfficialLaborInsuranceReportDoc
+              companyInfo={companyInfo}
+              laborInsuranceNumber="25-1-02-123456-000"
+              employees={employees as any}
+              targetFiscalYear={selectedYear}
+              onBack={() => setSelectedDocType(null)}
+            />
+          </div>
+        </div>
+      ) : selectedDocType === 'leave_procedure_doc' ? (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col p-2 sm:p-6 overflow-y-auto print:static print:p-0 print:m-0 print:bg-white print:z-auto print:block print:h-auto print:overflow-visible print:w-full print:min-w-0">
+          <div className="max-w-5xl mx-auto w-full">
+            <OfficialLeaveProcedureDoc
+              companyInfo={companyInfo}
+              employees={employees as any}
+              selectedEmployeeId={selectedEmployeeId === 'all' ? (employees[0]?.id || '') : selectedEmployeeId}
+              onSelectEmployee={(id) => setSelectedEmployeeId(id)}
+              onBack={() => setSelectedDocType(null)}
             />
           </div>
         </div>
