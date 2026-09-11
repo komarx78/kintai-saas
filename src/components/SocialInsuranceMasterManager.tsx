@@ -3,8 +3,18 @@ import { supabase } from '../lib/supabase';
 import { PREFECTURES } from '../lib/socialInsurance';
 import { 
   Shield, Save, RefreshCw, Sparkles, CheckCircle2, AlertCircle, 
-  Loader2, Building2, DownloadCloud, FileText, X, ExternalLink, Bell 
+  Loader2, Building2, DownloadCloud, FileText, X, ExternalLink, Bell,
+  Mail, Send, Settings, Check
 } from 'lucide-react';
+import { 
+  checkMasterRateStatus, 
+  sendMasterRateAlertIfNeeded, 
+  markMasterRateAsUpdated, 
+  getMasterRateAlertSettings, 
+  saveMasterRateAlertSettings, 
+  type MasterRateAlertSettings,
+  DEFAULT_MASTER_ALERT_SETTINGS 
+} from '../lib/socialInsuranceMasterAlert';
 
 interface SocialRateRecord {
   id?: string;
@@ -27,6 +37,17 @@ export const SocialInsuranceMasterManager: React.FC = () => {
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [tenantCount, setTenantCount] = useState<number>(0);
 
+  // 🚨 販売管理者向け未更新検知＆1日1回メール通知State
+  const [masterAlertSettings, setMasterAlertSettings] = useState<MasterRateAlertSettings>(DEFAULT_MASTER_ALERT_SETTINGS);
+  const [rateStatus, setRateStatus] = useState<{ isOutdated: boolean; reason: string; recordCount: number; lastModified?: string }>({
+    isOutdated: false,
+    reason: '',
+    recordCount: 0
+  });
+  const [alertModalOpen, setAlertModalOpen] = useState(false);
+  const [newRecipientEmail, setNewRecipientEmail] = useState('');
+  const [isSendingAlertTest, setIsSendingAlertTest] = useState(false);
+
   // 全国一括変更用のテンポラリ値
   const [bulkNursingRate, setBulkNursingRate] = useState<number>(1.60);
   const [bulkPensionRate, setBulkPensionRate] = useState<number>(18.30);
@@ -39,7 +60,24 @@ export const SocialInsuranceMasterManager: React.FC = () => {
   useEffect(() => {
     fetchTenantCount();
     fetchRatesForYear(selectedYear);
+    loadAlertSettingsAndCheck(selectedYear);
   }, [selectedYear]);
+
+  const loadAlertSettingsAndCheck = async (year: number) => {
+    try {
+      const s = await getMasterRateAlertSettings();
+      setMasterAlertSettings(s);
+      const status = await checkMasterRateStatus(year);
+      setRateStatus(status);
+
+      // 未更新かつアラート有効の場合、1日1回の自動送信判定を実行
+      if (status.isOutdated && s.enabled) {
+        await sendMasterRateAlertIfNeeded({ targetYear: year });
+      }
+    } catch (e) {
+      console.warn('Check alert status note:', e);
+    }
+  };
 
   const fetchTenantCount = async () => {
     try {
@@ -147,9 +185,11 @@ export const SocialInsuranceMasterManager: React.FC = () => {
 
       setRates(presetList);
       setSelectedYear(targetYear);
+      await markMasterRateAsUpdated(targetYear);
+      setRateStatus({ isOutdated: false, reason: `令和${targetYear - 2018}年度更新完了`, recordCount: 47 });
       setStatusMsg({
         type: 'success',
-        text: `✨ 令和${targetYear - 2018}年度の47都道府県公式標準料率を全社（${tenantCount}社）に一括適用・DB保存しました！各社の給与計算に即時反映されます。`
+        text: `✨ 令和${targetYear - 2018}年度の47都道府県公式標準料率を全社（${tenantCount}社）に一括適用・DB保存しました！未更新アラートメールの配信は自動停止されました。`
       });
     } catch (e: any) {
       console.error(e);
@@ -234,15 +274,66 @@ export const SocialInsuranceMasterManager: React.FC = () => {
         console.warn('DB upsert error:', error.message);
       }
       
+      await markMasterRateAsUpdated(selectedYear);
+      setRateStatus({ isOutdated: false, reason: `令和${selectedYear - 2018}年度更新完了`, recordCount: 47 });
+
       setStatusMsg({ 
         type: 'success', 
-        text: `✨ 令和${selectedYear - 2018}年度（${selectedYear}年度）の47都道府県料率マスタを保存しました！全契約企業（${tenantCount}社）の給与計算に即時一括適用されます。` 
+        text: `✨ 令和${selectedYear - 2018}年度（${selectedYear}年度）の47都道府県料率マスタを保存しました！全契約企業（${tenantCount}社）に即時適用され、未更新アラートメール配信は自動停止されました。` 
       });
     } catch (e: any) {
       console.error(e);
       setStatusMsg({ type: 'error', text: '保存に失敗しました: ' + e.message });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // 🚨 アラート宛先追加
+  const handleAddAlertEmail = () => {
+    const trimmed = newRecipientEmail.trim();
+    if (!trimmed || !trimmed.includes('@')) return;
+    if (masterAlertSettings.recipient_emails.includes(trimmed)) return;
+    setMasterAlertSettings({
+      ...masterAlertSettings,
+      recipient_emails: [...masterAlertSettings.recipient_emails, trimmed]
+    });
+    setNewRecipientEmail('');
+  };
+
+  // 🚨 アラート宛先削除
+  const handleRemoveAlertEmail = (idx: number) => {
+    setMasterAlertSettings({
+      ...masterAlertSettings,
+      recipient_emails: masterAlertSettings.recipient_emails.filter((_, i) => i !== idx)
+    });
+  };
+
+  // 🚨 アラート設定保存
+  const handleSaveAlertSettings = async () => {
+    const res = await saveMasterRateAlertSettings(masterAlertSettings);
+    if (res.success) {
+      alert('販売管理者向け未更新アラート設定を保存しました。');
+      setAlertModalOpen(false);
+    } else {
+      alert('保存に失敗しました: ' + res.error);
+    }
+  };
+
+  // 🚨 アラートテスト送信
+  const handleSendAlertTest = async () => {
+    if (masterAlertSettings.recipient_emails.length === 0) {
+      alert('送信先メールアドレスを登録してください。');
+      return;
+    }
+    setIsSendingAlertTest(true);
+    try {
+      const res = await sendMasterRateAlertIfNeeded({ forceTest: true, targetYear: selectedYear });
+      alert(res.message);
+    } catch (e: any) {
+      alert('テスト送信エラー: ' + e.message);
+    } finally {
+      setIsSendingAlertTest(false);
     }
   };
 
@@ -270,6 +361,58 @@ export const SocialInsuranceMasterManager: React.FC = () => {
               <div className="mt-2 flex items-center gap-2 bg-amber-50 text-amber-900 border border-amber-200 px-3 py-1.5 rounded-xl text-[11px] font-bold">
                 <Bell className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                 <span>毎年3月の健康保険料率改定・4月の雇用保険料率改定時期に、各社マスタ登録された人事労務担当者へ自動リマインダーメールが配信されます。</span>
+              </div>
+
+              {/* 🚨 販売管理者向け 未更新検知＆1日1回メール通知ステータスバー */}
+              <div className="mt-3 p-3 bg-slate-900 rounded-2xl text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <span className={`w-3 h-3 rounded-full shrink-0 ${
+                    rateStatus.isOutdated ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400'
+                  }`} />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black">
+                        【販売管理者専用】令和{selectedYear - 2018}年度料率更新ステータス:
+                      </span>
+                      {rateStatus.isOutdated ? (
+                        <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                          🚨 未更新・1日1回メール配信中
+                        </span>
+                      ) : (
+                        <span className="bg-emerald-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Check className="w-3 h-3" /> 更新完了・メール配信停止中
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      {rateStatus.isOutdated 
+                        ? '※ 最新料率が保存されるまで、登録された販売管理者へ1日1回督促メールが自動送信されます。マスタを更新・保存すると配信は自動停止します。'
+                        : '※ 最新の47都道府県料率が正常に保存されています。未更新アラートは自動停止（沈黙）しています。'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setAlertModalOpen(true)}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-indigo-400" />
+                    通知先メール設定
+                  </button>
+                  {rateStatus.isOutdated && (
+                    <button
+                      type="button"
+                      onClick={handleSendAlertTest}
+                      disabled={isSendingAlertTest}
+                      className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                    >
+                      <Send className="w-3 h-3" />
+                      {isSendingAlertTest ? '送信中...' : '今すぐ送信テスト'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -524,6 +667,135 @@ export const SocialInsuranceMasterManager: React.FC = () => {
                 {isParsing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-amber-300" />}
                 自動解析してテーブルに反映
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🚨 販売管理者向け 未更新アラート通知設定モーダル */}
+      {alertModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shadow-md">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-800">
+                    販売管理者向け 未更新アラート通知設定
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    全国社会保険料率マスタが未更新の場合、1日1回必ずメールで通知します
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAlertModalOpen(false)}
+                className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 有効化スイッチ */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-black text-slate-800">1日1回 未更新督促メールの自動配信</div>
+                <div className="text-[10px] text-slate-500">マスタが更新されると配信は自動停止（完全沈黙）します</div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={masterAlertSettings.enabled}
+                  onChange={e => setMasterAlertSettings({ ...masterAlertSettings, enabled: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
+              </label>
+            </div>
+
+            {/* 送信先メール一覧 */}
+            <div className="space-y-3">
+              <label className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                <Mail className="w-4 h-4 text-rose-600" />
+                通知先メールアドレス（販売管理者・特権担当者）
+              </label>
+
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={newRecipientEmail}
+                  onChange={e => setNewRecipientEmail(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddAlertEmail(); } }}
+                  placeholder="例: admin@company.com"
+                  className="flex-1 text-xs font-bold border border-slate-300 rounded-xl px-3 py-2 outline-hidden focus:ring-2 focus:ring-rose-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddAlertEmail}
+                  className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer shrink-0"
+                >
+                  追加
+                </button>
+              </div>
+
+              <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                {masterAlertSettings.recipient_emails.map((email, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                    <span className="font-mono font-bold text-slate-800">{email}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveAlertEmail(idx)}
+                      className="text-slate-400 hover:text-rose-600 p-1"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* GAS Webhook */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">GAS Webhook URL（自社Gmail送信設定・任意）</label>
+              <input
+                type="url"
+                value={masterAlertSettings.gas_webhook_url || ''}
+                onChange={e => setMasterAlertSettings({ ...masterAlertSettings, gas_webhook_url: e.target.value })}
+                placeholder="https://script.google.com/macros/s/.../exec"
+                className="w-full text-xs font-mono border border-slate-300 rounded-xl px-3 py-2 outline-hidden"
+              />
+            </div>
+
+            {/* アクションボタン */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={handleSendAlertTest}
+                disabled={isSendingAlertTest}
+                className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Send className="w-3.5 h-3.5 text-rose-600" />
+                {isSendingAlertTest ? '送信中...' : 'テスト送信'}
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAlertModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAlertSettings}
+                  className="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 rounded-xl text-xs font-black transition cursor-pointer shadow-md"
+                >
+                  設定を保存する
+                </button>
+              </div>
             </div>
           </div>
         </div>
