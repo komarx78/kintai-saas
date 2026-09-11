@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { PREFECTURES } from '../lib/socialInsurance';
 import { 
   Shield, Save, RefreshCw, Sparkles, CheckCircle2, AlertCircle, 
-  Loader2, Building2, DownloadCloud, FileText, X, ExternalLink 
+  Loader2, Building2, DownloadCloud, FileText, X, ExternalLink, Bell 
 } from 'lucide-react';
 
 interface SocialRateRecord {
@@ -267,6 +267,10 @@ export const SocialInsuranceMasterManager: React.FC = () => {
               <p className="text-xs text-slate-400 font-bold mt-0.5">
                 特権本部で全国の料率を一元管理。ここで更新・一括適用するだけで、全契約企業の給与計算が全自動で最新料率に切り替わります。
               </p>
+              <div className="mt-2 flex items-center gap-2 bg-amber-50 text-amber-900 border border-amber-200 px-3 py-1.5 rounded-xl text-[11px] font-bold">
+                <Bell className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>毎年3月の健康保険料率改定・4月の雇用保険料率改定時期に、各社マスタ登録された人事労務担当者へ自動リマインダーメールが配信されます。</span>
+              </div>
             </div>
           </div>
         </div>

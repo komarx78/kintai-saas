@@ -8,6 +8,7 @@ import { OrgChartPrintModal } from '../components/OrgChartPrintModal';
 import { OfficialLaborContractDoc } from '../components/OfficialLaborContractDoc';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { BonusDocMasterInspector } from '../components/BonusDocMasterInspector';
+import { OfficialReminderSettingsModal } from '../components/OfficialReminderSettingsModal';
 import { 
   type LaborContractTemplate, 
   DEFAULT_LABOR_CONTRACT_TEMPLATE, 
@@ -242,7 +243,7 @@ export default function CompanySettingsDashboard() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements' | 'qualifications'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements' | 'qualifications' | 'reminders'>('basic');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   // 📢 全社お知らせ掲示板State
@@ -1734,6 +1735,16 @@ export default function CompanySettingsDashboard() {
           >
             <Award className="w-4 h-4" />
             9. 📜 資格手当マスタ
+          </button>
+
+          <button
+            onClick={() => setActiveTab('reminders')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'reminders' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+            }`}
+          >
+            <Bell className="w-4 h-4 text-amber-500" />
+            10. 🔔 公的届出・社保改定通知マスタ
           </button>
         </div>
 
@@ -3607,6 +3618,17 @@ export default function CompanySettingsDashboard() {
             </div>
 
             {renderSaveFooter()}
+          </div>
+        )}
+
+        {/* 10. 🔔 公的届出・社保改定通知マスタ タブ */}
+        {activeTab === 'reminders' && (
+          <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100 animate-in fade-in duration-200">
+            <OfficialReminderSettingsModal
+              tenantId={tenantId || ''}
+              tenantName={basicInfo.name || '自社'}
+              isEmbedded={true}
+            />
           </div>
         )}
 

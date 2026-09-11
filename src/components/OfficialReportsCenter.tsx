@@ -18,6 +18,8 @@ import { OfficialSocialInsuranceDoc } from './OfficialSocialInsuranceDoc';
 import { OfficialEmploymentInsuranceDoc } from './OfficialEmploymentInsuranceDoc';
 import { OfficialLaborInsuranceReportDoc } from './OfficialLaborInsuranceReportDoc';
 import { OfficialLeaveProcedureDoc } from './OfficialLeaveProcedureDoc';
+import { OfficialReminderSettingsModal } from './OfficialReminderSettingsModal';
+import { Bell } from 'lucide-react';
 
 export interface OfficialReportsCenterProps {
   tenantId: string;
@@ -85,6 +87,8 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
 
   // 🎁 賞与算定・一括入力詳細エディタ用State
   const [bonusReportModalOpen, setBonusReportModalOpen] = useState(false);
+  // 🔔 公的届出・社保改定通知マスタモーダル用State
+  const [reminderModalOpen, setReminderModalOpen] = useState(false);
   const [officeSymbol, setOfficeSymbol] = useState<string>('01-イロハ');
   const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [payrollProfiles, setPayrollProfiles] = useState<Record<string, any>>({});
@@ -510,6 +514,37 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                 <span className="shrink-0 text-slate-500 font-bold">ヶ月分</span>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* 📅 年間公的届出 ＆ 社会保険料改定 メール通知バナー（法定期限アラート） */}
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-md border border-indigo-900/50 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full font-black border border-amber-400/30 flex items-center gap-1">
+                <Bell className="w-3 h-3 text-amber-400" />
+                公的労務カレンダー連動
+              </span>
+              <span className="text-xs text-indigo-300 font-bold">
+                法定期限・社保改定の自動メール通知
+              </span>
+            </div>
+            <h3 className="text-base sm:text-lg font-black tracking-wide text-white">
+              社会保険料改定 ＆ 公的帳票届出時期リマインダー
+            </h3>
+            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+              3月の健康保険料率改定、4月の雇用保険料率改定、6〜7月の労働保険年度更新、7月の算定基礎届など、<strong>法定期限の変更時期にマスタ登録された人事労務担当者へ自動でメール通知</strong>されます。
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              onClick={() => setReminderModalOpen(true)}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition cursor-pointer shadow-sm"
+            >
+              <Bell className="w-4 h-4 text-amber-300" />
+              通知先・時期マスタ設定
+            </button>
           </div>
         </div>
 
@@ -1756,6 +1791,16 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           employees={employees}
           payrollProfiles={payrollProfiles}
           initialYearMonth={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`}
+        />
+      )}
+
+      {/* 🔔 公的届出・社保改定通知マスタ設定モーダル */}
+      {reminderModalOpen && (
+        <OfficialReminderSettingsModal
+          tenantId={tenantId}
+          tenantName={companyInfo.name}
+          isOpen={reminderModalOpen}
+          onClose={() => setReminderModalOpen(false)}
         />
       )}
 
