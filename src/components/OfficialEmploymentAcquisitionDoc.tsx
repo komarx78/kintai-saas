@@ -710,7 +710,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                       position: 'absolute',
                       left: `${field.x}%`,
                       top: `${field.y}%`,
-                      width: field.width ? `${field.width}cqw` : undefined,
+                      width: 'max-content',
                       cursor: isDraggingThis ? 'grabbing' : 'grab',
                       userSelect: 'none',
                       touchAction: 'none',
@@ -729,7 +729,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                           key={idx}
                           style={{
                             display: 'inline-block',
-                            width: `${field.pitch}cqw`,
+                            width: `${(field.pitch || 2.32) * 2.1}mm`,
                             fontSize: `${field.fontSize}pt`,
                             fontWeight: 900,
                             color: isDraggingThis ? '#b45309' : '#0f172a',
@@ -755,7 +755,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                     position: 'absolute',
                     left: `${field.x}%`,
                     top: `${field.y}%`,
-                    width: field.width ? `${field.width}cqw` : 'auto',
+                    width: field.width ? `${field.width * 2.1}mm` : 'auto',
                     fontSize: `${field.fontSize}pt`,
                     fontWeight: 900,
                     color: isDraggingThis ? '#b45309' : '#0f172a',

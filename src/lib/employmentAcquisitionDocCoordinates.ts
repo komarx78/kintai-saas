@@ -27,18 +27,6 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
   // ① ヘッダー・番号欄（被保険者番号は4桁-6桁-1桁に分割）
   // ══════════════════════════════════════════════════════════════════════
   {
-    id: 'docTypeFixed',
-    name: '帳票種別（19101・5マス）',
-    section: 'header',
-    x: 21.2,
-    y: 11.5,
-    fontSize: 12.5,
-    pitch: 2.32,
-    width: 11.8,
-    example: '19101',
-    description: '左上固定帳票種別コード（5マス枠）'
-  },
-  {
     id: 'myNumber',
     name: '1. 個人番号（マイナンバー12桁）',
     section: 'header',
@@ -424,8 +412,8 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
   }
 ];
 
-// ローカルストレージキー（ブロック分割v2）
-const STORAGE_KEY = 'employment_acq_doc_coords_v2';
+// ローカルストレージキー（ブロック分割v3: docTypeFixed削除＆mmピッチ化）
+const STORAGE_KEY = 'employment_acq_doc_coords_v3';
 
 // 座標設定の読み込み
 export function loadEmploymentAcqCoordinates(): EmploymentAcqFieldConfig[] {

@@ -387,29 +387,86 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                 </div>
 
                 {/* フォントサイズ ＆ ピッチ */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 block mb-0.5">フォントサイズ (pt)</label>
-                    <input
-                      type="number"
-                      step={0.5}
-                      value={selectedField.fontSize}
-                      onChange={(e) => updateField(selectedField.id, 'fontSize', parseFloat(e.target.value) || 10)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 font-mono font-bold text-slate-800"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 block mb-0.5">マス目ピッチ (%)</label>
-                    <input
-                      type="number"
-                      step={0.05}
-                      value={selectedField.pitch || ''}
-                      onChange={(e) => updateField(selectedField.id, 'pitch', parseFloat(e.target.value) || undefined)}
-                      placeholder="未設定"
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 font-mono font-bold text-slate-800"
-                    />
-                  </div>
+                {/* フォントサイズ */}
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-0.5">フォントサイズ (pt)</label>
+                  <input
+                    type="number"
+                    step={0.5}
+                    value={selectedField.fontSize}
+                    onChange={(e) => updateField(selectedField.id, 'fontSize', parseFloat(e.target.value) || 10)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 font-mono font-bold text-slate-800"
+                  />
                 </div>
+
+                {/* 🎯 マス目ピッチ調整（スライダー ＆ 微調整ボタン） */}
+                {selectedField.pitch !== undefined && (
+                  <div className="bg-emerald-50/70 p-3 rounded-2xl border border-emerald-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-black text-emerald-900 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        マス目ピッチ（文字間隔）:
+                      </label>
+                      <span className="font-mono text-xs font-black text-emerald-700 bg-white px-2 py-0.5 rounded-md border border-emerald-300">
+                        {selectedField.pitch.toFixed(2)} % ({(selectedField.pitch * 2.1).toFixed(2)}mm)
+                      </span>
+                    </div>
+
+                    {/* スライダーバー */}
+                    <input
+                      type="range"
+                      min="1.00"
+                      max="4.00"
+                      step="0.01"
+                      value={selectedField.pitch}
+                      onChange={(e) => updateField(selectedField.id, 'pitch', parseFloat(e.target.value) || 2.32)}
+                      className="w-full accent-emerald-600 cursor-pointer h-2 bg-emerald-200 rounded-lg"
+                    />
+
+                    {/* ワンクリック微調整ボタン */}
+                    <div className="flex items-center justify-between gap-1 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => updateField(selectedField.id, 'pitch', Math.max(1.0, selectedField.pitch! - 0.05))}
+                        className="px-2 py-1 bg-white hover:bg-emerald-100 active:scale-95 text-emerald-800 border border-emerald-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                        title="0.05% 狭くする"
+                      >
+                        -0.05
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateField(selectedField.id, 'pitch', Math.max(1.0, selectedField.pitch! - 0.01))}
+                        className="px-2 py-1 bg-white hover:bg-emerald-100 active:scale-95 text-emerald-800 border border-emerald-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                        title="0.01% 狭くする"
+                      >
+                        -0.01
+                      </button>
+                      <input
+                        type="number"
+                        step={0.01}
+                        value={selectedField.pitch}
+                        onChange={(e) => updateField(selectedField.id, 'pitch', parseFloat(e.target.value) || 2.32)}
+                        className="w-16 bg-white border border-emerald-300 rounded-lg p-1 text-center text-xs font-mono font-bold text-emerald-900"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => updateField(selectedField.id, 'pitch', Math.min(4.0, selectedField.pitch! + 0.01))}
+                        className="px-2 py-1 bg-white hover:bg-emerald-100 active:scale-95 text-emerald-800 border border-emerald-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                        title="0.01% 広くする"
+                      >
+                        +0.01
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateField(selectedField.id, 'pitch', Math.min(4.0, selectedField.pitch! + 0.05))}
+                        className="px-2 py-1 bg-white hover:bg-emerald-100 active:scale-95 text-emerald-800 border border-emerald-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                        title="0.05% 広くする"
+                      >
+                        +0.05
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* 矢印キー微調整 */}
                 <div>
@@ -529,7 +586,7 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                       position: 'absolute',
                       left: `${field.x}%`,
                       top: `${field.y}%`,
-                      width: field.width ? `${field.width}cqw` : undefined,
+                      width: field.pitch && field.pitch > 0 ? 'max-content' : (field.width ? `${field.width * 2.1}mm` : 'auto'),
                       cursor: isDraggingThis ? 'grabbing' : 'grab',
                       userSelect: 'none',
                       zIndex: isDraggingThis ? 50 : isSelected ? 30 : 10,
@@ -556,7 +613,7 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                             key={i}
                             style={{
                               display: 'inline-block',
-                              width: `${field.pitch}cqw`,
+                              width: `${(field.pitch || 2.32) * 2.1}mm`,
                               fontSize: `${field.fontSize}pt`,
                               fontWeight: 900,
                               color: isDraggingThis ? '#b45309' : isSelected ? '#047857' : '#0f172a',
