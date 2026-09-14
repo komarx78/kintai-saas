@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Printer, ArrowLeft, User, Shield, Edit3
+  Printer, ArrowLeft, User, Shield, Edit3, Move
 } from 'lucide-react';
 import { 
   loadEmploymentAcqCoordinates, 
+  saveEmploymentAcqCoordinates,
+  saveEmploymentAcqCoordinatesToDb,
+  broadcastEmploymentAcqCoordinates,
   EMPLOYMENT_ACQ_COORDS_UPDATE_EVENT,
   type EmploymentAcqFieldConfig 
 } from '../lib/employmentAcquisitionDocCoordinates';
@@ -159,6 +162,76 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
     window.addEventListener(EMPLOYMENT_ACQ_COORDS_UPDATE_EVENT, handleCoordsUpdate);
     return () => window.removeEventListener(EMPLOYMENT_ACQ_COORDS_UPDATE_EVENT, handleCoordsUpdate);
   }, []);
+
+  // 🖱️ 原本直接ドラッグ微調整State
+  const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
+  const dragStartRef = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // リアルタイム座標更新 ＆ 保存
+  const updateFieldCoord = useCallback((id: string, x: number, y: number) => {
+    setCoords(prev => {
+      const precision = 100;
+      const finalX = Math.round(x * precision) / precision;
+      const finalY = Math.round(y * precision) / precision;
+      const updated = prev.map(f => f.id === id ? { ...f, x: finalX, y: finalY } : f);
+      saveEmploymentAcqCoordinates(updated);
+      broadcastEmploymentAcqCoordinates(updated);
+      return updated;
+    });
+  }, []);
+
+  // 🖱️ ドラッグ開始
+  const handleStartDrag = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setDraggingFieldId(id);
+
+    const target = coords.find(f => f.id === id);
+    if (!target) return;
+
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startX: target.x,
+      startY: target.y
+    };
+  };
+
+  // 🖱️ グローバルマウス移動＆解放リスナー
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!draggingFieldId || !dragStartRef.current || !previewContainerRef.current) return;
+
+      const rect = previewContainerRef.current.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+
+      const deltaX = ((e.clientX - dragStartRef.current.mouseX) / rect.width) * 100;
+      const deltaY = ((e.clientY - dragStartRef.current.mouseY) / rect.height) * 100;
+
+      const newX = Math.max(0, Math.min(100, dragStartRef.current.startX + deltaX));
+      const newY = Math.max(0, Math.min(100, dragStartRef.current.startY + deltaY));
+
+      updateFieldCoord(draggingFieldId, newX, newY);
+    };
+
+    const handleGlobalMouseUp = async () => {
+      if (draggingFieldId) {
+        setDraggingFieldId(null);
+        dragStartRef.current = null;
+        // DBへも非同期で自動保存
+        await saveEmploymentAcqCoordinatesToDb(coords);
+      }
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [draggingFieldId, updateFieldCoord, coords]);
 
   // PDF.js による原本第1面のCanvasレンダリング（原本画像の取得）
   useEffect(() => {
@@ -531,8 +604,19 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
         </div>
 
         {/* ➡️ 【原本リアルタイムプレビュー ＆ 印刷原本】 */}
-        <div className="xl:col-span-8 flex justify-center overflow-x-auto print:p-0 print:m-0 print:overflow-visible">
-          <div className="w-[210mm] min-h-[297mm] bg-white relative shadow-xl border border-slate-300 text-slate-900 font-mono print:shadow-none print:border-none print:p-0 print:w-full print:m-0 overflow-hidden select-none">
+        <div className="xl:col-span-8 flex flex-col items-center overflow-x-auto print:p-0 print:m-0 print:overflow-visible">
+          {/* ドラッグ操作案内バナー（印刷時非表示） */}
+          <div className="print:hidden mb-2 w-full max-w-[210mm] flex items-center justify-between gap-2 px-1">
+            <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs font-bold shadow-2xs">
+              <Move className="w-3.5 h-3.5 text-emerald-600" />
+              <span>原本上の文字をマウスで直接ドラッグして位置微調整可能（全社自動保存）</span>
+            </div>
+          </div>
+
+          <div 
+            ref={previewContainerRef}
+            className="w-[210mm] min-h-[297mm] bg-white relative shadow-xl border border-slate-300 text-slate-900 font-mono print:shadow-none print:border-none print:p-0 print:w-full print:m-0 overflow-hidden select-none"
+          >
             
             {/* 原本PDF画像背景 */}
             {bgPdfImg ? (
@@ -551,10 +635,11 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
               </div>
             )}
 
-            {/* 各マス目へのオーバーレイ入力文字印字 */}
+            {/* 各マス目へのオーバーレイ入力文字印字（直接ドラッグ微調整可能） */}
             {coords.map((field) => {
               if (field.disabled) return null;
               const val = formValues[field.id] || '';
+              const isDraggingThis = draggingFieldId === field.id;
 
               // ピッチ（マス目間隔）指定がある場合は1文字ずつマス目に配置
               if (field.pitch && field.pitch > 0) {
@@ -562,14 +647,24 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                 return (
                   <div
                     key={field.id}
+                    onMouseDown={(e) => handleStartDrag(field.id, e)}
                     style={{
                       position: 'absolute',
                       left: `${field.x}%`,
                       top: `${field.y}%`,
                       display: 'flex',
                       alignItems: 'center',
-                      pointerEvents: 'none'
+                      cursor: isDraggingThis ? 'grabbing' : 'grab',
+                      userSelect: 'none',
+                      touchAction: 'none',
+                      zIndex: isDraggingThis ? 50 : 10
                     }}
+                    className={`transition-all duration-75 px-0.5 py-0.2 rounded-xs print:ring-0 print:bg-transparent print:p-0 ${
+                      isDraggingThis 
+                        ? 'ring-2 ring-amber-500 bg-amber-500/25 shadow-md scale-105' 
+                        : 'hover:ring-1 hover:ring-emerald-400 hover:bg-emerald-50/40'
+                    }`}
+                    title={`${field.name} (ドラッグで位置微調整可能)`}
                   >
                     {chars.map((ch, idx) => (
                       <span
@@ -579,9 +674,10 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                           width: `${field.pitch}%`,
                           fontSize: `${field.fontSize}pt`,
                           fontWeight: 900,
-                          color: '#0f172a',
+                          color: isDraggingThis ? '#b45309' : '#0f172a',
                           textAlign: 'center',
-                          fontFamily: 'monospace'
+                          fontFamily: 'monospace',
+                          lineHeight: 1
                         }}
                       >
                         {ch}
@@ -595,6 +691,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
               return (
                 <div
                   key={field.id}
+                  onMouseDown={(e) => handleStartDrag(field.id, e)}
                   style={{
                     position: 'absolute',
                     left: `${field.x}%`,
@@ -602,11 +699,21 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                     width: field.width ? `${field.width}%` : 'auto',
                     fontSize: `${field.fontSize}pt`,
                     fontWeight: 900,
-                    color: '#0f172a',
-                    pointerEvents: 'none',
+                    color: isDraggingThis ? '#b45309' : '#0f172a',
                     fontFamily: field.id.includes('Text') || field.id.includes('employer') ? 'sans-serif' : 'monospace',
-                    lineHeight: 1.1
+                    lineHeight: 1.1,
+                    cursor: isDraggingThis ? 'grabbing' : 'grab',
+                    userSelect: 'none',
+                    touchAction: 'none',
+                    zIndex: isDraggingThis ? 50 : 10,
+                    whiteSpace: 'nowrap'
                   }}
+                  className={`transition-all duration-75 px-0.5 py-0.2 rounded-xs print:ring-0 print:bg-transparent print:p-0 ${
+                    isDraggingThis 
+                      ? 'ring-2 ring-amber-500 bg-amber-500/25 shadow-md scale-105' 
+                      : 'hover:ring-1 hover:ring-emerald-400 hover:bg-emerald-50/40'
+                  }`}
+                  title={`${field.name} (ドラッグで位置微調整可能)`}
                 >
                   {val}
                 </div>

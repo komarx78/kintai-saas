@@ -30,6 +30,9 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
   const [bgPdfImg, setBgPdfImg] = useState<string | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(true);
 
+  // 🖱️ ドラッグ移動用State
+  const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
+  const dragStartRef = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
 
   // PDF.jsによる原本描画
@@ -93,6 +96,94 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
       return updated;
     });
   }, []);
+
+  // 🖱️ ドラッグ開始 (MouseDown on Field)
+  const handleStartDrag = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedFieldId(id);
+    setDraggingFieldId(id);
+
+    const target = fields.find(f => f.id === id);
+    if (!target) return;
+
+    if (target.section !== selectedSection) {
+      setSelectedSection(target.section as any);
+    }
+
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startX: target.x,
+      startY: target.y
+    };
+  };
+
+  // 🖱️ マウスドラッグ移動リスナー（画面全体）
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!draggingFieldId || !dragStartRef.current || !previewContainerRef.current) return;
+
+      const rect = previewContainerRef.current.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+
+      const deltaX = ((e.clientX - dragStartRef.current.mouseX) / rect.width) * 100;
+      const deltaY = ((e.clientY - dragStartRef.current.mouseY) / rect.height) * 100;
+
+      const newX = Math.max(0, Math.min(100, dragStartRef.current.startX + deltaX));
+      const newY = Math.max(0, Math.min(100, dragStartRef.current.startY + deltaY));
+
+      updateField(draggingFieldId, 'x', newX);
+      updateField(draggingFieldId, 'y', newY);
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (draggingFieldId) {
+        setDraggingFieldId(null);
+        dragStartRef.current = null;
+      }
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [draggingFieldId, updateField]);
+
+  // ⌨️ PC矢印キー移動リスナー（いつでも矢印キーで微調整可能）
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+
+      if (!selectedFieldId) return;
+      const target = fields.find(f => f.id === selectedFieldId);
+      if (!target) return;
+
+      const step = e.shiftKey ? 1.0 : 0.1;
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        updateField(selectedFieldId, 'y', target.y - step);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        updateField(selectedFieldId, 'y', target.y + step);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        updateField(selectedFieldId, 'x', target.x - step);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        updateField(selectedFieldId, 'x', target.x + step);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [selectedFieldId, fields, updateField]);
 
   // 保存（ローカルおよびDB）
   const handleSave = async () => {
@@ -376,16 +467,24 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
 
           {/* 原本プレビュー ＆ マス目オーバーレイ */}
           <div className="lg:col-span-8 flex flex-col items-center">
-            {/* ズームバー */}
-            <div className="mb-2 flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600">
-              <span>ズーム:</span>
-              <button onClick={() => setPreviewZoom(z => Math.max(50, z - 10))} className="p-1 hover:bg-slate-100 rounded cursor-pointer">
-                <ZoomOut className="w-3.5 h-3.5" />
-              </button>
-              <span className="w-10 text-center font-mono">{previewZoom}%</span>
-              <button onClick={() => setPreviewZoom(z => Math.min(150, z + 10))} className="p-1 hover:bg-slate-100 rounded cursor-pointer">
-                <ZoomIn className="w-3.5 h-3.5" />
-              </button>
+            {/* ズームバー ＆ ドラッグ操作ガイド */}
+            <div className="mb-2 w-full flex flex-wrap items-center justify-between gap-2 px-2">
+              <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 shadow-2xs">
+                <span>ズーム:</span>
+                <button onClick={() => setPreviewZoom(z => Math.max(50, z - 10))} className="p-1 hover:bg-slate-100 rounded cursor-pointer">
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <span className="w-10 text-center font-mono">{previewZoom}%</span>
+                <button onClick={() => setPreviewZoom(z => Math.min(150, z + 10))} className="p-1 hover:bg-slate-100 rounded cursor-pointer">
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl text-[11px] font-bold shadow-2xs">
+                <span>🖱️ 項目を直接ドラッグ移動可能</span>
+                <span className="text-emerald-400">|</span>
+                <span>⌨️ 矢印キーで微調整（Shift併用で1%移動）</span>
+              </div>
             </div>
 
             <div
@@ -405,28 +504,46 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                 </div>
               )}
 
-              {/* オーバーレイ */}
+              {/* 🎯 原本用紙の上で直接ドラッグ可能な全フィールドボックス */}
               {fields.map(field => {
                 if (field.disabled) return null;
                 const isSelected = field.id === selectedFieldId;
+                const isDraggingThis = draggingFieldId === field.id;
 
                 return (
                   <div
                     key={field.id}
-                    onClick={() => setSelectedFieldId(field.id)}
+                    onMouseDown={(e) => handleStartDrag(field.id, e)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedFieldId(field.id);
+                      if (field.section !== selectedSection) {
+                        setSelectedSection(field.section as any);
+                      }
+                    }}
                     style={{
                       position: 'absolute',
                       left: `${field.x}%`,
                       top: `${field.y}%`,
-                      cursor: 'pointer',
-                      zIndex: isSelected ? 30 : 10
+                      cursor: isDraggingThis ? 'grabbing' : 'grab',
+                      userSelect: 'none',
+                      zIndex: isDraggingThis ? 50 : isSelected ? 30 : 10,
+                      touchAction: 'none'
                     }}
-                    className={`transition ${
-                      isSelected 
-                        ? 'ring-2 ring-emerald-500 bg-emerald-500/20 rounded-xs' 
-                        : 'hover:ring-1 hover:ring-blue-400/60'
+                    className={`transition-all duration-75 px-0.5 py-0.5 rounded-sm ${
+                      isDraggingThis
+                        ? 'ring-2 ring-amber-500 bg-amber-500/25 shadow-xl scale-105 font-black'
+                        : isSelected 
+                          ? 'ring-2 ring-emerald-500 bg-emerald-500/20 shadow-md font-black' 
+                          : 'hover:ring-1 hover:ring-blue-400 hover:bg-blue-100/40 bg-white/30'
                     }`}
+                    title={`${field.name} (ドラッグまたは矢印キーで移動可能)`}
                   >
+                    {isSelected && (
+                      <div className="absolute -top-4 left-0 bg-emerald-700 text-white text-[9px] px-1 py-0.2 rounded font-mono pointer-events-none whitespace-nowrap shadow-xs z-50">
+                        {field.name} ({field.x}%, {field.y}%)
+                      </div>
+                    )}
                     {field.pitch && field.pitch > 0 ? (
                       <div style={{ display: 'flex', alignItems: 'center' }}>
                         {field.example.split('').map((ch, i) => (
@@ -437,9 +554,10 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                               width: `${field.pitch}%`,
                               fontSize: `${field.fontSize}pt`,
                               fontWeight: 900,
-                              color: isSelected ? '#047857' : '#0f172a',
+                              color: isDraggingThis ? '#b45309' : isSelected ? '#047857' : '#0f172a',
                               textAlign: 'center',
-                              fontFamily: 'monospace'
+                              fontFamily: 'monospace',
+                              lineHeight: 1
                             }}
                           >
                             {ch}
@@ -451,8 +569,10 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                         style={{
                           fontSize: `${field.fontSize}pt`,
                           fontWeight: 900,
-                          color: isSelected ? '#047857' : '#0f172a',
-                          fontFamily: 'monospace'
+                          color: isDraggingThis ? '#b45309' : isSelected ? '#047857' : '#0f172a',
+                          fontFamily: 'monospace',
+                          lineHeight: 1,
+                          whiteSpace: 'nowrap'
                         }}
                       >
                         {field.example}
