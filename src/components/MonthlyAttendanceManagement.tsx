@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Calendar, Download, ChevronLeft, ChevronRight, Users, Loader2, 
-  FileText, ArrowLeft, Edit3, X, CheckCircle, AlertCircle
+  FileText, ArrowLeft, Edit3, X, CheckCircle, AlertCircle,
+  Lock, Unlock, CheckCheck, MapPin, ExternalLink
 } from 'lucide-react';
 
 interface MonthlyAttendanceManagementProps {
@@ -18,6 +19,15 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
   const [isLoading, setIsLoading] = useState(true);
   const [isBulkApproving, setIsBulkApproving] = useState(false);
   
+  // 🔒 月次勤怠締め確定State
+  const [closingInfo, setClosingInfo] = useState<{
+    isClosed: boolean;
+    closedAt: string | null;
+    closedByName: string | null;
+    notes: string;
+  } | null>(null);
+  const [isProcessingClosing, setIsProcessingClosing] = useState(false);
+  
   // viewMode: 'summary' (全社サマリー) | 'individual' (個人別タイムカード)
   const [viewMode, setViewMode] = useState<'summary' | 'individual'>('summary');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -31,8 +41,11 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     recordId: string | null;
     checkIn: string;
     checkOut: string;
+    breakMinutes: string;
     status: string;
     note: string;
+    checkInGps?: { lat: number | null; lng: number | null; accuracy: number | null; device: string | null } | null;
+    checkOutGps?: { lat: number | null; lng: number | null; accuracy: number | null; device: string | null } | null;
   }>({
     isOpen: false,
     userId: '',
@@ -41,8 +54,11 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     recordId: null,
     checkIn: '',
     checkOut: '',
+    breakMinutes: '60',
     status: '退勤済',
-    note: ''
+    note: '',
+    checkInGps: null,
+    checkOutGps: null
   });
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -107,8 +123,144 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     }
   };
 
+  // 🔒 月次締め状態の取得
+  const fetchClosingStatus = async () => {
+    if (!tenantId) return;
+    const yearMonth = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+    
+    // ローカルキャッシュからの即時読み出し
+    let localInfo: any = null;
+    try {
+      const raw = localStorage.getItem(`attendance_closing_${tenantId}_${yearMonth}`);
+      if (raw) localInfo = JSON.parse(raw);
+    } catch {}
+
+    try {
+      const { data } = await supabase
+        .from('attendance_monthly_closings')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('year_month', yearMonth)
+        .maybeSingle();
+
+      if (data && data.status === 'closed') {
+        const closedUser = users.find(u => u.id === data.closed_by);
+        const info = {
+          isClosed: true,
+          closedAt: data.closed_at,
+          closedByName: closedUser?.name || '全社管理者',
+          notes: data.notes || ''
+        };
+        setClosingInfo(info);
+        localStorage.setItem(`attendance_closing_${tenantId}_${yearMonth}`, JSON.stringify(info));
+      } else if (data && data.status === 'open') {
+        setClosingInfo({ isClosed: false, closedAt: null, closedByName: null, notes: '' });
+        localStorage.removeItem(`attendance_closing_${tenantId}_${yearMonth}`);
+      } else if (localInfo && localInfo.isClosed) {
+        setClosingInfo(localInfo);
+      } else {
+        setClosingInfo({ isClosed: false, closedAt: null, closedByName: null, notes: '' });
+      }
+    } catch (e) {
+      if (localInfo) setClosingInfo(localInfo);
+      else setClosingInfo({ isClosed: false, closedAt: null, closedByName: null, notes: '' });
+    }
+  };
+
+  // 🔒 月次勤怠締め確定の実行
+  const handleCloseAttendance = async () => {
+    if (!tenantId) return;
+    const yearMonth = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+
+    // 未承認の申請が残っているかチェック
+    const pendingList = leaveRequests.filter(r => r.status === '申請中');
+    if (pendingList.length > 0) {
+      alert(`⚠️ 未承認の申請が ${pendingList.length} 件残っています。\n未承認申請をすべて「承認」または「却下」してから、勤怠締め処理を行ってください。`);
+      return;
+    }
+
+    if (!confirm(`【${yearMonth}度】の勤怠締め処理（確定ロック）を実行しますか？\n\n・確定後は従業員の打刻修正や申請がロックされます。\n・確定した勤怠実績データは給与計算へ安全に引き渡されます。`)) {
+      return;
+    }
+
+    setIsProcessingClosing(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const closedAt = new Date().toISOString();
+      const currentUserName = users.find(u => u.id === user?.id)?.name || '全社管理者';
+
+      const payload = {
+        tenant_id: tenantId,
+        year_month: yearMonth,
+        status: 'closed',
+        closed_at: closedAt,
+        closed_by: user?.id || null,
+        notes: `${yearMonth} 勤怠締め確定実行`
+      };
+
+      try {
+        await supabase
+          .from('attendance_monthly_closings')
+          .upsert(payload, { onConflict: 'tenant_id,year_month' });
+      } catch (dbErr) {
+        console.warn('attendance_monthly_closings upsert fallback:', dbErr);
+      }
+
+      const info = {
+        isClosed: true,
+        closedAt,
+        closedByName: currentUserName,
+        notes: payload.notes
+      };
+      setClosingInfo(info);
+      localStorage.setItem(`attendance_closing_${tenantId}_${yearMonth}`, JSON.stringify(info));
+
+      showToast(`🔒 ${yearMonth}度の勤怠締め確定ロックを完了しました！`);
+      await fetchClosingStatus();
+    } catch (err: any) {
+      console.error('Close attendance error:', err);
+      alert('勤怠締め処理に失敗しました: ' + err.message);
+    } finally {
+      setIsProcessingClosing(false);
+    }
+  };
+
+  // 🔓 月次勤怠締めロックの解除
+  const handleReopenAttendance = async () => {
+    if (!tenantId) return;
+    const yearMonth = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+
+    if (!confirm(`【${yearMonth}度】の勤怠締めロックを解除しますか？\n\n・解除すると、再度打刻修正や申請の受付・編集が可能になります。`)) {
+      return;
+    }
+
+    setIsProcessingClosing(true);
+    try {
+      try {
+        await supabase
+          .from('attendance_monthly_closings')
+          .update({ status: 'open', notes: `${yearMonth} 勤怠締め解除` })
+          .eq('tenant_id', tenantId)
+          .eq('year_month', yearMonth);
+      } catch (dbErr) {
+        console.warn('attendance_monthly_closings reopen fallback:', dbErr);
+      }
+
+      setClosingInfo({ isClosed: false, closedAt: null, closedByName: null, notes: '' });
+      localStorage.removeItem(`attendance_closing_${tenantId}_${yearMonth}`);
+
+      showToast(`🔓 ${yearMonth}度の勤怠締めロックを解除しました。`);
+      await fetchClosingStatus();
+    } catch (err: any) {
+      alert('締め解除に失敗しました: ' + err.message);
+    } finally {
+      setIsProcessingClosing(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchClosingStatus();
   }, [tenantId, currentMonth]);
 
   // 申請の承認処理（打刻修正はattendance_recordsにも自動反映）
@@ -153,14 +305,16 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         }
       }
 
-      // 打刻修正申請の場合、attendance_records に打刻時刻を自動反映
+      // 打刻修正申請の場合、attendance_records に打刻時刻および休憩時間を自動反映
       if (req.type === '打刻修正' && req.start_date) {
         const reasonText = req.reason || '';
         const punchTypeMatch = reasonText.match(/【修正区分:\s*([^】]+)】/);
         const punchTimeMatch = reasonText.match(/【修正時刻:\s*([^】]+)】/);
+        const breakMatch = reasonText.match(/【休憩時間:\s*(\d+)分】/);
 
         const pType = punchTypeMatch ? punchTypeMatch[1].trim() : '';
         const pTime = punchTimeMatch ? punchTimeMatch[1].trim() : '';
+        const parsedBreak = breakMatch ? parseInt(breakMatch[1], 10) : null;
         const targetDate = req.start_date;
 
         if (pType && pTime) {
@@ -179,6 +333,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
               updatePayload.check_out_time = pTime;
               updatePayload.status = '退勤済';
             }
+            if (parsedBreak !== null) updatePayload.break_minutes = parsedBreak;
             await supabase
               .from('attendance_records')
               .update(updatePayload)
@@ -192,6 +347,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
             };
             if (pType === '出勤') insertPayload.check_in_time = pTime;
             if (pType === '退勤') insertPayload.check_out_time = pTime;
+            if (parsedBreak !== null) insertPayload.break_minutes = parsedBreak;
 
             await supabase
               .from('attendance_records')
@@ -247,8 +403,11 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           const reasonText = req.reason || '';
           const punchTypeMatch = reasonText.match(/【修正区分:\s*([^】]+)】/);
           const punchTimeMatch = reasonText.match(/【修正時刻:\s*([^】]+)】/);
+          const breakMatch = reasonText.match(/【休憩時間:\s*(\d+)分】/);
+
           const pType = punchTypeMatch ? punchTypeMatch[1].trim() : '';
           const pTime = punchTimeMatch ? punchTimeMatch[1].trim() : '';
+          const parsedBreak = breakMatch ? parseInt(breakMatch[1], 10) : null;
           const targetDate = req.start_date;
 
           if (pType && pTime) {
@@ -267,6 +426,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                 updatePayload.check_out_time = pTime;
                 updatePayload.status = '退勤済';
               }
+              if (parsedBreak !== null) updatePayload.break_minutes = parsedBreak;
               await supabase.from('attendance_records').update(updatePayload).eq('id', existRec.id);
             } else {
               const insertPayload: any = {
@@ -277,6 +437,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
               };
               if (pType === '出勤') insertPayload.check_in_time = pTime;
               if (pType === '退勤') insertPayload.check_out_time = pTime;
+              if (parsedBreak !== null) insertPayload.break_minutes = parsedBreak;
               await supabase.from('attendance_records').insert(insertPayload);
             }
           }
@@ -325,10 +486,16 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           const outTotal = outH * 60 + outM;
 
           if (outTotal > inTotal) {
-            let actual = outTotal - inTotal;
-            if (actual >= 360) actual -= 60; // 6時間以上で1時間休憩
-            else if (actual >= 240) actual -= 30; // 4時間以上で30分休憩
-            actual = Math.max(0, actual);
+            const rawDiff = outTotal - inTotal;
+            let breakMins = 0;
+            if (r.break_minutes !== null && r.break_minutes !== undefined) {
+              breakMins = Number(r.break_minutes) || 0;
+            } else {
+              if (rawDiff >= 480) breakMins = 60;
+              else if (rawDiff >= 360) breakMins = 45;
+              else if (rawDiff >= 240) breakMins = 30;
+            }
+            const actual = Math.max(0, rawDiff - breakMins);
 
             totalActualMins += actual;
             if (actual > 480) { // 8時間超過で残業
@@ -422,8 +589,10 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
 
       let actualStr = '-';
       let overtimeStr = '-';
+      let breakStr = '-';
       let actualMins = 0;
       let overtimeMins = 0;
+      let breakMins = 0;
 
       if (record?.check_in_time && record?.check_out_time) {
         const [inH, inM] = record.check_in_time.split(':').map(Number);
@@ -432,11 +601,18 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         const outTotal = outH * 60 + outM;
 
         if (outTotal > inTotal) {
-          actualMins = outTotal - inTotal;
-          if (actualMins >= 360) actualMins -= 60;
-          else if (actualMins >= 240) actualMins -= 30;
-          actualMins = Math.max(0, actualMins);
+          const rawDiff = outTotal - inTotal;
+          if (record.break_minutes !== null && record.break_minutes !== undefined) {
+            breakMins = Number(record.break_minutes) || 0;
+          } else {
+            if (rawDiff >= 480) breakMins = 60;
+            else if (rawDiff >= 360) breakMins = 45;
+            else if (rawDiff >= 240) breakMins = 30;
+            else breakMins = 0;
+          }
+          breakStr = `${breakMins}m`;
 
+          actualMins = Math.max(0, rawDiff - breakMins);
           actualStr = `${Math.floor(actualMins / 60)}h ${(actualMins % 60).toString().padStart(2, '0')}m`;
 
           if (actualMins > 480) {
@@ -444,6 +620,9 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
             overtimeStr = `${Math.floor(overtimeMins / 60)}h ${(overtimeMins % 60).toString().padStart(2, '0')}m`;
           }
         }
+      } else if (record?.break_minutes !== null && record?.break_minutes !== undefined) {
+        breakMins = Number(record.break_minutes) || 0;
+        breakStr = `${breakMins}m`;
       }
 
       rows.push({
@@ -459,6 +638,8 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         monthlyShiftReq,
         checkIn: record?.check_in_time || '-',
         checkOut: record?.check_out_time || '-',
+        breakStr,
+        breakMins,
         actualStr,
         overtimeStr,
         overtimeMins,
@@ -473,6 +654,10 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
   // 打刻編集モーダルを開く
   const handleOpenEditModal = (row: any) => {
     const user = users.find(u => u.id === selectedUserId);
+    const breakMinutesStr = row.record?.break_minutes != null 
+      ? String(row.record.break_minutes) 
+      : (row.breakMins ? String(row.breakMins) : '60');
+
     setEditModal({
       isOpen: true,
       userId: selectedUserId || '',
@@ -481,8 +666,21 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       recordId: row.record?.id || null,
       checkIn: row.record?.check_in_time || '',
       checkOut: row.record?.check_out_time || '',
+      breakMinutes: breakMinutesStr,
       status: row.record?.status || '退勤済',
-      note: row.record?.note || ''
+      note: row.record?.note || '',
+      checkInGps: row.record?.check_in_lat && row.record?.check_in_lng ? {
+        lat: row.record.check_in_lat,
+        lng: row.record.check_in_lng,
+        accuracy: row.record.check_in_accuracy,
+        device: row.record.check_in_device
+      } : null,
+      checkOutGps: row.record?.check_out_lat && row.record?.check_out_lng ? {
+        lat: row.record.check_out_lat,
+        lng: row.record.check_out_lng,
+        accuracy: row.record.check_out_accuracy,
+        device: row.record.check_out_device
+      } : null
     });
   };
 
@@ -490,6 +688,14 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
   const handleSaveRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId || !editModal.userId || !editModal.date) return;
+
+    if (closingInfo?.isClosed) {
+      alert(`⚠️ 当月（${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月）は勤怠締め確定済みのため、打刻修正はロックされています。\n修正が必要な場合は、先に「締めロックを解除」してください。`);
+      return;
+    }
+
+    const breakMinsNum = editModal.breakMinutes !== '' ? parseInt(editModal.breakMinutes, 10) : null;
+    const breakMinsVal = breakMinsNum !== null && !isNaN(breakMinsNum) ? breakMinsNum : null;
 
     try {
       if (editModal.recordId) {
@@ -499,6 +705,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           .update({
             check_in_time: editModal.checkIn || null,
             check_out_time: editModal.checkOut || null,
+            break_minutes: breakMinsVal,
             status: editModal.status,
             note: editModal.note || null
           })
@@ -514,6 +721,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
             date: editModal.date,
             check_in_time: editModal.checkIn || null,
             check_out_time: editModal.checkOut || null,
+            break_minutes: breakMinsVal,
             status: editModal.status,
             note: editModal.note || null
           });
@@ -567,12 +775,13 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     } else {
       const user = users.find(u => u.id === selectedUserId);
       const filename = `出勤簿_${user?.name || '従業員'}_${year}年${month}月.csv`;
-      const headers = ['日付', '曜日', '出勤時刻', '退勤時刻', '実働時間', '残業時間', 'ステータス', '備考'];
+      const headers = ['日付', '曜日', '出勤時刻', '退勤時刻', '休憩時間', '実働時間', '残業時間', 'ステータス', '備考'];
       const rows = selectedUserRows.map(r => [
         r.dateStr,
         r.dayOfWeekStr,
         r.checkIn,
         r.checkOut,
+        r.breakStr,
         r.actualStr,
         r.overtimeStr,
         r.status,
@@ -684,6 +893,80 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           >
             <Download className="w-4 h-4 text-blue-600" /> CSV出力
           </button>
+        </div>
+      </div>
+
+      {/* 🔒 月次勤怠締め確定コントロールパネル */}
+      <div className={`p-4 rounded-2xl border transition-all duration-200 print:hidden ${
+        closingInfo?.isClosed
+          ? 'bg-gradient-to-r from-emerald-50 via-teal-50/40 to-emerald-50 border-emerald-300 shadow-xs'
+          : 'bg-gradient-to-r from-slate-50 via-indigo-50/30 to-slate-50 border-slate-200 shadow-2xs'
+      }`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black shrink-0 ${
+              closingInfo?.isClosed
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                : 'bg-white text-slate-500 border border-slate-200 shadow-2xs'
+            }`}>
+              {closingInfo?.isClosed ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5 text-indigo-600" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-black text-slate-800">
+                  {currentMonth.getFullYear()}年 {currentMonth.getMonth() + 1}月度 勤怠締めステータス
+                </h3>
+                {closingInfo?.isClosed ? (
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-black px-2.5 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1">
+                    <CheckCheck className="w-3 h-3" />
+                    締め確定済み（給与連携ロック完了）
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full border border-slate-200">
+                    集計中（未確定・修正可能）
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                {closingInfo?.isClosed ? (
+                  <span>
+                    確定日時: {new Date(closingInfo.closedAt || '').toLocaleString('ja-JP')} （確定者: {closingInfo.closedByName || '全社管理者'}）
+                    <span className="text-emerald-700 ml-1.5 font-bold">※ 給与計算データとして確定・打刻修正はロックされています</span>
+                  </span>
+                ) : (
+                  <span>
+                    当月の打刻修正・申請確認が完了したら、締め確定ボタンを押して勤怠実績を確定・ロックしてください。
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {closingInfo?.isClosed ? (
+              <button
+                type="button"
+                onClick={handleReopenAttendance}
+                disabled={isProcessingClosing}
+                className="px-3.5 py-2 bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 hover:border-rose-300 font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
+                title="勤怠締めのロックを解除して再編集を可能にします（管理者権限）"
+              >
+                {isProcessingClosing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlock className="w-3.5 h-3.5" />}
+                締めロックを解除
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleCloseAttendance}
+                disabled={isProcessingClosing}
+                className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-black text-xs rounded-xl shadow-md shadow-indigo-600/20 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="当月の全勤怠データを締め確定して変更をロックします"
+              >
+                {isProcessingClosing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                {currentMonth.getMonth() + 1}月度 勤怠締め確定
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1023,6 +1306,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                         <th className="p-3.5 w-28">日付</th>
                         <th className="p-3.5 w-28">出勤打刻</th>
                         <th className="p-3.5 w-28">退勤打刻</th>
+                        <th className="p-3.5 text-center w-20">休憩</th>
                         <th className="p-3.5 text-right w-24">実働時間</th>
                         <th className="p-3.5 text-right w-24">残業時間</th>
                         <th className="p-3.5">事由・申請・備考</th>
@@ -1052,14 +1336,55 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                             </td>
                             <td className="p-3.5 font-bold text-slate-800 text-xs">
                               {row.checkIn !== '-' ? (
-                                <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200">{row.checkIn}</span>
+                                <div className="flex flex-col items-start gap-1">
+                                  <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono">{row.checkIn}</span>
+                                  {row.record?.check_in_lat && row.record?.check_in_lng ? (
+                                    <a
+                                      href={`https://www.google.com/maps?q=${row.record.check_in_lat},${row.record.check_in_lng}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 hover:text-blue-800 font-bold bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 transition"
+                                      title={`出勤GPS: 精度±${row.record.check_in_accuracy || 0}m (Googleマップで表示)`}
+                                    >
+                                      <MapPin className="w-2.5 h-2.5 text-blue-600 shrink-0" />
+                                      <span>GPS</span>
+                                      <ExternalLink className="w-2 h-2 text-blue-400" />
+                                    </a>
+                                  ) : row.record?.check_in_device === 'pc' ? (
+                                    <span className="text-[10px] text-slate-400 font-normal">💻 PC</span>
+                                  ) : null}
+                                </div>
                               ) : (
                                 <span className="text-slate-300">-</span>
                               )}
                             </td>
                             <td className="p-3.5 font-bold text-slate-800 text-xs">
                               {row.checkOut !== '-' ? (
-                                <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200">{row.checkOut}</span>
+                                <div className="flex flex-col items-start gap-1">
+                                  <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono">{row.checkOut}</span>
+                                  {row.record?.check_out_lat && row.record?.check_out_lng ? (
+                                    <a
+                                      href={`https://www.google.com/maps?q=${row.record.check_out_lat},${row.record.check_out_lng}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-0.5 text-[10px] text-orange-600 hover:text-orange-800 font-bold bg-orange-50 hover:bg-orange-100 px-1.5 py-0.5 rounded border border-orange-200 transition"
+                                      title={`退勤GPS: 精度±${row.record.check_out_accuracy || 0}m (Googleマップで表示)`}
+                                    >
+                                      <MapPin className="w-2.5 h-2.5 text-orange-600 shrink-0" />
+                                      <span>GPS</span>
+                                      <ExternalLink className="w-2 h-2 text-orange-400" />
+                                    </a>
+                                  ) : row.record?.check_out_device === 'pc' ? (
+                                    <span className="text-[10px] text-slate-400 font-normal">💻 PC</span>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <span className="text-slate-300">-</span>
+                              )}
+                            </td>
+                            <td className="p-3.5 text-center font-medium text-xs">
+                              {row.breakStr !== '-' ? (
+                                <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200 font-bold">{row.breakStr}</span>
                               ) : (
                                 <span className="text-slate-300">-</span>
                               )}
@@ -1174,34 +1499,122 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
               </button>
             </div>
 
+            {closingInfo?.isClosed && (
+              <div className="mx-6 mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-700 font-bold">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>当月（{currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月度）は勤怠締め確定済みのため打刻修正はロックされています。「締めロックを解除」してから修正してください。</span>
+              </div>
+            )}
+
             <form onSubmit={handleSaveRecord} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-black text-slate-700 mb-1">出勤時刻</label>
                   <input 
                     type="time" 
+                    disabled={closingInfo?.isClosed}
                     value={editModal.checkIn} 
                     onChange={e => setEditModal({ ...editModal, checkIn: e.target.value })} 
-                    className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-sm" 
+                    className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-sm disabled:bg-slate-100 disabled:text-slate-400" 
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-black text-slate-700 mb-1">退勤時刻</label>
                   <input 
                     type="time" 
+                    disabled={closingInfo?.isClosed}
                     value={editModal.checkOut} 
                     onChange={e => setEditModal({ ...editModal, checkOut: e.target.value })} 
-                    className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-sm" 
+                    className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-sm disabled:bg-slate-100 disabled:text-slate-400" 
                   />
+                </div>
+              </div>
+
+              {/* 📍 GPS位置情報（記録がある場合） */}
+              {(editModal.checkInGps || editModal.checkOutGps) && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
+                  <div className="font-black text-slate-800 flex items-center gap-1.5 text-xs">
+                    <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                    <span>打刻時 GPS位置情報（不正打刻防止ログ）</span>
+                  </div>
+                  {editModal.checkInGps && (
+                    <div className="flex items-center justify-between text-[11px] bg-white p-2 rounded-lg border border-slate-200">
+                      <span className="font-medium text-slate-700">
+                        出勤: 緯度 {editModal.checkInGps.lat}, 経度 {editModal.checkInGps.lng} (精度 ±{editModal.checkInGps.accuracy}m)
+                      </span>
+                      <a
+                        href={`https://www.google.com/maps?q=${editModal.checkInGps.lat},${editModal.checkInGps.lng}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-0.5 shrink-0 ml-2"
+                      >
+                        地図で確認 <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </div>
+                  )}
+                  {editModal.checkOutGps && (
+                    <div className="flex items-center justify-between text-[11px] bg-white p-2 rounded-lg border border-slate-200">
+                      <span className="font-medium text-slate-700">
+                        退勤: 緯度 {editModal.checkOutGps.lat}, 経度 {editModal.checkOutGps.lng} (精度 ±{editModal.checkOutGps.accuracy}m)
+                      </span>
+                      <a
+                        href={`https://www.google.com/maps?q=${editModal.checkOutGps.lat},${editModal.checkOutGps.lng}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-orange-600 hover:text-orange-800 font-bold flex items-center gap-0.5 shrink-0 ml-2"
+                      >
+                        地図で確認 <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-black text-slate-700">休憩時間（分）</label>
+                  <span className="text-[11px] text-blue-600 font-bold">※実働から差し引く休憩</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="number"
+                    min="0"
+                    max="360"
+                    step="5"
+                    disabled={closingInfo?.isClosed}
+                    value={editModal.breakMinutes} 
+                    onChange={e => setEditModal({ ...editModal, breakMinutes: e.target.value })} 
+                    className="w-24 p-2 border border-slate-300 rounded-lg font-bold text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400" 
+                    placeholder="60"
+                  />
+                  <span className="text-xs font-bold text-slate-600">分</span>
+                  <div className="flex items-center gap-1 ml-auto">
+                    {['0', '45', '60', '90'].map(mins => (
+                      <button
+                        key={mins}
+                        type="button"
+                        disabled={closingInfo?.isClosed}
+                        onClick={() => setEditModal(prev => ({ ...prev, breakMinutes: mins }))}
+                        className={`px-2 py-1 text-xs font-bold rounded-md border transition cursor-pointer ${
+                          editModal.breakMinutes === mins 
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' 
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {mins}分
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-black text-slate-700 mb-1">ステータス</label>
                 <select 
+                  disabled={closingInfo?.isClosed}
                   value={editModal.status} 
                   onChange={e => setEditModal({ ...editModal, status: e.target.value })} 
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm bg-white"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   <option value="退勤済">退勤済（通常勤務）</option>
                   <option value="勤務中">勤務中</option>
@@ -1215,9 +1628,10 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                 <label className="block text-xs font-black text-slate-700 mb-1">事由・備考</label>
                 <input 
                   type="text" 
+                  disabled={closingInfo?.isClosed}
                   value={editModal.note} 
                   onChange={e => setEditModal({ ...editModal, note: e.target.value })} 
-                  className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-xs" 
+                  className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-xs disabled:bg-slate-100 disabled:text-slate-400" 
                   placeholder="管理者による修正理由など" 
                 />
               </div>
@@ -1232,9 +1646,11 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer"
+                  disabled={closingInfo?.isClosed}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-black text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-1.5"
                 >
-                  保存する
+                  {closingInfo?.isClosed ? <Lock className="w-3.5 h-3.5" /> : null}
+                  {closingInfo?.isClosed ? '締め確定のため編集不可' : '保存する'}
                 </button>
               </div>
             </form>

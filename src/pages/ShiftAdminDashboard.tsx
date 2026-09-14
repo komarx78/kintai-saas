@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Zap, Calendar, ArrowLeft, CheckCircle, Settings, Users, ClipboardList, Send, LogOut } from 'lucide-react';
+import { DollarSign, Zap, Calendar, ArrowLeft, CheckCircle, Settings, Users, ClipboardList, Send, LogOut, RotateCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, addDays } from 'date-fns';
@@ -14,6 +14,7 @@ const ShiftAdminDashboard: React.FC = () => {
   const [loadingStats, setLoadingStats] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [generationResult, setGenerationResult] = useState<{ added: number } | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
@@ -210,6 +211,32 @@ const ShiftAdminDashboard: React.FC = () => {
     }
   };
 
+  const handleUnpublishDrafts = async () => {
+    if (!window.confirm('対象期間の確定済みシフトをすべて「未確定（下書き）」に戻しますか？\n※スタッフ画面からは未確定状態となり、再度のAI自動生成や手動調整が可能になります。')) return;
+    setIsUnpublishing(true);
+    try {
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
+      const startDate = format(weekStart, 'yyyy-MM-dd');
+      const endDate = format(weekEnd, 'yyyy-MM-dd');
+
+      const { error } = await supabase.from('advanced_shifts')
+        .update({ status: 'draft' })
+        .eq('tenant_id', tenantId)
+        .eq('status', 'confirmed')
+        .gte('target_date', startDate)
+        .lte('target_date', endDate);
+      
+      if (error) throw error;
+      alert('🎉 対象期間のシフトの確定を解除し、下書き状態に戻しました！');
+      fetchStats();
+    } catch (err) {
+      console.error('確定解除エラー:', err);
+      alert('確定解除処理中にエラーが発生しました。');
+    } finally {
+      setIsUnpublishing(false);
+    }
+  };
+
   const handleGenerate = async () => {
     setIsGenerating(true);
     setGenerationResult(null);
@@ -361,6 +388,15 @@ const ShiftAdminDashboard: React.FC = () => {
               >
                 {isPublishing ? <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full mr-1.5"></div> : <Send className="w-3.5 h-3.5 mr-1.5" />}
                 下書き確定（Publish）
+              </button>
+              <button 
+                onClick={handleUnpublishDrafts} 
+                disabled={isUnpublishing}
+                className="bg-slate-700 hover:bg-slate-800 text-white shadow-md px-3.5 py-2 rounded-xl flex items-center transition font-bold text-xs disabled:opacity-50 cursor-pointer"
+                title="確定済みシフトを下書き（ドラフト）に戻し、再調整可能にします"
+              >
+                {isUnpublishing ? <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full mr-1.5"></div> : <RotateCcw className="w-3.5 h-3.5 mr-1.5 text-amber-300" />}
+                確定解除（下書きへ）
               </button>
               <button onClick={() => navigate('/shift/admin/employees')} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md px-3 py-2 rounded-xl flex items-center transition shadow-xs font-bold border border-white/30 text-xs cursor-pointer">
                 <Users className="w-3.5 h-3.5 mr-1.5" />人員マスタ

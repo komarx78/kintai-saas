@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 /**
  * 労働条件通知書・雇用契約書 条文テンプレート ＆ 就業規則解析・AI条文清書エンジン
  */
@@ -202,13 +204,52 @@ export function getLaborContractTemplateFromStorage(tId: string): LaborContractT
   return DEFAULT_LABOR_CONTRACT_TEMPLATE;
 }
 
-export function saveLaborContractTemplateToStorage(tId: string, tpl: LaborContractTemplate) {
+/**
+ * データベース（Supabase tenants）から契約書テンプレートを全端末同期取得
+ */
+export async function fetchLaborContractTemplate(tId: string): Promise<LaborContractTemplate> {
+  let result = getLaborContractTemplateFromStorage(tId);
+  if (!tId) return result;
+
+  try {
+    const { data: tData } = await supabase
+      .from('tenants')
+      .select('labor_contract_template_data')
+      .eq('id', tId)
+      .maybeSingle();
+
+    if (tData?.labor_contract_template_data && typeof tData.labor_contract_template_data === 'object' && Object.keys(tData.labor_contract_template_data).length > 0) {
+      result = { ...DEFAULT_LABOR_CONTRACT_TEMPLATE, ...tData.labor_contract_template_data };
+      const payload = JSON.stringify(result);
+      localStorage.setItem(`labor_contract_template_${tId}`, payload);
+      localStorage.setItem('labor_contract_template', payload);
+    }
+  } catch (err) {
+    console.warn('DB fetch labor contract template notice:', err);
+  }
+
+  return result;
+}
+
+export async function saveLaborContractTemplateToStorage(tId: string, tpl: LaborContractTemplate) {
   try {
     const payload = JSON.stringify({ ...tpl, updated_at: new Date().toISOString() });
     localStorage.setItem(`labor_contract_template_${tId}`, payload);
     localStorage.setItem('labor_contract_template', payload);
   } catch (e) {
     console.warn('Failed to save labor_contract_template to LocalStorage:', e);
+  }
+
+  // データベースへ永続化（全社共有）
+  if (tId) {
+    try {
+      await supabase
+        .from('tenants')
+        .update({ labor_contract_template_data: tpl })
+        .eq('id', tId);
+    } catch (err) {
+      console.warn('DB save labor contract template notice:', err);
+    }
   }
 }
 

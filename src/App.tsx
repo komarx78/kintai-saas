@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
+import ResetPassword from './pages/ResetPassword';
 import SuperAdminLogin from './pages/SuperAdminLogin';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import Portal from './pages/Portal';
@@ -20,6 +21,7 @@ import OnboardingAdminDashboard from './pages/OnboardingAdminDashboard';
 import EmployeeOnboardingSubmission from './pages/EmployeeOnboardingSubmission';
 import EmployeeOnboardingWelcome from './pages/EmployeeOnboardingWelcome';
 import CompanySettingsDashboard from './pages/CompanySettingsDashboard';
+import CommunitySupportDashboard from './pages/CommunitySupportDashboard';
 import TrialEnded from './pages/TrialEnded';
 import { supabase } from './lib/supabase';
 
@@ -54,10 +56,18 @@ const PrivateRoute = ({ children, requiredRole }: { children: React.ReactNode, r
       }
 
       // Check role
-      if (requiredRole && userData.role !== requiredRole) {
-        setAuthorized(false);
-        setLoading(false);
-        return;
+      if (requiredRole) {
+        if (requiredRole === 'admin') {
+          if (userData.role !== 'admin' && userData.role !== 'superadmin') {
+            setAuthorized(false);
+            setLoading(false);
+            return;
+          }
+        } else if (userData.role !== requiredRole) {
+          setAuthorized(false);
+          setLoading(false);
+          return;
+        }
       }
 
       // Check trial lock (Superadmins bypass this)
@@ -100,6 +110,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/master-login" element={<SuperAdminLogin />} />
         <Route path="/trial-ended" element={<TrialEnded />} />
         <Route path="/super-admin/*" element={
@@ -148,7 +159,7 @@ function App() {
           </PrivateRoute>
         } />
         <Route path="/kintai/admin/*" element={
-          <PrivateRoute>
+          <PrivateRoute requiredRole="admin">
             <AdminDashboard />
           </PrivateRoute>
         } />
@@ -188,6 +199,12 @@ function App() {
             <CompanySettingsDashboard />
           </PrivateRoute>
         } />
+        <Route path="/support" element={
+          <PrivateRoute>
+            <CommunitySupportDashboard />
+          </PrivateRoute>
+        } />
+        <Route path="/community" element={<Navigate to="/support" replace />} />
         {/* 旧URLや未定義ルートへのアクセス対策リダイレクト */}
         <Route path="/admin/*" element={<Navigate to="/kintai/admin" replace />} />
         <Route path="/user/*" element={<Navigate to="/kintai/user" replace />} />

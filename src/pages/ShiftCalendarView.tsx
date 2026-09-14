@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2 } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -40,6 +40,7 @@ const ShiftCalendarView: React.FC = () => {
   const [modalData, setModalData] = useState<Partial<Shift>>({});
   const [saving, setSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
   useEffect(() => {
@@ -178,7 +179,8 @@ const ShiftCalendarView: React.FC = () => {
             target_date: modalData.target_date,
             start_time: modalData.start_time,
             end_time: modalData.end_time,
-            role: modalData.role
+            role: modalData.role,
+            status: modalData.status || 'confirmed'
           }).eq('id', modalData.id);
           if (error) throw error;
         }
@@ -315,6 +317,32 @@ const ShiftCalendarView: React.FC = () => {
     }
   };
 
+  const handleUnpublishAll = async () => {
+    if (!window.confirm(`現在の表示期間（${format(startDate, 'M/d')}〜${format(endDate, 'M/d')}）の確定シフトをすべて「未確定（下書き）」に戻しますか？\n\n※確定を解除すると、シフトは下書き（ドラフト）状態に戻り、再度の手動微調整やAI自動生成、再確定が可能になります。`)) return;
+    setIsUnpublishing(true);
+    try {
+      const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
+      const startStr = format(startDate, 'yyyy-MM-dd');
+      const endStr = format(endDate, 'yyyy-MM-dd');
+
+      const { error } = await supabase.from('advanced_shifts')
+        .update({ status: 'draft' })
+        .eq('tenant_id', tenantIdData)
+        .eq('status', 'confirmed')
+        .gte('target_date', startStr)
+        .lte('target_date', endStr);
+      
+      if (error) throw error;
+      alert('🎉 対象期間のシフトの確定を解除し、下書き（ドラフト）状態に戻しました！');
+      fetchSettingsAndData();
+    } catch (err) {
+      console.error(err);
+      alert('確定解除処理に失敗しました');
+    } finally {
+      setIsUnpublishing(false);
+    }
+  };
+
   let startDate: Date, endDate: Date;
   if (displayPeriod === '1day') {
     startDate = baseDate;
@@ -413,6 +441,19 @@ const ShiftCalendarView: React.FC = () => {
               </div>
               <span className="text-[10px] text-emerald-100 font-medium">（本番公開・配信）</span>
             </button>
+
+            <button 
+              onClick={handleUnpublishAll}
+              disabled={isUnpublishing}
+              className="bg-slate-700 hover:bg-slate-800 text-white px-3.5 py-2 rounded-xl flex flex-col items-center justify-center transition shadow-md font-bold cursor-pointer disabled:opacity-50"
+              title="確定済みのシフトを未確定の下書き（ドラフト）に戻し、再調整やAI再割り当てを可能にします"
+            >
+              <div className="flex items-center space-x-1.5 text-xs">
+                {isUnpublishing ? <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full"></div> : <RotateCcw className="w-3.5 h-3.5 text-amber-300" />}
+                <span>確定解除</span>
+              </div>
+              <span className="text-[10px] text-slate-300 font-medium">（下書きに戻す）</span>
+            </button>
             
             <button 
               onClick={() => {
@@ -454,7 +495,12 @@ const ShiftCalendarView: React.FC = () => {
             <span className="text-slate-400">➔</span>
             <span className="flex items-center gap-1 font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-lg border border-emerald-200/50">
               <span className="w-4 h-4 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center text-[10px]">3</span>
-              🚀 一括確定（スタッフへ本番公開・スマホ通知）
+              🚀 一括確定（本番公開・配信）
+            </span>
+            <span className="text-slate-400">➔</span>
+            <span className="flex items-center gap-1 font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-300">
+              <RotateCcw className="w-3 h-3 text-slate-500" />
+              確定解除（いつでも下書きに戻して再調整可）
             </span>
           </div>
           <button 
@@ -745,7 +791,18 @@ const ShiftCalendarView: React.FC = () => {
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200">
             <div className="bg-indigo-600 p-4 flex justify-between items-center">
-              <h2 className="text-white font-bold text-lg">{modalData.id ? 'シフト編集' : 'シフト直接追加'}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-white font-bold text-lg">{modalData.id ? 'シフト編集' : 'シフト直接追加'}</h2>
+                {modalData.id && (
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md shadow-2xs ${
+                    modalData.status === 'confirmed' ? 'bg-emerald-500 text-white' :
+                    modalData.status === 'request' ? 'bg-rose-500 text-white' :
+                    'bg-amber-400 text-slate-900'
+                  }`}>
+                    {modalData.status === 'confirmed' ? '確定済み' : modalData.status === 'request' ? '従業員希望' : '下書き（ドラフト）'}
+                  </span>
+                )}
+              </div>
               <button onClick={() => setIsModalOpen(false)} className="text-white/70 hover:text-white transition">
                 <X className="w-5 h-5" />
               </button>
@@ -779,15 +836,48 @@ const ShiftCalendarView: React.FC = () => {
                 </select>
               </div>
               
-              <div className="flex space-x-3 mt-6">
+              <div className="flex flex-wrap gap-2 mt-6">
                 {modalData.id && (
-                  <button onClick={() => handleDeleteShift(modalData.id!, modalData.status)} className="px-4 py-3 bg-red-50 text-red-600 rounded-xl font-bold hover:bg-red-100 transition flex items-center justify-center whitespace-nowrap">
-                    <Trash2 className="w-5 h-5 mr-2" />
+                  <button 
+                    type="button"
+                    onClick={() => handleDeleteShift(modalData.id!, modalData.status)} 
+                    className="px-3 py-3 bg-red-50 text-red-600 rounded-xl font-bold hover:bg-red-100 transition flex items-center justify-center whitespace-nowrap text-xs cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4 mr-1.5" />
                     {modalData.status === 'request' ? '却下する' : '削除する'}
                   </button>
                 )}
-                <button onClick={handleSaveShift} disabled={saving} className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-md hover:bg-indigo-700 transition flex items-center justify-center">
-                  {saving ? <div className="animate-spin w-5 h-5 border-2 border-white/30 border-t-white rounded-full"></div> : <><Save className="w-5 h-5 mr-2" />{modalData.status === 'request' ? 'この希望で確定する' : '確定する'}</>}
+
+                {modalData.id && modalData.status === 'confirmed' && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!modalData.id) return;
+                      try {
+                        const { error } = await supabase.from('advanced_shifts').update({ status: 'draft' }).eq('id', modalData.id);
+                        if (error) throw error;
+                        setIsModalOpen(false);
+                        fetchSettingsAndData();
+                        alert('このシフトの確定を解除し、下書きに戻しました');
+                      } catch (e: any) {
+                        alert('確定解除に失敗しました: ' + e.message);
+                      }
+                    }}
+                    className="px-3 py-3 bg-amber-50 text-amber-900 border border-amber-300 rounded-xl font-bold hover:bg-amber-100 transition flex items-center justify-center whitespace-nowrap text-xs cursor-pointer"
+                    title="このシフトのみ確定を解除して下書き状態に戻します"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-1.5 text-amber-700" />
+                    確定解除（下書きへ）
+                  </button>
+                )}
+
+                <button 
+                  type="button"
+                  onClick={handleSaveShift} 
+                  disabled={saving} 
+                  className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-md hover:bg-indigo-700 transition flex items-center justify-center text-xs cursor-pointer"
+                >
+                  {saving ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <><Save className="w-4 h-4 mr-1.5" />{modalData.status === 'request' ? 'この希望で確定する' : '確定する'}</>}
                 </button>
               </div>
             </div>

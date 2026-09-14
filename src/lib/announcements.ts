@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 /**
  * 全社ポータル（KAP Base）お知らせ掲示板管理ライブラリ
  */
@@ -61,13 +63,52 @@ export const getAnnouncementsFromStorage = (tenantId?: string): AnnouncementItem
   return DEFAULT_ANNOUNCEMENTS;
 };
 
-export const saveAnnouncementsToStorage = (announcements: AnnouncementItem[], tenantId?: string) => {
+/**
+ * データベース（Supabase tenants）から全社員端末へ同期取得
+ */
+export const fetchAnnouncements = async (tenantId?: string): Promise<AnnouncementItem[]> => {
+  let result = getAnnouncementsFromStorage(tenantId);
+  if (!tenantId) return result;
+
+  try {
+    const { data: tData } = await supabase
+      .from('tenants')
+      .select('portal_announcements_data')
+      .eq('id', tenantId)
+      .maybeSingle();
+
+    if (tData?.portal_announcements_data && Array.isArray(tData.portal_announcements_data) && tData.portal_announcements_data.length > 0) {
+      result = tData.portal_announcements_data;
+      const key = `portal_announcements_${tenantId}`;
+      localStorage.setItem(key, JSON.stringify(result));
+      localStorage.setItem('portal_announcements', JSON.stringify(result));
+    }
+  } catch (e) {
+    console.warn('DB fetch announcements notice:', e);
+  }
+
+  return result;
+};
+
+export const saveAnnouncementsToStorage = async (announcements: AnnouncementItem[], tenantId?: string) => {
   try {
     const key = tenantId ? `portal_announcements_${tenantId}` : 'portal_announcements';
     localStorage.setItem(key, JSON.stringify(announcements));
     localStorage.setItem('portal_announcements', JSON.stringify(announcements));
   } catch (e) {
     console.warn('LocalStorage announcements save error:', e);
+  }
+
+  // データベースへ永続化（全社共有）
+  if (tenantId) {
+    try {
+      await supabase
+        .from('tenants')
+        .update({ portal_announcements_data: announcements })
+        .eq('id', tenantId);
+    } catch (err) {
+      console.warn('DB save announcements notice:', err);
+    }
   }
 };
 

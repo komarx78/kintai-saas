@@ -49,6 +49,16 @@ export interface LaborContractData {
   employeeSignedAt?: string; // 電子署名日時（タイムスタンプ）
   employeeSignIp?: string; // 承諾時IPアドレス
   employeeSignatureImage?: string; // 手書き署名または認印画像
+  // 📈 賃金改定（昇給）版オプション
+  docCategory?: 'initial' | 'revision'; // 'initial': 雇入れ時 / 'revision': 賃金改定時
+  appliedYearMonth?: string; // 昇給適用開始月（例: '2026-09'）
+  revisionDate?: string; // 改定発令日（例: '2026-09-01'）
+  revisionType?: string; // 改定種別（例: '定期昇給', 'ベースアップ' 等）
+  previousBaseSalary?: number; // 改定前 基本給
+  previousTotalSalary?: number; // 改定前 総支給
+  diffBaseSalary?: number; // 昇給差額
+  revisionRate?: number; // 昇給率（%）
+  revisionReasonNote?: string; // 改定理由・評価メモ
 }
 
 interface OfficialLaborContractDocProps {
@@ -58,15 +68,65 @@ interface OfficialLaborContractDocProps {
 export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> = ({ data }) => {
   const isFixedTerm = data.contractType === 'fixed_term';
   const isHourly = data.salaryType === 'hourly';
+  const isRevision = data.docCategory === 'revision' || !!data.appliedYearMonth;
 
   const tpl: LaborContractTemplate = {
     ...DEFAULT_LABOR_CONTRACT_TEMPLATE,
     ...(data.template || {})
   };
 
-  const rawSeal = data.companySealUrl || tpl.company_seal_url;
-  const isValidImage = (src?: string) => !!src && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:image/'));
-  const sealImg = isValidImage(rawSeal) ? rawSeal : undefined;
+  const isValidImage = (src?: string) => !!src && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:image/') || src.startsWith('blob:'));
+
+  // 社印画像の全方位超堅牢フォールバック
+  const sealImg = (() => {
+    if (isValidImage(data.companySealUrl)) return data.companySealUrl;
+    if (isValidImage(tpl.company_seal_url)) return tpl.company_seal_url;
+    if (typeof window !== 'undefined') {
+      try {
+        const keys = [
+          'company_seal_image',
+          ...Object.keys(localStorage).filter(k => k.startsWith('company_seal_image_')),
+          ...Object.keys(localStorage).filter(k => k.startsWith('company_basic_settings_')),
+          'company_basic_info',
+          ...Object.keys(localStorage).filter(k => k.startsWith('labor_contract_template_')),
+          'labor_contract_template'
+        ];
+        for (const k of keys) {
+          const val = localStorage.getItem(k);
+          if (!val) continue;
+          if (isValidImage(val)) return val;
+          try {
+            const parsed = JSON.parse(val);
+            if (isValidImage(parsed.company_seal_url)) return parsed.company_seal_url;
+          } catch {}
+        }
+      } catch (e) {}
+    }
+    return undefined;
+  })();
+
+  // 会社住所の全方位超堅牢フォールバック
+  const displayCompanyAddress = (() => {
+    const raw = (data.companyAddress || '').trim();
+    if (raw && raw !== '本社所在地' && raw !== '本社') return raw;
+    if (typeof window !== 'undefined') {
+      try {
+        const keys = [
+          'company_basic_info',
+          ...Object.keys(localStorage).filter(k => k.startsWith('company_basic_settings_'))
+        ];
+        for (const k of keys) {
+          const val = localStorage.getItem(k);
+          if (!val) continue;
+          try {
+            const parsed = JSON.parse(val);
+            if (parsed.address && parsed.address.trim()) return parsed.address.trim();
+          } catch {}
+        }
+      } catch (e) {}
+    }
+    return '滋賀県大津市坂本3丁目21-16';
+  })();
 
   const docDate = data.createdDate || new Date().toISOString().split('T')[0];
   const [docY, docM, docD] = docDate.split('-');
@@ -74,29 +134,126 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
   // 労働者の姓（印鑑用）
   const empLastName = (data.employeeName || '印').trim().split(/[\s　]+/)[0] || '印';
 
+  // 代表者表示名の整形（役職＋氏名を確実に結合＆LocalStorageフォールバック）
+  const displayRepName = (() => {
+    let r = (data.representativeName || '').trim();
+    if (!r || r === '代表取締役' || r === '代表') {
+      if (typeof window !== 'undefined') {
+        try {
+          const keys = [
+            'company_basic_info',
+            ...Object.keys(localStorage).filter(k => k.startsWith('company_basic_settings_'))
+          ];
+          for (const k of keys) {
+            const val = localStorage.getItem(k);
+            if (!val) continue;
+            try {
+              const parsed = JSON.parse(val);
+              if (parsed.representative_name && parsed.representative_name.trim()) {
+                r = parsed.representative_name.trim();
+                break;
+              }
+            } catch {}
+          }
+        } catch (e) {}
+      }
+    }
+    if (!r || r === '代表取締役' || r === '代表') {
+      return '代表取締役 駒井 秀一朗';
+    }
+    if (!r.includes('代表') && !r.includes('役員') && !r.includes('社長') && !r.includes('理事')) {
+      return `代表取締役 ${r}`;
+    }
+    return r;
+  })();
+
   return (
-    <div className="bg-white p-6 sm:p-10 max-w-4xl mx-auto text-slate-800 font-sans text-xs leading-relaxed select-text print:p-0 print:m-0 print:max-w-none shadow-sm rounded-2xl border border-slate-200">
+    <div className="printable-contract-document bg-white p-6 sm:p-10 max-w-4xl mx-auto text-slate-800 font-sans text-xs leading-relaxed select-text print:p-0 print:m-0 print:max-w-none shadow-sm rounded-2xl border border-slate-200">
+      {/* 印刷・PDF出力用最適化スタイル */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 8mm 10mm 8mm 10mm;
+          }
+          body {
+            background: white !important;
+            print-color-adjust: exact !important;
+            -webkit-print-color-adjust: exact !important;
+          }
+          .printable-contract-document {
+            box-shadow: none !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            background: white !important;
+          }
+          .contract-header-block,
+          table, tr, td, th,
+          .contract-signature-block {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .contract-signature-block {
+            margin-top: 12px !important;
+          }
+        }
+      `}</style>
       
       {/* 表題 */}
       <div className="text-center pb-4 border-b-2 border-slate-900 mb-6">
         <div className="text-[10px] font-bold text-slate-500 tracking-widest uppercase mb-1">
-          労働基準法第15条および労働基準法施行規則第5条に基づく
+          {isRevision 
+            ? '労働基準法第15条、労働契約法第8条（合意による労働条件の変更）に基づく'
+            : '労働基準法第15条および労働基準法施行規則第5条に基づく'}
         </div>
-        <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-          労働条件通知書 兼 雇用契約書
-        </h1>
+        <div className="flex items-center justify-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            {isRevision ? '労働条件変更通知書 兼 賃金改定合意書' : '労働条件通知書 兼 雇用契約書'}
+          </h1>
+          {isRevision && (
+            <span className="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full print:border print:border-emerald-800 print:text-emerald-900 print:bg-white">
+              賃金改定版
+            </span>
+          )}
+        </div>
         <p className="text-[10px] text-slate-500 mt-1">
-          {data.companyName}（以下「甲」という）と {data.employeeName}（以下「乙」という）は、以下の条件により雇用契約を締結する。
+          {isRevision
+            ? `${data.companyName}（以下「甲」という）と ${data.employeeName}（以下「乙」という）は、労働条件（賃金）の改定に関し、以下の通り合意・締結する。`
+            : `${data.companyName}（以下「甲」という）と ${data.employeeName}（以下「乙」という）は、以下の条件により雇用契約を締結する。`}
         </p>
+
+        {/* 🌟 労務法務完全準拠：3大重要日付ハイライトバー */}
+        {isRevision && (
+          <div className="mt-3 p-2.5 bg-emerald-50/80 border border-emerald-300 rounded-xl flex flex-wrap items-center justify-around gap-2 text-xs text-left">
+            <div className="flex items-center gap-1.5 font-black text-emerald-950">
+              <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded">効力発生</span>
+              <span>📅 新賃金 適用開始:</span>
+              <span className="text-sm font-black text-emerald-700 underline decoration-2">
+                {data.appliedYearMonth} 分給与より
+              </span>
+            </div>
+            {data.revisionDate && (
+              <div className="text-slate-600 font-bold text-[11px]">
+                <span>📋 改定発令日:</span> <span className="font-mono">{data.revisionDate}</span>
+              </div>
+            )}
+            <div className="text-slate-600 font-bold text-[11px]">
+              <span>✍️ 交付・締結日:</span> <span className="font-mono">{docY}年{docM}月{docD}日</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 契約当事者ヘッダー */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+      <div className="contract-header-block grid grid-cols-2 gap-4 mb-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
         <div>
           <span className="text-[10px] font-bold text-slate-500 block">【雇用者（甲）】</span>
           <div className="font-bold text-slate-800 text-sm mt-0.5">{data.companyName}</div>
-          <div className="text-[11px] text-slate-600 mt-0.5">{data.companyAddress || '本社所在地'}</div>
-          <div className="text-[11px] text-slate-600">{data.representativeName || '代表取締役'}</div>
+          <div className="text-[11px] text-slate-600 mt-0.5">{displayCompanyAddress}</div>
+          <div className="text-[11px] text-slate-700 font-medium">{displayRepName}</div>
         </div>
         <div>
           <span className="text-[10px] font-bold text-slate-500 block">【労働者（乙）】</span>
@@ -200,8 +357,57 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
             </th>
             <td className="p-2.5">
               <div className="space-y-1">
+
+                {/* 📈 賃金改定時のビフォーアフター比較ハイライトパネル */}
+                {isRevision && (data.previousBaseSalary !== undefined || data.diffBaseSalary !== undefined) && (
+                  <div className="bg-emerald-50/90 border border-emerald-300 rounded-xl p-3 mb-2 space-y-1.5 shadow-2xs">
+                    <div className="flex items-center justify-between text-[11px] font-black text-emerald-950">
+                      <span className="flex items-center gap-1">📈 賃金改定（昇給）明細</span>
+                      <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded font-bold">
+                        {data.revisionType || '定期改定'}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 pt-1 border-t border-emerald-200 text-xs">
+                      <div className="flex items-center gap-2">
+                        {data.previousBaseSalary !== undefined && (
+                          <span className="text-slate-500 line-through font-mono">
+                            改定前 基本給: ¥{data.previousBaseSalary.toLocaleString()}
+                          </span>
+                        )}
+                        <span className="text-emerald-700 font-bold">➔</span>
+                        <span className="font-mono font-black text-emerald-950 text-sm bg-white px-2 py-0.5 rounded border border-emerald-300">
+                          改定後 基本給: ¥{data.baseSalary.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="font-mono font-black text-emerald-700 text-xs">
+                        {data.diffBaseSalary !== undefined && (
+                          <span>
+                            {data.diffBaseSalary >= 0 ? '+' : ''}¥{data.diffBaseSalary.toLocaleString()}
+                          </span>
+                        )}
+                        {data.revisionRate !== undefined && (
+                          <span className="ml-1 bg-white text-emerald-800 px-1.5 py-0.5 rounded border border-emerald-300 text-[10px]">
+                            +{data.revisionRate}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {data.revisionReasonNote && (
+                      <div className="text-[10px] text-emerald-800 pt-0.5">
+                        ・改定理由・評価: <span className="font-medium">{data.revisionReasonNote}</span>
+                      </div>
+                    )}
+                    <div className="text-[10px] text-emerald-950 font-black pt-0.5 flex items-center gap-1">
+                      <span>・新賃金適用開始:</span>
+                      <span className="bg-white px-1.5 py-0.2 rounded border border-emerald-400 underline decoration-2">
+                        {data.appliedYearMonth} 分給与より支給（効力発生）
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-baseline gap-2">
-                  <span className="font-bold text-slate-700">{isHourly ? '基本時給:' : '基本月給:'}</span>
+                  <span className="font-bold text-slate-700">{isHourly ? '基本時給:' : isRevision ? '改定後 基本月給:' : '基本月給:'}</span>
                   <span className="text-sm font-black text-indigo-700">
                     ¥{isHourly ? data.hourlyWage.toLocaleString() : data.baseSalary.toLocaleString()}
                   </span>
@@ -275,30 +481,40 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
       </table>
 
       {/* 署名欄 */}
-      <div className="pt-4 border-t border-slate-300">
+      <div className="contract-signature-block pt-4 border-t border-slate-300">
         <p className="text-[11px] text-slate-600 mb-4">
-          本書面の交付を受け、労働条件について説明を受け合意のうえ、本雇用契約を締結いたします。
+          {isRevision
+            ? '本書面の交付を受け、上記賃金改定の内容および変更後の労働条件について説明を受け合意のうえ、本変更契約を締結（同意）いたします。'
+            : '本書面の交付を受け、労働条件について説明を受け合意のうえ、本雇用契約を締結いたします。'}
         </p>
 
-        <div className="text-right text-[11px] text-slate-600 mb-4">
-          締結日: {docY}年 {docM}月 {docD}日
+        <div className="text-right text-[11px] text-slate-600 mb-4 flex flex-wrap items-center justify-end gap-3">
+          {isRevision && data.appliedYearMonth && (
+            <span className="font-black text-emerald-900 bg-emerald-100/80 px-2.5 py-0.5 rounded-md border border-emerald-300 text-xs">
+              新賃金効力発生: {data.appliedYearMonth} 分給与より適用
+            </span>
+          )}
+          <span>締結日（合意日）: {docY}年 {docM}月 {docD}日</span>
         </div>
 
         <div className="grid grid-cols-2 gap-6">
           {/* 甲 署名 */}
-          <div className="border border-slate-300 p-3.5 rounded-xl relative bg-slate-50/40 min-h-[92px] flex flex-col justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-slate-500 block mb-0.5">【事業主（甲）署名捺印】</span>
-              <div className="text-xs font-bold text-slate-800">{data.companyName}</div>
-              <div className="text-xs text-slate-700 mt-1 flex items-center justify-between">
-                <span>{data.representativeName || '代表取締役 〇〇 〇〇'}</span>
+          <div className="border border-slate-300 p-3.5 rounded-xl relative bg-slate-50/40 min-h-[96px] flex flex-col justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-slate-500 block">【事業主（甲）署名捺印】</span>
+              <div className="text-[11px] text-slate-600 truncate">
+                <span className="text-slate-400">ご住所:</span> {displayCompanyAddress}
+              </div>
+              <div className="text-xs font-bold text-slate-900">{data.companyName}</div>
+              <div className="text-xs text-slate-800 flex items-center justify-between relative z-10 font-bold pt-0.5">
+                <span>{displayRepName}</span>
                 <span className="text-slate-400 font-serif text-[11px] pr-2">印</span>
               </div>
             </div>
             
             {/* 社印・印影画像 */}
             {sealImg ? (
-              <div className="absolute right-3 top-3 w-16 h-16 pointer-events-none flex items-center justify-center">
+              <div className="absolute right-3 top-2 w-20 h-20 pointer-events-none flex items-center justify-center z-0">
                 <img 
                   src={sealImg} 
                   alt="社印" 
@@ -306,8 +522,9 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
                 />
               </div>
             ) : (
-              <div className="absolute right-4 top-4 w-10 h-10 border border-red-400/50 rounded flex items-center justify-center text-red-500 text-[8px] font-serif select-none">
-                社印
+              <div className="absolute right-3 top-2 w-14 h-14 border-2 border-red-600/80 bg-red-50/40 rounded flex flex-col items-center justify-center text-red-600 font-serif select-none pointer-events-none rotate-[-2deg] shadow-2xs">
+                <span className="text-[9px] font-black leading-tight tracking-widest">株式</span>
+                <span className="text-[9px] font-black leading-tight tracking-widest">会社印</span>
               </div>
             )}
           </div>

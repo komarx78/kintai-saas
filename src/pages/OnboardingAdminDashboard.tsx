@@ -11,10 +11,10 @@ import OfficialCustomCanvasDoc from '../components/OfficialCustomCanvasDoc';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { 
   type CustomDocTemplate, 
-  getCustomDocTemplatesFromStorage 
+  fetchCustomDocTemplates 
 } from '../lib/customDocManager';
 import { compressImageFile } from '../lib/imageCompressor';
-import { getLaborContractTemplateFromStorage } from '../lib/laborContractTemplate';
+import { getLaborContractTemplateFromStorage, fetchLaborContractTemplate } from '../lib/laborContractTemplate';
 import { 
   type PositionMaster, 
   DEFAULT_POSITIONS, 
@@ -32,8 +32,18 @@ import {
   HelpCircle, Building2, Check, UserCheck, Edit3, UserMinus, 
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
   FolderOpen, Settings, Clock, Smartphone, AlertCircle, ArrowRight, CornerDownLeft,
-  Copy, DollarSign, Sparkles
+  Copy, DollarSign, Sparkles, Award, ShieldCheck, FileCheck,
+  ExternalLink, Gift
 } from 'lucide-react';
+import { BonusPaymentReportModal } from '../components/BonusPaymentReportModal';
+import { 
+  getQualificationsFromStorage, 
+  type QualificationMaster 
+} from './CompanySettingsDashboard';
+import { 
+  HEALTH_REMUNERATION_TABLE, 
+  lookupStandardMonthlyRemuneration 
+} from '../lib/socialInsurance';
 
 interface EmployeeOnboardingData {
   user_id: string;
@@ -64,6 +74,9 @@ interface EmployeeOnboardingData {
   hourly_wage: number;
   position_allowance: number;
   qualification_allowance?: number;
+  qualification_name?: string;
+  qualification_certificate_url?: string;
+  qualification_certificate_filename?: string;
   fixed_overtime_allowance?: number;
   housing_allowance?: number;
   family_allowance?: number;
@@ -71,8 +84,14 @@ interface EmployeeOnboardingData {
   commuting_daily_amount?: number;
   commuting_allowance: number;
   health_insurance_joined: boolean;
+  health_standard_monthly_remuneration?: number;
   pension_insurance_joined: boolean;
+  pension_standard_monthly_remuneration?: number;
+  standard_remuneration_notice_url?: string;
+  standard_remuneration_notice_filename?: string;
   employment_insurance_joined: boolean;
+  resident_tax_monthly?: number;
+  resident_tax_details?: Record<string, number>;
   bank_name?: string;
   branch_name?: string;
   account_type?: 'ordinary' | 'current';
@@ -208,7 +227,9 @@ export default function OnboardingAdminDashboard() {
     branch_name: '',
     account_type: 'ordinary',
     account_number: '',
-    account_holder: ''
+    account_holder: '',
+    dependents_count: 0,
+    has_spouse: false
   });
 
   // 編集・修正モーダルState
@@ -219,6 +240,63 @@ export default function OnboardingAdminDashboard() {
     isOpen: false,
     data: null
   });
+
+  // 📜 資格手当マスタ ＆ 合格証エビデンスState
+  const [qualifications, setQualifications] = useState<QualificationMaster[]>([]);
+  const [isCompressingCert, setIsCompressingCert] = useState(false);
+  const [compressionStats, setCompressionStats] = useState<{
+    originalKb: number;
+    compressedKb: number;
+    ratio: number;
+  } | null>(null);
+  const [certificateViewModal, setCertificateViewModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    url: string;
+    filename?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    url: '',
+    filename: ''
+  });
+
+  // 🏥 社保・標準報酬月額 ＆ 住民税12ヶ月管理用State
+  const [separateSocialRemuneration, setSeparateSocialRemuneration] = useState(false); // 健保・厚年を個別に設定する
+  const [residentTaxBulkMonth, setResidentTaxBulkMonth] = useState<number>(6); // 一括反映の開始月 (デフォルト6月)
+  const [residentTaxBulkAmount, setResidentTaxBulkAmount] = useState<number | ''>(''); // 一括反映金額
+
+  // 📁 年金事務所 標準報酬決定通知書 ＆ 保険料額表 全社保管庫State
+  const [remunerationCabinetOpen, setRemunerationCabinetOpen] = useState(false);
+  const [bonusReportModalOpen, setBonusReportModalOpen] = useState(false);
+  const [isCompressingNotice, setIsCompressingNotice] = useState(false);
+  const [remunerationDocs, setRemunerationDocs] = useState<Array<{
+    id: string;
+    fiscal_year: string;
+    title: string;
+    doc_type: 'nenkin_notice' | 'rate_table' | 'other';
+    file_url: string;
+    filename: string;
+    uploaded_at: string;
+    uploaded_by: string;
+    note?: string;
+  }>>([]);
+  const [newCabinetDoc, setNewCabinetDoc] = useState<{
+    fiscal_year: string;
+    title: string;
+    doc_type: 'nenkin_notice' | 'rate_table' | 'other';
+    file_url: string;
+    filename: string;
+    note: string;
+  }>({
+    fiscal_year: '令和8年度 (2026)',
+    title: '',
+    doc_type: 'nenkin_notice',
+    file_url: '',
+    filename: '',
+    note: ''
+  });
+  const [isUploadingCabinetDoc, setIsUploadingCabinetDoc] = useState(false);
 
   // 労務書面キャビネット（証憑アーカイブ）モーダルState
   const [cabinetModal, setCabinetModal] = useState<{
@@ -359,6 +437,13 @@ export default function OnboardingAdminDashboard() {
       }
       setPositions(posList);
 
+      // 資格手当マスタ取得（DB自動同期）
+      let qualList = getQualificationsFromStorage(tenantIdData);
+      if (tData?.qualification_masters_data && Array.isArray(tData.qualification_masters_data) && tData.qualification_masters_data.length > 0) {
+        qualList = tData.qualification_masters_data;
+      }
+      setQualifications(qualList);
+
       // 就業時間パターンマスタ取得
       const { data: patData } = await supabase
         .from('work_schedule_patterns')
@@ -388,9 +473,12 @@ export default function OnboardingAdminDashboard() {
         break_time_minutes: defaultBreak
       }));
 
-      // 全社カスタム公的書類テンプレート一覧の復元
-      const customTemplatesLoaded = getCustomDocTemplatesFromStorage(tenantIdData);
+      // 全社カスタム公的書類テンプレート一覧の復元（DB完全自動同期）
+      const customTemplatesLoaded = await fetchCustomDocTemplates(tenantIdData);
       setCustomDocTemplates(customTemplatesLoaded);
+
+      // 雇用契約書・労働条件通知書テンプレートの復元（DB完全自動同期）
+      await fetchLaborContractTemplate(tenantIdData);
 
       // 書類提出・申請リスト取得（先に取得して台帳に完全マージ）
       const { data: subData } = await supabase
@@ -515,6 +603,14 @@ export default function OnboardingAdminDashboard() {
           onb?.birth_date || pay?.birth_date || 
           localBackup?.birth_date || localBackup?.birthDate || '';
 
+        const kana = depDoc.name_kana || depDoc.nameKana || depDoc.furigana || depDoc.kana ||
+                     resDoc.name_kana || resDoc.nameKana || resDoc.furigana || resDoc.kana ||
+                     conDoc.name_kana || conDoc.nameKana || conDoc.furigana || conDoc.kana ||
+                     u.name_kana || u.nameKana || u.furigana || u.kana ||
+                     onb?.name_kana || onb?.nameKana || onb?.furigana || onb?.kana ||
+                     pay?.name_kana || pay?.nameKana || pay?.furigana || pay?.kana ||
+                     localBackup?.name_kana || localBackup?.nameKana || localBackup?.furigana || localBackup?.kana || '';
+
         const addr = depDoc.address || resDoc.address || conDoc.address || bankDoc.address || u.address || onb?.address || localBackup?.address || '';
         const ph = depDoc.phone || depDoc.phoneNumber || conDoc.phone || conDoc.phoneNumber || resDoc.phone || u.phone || onb?.phone || localBackup?.phone || '';
 
@@ -533,9 +629,16 @@ export default function OnboardingAdminDashboard() {
         // 通勤手当（提出書類の通勤定期代から即座に抽出）
         const commAllowance = commDoc.one_month_pass_amount ?? onb?.commuting_allowance ?? pay?.commuting_allowance ?? localBackup?.commuting_allowance ?? 15000;
 
+        // 社保標準報酬月額 ＆ 住民税（特別徴収）
+        const hRemun = onb?.health_standard_monthly_remuneration ?? pay?.health_standard_monthly_remuneration ?? localBackup?.health_standard_monthly_remuneration;
+        const pRemun = onb?.pension_standard_monthly_remuneration ?? pay?.pension_standard_monthly_remuneration ?? localBackup?.pension_standard_monthly_remuneration;
+        const resTaxMonthly = onb?.resident_tax_monthly ?? pay?.resident_tax_monthly ?? localBackup?.resident_tax_monthly ?? 0;
+        const resTaxDetails = onb?.resident_tax_details ?? pay?.resident_tax_details ?? localBackup?.resident_tax_details ?? {};
+
         return {
           user_id: u.id,
           name: u.name || '従業員',
+          name_kana: kana,
           email: u.email,
           phone: ph,
           birth_date: bDate,
@@ -560,12 +663,21 @@ export default function OnboardingAdminDashboard() {
           hourly_wage: conDoc.hourly_wage ?? onb?.hourly_wage ?? pay?.hourly_wage ?? localBackup?.hourly_wage ?? 1150,
           position_allowance: conDoc.position_allowance ?? onb?.position_allowance ?? pay?.position_allowance ?? localBackup?.position_allowance ?? 0,
           qualification_allowance: conDoc.qualification_allowance ?? onb?.qualification_allowance ?? pay?.qualification_allowance ?? localBackup?.qualification_allowance ?? 0,
+          qualification_name: onb?.qualification_name || pay?.qualification_name || localBackup?.qualification_name || '',
+          qualification_certificate_url: onb?.qualification_certificate_url || localBackup?.qualification_certificate_url || '',
+          qualification_certificate_filename: onb?.qualification_certificate_filename || localBackup?.qualification_certificate_filename || '',
           housing_allowance: onb?.housing_allowance ?? pay?.housing_allowance ?? localBackup?.housing_allowance ?? 0,
           family_allowance: onb?.family_allowance ?? pay?.family_allowance ?? localBackup?.family_allowance ?? 0,
           commuting_allowance: commAllowance,
           health_insurance_joined: onb?.health_insurance_joined ?? pay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? true,
+          health_standard_monthly_remuneration: hRemun,
           pension_insurance_joined: onb?.pension_insurance_joined ?? pay?.pension_insurance_enabled ?? localBackup?.pension_insurance_joined ?? true,
+          pension_standard_monthly_remuneration: pRemun,
+          standard_remuneration_notice_url: onb?.standard_remuneration_notice_url || localBackup?.standard_remuneration_notice_url || '',
+          standard_remuneration_notice_filename: onb?.standard_remuneration_notice_filename || localBackup?.standard_remuneration_notice_filename || '',
           employment_insurance_joined: onb?.employment_insurance_joined ?? pay?.employment_insurance_enabled ?? localBackup?.employment_insurance_joined ?? true,
+          resident_tax_monthly: resTaxMonthly,
+          resident_tax_details: resTaxDetails,
           bank_name: bName,
           branch_name: brName,
           account_type: accType,
@@ -728,6 +840,33 @@ export default function OnboardingAdminDashboard() {
             console.warn('Auto-sync approved employee error:', autoErr);
           }
         }
+      }
+
+      // 📁 全社決定通知書・保険料額表キャビネットのロード
+      try {
+        const cabKey = `remuneration_docs_${tenantIdData}`;
+        const cabRaw = localStorage.getItem(cabKey);
+        if (cabRaw) {
+          setRemunerationDocs(JSON.parse(cabRaw));
+        } else {
+          const initialDocs = [
+            {
+              id: 'init-rate-2026',
+              fiscal_year: '令和8年度 (2026)',
+              title: '令和8年度 協会けんぽ保険料額表（都道府県別・全等級対照表）',
+              doc_type: 'rate_table' as const,
+              file_url: 'https://www.kyoukaikenpo.or.jp/g7/cat330/sb8200/r08/',
+              filename: '令和8年度保険料額表.pdf',
+              uploaded_at: '2026-04-01 09:00',
+              uploaded_by: 'システム管理者',
+              note: '2026年3月分（4月納付分）からの最新料率・標準報酬等級表'
+            }
+          ];
+          setRemunerationDocs(initialDocs);
+          localStorage.setItem(cabKey, JSON.stringify(initialDocs));
+        }
+      } catch (cabErr) {
+        console.warn('Load remuneration docs error:', cabErr);
       }
 
       setEmployees([...combined]);
@@ -1617,7 +1756,9 @@ export default function OnboardingAdminDashboard() {
         branch_name: wizardData.branch_name,
         account_type: wizardData.account_type,
         account_number: wizardData.account_number,
-        account_holder: wizardData.account_holder || wizardData.name
+        account_holder: wizardData.account_holder || wizardData.name,
+        dependents_count: wizardData.dependents_count || 0,
+        has_spouse: wizardData.has_spouse || false
       }, { onConflict: 'tenant_id,user_id' });
 
       await supabase.from('employee_onboarding_profiles').upsert({
@@ -1641,7 +1782,9 @@ export default function OnboardingAdminDashboard() {
         commuting_allowance: wizardData.commuting_allowance,
         health_insurance_joined: wizardData.health_insurance_joined,
         pension_insurance_joined: wizardData.pension_insurance_joined,
-        employment_insurance_joined: wizardData.employment_insurance_joined
+        employment_insurance_joined: wizardData.employment_insurance_joined,
+        dependents_count: wizardData.dependents_count || 0,
+        has_spouse: wizardData.has_spouse || false
       }, { onConflict: 'tenant_id,user_id' });
 
       alert(`🎉 ${wizardData.name} さんの入社手続きが完了しました！\n「勤怠管理」「シフト管理」「給与計算」の全システムに即座に同期されました。`);
@@ -1656,9 +1799,162 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
+  // 証明書（合格証・写メ/PDF）のアップロード＆超圧縮処理
+  const handleCertificateUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsCompressingCert(true);
+    setCompressionStats(null);
+    try {
+      const result = await compressImageFile(file, { maxWidth: 1200, maxHeight: 1200, quality: 0.75 });
+      const origKb = Math.round(result.originalSize / 1024);
+      const compKb = Math.round(result.compressedSize / 1024);
+      const ratio = origKb > 0 ? Math.round(((origKb - compKb) / origKb) * 100) : 0;
+      setCompressionStats({ originalKb: origKb, compressedKb: compKb, ratio });
+      
+      if (editModal.data) {
+        setEditModal({
+          ...editModal,
+          data: {
+            ...editModal.data,
+            qualification_certificate_url: result.base64,
+            qualification_certificate_filename: result.fileName
+          }
+        });
+      }
+    } catch (err: any) {
+      alert('証明書のアップロード/圧縮に失敗しました: ' + err.message);
+    } finally {
+      setIsCompressingCert(false);
+    }
+  };
+
+  // 🏥 年金事務所 標準報酬決定通知書（個人別 原本写メ/PDF）のアップロード＆超圧縮処理
+  const handleRemunerationNoticeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsCompressingNotice(true);
+    try {
+      const result = await compressImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.8 });
+      if (editModal.data) {
+        setEditModal({
+          ...editModal,
+          data: {
+            ...editModal.data,
+            standard_remuneration_notice_url: result.base64,
+            standard_remuneration_notice_filename: result.fileName
+          }
+        });
+      }
+    } catch (err: any) {
+      alert('決定通知書のアップロード/圧縮に失敗しました: ' + err.message);
+    } finally {
+      setIsCompressingNotice(false);
+    }
+  };
+
+  // 📁 全社キャビネット（年金事務所決定通知書・保険料額表）へのファイル追加処理
+  const handleSaveCabinetDoc = async () => {
+    if (!tenantId) return;
+    if (!newCabinetDoc.title.trim()) {
+      alert('文書名・タイトルを入力してください');
+      return;
+    }
+    if (!newCabinetDoc.file_url) {
+      alert('通知書・書類ファイル（PDFまたは写メ画像）を添付してください');
+      return;
+    }
+    try {
+      const newDoc = {
+        id: `remun-doc-${Date.now()}`,
+        fiscal_year: newCabinetDoc.fiscal_year || '令和8年度 (2026)',
+        title: newCabinetDoc.title.trim(),
+        doc_type: newCabinetDoc.doc_type,
+        file_url: newCabinetDoc.file_url,
+        filename: newCabinetDoc.filename || '決定通知書.pdf',
+        uploaded_at: new Date().toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+        uploaded_by: currentAdminName || '管理者',
+        note: newCabinetDoc.note?.trim() || ''
+      };
+
+      const updatedDocs = [newDoc, ...remunerationDocs];
+      setRemunerationDocs(updatedDocs);
+      const cabKey = `remuneration_docs_${tenantId}`;
+      localStorage.setItem(cabKey, JSON.stringify(updatedDocs));
+
+      alert('✨ 全社保管庫に決定通知書・書類を追加しました！');
+      setNewCabinetDoc({
+        fiscal_year: '令和8年度 (2026)',
+        title: '',
+        doc_type: 'nenkin_notice',
+        file_url: '',
+        filename: '',
+        note: ''
+      });
+    } catch (err: any) {
+      console.error('Save cabinet doc error:', err);
+      alert('保管庫への保存に失敗しました: ' + err.message);
+    }
+  };
+
+  // 📁 全社キャビネットからの削除
+  const handleDeleteCabinetDoc = (id: string) => {
+    if (!window.confirm('この書類を全社保管庫から削除してもよろしいですか？')) return;
+    const updated = remunerationDocs.filter(d => d.id !== id);
+    setRemunerationDocs(updated);
+    if (tenantId) {
+      localStorage.setItem(`remuneration_docs_${tenantId}`, JSON.stringify(updated));
+    }
+  };
+
+  // 📁 全社キャビネット用のファイルアップロード（PDFまたは画像圧縮）
+  const handleCabinetFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingCabinetDoc(true);
+    try {
+      if (file.type === 'application/pdf') {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setNewCabinetDoc(prev => ({
+            ...prev,
+            file_url: reader.result as string,
+            filename: file.name,
+            title: prev.title || file.name.replace(/\.[^/.]+$/, '')
+          }));
+          setIsUploadingCabinetDoc(false);
+        };
+        reader.onerror = () => {
+          alert('PDFの読み込みに失敗しました');
+          setIsUploadingCabinetDoc(false);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        const result = await compressImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.8 });
+        setNewCabinetDoc(prev => ({
+          ...prev,
+          file_url: result.base64,
+          filename: result.fileName,
+          title: prev.title || file.name.replace(/\.[^/.]+$/, '')
+        }));
+        setIsUploadingCabinetDoc(false);
+      }
+    } catch (err: any) {
+      alert('ファイルの読み込みに失敗しました: ' + err.message);
+      setIsUploadingCabinetDoc(false);
+    }
+  };
+
   // 従業員情報編集保存（個人別就業時間の上書き反映）
   const handleSaveEditedEmployee = async (data: EmployeeOnboardingData) => {
     if (!tenantId || !data) return;
+
+    // 資格手当が設定されている場合、合格証（写メまたはPDF）のエビデンス添付が必須！
+    if ((data.qualification_allowance || 0) > 0 && !data.qualification_certificate_url) {
+      alert('⚠️ 資格手当を支給する場合は、資格証明書（合格証の写メまたはPDF）のエビデンス添付が必須です。');
+      return;
+    }
+
     setIsSaving(true);
     try {
       // 1. users テーブルの更新（カラム未存在エラー対策フォールバック）
@@ -1689,7 +1985,11 @@ export default function OnboardingAdminDashboard() {
           .eq('id', data.user_id);
       }
 
-      // 2. employee_payroll_profiles の更新（birth_date カラム対応）
+      // 住民税月額（特別徴収）の解決（月別設定がある場合はそこからも確実に抽出）
+      const resolvedResidentTaxMonthly = Number(data.resident_tax_monthly) || 
+        (data.resident_tax_details ? (Number(data.resident_tax_details['7']) || Number(data.resident_tax_details['6']) || Number(Object.values(data.resident_tax_details)[0]) || 0) : 0);
+
+      // 2. employee_payroll_profiles の更新（標準報酬月額・住民税・資格手当・扶養親族の100%全同期）
       try {
         const { error: pErr } = await supabase
           .from('employee_payroll_profiles')
@@ -1708,8 +2008,15 @@ export default function OnboardingAdminDashboard() {
             commuting_daily_amount: data.commuting_daily_amount,
             commuting_allowance: data.commuting_allowance,
             health_insurance_enabled: data.health_insurance_joined,
+            health_standard_monthly_remuneration: data.health_standard_monthly_remuneration || null,
             pension_insurance_enabled: data.pension_insurance_joined,
+            pension_standard_monthly_remuneration: data.pension_standard_monthly_remuneration || null,
             employment_insurance_enabled: data.employment_insurance_joined,
+            resident_tax_monthly: resolvedResidentTaxMonthly,
+            resident_tax_details: data.resident_tax_details || {},
+            dependents_count: data.dependents_count ?? 0,
+            has_spouse: !!data.has_spouse,
+            my_number: data.my_number || '',
             bank_name: data.bank_name,
             branch_name: data.branch_name,
             account_type: data.account_type,
@@ -1718,7 +2025,7 @@ export default function OnboardingAdminDashboard() {
           }, { onConflict: 'tenant_id,user_id' });
         if (pErr) throw pErr;
       } catch (pErr) {
-        console.warn('payroll profile birth_date update failed, trying without birth_date:', pErr);
+        console.warn('payroll profile full update failed, trying fallback:', pErr);
         await supabase
           .from('employee_payroll_profiles')
           .upsert({
@@ -1736,7 +2043,11 @@ export default function OnboardingAdminDashboard() {
             commuting_allowance: data.commuting_allowance,
             health_insurance_enabled: data.health_insurance_joined,
             pension_insurance_enabled: data.pension_insurance_joined,
-            employment_insurance_joined: data.employment_insurance_joined,
+            employment_insurance_enabled: data.employment_insurance_joined,
+            resident_tax_monthly: resolvedResidentTaxMonthly,
+            resident_tax_details: data.resident_tax_details || {},
+            dependents_count: data.dependents_count ?? 0,
+            has_spouse: !!data.has_spouse,
             bank_name: data.bank_name,
             branch_name: data.branch_name,
             account_type: data.account_type,
@@ -1755,7 +2066,7 @@ export default function OnboardingAdminDashboard() {
           base_wage: data.salary_type === 'hourly' ? data.hourly_wage : 1150
         }, { onConflict: 'user_id' });
 
-      // 4. employee_onboarding_profiles の更新
+      // 4. employee_onboarding_profiles の更新（標準報酬月額・住民税・資格証憑・扶養含む）
       try {
         const { error: onbErr } = await supabase
           .from('employee_onboarding_profiles')
@@ -1777,17 +2088,30 @@ export default function OnboardingAdminDashboard() {
             base_salary: data.base_salary,
             hourly_wage: data.hourly_wage,
             position_allowance: data.position_allowance,
+            qualification_allowance: data.qualification_allowance || 0,
+            qualification_name: data.qualification_name || '',
+            qualification_certificate_url: data.qualification_certificate_url || '',
+            qualification_certificate_filename: data.qualification_certificate_filename || '',
             commuting_type: data.commuting_type,
             commuting_daily_amount: data.commuting_daily_amount,
             commuting_allowance: data.commuting_allowance,
             health_insurance_joined: data.health_insurance_joined,
+            health_standard_monthly_remuneration: data.health_standard_monthly_remuneration || null,
             pension_insurance_joined: data.pension_insurance_joined,
+            pension_standard_monthly_remuneration: data.pension_standard_monthly_remuneration || null,
+            standard_remuneration_notice_url: data.standard_remuneration_notice_url || '',
+            standard_remuneration_notice_filename: data.standard_remuneration_notice_filename || '',
             employment_insurance_joined: data.employment_insurance_joined,
+            resident_tax_monthly: resolvedResidentTaxMonthly,
+            resident_tax_details: data.resident_tax_details || {},
+            dependents_count: data.dependents_count ?? 0,
+            has_spouse: !!data.has_spouse,
+            my_number: data.my_number || '',
             updated_at: new Date().toISOString()
           }, { onConflict: 'tenant_id,user_id' });
         if (onbErr) throw onbErr;
       } catch (onbErr) {
-        console.warn('onboarding profile full update failed:', onbErr);
+        console.warn('onboarding profile full update failed, falling back:', onbErr);
         await supabase
           .from('employee_onboarding_profiles')
           .upsert({
@@ -1830,20 +2154,48 @@ export default function OnboardingAdminDashboard() {
           hourly_wage: data.hourly_wage,
           position_allowance: data.position_allowance,
           qualification_allowance: data.qualification_allowance || 0,
+          qualification_name: data.qualification_name || '',
+          qualification_certificate_url: data.qualification_certificate_url || '',
+          qualification_certificate_filename: data.qualification_certificate_filename || '',
           housing_allowance: data.housing_allowance || 0,
           family_allowance: data.family_allowance || 0,
           commuting_allowance: data.commuting_allowance,
           health_insurance_joined: data.health_insurance_joined,
+          health_standard_monthly_remuneration: data.health_standard_monthly_remuneration || null,
           pension_insurance_joined: data.pension_insurance_joined,
+          pension_standard_monthly_remuneration: data.pension_standard_monthly_remuneration || null,
+          standard_remuneration_notice_url: data.standard_remuneration_notice_url || '',
+          standard_remuneration_notice_filename: data.standard_remuneration_notice_filename || '',
           employment_insurance_joined: data.employment_insurance_joined,
+          resident_tax_monthly: resolvedResidentTaxMonthly,
+          resident_tax_details: data.resident_tax_details || {},
+          dependents_count: data.dependents_count ?? 0,
+          has_spouse: !!data.has_spouse,
+          my_number: data.my_number || '',
           updated_at: new Date().toISOString()
         }));
+
+        // 給与側の payroll_profiles_${tenantId} キャッシュも即座に同期更新！
+        const payKey = `payroll_profiles_${tenantId}`;
+        const payRaw = localStorage.getItem(payKey);
+        const payCache = payRaw ? JSON.parse(payRaw) : {};
+        payCache[data.user_id] = {
+          ...(payCache[data.user_id] || {}),
+          dependents_count: data.dependents_count ?? 0,
+          has_spouse: !!data.has_spouse,
+          health_standard_monthly_remuneration: data.health_standard_monthly_remuneration || null,
+          pension_standard_monthly_remuneration: data.pension_standard_monthly_remuneration || null,
+          resident_tax_monthly: resolvedResidentTaxMonthly,
+          updated_at: new Date().toISOString()
+        };
+        localStorage.setItem(payKey, JSON.stringify(payCache));
       } catch (stErr) {
         console.warn('localStorage backup error:', stErr);
       }
 
-      alert('✨ 従業員・労務情報の修正を保存しました！\n銀行口座・生年月日・住所・就業規定が全システムに即座に同期されました。');
+      alert('✨ 従業員・労務情報の修正を保存しました！\n標準報酬月額・住民税・資格手当（合格証証憑）・就業規定が給与計算・全システムに即座に同期されました。');
       setEditModal({ isOpen: false, data: null });
+      setCompressionStats(null);
       await fetchData();
     } catch (err: any) {
       console.error('Save edit error:', err);
@@ -2036,6 +2388,9 @@ export default function OnboardingAdminDashboard() {
       position_name: resolvedPositionName,
       position_allowance: resolvedPositionAllowance,
       qualification_allowance: resolvedQualificationAllowance,
+      qualification_name: matchedEmp.qualification_name || localMaster.qualification_name || '',
+      qualification_certificate_url: matchedEmp.qualification_certificate_url || localMaster.qualification_certificate_url || '',
+      qualification_certificate_filename: matchedEmp.qualification_certificate_filename || localMaster.qualification_certificate_filename || '',
       fixed_overtime_allowance: resolvedFixedOvertimeAllowance,
       commuting_allowance: resolvedCommutingAllowance,
       salary_type: resolvedSalaryType,
@@ -2050,8 +2405,12 @@ export default function OnboardingAdminDashboard() {
       dependents_count: resolvedDependentsCount,
       has_spouse: resolvedHasSpouse,
       health_insurance_joined: matchedEmp.health_insurance_joined ?? true,
+      health_standard_monthly_remuneration: matchedEmp.health_standard_monthly_remuneration || localMaster.health_standard_monthly_remuneration || undefined,
       pension_insurance_joined: matchedEmp.pension_insurance_joined ?? true,
+      pension_standard_monthly_remuneration: matchedEmp.pension_standard_monthly_remuneration || localMaster.pension_standard_monthly_remuneration || undefined,
       employment_insurance_joined: matchedEmp.employment_insurance_joined ?? true,
+      resident_tax_monthly: matchedEmp.resident_tax_monthly || localMaster.resident_tax_monthly || 0,
+      resident_tax_details: matchedEmp.resident_tax_details || localMaster.resident_tax_details || {},
       signed_at: resolvedSignedAt
     };
   };
@@ -2246,6 +2605,15 @@ export default function OnboardingAdminDashboard() {
               <Upload className="w-4 h-4" />
               紙書類の手動代行登録（PC苦手な方用）
             </button>
+
+            <button
+              onClick={() => setRemunerationCabinetOpen(true)}
+              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold text-xs px-3.5 py-2 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              title="年金事務所から届いた標準報酬決定通知書（原本PDF/写メ）や協会けんぽ保険料額表の全社保管庫"
+            >
+              <FolderOpen className="w-4 h-4 text-indigo-600" />
+              📁 通知書・保険料額表 保管庫
+            </button>
           </div>
         </div>
 
@@ -2424,11 +2792,47 @@ export default function OnboardingAdminDashboard() {
                           </td>
 
                           <td className="py-3.5 px-3 text-slate-700 text-[11px]">
-                            <div className="font-bold">
+                            <div className="font-bold flex items-center gap-1">
                               {isHourly ? `時給 ¥${emp.hourly_wage?.toLocaleString()}` : `月給 ¥${emp.base_salary?.toLocaleString()}`}
+                              {emp.qualification_allowance ? (
+                                <span 
+                                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
+                                    emp.qualification_certificate_url 
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                                  }`}
+                                  title={emp.qualification_name ? `資格: ${emp.qualification_name} (+¥${emp.qualification_allowance.toLocaleString()})` : `資格手当: ¥${emp.qualification_allowance.toLocaleString()}`}
+                                >
+                                  <Award className="w-2.5 h-2.5" />
+                                  +¥{emp.qualification_allowance.toLocaleString()}
+                                  {emp.qualification_certificate_url ? '✓証憑' : '⚠️無'}
+                                </span>
+                              ) : null}
                             </div>
-                            <div className="text-[10px] text-slate-500">
+                            <div className="text-[10px] text-slate-500 mt-0.5">
                               口座: {emp.bank_name || '未登録'} / 通勤: ¥{emp.commuting_allowance?.toLocaleString() || 0}
+                            </div>
+                            <div className="flex items-center gap-1 mt-1 text-[9px] text-slate-500 flex-wrap">
+                              <span className="bg-amber-50 text-amber-900 font-bold px-1.5 py-0.5 rounded border border-amber-200">
+                                👨‍👩‍👧 扶養: {emp.dependents_count || 0}名{emp.has_spouse ? ' (💍配偶者有)' : ''}
+                              </span>
+                              {emp.health_standard_monthly_remuneration ? (
+                                <span className="bg-indigo-50 text-indigo-700 font-bold px-1 py-0.5 rounded border border-indigo-100">
+                                  健保: ¥{(emp.health_standard_monthly_remuneration / 10000).toFixed(0)}万
+                                </span>
+                              ) : null}
+                              {emp.pension_standard_monthly_remuneration ? (
+                                <span className="bg-purple-50 text-purple-700 font-bold px-1 py-0.5 rounded border border-purple-100">
+                                  年金: ¥{(emp.pension_standard_monthly_remuneration / 10000).toFixed(0)}万
+                                </span>
+                              ) : null}
+                              {(emp.resident_tax_monthly || (emp.resident_tax_details && Object.keys(emp.resident_tax_details).length > 0)) ? (
+                                <span className="bg-slate-100 text-slate-700 font-bold px-1 py-0.5 rounded border border-slate-200">
+                                  住民税: {emp.resident_tax_details && Object.keys(emp.resident_tax_details).length > 0
+                                    ? `月別設定 (年¥${Object.values(emp.resident_tax_details).reduce((a, b) => a + Number(b), 0).toLocaleString()})`
+                                    : `¥${emp.resident_tax_monthly?.toLocaleString()}`}
+                                </span>
+                              ) : null}
                             </div>
                           </td>
 
@@ -3677,7 +4081,7 @@ export default function OnboardingAdminDashboard() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] text-slate-500 block mb-0.5">役職手当</label>
+                    <label className="text-[10px] text-slate-500 block mb-0.5">役職手当 (円)</label>
                     <input
                       type="number"
                       placeholder="例: 30000"
@@ -3723,6 +4127,190 @@ export default function OnboardingAdminDashboard() {
                     </div>
                   </div>
                 </div>
+
+                {/* 📜 資格手当 ＆ 合格証エビデンス添付（必須） */}
+                <div className="p-3.5 bg-indigo-50/70 rounded-xl border border-indigo-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-indigo-950 flex items-center gap-1.5">
+                      <Award className="w-4 h-4 text-indigo-600" />
+                      資格手当 ＆ 合格証エビデンス（手当支給時【添付必須】）
+                    </label>
+                    <span className="text-[10px] font-bold text-indigo-600 bg-white px-2 py-0.5 rounded-full border border-indigo-200">
+                      全社マスタ連動
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">資格手当マスタから選択</label>
+                      <select
+                        value={editModal.data?.qualification_name || ''}
+                        onChange={e => {
+                          const selectedName = e.target.value;
+                          const found = qualifications.find(q => q.name === selectedName);
+                          setEditModal({
+                            ...editModal,
+                            data: {
+                              ...editModal.data!,
+                              qualification_name: selectedName,
+                              qualification_allowance: found ? found.default_allowance : (editModal.data!.qualification_allowance || 0)
+                            }
+                          });
+                        }}
+                        className="w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 font-bold text-xs"
+                      >
+                        <option value="">（マスタから選択...）</option>
+                        {qualifications.map(q => (
+                          <option key={q.id} value={q.name}>
+                            {q.name} (¥{q.default_allowance.toLocaleString()})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">資格・免許名（直接入力も可）</label>
+                      <input
+                        type="text"
+                        placeholder="例: 第一種衛生管理者"
+                        value={editModal.data?.qualification_name || ''}
+                        onChange={e => setEditModal({
+                          ...editModal,
+                          data: { ...editModal.data!, qualification_name: e.target.value }
+                        })}
+                        className="w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 font-bold text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">資格手当額 (円/月)</label>
+                      <input
+                        type="number"
+                        placeholder="例: 10000"
+                        value={editModal.data?.qualification_allowance === 0 ? '' : (editModal.data?.qualification_allowance || '')}
+                        onChange={e => setEditModal({
+                          ...editModal,
+                          data: { ...editModal.data!, qualification_allowance: e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0) }
+                        })}
+                        className="w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 font-bold text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 📷 合格証・資格証明書の写メ/PDF 添付枠 */}
+                  <div className="bg-white p-3 rounded-xl border border-indigo-100 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-slate-700 flex items-center gap-1">
+                        <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        合格証・証明書エビデンス（写メ・写真またはPDF）
+                        {(editModal.data?.qualification_allowance || 0) > 0 && (
+                          <span className="text-[9px] bg-rose-100 text-rose-700 font-black px-1.5 py-0.5 rounded">必須</span>
+                        )}
+                      </span>
+                      {compressionStats && (
+                        <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          ✨ {compressionStats.originalKb}KB ➔ {compressionStats.compressedKb}KB ({compressionStats.ratio}%自動圧縮)
+                        </span>
+                      )}
+                    </div>
+
+                    {editModal.data?.qualification_certificate_url ? (
+                      <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {editModal.data.qualification_certificate_url.startsWith('data:image/') ? (
+                            <img
+                              src={editModal.data.qualification_certificate_url}
+                              alt="合格証プレビュー"
+                              className="w-10 h-10 object-cover rounded-md border border-slate-200 shrink-0 cursor-pointer hover:opacity-80 transition"
+                              onClick={() => setCertificateViewModal({
+                                isOpen: true,
+                                title: `${editModal.data?.name} 殿 - ${editModal.data?.qualification_name || '資格'} 合格証`,
+                                url: editModal.data!.qualification_certificate_url!,
+                                filename: editModal.data?.qualification_certificate_filename
+                              })}
+                            />
+                          ) : (
+                            <div 
+                              onClick={() => setCertificateViewModal({
+                                isOpen: true,
+                                title: `${editModal.data?.name} 殿 - ${editModal.data?.qualification_name || '資格'} 合格証`,
+                                url: editModal.data!.qualification_certificate_url!,
+                                filename: editModal.data?.qualification_certificate_filename
+                              })}
+                              className="w-10 h-10 bg-rose-100 text-rose-600 rounded-md flex items-center justify-center font-black text-xs shrink-0 cursor-pointer hover:bg-rose-200 transition"
+                            >
+                              PDF
+                            </div>
+                          )}
+                          <div className="truncate">
+                            <div className="font-bold text-xs text-slate-800 truncate">
+                              {editModal.data.qualification_certificate_filename || '資格合格証証明書'}
+                            </div>
+                            <div className="text-[10px] text-emerald-600 font-bold flex items-center gap-1 mt-0.5">
+                              <CheckCircle2 className="w-3 h-3" />
+                              エビデンス添付済み（軽量化保存中）
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                          <button
+                            type="button"
+                            onClick={() => setCertificateViewModal({
+                              isOpen: true,
+                              title: `${editModal.data?.name} 殿 - ${editModal.data?.qualification_name || '資格'} 合格証`,
+                              url: editModal.data!.qualification_certificate_url!,
+                              filename: editModal.data?.qualification_certificate_filename
+                            })}
+                            className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-md text-[11px] font-bold flex items-center gap-1 cursor-pointer transition"
+                          >
+                            <Eye className="w-3 h-3 text-indigo-600" />
+                            拡大確認
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditModal({
+                              ...editModal,
+                              data: {
+                                ...editModal.data!,
+                                qualification_certificate_url: '',
+                                qualification_certificate_filename: ''
+                              }
+                            })}
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded-md cursor-pointer transition"
+                            title="添付削除"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-2.5 bg-slate-50 border border-dashed border-slate-300 rounded-lg">
+                        <div className="text-[10px] text-slate-500">
+                          {isCompressingCert ? (
+                            <span className="text-indigo-600 font-bold flex items-center gap-1">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              高解像度写真を軽量化圧縮中...
+                            </span>
+                          ) : (
+                            <span>スマホの写真（写メ）またはPDFを選択してください（自動で高画質圧縮されます）</span>
+                          )}
+                        </div>
+                        <label className="cursor-pointer bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-2xs">
+                          <Upload className="w-3.5 h-3.5" />
+                          合格証を添付
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={handleCertificateUpload}
+                            disabled={isCompressingCert}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
@@ -3763,6 +4351,472 @@ export default function OnboardingAdminDashboard() {
                       onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, account_holder: e.target.value } })}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5"
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* 🏥 社会保険（標準報酬月額・等級表連動）＆ 住民税（12ヶ月特別徴収管理）完全連動設定 */}
+              <div className="bg-indigo-50/60 p-4 rounded-2xl border border-indigo-200 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-200 pb-2">
+                  <div>
+                    <h4 className="font-bold text-indigo-950 text-xs flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                      社会保険（標準報酬月額）＆ 住民税（12ヶ月特別徴収）設定
+                    </h4>
+                    <p className="text-[10px] text-indigo-700">
+                      ※ 唯一の真実（SSOT）として給与マスタへ即時流動・給与計算へ完全自動連動
+                    </p>
+                  </div>
+                  {(() => {
+                    const curSalaryType = editModal.data.salary_type || (editModal.data.employment_type === 'part-time' ? 'hourly' : 'monthly');
+                    const baseAmount = curSalaryType === 'hourly'
+                      ? ((editModal.data.hourly_wage || 1200) * 160)
+                      : (editModal.data.base_salary || 250000);
+                    const allowanceSum = (editModal.data.position_allowance || 0) +
+                      (editModal.data.qualification_allowance || 0) +
+                      (editModal.data.housing_allowance || 0) +
+                      (editModal.data.family_allowance || 0) +
+                      (editModal.data.commuting_allowance || 0);
+                    const estimatedMonthlySalary = Math.round(baseAmount + allowanceSum);
+                    const recHealthVal = lookupStandardMonthlyRemuneration(estimatedMonthlySalary, 'health');
+                    const recPensionVal = lookupStandardMonthlyRemuneration(estimatedMonthlySalary, 'pension');
+                    const recHealthObj = HEALTH_REMUNERATION_TABLE.find(t => t.standard === recHealthVal);
+                    const recPensionObj = HEALTH_REMUNERATION_TABLE.find(t => t.standard === recPensionVal);
+
+                    return (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-900 border border-amber-300 rounded-lg text-[11px] font-bold shadow-2xs">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                          <span>💡 給与見込（¥{estimatedMonthlySalary.toLocaleString()}）からの推奨等級:</span>
+                          <span className="bg-amber-600 text-white px-2 py-0.5 rounded text-[10px] font-black">
+                            第{recHealthObj?.grade || '―'}等級（¥{recHealthVal.toLocaleString()}）
+                            {recPensionObj && recPensionVal !== recHealthVal && ` / 厚年: 第${recPensionObj.grade - 3}等級`}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditModal({
+                              ...editModal,
+                              data: {
+                                ...editModal.data!,
+                                health_standard_monthly_remuneration: recHealthVal,
+                                pension_standard_monthly_remuneration: recPensionVal
+                              }
+                            });
+                          }}
+                          className="px-2.5 py-1 bg-white hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                          title="現在の基本給・手当の合計から法律上の適正等級をワンタッチで反映します"
+                        >
+                          <Sparkles className="w-3 h-3 text-amber-600" />
+                          推奨等級をワンタッチ適用
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* ① 社会保険（標準報酬月額表プルダウン ＆ 健保厚年自動連動） */}
+                {(() => {
+                  const curSalaryType = editModal.data.salary_type || (editModal.data.employment_type === 'part-time' ? 'hourly' : 'monthly');
+                  const baseAmount = curSalaryType === 'hourly'
+                    ? ((editModal.data.hourly_wage || 1200) * 160)
+                    : (editModal.data.base_salary || 250000);
+                  const allowanceSum = (editModal.data.position_allowance || 0) +
+                    (editModal.data.qualification_allowance || 0) +
+                    (editModal.data.housing_allowance || 0) +
+                    (editModal.data.family_allowance || 0) +
+                    (editModal.data.commuting_allowance || 0);
+                  const estimatedMonthlySalary = Math.round(baseAmount + allowanceSum);
+                  const recHealthVal = lookupStandardMonthlyRemuneration(estimatedMonthlySalary, 'health');
+                  const recPensionVal = lookupStandardMonthlyRemuneration(estimatedMonthlySalary, 'pension');
+                  const recHealthObj = HEALTH_REMUNERATION_TABLE.find(t => t.standard === recHealthVal);
+                  const recPensionObj = HEALTH_REMUNERATION_TABLE.find(t => t.standard === recPensionVal);
+
+                  return (
+                    <div className="bg-white p-3.5 rounded-xl border border-indigo-100 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-4">
+                          <label className="text-xs font-black text-slate-800 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editModal.data.health_insurance_joined}
+                              onChange={e => setEditModal({
+                                ...editModal,
+                                data: { ...editModal.data!, health_insurance_joined: e.target.checked }
+                              })}
+                              className="w-3.5 h-3.5 text-indigo-600 rounded cursor-pointer"
+                            />
+                            健康保険
+                          </label>
+                          <label className="text-xs font-black text-slate-800 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editModal.data.pension_insurance_joined}
+                              onChange={e => setEditModal({
+                                ...editModal,
+                                data: { ...editModal.data!, pension_insurance_joined: e.target.checked }
+                              })}
+                              className="w-3.5 h-3.5 text-indigo-600 rounded cursor-pointer"
+                            />
+                            厚生年金
+                          </label>
+                          <label className="text-xs font-black text-slate-800 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editModal.data.employment_insurance_joined}
+                              onChange={e => setEditModal({
+                                ...editModal,
+                                data: { ...editModal.data!, employment_insurance_joined: e.target.checked }
+                              })}
+                              className="w-3.5 h-3.5 text-indigo-600 rounded cursor-pointer"
+                            />
+                            雇用保険
+                          </label>
+                        </div>
+
+                        <label className="text-[10px] font-bold text-slate-500 flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={separateSocialRemuneration}
+                            onChange={e => setSeparateSocialRemuneration(e.target.checked)}
+                            className="w-3 h-3 text-indigo-600 rounded cursor-pointer"
+                          />
+                          健保と厚年を個別に設定する（高所得・特例時）
+                        </label>
+                      </div>
+
+                      {!separateSocialRemuneration ? (
+                        // 通常: 共通の標準報酬月額プルダウン選択（健保・厚年完全自動連動）
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] font-bold text-indigo-950 flex items-center gap-1">
+                              標準報酬月額（月額表から選択・健保＆厚年自動連動）
+                              <span className="text-[9px] bg-emerald-50 text-emerald-700 px-1.5 py-0.2 rounded border border-emerald-200">
+                                通知書通りの数字
+                              </span>
+                            </label>
+                            {editModal.data.health_standard_monthly_remuneration && (
+                              <span className="text-[10px] font-bold text-indigo-600">
+                                現在選択: ¥{editModal.data.health_standard_monthly_remuneration.toLocaleString()}
+                                {editModal.data.health_standard_monthly_remuneration > 650000 && (
+                                  <span className="text-amber-600 ml-1">（※ 厚年は上限65万円で自動調整）</span>
+                                )}
+                              </span>
+                            )}
+                          </div>
+                          <select
+                            value={editModal.data.health_standard_monthly_remuneration || ''}
+                            onChange={e => {
+                              const val = e.target.value === '' ? undefined : Number(e.target.value);
+                              // 厚年上限は65万円 (32等級)
+                              const pensionVal = val !== undefined ? Math.min(val, 650000) : undefined;
+                              setEditModal({
+                                ...editModal,
+                                data: {
+                                  ...editModal.data!,
+                                  health_standard_monthly_remuneration: val,
+                                  pension_standard_monthly_remuneration: pensionVal
+                                }
+                              });
+                            }}
+                            className="w-full bg-slate-50 border border-indigo-200 rounded-lg px-2.5 py-2 font-bold text-xs text-slate-800 focus:bg-white transition"
+                          >
+                            <option value="">（未設定：基本給・諸手当から給与計算時に自動判定）</option>
+                            {recHealthObj && (
+                              <option value={recHealthObj.standard} className="bg-amber-50 font-black text-amber-900">
+                                🌟 【給与見込からの推奨】第{recHealthObj.grade}等級: ¥{recHealthObj.standard.toLocaleString()}（総支給見込: ¥{estimatedMonthlySalary.toLocaleString()}）
+                              </option>
+                            )}
+                            {HEALTH_REMUNERATION_TABLE.map(t => (
+                              <option key={t.grade} value={t.standard}>
+                                第{t.grade}等級: ¥{t.standard.toLocaleString()}（報酬月額: {t.min === 0 ? '〜' : `${(t.min / 10000).toFixed(1)}万〜`}{t.max === Infinity ? '' : `${(t.max / 10000).toFixed(1)}万円`}）{t.standard === recHealthVal ? ' ⭐給与推奨' : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[9px] text-slate-400 mt-1">
+                            ※ 年金事務所からの「標準報酬決定通知書」に記載された標準報酬月額を選択してください。厚年も上限65万円の範囲で自動連動します。
+                          </p>
+                        </div>
+                      ) : (
+                        // 個別設定時: 健保と厚年をそれぞれ選択
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-100">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-700 block mb-0.5">
+                              健康保険 標準報酬月額（全50等級）
+                            </label>
+                            <select
+                              value={editModal.data.health_standard_monthly_remuneration || ''}
+                              onChange={e => {
+                                const val = e.target.value === '' ? undefined : Number(e.target.value);
+                                setEditModal({
+                                  ...editModal,
+                                  data: { ...editModal.data!, health_standard_monthly_remuneration: val }
+                                });
+                              }}
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-bold text-xs text-slate-800"
+                            >
+                              <option value="">（自動判定）</option>
+                              {recHealthObj && (
+                                <option value={recHealthObj.standard} className="bg-amber-50 font-bold text-amber-900">
+                                  🌟 【推奨】第{recHealthObj.grade}等級: ¥{recHealthObj.standard.toLocaleString()}
+                                </option>
+                              )}
+                              {HEALTH_REMUNERATION_TABLE.map(t => (
+                                <option key={`h-${t.grade}`} value={t.standard}>
+                                  第{t.grade}等級: ¥{t.standard.toLocaleString()}{t.standard === recHealthVal ? ' ⭐推奨' : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-700 block mb-0.5">
+                              厚生年金 標準報酬月額（1〜32等級・上限65万）
+                            </label>
+                            <select
+                              value={editModal.data.pension_standard_monthly_remuneration || ''}
+                              onChange={e => {
+                                const val = e.target.value === '' ? undefined : Number(e.target.value);
+                                setEditModal({
+                                  ...editModal,
+                                  data: { ...editModal.data!, pension_standard_monthly_remuneration: val }
+                                });
+                              }}
+                              className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-bold text-xs text-slate-800"
+                            >
+                              <option value="">（自動判定）</option>
+                              {recPensionObj && (
+                                <option value={recPensionObj.standard} className="bg-amber-50 font-bold text-amber-900">
+                                  🌟 【推奨】第{recPensionObj.grade - 3}等級: ¥{recPensionObj.standard.toLocaleString()}
+                                </option>
+                              )}
+                              {HEALTH_REMUNERATION_TABLE.filter(t => t.standard <= 650000 && t.standard >= 88000).map(t => (
+                                <option key={`p-${t.grade}`} value={t.standard}>
+                                  第{t.grade - 3}等級: ¥{t.standard.toLocaleString()}{t.standard === recPensionVal ? ' ⭐推奨' : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 📷 年金事務所の標準報酬決定通知書（原本写メ/PDF）証憑添付枠 */}
+                      <div className="bg-slate-50 p-3 rounded-xl border border-indigo-100 mt-2">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                            <span className="text-[11px] font-bold text-indigo-950">
+                              年金事務所 決定通知書（原本写メ/PDF）
+                            </span>
+                            <span className="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-medium">
+                              エビデンス原本
+                            </span>
+                          </div>
+                          {editModal.data.standard_remuneration_notice_url && (
+                            <button
+                              type="button"
+                              onClick={() => setCertificateViewModal({
+                                isOpen: true,
+                                title: `${editModal.data?.name}様 - 標準報酬決定通知書 原本`,
+                                url: editModal.data?.standard_remuneration_notice_url || '',
+                                filename: editModal.data?.standard_remuneration_notice_filename
+                              })}
+                              className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer bg-white px-2 py-0.5 rounded border border-indigo-200 shadow-2xs"
+                            >
+                              <Eye className="w-3 h-3" />
+                              原本を拡大表示
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          {editModal.data.standard_remuneration_notice_url ? (
+                            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 flex-1">
+                              <span className="text-[11px] text-slate-700 truncate font-medium flex-1">
+                                📎 {editModal.data.standard_remuneration_notice_filename || '決定通知書原本.jpg'}
+                              </span>
+                              <label className="text-[10px] text-blue-600 hover:underline cursor-pointer font-bold">
+                                差し替え
+                                <input
+                                  type="file"
+                                  accept="image/*,application/pdf"
+                                  onChange={handleRemunerationNoticeUpload}
+                                  className="hidden"
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => setEditModal({
+                                  ...editModal,
+                                  data: {
+                                    ...editModal.data!,
+                                    standard_remuneration_notice_url: '',
+                                    standard_remuneration_notice_filename: ''
+                                  }
+                                })}
+                                className="text-[10px] text-rose-500 hover:underline cursor-pointer font-bold"
+                              >
+                                削除
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="flex items-center justify-center gap-1.5 w-full py-2.5 px-3 bg-white hover:bg-indigo-50/50 border border-dashed border-indigo-300 rounded-lg cursor-pointer transition text-indigo-700 font-bold text-xs">
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>通知書ハガキ・決定通知原本の写メ / PDFを添付</span>
+                              <input
+                                type="file"
+                                accept="image/*,application/pdf"
+                                onChange={handleRemunerationNoticeUpload}
+                                className="hidden"
+                              />
+                            </label>
+                          )}
+                          {isCompressingNotice && (
+                            <span className="text-[10px] text-indigo-600 flex items-center gap-1 animate-pulse">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              画像圧縮中...
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[9px] text-slate-400 mt-1">
+                          ※ 算定基礎届・月額変更届・資格取得時に年金事務所から届いた通知書（ハガキ等）を撮影して添付しておくと、いつでも番号と等級を原本照合できます。
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ② 住民税（12ヶ月月別特別徴収 ＆ ◯月以降同額一括入力） */}
+                <div className="bg-white p-3.5 rounded-xl border border-indigo-100 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <div>
+                      <label className="text-[11px] font-bold text-indigo-950 flex items-center gap-1.5">
+                        住民税 特別徴収税額（6月〜翌5月・12ヶ月月別管理）
+                        <span className="text-[9px] bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded border border-indigo-200">
+                          決定通知書準拠
+                        </span>
+                      </label>
+                      <p className="text-[9px] text-slate-400">
+                        ※ 各自治体の通知書通りに入力。6月の端数調整や中途入社（◯月〜）の税額も完全対応
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-500 font-bold">年間特別徴収総額: </span>
+                      <span className="text-xs font-black text-indigo-600">
+                        ¥{([6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5].reduce((acc, m) => {
+                          const val = editModal.data?.resident_tax_details?.[String(m)];
+                          return acc + (val !== undefined ? Number(val) : (editModal.data?.resident_tax_monthly || 0));
+                        }, 0)).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* ⚡ 一括反映バー（◯月以降同額） */}
+                  <div className="p-2 bg-indigo-50/50 rounded-lg border border-indigo-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-bold text-indigo-900 flex items-center gap-1">
+                        ⚡ 一括反映アシスト:
+                      </span>
+                      <select
+                        value={residentTaxBulkMonth}
+                        onChange={e => setResidentTaxBulkMonth(Number(e.target.value))}
+                        className="bg-white border border-indigo-200 rounded px-2 py-1 text-xs font-bold text-slate-700 cursor-pointer"
+                      >
+                        {[6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5].map(m => (
+                          <option key={m} value={m}>
+                            {m >= 6 ? `${m}月分` : `翌${m}月分`}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-[10px] text-slate-500 font-bold">以降同額:</span>
+                      <input
+                        type="number"
+                        placeholder="例: 14000"
+                        value={residentTaxBulkAmount}
+                        onChange={e => setResidentTaxBulkAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                        className="w-24 bg-white border border-indigo-200 rounded px-2 py-1 text-xs font-bold text-slate-800"
+                      />
+                      <span className="text-[10px] text-slate-500">円</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (residentTaxBulkAmount === '') return;
+                        const amt = Number(residentTaxBulkAmount) || 0;
+                        const monthsOrder = [6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5];
+                        const startIndex = monthsOrder.indexOf(residentTaxBulkMonth);
+                        if (startIndex === -1) return;
+
+                        const newDetails = { ...(editModal.data?.resident_tax_details || {}) };
+                        for (let i = startIndex; i < monthsOrder.length; i++) {
+                          newDetails[String(monthsOrder[i])] = amt;
+                        }
+
+                        setEditModal({
+                          ...editModal,
+                          data: {
+                            ...editModal.data!,
+                            resident_tax_monthly: amt,
+                            resident_tax_details: newDetails
+                          }
+                        });
+                      }}
+                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded-md transition shadow-2xs cursor-pointer"
+                    >
+                      {residentTaxBulkMonth >= 6 ? `${residentTaxBulkMonth}月` : `翌${residentTaxBulkMonth}月`}以降に一括反映
+                    </button>
+                  </div>
+
+                  {/* 12ヶ月分月別入力グリッド (6月〜翌5月) */}
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {[6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5].map((monthNum) => {
+                      const isFirstMonth = monthNum === 6; // 6月は端数調整月
+                      const currentVal = editModal.data?.resident_tax_details?.[String(monthNum)] ?? (editModal.data?.resident_tax_monthly ?? 0);
+
+                      return (
+                        <div 
+                          key={monthNum} 
+                          className={`p-2 rounded-lg border text-center transition ${
+                            isFirstMonth 
+                              ? 'bg-amber-50/50 border-amber-300' 
+                              : 'bg-slate-50/80 border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-[10px] font-black mb-1">
+                            <span className={isFirstMonth ? 'text-amber-800' : 'text-slate-700'}>
+                              {monthNum >= 6 ? `${monthNum}月` : `翌${monthNum}月`}
+                            </span>
+                            {isFirstMonth && (
+                              <span className="text-[8px] bg-amber-200/80 text-amber-800 font-bold px-1 rounded">端数月</span>
+                            )}
+                          </div>
+                          <input
+                            type="number"
+                            value={currentVal === 0 ? '' : currentVal}
+                            placeholder="0"
+                            onChange={e => {
+                              const val = e.target.value === '' ? 0 : (parseInt(e.target.value, 10) || 0);
+                              const updatedDetails = {
+                                ...(editModal.data?.resident_tax_details || {}),
+                                [String(monthNum)]: val
+                              };
+                              setEditModal({
+                                ...editModal,
+                                data: {
+                                  ...editModal.data!,
+                                  resident_tax_details: updatedDetails,
+                                  resident_tax_monthly: monthNum === 6 ? val : (editModal.data?.resident_tax_monthly || val)
+                                }
+                              });
+                            }}
+                            className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 text-center font-bold text-xs text-slate-800 focus:border-indigo-400 focus:bg-indigo-50/20"
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -3826,6 +4880,66 @@ export default function OnboardingAdminDashboard() {
               >
                 {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-4 h-4" />}
                 修正内容を全同期保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📜 資格合格証・証明書 拡大プレビュー モーダル */}
+      {certificateViewModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 my-8 animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2">
+                <Award className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-bold text-slate-800 text-sm truncate">
+                  {certificateViewModal.title || '資格合格証証明書'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setCertificateViewModal({ isOpen: false, title: '', url: '', filename: '' })}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="py-4 flex-1 overflow-auto flex items-center justify-center bg-slate-900/5 rounded-2xl border border-slate-100 my-3 min-h-[300px]">
+              {certificateViewModal.url.startsWith('data:image/') ? (
+                <img
+                  src={certificateViewModal.url}
+                  alt="合格証証明書"
+                  className="max-h-[65vh] w-auto object-contain rounded-lg shadow-sm"
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-3 p-8 text-center">
+                  <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center text-xl font-black">
+                    PDF
+                  </div>
+                  <div className="font-bold text-slate-800 text-sm">
+                    {certificateViewModal.filename || '資格証明書.pdf'}
+                  </div>
+                  <a
+                    href={certificateViewModal.url}
+                    download={certificateViewModal.filename || 'certificate.pdf'}
+                    className="mt-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition"
+                  >
+                    PDFファイルをダウンロード・閲覧
+                  </a>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100 shrink-0 text-xs">
+              <span className="text-[11px] text-slate-400">
+                ファイル名: {certificateViewModal.filename || '添付証明書'}
+              </span>
+              <button
+                onClick={() => setCertificateViewModal({ isOpen: false, title: '', url: '', filename: '' })}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition cursor-pointer"
+              >
+                閉じる
               </button>
             </div>
           </div>
@@ -4120,6 +5234,41 @@ export default function OnboardingAdminDashboard() {
                     />
                   </div>
                 </div>
+
+                {/* 👨‍👩‍👧 税法上の扶養親族・配偶者（源泉所得税の甲欄計算用） */}
+                <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200 space-y-2">
+                  <label className="text-[11px] font-bold text-amber-950 flex items-center gap-1.5">
+                    👨‍👩‍👧 税法上の扶養親族 ＆ 配偶者（源泉所得税 甲欄連動マスタ）
+                  </label>
+                  <p className="text-[10px] text-amber-800">
+                    ※ 従業員の扶養控除等申告書に基づく人数です。登録内容は「給与計算システム」の国税庁公式源泉徴収税額へ100%自動反映されます。
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">控除対象 扶養親族数 (名)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="15"
+                        placeholder="例: 0"
+                        value={wizardData.dependents_count || 0}
+                        onChange={e => setWizardData({ ...wizardData, dependents_count: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                        className="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">源泉控除対象配偶者</label>
+                      <select
+                        value={wizardData.has_spouse ? 'true' : 'false'}
+                        onChange={e => setWizardData({ ...wizardData, has_spouse: e.target.value === 'true' })}
+                        className="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800"
+                      >
+                        <option value="false">❌ なし (単身・対象外)</option>
+                        <option value="true">💍 あり (配偶者控除あり)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -4136,6 +5285,7 @@ export default function OnboardingAdminDashboard() {
                     <div>就業時間: <span className="font-bold text-indigo-700">{wizardData.start_time} 〜 {wizardData.end_time}</span></div>
                     <div>入社日: <span className="font-bold">{wizardData.join_date}</span></div>
                     <div>給与: <span className="font-bold">{wizardData.salary_type === 'hourly' ? `時給 ¥${wizardData.hourly_wage}` : `月給 ¥${wizardData.base_salary.toLocaleString()}`}</span></div>
+                    <div>扶養: <span className="font-bold text-amber-900">{wizardData.dependents_count || 0}名{wizardData.has_spouse ? ' (💍配偶者有)' : ''}</span></div>
                   </div>
                 </div>
 
@@ -5256,6 +6406,338 @@ export default function OnboardingAdminDashboard() {
           </div>
         );
       })()}
+
+      {/* 📁 年金事務所 決定通知書 ＆ 保険料額表 全社保管庫モーダル */}
+      {remunerationCabinetOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-4xl max-h-[92vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-slate-200">
+            {/* モーダルヘッダー */}
+            <div className="p-5 bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center">
+                  <FolderOpen className="w-5 h-5 text-cyan-300" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base flex items-center gap-2 text-white">
+                    年金事務所 決定通知書 ＆ 保険料額表 全社保管庫
+                    <span className="text-[10px] bg-indigo-500/30 border border-indigo-400/40 text-cyan-200 px-2 py-0.5 rounded-full font-medium">
+                      公的エビデンス保管
+                    </span>
+                  </h3>
+                  <p className="text-xs text-indigo-200 mt-0.5">
+                    算定基礎届・月額変更届の原本（PDF/写メ）や協会けんぽ標準報酬月額表を年度別に保管・閲覧
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setRemunerationCabinetOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* モーダルボディ（スクロールエリア） */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-slate-50/50">
+              {/* 1. 協会けんぽ公式 標準報酬月額表 クイックリファレンス */}
+              <div className="bg-white p-4 rounded-2xl border border-indigo-100 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-50 pb-3">
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                      協会けんぽ公式 標準報酬月額・保険料額表（令和8年度最新）
+                    </h4>
+                    <p className="text-[10px] text-slate-500">
+                      全国健康保険協会（協会けんぽ）が発行する都道府県別公式保険料額表
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setBonusReportModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-700 hover:to-pink-700 text-white font-black text-xs rounded-xl shadow-xs transition cursor-pointer self-start sm:self-auto"
+                      title="日本年金機構公式様式コード2265に準拠した被保険者賞与支払届を作成・A4印刷"
+                    >
+                      <Gift className="w-3.5 h-3.5" />
+                      🎁 被保険者賞与支払届を作成
+                    </button>
+                    <a
+                      href="https://www.kyoukaikenpo.or.jp/g7/cat330/sb8200/r08/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 transition cursor-pointer self-start sm:self-auto"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      協会けんぽ 公式額表を開く
+                    </a>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="p-2.5 bg-indigo-50/40 rounded-xl border border-indigo-100">
+                    <span className="text-[10px] text-slate-500 block">健康保険 等級範囲</span>
+                    <span className="font-black text-indigo-950">第1等級 (5.8万) 〜 第50等級 (139万)</span>
+                  </div>
+                  <div className="p-2.5 bg-indigo-50/40 rounded-xl border border-indigo-100">
+                    <span className="text-[10px] text-slate-500 block">厚生年金 等級範囲</span>
+                    <span className="font-black text-indigo-950">第1等級 (8.8万) 〜 第32等級 (65万上限)</span>
+                  </div>
+                  <div className="p-2.5 bg-indigo-50/40 rounded-xl border border-indigo-100">
+                    <span className="text-[10px] text-slate-500 block">定期改定（定時決定）</span>
+                    <span className="font-bold text-slate-700">毎年4・5・6月報酬 → 9月改定</span>
+                  </div>
+                  <div className="p-2.5 bg-indigo-50/40 rounded-xl border border-indigo-100">
+                    <span className="text-[10px] text-slate-500 block">随時改定（月額変更）</span>
+                    <span className="font-bold text-slate-700">固定的賃金変動＋2等級以上の差</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. 新しい決定通知書・書類の追加フォーム */}
+              <div className="bg-white p-5 rounded-2xl border border-indigo-100 shadow-xs space-y-4">
+                <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                  <Upload className="w-4 h-4 text-indigo-600" />
+                  年金事務所からの決定通知書原本・月額表の追加
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">年度 / 対象年</label>
+                    <input
+                      type="text"
+                      value={newCabinetDoc.fiscal_year}
+                      onChange={e => setNewCabinetDoc(prev => ({ ...prev, fiscal_year: e.target.value }))}
+                      placeholder="例: 令和8年度 (2026)"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">書類種別</label>
+                    <select
+                      value={newCabinetDoc.doc_type}
+                      onChange={e => setNewCabinetDoc(prev => ({ ...prev, doc_type: e.target.value as any }))}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white"
+                    >
+                      <option value="nenkin_notice">年金事務所 標準報酬決定通知書（定時決定/月変）</option>
+                      <option value="rate_table">協会けんぽ 保険料額表（都道府県別原本）</option>
+                      <option value="other">その他 社会保険・年金関連書類</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">文書タイトル / 概要</label>
+                    <input
+                      type="text"
+                      value={newCabinetDoc.title}
+                      onChange={e => setNewCabinetDoc(prev => ({ ...prev, title: e.target.value }))}
+                      placeholder="例: 令和8年度 定時決定通知書原本（全社）"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">通知書ファイル添付（PDF / 写メ画像）</label>
+                    {newCabinetDoc.file_url ? (
+                      <div className="flex items-center justify-between p-2.5 bg-indigo-50/60 rounded-xl border border-indigo-200">
+                        <span className="text-xs text-indigo-950 font-bold truncate flex items-center gap-1.5 flex-1">
+                          📎 {newCabinetDoc.filename}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setNewCabinetDoc(prev => ({ ...prev, file_url: '', filename: '' }))}
+                          className="text-[10px] text-rose-500 font-bold hover:underline ml-2"
+                        >
+                          削除
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center gap-2 p-3 bg-slate-50 hover:bg-indigo-50/30 border border-dashed border-indigo-300 rounded-xl cursor-pointer transition text-indigo-700 font-bold text-xs">
+                        <Upload className="w-4 h-4" />
+                        <span>PDF または 画像ファイルを選択</span>
+                        <input
+                          type="file"
+                          accept="application/pdf,image/*"
+                          onChange={handleCabinetFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                    {isUploadingCabinetDoc && (
+                      <span className="text-[10px] text-indigo-600 flex items-center gap-1 mt-1 animate-pulse">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        ファイルを読み込み・最適化中...
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">備考 / メモ（任意）</label>
+                    <input
+                      type="text"
+                      value={newCabinetDoc.note}
+                      onChange={e => setNewCabinetDoc(prev => ({ ...prev, note: e.target.value }))}
+                      placeholder="例: 9月納付分からの全社標準報酬月額改定分"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 focus:bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={handleSaveCabinetDoc}
+                    disabled={isUploadingCabinetDoc || !newCabinetDoc.file_url}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    全社保管庫に登録する
+                  </button>
+                </div>
+              </div>
+
+              {/* 3. 保管済み通知書・書類一覧 */}
+              <div className="bg-white p-5 rounded-2xl border border-indigo-100 shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <FolderOpen className="w-4 h-4 text-indigo-600" />
+                    保管済み 決定通知書・書類アーカイブ一覧 ({remunerationDocs.length}件)
+                  </h4>
+                  <span className="text-[10px] text-slate-400">年度ごとに整理して永続保存</span>
+                </div>
+
+                {remunerationDocs.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 text-xs">
+                    保管されている書類はありません。上のフォームから決定通知書を登録してください。
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {remunerationDocs.map(doc => (
+                      <div
+                        key={doc.id}
+                        className="p-3 bg-slate-50 hover:bg-indigo-50/40 rounded-xl border border-slate-200 hover:border-indigo-200 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                            doc.doc_type === 'rate_table' ? 'bg-amber-100 text-amber-800' : 'bg-indigo-100 text-indigo-800'
+                          }`}>
+                            {doc.doc_type === 'rate_table' ? '額表' : '通知'}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-1.5 py-0.5 rounded">
+                                {doc.fiscal_year}
+                              </span>
+                              <span className="font-bold text-slate-900 text-xs">
+                                {doc.title}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+                              <span>📎 {doc.filename}</span>
+                              <span>•</span>
+                              <span>登録: {doc.uploaded_at} ({doc.uploaded_by})</span>
+                              {doc.note && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-slate-600 italic">{doc.note}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-center">
+                          {doc.file_url.startsWith('http') ? (
+                            <a
+                              href={doc.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-1 bg-white hover:bg-slate-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              開く
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCertificateViewModal({
+                                  isOpen: true,
+                                  title: `【${doc.fiscal_year}】${doc.title}`,
+                                  url: doc.file_url,
+                                  filename: doc.filename
+                                });
+                              }}
+                              className="px-3 py-1 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              原本を表示
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCabinetDoc(doc.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                            title="削除"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* モーダルフッター */}
+            <div className="p-4 bg-slate-100 border-t border-slate-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setRemunerationCabinetOpen(false)}
+                className="px-5 py-2 bg-white hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition cursor-pointer"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🎁 日本年金機構公式 被保険者賞与支払届（様式コード2265）モーダル */}
+      <BonusPaymentReportModal
+        isOpen={bonusReportModalOpen}
+        onClose={() => setBonusReportModalOpen(false)}
+        tenantId={tenantId || ''}
+        tenantInfo={tenantInfo}
+        employees={employees}
+        onSaveNoticeToCabinet={fileData => {
+          if (!tenantId) return;
+          try {
+            const cabKey = `remuneration_docs_${tenantId}`;
+            const cabRaw = localStorage.getItem(cabKey);
+            const currentDocs = cabRaw ? JSON.parse(cabRaw) : [];
+            const newDoc = {
+              id: `bonus-report-${Date.now()}`,
+              fiscal_year: fileData.fiscal_year,
+              title: fileData.title,
+              doc_type: 'nenkin_notice' as const,
+              file_url: fileData.file_url,
+              filename: fileData.filename,
+              uploaded_at: new Date().toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+              uploaded_by: currentAdminName || '労務管理者',
+              note: fileData.note
+            };
+            const updated = [newDoc, ...currentDocs];
+            setRemunerationDocs(updated);
+            localStorage.setItem(cabKey, JSON.stringify(updated));
+          } catch (e) {
+            console.warn('Save bonus to cabinet failed:', e);
+          }
+        }}
+      />
 
       {/* ❓ 使い方ガイドモーダル */}
       <HelpGuideModal 

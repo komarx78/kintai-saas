@@ -1,8 +1,55 @@
 // Google Gemini API クライアント
+import { supabase } from './supabase';
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
+}
+
+/**
+ * 全デバイス・別PCで確実にGemini APIキーを取得するリゾルバ（SaaSマルチテナント対応）
+ * テナント個別 ➔ プラットフォーム共通（system_settings） ➔ キャッシュ ➔ 環境変数の順で自動解決
+ */
+export async function getResolvedGeminiApiKey(tenantId?: string): Promise<string> {
+  // 1. localStorage からの即時キャッシュ
+  const localKey = (tenantId ? localStorage.getItem(`gemini_api_key_${tenantId}`) : null) ||
+    localStorage.getItem('platform_gemini_api_key') ||
+    localStorage.getItem('gemini_api_key_custom');
+  if (localKey && localKey.trim() && !localKey.includes('placeholder')) {
+    return localKey.trim();
+  }
+
+  // 2. テナント個別設定（tenants テーブル）から取得
+  if (tenantId) {
+    try {
+      const { data: tData } = await supabase.from('tenants').select('gemini_api_key').eq('id', tenantId).maybeSingle();
+      if (tData?.gemini_api_key && tData.gemini_api_key.trim()) {
+        localStorage.setItem(`gemini_api_key_${tenantId}`, tData.gemini_api_key.trim());
+        return tData.gemini_api_key.trim();
+      }
+    } catch (e) {
+      console.warn('Failed to fetch tenant gemini_api_key:', e);
+    }
+  }
+
+  // 3. プラットフォーム統括本部設定（system_settings テーブル）から取得（別PC・全社共通の決定打）
+  try {
+    const { data: sData } = await supabase.from('system_settings').select('gemini_api_key').limit(1).maybeSingle();
+    if (sData?.gemini_api_key && sData.gemini_api_key.trim()) {
+      localStorage.setItem('platform_gemini_api_key', sData.gemini_api_key.trim());
+      return sData.gemini_api_key.trim();
+    }
+  } catch (e) {
+    console.warn('Failed to fetch system_settings gemini_api_key:', e);
+  }
+
+  // 4. 環境変数フォールバック
+  const envKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (envKey && envKey.trim() && !envKey.includes('placeholder')) {
+    return envKey.trim();
+  }
+
+  return '';
 }
 
 /**
@@ -11,22 +58,22 @@ export interface ChatMessage {
  * @param companyRules 就業規則・社内規定テキスト
  * @param chatHistory これまでのチャット履歴
  * @param tenantApiKey テナントごとの個別APIキー（任意）
+ * @param tenantId テナントID（任意）
  */
 export async function askEmploymentRulesAI(
   query: string,
   companyRules: string,
   chatHistory: ChatMessage[] = [],
-  tenantApiKey?: string
+  tenantApiKey?: string,
+  tenantId?: string
 ): Promise<string> {
-  // 1. 販売元プラットフォーム設定キー ➔ 2. 環境変数 ➔ 3. テナント個別キー
-  const apiKey = tenantApiKey ||
-    localStorage.getItem('platform_gemini_api_key') ||
-    import.meta.env.VITE_GEMINI_API_KEY ||
-    localStorage.getItem('gemini_api_key_custom') ||
-    '';
+  let apiKey = tenantApiKey?.trim() || '';
+  if (!apiKey || apiKey.includes('placeholder')) {
+    apiKey = await getResolvedGeminiApiKey(tenantId);
+  }
 
   if (!apiKey || apiKey.includes('placeholder')) {
-    return '【AI機能のご案内】現在、就業規則AI相談機能の準備中です。システム管理者にお問い合わせいただくか、就業規則の直接のご確認をお願いいたします。';
+    return '【AI機能のご案内】現在、社内規定AI相談機能のAPIキーが未設定です。\n管理者アカウントにて「特権本部」または「会社・全社マスタ設定」より、Google Gemini APIキーの登録をお願いいたします。';
   }
 
   const systemInstruction = `あなたは企業の就業規則・社内規定に精通した親切で優秀な人事労務アシスタントAIです。
@@ -71,70 +118,121 @@ ${companyRules || '（就業規則が登録されていません。労働基準�
   });
 
   try {
-    // 最新のGemini 3.5 Flashモデルを第一優先で呼び出し
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
-    
-    let res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: contents,
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 2048,
+    // 最新の Gemini 3.5 Flash を最優先で呼び出し
+    const models = ['gemini-3.5-flash', 'gemini-3.5-flash-latest', 'gemini-3.5-pro'];
+    let lastError: any = null;
+    let answer: string | null = null;
+
+    for (const model of models) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: contents,
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens: 2048,
+            }
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          answer = data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+          if (answer) break;
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          console.warn(`Model ${model} returned status ${res.status}:`, errJson);
+          lastError = errJson.error?.message || res.statusText;
         }
-      })
-    });
-
-    // 3.5-flashが利用できない場合のフォールバック（2.5-flash / 1.5-flash）
-    if (!res.ok) {
-      console.warn('Gemini 3.5 flash returned status:', res.status, 'Retrying with 2.5 flash...');
-      const fallbackUrl25 = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-      res = await fetch(fallbackUrl25, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: contents,
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 2048,
-          }
-        })
-      });
+      } catch (e: any) {
+        lastError = e.message;
+      }
     }
 
-    if (!res.ok) {
-      console.warn('Gemini 2.5 flash returned status:', res.status, 'Retrying with 1.5 flash...');
-      const fallbackUrl15 = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-      res = await fetch(fallbackUrl15, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: contents,
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 2048,
-          }
-        })
-      });
-    }
-
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      console.error('Gemini API Error details:', errJson);
-      throw new Error(`AI API エラー (${res.status}): ${errJson.error?.message || res.statusText}`);
-    }
-
-    const data = await res.json();
-    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
     if (!answer) {
-      return 'AIからの回答を取得できませんでした。もう一度お試しください。';
+      if (lastError && (lastError.includes('API_KEY_INVALID') || lastError.includes('API key not valid'))) {
+        return '【エラー】登録されているGemini APIキーが無効です。管理者様にて正しいAPIキーを再登録してください。';
+      }
+      if (lastError && lastError.includes('Quota')) {
+        return '【エラー】Gemini APIの利用制限（クォータ）に達しました。しばらく時間をおいてから再度お試しください。';
+      }
+      return `申し訳ありません。AIの応答を取得できませんでした。\n（詳細: ${lastError || 'モデル接続エラー'}）`;
     }
 
     return answer;
   } catch (error: any) {
     console.error('AI Error:', error);
     return `申し訳ありません。AIの応答中にエラーが発生しました。\n（詳細: ${error.message}）`;
+  }
+}
+
+/**
+ * システム公式操作マニュアル＆FAQをもとにGemini AIに質問する（システムAIサポートデスク）
+ */
+export async function askSystemOperationAI(
+  query: string,
+  faqKnowledge: string,
+  tenantId?: string
+): Promise<string> {
+  const apiKey = await getResolvedGeminiApiKey(tenantId);
+  if (!apiKey) {
+    return '【お知らせ】AIサポートデスクのAPIキーが未設定です。特権管理者（super-admin）にてAIプラットフォーム設定をご確認いただくか、下記の操作FAQ一覧をご参照ください。';
+  }
+
+  const systemInstruction = `
+あなたは「KAP 勤怠・シフト・労務管理クラウドシステム」の公式AIサポートデスク担当者です。
+利用企業（テナント）の従業員および管理者からの「システムの操作方法・機能の使い方・困りごと」に対して、親切・丁寧・的確に操作手順を回答してください。
+
+【システム公式操作マニュアル・FAQ知識ベース】
+${faqKnowledge}
+
+【回答ガイドライン】
+1. 礼儀正しく、親身で分かりやすい日本語で回答してください。
+2. 画面のどこを押せばよいか、操作の具体的な手順（1. 2. 3.）をステップ形式で示してください。
+3. 知識ベースにない特殊な設定や自社独自の就業規則に関しては、「自社の管理者様または開発元サポート窓口へお問い合わせください」と案内してください。
+4. 箇条書きや絵文字を適度に使って、読みやすく構成してください。
+`;
+
+  try {
+    const models = ['gemini-3.5-flash', 'gemini-3.5-flash-latest', 'gemini-3.5-pro'];
+    let answer: string | null = null;
+    let lastError: string | null = null;
+
+    for (const model of models) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const body = {
+          contents: [{ role: 'user', parts: [{ text: `${systemInstruction}\n\nユーザーの質問: ${query}` }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+        };
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          answer = data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+          if (answer) break;
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          lastError = errJson.error?.message || res.statusText;
+        }
+      } catch (e: any) {
+        lastError = e.message;
+      }
+    }
+
+    if (!answer) {
+      return `申し訳ありません。AI応答を取得できませんでした。（詳細: ${lastError || '接続エラー'}）下記のFAQ一覧もあわせてご参照ください。`;
+    }
+    return answer;
+  } catch (error: any) {
+    return `申し訳ありません。エラーが発生しました。（詳細: ${error.message}）`;
   }
 }

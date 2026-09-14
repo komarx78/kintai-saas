@@ -4,23 +4,27 @@ import {
   Settings, Users, Save, Database, Edit, X, Sparkles, 
   CheckCircle2, Loader2, Building2, FileText, 
   Activity, ShieldAlert, RefreshCw, ExternalLink, Shield,
-  Plus, Trash2, Edit3
+  Plus, Trash2, Edit3, HelpCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { TaxDocMasterInspector } from '../components/TaxDocMasterInspector';
+import { OfficialDocMasterInspector } from '../components/OfficialDocMasterInspector';
 import { SocialInsuranceMasterManager } from '../components/SocialInsuranceMasterManager';
 import CustomDocDesignerModal from '../components/CustomDocDesignerModal';
+import { SuperAdminSystemSupport } from '../components/SuperAdminSystemSupport';
 import { 
   type CustomDocTemplate, 
-  getCustomDocTemplatesFromStorage, 
+  fetchCustomDocTemplates,
   deleteCustomDocTemplateFromStorage 
 } from '../lib/customDocManager';
+import { BILLING_MODELS, type BillingModelType } from '../lib/subscriptionBilling';
+import { fetchSystemSuggestions } from '../lib/systemSupportManager';
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
   
   // タブ: 'tenants_monitor', 'tax_docs', 'system_health', 'billing', 'ai_settings', 'staff'
   const [activeTab, setActiveTab] = useState('tenants_monitor');
+  const [pendingSuggestionsCount, setPendingSuggestionsCount] = useState(0);
 
   // Settings State
   const [settingsId, setSettingsId] = useState<string | null>(null);
@@ -28,12 +32,20 @@ export default function SuperAdminDashboard() {
   const [isSavingAi, setIsSavingAi] = useState(false);
   
   const [sysPrices, setSysPrices] = useState({
-    price_1_user: 2000, price_1_user_annual: 20000,
-    price_2_users: 4000, price_2_users_annual: 40000,
-    price_3_users: 6000, price_3_users_annual: 60000,
-    price_4_users: 8000, price_4_users_annual: 80000,
-    price_5_users: 10000, price_5_users_annual: 100000,
-    additional_user_price: 500, additional_user_price_annual: 5000,
+    billing_model: 'per_user' as BillingModelType,
+    unit_price_per_user: 300,
+    unit_price_per_user_annual: 3600,
+    base_fee: 0,
+    base_fee_annual: 0,
+    included_users: 0,
+    flat_monthly_price: 15000,
+    flat_annual_price: 150000,
+    price_1_user: 300, price_1_user_annual: 3600,
+    price_2_users: 600, price_2_users_annual: 7200,
+    price_3_users: 900, price_3_users_annual: 10800,
+    price_4_users: 1200, price_4_users_annual: 14400,
+    price_5_users: 1500, price_5_users_annual: 18000,
+    additional_user_price: 300, additional_user_price_annual: 3600,
     default_trial_days: 30
   });
 
@@ -55,8 +67,18 @@ export default function SuperAdminDashboard() {
     fetchSystemSettings();
     fetchTenants();
     fetchStaff();
-    setCustomDocTemplates(getCustomDocTemplatesFromStorage());
+    fetchCustomDocTemplates().then(list => setCustomDocTemplates(list));
+    refreshPendingCount();
   }, []);
+
+  const refreshPendingCount = async () => {
+    try {
+      const list = await fetchSystemSuggestions();
+      setPendingSuggestionsCount(list.filter(s => s.status === 'pending').length);
+    } catch (e) {
+      console.warn('Failed to refresh pending count:', e);
+    }
+  };
 
   useEffect(() => {
     const titles: Record<string, string> = {
@@ -64,6 +86,7 @@ export default function SuperAdminDashboard() {
       social_rates: '🏥 社会保険料率マスタ設定 | 特権管理者運用本部',
       tax_docs: '📄 国税庁公的帳票マスタ設定 | 特権管理者運用本部',
       system_health: '🚨 システムヘルス＆エラー監視 | 特権管理者運用本部',
+      system_support: '💡 システム操作Q&A ＆ 改善要望統括 | 特権管理者運用本部',
       billing: 'プラン＆価格管理 | 特権管理者運用本部',
       ai_settings: '✨ AIプラットフォーム設定 | 特権管理者運用本部',
       staff: '運営スタッフ管理 | 特権管理者運用本部'
@@ -81,18 +104,26 @@ export default function SuperAdminDashboard() {
         setSettingsId(data.id);
         if (data.gemini_api_key) setGeminiApiKey(data.gemini_api_key);
         setSysPrices({
-          price_1_user: data.price_1_user || 2000,
-          price_1_user_annual: data.price_1_user_annual || 20000,
-          price_2_users: data.price_2_users || 4000,
-          price_2_users_annual: data.price_2_users_annual || 40000,
-          price_3_users: data.price_3_users || 6000,
-          price_3_users_annual: data.price_3_users_annual || 60000,
-          price_4_users: data.price_4_users || 8000,
-          price_4_users_annual: data.price_4_users_annual || 80000,
-          price_5_users: data.price_5_users || 10000,
-          price_5_users_annual: data.price_5_users_annual || 100000,
-          additional_user_price: data.additional_user_price || 500,
-          additional_user_price_annual: data.additional_user_price_annual || 5000,
+          billing_model: (data.billing_model as BillingModelType) || 'per_user',
+          unit_price_per_user: data.unit_price_per_user || 300,
+          unit_price_per_user_annual: data.unit_price_per_user_annual || 3600,
+          base_fee: data.base_fee || 0,
+          base_fee_annual: data.base_fee_annual || 0,
+          included_users: data.included_users || 0,
+          flat_monthly_price: data.flat_monthly_price || 15000,
+          flat_annual_price: data.flat_annual_price || 150000,
+          price_1_user: data.price_1_user || 300,
+          price_1_user_annual: data.price_1_user_annual || 3600,
+          price_2_users: data.price_2_users || 600,
+          price_2_users_annual: data.price_2_users_annual || 7200,
+          price_3_users: data.price_3_users || 900,
+          price_3_users_annual: data.price_3_users_annual || 10800,
+          price_4_users: data.price_4_users || 1200,
+          price_4_users_annual: data.price_4_users_annual || 14400,
+          price_5_users: data.price_5_users || 1500,
+          price_5_users_annual: data.price_5_users_annual || 18000,
+          additional_user_price: data.additional_user_price || 300,
+          additional_user_price_annual: data.additional_user_price_annual || 3600,
           default_trial_days: data.default_trial_days || 30
         });
       } else if (error) {
@@ -128,10 +159,6 @@ export default function SuperAdminDashboard() {
     } catch (e) {
       console.warn('Fetch staff exception:', e);
     }
-  };
-
-  const handleSysPriceChange = (field: string, value: string) => {
-    setSysPrices(prev => ({ ...prev, [field]: Number(value) }));
   };
 
   const handleSaveSettings = async () => {
@@ -180,16 +207,12 @@ export default function SuperAdminDashboard() {
         name: editingTenant.name,
         plan_type: editingTenant.plan_type,
         trial_ends_at: editingTenant.trial_ends_at,
-        custom_price_1_user: editingTenant.custom_price_1_user,
-        custom_price_1_user_annual: editingTenant.custom_price_1_user_annual,
-        custom_price_2_users: editingTenant.custom_price_2_users,
-        custom_price_2_users_annual: editingTenant.custom_price_2_users_annual,
-        custom_price_3_users: editingTenant.custom_price_3_users,
-        custom_price_3_users_annual: editingTenant.custom_price_3_users_annual,
-        custom_price_4_users: editingTenant.custom_price_4_users,
-        custom_price_4_users_annual: editingTenant.custom_price_4_users_annual,
-        custom_price_5_users: editingTenant.custom_price_5_users,
-        custom_price_5_users_annual: editingTenant.custom_price_5_users_annual,
+        custom_billing_model: editingTenant.custom_billing_model || null,
+        custom_unit_price_per_user: editingTenant.custom_unit_price_per_user ? Number(editingTenant.custom_unit_price_per_user) : null,
+        custom_unit_price_per_user_annual: editingTenant.custom_unit_price_per_user_annual ? Number(editingTenant.custom_unit_price_per_user_annual) : null,
+        custom_base_fee: editingTenant.custom_base_fee ? Number(editingTenant.custom_base_fee) : null,
+        custom_included_users: editingTenant.custom_included_users ? Number(editingTenant.custom_included_users) : null,
+        custom_flat_monthly_price: editingTenant.custom_flat_monthly_price ? Number(editingTenant.custom_flat_monthly_price) : null,
       };
       const { error } = await supabase.from('tenants').update(updatePayload).eq('id', editingTenant.id);
       if (error) throw error;
@@ -238,47 +261,6 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  const renderPriceRow = (label: string, fieldMonthly: string, fieldAnnual: string, isTenantModal = false) => {
-    const stateObj = isTenantModal ? editingTenant : sysPrices;
-    const onChangeFn = isTenantModal 
-      ? (field: string, val: string) => setEditingTenant({ ...editingTenant, [field]: val === '' ? null : Number(val) })
-      : handleSysPriceChange;
-    
-    return (
-      <tr className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-        <td className="py-3 px-4 font-medium text-gray-700 whitespace-nowrap">{label}</td>
-        <td className="py-3 px-4">
-          <div className="relative rounded-md shadow-sm">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <span className="text-gray-500 sm:text-sm">¥</span>
-            </div>
-            <input 
-              type="number" 
-              value={stateObj[fieldMonthly] === null || stateObj[fieldMonthly] === undefined ? '' : stateObj[fieldMonthly]} 
-              onChange={e => onChangeFn(fieldMonthly, e.target.value)} 
-              placeholder={isTenantModal ? "共通設定を適用" : ""}
-              className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-8 pr-3 sm:text-sm border-gray-300 rounded-md py-2 border" 
-            />
-          </div>
-        </td>
-        <td className="py-3 px-4">
-          <div className="relative rounded-md shadow-sm">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <span className="text-gray-500 sm:text-sm">¥</span>
-            </div>
-            <input 
-              type="number" 
-              value={stateObj[fieldAnnual] === null || stateObj[fieldAnnual] === undefined ? '' : stateObj[fieldAnnual]} 
-              onChange={e => onChangeFn(fieldAnnual, e.target.value)} 
-              placeholder={isTenantModal ? "共通設定を適用" : ""}
-              className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-8 pr-3 sm:text-sm border-gray-300 rounded-md py-2 border" 
-            />
-          </div>
-        </td>
-      </tr>
-    );
-  };
-
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col md:flex-row font-sans">
       {/* 🧭 サイドバー */}
@@ -319,7 +301,7 @@ export default function SuperAdminDashboard() {
             }`}
           >
             <FileText className="h-4 w-4 mr-2.5 text-amber-400" />
-            📄 国税庁公的帳票マスタ設定
+            📄 公的帳票・印字座標マスタ設定
           </button>
 
           <button 
@@ -330,6 +312,23 @@ export default function SuperAdminDashboard() {
           >
             <Activity className="h-4 w-4 mr-2.5 text-emerald-400" />
             🚨 システムエラー・ログ監視
+          </button>
+
+          <button 
+            onClick={() => setActiveTab('system_support')}
+            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition cursor-pointer ${
+              activeTab === 'system_support' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <div className="flex items-center">
+              <HelpCircle className="h-4 w-4 mr-2.5 text-cyan-400" />
+              <span>💡 システムQ&A ＆ 改善要望統括</span>
+            </div>
+            {pendingSuggestionsCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white animate-pulse">
+                {pendingSuggestionsCount}
+              </span>
+            )}
           </button>
 
           <div className="pt-3 pb-1 border-t border-slate-800 my-1 text-[10px] text-slate-500 uppercase tracking-wider px-2">
@@ -473,7 +472,27 @@ export default function SuperAdminDashboard() {
                           </span>
                         </td>
                         <td className="py-3 px-4 text-slate-600 font-mono">
-                          {tenant.trial_ends_at ? new Date(tenant.trial_ends_at).toLocaleDateString('ja-JP') : '-'}
+                          {tenant.trial_ends_at ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span>{new Date(tenant.trial_ends_at).toLocaleDateString('ja-JP')}</span>
+                              {tenant.plan_type === 'trial' && (() => {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const target = new Date(tenant.trial_ends_at);
+                                target.setHours(0, 0, 0, 0);
+                                const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                if (diffDays < 0) {
+                                  return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-700 w-fit">期限切れ ({Math.abs(diffDays)}日経過)</span>;
+                                } else if (diffDays <= 7) {
+                                  return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 w-fit">残り{diffDays}日（要フォロー）</span>;
+                                } else {
+                                  return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 w-fit">残り{diffDays}日</span>;
+                                }
+                              })()}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-[11px]">- (無期限)</span>
+                          )}
                         </td>
                         <td className="py-3 px-4">
                           <span className="flex items-center gap-1 text-emerald-600 font-bold">
@@ -592,15 +611,9 @@ export default function SuperAdminDashboard() {
               </div>
             )}
 
-            {/* 標準帳票: 令和8年分 扶養控除等申告書 公式PDFインスペクター */}
+            {/* 標準公的帳票（国税庁 扶養控除申告書 ＆ 年金機構 賞与支払届）公式原本インスペクター */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between px-1">
-                <span className="font-black text-xs text-slate-700">
-                  🏛️ 【標準公式帳票】令和8年分 給与所得者の扶養控除等申告書（全国共通インスペクター）
-                </span>
-                <span className="text-[10px] text-slate-400">※ 国税庁原本PDF（A4）印字座標設定</span>
-              </div>
-              <TaxDocMasterInspector />
+              <OfficialDocMasterInspector />
             </div>
           </div>
         )}
@@ -679,6 +692,13 @@ export default function SuperAdminDashboard() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════════════════ */}
+        {/* 💡 タブ：システム操作Q&A ＆ 改善要望回収統括 */}
+        {/* ══════════════════════════════════════════════════════════════════════════════════ */}
+        {activeTab === 'system_support' && (
+          <SuperAdminSystemSupport />
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════════════════════ */}
         {/* ✨ タブ④：AIプラットフォーム設定 */}
         {/* ══════════════════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'ai_settings' && (
@@ -734,30 +754,131 @@ export default function SuperAdminDashboard() {
               </p>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden p-6 space-y-4">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-500 font-bold">
-                    <th className="py-2 px-4 text-left">ユーザー規模</th>
-                    <th className="py-2 px-4 text-left">月額料金（円/月）</th>
-                    <th className="py-2 px-4 text-left">年額料金（円/年）</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {renderPriceRow('1ユーザー', 'price_1_user', 'price_1_user_annual')}
-                  {renderPriceRow('2ユーザー', 'price_2_users', 'price_2_users_annual')}
-                  {renderPriceRow('3ユーザー', 'price_3_users', 'price_3_users_annual')}
-                  {renderPriceRow('4ユーザー', 'price_4_users', 'price_4_users_annual')}
-                  {renderPriceRow('5ユーザー', 'price_5_users', 'price_5_users_annual')}
-                </tbody>
-              </table>
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 space-y-6">
+              <div className="bg-indigo-50/70 p-4 rounded-xl border border-indigo-200 space-y-3">
+                <label className="block text-xs font-black text-indigo-950">
+                  🎯 全社デフォルト課金計算モデルの選択
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {BILLING_MODELS.map(m => (
+                    <label 
+                      key={m.id}
+                      className={`p-3 rounded-xl border cursor-pointer transition flex items-start gap-2.5 ${
+                        sysPrices.billing_model === m.id 
+                          ? 'bg-white border-indigo-600 shadow-sm ring-2 ring-indigo-500/20' 
+                          : 'bg-white/60 border-indigo-100 hover:bg-white'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="billing_model"
+                        value={m.id}
+                        checked={sysPrices.billing_model === m.id}
+                        onChange={() => setSysPrices(prev => ({ ...prev, billing_model: m.id }))}
+                        className="mt-0.5 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div>
+                        <div className="font-bold text-xs text-slate-900">{m.name}</div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">{m.description}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
-              <button
-                onClick={handleSaveSettings}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shadow-md transition flex items-center gap-2 cursor-pointer"
-              >
-                <Save className="w-4 h-4" /> 共通料金設定を保存
-              </button>
+              {/* モデル別 パラメータ設定 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    1人あたり月額単価 (円) <span className="text-indigo-600 font-bold">※現在300円</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={sysPrices.unit_price_per_user}
+                    onChange={e => setSysPrices(prev => ({ ...prev, unit_price_per_user: Number(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold font-mono text-slate-800"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">「シンプル1人単価制」等の計算基礎</p>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    1人あたり年額単価 (円)
+                  </label>
+                  <input
+                    type="number"
+                    value={sysPrices.unit_price_per_user_annual}
+                    onChange={e => setSysPrices(prev => ({ ...prev, unit_price_per_user_annual: Number(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold font-mono text-slate-800"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">年額払い選択時の単価（例: 3,600円）</p>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    基本料金 (円/月)
+                  </label>
+                  <input
+                    type="number"
+                    value={sysPrices.base_fee}
+                    onChange={e => setSysPrices(prev => ({ ...prev, base_fee: Number(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold font-mono text-slate-800"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">「基本料＋従量」「基本枠＋超過」の基本料金</p>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    基本枠 含まれる人数 (名)
+                  </label>
+                  <input
+                    type="number"
+                    value={sysPrices.included_users}
+                    onChange={e => setSysPrices(prev => ({ ...prev, included_users: Number(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold font-mono text-slate-800"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">「基本枠＋超過」で追加料金が発生しない上限人数</p>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    全社定額 月額料金 (円/月)
+                  </label>
+                  <input
+                    type="number"
+                    value={sysPrices.flat_monthly_price}
+                    onChange={e => setSysPrices(prev => ({ ...prev, flat_monthly_price: Number(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-slate-300 rounded-lg p-2 text-xs font-bold font-mono text-slate-800"
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1">「全社定額制」選択時の月額料金</p>
+                </div>
+
+                <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200">
+                  <label className="block text-[11px] font-bold text-amber-900 mb-1 flex items-center justify-between">
+                    <span>新規登録 無料トライアル日数 (日)</span>
+                    <span className="text-amber-600 text-[10px] font-bold">★全社共通初期値</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={sysPrices.default_trial_days}
+                    onChange={e => setSysPrices(prev => ({ ...prev, default_trial_days: Number(e.target.value) || 0 }))}
+                    className="w-full bg-white border border-amber-300 rounded-lg p-2 text-xs font-bold font-mono text-slate-800"
+                  />
+                  <p className="text-[9px] text-amber-700 mt-1">企業アカウント新規発行時の無料試用期間日数（初期値30日）</p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                <p className="text-xs text-slate-500 font-bold">
+                  ※ 保存すると、全顧客テナントの月額利用料金の算出に即座に反映されます。
+                </p>
+                <button
+                  onClick={handleSaveSettings}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shadow-md transition flex items-center gap-2 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" /> 共通料金設定を保存
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -837,11 +958,30 @@ export default function SuperAdminDashboard() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">プラン種別</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700">プラン種別</label>
+                    {editingTenant.plan_type !== 'paid' && editingTenant.plan_type !== 'standard' && editingTenant.plan_type !== 'pro' ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditingTenant({ ...editingTenant, plan_type: 'paid' })}
+                        className="text-[10px] text-emerald-600 font-black hover:underline cursor-pointer"
+                      >
+                        ⚡有料本契約へ切替
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingTenant({ ...editingTenant, plan_type: 'trial' })}
+                        className="text-[10px] text-amber-600 font-black hover:underline cursor-pointer"
+                      >
+                        ↩トライアルへ切替
+                      </button>
+                    )}
+                  </div>
                   <select
                     value={editingTenant.plan_type || 'trial'}
                     onChange={e => setEditingTenant({ ...editingTenant, plan_type: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                    className="w-full p-2.5 border border-slate-300 rounded-xl font-bold"
                   >
                     <option value="trial">トライアル</option>
                     <option value="standard">スタンダード</option>
@@ -851,13 +991,84 @@ export default function SuperAdminDashboard() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">トライアル期限</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700">トライアル期限</label>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        title="現在の期限または本日から30日延長"
+                        onClick={() => {
+                          const base = editingTenant.trial_ends_at ? new Date(editingTenant.trial_ends_at) : new Date();
+                          const targetDate = isNaN(base.getTime()) ? new Date() : base;
+                          targetDate.setDate(targetDate.getDate() + 30);
+                          setEditingTenant({ ...editingTenant, trial_ends_at: targetDate.toISOString().slice(0, 10) });
+                        }}
+                        className="px-1.5 py-0.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded text-[10px] font-black cursor-pointer transition"
+                      >
+                        +30日延長
+                      </button>
+                      <button
+                        type="button"
+                        title="期限設定を解除（無期限化）"
+                        onClick={() => setEditingTenant({ ...editingTenant, trial_ends_at: null })}
+                        className="px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[10px] font-bold cursor-pointer transition"
+                      >
+                        クリア
+                      </button>
+                    </div>
+                  </div>
                   <input
                     type="date"
                     value={editingTenant.trial_ends_at ? editingTenant.trial_ends_at.slice(0, 10) : ''}
                     onChange={e => setEditingTenant({ ...editingTenant, trial_ends_at: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                    className="w-full p-2.5 border border-slate-300 rounded-xl font-mono"
                   />
+                  {editingTenant.trial_ends_at && (
+                    <div className="mt-1 text-[10px] flex items-center justify-between text-slate-500">
+                      <span>設定期限: {new Date(editingTenant.trial_ends_at).toLocaleDateString('ja-JP')}</span>
+                      {(() => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const target = new Date(editingTenant.trial_ends_at);
+                        target.setHours(0, 0, 0, 0);
+                        const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                        if (diffDays < 0) {
+                          return <span className="text-red-600 font-bold">期限切れ（{Math.abs(diffDays)}日前）</span>;
+                        } else {
+                          return <span className="text-indigo-600 font-bold">本日より残り{diffDays}日</span>;
+                        }
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 space-y-2">
+                <h4 className="text-xs font-black text-slate-800">💼 個別カスタム課金モデル（未指定時はシステム共通設定）</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">個別課金モデル</label>
+                    <select
+                      value={editingTenant.custom_billing_model || ''}
+                      onChange={e => setEditingTenant({ ...editingTenant, custom_billing_model: e.target.value || null })}
+                      className="w-full p-2 border border-slate-300 rounded-lg text-xs"
+                    >
+                      <option value="">（システム共通設定に従う）</option>
+                      {BILLING_MODELS.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">個別1人あたり月額単価 (円)</label>
+                    <input
+                      type="number"
+                      placeholder="共通設定を使用 (300円)"
+                      value={editingTenant.custom_unit_price_per_user || ''}
+                      onChange={e => setEditingTenant({ ...editingTenant, custom_unit_price_per_user: e.target.value === '' ? null : Number(e.target.value) })}
+                      className="w-full p-2 border border-slate-300 rounded-lg text-xs font-mono font-bold"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

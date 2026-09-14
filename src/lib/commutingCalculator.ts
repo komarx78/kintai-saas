@@ -262,7 +262,7 @@ ${via ? `【経由地】: ${via}` : ''}
 ]
 ※ 必ずJSON配列のみを出力してください。`;
 
-      const candidateModels = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-3.5-flash'];
+      const candidateModels = ['gemini-3.5-flash', 'gemini-3.5-flash-latest', 'gemini-3.5-pro'];
       let res: Response | null = null;
 
       for (const model of candidateModels) {

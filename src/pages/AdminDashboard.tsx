@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock, Bot, BookOpen, Sparkles, Printer, ShieldCheck, DollarSign, Building2, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -8,6 +8,7 @@ import { PayslipManagement } from '../components/PayslipManagement';
 import AppSwitcher from '../components/AppSwitcher';
 import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 import { HelpGuideModal } from '../components/HelpGuideModal';
+import { calculateSubscriptionFee, type BillingMasterConfig } from '../lib/subscriptionBilling';
 
 // 2026年の日本の祝日（簡易モック用リスト）
 const NATIONAL_HOLIDAYS_2026 = [
@@ -29,6 +30,13 @@ const AdminDashboard = () => {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        // ロール検証（一般従業員の場合は /kintai/user へ即時リダイレクト）
+        const { data: userData } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle();
+        if (userData && userData.role !== 'admin' && userData.role !== 'superadmin') {
+          navigate('/kintai/user');
+          return;
+        }
+
         const { data: tenantIdData, error } = await supabase.rpc('get_user_tenant_id');
         if (tenantIdData) {
           setTenantId(tenantIdData);
@@ -145,14 +153,31 @@ ${tenantId || '（エラー：コード取得失敗）'}
 
   // 打刻の丸め単位（1分、15分、30分）
   const [roundingUnit, setRoundingUnit] = useState<number>(() => {
-    const saved = localStorage.getItem('mock_rounding_unit');
-    return saved ? parseInt(saved) : 15;
+    return 15;
   });
 
-  const handleRoundingChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleRoundingChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = parseInt(e.target.value);
     setRoundingUnit(val);
+    if (tenantId) {
+      localStorage.setItem(`mock_rounding_unit_${tenantId}`, val.toString());
+    }
     localStorage.setItem('mock_rounding_unit', val.toString());
+
+    if (tenantId) {
+      try {
+        const { data: tData } = await supabase.from('tenants').select('payroll_common_settings').eq('id', tenantId).maybeSingle();
+        const currentPayroll = tData?.payroll_common_settings || {};
+        await supabase.from('tenants').update({
+          payroll_common_settings: {
+            ...currentPayroll,
+            rounding_unit: val.toString()
+          }
+        }).eq('id', tenantId);
+      } catch (err) {
+        console.warn('Failed to update rounding_unit in tenants DB:', err);
+      }
+    }
   };
 
   const handleSaveBasicSettings = async () => {
@@ -173,12 +198,44 @@ ${tenantId || '（エラー：コード取得失敗）'}
   const [isSavingRules, setIsSavingRules] = useState(false);
 
   useEffect(() => {
-    const loadCompanyRules = () => {
+    const loadCompanyRules = async () => {
       // 1. ローカルストレージからの即時読み込み
-      const savedLocal = localStorage.getItem(`company_employment_rules_${tenantId}`) || localStorage.getItem('company_employment_rules');
+      const savedLocal = (tenantId ? localStorage.getItem(`company_employment_rules_${tenantId}`) : null) || 
+                         localStorage.getItem('company_employment_rules');
       if (savedLocal) setCompanyRulesText(savedLocal);
-      const savedKeyLocal = localStorage.getItem(`gemini_api_key_${tenantId}`) || localStorage.getItem('gemini_api_key_custom');
+      const savedKeyLocal = (tenantId ? localStorage.getItem(`gemini_api_key_${tenantId}`) : null) || 
+                            localStorage.getItem('gemini_api_key_custom');
       if (savedKeyLocal) setGeminiApiKeyCustom(savedKeyLocal);
+
+      // 2. データベース（Supabase tenants テーブル）からの同期取得
+      if (tenantId) {
+        try {
+          const { data: tData } = await supabase
+            .from('tenants')
+            .select('employment_rules_text, gemini_api_key, payroll_common_settings')
+            .eq('id', tenantId)
+            .maybeSingle();
+
+          if (tData) {
+            if (tData.employment_rules_text) {
+              setCompanyRulesText(tData.employment_rules_text);
+              localStorage.setItem(`company_employment_rules_${tenantId}`, tData.employment_rules_text);
+            }
+            if (tData.gemini_api_key) {
+              setGeminiApiKeyCustom(tData.gemini_api_key);
+              localStorage.setItem(`gemini_api_key_${tenantId}`, tData.gemini_api_key);
+            }
+            if (tData.payroll_common_settings?.rounding_unit) {
+              const rUnit = parseInt(tData.payroll_common_settings.rounding_unit);
+              setRoundingUnit(rUnit);
+              localStorage.setItem(`mock_rounding_unit_${tenantId}`, rUnit.toString());
+              localStorage.setItem('mock_rounding_unit', rUnit.toString());
+            }
+          }
+        } catch (e) {
+          console.warn('DB load company rules error:', e);
+        }
+      }
     };
     loadCompanyRules();
   }, [tenantId]);
@@ -187,17 +244,33 @@ ${tenantId || '（エラー：コード取得失敗）'}
     if (!tenantId) return;
     setIsSavingRules(true);
     try {
+      const trimmedKey = geminiApiKeyCustom.trim();
+
+      // 1. ローカルストレージにキャッシュ保存
       localStorage.setItem(`company_employment_rules_${tenantId}`, companyRulesText);
       localStorage.setItem('company_employment_rules', companyRulesText);
-      if (geminiApiKeyCustom) {
-        localStorage.setItem(`gemini_api_key_${tenantId}`, geminiApiKeyCustom.trim());
-        localStorage.setItem('gemini_api_key_custom', geminiApiKeyCustom.trim());
+      if (trimmedKey) {
+        localStorage.setItem(`gemini_api_key_${tenantId}`, trimmedKey);
+        localStorage.setItem('gemini_api_key_custom', trimmedKey);
       } else {
         localStorage.removeItem(`gemini_api_key_${tenantId}`);
         localStorage.removeItem('gemini_api_key_custom');
       }
 
-      alert('📜 就業規則・社内規定およびAI設定を保存しました！\n自社のすべての従業員（スマホ・PC）のAI相談ボットに即座に反映されます。');
+      // 2. データベース（Supabase tenants テーブル）へ永続保存（全社同期の要）
+      const { error: updateErr } = await supabase
+        .from('tenants')
+        .update({
+          employment_rules_text: companyRulesText,
+          gemini_api_key: trimmedKey
+        })
+        .eq('id', tenantId);
+
+      if (updateErr) {
+        console.warn('Tenants table update warning:', updateErr);
+      }
+
+      alert('📜 就業規則・社内規定およびAI設定を全社データベースへ保存しました！\n全従業員のPC・スマートフォンでAI相談機能が即座に利用可能となります。');
     } catch (err: any) {
       console.error(err);
       alert('就業規則を保存しました。');
@@ -346,6 +419,18 @@ ${tenantId || '（エラー：コード取得失敗）'}
       .eq('type', '有給休暇');
     
     if (data) {
+      // 大元労務マスタから退職者ステータスを取得（在籍者のみを課金対象とするため）
+      let retiredUserIds = new Set<string>();
+      try {
+        const { data: onbData } = await supabase
+          .from('employee_onboarding_profiles')
+          .select('user_id, status')
+          .eq('tenant_id', tenantId);
+        if (onbData) {
+          onbData.filter(o => o.status === 'retired').forEach(o => retiredUserIds.add(o.user_id));
+        }
+      } catch {}
+
       const mapped = data.map(u => {
         const userRequests = requestsData ? requestsData.filter(r => r.user_id === u.id) : [];
         const userTakenDates: string[] = [];
@@ -378,7 +463,8 @@ ${tenantId || '（エラー：コード取得失敗）'}
           paidLeaveBalance: parseFloat(u.paid_leave_balance || 0),
           paidLeaveCarryover: parseFloat(u.paid_leave_carryover || 0),
           has_kintai_access: u.has_kintai_access ?? true,
-          has_shift_access: u.has_shift_access ?? false
+          has_shift_access: u.has_shift_access ?? false,
+          is_retired: retiredUserIds.has(u.id) || u.status === 'retired'
         };
       });
       setEmployees(mapped);
@@ -488,39 +574,33 @@ ${tenantId || '（エラー：コード取得失敗）'}
     fetchRequests();
   }, [tenantId, activeTab]);
 
-  const currentUsers = employees.length;
-  
-  // 登録人数および設定価格に基づく正確な料金計算
-  const calculateCurrentFee = () => {
-    const count = currentUsers;
-    const isAnnual = tenantInfo?.billing_cycle === 'annual';
-    const custom = tenantInfo || {};
-    const sys = systemPrices || {};
+  // 在籍中の従業員のみを課金対象として正確にカウント（退職者は自動除外）
+  const activeEmployees = useMemo(() => employees.filter(e => !e.is_retired), [employees]);
+  const currentUsers = activeEmployees.length;
+  const retiredCount = employees.length - currentUsers;
 
-    if (count <= 0) return 0;
-    if (count === 1) {
-      return (isAnnual ? custom.custom_price_1_user_annual : custom.custom_price_1_user) ?? (isAnnual ? sys.price_1_user_annual : sys.price_1_user) ?? (isAnnual ? 2400 : 200);
-    }
-    if (count === 2) {
-      return (isAnnual ? custom.custom_price_2_users_annual : custom.custom_price_2_users) ?? (isAnnual ? sys.price_2_users_annual : sys.price_2_users) ?? (isAnnual ? 4800 : 400);
-    }
-    if (count === 3) {
-      return (isAnnual ? custom.custom_price_3_users_annual : custom.custom_price_3_users) ?? (isAnnual ? sys.price_3_users_annual : sys.price_3_users) ?? (isAnnual ? 7200 : 600);
-    }
-    if (count === 4) {
-      return (isAnnual ? custom.custom_price_4_users_annual : custom.custom_price_4_users) ?? (isAnnual ? sys.price_4_users_annual : sys.price_4_users) ?? (isAnnual ? 9600 : 800);
-    }
-    if (count === 5) {
-      return (isAnnual ? custom.custom_price_5_users_annual : custom.custom_price_5_users) ?? (isAnnual ? sys.price_5_users_annual : sys.price_5_users) ?? (isAnnual ? 12000 : 1000);
-    }
-    
-    // 6名以降
-    const base5 = (isAnnual ? custom.custom_price_5_users_annual : custom.custom_price_5_users) ?? (isAnnual ? sys.price_5_users_annual : sys.price_5_users) ?? (isAnnual ? 12000 : 1000);
-    const additionalUnit = (isAnnual ? sys.additional_user_price_annual : sys.additional_user_price) ?? (isAnnual ? 2400 : 200);
-    return base5 + ((count - 5) * additionalUnit);
-  };
+  // マスタ設定（テナント個別設定優先 ➔ システム共通設定 ➔ 規定単価300円）
+  const billingConfig: BillingMasterConfig = useMemo(() => {
+    const t = tenantInfo || {};
+    const s = systemPrices || {};
+    return {
+      billing_model: t.custom_billing_model || s.billing_model || 'per_user',
+      unit_price_per_user: t.custom_unit_price_per_user ?? s.unit_price_per_user ?? 300,
+      unit_price_per_user_annual: t.custom_unit_price_per_user_annual ?? s.unit_price_per_user_annual ?? 3600,
+      base_fee: t.custom_base_fee ?? s.base_fee ?? 0,
+      base_fee_annual: t.custom_base_fee_annual ?? s.base_fee_annual ?? 0,
+      included_users: t.custom_included_users ?? s.included_users ?? 0,
+      flat_monthly_price: t.custom_flat_monthly_price ?? s.flat_monthly_price ?? 15000,
+      flat_annual_price: t.custom_flat_annual_price ?? s.flat_annual_price ?? 150000,
+      billing_cycle: t.billing_cycle || 'monthly'
+    };
+  }, [tenantInfo, systemPrices]);
 
-  const calculatedFee = calculateCurrentFee();
+  const subscriptionResult = useMemo(() => {
+    return calculateSubscriptionFee(currentUsers, billingConfig);
+  }, [currentUsers, billingConfig]);
+
+  const calculatedFee = subscriptionResult.totalFee;
 
   const handleOpenModal = (employee: any = null) => {
     setEditingEmployee(employee);
@@ -578,6 +658,53 @@ ${tenantId || '（エラー：コード取得失敗）'}
     } catch (err: any) {
       console.error('Update Error:', err);
       alert('保存に失敗しました。');
+    }
+  };
+
+  const handleToggleRetireEmployee = async (emp: any) => {
+    if (!emp || !tenantId) return;
+    const isCurrentlyRetired = emp.is_retired || emp.status === 'retired';
+    
+    if (isCurrentlyRetired) {
+      if (!window.confirm(`【復職確認】「${emp.name}」さんを在籍（アクティブ）に戻しますか？\n※勤怠・シフトへのアクセスが再開され、課金対象人数に再カウントされます。`)) return;
+      try {
+        const { error } = await supabase
+          .from('users')
+          .update({
+            status: 'active',
+            is_retired: false,
+            has_kintai_access: true,
+            has_shift_access: true
+          })
+          .eq('id', emp.id);
+
+        if (error) throw error;
+        alert(`「${emp.name}」さんを在籍状態へ復帰しました。`);
+        await fetchEmployees();
+      } catch (err: any) {
+        console.error('Reactivate Error:', err);
+        alert('復帰処理に失敗しました: ' + (err.message || ''));
+      }
+    } else {
+      if (!window.confirm(`【退職処理確認】「${emp.name}」さんを退職（無効化）処理しますか？\n※勤怠打刻やシフト申請が停止され、課金対象人数からも自動除外されます。過去の出勤簿・有給台帳・給与記録は法定保管のため安全に保持されます。`)) return;
+      try {
+        const { error } = await supabase
+          .from('users')
+          .update({
+            status: 'retired',
+            is_retired: true,
+            has_kintai_access: false,
+            has_shift_access: false
+          })
+          .eq('id', emp.id);
+
+        if (error) throw error;
+        alert(`「${emp.name}」さんを退職処理いたしました。`);
+        await fetchEmployees();
+      } catch (err: any) {
+        console.error('Retire Error:', err);
+        alert('退職処理に失敗しました: ' + (err.message || ''));
+      }
     }
   };
 
@@ -729,8 +856,11 @@ ${tenantId || '（エラー：コード取得失敗）'}
         </nav>
         <div className="p-4 border-t border-blue-800 hidden md:block">
           <button 
-            onClick={() => navigate('/')}
-            className="flex items-center w-full p-2 hover:bg-blue-800 rounded transition-colors"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              navigate('/');
+            }}
+            className="flex items-center w-full p-2 hover:bg-blue-800 rounded transition-colors cursor-pointer"
           >
             <LogOut className="mr-3 h-5 w-5" />
             ログアウト
@@ -819,11 +949,19 @@ ${tenantId || '（エラー：コード取得失敗）'}
                     )}
                   </div>
                   
-                  <p className="text-sm font-bold text-gray-800">
-                    登録従業員数: <strong>{currentUsers}</strong> 名
+                  <p className="text-sm font-bold text-gray-800 flex flex-wrap items-center gap-1.5">
+                    登録従業員数: <strong className="text-base text-slate-900">{currentUsers}</strong> 名
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      在籍中
+                    </span>
+                    {retiredCount > 0 && (
+                      <span className="text-[11px] text-slate-400 font-medium">
+                        （退職者 {retiredCount}名 課金対象外）
+                      </span>
+                    )}
                     {isPaid && (
-                      <span className="text-xs font-bold text-slate-500 ml-1.5">
-                        （{currentUsers <= 5 ? `${currentUsers}名様枠` : '5名枠＋追加分'} / {tenantInfo?.billing_cycle === 'annual' ? '年額払い' : '月額払い'}）
+                      <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
+                        {subscriptionResult.modelName}（{tenantInfo?.billing_cycle === 'annual' ? '年額' : '月額'} ¥{subscriptionResult.unitPrice.toLocaleString()}/名）
                       </span>
                     )}
                   </p>
@@ -849,9 +987,14 @@ ${tenantId || '（エラー：コード取得失敗）'}
                   </h3>
                   <div className="flex sm:justify-end items-baseline gap-1 mt-0.5">
                     {isPaid ? (
-                      <p className="text-2xl font-black text-blue-600 font-mono">
-                        ¥{calculatedFee.toLocaleString()}
-                      </p>
+                      <div className="text-right">
+                        <p className="text-2xl font-black text-blue-600 font-mono">
+                          ¥{calculatedFee.toLocaleString()}
+                        </p>
+                        <p className="text-[11px] text-slate-500 font-bold mt-0.5">
+                          内訳: {subscriptionResult.breakdownText}
+                        </p>
+                      </div>
                     ) : (
                       <div className="flex items-baseline gap-1.5">
                         <span className="text-2xl font-black text-emerald-600 font-mono">¥0</span>
@@ -923,13 +1066,24 @@ ${tenantId || '（エラー：コード取得失敗）'}
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{emp.join_date}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{emp.manager}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${emp.role === '管理者' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'}`}>
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${emp.role === '管理者' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'} mr-1.5`}>
                             {emp.role}
                           </span>
+                          {emp.is_retired && (
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-slate-100 text-slate-600 border border-slate-300">
+                              退職済
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-medium">
-                          <button onClick={() => handleOpenModal(emp)} className="text-blue-600 hover:text-blue-900 mr-3">編集</button>
-                          <button className="text-red-600 hover:text-red-900">削除</button>
+                          <button onClick={() => handleOpenModal(emp)} className="text-blue-600 hover:text-blue-900 mr-3 cursor-pointer">編集</button>
+                          <button 
+                            onClick={() => handleToggleRetireEmployee(emp)} 
+                            className={`cursor-pointer font-bold ${emp.is_retired ? 'text-emerald-600 hover:text-emerald-800' : 'text-rose-600 hover:text-rose-800'}`}
+                            title={emp.is_retired ? '在籍へ戻す（復職）' : '退職処理する'}
+                          >
+                            {emp.is_retired ? '復職' : '退職'}
+                          </button>
                         </td>
                       </tr>
                     ))}

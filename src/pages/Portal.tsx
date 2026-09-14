@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2, Bell, Edit3 } from 'lucide-react';
-import { getAnnouncementsFromStorage, type AnnouncementItem } from '../lib/announcements';
+import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2, Sparkles, Bell, Edit3, HelpCircle } from 'lucide-react';
+import { fetchAnnouncements, type AnnouncementItem } from '../lib/announcements';
+import { fetchRevisionContracts, type RevisionContractDoc } from '../lib/revisionContracts';
 
 type UserData = {
+  id: string;
   name: string;
   role: 'superadmin' | 'admin' | 'user';
   tenant_id: string;
@@ -17,6 +19,7 @@ export default function Portal() {
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [pendingContractDoc, setPendingContractDoc] = useState<RevisionContractDoc | null>(null);
 
   useEffect(() => {
     fetchUserData();
@@ -37,11 +40,26 @@ export default function Portal() {
         .single();
 
       if (error) throw error;
-      setUserData(data as UserData);
+      const fullUserData: UserData = {
+        id: user.id,
+        name: data.name,
+        role: data.role,
+        tenant_id: data.tenant_id,
+        has_kintai_access: data.has_kintai_access,
+        has_shift_access: data.has_shift_access,
+      };
+      setUserData(fullUserData);
 
-      // お知らせ一覧のロード
-      const list = getAnnouncementsFromStorage((data as any)?.tenant_id);
+      // お知らせ一覧のロード（DB自動同期）
+      const list = await fetchAnnouncements(data?.tenant_id);
       setAnnouncements(list);
+
+      // 📄 未押印の労働条件通知書チェック（DB自動同期）
+      if (data?.tenant_id) {
+        const contracts = await fetchRevisionContracts(data.tenant_id);
+        const pending = contracts.find(c => (c.user_id === user.id || c.user_name === data.name) && c.status === 'pending_signature');
+        setPendingContractDoc(pending || null);
+      }
     } catch (err) {
       console.error(err);
       navigate('/');
@@ -83,6 +101,15 @@ export default function Portal() {
       icon: <CalendarDays className="w-7 h-7 text-white drop-shadow-md" />,
       path: (role === 'admin' || role === 'superadmin') ? '/shift/admin' : '/shift/user',
       color: 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shadow-md ring-1 ring-white/40',
+      hoverColor: 'hover:border-indigo-300 hover:shadow-[0_15px_30px_-10px_rgba(99,102,241,0.3)]',
+    },
+    {
+      id: 'support',
+      title: 'システム操作Q&A・改善要望',
+      description: '本システムの初心者向け公式操作ガイド、機能改善リクエスト（回収ボックス）はこちら',
+      icon: <HelpCircle className="w-7 h-7 text-white drop-shadow-md" />,
+      path: '/support',
+      color: 'bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-700 shadow-md ring-1 ring-white/40',
       hoverColor: 'hover:border-indigo-300 hover:shadow-[0_15px_30px_-10px_rgba(99,102,241,0.3)]',
     },
     {
@@ -166,7 +193,39 @@ export default function Portal() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-6 py-12">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-6 py-8 sm:py-12 space-y-8">
+        
+        {/* 🔔 労働条件通知書（賃金改定版）電子押印依頼バナー */}
+        {pendingContractDoc && (
+          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white p-5 rounded-3xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-2 border-amber-300">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shrink-0">
+                🔔
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-black text-base tracking-tight">
+                    【重要】給与改定に伴う『労働条件通知書』が届いています
+                  </h3>
+                  <span className="bg-white text-orange-700 text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs">
+                    電子押印待ち
+                  </span>
+                </div>
+                <p className="text-xs text-amber-100 mt-0.5">
+                  {pendingContractDoc.applied_year_month}分給与改定（新基本給: ¥{pendingContractDoc.base_salary.toLocaleString()}）の内容をご確認の上、電子同意・押印を行ってください。
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/payroll/user')}
+              className="px-5 py-2.5 bg-white text-orange-700 hover:bg-orange-50 rounded-2xl font-black text-xs transition shadow-md cursor-pointer shrink-0 flex items-center justify-center gap-2"
+            >
+              <Sparkles className="w-4 h-4 text-orange-600" />
+              Web給与明細で確認・押印する
+            </button>
+          </div>
+        )}
+
         <div className="mb-10 text-center animate-fade-in-up">
           <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-3">
             利用するアプリケーションを選択してください
@@ -176,14 +235,22 @@ export default function Portal() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+        <div className={`grid gap-6 ${role === 'admin' || role === 'superadmin' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 md:grid-cols-3 max-w-6xl mx-auto'}`}>
           {apps.filter(app => {
             if (role === 'superadmin') return true;
-            if (app.id === 'kintai') return userData?.has_kintai_access;
-            if (app.id === 'shift') return userData?.has_shift_access;
-            if (app.id === 'payroll') return userData?.has_kintai_access !== false;
-            if (app.id === 'onboarding') return true;
-            if (app.id === 'settings') return role === 'admin';
+            if (role === 'admin') {
+              if (app.id === 'kintai') return true;
+              if (app.id === 'shift') return true;
+              if (app.id === 'support') return true;
+              if (app.id === 'payroll') return true;
+              if (app.id === 'onboarding') return true;
+              if (app.id === 'settings') return true;
+              return false;
+            }
+            // 従業員が利用できるものは「勤怠・有給管理」「シフト管理」「社内Q&A・目安箱」
+            if (app.id === 'kintai') return userData?.has_kintai_access !== false;
+            if (app.id === 'shift') return userData?.has_shift_access !== false;
+            if (app.id === 'support') return true;
             return false;
           }).map((app, index) => (
             <button
@@ -217,7 +284,7 @@ export default function Portal() {
           ))}
         </div>
         
-        {/* 📢 全社お知らせ掲示板（動的レンダリング） */}
+        {/* 📢 社内お知らせ掲示板 */}
         <div className="mt-16 bg-white rounded-3xl shadow-sm border border-gray-200 p-6 sm:p-8 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
           <div className="flex items-center justify-between mb-6 pb-3 border-b border-gray-100">
             <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
@@ -225,45 +292,58 @@ export default function Portal() {
               <Bell className="w-5 h-5 text-indigo-600" />
               社内お知らせ・アップデート
             </h3>
-            {(role === 'admin' || role === 'superadmin') && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => navigate('/settings/company')}
-                className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-                title="会社マスタ設定でお知らせを管理・編集"
+                onClick={() => navigate('/support')}
+                className="text-xs font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
               >
-                <Edit3 className="w-3.5 h-3.5" />
-                お知らせを管理・追加
+                <HelpCircle className="w-3.5 h-3.5" />
+                システムQ&A・改善要望
               </button>
-            )}
+              {(role === 'admin' || role === 'superadmin') && (
+                <button
+                  onClick={() => navigate('/settings/company')}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                  title="会社マスタ設定でお知らせを管理・編集"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  お知らせを管理
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="divide-y divide-gray-100">
-            {announcements.map((item) => (
-              <div key={item.id} className="py-3.5 hover:bg-slate-50/60 transition rounded-xl px-2 sm:px-3">
-                <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-3">
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
-                      {item.date}
-                    </span>
-                    {item.tag && (
-                      <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
-                        {item.tag}
+            {announcements.length === 0 ? (
+              <p className="text-xs text-gray-400 py-4 text-center">現在新しいお知らせはありません</p>
+            ) : (
+              announcements.map((item) => (
+                <div key={item.id} className="py-3.5 hover:bg-slate-50/60 transition rounded-xl px-2 sm:px-3">
+                  <div className="flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-3">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                        {item.date}
                       </span>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-sm font-bold text-slate-800">
-                      {item.title}
-                    </h4>
-                    {item.content && (
-                      <p className="text-xs text-slate-500 mt-1 leading-relaxed whitespace-pre-line">
-                        {item.content}
-                      </p>
-                    )}
+                      {item.tag && (
+                        <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                          {item.tag}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-bold text-slate-800">
+                        {item.title}
+                      </h4>
+                      {item.content && (
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed whitespace-pre-line">
+                          {item.content}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </main>
