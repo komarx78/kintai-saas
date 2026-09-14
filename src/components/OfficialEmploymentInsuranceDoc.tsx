@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Printer, ArrowLeft, AlertCircle } from 'lucide-react';
+import { OfficialSeparationCertificateDoc } from './OfficialSeparationCertificateDoc';
 
 export interface EmploymentInsuranceEmployee {
   id: string;
@@ -46,9 +47,6 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
   const [docType, setDocType] = useState<'acquisition' | 'loss' | 'separation'>(initialType);
   const [submissionDate] = useState<string>(new Date().toISOString().split('T')[0]);
   
-  // 離職証明書用ステート
-  const [separationReasonCode, setSeparationReasonCode] = useState<string>('4-(2)'); // 労働者の個人的事由（自己都合）
-  const separationReasonDetail = '自己都合による退職（一身上の都合）';
   const weeklyWorkingHours = 40;
 
   const currentEmployee = employees.find(e => e.id === selectedEmployeeId) || employees[0];
@@ -68,29 +66,9 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
     );
   }
 
-  // 直近6ヶ月の賃金支払履歴の算定（給与マスタからの推計）
-  const retDate = currentEmployee.retirement_date ? new Date(currentEmployee.retirement_date) : new Date();
-  const monthlySalary = currentEmployee.base_salary || 250000;
-  
-  const past6Months = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(retDate.getFullYear(), retDate.getMonth() - i, 1);
-    const endOfMonth = new Date(retDate.getFullYear(), retDate.getMonth() - i + 1, 0);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(endOfMonth.getDate()).padStart(2, '0');
-    
-    return {
-      periodStart: `${yyyy}/${mm}/01`,
-      periodEnd: `${yyyy}/${mm}/${dd}`,
-      baseDays: 21, // 基礎日数
-      fixedWage: monthlySalary,
-      overtimeWage: Math.round(monthlySalary * 0.08), // 推定時間外手当
-      totalWage: Math.round(monthlySalary * 1.08)
-    };
-  });
 
-  const total6MonthWages = past6Months.reduce((acc, row) => acc + row.totalWage, 0);
-  const wageDailyRate = Math.round(total6MonthWages / 180); // 賃金日額
+
+
 
   return (
     <div className="space-y-6">
@@ -170,8 +148,19 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
         </div>
       </div>
 
-      {/* 印刷・公式A4原本コンテナ */}
-      <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl flex justify-center overflow-x-auto print:p-0 print:m-0 print:bg-white print:overflow-visible">
+      {/* 離職証明書の場合は転記ナビゲーション、取得・喪失の場合は公式届出書原本 */}
+      {docType === 'separation' ? (
+        <OfficialSeparationCertificateDoc
+          companyInfo={companyInfo}
+          officeNumber={officeNumber}
+          employees={employees as any}
+          selectedEmployeeId={currentEmployee.id}
+          onSelectEmployee={onSelectEmployee}
+          onBack={onBack}
+        />
+      ) : (
+        /* 印刷・公式A4原本コンテナ（取得届 / 喪失届） */
+        <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl flex justify-center overflow-x-auto print:p-0 print:m-0 print:bg-white print:overflow-visible">
         <div className="w-[210mm] min-h-[297mm] bg-white p-[15mm] shadow-lg border border-slate-300 text-slate-900 font-sans print:shadow-none print:border-none print:p-0 print:w-full print:m-0 box-border text-[11px] leading-tight">
 
           {/* 表題部 */}
@@ -182,10 +171,10 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
                   公共職業安定所長（ハローワーク）提出用
                 </span>
                 <h1 className="text-xl font-black tracking-wider mt-2">
-                  雇用保険被保険者{docType === 'acquisition' ? '資格取得届' : docType === 'loss' ? '資格喪失届' : '離職証明書（事業主控・安定所提出用）'}
+                  雇用保険被保険者{docType === 'acquisition' ? '資格取得届' : '資格喪失届'}
                 </h1>
                 <p className="text-[10px] text-slate-600 mt-0.5">
-                  {docType === 'separation' ? '（離職票交付申請 兼 賃金支払状況証明書）' : '労働保険・雇用保険適用事業所提出書式'}
+                  労働保険・雇用保険適用事業所提出書式
                 </p>
               </div>
 
@@ -284,72 +273,7 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
             </table>
           </div>
 
-          {/* 離職票専用セクション: 賃金支払状況（直近6ヶ月自動算定） */}
-          {docType === 'separation' && (
-            <div className="border border-slate-800 mb-4 rounded-xs overflow-hidden">
-              <div className="bg-amber-50 border-b border-slate-800 p-2 font-black text-xs text-amber-900 flex justify-between items-center">
-                <span>離職の日以前の賃金支払状況（直近6ヶ月の算定対象期間）</span>
-                <span className="text-[9px] text-amber-800 font-normal">※ 給与台帳データより自動算出</span>
-              </div>
 
-              <table className="w-full text-[10px] border-collapse text-center">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-300 text-[9px] text-slate-600">
-                    <th className="p-1.5 border-r border-slate-300 w-10">No.</th>
-                    <th className="p-1.5 border-r border-slate-300">賃金支払対象期間</th>
-                    <th className="p-1.5 border-r border-slate-300 w-24">賃金支払基礎日数</th>
-                    <th className="p-1.5 border-r border-slate-300">賃金額 A (基本手当)</th>
-                    <th className="p-1.5 border-r border-slate-300">賃金額 B (割増手当)</th>
-                    <th className="p-1.5">合計額 (A+B)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {past6Months.map((m, idx) => (
-                    <tr key={idx} className="border-b border-slate-200">
-                      <td className="p-1.5 border-r border-slate-300 font-mono font-bold">{idx + 1}</td>
-                      <td className="p-1.5 border-r border-slate-300 font-mono">{m.periodStart} 〜 {m.periodEnd}</td>
-                      <td className="p-1.5 border-r border-slate-300 font-mono font-bold">{m.baseDays} 日</td>
-                      <td className="p-1.5 border-r border-slate-300 font-mono text-right pr-3">¥{m.fixedWage.toLocaleString()}</td>
-                      <td className="p-1.5 border-r border-slate-300 font-mono text-right pr-3">¥{m.overtimeWage.toLocaleString()}</td>
-                      <td className="p-1.5 font-mono font-bold text-right pr-3">¥{m.totalWage.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                  <tr className="bg-slate-100 font-black border-t border-slate-400">
-                    <td colSpan={3} className="p-2 border-r border-slate-300 text-center">6ヶ月間 合計額</td>
-                    <td colSpan={2} className="p-2 border-r border-slate-300 text-right pr-3 text-slate-600 text-[9px]">
-                      賃金日額: ¥{wageDailyRate.toLocaleString()}
-                    </td>
-                    <td className="p-2 font-mono text-right pr-3 text-emerald-900 text-xs">
-                      ¥{total6MonthWages.toLocaleString()}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {/* 離職理由 */}
-              <div className="p-3 bg-white border-t border-slate-300 space-y-2 text-[10px]">
-                <div className="font-bold text-slate-800 flex items-center justify-between">
-                  <span>離職理由コード・区分:</span>
-                  <div className="print:hidden">
-                    <select
-                      value={separationReasonCode}
-                      onChange={(e) => setSeparationReasonCode(e.target.value)}
-                      className="text-[10px] font-bold border border-slate-300 rounded-md px-2 py-1"
-                    >
-                      <option value="4-(2)">4-(2) 労働者の個人的な事由による離職（一身上の都合、転職等）</option>
-                      <option value="1-(1)">1-(1) 事業所の倒産等</option>
-                      <option value="2-(3)">2-(3) 事業主からの働きかけによる退職（会社都合・希望退職等）</option>
-                      <option value="3-(1)">3-(1) 契約満了（雇止め・更新なし）</option>
-                      <option value="5-(1)">5-(1) 定年退職</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="bg-slate-50 p-2 rounded-xs border border-slate-200">
-                  <span className="font-black text-amber-900">{separationReasonCode}</span> : {separationReasonDetail}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* 法定特記事項 */}
           <div className="border border-slate-400 p-2.5 rounded-xs text-[9px] text-slate-600 space-y-1 mb-6 bg-slate-50/50">
@@ -373,6 +297,7 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
 
         </div>
       </div>
+      )}
     </div>
   );
 };

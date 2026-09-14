@@ -16,6 +16,7 @@ import { EmployeeRosterViewer } from './EmployeeRosterViewer';
 import { WithholdingTaxLedgerViewer } from './WithholdingTaxLedgerViewer';
 import { OfficialSocialInsuranceDoc } from './OfficialSocialInsuranceDoc';
 import { OfficialEmploymentInsuranceDoc } from './OfficialEmploymentInsuranceDoc';
+import { OfficialSeparationCertificateDoc } from './OfficialSeparationCertificateDoc';
 import { OfficialLaborInsuranceReportDoc } from './OfficialLaborInsuranceReportDoc';
 import { OfficialLeaveProcedureDoc } from './OfficialLeaveProcedureDoc';
 import { OfficialReminderSettingsModal } from './OfficialReminderSettingsModal';
@@ -1067,11 +1068,24 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
             />
           </div>
         </div>
-      ) : (selectedDocType === 'employment_insurance_doc' || selectedDocType === 'employment_separation_doc') ? (
+      ) : selectedDocType === 'employment_separation_doc' ? (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col p-2 sm:p-6 overflow-y-auto print:static print:p-0 print:m-0 print:bg-white print:z-auto print:block print:h-auto print:overflow-visible print:w-full print:min-w-0">
+          <div className="max-w-6xl mx-auto w-full">
+            <OfficialSeparationCertificateDoc
+              companyInfo={companyInfo}
+              officeNumber="2501-123456-7"
+              employees={employees as any}
+              selectedEmployeeId={selectedEmployeeId === 'all' ? (employees[0]?.id || '') : selectedEmployeeId}
+              onSelectEmployee={(id) => setSelectedEmployeeId(id)}
+              onBack={() => setSelectedDocType(null)}
+            />
+          </div>
+        </div>
+      ) : selectedDocType === 'employment_insurance_doc' ? (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col p-2 sm:p-6 overflow-y-auto print:static print:p-0 print:m-0 print:bg-white print:z-auto print:block print:h-auto print:overflow-visible print:w-full print:min-w-0">
           <div className="max-w-5xl mx-auto w-full">
             <OfficialEmploymentInsuranceDoc
-              initialType={selectedDocType === 'employment_separation_doc' ? 'separation' : 'acquisition'}
+              initialType="acquisition"
               companyInfo={companyInfo}
               officeNumber="2501-123456-7"
               employees={employees as any}
