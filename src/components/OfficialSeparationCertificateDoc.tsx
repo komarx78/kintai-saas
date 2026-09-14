@@ -36,6 +36,7 @@ export interface OfficialSeparationCertificateDocProps {
   selectedEmployeeId: string;
   onSelectEmployee: (id: string) => void;
   onBack: () => void;
+  hideHeader?: boolean;
 }
 
 // 和暦変換ユーティリティ
@@ -73,7 +74,8 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
   employees,
   selectedEmployeeId,
   onSelectEmployee,
-  onBack
+  onBack,
+  hideHeader = false
 }) => {
   // 表示モード: 'nav' (転記ナビゲーション) | 'print' (公式A4下書き印刷プレビュー)
   const [viewMode, setViewMode] = useState<'nav' | 'print'>('nav');
@@ -248,48 +250,94 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
   return (
     <div className="space-y-6">
       {/* 操作ヘッダーバー（印刷時は非表示） */}
-      <div className="print:hidden bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="p-2 hover:bg-slate-100 rounded-xl text-slate-500 transition cursor-pointer"
-            title="戻る"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs px-2.5 py-0.5 rounded-full font-black bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
-                <FileText className="w-3.5 h-3.5" />
-                ハローワーク様式第4号の2
-              </span>
-              <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                実物用紙1対1転記モード搭載
-              </span>
+      {!hideHeader && (
+        <div className="print:hidden bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              className="p-2 hover:bg-slate-100 rounded-xl text-slate-500 transition cursor-pointer"
+              title="戻る"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs px-2.5 py-0.5 rounded-full font-black bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                  <FileText className="w-3.5 h-3.5" />
+                  ハローワーク様式第4号の2
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                  実物用紙1対1転記モード搭載
+                </span>
+              </div>
+              <h2 className="text-lg font-black text-slate-900 mt-1 flex items-center gap-2">
+                雇用保険被保険者 離職証明書（離職票）転記ナビゲーション
+              </h2>
             </div>
-            <h2 className="text-lg font-black text-slate-900 mt-1 flex items-center gap-2">
-              雇用保険被保険者 離職証明書（離職票）転記ナビゲーション
-            </h2>
+          </div>
+
+          {/* コントロール群 */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* 従業員選択 */}
+            <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+              <User className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-[11px] font-bold text-slate-500">対象離職者:</span>
+              <select
+                value={currentEmployee.id}
+                onChange={(e) => onSelectEmployee(e.target.value)}
+                className="bg-transparent text-xs font-black text-slate-800 outline-hidden cursor-pointer"
+              >
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name} ({emp.retirement_date ? `${emp.retirement_date}退職` : '退職予定'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* モード切替タブ */}
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+              <button
+                onClick={() => setViewMode('nav')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === 'nav' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                転記ナビ画面
+              </button>
+              <button
+                onClick={() => setViewMode('print')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === 'print' ? 'bg-white text-amber-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Eye className="w-3.5 h-3.5" />
+                実物A4下書き印刷
+              </button>
+            </div>
+
+            {/* 印刷ボタン */}
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-black shadow-xs transition cursor-pointer"
+            >
+              <Printer className="w-4 h-4" />
+              A4下書き印刷
+            </button>
           </div>
         </div>
+      )}
 
-        {/* コントロール群 */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* 従業員選択 */}
-          <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-            <User className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-[11px] font-bold text-slate-500">対象離職者:</span>
-            <select
-              value={currentEmployee.id}
-              onChange={(e) => onSelectEmployee(e.target.value)}
-              className="bg-transparent text-xs font-black text-slate-800 outline-hidden cursor-pointer"
-            >
-              {employees.map(emp => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.name} ({emp.retirement_date ? `${emp.retirement_date}退職` : '退職予定'})
-                </option>
-              ))}
-            </select>
+      {/* 親コンポーネントでヘッダー統合時のサブコントロールバー */}
+      {hideHeader && (
+        <div className="print:hidden bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-black bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+              <FileText className="w-3.5 h-3.5" />
+              ハローワーク様式第4号の2（離職証明書）
+            </span>
+            <span className="text-xs text-slate-500 font-bold">実物複写用紙1対1転記モード</span>
           </div>
 
           {/* モード切替タブ */}
@@ -313,17 +361,8 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
               実物A4下書き印刷
             </button>
           </div>
-
-          {/* 印刷ボタン */}
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-black shadow-xs transition cursor-pointer"
-          >
-            <Printer className="w-4 h-4" />
-            A4下書き印刷
-          </button>
         </div>
-      </div>
+      )}
 
       {/* 転記ナビゲーションモード */}
       {viewMode === 'nav' && (

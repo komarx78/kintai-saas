@@ -167,6 +167,8 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
       officeNumber_3: cleanOffice.slice(10, 11),
       // 雇用条件・賃金・取得年月日
       causeCode: '2', // 新規雇用（中途・その他）
+      wageType: currentEmployee.salary_type === 'hourly' ? '4' : '1',
+      wageAmount: wageStr,
       wageThousands: wageStr,
       joinEra: join.eraCode,
       acqYMD: `${join.year2}${join.month2}${join.day2}`,
@@ -493,17 +495,29 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                 </div>
               </div>
 
-              {/* 4. 氏名カタカナ */}
-              <div>
-                <label className="text-slate-600 font-bold block mb-1">4. 被保険者氏名 フリガナ（カタカナ）</label>
-                <input
-                  type="text"
-                  value={formValues.nameKana || ''}
-                  onChange={(e) => handleInputChange('nameKana', e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                  placeholder="コマイ　シュウイチロウ"
-                />
-                <span className="text-[10px] text-slate-400 block mt-0.5">※ 姓と名の間は1マス空けて記載されます</span>
+              {/* 4. 氏名（漢字 ＆ カタカナフリガナ） */}
+              <div className="space-y-2">
+                <div>
+                  <label className="text-slate-600 font-bold block mb-1">4. 被保険者氏名（漢字氏名）</label>
+                  <input
+                    type="text"
+                    value={formValues.nameKanji || ''}
+                    onChange={(e) => handleInputChange('nameKanji', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-black text-slate-800"
+                    placeholder="駒井　修一郎"
+                  />
+                </div>
+                <div>
+                  <label className="text-slate-600 font-bold block mb-1">4. 被保険者氏名 フリガナ（カタカナ）</label>
+                  <input
+                    type="text"
+                    value={formValues.nameKana || ''}
+                    onChange={(e) => handleInputChange('nameKana', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                    placeholder="コマイ　シュウイチロウ"
+                  />
+                  <span className="text-[10px] text-slate-400 block mt-0.5">※ 姓と名の間は1マス空けて原本マス目に印字されます</span>
+                </div>
               </div>
 
               {/* 6. 性別 ＆ 7. 生年月日 */}
@@ -520,12 +534,12 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                   </select>
                 </div>
                 <div>
-                  <label className="text-slate-600 font-bold block mb-1">7. 生年月日（YYMMDD）</label>
-                  <div className="flex gap-2">
+                  <label className="text-slate-600 font-bold block mb-1">7. 生年月日（元号 / 年月日）</label>
+                  <div className="flex gap-1.5">
                     <select
                       value={formValues.birthEra || '5'}
                       onChange={(e) => handleInputChange('birthEra', e.target.value)}
-                      className="bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 w-20 text-xs shrink-0"
+                      className="bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 w-16 text-xs shrink-0"
                     >
                       <option value="3">昭和</option>
                       <option value="4">平成</option>
@@ -536,8 +550,9 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                       maxLength={6}
                       value={formValues.birthYMD || ''}
                       onChange={(e) => handleInputChange('birthYMD', e.target.value.replace(/[^0-9]/g, ''))}
-                      className="flex-1 min-w-0 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-800 tracking-wider text-xs"
+                      className="flex-1 min-w-0 bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-mono font-bold text-slate-800 tracking-wider text-xs"
                       placeholder="020510"
+                      title="年2桁・月2桁・日2桁（例: 020510）"
                     />
                   </div>
                 </div>
@@ -556,14 +571,14 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                 />
               </div>
 
-              {/* 9. 原因 ＆ 10. 賃金 */}
+              {/* 9. 原因 ＆ 10. 賃金態様 */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-slate-600 font-bold block mb-1">9. 原因コード</label>
                   <select
                     value={formValues.causeCode || '2'}
                     onChange={(e) => handleInputChange('causeCode', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
                   >
                     <option value="1">1: 新規学卒</option>
                     <option value="2">2: 中途・その他雇用</option>
@@ -573,11 +588,11 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                   </select>
                 </div>
                 <div>
-                  <label className="text-slate-600 font-bold block mb-1">10. 賃金支払態様</label>
+                  <label className="text-slate-600 font-bold block mb-1">10. 賃金態様</label>
                   <select
                     value={formValues.wageType || '1'}
                     onChange={(e) => handleInputChange('wageType', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
                   >
                     <option value="1">1: 月給</option>
                     <option value="2">2: 週給</option>
@@ -602,15 +617,26 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                   />
                 </div>
                 <div>
-                  <label className="text-slate-600 font-bold block mb-1">11. 取得日（YYMMDD）</label>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={formValues.acqYMD || ''}
-                    onChange={(e) => handleInputChange('acqYMD', e.target.value.replace(/[^0-9]/g, ''))}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-mono font-bold text-slate-800"
-                    placeholder="080401"
-                  />
+                  <label className="text-slate-600 font-bold block mb-1">11. 取得年月日</label>
+                  <div className="flex gap-1.5">
+                    <select
+                      value={formValues.joinEra || '5'}
+                      onChange={(e) => handleInputChange('joinEra', e.target.value)}
+                      className="bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 w-16 text-xs shrink-0"
+                    >
+                      <option value="4">平成</option>
+                      <option value="5">令和</option>
+                    </select>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={formValues.acqYMD || ''}
+                      onChange={(e) => handleInputChange('acqYMD', e.target.value.replace(/[^0-9]/g, ''))}
+                      className="flex-1 min-w-0 bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-mono font-bold text-slate-800 tracking-wider text-xs"
+                      placeholder="080401"
+                      title="年2桁・月2桁・日2桁（例: 080401）"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -621,7 +647,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                   <select
                     value={formValues.employmentForm || '7'}
                     onChange={(e) => handleInputChange('employmentForm', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
                   >
                     <option value="7">7: その他（正社員等）</option>
                     <option value="3">3: パートタイム</option>
@@ -637,7 +663,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                   <select
                     value={formValues.jobCode || '03'}
                     onChange={(e) => handleInputChange('jobCode', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
                   >
                     <option value="01">01: 管理的職業</option>
                     <option value="02">02: 専門・技術的職業</option>
@@ -650,6 +676,34 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                     <option value="09">09: 輸送・機械運転</option>
                     <option value="10">10: 建設・採掘の職業</option>
                     <option value="11">11: 運搬・清掃・包装</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 14. 就職経路 ＆ 16. 契約期間の定め */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-slate-600 font-bold block mb-1">14. 就職経路コード</label>
+                  <select
+                    value={formValues.routeCode || '2'}
+                    onChange={(e) => handleInputChange('routeCode', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
+                  >
+                    <option value="1">1: 安定所紹介</option>
+                    <option value="2">2: 自己就職</option>
+                    <option value="3">3: 民間紹介</option>
+                    <option value="4">4: 把握していない</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-600 font-bold block mb-1">16. 契約期間の定め</label>
+                  <select
+                    value={formValues.contractFixed || '2'}
+                    onChange={(e) => handleInputChange('contractFixed', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
+                  >
+                    <option value="2">2: 無（期間の定めなし）</option>
+                    <option value="1">1: 有（有期雇用契約）</option>
                   </select>
                 </div>
               </div>
@@ -670,17 +724,71 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                 />
               </div>
 
-              {/* 所轄ハローワーク */}
-              <div>
-                <label className="text-slate-600 font-bold block mb-1">所轄公共職業安定所名</label>
-                <div className="flex items-center gap-1.5">
+              {/* 🏢 事業主・事業所情報（原本最下部に自動印字） */}
+              <div className="border-t border-slate-200 pt-3 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                    🏢 事業所・事業主情報（原本下部印字）
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-bold">原本最下部へ反映</span>
+                </div>
+
+                <div>
+                  <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">事業主 所在地</label>
                   <input
                     type="text"
-                    value={formValues.targetHelloWork || '大津'}
-                    onChange={(e) => handleInputChange('targetHelloWork', e.target.value)}
-                    className="w-32 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                    value={formValues.employerAddress || ''}
+                    onChange={(e) => handleInputChange('employerAddress', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-800 text-xs"
+                    placeholder="滋賀県大津市..."
                   />
-                  <span className="text-slate-600 font-bold">公共職業安定所長 殿</span>
+                </div>
+
+                <div>
+                  <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">事業主 名称</label>
+                  <input
+                    type="text"
+                    value={formValues.employerName || ''}
+                    onChange={(e) => handleInputChange('employerName', e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-800 text-xs"
+                    placeholder="株式会社cocotte"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">代表者職氏名</label>
+                    <input
+                      type="text"
+                      value={formValues.employerRep || ''}
+                      onChange={(e) => handleInputChange('employerRep', e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-800 text-xs"
+                      placeholder="代表取締役 駒井 修一郎"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">電話番号</label>
+                    <input
+                      type="text"
+                      value={formValues.employerPhone || ''}
+                      onChange={(e) => handleInputChange('employerPhone', e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-mono font-bold text-slate-800 text-xs"
+                      placeholder="077-574-6907"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">所轄公共職業安定所名</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={formValues.targetHelloWork || '大津'}
+                      onChange={(e) => handleInputChange('targetHelloWork', e.target.value)}
+                      className="w-28 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-800 text-xs"
+                    />
+                    <span className="text-slate-600 font-bold text-xs">公共職業安定所長 殿</span>
+                  </div>
                 </div>
               </div>
             </div>
