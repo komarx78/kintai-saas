@@ -43,6 +43,7 @@ export interface OfficialEmploymentAcquisitionDocProps {
   selectedEmployeeId?: string;
   onSelectEmployee?: (id: string) => void;
   onBack?: () => void;
+  customCoords?: EmploymentAcqFieldConfig[];
 }
 
 // 和暦変換ヘルパー（元号コード: 2大正, 3昭和, 4平成, 5令和）
@@ -74,14 +75,22 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
   employees,
   selectedEmployeeId,
   onSelectEmployee,
-  onBack
+  onBack,
+  customCoords
 }) => {
   // 対象従業員
   const currentEmpId = selectedEmployeeId || employees[0]?.id || '';
   const currentEmployee = employees.find(e => e.id === currentEmpId) || employees[0];
 
-  // リアルタイム座標設定State
-  const [coords, setCoords] = useState<EmploymentAcqFieldConfig[]>(() => loadEmploymentAcqCoordinates());
+  // リアルタイム座標設定State（親からの指定があれば最優先）
+  const [coords, setCoords] = useState<EmploymentAcqFieldConfig[]>(() => customCoords || loadEmploymentAcqCoordinates());
+
+  // 親から渡された customCoords の変更に即時連動（SSOT保証）
+  useEffect(() => {
+    if (customCoords) {
+      setCoords(customCoords);
+    }
+  }, [customCoords]);
 
   // 原本背景PDFのレンダリング画像URL
   const [bgPdfImg, setBgPdfImg] = useState<string | null>(null);
@@ -722,6 +731,9 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
             {/* 各マス目へのオーバーレイ入力文字印字（直接ドラッグ微調整可能） */}
             {coords.map((field) => {
               if (field.disabled) return null;
+              // 旧キー（11桁の一括キーや固定帳票種別）はブロック分割表示のためスキップ
+              if (field.id === 'docTypeFixed' || field.id === 'officeNumber' || field.id === 'insuredNumber') return null;
+
               const val = formValues[field.id] || '';
               const isDraggingThis = draggingFieldId === field.id;
 
@@ -742,7 +754,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                       touchAction: 'none',
                       zIndex: isDraggingThis ? 50 : 10
                     }}
-                    className={`transition-all duration-75 px-0.5 py-0.2 rounded-xs print:ring-0 print:bg-transparent print:p-0 ${
+                    className={`transition-all duration-75 p-0 rounded-xs print:ring-0 print:bg-transparent print:p-0 ${
                       isDraggingThis 
                         ? 'ring-2 ring-amber-500 bg-amber-500/25 shadow-md scale-105' 
                         : 'hover:ring-1 hover:ring-emerald-400 hover:bg-emerald-50/40'
@@ -755,7 +767,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                           key={idx}
                           style={{
                             display: 'inline-block',
-                            width: `${(field.pitch || 2.32) * 2.1}mm`,
+                            width: `${(field.pitch || 2.86) * 2.1}mm`,
                             fontSize: `${field.fontSize}pt`,
                             fontWeight: 900,
                             color: isDraggingThis ? '#b45309' : '#0f172a',
@@ -785,15 +797,15 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                     fontSize: `${field.fontSize}pt`,
                     fontWeight: 900,
                     color: isDraggingThis ? '#b45309' : '#0f172a',
-                    fontFamily: field.id.includes('Text') || field.id.includes('employer') ? 'sans-serif' : 'monospace',
-                    lineHeight: 1.1,
+                    fontFamily: field.id.includes('employer') ? 'sans-serif' : 'monospace',
+                    lineHeight: 1,
                     cursor: isDraggingThis ? 'grabbing' : 'grab',
                     userSelect: 'none',
                     touchAction: 'none',
                     zIndex: isDraggingThis ? 50 : 10,
                     whiteSpace: 'nowrap'
                   }}
-                  className={`transition-all duration-75 px-0.5 py-0.2 rounded-xs print:ring-0 print:bg-transparent print:p-0 ${
+                  className={`transition-all duration-75 p-0 rounded-xs print:ring-0 print:bg-transparent print:p-0 ${
                     isDraggingThis 
                       ? 'ring-2 ring-amber-500 bg-amber-500/25 shadow-md scale-105' 
                       : 'hover:ring-1 hover:ring-emerald-400 hover:bg-emerald-50/40'

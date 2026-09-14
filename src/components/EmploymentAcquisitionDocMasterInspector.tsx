@@ -189,6 +189,7 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
   const handleSave = async () => {
     setIsSaving(true);
     saveEmploymentAcqCoordinates(fields);
+    broadcastEmploymentAcqCoordinates(fields);
     await saveEmploymentAcqCoordinatesToDb(fields);
     setIsSaving(false);
     setSavedSuccess(true);
@@ -253,6 +254,7 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
       {/* 1. 直接入力プレビューモード */}
       {activeTab === 'input_preview' && (
         <OfficialEmploymentAcquisitionDoc
+          customCoords={fields}
           companyInfo={{
             name: '株式会社KAP',
             address: '滋賀県大津市坂本3丁目21-16',
@@ -267,7 +269,7 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
               id: 'demo-1',
               name: '駒井 秀一朗',
               name_kana: 'コマイ　シュウイチロウ',
-              birth_date: '1990-05-10',
+              birth_date: '1979-03-18',
               gender: '男',
               my_number: '123456789012',
               employment_insurance_number: '1234-567890-1',
@@ -592,7 +594,7 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                       zIndex: isDraggingThis ? 50 : isSelected ? 30 : 10,
                       touchAction: 'none'
                     }}
-                    className={`transition-all duration-75 px-0.5 py-0.5 rounded-sm ${
+                    className={`transition-all duration-75 p-0 rounded-xs ${
                       isDraggingThis
                         ? 'ring-2 ring-amber-500 bg-amber-500/25 shadow-xl scale-105 font-black'
                         : isSelected 

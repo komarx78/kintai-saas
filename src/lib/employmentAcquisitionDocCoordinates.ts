@@ -19,9 +19,9 @@ export interface EmploymentAcqFieldConfig {
   disabled?: boolean;
 }
 
-// 🎯 原本PDF（様式第2号 A4縦: 210mm × 297mm）の実寸枠内に100%合致する画像解析実測ブロック定義
+// 🎯 原本PDF（様式第2号 A4縦: 210mm × 297mm）の実寸枠内に100%合致する画像解析実測ブロック定義 v5
 // ハローワーク標準OCRマス目規格: マス幅 2.38% (5.0mm) + 隙間 0.48% (1.0mm) = ピッチ 2.86% (6.01mm)
-// マス目高さ: 2.36% (7.0mm)
+// ハイフン印刷枠を跨ぐブロック設計
 export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
   // ══════════════════════════════════════════════════════════════════════
   // ① ヘッダー・番号欄（被保険者番号は4桁-6桁-1桁に分割）
@@ -54,7 +54,7 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     id: 'insuredNumber_2',
     name: '2. 被保険者番号［中6桁］',
     section: 'header',
-    x: 21.4,
+    x: 23.8,
     y: 12.7,
     fontSize: 11.5,
     pitch: 2.86,
@@ -66,7 +66,7 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     id: 'insuredNumber_3',
     name: '2. 被保険者番号［後1桁］',
     section: 'header',
-    x: 38.5,
+    x: 40.9,
     y: 12.7,
     fontSize: 11.5,
     width: 2.5,
@@ -89,17 +89,6 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
   // ② 氏名・生年月日・性別・事業所番号（4桁-6桁-1桁に分割）
   // ══════════════════════════════════════════════════════════════════════
   {
-    id: 'nameKanji',
-    name: '4. 被保険者氏名（漢字氏名枠）',
-    section: 'employee_basic',
-    x: 10.0,
-    y: 17.0,
-    fontSize: 10.5,
-    width: 15.0,
-    example: '駒井　修一郎',
-    description: '氏名漢字記入枠'
-  },
-  {
     id: 'nameKana',
     name: '4. 被保険者氏名 フリガナ（カタカナ28マス）',
     section: 'employee_basic',
@@ -112,10 +101,21 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     description: 'カタカナ28マス枠（姓と名の間は1マス空け）'
   },
   {
+    id: 'nameKanji',
+    name: '4. 被保険者氏名（漢字氏名枠）',
+    section: 'employee_basic',
+    x: 9.8,
+    y: 19.3,
+    fontSize: 10.5,
+    width: 18.0,
+    example: '駒井　修一郎',
+    description: '氏名漢字記入枠（フリガナの下段枠）'
+  },
+  {
     id: 'gender',
     name: '6. 性別（1男 / 2女）',
     section: 'employee_basic',
-    x: 17.6,
+    x: 9.8,
     y: 25.5,
     fontSize: 11.5,
     width: 2.5,
@@ -137,19 +137,19 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     id: 'birthYear',
     name: '7. 生年月日［年2桁］',
     section: 'employee_basic',
-    x: 23.3,
+    x: 26.2,
     y: 25.5,
     fontSize: 11.5,
     pitch: 2.86,
     width: 5.7,
     example: '02',
-    description: '生年（2桁）'
+    description: '生年（2桁、ハイフン跨ぎ）'
   },
   {
     id: 'birthMonth',
     name: '7. 生年月日［月2桁］',
     section: 'employee_basic',
-    x: 29.0,
+    x: 31.9,
     y: 25.5,
     fontSize: 11.5,
     pitch: 2.86,
@@ -161,7 +161,7 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     id: 'birthDay',
     name: '7. 生年月日［日2桁］',
     section: 'employee_basic',
-    x: 34.7,
+    x: 37.6,
     y: 25.5,
     fontSize: 11.5,
     pitch: 2.86,
@@ -185,24 +185,24 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     id: 'officeNumber_2',
     name: '8. 事業所番号［中6桁］',
     section: 'employee_basic',
-    x: 61.4,
+    x: 64.3,
     y: 25.5,
     fontSize: 11.5,
     pitch: 2.86,
     width: 17.2,
     example: '123456',
-    description: '事業所番号の中央6桁枠'
+    description: '事業所番号の中央6桁枠（ハイフン跨ぎ）'
   },
   {
     id: 'officeNumber_3',
     name: '8. 事業所番号［後1桁］',
     section: 'employee_basic',
-    x: 78.6,
+    x: 84.3,
     y: 25.5,
     fontSize: 11.5,
     width: 2.5,
     example: '7',
-    description: '事業所番号の最後1桁枠'
+    description: '事業所番号の最後1桁枠（ハイフン跨ぎ）'
   },
 
   // ══════════════════════════════════════════════════════════════════════
@@ -234,13 +234,13 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     id: 'wageThousands',
     name: '10. 賃金月額（千円単位・4マス）',
     section: 'employment_condition',
-    x: 28.3,
+    x: 31.2,
     y: 30.8,
     fontSize: 11.5,
     pitch: 2.86,
     width: 11.4,
     example: '0250',
-    description: '百万、十万、万、千円の4マス（千円未満四捨五入）'
+    description: '百万、十万、万、千円の4マス（ハイフン枠跨ぎ）'
   },
   {
     id: 'joinEra',
@@ -257,19 +257,19 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     id: 'joinYear',
     name: '11. 資格取得年月日［年2桁］',
     section: 'employment_condition',
-    x: 61.4,
+    x: 64.3,
     y: 30.8,
     fontSize: 11.5,
     pitch: 2.86,
     width: 5.7,
     example: '08',
-    description: '取得年（2桁）'
+    description: '取得年（2桁、ハイフン跨ぎ）'
   },
   {
     id: 'joinMonth',
     name: '11. 資格取得年月日［月2桁］',
     section: 'employment_condition',
-    x: 67.1,
+    x: 70.0,
     y: 30.8,
     fontSize: 11.5,
     pitch: 2.86,
@@ -281,7 +281,7 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     id: 'joinDay',
     name: '11. 資格取得年月日［日2桁］',
     section: 'employment_condition',
-    x: 72.8,
+    x: 75.7,
     y: 30.8,
     fontSize: 11.5,
     pitch: 2.86,
@@ -293,8 +293,8 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     id: 'employmentForm',
     name: '12. 雇用形態コード（1マス）',
     section: 'employment_condition',
-    x: 19.5,
-    y: 42.9,
+    x: 22.0,
+    y: 36.8,
     fontSize: 11.5,
     width: 2.5,
     example: '7',
@@ -304,8 +304,8 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     id: 'jobCode',
     name: '13. 職種コード（2マス）',
     section: 'employment_condition',
-    x: 29.5,
-    y: 42.9,
+    x: 40.1,
+    y: 36.8,
     fontSize: 11.5,
     pitch: 2.86,
     width: 5.7,
@@ -316,8 +316,8 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     id: 'routeCode',
     name: '14. 就職経路コード（1マス）',
     section: 'employment_condition',
-    x: 35.9,
-    y: 42.9,
+    x: 52.6,
+    y: 36.8,
     fontSize: 11.5,
     width: 2.5,
     example: '2',
@@ -327,8 +327,8 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     id: 'weeklyHours',
     name: '15. 週所定労働時間［時間 2マス］',
     section: 'employment_condition',
-    x: 38.8,
-    y: 42.9,
+    x: 67.0,
+    y: 36.8,
     fontSize: 11.5,
     pitch: 2.86,
     width: 5.7,
@@ -339,8 +339,8 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     id: 'weeklyMins',
     name: '15. 週所定労働時間［分 2マス］',
     section: 'employment_condition',
-    x: 44.5,
-    y: 42.9,
+    x: 72.7,
+    y: 36.8,
     fontSize: 11.5,
     pitch: 2.86,
     width: 5.7,
@@ -356,7 +356,7 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     name: '16. 契約期間の定め（1:有 / 2:無）',
     section: 'contract',
     x: 10.3,
-    y: 55.0,
+    y: 42.9,
     fontSize: 11.5,
     width: 2.5,
     example: '2',
@@ -423,8 +423,8 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
   }
 ];
 
-// ローカルストレージキー（実測精密黄金比率 v4: 枠はみ出し完全根絶版）
-const STORAGE_KEY = 'employment_acq_doc_coords_v4';
+// ローカルストレージキー（実測精密黄金比率 v5: ハイフン跨ぎ・全段完全整合版）
+const STORAGE_KEY = 'employment_acq_doc_coords_v5';
 
 // 座標設定の読み込み
 export function loadEmploymentAcqCoordinates(): EmploymentAcqFieldConfig[] {
