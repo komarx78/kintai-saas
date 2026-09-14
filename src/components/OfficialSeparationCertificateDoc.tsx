@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Printer, ArrowLeft, CheckSquare, Square, Copy, Check, 
-  Eye, Sliders, User, FileText, RefreshCw
+  Eye, Sliders, User, FileText, RefreshCw, ShieldCheck
 } from 'lucide-react';
 
 export interface SeparationEmployee {
@@ -85,7 +85,7 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
   // 設定パラメーター
   const [closingDay, setClosingDay] = useState<number>(31); // 締日: 31=末日, 20=20日, 25=25日
   const [paymentDay, setPaymentDay] = useState<string>('翌月25日'); // 支払日
-  const [monthCount, setMonthCount] = useState<number>(6); // 算定対象月数: 6ヶ月 or 12ヶ月
+  const [monthCount, setMonthCount] = useState<number>(12); // 算定対象月数: デフォルト12ヶ月（1年分・12段）
   const [separationReasonCode, setSeparationReasonCode] = useState<string>('4-(2)');
   const [separationReasonDetail, setSeparationReasonDetail] = useState<string>('自己都合による退職（一身上の都合・転職のため）');
   const [weeklyHours, setWeeklyHours] = useState<number>(40);
@@ -197,12 +197,21 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
     return rows;
   }, [retDate, monthCount, closingDay, monthlyBaseWage]);
 
-  // 合計値計算
+  // 12ヶ月（または全期間）合計値計算
   const totalWageA = useMemo(() => wageRows.reduce((sum, r) => sum + r.wageA, 0), [wageRows]);
   const totalWageB = useMemo(() => wageRows.reduce((sum, r) => sum + r.wageB, 0), [wageRows]);
   const totalWageAll = useMemo(() => wageRows.reduce((sum, r) => sum + r.wageTotal, 0), [wageRows]);
   const totalDays = useMemo(() => wageRows.reduce((sum, r) => sum + r.payBaseDays, 0), [wageRows]);
-  const dailyWageRate = Math.round(totalWageAll / 180); // 賃金日額(180日除算)
+
+  // 直近6ヶ月間 小計（基本手当日額算定対象: 第1段〜第6段）
+  const recent6Rows = useMemo(() => wageRows.slice(0, 6), [wageRows]);
+  const recent6WageA = useMemo(() => recent6Rows.reduce((sum, r) => sum + r.wageA, 0), [recent6Rows]);
+  const recent6WageB = useMemo(() => recent6Rows.reduce((sum, r) => sum + r.wageB, 0), [recent6Rows]);
+  const recent6WageTotal = useMemo(() => recent6Rows.reduce((sum, r) => sum + r.wageTotal, 0), [recent6Rows]);
+  const recent6Days = useMemo(() => recent6Rows.reduce((sum, r) => sum + r.payBaseDays, 0), [recent6Rows]);
+  
+  // 賃金日額: 雇用保険法に基づき、退職前直近6ヶ月間の賃金総額 ÷ 180日 で算出
+  const dailyWageRate = Math.round(recent6WageTotal / 180);
 
   // 全14項目のうちチェック済みの件数
   const totalKeyFields = 14;
@@ -381,8 +390,8 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
                 onChange={(e) => setMonthCount(Number(e.target.value))}
                 className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 font-bold text-slate-800"
               >
-                <option value={6}>直近6ヶ月（基本算定）</option>
-                <option value={12}>直近12ヶ月（特定理由・特定受給用）</option>
+                <option value={12}>12ヶ月（1年分・ハローワーク様式12段【標準】）</option>
+                <option value={6}>直近6ヶ月（日額確認・短期特例用）</option>
               </select>
             </div>
             <div>
@@ -652,16 +661,18 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
               <div className="flex items-center justify-between border-b-2 border-slate-800 pb-2">
                 <h3 className="font-black text-slate-800 text-sm flex items-center gap-1.5">
                   <span className="w-5 h-5 rounded-full bg-slate-800 text-white flex items-center justify-center text-[10px]">右</span>
-                  実物用紙【右半分】賃金支払状況（⑧〜⑫欄）
+                  実物用紙【右半分】賃金支払状況（⑧〜⑫欄・12段構成）
                 </h3>
-                <span className="text-[11px] text-slate-400 font-bold">給与台帳より自動算定済</span>
+                <span className="text-[11px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                  1年間（12ヶ月）自動展開済
+                </span>
               </div>
 
               {/* 算定期間＆賃金テーブル（実物完全模写） */}
               <div className="bg-white rounded-xl border border-slate-300 overflow-hidden shadow-2xs">
                 <div className="bg-slate-800 text-white p-2.5 text-xs font-black flex items-center justify-between">
-                  <span>離職の日以前の賃金支払状況等（直近{monthCount}ヶ月）</span>
-                  <span className="text-[10px] font-normal text-slate-300">実物複写用紙の段ごとの枠に転記</span>
+                  <span>離職の日以前の賃金支払状況等（{monthCount}ヶ月・{monthCount}段）</span>
+                  <span className="text-[10px] font-normal text-slate-300">実物複写用紙の1段目〜{monthCount}段目の枠に転記</span>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -696,11 +707,16 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
                       {wageRows.map((row) => {
                         const rowKey = `row_${row.index}`;
                         const isRowChecked = checkedFields[rowKey];
+                        const isRecent6 = row.index <= 6;
                         return (
                           <tr
                             key={row.index}
                             className={`border-b border-slate-200 transition ${
-                              isRowChecked ? 'bg-emerald-50/50' : row.index % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'
+                              isRowChecked 
+                                ? 'bg-emerald-50/50' 
+                                : isRecent6 
+                                  ? 'bg-amber-50/30' 
+                                  : row.index % 2 === 0 ? 'bg-slate-50/50' : 'bg-white'
                             }`}
                           >
                             <td className="p-1.5 border-r border-slate-300 font-mono font-bold">
@@ -712,13 +728,20 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
                                 {isRowChecked ? (
                                   <CheckSquare className="w-3.5 h-3.5 text-emerald-600 mx-auto" />
                                 ) : (
-                                  <span className="text-[10px]">{row.index}</span>
+                                  <span className={`text-[10px] ${isRecent6 ? 'font-black text-amber-800' : ''}`}>{row.index}</span>
                                 )}
                               </button>
                             </td>
                             {/* ⑧ 算定対象期間 */}
                             <td className="p-1.5 border-r border-slate-300 font-mono text-[11px] font-bold text-slate-800">
-                              {row.periodDisplay}
+                              <div className="flex items-center justify-center gap-1">
+                                {isRecent6 && (
+                                  <span className="text-[9px] bg-amber-100 text-amber-800 px-1 rounded-xs font-bold" title="基本手当日額算定対象">
+                                    日額対象
+                                  </span>
+                                )}
+                                <span>{row.periodDisplay}</span>
+                              </div>
                             </td>
                             {/* ⑨ 基礎日数 */}
                             <td className="p-1.5 border-r border-slate-300 font-mono font-black text-blue-900 bg-blue-50/30">
@@ -748,10 +771,37 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
                         );
                       })}
 
-                      {/* 合計行 */}
+                      {/* 直近6ヶ月小計（基本手当日額算定用: 1〜6段） */}
+                      {monthCount > 6 && (
+                        <tr className="bg-amber-100/70 font-black border-t-2 border-amber-300 text-[11px] text-amber-950">
+                          <td colSpan={2} className="p-2 border-r border-amber-300 text-center">
+                            📌 直近6ヶ月 小計（1〜6段：日額算定用）
+                          </td>
+                          <td className="p-2 border-r border-amber-300 font-mono text-center">
+                            {recent6Days}日
+                          </td>
+                          <td className="p-2 border-r border-amber-300 text-center text-slate-500">
+                            -
+                          </td>
+                          <td className="p-2 border-r border-amber-300 font-mono text-center">
+                            {recent6Days}日
+                          </td>
+                          <td className="p-2 border-r border-amber-300 font-mono text-right pr-2">
+                            ¥{recent6WageA.toLocaleString()}
+                          </td>
+                          <td className="p-2 border-r border-amber-300 font-mono text-right pr-2">
+                            ¥{recent6WageB.toLocaleString()}
+                          </td>
+                          <td className="p-2 font-mono text-right pr-2 text-emerald-950 text-xs font-black">
+                            ¥{recent6WageTotal.toLocaleString()}
+                          </td>
+                        </tr>
+                      )}
+
+                      {/* 12ヶ月 総合計行 */}
                       <tr className="bg-slate-100 font-black border-t-2 border-slate-400 text-[11px]">
-                        <td colSpan={2} className="p-2 border-r border-slate-300 text-center text-slate-700">
-                          合計
+                        <td colSpan={2} className="p-2 border-r border-slate-300 text-center text-slate-800">
+                          {monthCount}ヶ月 総合計（被保険者期間用）
                         </td>
                         <td className="p-2 border-r border-slate-300 font-mono text-center text-blue-900">
                           {totalDays}日
@@ -777,21 +827,25 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
                 </div>
               </div>
 
-              {/* 賃金日額算定ボックス */}
+              {/* 賃金日額算定ボックス（雇用保険法正式計算） */}
               <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-center justify-between">
                 <div>
-                  <span className="text-xs font-black text-emerald-900 block">
-                    ⑫ 賃金総額（直近6ヶ月合計）＆ 算定賃金日額
+                  <span className="text-xs font-black text-emerald-900 block flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    ⑫ 賃金日額 ＆ 受給要件算定結果
                   </span>
-                  <span className="text-[10px] text-emerald-700">
-                    賃金日額 = 6ヶ月間総支給額（¥{totalWageAll.toLocaleString()}）÷ 180日
+                  <span className="text-[10px] text-emerald-700 block mt-0.5">
+                    賃金日額 ＝ 直近6ヶ月総支給額（¥{recent6WageTotal.toLocaleString()}）÷ 180日 ＝ <strong>¥{dailyWageRate.toLocaleString()}</strong> / 日
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    ※ 過去12ヶ月被保険者期間: {totalDays}日（各月11日以上 × {monthCount}ヶ月 ＝ 受給資格要件充足）
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-base font-black font-mono text-emerald-900">
+                  <span className="text-lg font-black font-mono text-emerald-900">
                     ¥{dailyWageRate.toLocaleString()}
                   </span>
-                  <span className="text-[10px] text-emerald-600 block">/日</span>
+                  <span className="text-[10px] text-emerald-700 block font-bold">/日（基本手当日額の基準）</span>
                 </div>
               </div>
 
@@ -939,26 +993,45 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
                     </tr>
                   </thead>
                   <tbody>
-                    {wageRows.map(r => (
-                      <tr key={r.index} className="border-b border-slate-300">
-                        <td className="p-0.5 border-r border-slate-300 font-mono">{r.index}</td>
-                        <td className="p-0.5 border-r border-slate-300 font-mono">{r.periodDisplay}</td>
-                        <td className="p-0.5 border-r border-slate-300 font-mono font-bold">{r.periodBaseDays}</td>
-                        <td className="p-0.5 border-r border-slate-300 font-mono">{r.payPeriodDisplay}</td>
-                        <td className="p-0.5 border-r border-slate-300 font-mono font-bold">{r.payBaseDays}</td>
-                        <td className="p-0.5 border-r border-slate-300 font-mono text-right pr-1">¥{r.wageA.toLocaleString()}</td>
-                        <td className="p-0.5 border-r border-slate-300 font-mono text-right pr-1">¥{r.wageB.toLocaleString()}</td>
-                        <td className="p-0.5 font-mono font-bold text-right pr-1">¥{r.wageTotal.toLocaleString()}</td>
+                    {wageRows.map(r => {
+                      const isRecent6 = r.index <= 6;
+                      return (
+                        <tr key={r.index} className={`border-b border-slate-300 ${isRecent6 ? 'bg-amber-50/20' : ''}`}>
+                          <td className="p-0.5 border-r border-slate-300 font-mono">
+                            {r.index}
+                            {isRecent6 && <span className="text-[7px] text-amber-700 block font-bold leading-none">日額</span>}
+                          </td>
+                          <td className="p-0.5 border-r border-slate-300 font-mono">{r.periodDisplay}</td>
+                          <td className="p-0.5 border-r border-slate-300 font-mono font-bold">{r.periodBaseDays}</td>
+                          <td className="p-0.5 border-r border-slate-300 font-mono">{r.payPeriodDisplay}</td>
+                          <td className="p-0.5 border-r border-slate-300 font-mono font-bold">{r.payBaseDays}</td>
+                          <td className="p-0.5 border-r border-slate-300 font-mono text-right pr-1">¥{r.wageA.toLocaleString()}</td>
+                          <td className="p-0.5 border-r border-slate-300 font-mono text-right pr-1">¥{r.wageB.toLocaleString()}</td>
+                          <td className="p-0.5 font-mono font-bold text-right pr-1">¥{r.wageTotal.toLocaleString()}</td>
+                        </tr>
+                      );
+                    })}
+                    {/* 直近6ヶ月小計 */}
+                    {monthCount > 6 && (
+                      <tr className="bg-amber-100/60 font-black border-t border-amber-300 text-[8px] text-amber-950">
+                        <td colSpan={2} className="p-0.5 border-r border-amber-300">直近6ヶ月小計（日額算定）</td>
+                        <td className="p-0.5 border-r border-amber-300 font-mono">{recent6Days}</td>
+                        <td className="p-0.5 border-r border-amber-300">-</td>
+                        <td className="p-0.5 border-r border-amber-300 font-mono">{recent6Days}</td>
+                        <td className="p-0.5 border-r border-amber-300 font-mono text-right pr-1">¥{recent6WageA.toLocaleString()}</td>
+                        <td className="p-0.5 border-r border-amber-300 font-mono text-right pr-1">¥{recent6WageB.toLocaleString()}</td>
+                        <td className="p-0.5 font-mono text-right pr-1">¥{recent6WageTotal.toLocaleString()}</td>
                       </tr>
-                    ))}
-                    <tr className="bg-slate-100 font-black border-t border-slate-400">
-                      <td colSpan={2} className="p-1 border-r border-slate-300">合計</td>
-                      <td className="p-1 border-r border-slate-300 font-mono">{totalDays}</td>
-                      <td className="p-1 border-r border-slate-300">-</td>
-                      <td className="p-1 border-r border-slate-300 font-mono">{totalDays}</td>
-                      <td className="p-1 border-r border-slate-300 font-mono text-right pr-1">¥{totalWageA.toLocaleString()}</td>
-                      <td className="p-1 border-r border-slate-300 font-mono text-right pr-1">¥{totalWageB.toLocaleString()}</td>
-                      <td className="p-1 font-mono text-right pr-1">¥{totalWageAll.toLocaleString()}</td>
+                    )}
+                    {/* 総合計 */}
+                    <tr className="bg-slate-100 font-black border-t border-slate-400 text-[8px]">
+                      <td colSpan={2} className="p-0.5 border-r border-slate-300">{monthCount}ヶ月 総合計</td>
+                      <td className="p-0.5 border-r border-slate-300 font-mono">{totalDays}</td>
+                      <td className="p-0.5 border-r border-slate-300">-</td>
+                      <td className="p-0.5 border-r border-slate-300 font-mono">{totalDays}</td>
+                      <td className="p-0.5 border-r border-slate-300 font-mono text-right pr-1">¥{totalWageA.toLocaleString()}</td>
+                      <td className="p-0.5 border-r border-slate-300 font-mono text-right pr-1">¥{totalWageB.toLocaleString()}</td>
+                      <td className="p-0.5 font-mono text-right pr-1">¥{totalWageAll.toLocaleString()}</td>
                     </tr>
                   </tbody>
                 </table>
