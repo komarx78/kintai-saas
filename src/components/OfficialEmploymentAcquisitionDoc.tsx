@@ -119,32 +119,45 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
     const newValues: Record<string, string> = {
       docTypeFixed: '19101',
       myNumber: cleanMyNumber,
+      // 被保険者番号（元値および分割3ブロック）
       insuredNumber: cleanIns,
-      acqType: cleanIns ? '2' : '1', // 番号があれば再取得、なければ新規
+      insuredNumber_1: cleanIns.slice(0, 4),
+      insuredNumber_2: cleanIns.slice(4, 10),
+      insuredNumber_3: cleanIns.slice(10, 11),
+      acqType: cleanIns.trim() ? '2' : '1', // 番号があれば再取得、なければ新規
+      // 氏名
+      nameKanji: currentEmployee.name || '駒井　修一郎',
       nameKana: rawKana,
-      nameKanaChanged: '',
       gender: genderCode,
+      // 生年月日
       birthEra: birth.eraCode,
       birthYMD: `${birth.year2}${birth.month2}${birth.day2}`,
+      birthYear: birth.year2,
+      birthMonth: birth.month2,
+      birthDay: birth.day2,
+      // 事業所番号（元値および分割3ブロック）
       officeNumber: cleanOffice,
+      officeNumber_1: cleanOffice.slice(0, 4),
+      officeNumber_2: cleanOffice.slice(4, 10),
+      officeNumber_3: cleanOffice.slice(10, 11),
+      // 雇用条件・賃金・取得年月日
       causeCode: '2', // 新規雇用（中途・その他）
-      wageType: '1', // 月給
-      wageAmount: wageStr,
-      acqEra: join.eraCode,
+      wageThousands: wageStr,
+      joinEra: join.eraCode,
       acqYMD: `${join.year2}${join.month2}${join.day2}`,
+      joinYear: join.year2,
+      joinMonth: join.month2,
+      joinDay: join.day2,
       employmentForm: formCode,
       jobCode: '03', // 事務的職業
       routeCode: '2', // 自己就職
-      weeklyHours: '4000', // 40時間00分
+      weeklyHours: String(currentEmployee.weekly_hours || 40).padStart(2, '0'),
+      weeklyMins: '00',
       contractFixed: '2', // 無
-      contractRenew: '2', // 無
-      officeNameText: companyInfo.name,
-      remarksText: '',
-      submitYear: String(new Date().getFullYear() - 2018),
-      submitMonth: String(new Date().getMonth() + 1),
-      submitDay: String(new Date().getDate()),
+      // 事業主情報
       employerAddress: companyInfo.address,
-      employerName: `${companyInfo.name}　${companyInfo.representative_name}`,
+      employerName: companyInfo.name,
+      employerRep: companyInfo.representative_name,
       employerPhone: companyInfo.phone_number,
       targetHelloWork: '大津'
     };
@@ -280,12 +293,53 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
     return () => { isCancelled = true; };
   }, []);
 
-  // 値変更ハンドラー
+  // 値変更ハンドラー（分割ブロックキーにも自動配分）
   const handleInputChange = (fieldId: string, val: string) => {
-    setFormValues(prev => ({
-      ...prev,
-      [fieldId]: val
-    }));
+    setFormValues(prev => {
+      const updated = { ...prev, [fieldId]: val };
+
+      // 被保険者番号の自動分解（4桁-6桁-1桁）
+      if (fieldId === 'insuredNumber') {
+        const clean = val.replace(/[^0-9]/g, '');
+        updated.insuredNumber_1 = clean.slice(0, 4);
+        updated.insuredNumber_2 = clean.slice(4, 10);
+        updated.insuredNumber_3 = clean.slice(10, 11);
+      }
+      // 事業所番号の自動分解（4桁-6桁-1桁）
+      if (fieldId === 'officeNumber') {
+        const clean = val.replace(/[^0-9]/g, '');
+        updated.officeNumber_1 = clean.slice(0, 4);
+        updated.officeNumber_2 = clean.slice(4, 10);
+        updated.officeNumber_3 = clean.slice(10, 11);
+      }
+      // 生年月日YYMMDDの自動分解
+      if (fieldId === 'birthYMD') {
+        const clean = val.replace(/[^0-9]/g, '');
+        updated.birthYear = clean.slice(0, 2);
+        updated.birthMonth = clean.slice(2, 4);
+        updated.birthDay = clean.slice(4, 6);
+      }
+      // 取得日YYMMDDの自動分解
+      if (fieldId === 'acqYMD') {
+        const clean = val.replace(/[^0-9]/g, '');
+        updated.joinYear = clean.slice(0, 2);
+        updated.joinMonth = clean.slice(2, 4);
+        updated.joinDay = clean.slice(4, 6);
+      }
+      // 週所定労働時間の自動分解（時間2桁＋分2桁）
+      if (fieldId === 'weeklyHoursRaw') {
+        const clean = val.replace(/[^0-9]/g, '');
+        updated.weeklyHours = clean.slice(0, 2);
+        updated.weeklyMins = clean.slice(2, 4) || '00';
+      }
+      // 賃金月額の自動分解（千円単位4桁）
+      if (fieldId === 'wageAmount') {
+        const clean = val.replace(/[^0-9]/g, '').padStart(4, '0');
+        updated.wageThousands = clean.slice(-4);
+      }
+
+      return updated;
+    });
   };
 
   // 印刷
@@ -579,8 +633,11 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                 <input
                   type="text"
                   maxLength={4}
-                  value={formValues.weeklyHours || '4000'}
-                  onChange={(e) => handleInputChange('weeklyHours', e.target.value.replace(/[^0-9]/g, ''))}
+                  value={formValues.weeklyHoursRaw || (formValues.weeklyHours ? `${formValues.weeklyHours}${formValues.weeklyMins || '00'}` : '4000')}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^0-9]/g, '');
+                    handleInputChange('weeklyHoursRaw', raw);
+                  }}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-800"
                   placeholder="4000（40時間00分）"
                 />

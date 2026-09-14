@@ -296,7 +296,7 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                     selectedSection === 'header' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  ① 番号
+                  ① 番号・取得区分
                 </button>
                 <button
                   onClick={() => setSelectedSection('employee_basic')}
@@ -304,7 +304,7 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                     selectedSection === 'employee_basic' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-50 text-slate-700 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
-                  ② 氏名・生年月日
+                  ② 氏名・生年月日・事業所
                 </button>
                 <button
                   onClick={() => setSelectedSection('employment_condition')}
@@ -312,7 +312,7 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                     selectedSection === 'employment_condition' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  ③ 雇用・賃金
+                  ③ 雇用・賃金・取得日
                 </button>
                 <button
                   onClick={() => setSelectedSection('contract')}
@@ -328,7 +328,7 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                     selectedSection === 'office' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
-                  ⑤ 事業所・署名
+                  ⑤ 事業主署名欄
                 </button>
               </div>
             </div>
