@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Printer, ArrowLeft, AlertCircle } from 'lucide-react';
 import { OfficialSeparationCertificateDoc } from './OfficialSeparationCertificateDoc';
+import { OfficialEmploymentAcquisitionDoc } from './OfficialEmploymentAcquisitionDoc';
 
 export interface EmploymentInsuranceEmployee {
   id: string;
@@ -148,7 +149,7 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
         </div>
       </div>
 
-      {/* 離職証明書の場合は転記ナビゲーション、取得・喪失の場合は公式届出書原本 */}
+      {/* 離職票、資格取得届、資格喪失届の完全分離 */}
       {docType === 'separation' ? (
         <OfficialSeparationCertificateDoc
           companyInfo={companyInfo}
@@ -158,8 +159,17 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
           onSelectEmployee={onSelectEmployee}
           onBack={onBack}
         />
+      ) : docType === 'acquisition' ? (
+        <OfficialEmploymentAcquisitionDoc
+          companyInfo={companyInfo}
+          officeNumber={officeNumber}
+          employees={employees as any}
+          selectedEmployeeId={currentEmployee.id}
+          onSelectEmployee={onSelectEmployee}
+          onBack={onBack}
+        />
       ) : (
-        /* 印刷・公式A4原本コンテナ（取得届 / 喪失届） */
+        /* 印刷・公式A4原本コンテナ（資格喪失届） */
         <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl flex justify-center overflow-x-auto print:p-0 print:m-0 print:bg-white print:overflow-visible">
         <div className="w-[210mm] min-h-[297mm] bg-white p-[15mm] shadow-lg border border-slate-300 text-slate-900 font-sans print:shadow-none print:border-none print:p-0 print:w-full print:m-0 box-border text-[11px] leading-tight">
 
@@ -171,7 +181,7 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
                   公共職業安定所長（ハローワーク）提出用
                 </span>
                 <h1 className="text-xl font-black tracking-wider mt-2">
-                  雇用保険被保険者{docType === 'acquisition' ? '資格取得届' : '資格喪失届'}
+                  雇用保険被保険者資格喪失届
                 </h1>
                 <p className="text-[10px] text-slate-600 mt-0.5">
                   労働保険・雇用保険適用事業所提出書式
@@ -244,14 +254,10 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
 
                 <tr className="border-b border-slate-300">
                   <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">
-                    {docType === 'acquisition' ? '雇入年月日' : '雇入年月日 〜 離職日'}
+                    雇入年月日 〜 離職日
                   </td>
                   <td className="p-2 border-r border-slate-300 font-bold text-xs">
-                    {docType === 'acquisition' ? (
-                      <span>{currentEmployee.join_date}</span>
-                    ) : (
-                      <span>{currentEmployee.join_date} 〜 {currentEmployee.retirement_date || '退職日未定'}</span>
-                    )}
+                    <span>{currentEmployee.join_date} 〜 {currentEmployee.retirement_date || '退職日未定'}</span>
                   </td>
                   <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">週所定労働時間</td>
                   <td className="p-2">
