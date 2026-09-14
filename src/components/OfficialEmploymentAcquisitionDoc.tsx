@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Printer, ArrowLeft, User, Shield, Edit3, Move
+  Printer, ArrowLeft, User, Shield, Edit3, Move, ZoomIn, ZoomOut
 } from 'lucide-react';
 import { 
   loadEmploymentAcqCoordinates, 
@@ -86,6 +86,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
   // 原本背景PDFのレンダリング画像URL
   const [bgPdfImg, setBgPdfImg] = useState<string | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(true);
+  const [previewZoom, setPreviewZoom] = useState<number>(85);
 
   // 各マス目・入力項目の入力State
   const [formValues, setFormValues] = useState<Record<string, string>>({});
@@ -411,11 +412,11 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
       </div>
 
       {/* メインレイアウト: 入力コントロールパネル ＆ 原本リアルタイムプレビュー */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
 
         {/* ⬅️ 【入力フォームパネル】（印刷時非表示） */}
-        <div className="print:hidden xl:col-span-4 space-y-4">
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
+        <div className="print:hidden lg:col-span-4 space-y-4">
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4 max-h-[calc(100vh-140px)] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
                 <Edit3 className="w-4 h-4 text-emerald-600" />
@@ -494,11 +495,11 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                 </div>
                 <div>
                   <label className="text-slate-600 font-bold block mb-1">7. 生年月日（YYMMDD）</label>
-                  <div className="flex gap-1">
+                  <div className="flex gap-2">
                     <select
                       value={formValues.birthEra || '5'}
                       onChange={(e) => handleInputChange('birthEra', e.target.value)}
-                      className="bg-slate-50 border border-slate-300 rounded-xl px-1.5 py-2 font-bold text-slate-800 w-16"
+                      className="bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 w-20 text-xs shrink-0"
                     >
                       <option value="3">昭和</option>
                       <option value="4">平成</option>
@@ -509,7 +510,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                       maxLength={6}
                       value={formValues.birthYMD || ''}
                       onChange={(e) => handleInputChange('birthYMD', e.target.value.replace(/[^0-9]/g, ''))}
-                      className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-mono font-bold text-slate-800"
+                      className="flex-1 min-w-0 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-800 tracking-wider text-xs"
                       placeholder="020510"
                     />
                   </div>
@@ -661,19 +662,44 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
         </div>
 
         {/* ➡️ 【原本リアルタイムプレビュー ＆ 印刷原本】 */}
-        <div className="xl:col-span-8 flex flex-col items-center overflow-x-auto print:p-0 print:m-0 print:overflow-visible">
-          {/* ドラッグ操作案内バナー（印刷時非表示） */}
-          <div className="print:hidden mb-2 w-full max-w-[210mm] flex items-center justify-between gap-2 px-1">
+        <div className="lg:col-span-8 flex flex-col items-center overflow-x-auto print:p-0 print:m-0 print:overflow-visible pb-12">
+          {/* ドラッグ操作案内 ＆ ズームバー（印刷時非表示） */}
+          <div className="print:hidden mb-2 w-full max-w-[210mm] flex flex-wrap items-center justify-between gap-2 px-1">
+            <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs">
+              <span className="text-[11px] text-slate-500">ズーム:</span>
+              <button 
+                type="button"
+                onClick={() => setPreviewZoom(z => Math.max(50, z - 10))} 
+                className="p-1 hover:bg-slate-100 rounded-lg cursor-pointer"
+                title="縮小"
+              >
+                <ZoomOut className="w-3.5 h-3.5 text-slate-600" />
+              </button>
+              <span className="w-9 text-center font-mono text-xs">{previewZoom}%</span>
+              <button 
+                type="button"
+                onClick={() => setPreviewZoom(z => Math.min(150, z + 10))} 
+                className="p-1 hover:bg-slate-100 rounded-lg cursor-pointer"
+                title="拡大"
+              >
+                <ZoomIn className="w-3.5 h-3.5 text-slate-600" />
+              </button>
+            </div>
+
             <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs font-bold shadow-2xs">
               <Move className="w-3.5 h-3.5 text-emerald-600" />
-              <span>原本上の文字をマウスで直接ドラッグして位置微調整可能（全社自動保存）</span>
+              <span>原本上の文字を直接ドラッグして位置微調整可能（全社自動保存）</span>
             </div>
           </div>
 
           <div 
             ref={previewContainerRef}
-            style={{ containerType: 'inline-size' }}
-            className="w-[210mm] min-h-[297mm] bg-white relative shadow-xl border border-slate-300 text-slate-900 font-mono print:shadow-none print:border-none print:p-0 print:w-full print:m-0 overflow-hidden select-none"
+            style={{ 
+              transform: `scale(${previewZoom / 100})`, 
+              transformOrigin: 'top center',
+              containerType: 'inline-size' 
+            }}
+            className="w-[210mm] min-h-[297mm] bg-white relative shadow-xl border border-slate-300 text-slate-900 font-mono print:shadow-none print:border-none print:p-0 print:w-full print:m-0 print:transform-none overflow-hidden select-none"
           >
             
             {/* 原本PDF画像背景 */}
