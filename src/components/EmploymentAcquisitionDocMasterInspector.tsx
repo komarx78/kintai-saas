@@ -489,7 +489,11 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
 
             <div
               ref={previewContainerRef}
-              style={{ transform: `scale(${previewZoom / 100})`, transformOrigin: 'top center' }}
+              style={{ 
+                transform: `scale(${previewZoom / 100})`, 
+                transformOrigin: 'top center',
+                containerType: 'inline-size'
+              }}
               className="w-[210mm] min-h-[297mm] bg-white relative shadow-xl border border-slate-300 overflow-hidden select-none"
             >
               {bgPdfImg ? (
@@ -525,6 +529,7 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                       position: 'absolute',
                       left: `${field.x}%`,
                       top: `${field.y}%`,
+                      width: field.width ? `${field.width}cqw` : undefined,
                       cursor: isDraggingThis ? 'grabbing' : 'grab',
                       userSelect: 'none',
                       zIndex: isDraggingThis ? 50 : isSelected ? 30 : 10,
@@ -545,13 +550,13 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                       </div>
                     )}
                     {field.pitch && field.pitch > 0 ? (
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <div className="flex items-center pointer-events-none">
                         {field.example.split('').map((ch, i) => (
                           <span
                             key={i}
                             style={{
                               display: 'inline-block',
-                              width: `${field.pitch}%`,
+                              width: `${field.pitch}cqw`,
                               fontSize: `${field.fontSize}pt`,
                               fontWeight: 900,
                               color: isDraggingThis ? '#b45309' : isSelected ? '#047857' : '#0f172a',
@@ -566,6 +571,7 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
                       </div>
                     ) : (
                       <span
+                        className="pointer-events-none"
                         style={{
                           fontSize: `${field.fontSize}pt`,
                           fontWeight: 900,

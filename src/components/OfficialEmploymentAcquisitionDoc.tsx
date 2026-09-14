@@ -615,6 +615,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
 
           <div 
             ref={previewContainerRef}
+            style={{ containerType: 'inline-size' }}
             className="w-[210mm] min-h-[297mm] bg-white relative shadow-xl border border-slate-300 text-slate-900 font-mono print:shadow-none print:border-none print:p-0 print:w-full print:m-0 overflow-hidden select-none"
           >
             
@@ -652,8 +653,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                       position: 'absolute',
                       left: `${field.x}%`,
                       top: `${field.y}%`,
-                      display: 'flex',
-                      alignItems: 'center',
+                      width: field.width ? `${field.width}cqw` : undefined,
                       cursor: isDraggingThis ? 'grabbing' : 'grab',
                       userSelect: 'none',
                       touchAction: 'none',
@@ -666,23 +666,25 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                     }`}
                     title={`${field.name} (ドラッグで位置微調整可能)`}
                   >
-                    {chars.map((ch, idx) => (
-                      <span
-                        key={idx}
-                        style={{
-                          display: 'inline-block',
-                          width: `${field.pitch}%`,
-                          fontSize: `${field.fontSize}pt`,
-                          fontWeight: 900,
-                          color: isDraggingThis ? '#b45309' : '#0f172a',
-                          textAlign: 'center',
-                          fontFamily: 'monospace',
-                          lineHeight: 1
-                        }}
-                      >
-                        {ch}
-                      </span>
-                    ))}
+                    <div className="flex items-center pointer-events-none">
+                      {chars.map((ch, idx) => (
+                        <span
+                          key={idx}
+                          style={{
+                            display: 'inline-block',
+                            width: `${field.pitch}cqw`,
+                            fontSize: `${field.fontSize}pt`,
+                            fontWeight: 900,
+                            color: isDraggingThis ? '#b45309' : '#0f172a',
+                            textAlign: 'center',
+                            fontFamily: 'monospace',
+                            lineHeight: 1
+                          }}
+                        >
+                          {ch}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 );
               }
@@ -696,7 +698,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                     position: 'absolute',
                     left: `${field.x}%`,
                     top: `${field.y}%`,
-                    width: field.width ? `${field.width}%` : 'auto',
+                    width: field.width ? `${field.width}cqw` : 'auto',
                     fontSize: `${field.fontSize}pt`,
                     fontWeight: 900,
                     color: isDraggingThis ? '#b45309' : '#0f172a',
@@ -715,7 +717,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                   }`}
                   title={`${field.name} (ドラッグで位置微調整可能)`}
                 >
-                  {val}
+                  <span className="pointer-events-none">{val}</span>
                 </div>
               );
             })}
