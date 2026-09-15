@@ -673,6 +673,37 @@ export default function EmployeeOnboardingWelcome() {
         });
       }
 
+      // 💡 大元従業員台帳（users / employee_onboarding_profiles / payroll）へフリガナ・基本情報を即時確定反映
+      try {
+        // 1. users テーブルのフリガナ・生年月日・住所・電話番号を即時同期
+        await supabase.from('users').update({
+          name: basicData.name,
+          name_kana: basicData.nameKana || null,
+          birth_date: basicData.birthDate || null,
+          address: basicData.address || null,
+          phone: basicData.phoneNumber || null,
+        }).eq('id', userId);
+      } catch (uSyncErr) {
+        console.warn('users table name_kana sync note:', uSyncErr);
+      }
+
+      try {
+        // 2. employee_onboarding_profiles へ即時同期
+        await supabase.from('employee_onboarding_profiles').upsert({
+          tenant_id: effectiveTenantId,
+          user_id: userId,
+          name_kana: basicData.nameKana || null,
+          birth_date: basicData.birthDate || null,
+          address: basicData.address || null,
+          phone: basicData.phoneNumber || null,
+          join_date: contractAgreement.joinDate || '2026-04-01',
+          status: 'onboarding',
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' });
+      } catch (onbSyncErr) {
+        console.warn('employee_onboarding_profiles name_kana sync note:', onbSyncErr);
+      }
+
       setIsCompleted(true);
     } catch (err: any) {
       console.error('Submit onboarding error:', err);

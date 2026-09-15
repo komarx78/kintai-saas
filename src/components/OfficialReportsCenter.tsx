@@ -212,13 +212,30 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           if (raw) localBackup = JSON.parse(raw);
         } catch (e) {}
 
-        const kana = depDoc.name_kana || depDoc.nameKana || depDoc.furigana || depDoc.kana ||
+        const kana = u.name_kana || u.nameKana || u.furigana || u.kana ||
+                     ob.name_kana || ob.nameKana || ob.furigana || ob.kana ||
+                     pp.name_kana || pp.nameKana || pp.furigana || pp.kana ||
+                     depDoc.name_kana || depDoc.nameKana || depDoc.furigana || depDoc.kana ||
                      resDoc.name_kana || resDoc.nameKana || resDoc.furigana || resDoc.kana ||
                      conDoc.name_kana || conDoc.nameKana || conDoc.furigana || conDoc.kana ||
-                     ob.name_kana || ob.nameKana || ob.furigana || ob.kana ||
-                     u.name_kana || u.nameKana || u.furigana || u.kana ||
-                     pp.name_kana || pp.nameKana || pp.furigana || pp.kana ||
                      localBackup?.name_kana || localBackup?.nameKana || localBackup?.furigana || localBackup?.kana || '';
+
+        // 💡 大元台帳（users / employee_onboarding_profiles）へフリガナ自動確定バックフィル
+        if (kana && (!u.name_kana || !ob?.name_kana)) {
+          void (async () => {
+            try {
+              await supabase.from('users').update({ name_kana: kana }).eq('id', u.id);
+            } catch (e) {}
+            try {
+              await supabase.from('employee_onboarding_profiles').upsert({
+                tenant_id: tenantId,
+                user_id: u.id,
+                name_kana: kana,
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'tenant_id,user_id' });
+            } catch (e) {}
+          })();
+        }
 
         const bDate = depDoc.birth_date || depDoc.birthDate ||
                       resDoc.birth_date || resDoc.birthDate ||

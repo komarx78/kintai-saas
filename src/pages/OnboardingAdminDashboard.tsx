@@ -635,6 +635,23 @@ export default function OnboardingAdminDashboard() {
         const resTaxMonthly = onb?.resident_tax_monthly ?? pay?.resident_tax_monthly ?? localBackup?.resident_tax_monthly ?? 0;
         const resTaxDetails = onb?.resident_tax_details ?? pay?.resident_tax_details ?? localBackup?.resident_tax_details ?? {};
 
+        // 💡 提出書類にフリガナがあるが users / onb に未反映の場合の自動バックフィル同期（大元台帳へ自動確定反映）
+        if (kana && (!u.name_kana || !onb?.name_kana)) {
+          void (async () => {
+            try {
+              await supabase.from('users').update({ name_kana: kana }).eq('id', u.id);
+            } catch (e) {}
+            try {
+              await supabase.from('employee_onboarding_profiles').upsert({
+                tenant_id: tenantId,
+                user_id: u.id,
+                name_kana: kana,
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'tenant_id,user_id' });
+            } catch (e) {}
+          })();
+        }
+
         return {
           user_id: u.id,
           name: u.name || '従業員',
@@ -1453,7 +1470,9 @@ export default function OnboardingAdminDashboard() {
 
       // 3. 各書類タイプ別のマスタ同期
       if (sub.document_type === 'labor_contract') {
+        const kana = d.name_kana || d.nameKana || d.furigana || '';
         localMaster.name = empName;
+        if (kana) localMaster.name_kana = kana;
         localMaster.employment_type = d.employment_type;
         localMaster.salary_type = d.salary_type;
         localMaster.base_salary = d.base_salary;
@@ -1465,10 +1484,17 @@ export default function OnboardingAdminDashboard() {
         localMaster.department = d.department;
         localMaster.join_date = d.join_date;
 
+        if (kana) {
+          try {
+            await supabase.from('users').update({ name_kana: kana }).eq('id', uId);
+          } catch (e) {}
+        }
+
         try {
           await supabase.from('employee_payroll_profiles').upsert({
             tenant_id: tenantId,
             user_id: uId,
+            name_kana: kana || undefined,
             salary_type: d.salary_type || 'monthly',
             base_salary: d.base_salary || 250000,
             hourly_wage: d.hourly_wage || 1200,
@@ -1482,6 +1508,7 @@ export default function OnboardingAdminDashboard() {
             tenant_id: tenantId,
             user_id: uId,
             status: 'active',
+            name_kana: kana || undefined,
             join_date: d.join_date || new Date().toISOString().split('T')[0],
             salary_type: d.salary_type || 'monthly',
             base_salary: d.base_salary || 250000,
@@ -1564,13 +1591,21 @@ export default function OnboardingAdminDashboard() {
         const addr = d.address || '';
         const ph = d.phone || d.phoneNumber || '';
         const myNum = d.my_number || d.myNumber || '';
+        const kana = d.name_kana || d.nameKana || d.furigana || '';
 
         localMaster.dependents_count = depCount;
         localMaster.has_spouse = d.has_spouse;
+        if (kana) localMaster.name_kana = kana;
         if (bDate) localMaster.birth_date = bDate;
         if (addr) localMaster.address = addr;
         if (ph) localMaster.phone = ph;
         if (myNum) localMaster.my_number = myNum;
+
+        if (kana) {
+          try {
+            await supabase.from('users').update({ name_kana: kana }).eq('id', uId);
+          } catch (e) {}
+        }
 
         try {
           await supabase
@@ -1578,6 +1613,7 @@ export default function OnboardingAdminDashboard() {
             .upsert({
               tenant_id: tenantId,
               user_id: uId,
+              name_kana: kana || undefined,
               dependents_count: depCount,
               birth_date: bDate || undefined
             }, { onConflict: 'tenant_id,user_id' });
@@ -1589,6 +1625,7 @@ export default function OnboardingAdminDashboard() {
             .upsert({
               tenant_id: tenantId,
               user_id: uId,
+              name_kana: kana || undefined,
               address: addr || undefined,
               birth_date: bDate || undefined,
               phone: ph || undefined,
@@ -1600,10 +1637,18 @@ export default function OnboardingAdminDashboard() {
         const bDate = d.birth_date || d.birthDate || '';
         const addr = d.address || '';
         const ph = d.phone || d.phoneNumber || '';
+        const kana = d.name_kana || d.nameKana || d.furigana || '';
 
+        if (kana) localMaster.name_kana = kana;
         if (addr) localMaster.address = addr;
         if (bDate) localMaster.birth_date = bDate;
         if (ph) localMaster.phone = ph;
+
+        if (kana) {
+          try {
+            await supabase.from('users').update({ name_kana: kana }).eq('id', uId);
+          } catch (e) {}
+        }
 
         try {
           await supabase
@@ -1611,6 +1656,7 @@ export default function OnboardingAdminDashboard() {
             .upsert({
               tenant_id: tenantId,
               user_id: uId,
+              name_kana: kana || undefined,
               address: addr || undefined,
               birth_date: bDate || undefined,
               phone: ph || undefined,
@@ -1963,6 +2009,7 @@ export default function OnboardingAdminDashboard() {
           .from('users')
           .update({
             name: data.name,
+            name_kana: data.name_kana || null,
             department: data.department,
             employment_type: data.employment_type,
             join_date: data.join_date,
@@ -1978,6 +2025,7 @@ export default function OnboardingAdminDashboard() {
           .from('users')
           .update({
             name: data.name,
+            name_kana: data.name_kana || null,
             department: data.department,
             employment_type: data.employment_type,
             join_date: data.join_date
@@ -2074,6 +2122,7 @@ export default function OnboardingAdminDashboard() {
             tenant_id: tenantId,
             user_id: data.user_id,
             status: data.status,
+            name_kana: data.name_kana || null,
             join_date: data.join_date,
             birth_date: data.birth_date || null,
             address: data.address || null,
@@ -2370,7 +2419,7 @@ export default function OnboardingAdminDashboard() {
     return {
       user_id: targetUserId || matchedEmp.user_id || `temp_${Date.now()}`,
       name: targetName || matchedEmp.name || '従業員',
-      name_kana: residentData.name_kana || taxData.name_kana || matchedEmp.name_kana || '',
+      name_kana: matchedEmp.name_kana || residentData.name_kana || taxData.name_kana || contractData.name_kana || localMaster.name_kana || '',
       role: matchedEmp.role || 'employee',
       status: matchedEmp.status || 'active',
       department: contractData.department || localMaster.department || matchedEmp.department || '本社',
@@ -2692,8 +2741,13 @@ export default function OnboardingAdminDashboard() {
                                 {emp.name.substring(0, 1)}
                               </div>
                               <div>
-                                <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                                  {emp.name}
+                                <div className="font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                                  <span>{emp.name}</span>
+                                  {emp.name_kana && (
+                                    <span className="text-[10px] text-slate-500 font-normal">
+                                      （{emp.name_kana}）
+                                    </span>
+                                  )}
                                   {isRetired && <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-bold">退職</span>}
                                 </div>
                                 <div className="text-[10px] text-slate-400 flex items-center gap-1.5 flex-wrap">
@@ -3199,7 +3253,12 @@ export default function OnboardingAdminDashboard() {
               <div>
                 <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
                   <FolderOpen className="w-5 h-5 text-indigo-600" />
-                  労務書面キャビネット（{cabinetModal.employee.name} 殿）
+                  労務書面キャビネット（{cabinetModal.employee.name}
+                  {cabinetModal.employee.name_kana && (
+                    <span className="text-xs text-slate-500 font-normal">
+                      （{cabinetModal.employee.name_kana}）
+                    </span>
+                  )} 殿）
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">入社時に締結した契約書および提出された通勤届・口座届のエビデンス原本</p>
               </div>
@@ -3834,14 +3893,24 @@ export default function OnboardingAdminDashboard() {
             <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 text-xs">
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                 <h4 className="font-bold text-slate-700">基本情報 ＆ 就業時間帯</h4>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">氏名</label>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">氏名（漢字）</label>
                     <input
                       type="text"
                       value={editModal.data.name}
                       onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, name: e.target.value } })}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-indigo-700 block mb-1">フリガナ（カタカナ）</label>
+                    <input
+                      type="text"
+                      value={editModal.data.name_kana || ''}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, name_kana: e.target.value } })}
+                      placeholder="例: ヤマダ タロウ"
+                      className="w-full bg-white border border-indigo-300 rounded-lg px-2.5 py-1.5 font-bold text-indigo-950 focus:border-indigo-500"
                     />
                   </div>
                   <div>
