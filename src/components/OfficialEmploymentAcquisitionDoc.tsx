@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Printer, ArrowLeft, User, Shield, Edit3, Move, ZoomIn, ZoomOut,
-  CheckCircle2, RotateCcw, ChevronDown, ChevronUp, Sparkles, Check
+  CheckCircle2, RotateCcw, ChevronDown, ChevronUp, Sparkles, Check,
+  Maximize2, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 import { 
   loadEmploymentAcqCoordinates, 
@@ -113,7 +114,9 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
   // 原本背景PDFのレンダリング画像URL
   const [bgPdfImg, setBgPdfImg] = useState<string | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(true);
-  const [previewZoom, setPreviewZoom] = useState<number>(85);
+  const [previewZoom, setPreviewZoom] = useState<number>(75);
+  // 左側パネルの表示/折りたたみState（全画面プレビュー対応）
+  const [isSidePanelOpen, setIsSidePanelOpen] = useState<boolean>(true);
 
   // ✏️ 提出直前の微調整アコーディオン開閉State（デフォルトは閉じてスッキリ表示）
   const [isAdjustOpen, setIsAdjustOpen] = useState(false);
@@ -464,7 +467,8 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start print:block print:w-[210mm] print:m-0 print:p-0">
 
         {/* ⬅️ 【入退社労務マスタ 自動転記ステータス＆微調整パネル】（印刷時非表示） */}
-        <div className="print:hidden lg:col-span-4 space-y-4">
+        {isSidePanelOpen && (
+          <div className="print:hidden lg:col-span-4 space-y-4">
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4 max-h-[calc(100vh-140px)] overflow-y-auto">
             {/* パネルヘッダー */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -928,50 +932,108 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
             </div>
           </div>
         </div>
+      )}
 
         {/* ➡️ 【原本リアルタイムプレビュー ＆ 印刷原本】 */}
-        <div className="lg:col-span-8 flex flex-col items-center overflow-x-auto print:block print:w-[210mm] print:p-0 print:m-0 print:overflow-visible pb-12 print:pb-0">
+        <div className={`${isSidePanelOpen ? 'lg:col-span-8' : 'lg:col-span-12'} flex flex-col items-center overflow-x-auto print:block print:w-[210mm] print:p-0 print:m-0 print:overflow-visible pb-12 print:pb-0 transition-all duration-200`}>
           {/* ドラッグ操作案内 ＆ ズームバー（印刷時非表示） */}
           <div className="print:hidden mb-2 w-full max-w-[210mm] flex flex-wrap items-center justify-between gap-2 px-1">
-            <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs">
-              <span className="text-[11px] text-slate-500">ズーム:</span>
-              <button 
+            <div className="flex flex-wrap items-center gap-2">
+              {/* パネル折りたたみトグル */}
+              <button
                 type="button"
-                onClick={() => setPreviewZoom(z => Math.max(50, z - 10))} 
-                className="p-1 hover:bg-slate-100 rounded-lg cursor-pointer"
-                title="縮小"
+                onClick={() => setIsSidePanelOpen(!isSidePanelOpen)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl border border-slate-200 text-xs font-bold transition cursor-pointer shadow-2xs"
+                title={isSidePanelOpen ? "左の入力欄を閉じて原本を画面いっぱいに広げる" : "左の入力欄を表示する"}
               >
-                <ZoomOut className="w-3.5 h-3.5 text-slate-600" />
+                {isSidePanelOpen ? (
+                  <>
+                    <PanelLeftClose className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="hidden sm:inline">入力欄を畳む</span>
+                  </>
+                ) : (
+                  <>
+                    <PanelLeftOpen className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>入力欄を表示</span>
+                  </>
+                )}
               </button>
-              <span className="w-9 text-center font-mono text-xs">{previewZoom}%</span>
-              <button 
+
+              {/* ズーム拡大・縮小バー */}
+              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs">
+                <span className="text-[11px] text-slate-500">ズーム:</span>
+                <button 
+                  type="button"
+                  onClick={() => setPreviewZoom(z => Math.max(50, z - 10))} 
+                  className="p-1 hover:bg-slate-100 rounded-lg cursor-pointer"
+                  title="縮小"
+                >
+                  <ZoomOut className="w-3.5 h-3.5 text-slate-600" />
+                </button>
+                <span className="w-9 text-center font-mono text-xs">{previewZoom}%</span>
+                <button 
+                  type="button"
+                  onClick={() => setPreviewZoom(z => Math.min(150, z + 10))} 
+                  className="p-1 hover:bg-slate-100 rounded-lg cursor-pointer"
+                  title="拡大"
+                >
+                  <ZoomIn className="w-3.5 h-3.5 text-slate-600" />
+                </button>
+              </div>
+
+              {/* 全体表示（Fit）ボタン */}
+              <button
                 type="button"
-                onClick={() => setPreviewZoom(z => Math.min(150, z + 10))} 
-                className="p-1 hover:bg-slate-100 rounded-lg cursor-pointer"
-                title="拡大"
+                onClick={() => setPreviewZoom(isSidePanelOpen ? 75 : 90)}
+                className={`px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 border shadow-2xs ${
+                  previewZoom <= 80 ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+                title="用紙全体が枠内に美しく収まる最適倍率に切り替え"
               >
-                <ZoomIn className="w-3.5 h-3.5 text-slate-600" />
+                <Maximize2 className="w-3 h-3 text-emerald-600" />
+                <span>全体表示(Fit)</span>
+              </button>
+
+              {/* 100%原寸ボタン */}
+              <button
+                type="button"
+                onClick={() => setPreviewZoom(100)}
+                className={`px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1 border shadow-2xs ${
+                  previewZoom === 100 ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+                title="A4実寸サイズ(100%)で表示"
+              >
+                <span>原寸100%</span>
               </button>
             </div>
 
             <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl text-xs font-bold shadow-2xs">
               <Move className="w-3.5 h-3.5 text-emerald-600" />
-              <span>原本上の文字を直接ドラッグして位置微調整可能（全社自動保存）</span>
+              <span>原本上の文字を直接ドラッグして位置微調整可能</span>
             </div>
           </div>
 
+          {/* 原本スケーリングサイザー（スケーリング時の余計な空白・はみ出し見切れを完全防止） */}
           <div 
-            ref={previewContainerRef}
             style={{ 
-              transform: `scale(${previewZoom / 100})`, 
-              transformOrigin: 'top center',
-              containerType: 'inline-size',
-              width: '210mm',
-              height: '297mm',
-              aspectRatio: '210 / 297'
-            }}
-            className="official-acq-print-container w-[210mm] h-[297mm] bg-white relative shadow-xl border border-slate-300 text-slate-900 font-mono print:shadow-none print:border-none print:p-0 print:m-0 print:w-[210mm] print:h-[297mm] print:transform-none overflow-hidden select-none"
+              width: `${210 * (previewZoom / 100)}mm`, 
+              height: `${297 * (previewZoom / 100)}mm`,
+              maxWidth: '100%'
+            }} 
+            className="relative transition-[width,height] duration-100 ease-out print:w-[210mm] print:h-[297mm]"
           >
+            <div 
+              ref={previewContainerRef}
+              style={{ 
+                transform: `scale(${previewZoom / 100})`, 
+                transformOrigin: 'top left',
+                containerType: 'inline-size',
+                width: '210mm',
+                height: '297mm',
+                aspectRatio: '210 / 297'
+              }}
+              className="official-acq-print-container w-[210mm] h-[297mm] bg-white absolute top-0 left-0 shadow-xl border border-slate-300 text-slate-900 font-mono print:shadow-none print:border-none print:p-0 print:m-0 print:w-[210mm] print:h-[297mm] print:transform-none overflow-hidden select-none"
+            >
             
             {/* 原本PDF画像背景 */}
             {bgPdfImg ? (
@@ -1080,6 +1142,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
             })}
 
           </div>
+        </div>
         </div>
 
       </div>

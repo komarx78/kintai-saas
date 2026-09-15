@@ -1128,7 +1128,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
         </div>
       ) : selectedDocType === 'employment_insurance_doc' ? (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex flex-col p-2 sm:p-6 overflow-y-auto print:static print:p-0 print:m-0 print:bg-white print:z-auto print:block print:h-auto print:overflow-visible print:w-full print:min-w-0">
-          <div className="max-w-5xl mx-auto w-full">
+          <div className="max-w-[1500px] mx-auto w-full">
             <OfficialEmploymentInsuranceDoc
               initialType="acquisition"
               companyInfo={companyInfo}
