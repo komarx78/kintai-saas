@@ -22,21 +22,8 @@ export interface EmploymentLossFieldConfig {
 // 🎯 原本PDF（様式第4号 A4縦: 210mm × 297mm）の実寸枠内に合致する精密ブロック定義
 export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
   // ══════════════════════════════════════════════════════════════════════
-  // ① ヘッダー・番号欄（帳票種別 17191 / 個人番号12桁 / 被保険者番号 / 事業所番号）
+  // ① ヘッダー・番号欄（個人番号12桁 / 被保険者番号 / 事業所番号）
   // ══════════════════════════════════════════════════════════════════════
-  {
-    id: 'docTypeNumber',
-    name: '帳票種別（17191・プレプリント済）',
-    section: 'header',
-    x: 7.2,
-    y: 8.6,
-    fontSize: 12,
-    pitch: 2.86,
-    width: 14.5,
-    example: '17191',
-    description: '原本にプレプリント印刷済のため印字不要',
-    disabled: true
-  },
   {
     id: 'myNumber',
     name: '1. 個人番号（マイナンバー12桁）',
@@ -539,9 +526,10 @@ const STORAGE_KEY = 'employment_loss_doc_coordinates_custom_v2';
 export function loadEmploymentLossCoordinates(): EmploymentLossFieldConfig[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('employment_loss_doc_coordinates_custom_v1');
-    if (!raw) return DEFAULT_EMPLOYMENT_LOSS_FIELDS;
+    if (!raw) return DEFAULT_EMPLOYMENT_LOSS_FIELDS.filter(f => f.id !== 'docTypeNumber');
     const parsed: Partial<EmploymentLossFieldConfig>[] = JSON.parse(raw);
-    return DEFAULT_EMPLOYMENT_LOSS_FIELDS.map(def => {
+    const filteredDefaults = DEFAULT_EMPLOYMENT_LOSS_FIELDS.filter(f => f.id !== 'docTypeNumber');
+    return filteredDefaults.map(def => {
       const custom = parsed.find(p => p.id === def.id);
       if (custom) {
         return {
@@ -555,17 +543,18 @@ export function loadEmploymentLossCoordinates(): EmploymentLossFieldConfig[] {
         };
       }
       return def;
-    });
+    }).filter(f => f.id !== 'docTypeNumber');
   } catch (err) {
     console.warn('Failed to parse employment loss custom coords from localStorage:', err);
-    return DEFAULT_EMPLOYMENT_LOSS_FIELDS;
+    return DEFAULT_EMPLOYMENT_LOSS_FIELDS.filter(f => f.id !== 'docTypeNumber');
   }
 }
 
 // ローカルストレージへの保存
 export function saveEmploymentLossCoordinates(fields: EmploymentLossFieldConfig[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(fields));
+    const cleaned = fields.filter(f => f.id !== 'docTypeNumber');
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
   } catch (err) {
     console.error('Failed to save employment loss coords to localStorage:', err);
   }
@@ -576,12 +565,13 @@ export function resetEmploymentLossCoordinates(): EmploymentLossFieldConfig[] {
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch (err) {}
-  return DEFAULT_EMPLOYMENT_LOSS_FIELDS;
+  return DEFAULT_EMPLOYMENT_LOSS_FIELDS.filter(f => f.id !== 'docTypeNumber');
 }
 
 // リアルタイム反映ブロードキャスト
 export function broadcastEmploymentLossCoordinates(fields: EmploymentLossFieldConfig[]) {
-  const ev = new CustomEvent(EMPLOYMENT_LOSS_COORDS_UPDATE_EVENT, { detail: fields });
+  const cleaned = fields.filter(f => f.id !== 'docTypeNumber');
+  const ev = new CustomEvent(EMPLOYMENT_LOSS_COORDS_UPDATE_EVENT, { detail: cleaned });
   window.dispatchEvent(ev);
 }
 
@@ -595,8 +585,9 @@ export async function fetchEmploymentLossCoordinatesFromDb(): Promise<Employment
       .maybeSingle();
 
     if (data && data.employment_loss_doc_coordinates && Array.isArray(data.employment_loss_doc_coordinates)) {
-      const dbFields = data.employment_loss_doc_coordinates as EmploymentLossFieldConfig[];
-      const merged = DEFAULT_EMPLOYMENT_LOSS_FIELDS.map(def => {
+      const dbFields = (data.employment_loss_doc_coordinates as EmploymentLossFieldConfig[]).filter(f => f.id !== 'docTypeNumber');
+      const filteredDefaults = DEFAULT_EMPLOYMENT_LOSS_FIELDS.filter(f => f.id !== 'docTypeNumber');
+      const merged = filteredDefaults.map(def => {
         const custom = dbFields.find(p => p.id === def.id);
         if (custom) {
           return {
@@ -610,7 +601,7 @@ export async function fetchEmploymentLossCoordinatesFromDb(): Promise<Employment
           };
         }
         return def;
-      });
+      }).filter(f => f.id !== 'docTypeNumber');
       localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
       return merged;
     }
@@ -623,7 +614,8 @@ export async function fetchEmploymentLossCoordinatesFromDb(): Promise<Employment
 // Supabase DB への保存（UUID完全整合・レコード自動判定）
 export async function saveEmploymentLossCoordinatesToDb(fields: EmploymentLossFieldConfig[]): Promise<boolean> {
   try {
-    saveEmploymentLossCoordinates(fields);
+    const cleaned = fields.filter(f => f.id !== 'docTypeNumber');
+    saveEmploymentLossCoordinates(cleaned);
 
     const { data: current } = await supabase
       .from('system_settings')

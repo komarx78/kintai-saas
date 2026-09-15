@@ -33,8 +33,11 @@ import {
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
   FolderOpen, Settings, Clock, Smartphone, AlertCircle, ArrowRight, CornerDownLeft,
   Copy, DollarSign, Sparkles, Award, ShieldCheck, FileCheck,
-  ExternalLink, Gift
+  ExternalLink, Gift, Baby
 } from 'lucide-react';
+import { MaternityLeaveModal } from '../components/MaternityLeaveModal';
+import { OfficialMaternityLeaveDoc } from '../components/OfficialMaternityLeaveDoc';
+import { fetchMaternityLeaveRecord, type MaternityLeaveRecord } from '../lib/maternityLeave';
 import { BonusPaymentReportModal } from '../components/BonusPaymentReportModal';
 import { 
   getQualificationsFromStorage, 
@@ -302,13 +305,25 @@ export default function OnboardingAdminDashboard() {
   const [cabinetModal, setCabinetModal] = useState<{
     isOpen: boolean;
     employee: EmployeeOnboardingData | null;
-    activeDoc: 'contract' | 'commuting' | 'bank' | 'tax' | 'spouse_deduction' | 'identity' | 'raw_data' | string;
+    activeDoc: 'contract' | 'commuting' | 'bank' | 'tax' | 'spouse_deduction' | 'maternity_leave' | 'identity' | 'raw_data' | string;
     selectedSubmission?: DocumentSubmission | null;
   }>({
     isOpen: false,
     employee: null,
     activeDoc: 'contract',
     selectedSubmission: null
+  });
+
+  // キャビネット内 産休・育休データ保持State
+  const [cabinetMaternityRecord, setCabinetMaternityRecord] = useState<MaternityLeaveRecord | null>(null);
+
+  // 👶 産前産後・育児休業 手続きステーション（モーダル）State
+  const [maternityModal, setMaternityModal] = useState<{
+    isOpen: boolean;
+    employee: EmployeeOnboardingData | null;
+  }>({
+    isOpen: false,
+    employee: null
   });
 
   // 🖨️ 全社カスタム公的書類一覧 State
@@ -2949,6 +2964,17 @@ export default function OnboardingAdminDashboard() {
                                 <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
                               </button>
 
+                              <button
+                                onClick={() => setMaternityModal({
+                                  isOpen: true,
+                                  employee: resolveEmployeeFullData(emp)
+                                })}
+                                className="bg-pink-50 hover:bg-pink-100 text-pink-700 font-bold text-xs p-1.5 rounded-lg border border-pink-200 transition cursor-pointer"
+                                title="産前産後・育児休業の手続き＆申請書・立替表作成"
+                              >
+                                <Baby className="w-3.5 h-3.5 text-pink-600" />
+                              </button>
+
                               {isRetired ? (
                                 <button
                                   onClick={() => handleRehire(emp)}
@@ -3329,6 +3355,22 @@ export default function OnboardingAdminDashboard() {
                 5. 配偶者控除等申告書（特別控除）
               </button>
 
+              <button
+                onClick={async () => {
+                  setCabinetModal(prev => ({ ...prev, activeDoc: 'maternity_leave' }));
+                  if (tenantId && cabinetModal.employee) {
+                    const rec = await fetchMaternityLeaveRecord(tenantId, cabinetModal.employee.user_id);
+                    setCabinetMaternityRecord(rec);
+                  }
+                }}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  cabinetModal.activeDoc === 'maternity_leave' ? 'bg-pink-600 text-white shadow-sm' : 'bg-pink-50 text-pink-800 hover:bg-pink-100 border border-pink-300'
+                }`}
+              >
+                <Baby className="w-4 h-4 text-pink-600" />
+                6. 👶 産休・育休申請＆立替表
+              </button>
+
               {/* 🖨️ 全社カスタム登録公的書類タブ一覧 */}
               {customDocTemplates.map((tpl, tIdx) => (
                 <button
@@ -3611,6 +3653,65 @@ export default function OnboardingAdminDashboard() {
                       spouseAddress: resolvedEmp.address,
                       appliedDate: resolvedEmp.join_date
                     }} />
+                  </div>
+                );
+              })()}
+
+              {/* 👶 6. 産前産後・育児休業 申請書＆住民税立替表 */}
+              {cabinetModal.activeDoc === 'maternity_leave' && (() => {
+                const resolvedEmp = resolveEmployeeFullData(cabinetModal.employee);
+                if (!cabinetMaternityRecord) {
+                  return (
+                    <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300 space-y-3">
+                      <div className="w-12 h-12 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center mx-auto">
+                        <Baby className="w-6 h-6" />
+                      </div>
+                      <h4 className="font-bold text-slate-800 text-sm">
+                        産前産後・育児休業の申請データはまだ登録されていません
+                      </h4>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto">
+                        出産予定日を入力することで、産前・産後・育休期間、復職予定日、および無給期間中の住民税立替スケジュールを自動計算できます。
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const targetEmp = resolvedEmp;
+                          setCabinetModal(prev => ({ ...prev, isOpen: false }));
+                          setMaternityModal({ isOpen: true, employee: targetEmp });
+                        }}
+                        className="mt-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold text-xs rounded-xl shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Baby className="w-4 h-4" />
+                        👶 産休・育休手続きステーションを開く
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-4">
+                    <OfficialMaternityLeaveDoc
+                      companyInfo={{
+                        name: tenantInfo?.name || '会社名未設定',
+                        address: tenantInfo?.address || '',
+                        representative_name: tenantInfo?.representative_name || '',
+                        phone_number: tenantInfo?.phone_number || '',
+                        corporate_number: tenantInfo?.corporate_number,
+                        company_seal_url: tenantInfo?.company_seal_url
+                      }}
+                      employee={{
+                        id: resolvedEmp.user_id,
+                        name: resolvedEmp.name,
+                        name_kana: resolvedEmp.name_kana,
+                        department: resolvedEmp.department,
+                        birth_date: resolvedEmp.birth_date,
+                        join_date: resolvedEmp.join_date,
+                        address: resolvedEmp.address,
+                        phone: cabinetMaternityRecord.contact_phone || resolvedEmp.phone,
+                        email: cabinetMaternityRecord.contact_email || resolvedEmp.email
+                      }}
+                      record={cabinetMaternityRecord}
+                    />
                   </div>
                 );
               })()}
@@ -5080,6 +5181,39 @@ export default function OnboardingAdminDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 👶 産前産後・育児休業 手続き＆管理ステーション モーダル */}
+      {maternityModal.isOpen && maternityModal.employee && (
+        <MaternityLeaveModal
+          isOpen={maternityModal.isOpen}
+          onClose={() => setMaternityModal({ isOpen: false, employee: null })}
+          tenantId={tenantId || ''}
+          companyInfo={{
+            name: tenantInfo?.name || '会社名未設定',
+            address: tenantInfo?.address || '',
+            representative_name: tenantInfo?.representative_name || '',
+            phone_number: tenantInfo?.phone_number || '',
+            corporate_number: tenantInfo?.corporate_number,
+            company_seal_url: tenantInfo?.company_seal_url
+          }}
+          employee={{
+            user_id: maternityModal.employee.user_id,
+            name: maternityModal.employee.name,
+            name_kana: maternityModal.employee.name_kana,
+            department: maternityModal.employee.department,
+            birth_date: maternityModal.employee.birth_date,
+            join_date: maternityModal.employee.join_date,
+            address: maternityModal.employee.address,
+            phone: maternityModal.employee.phone,
+            email: maternityModal.employee.email,
+            resident_tax_monthly: maternityModal.employee.resident_tax_monthly,
+            resident_tax_details: maternityModal.employee.resident_tax_details
+          }}
+          onSaved={() => {
+            fetchData();
+          }}
+        />
       )}
 
       {/* 新規入社ウィザード モーダル（就業時間パターン自動セット ＆ 個別調整） */}

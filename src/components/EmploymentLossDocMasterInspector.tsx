@@ -20,7 +20,9 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'inspector' | 'input_preview'>('inspector');
 
   // インスペクター用State
-  const [fields, setFields] = useState<EmploymentLossFieldConfig[]>(() => loadEmploymentLossCoordinates());
+  const [fields, setFields] = useState<EmploymentLossFieldConfig[]>(() => 
+    loadEmploymentLossCoordinates().filter(f => f.id !== 'docTypeNumber')
+  );
   const [selectedSection, setSelectedSection] = useState<'header' | 'employee_basic' | 'loss_detail' | 'lower_table' | 'office'>('header');
   const [selectedFieldId, setSelectedFieldId] = useState<string>('myNumber');
   const [isSaving, setIsSaving] = useState(false);
@@ -32,7 +34,8 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
     let isCancelled = false;
     fetchEmploymentLossCoordinatesFromDb().then(dbCoords => {
       if (!isCancelled && dbCoords && dbCoords.length > 0) {
-        setFields(dbCoords);
+        const cleaned = dbCoords.filter(f => f.id !== 'docTypeNumber');
+        setFields(cleaned);
       }
     });
     return () => { isCancelled = true; };
@@ -101,8 +104,8 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
   }, []);
 
   // 選択中項目
-  const selectedField = fields.find(f => f.id === selectedFieldId);
-  const sectionFields = fields.filter(f => f.section === selectedSection);
+  const selectedField = fields.find(f => f.id === selectedFieldId && f.id !== 'docTypeNumber');
+  const sectionFields = fields.filter(f => f.section === selectedSection && f.id !== 'docTypeNumber');
 
   // 項目値更新
   const updateField = useCallback((id: string, key: keyof EmploymentLossFieldConfig, value: any) => {
@@ -637,7 +640,7 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
 
               {/* 🎯 原本用紙の上で直接ドラッグ可能な全フィールドボックス */}
               {fields.map(field => {
-                if (field.disabled) return null;
+                if (field.disabled || field.id === 'docTypeNumber') return null;
                 const isSelected = field.id === selectedFieldId;
                 const isDraggingThis = draggingFieldId === field.id;
 
