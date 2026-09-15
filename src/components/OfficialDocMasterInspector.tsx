@@ -4,17 +4,34 @@ import { TaxDocMasterInspector } from './TaxDocMasterInspector';
 import { BonusDocMasterInspector } from './BonusDocMasterInspector';
 import { EmploymentAcquisitionDocMasterInspector } from './EmploymentAcquisitionDocMasterInspector';
 import { EmploymentLossDocMasterInspector } from './EmploymentLossDocMasterInspector';
+import { SpouseDocMasterInspector } from './SpouseDocMasterInspector';
 
-export type PublicDocType = 'employment_acquisition' | 'employment_loss' | 'bonus_report' | 'tax_withholding';
+export type PublicDocType = 'employment_acquisition' | 'employment_loss' | 'bonus_report' | 'tax_withholding' | 'spouse_deduction';
 
 export const OfficialDocMasterInspector: React.FC = () => {
-  const [activeDoc, setActiveDoc] = useState<PublicDocType>('employment_loss'); // 喪失届をデフォルト表示
+  const [activeDoc, setActiveDoc] = useState<PublicDocType>('spouse_deduction'); // 配偶者控除等をデフォルト表示
 
   return (
     <div className="space-y-4 font-sans">
       {/* 🧭 公的帳票 選択切り替えタブバー */}
       <div className="bg-slate-900 p-2 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-2 shadow-lg">
         <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setActiveDoc('spouse_deduction')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer ${
+              activeDoc === 'spouse_deduction'
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg ring-2 ring-purple-400/40'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <span className="text-base">🏛️</span>
+            <span>令和8年分 基礎・配偶者・特定親族・所得調整控除申告書（A4横）</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-200 border border-purple-500/30 font-bold">
+              NEW
+            </span>
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveDoc('employment_loss')}
@@ -26,9 +43,6 @@ export const OfficialDocMasterInspector: React.FC = () => {
           >
             <span className="text-base">🏛️</span>
             <span>雇用保険被保険者資格喪失届（様式第4号）</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/30">
-              NEW
-            </span>
           </button>
 
           <button
@@ -62,7 +76,7 @@ export const OfficialDocMasterInspector: React.FC = () => {
             onClick={() => setActiveDoc('tax_withholding')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer ${
               activeDoc === 'tax_withholding'
-                ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-lg ring-2 ring-indigo-400/40'
+                ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg ring-2 ring-blue-400/40'
                 : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
@@ -78,7 +92,9 @@ export const OfficialDocMasterInspector: React.FC = () => {
       </div>
 
       {/* 選択された帳票のインスペクター本体 */}
-      {activeDoc === 'employment_loss' ? (
+      {activeDoc === 'spouse_deduction' ? (
+        <SpouseDocMasterInspector />
+      ) : activeDoc === 'employment_loss' ? (
         <EmploymentLossDocMasterInspector />
       ) : activeDoc === 'employment_acquisition' ? (
         <EmploymentAcquisitionDocMasterInspector />
@@ -90,3 +106,4 @@ export const OfficialDocMasterInspector: React.FC = () => {
     </div>
   );
 };
+
