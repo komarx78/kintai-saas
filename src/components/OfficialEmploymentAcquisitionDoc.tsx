@@ -461,7 +461,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
       )}
 
       {/* メインレイアウト: 入力コントロールパネル ＆ 原本リアルタイムプレビュー */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start print:block print:w-[210mm] print:m-0 print:p-0">
 
         {/* ⬅️ 【入退社労務マスタ 自動転記ステータス＆微調整パネル】（印刷時非表示） */}
         <div className="print:hidden lg:col-span-4 space-y-4">
@@ -930,7 +930,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
         </div>
 
         {/* ➡️ 【原本リアルタイムプレビュー ＆ 印刷原本】 */}
-        <div className="lg:col-span-8 flex flex-col items-center overflow-x-auto print:p-0 print:m-0 print:overflow-visible pb-12">
+        <div className="lg:col-span-8 flex flex-col items-center overflow-x-auto print:block print:w-[210mm] print:p-0 print:m-0 print:overflow-visible pb-12 print:pb-0">
           {/* ドラッグ操作案内 ＆ ズームバー（印刷時非表示） */}
           <div className="print:hidden mb-2 w-full max-w-[210mm] flex flex-wrap items-center justify-between gap-2 px-1">
             <div className="flex items-center gap-2 bg-white px-2.5 py-1 rounded-xl border border-slate-200 text-xs font-bold text-slate-700 shadow-2xs">
@@ -965,9 +965,12 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
             style={{ 
               transform: `scale(${previewZoom / 100})`, 
               transformOrigin: 'top center',
-              containerType: 'inline-size' 
+              containerType: 'inline-size',
+              width: '210mm',
+              height: '297mm',
+              aspectRatio: '210 / 297'
             }}
-            className="w-[210mm] min-h-[297mm] bg-white relative shadow-xl border border-slate-300 text-slate-900 font-mono print:shadow-none print:border-none print:p-0 print:w-full print:m-0 print:transform-none overflow-hidden select-none"
+            className="official-acq-print-container w-[210mm] h-[297mm] bg-white relative shadow-xl border border-slate-300 text-slate-900 font-mono print:shadow-none print:border-none print:p-0 print:m-0 print:w-[210mm] print:h-[297mm] print:transform-none overflow-hidden select-none"
           >
             
             {/* 原本PDF画像背景 */}
@@ -975,7 +978,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
               <img
                 src={bgPdfImg}
                 alt="雇用保険被保険者資格取得届原本"
-                className="w-full h-full object-contain pointer-events-none"
+                className="w-full h-full object-fill pointer-events-none"
               />
             ) : isLoadingPdf ? (
               <div className="w-full h-[297mm] bg-slate-50 flex items-center justify-center text-slate-400">
@@ -1080,6 +1083,53 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
         </div>
 
       </div>
+
+      {/* 🖨️ A4縦・マージンゼロ・等倍印刷CSS（荀彧 帳票門番規定） */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0mm;
+          }
+          html, body {
+            width: 210mm !important;
+            height: 297mm !important;
+            margin: 0mm !important;
+            padding: 0mm !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .official-acq-print-container {
+            width: 210mm !important;
+            height: 297mm !important;
+            min-width: 210mm !important;
+            max-width: 210mm !important;
+            min-height: 297mm !important;
+            max-height: 297mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            transform: none !important;
+            container-type: inline-size !important;
+            position: relative !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            overflow: hidden !important;
+          }
+          .official-acq-print-container img {
+            width: 210mm !important;
+            height: 297mm !important;
+            object-fit: fill !important;
+            display: block !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };

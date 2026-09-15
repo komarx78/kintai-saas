@@ -168,7 +168,7 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 print:space-y-0 print:m-0 print:p-0">
       {/* 画面操作ヘッダー（印刷時は非表示） */}
       <div className="print:hidden bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
         {/* 上段: タイトル・タブ切替・印刷ボタン */}
