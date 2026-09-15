@@ -841,7 +841,6 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
               }
 
               // 単一の文字またはテキスト枠
-              const isCircleField = field.id.includes('Circle') || field.id.includes('birthEra');
               return (
                 <div
                   key={field.id}
@@ -850,22 +849,17 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
                     position: 'absolute',
                     left: `${field.x}%`,
                     top: `${field.y}%`,
-                    width: field.width ? `${field.width * 2.1}mm` : (isCircleField ? '4.5mm' : 'auto'),
-                    height: isCircleField ? '4.5mm' : 'auto',
+                    width: field.width ? `${field.width * 2.1}mm` : 'auto',
                     fontSize: `${field.fontSize}pt`,
                     fontWeight: 900,
                     color: isDraggingThis ? '#b45309' : '#0f172a',
-                    fontFamily: isCircleField ? 'sans-serif' : field.id.includes('employer') || field.id.includes('Name') || field.id.includes('Address') ? 'sans-serif' : 'monospace',
+                    fontFamily: field.id.includes('employer') || field.id.includes('Name') || field.id.includes('Address') ? 'sans-serif' : 'monospace',
                     lineHeight: 1,
                     cursor: isDraggingThis ? 'grabbing' : 'grab',
                     userSelect: 'none',
                     touchAction: 'none',
                     zIndex: isDraggingThis ? 50 : 10,
-                    whiteSpace: 'nowrap',
-                    display: isCircleField ? 'flex' : 'block',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    textAlign: 'center'
+                    whiteSpace: 'nowrap'
                   }}
                   className={`transition-all duration-75 p-0 rounded-xs print:ring-0 print:bg-transparent print:p-0 ${
                     isDraggingThis 

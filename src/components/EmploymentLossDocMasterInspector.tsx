@@ -575,8 +575,6 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
                 const isSelected = field.id === selectedFieldId;
                 const isDraggingThis = draggingFieldId === field.id;
 
-                const isCircleField = field.id.includes('Circle') || field.id.includes('birthEra');
-
                 return (
                   <div
                     key={field.id}
@@ -592,16 +590,11 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
                       position: 'absolute',
                       left: `${field.x}%`,
                       top: `${field.y}%`,
-                      width: field.pitch && field.pitch > 0 ? 'max-content' : (field.width ? `${field.width * 2.1}mm` : (isCircleField ? '4.5mm' : 'auto')),
-                      height: isCircleField ? '4.5mm' : 'auto',
+                      width: field.pitch && field.pitch > 0 ? 'max-content' : (field.width ? `${field.width * 2.1}mm` : 'auto'),
                       cursor: isDraggingThis ? 'grabbing' : 'grab',
                       userSelect: 'none',
                       zIndex: isDraggingThis ? 50 : isSelected ? 30 : 10,
-                      touchAction: 'none',
-                      display: isCircleField ? 'flex' : 'block',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      textAlign: 'center'
+                      touchAction: 'none'
                     }}
                     className={`transition-all duration-75 p-0 rounded-xs ${
                       isDraggingThis
