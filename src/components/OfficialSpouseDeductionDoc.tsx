@@ -300,7 +300,16 @@ export default function OfficialSpouseDeductionDoc({
         const pdfjsLib = window.pdfjsLib;
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-        const loadingTask = pdfjsLib.getDocument('/spouse_deduction_template.pdf');
+        const cMapUrl = window.location.origin ? (window.location.origin + '/cmaps/') : '/cmaps/';
+        const standardFontDataUrl = window.location.origin ? (window.location.origin + '/standard_fonts/') : '/standard_fonts/';
+
+        const loadingTask = pdfjsLib.getDocument({
+          url: '/spouse_deduction_template.pdf',
+          cMapUrl: cMapUrl,
+          cMapPacked: true,
+          standardFontDataUrl: standardFontDataUrl,
+          enableXfa: true
+        });
         const pdf = await loadingTask.promise;
         const page = await pdf.getPage(1);
 
