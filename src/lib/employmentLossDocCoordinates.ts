@@ -315,27 +315,106 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
     example: '駒井　秀一郎',
     description: '被保険者氏名漢字'
   },
+  // 21. 性別（原本に「男 ・ 女」がプレプリントされているため○印を付加）
   {
-    id: 'genderText',
-    name: '21. 性別（男 / 女）',
+    id: 'genderCircle_male',
+    name: '21. 性別○印［男］',
     section: 'lower_table',
-    x: 52.8,
-    y: 57.2,
-    fontSize: 10,
-    width: 6.0,
-    example: '男',
-    description: '性別表記'
+    x: 52.5,
+    y: 56.4,
+    fontSize: 13,
+    width: 3.5,
+    example: '○',
+    description: '男性の場合に原本の「男」へ○印'
   },
   {
-    id: 'birthDateText',
-    name: '22. 生年月日（和暦）',
+    id: 'genderCircle_female',
+    name: '21. 性別○印［女］',
     section: 'lower_table',
-    x: 62.5,
-    y: 57.2,
-    fontSize: 9.5,
-    width: 28.0,
-    example: '平成 12年 02月 02日',
-    description: '生年月日の和暦表記'
+    x: 56.2,
+    y: 56.4,
+    fontSize: 13,
+    width: 3.5,
+    example: '',
+    description: '女性の場合に原本の「女」へ○印'
+  },
+  // 22. 生年月日（原本に元号選択肢と年月日の文字がプレプリントされているため、元号○印と数字を分割印字）
+  {
+    id: 'birthEra_taisho',
+    name: '22. 生年月日 元号○［大正］',
+    section: 'lower_table',
+    x: 63.3,
+    y: 55.4,
+    fontSize: 12,
+    width: 3.0,
+    example: '',
+    description: '大正生まれの場合に○印'
+  },
+  {
+    id: 'birthEra_showa',
+    name: '22. 生年月日 元号○［昭和］',
+    section: 'lower_table',
+    x: 66.5,
+    y: 55.4,
+    fontSize: 12,
+    width: 3.0,
+    example: '',
+    description: '昭和生まれの場合に○印'
+  },
+  {
+    id: 'birthEra_heisei',
+    name: '22. 生年月日 元号○［平成］',
+    section: 'lower_table',
+    x: 63.3,
+    y: 57.4,
+    fontSize: 12,
+    width: 3.0,
+    example: '○',
+    description: '平成生まれの場合に○印'
+  },
+  {
+    id: 'birthEra_reiwa',
+    name: '22. 生年月日 元号○［令和］',
+    section: 'lower_table',
+    x: 66.5,
+    y: 57.4,
+    fontSize: 12,
+    width: 3.0,
+    example: '',
+    description: '令和生まれの場合に○印'
+  },
+  {
+    id: 'birthYear',
+    name: '22. 生年月日［年］',
+    section: 'lower_table',
+    x: 70.8,
+    y: 56.8,
+    fontSize: 11,
+    width: 4.0,
+    example: '12',
+    description: '和暦年'
+  },
+  {
+    id: 'birthMonth',
+    name: '22. 生年月日［月］',
+    section: 'lower_table',
+    x: 76.5,
+    y: 56.8,
+    fontSize: 11,
+    width: 4.0,
+    example: '02',
+    description: '月'
+  },
+  {
+    id: 'birthDay',
+    name: '22. 生年月日［日］',
+    section: 'lower_table',
+    x: 82.5,
+    y: 56.8,
+    fontSize: 11,
+    width: 4.0,
+    example: '02',
+    description: '日'
   },
   {
     id: 'empAddress',

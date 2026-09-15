@@ -197,10 +197,17 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
       // 20. 被保険者氏名
       empNameKana: cleanKana,
       empName: emp.name,
-      // 21. 性別
-      genderText: emp.gender === 'female' || emp.gender === '女' ? '女' : '男',
-      // 22. 生年月日
-      birthDateText: emp.birth_date ? `${birthWareki.eraName} ${birthWareki.year2}年 ${birthWareki.month2}月 ${birthWareki.day2}日` : '平成 12年 02月 02日',
+      // 21. 性別（原本に「男 ・ 女」がプレプリントされているため○印を付加）
+      genderCircle_male: emp.gender === 'female' || emp.gender === '女' ? '' : '○',
+      genderCircle_female: emp.gender === 'female' || emp.gender === '女' ? '○' : '',
+      // 22. 生年月日（原本に元号選択肢と年月日の文字がプレプリントされているため、元号○印と数字を分割印字）
+      birthEra_taisho: birthWareki.eraCode === '2' ? '○' : '',
+      birthEra_showa: birthWareki.eraCode === '3' ? '○' : '',
+      birthEra_heisei: birthWareki.eraCode === '4' ? '○' : '',
+      birthEra_reiwa: birthWareki.eraCode === '5' ? '○' : '',
+      birthYear: String(parseInt(birthWareki.year2, 10)),
+      birthMonth: String(parseInt(birthWareki.month2, 10)),
+      birthDay: String(parseInt(birthWareki.day2, 10)),
       // 23. 被保険者の住所
       empAddress: emp.address || '滋賀県大津市坂本3丁目21-16',
       // 24. 事業所名称
@@ -372,6 +379,16 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
         updated.officeNumber_1 = clean.slice(0, 4);
         updated.officeNumber_2 = clean.slice(4, 10);
         updated.officeNumber_3 = clean.slice(10, 11);
+      }
+      if (fieldId === 'genderSelect') {
+        updated.genderCircle_male = val === 'male' ? '○' : '';
+        updated.genderCircle_female = val === 'female' ? '○' : '';
+      }
+      if (fieldId === 'birthEraSelect') {
+        updated.birthEra_taisho = val === '2' ? '○' : '';
+        updated.birthEra_showa = val === '3' ? '○' : '';
+        updated.birthEra_heisei = val === '4' ? '○' : '';
+        updated.birthEra_reiwa = val === '5' ? '○' : '';
       }
       return updated;
     });
@@ -607,6 +624,86 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
                         className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800"
                       />
                     </div>
+
+                    {/* 21. 性別 */}
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">21. 性別（原本プレプリント「男・女」への○印）</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleInputChange('genderSelect', 'male')}
+                          className={`py-1.5 px-3 rounded-lg font-black text-xs transition border cursor-pointer ${
+                            formValues.genderCircle_male === '○'
+                              ? 'bg-amber-100 border-amber-500 text-amber-950 ring-1 ring-amber-500'
+                              : 'bg-slate-50 border-slate-300 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          男性（男に○）
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleInputChange('genderSelect', 'female')}
+                          className={`py-1.5 px-3 rounded-lg font-black text-xs transition border cursor-pointer ${
+                            formValues.genderCircle_female === '○'
+                              ? 'bg-amber-100 border-amber-500 text-amber-950 ring-1 ring-amber-500'
+                              : 'bg-slate-50 border-slate-300 text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
+                          女性（女に○）
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 22. 生年月日 */}
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">22. 生年月日（元号○印 ＆ 年・月・日）</label>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        <select
+                          value={
+                            formValues.birthEra_reiwa === '○' ? '5' :
+                            formValues.birthEra_heisei === '○' ? '4' :
+                            formValues.birthEra_showa === '○' ? '3' : '2'
+                          }
+                          onChange={(e) => handleInputChange('birthEraSelect', e.target.value)}
+                          className="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-bold text-slate-800"
+                        >
+                          <option value="5">令和(○)</option>
+                          <option value="4">平成(○)</option>
+                          <option value="3">昭和(○)</option>
+                          <option value="2">大正(○)</option>
+                        </select>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={formValues.birthYear || ''}
+                            onChange={(e) => handleInputChange('birthYear', e.target.value)}
+                            placeholder="年"
+                            className="w-full bg-slate-50 border border-slate-300 rounded-lg px-1.5 py-1.5 text-center font-bold text-slate-800"
+                          />
+                          <span className="text-[10px] text-slate-500">年</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={formValues.birthMonth || ''}
+                            onChange={(e) => handleInputChange('birthMonth', e.target.value)}
+                            placeholder="月"
+                            className="w-full bg-slate-50 border border-slate-300 rounded-lg px-1.5 py-1.5 text-center font-bold text-slate-800"
+                          />
+                          <span className="text-[10px] text-slate-500">月</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={formValues.birthDay || ''}
+                            onChange={(e) => handleInputChange('birthDay', e.target.value)}
+                            placeholder="日"
+                            className="w-full bg-slate-50 border border-slate-300 rounded-lg px-1.5 py-1.5 text-center font-bold text-slate-800"
+                          />
+                          <span className="text-[10px] text-slate-500">日</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -744,6 +841,7 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
               }
 
               // 単一の文字またはテキスト枠
+              const isCircleField = field.id.includes('Circle') || field.id.includes('birthEra');
               return (
                 <div
                   key={field.id}
@@ -752,17 +850,22 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
                     position: 'absolute',
                     left: `${field.x}%`,
                     top: `${field.y}%`,
-                    width: field.width ? `${field.width * 2.1}mm` : 'auto',
+                    width: field.width ? `${field.width * 2.1}mm` : (isCircleField ? '4.5mm' : 'auto'),
+                    height: isCircleField ? '4.5mm' : 'auto',
                     fontSize: `${field.fontSize}pt`,
                     fontWeight: 900,
                     color: isDraggingThis ? '#b45309' : '#0f172a',
-                    fontFamily: field.id.includes('employer') || field.id.includes('Name') || field.id.includes('Address') ? 'sans-serif' : 'monospace',
+                    fontFamily: isCircleField ? 'sans-serif' : field.id.includes('employer') || field.id.includes('Name') || field.id.includes('Address') ? 'sans-serif' : 'monospace',
                     lineHeight: 1,
                     cursor: isDraggingThis ? 'grabbing' : 'grab',
                     userSelect: 'none',
                     touchAction: 'none',
                     zIndex: isDraggingThis ? 50 : 10,
-                    whiteSpace: 'nowrap'
+                    whiteSpace: 'nowrap',
+                    display: isCircleField ? 'flex' : 'block',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center'
                   }}
                   className={`transition-all duration-75 p-0 rounded-xs print:ring-0 print:bg-transparent print:p-0 ${
                     isDraggingThis 
