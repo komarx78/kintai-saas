@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Printer, ArrowLeft, User, Shield, Edit3, Move, ZoomIn, ZoomOut
+  Printer, ArrowLeft, User, Shield, Edit3, Move, ZoomIn, ZoomOut,
+  CheckCircle2, RotateCcw, ChevronDown, ChevronUp, Sparkles, Check
 } from 'lucide-react';
 import { 
   loadEmploymentAcqCoordinates, 
@@ -28,6 +29,8 @@ export interface AcquisitionEmployee {
   weekly_hours?: number;
   address?: string;
   phone?: string;
+  contract_type?: string;
+  retirement_reason?: string;
 }
 
 export interface OfficialEmploymentAcquisitionDocProps {
@@ -112,36 +115,42 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
   const [isLoadingPdf, setIsLoadingPdf] = useState(true);
   const [previewZoom, setPreviewZoom] = useState<number>(85);
 
+  // ✏️ 提出直前の微調整アコーディオン開閉State（デフォルトは閉じてスッキリ表示）
+  const [isAdjustOpen, setIsAdjustOpen] = useState(false);
+
   // 各マス目・入力項目の入力State
   const [formValues, setFormValues] = useState<Record<string, string>>({});
 
-  // 従業員切り替え時に初期値を自動計算・反映（SSOT連動）
-  useEffect(() => {
-    if (!currentEmployee) return;
+  // 🌐 大元の入退社・労務書類管理システムから全項目を自動抽出・計算（SSOT完全流動）
+  const calculateMasterValues = useCallback((emp: AcquisitionEmployee | undefined): Record<string, string> => {
+    if (!emp) return {};
 
-    const birth = parseWarekiEraCode(currentEmployee.birth_date);
-    const join = parseWarekiEraCode(currentEmployee.join_date);
+    const birth = parseWarekiEraCode(emp.birth_date);
+    const join = parseWarekiEraCode(emp.join_date);
 
     // 事業所番号（数字のみ11桁）
     const cleanOffice = (officeNumber || '').replace(/[^0-9]/g, '').padEnd(11, ' ');
     // 被保険者番号（数字のみ11桁）
-    const cleanIns = (currentEmployee.employment_insurance_number || '').replace(/[^0-9]/g, '');
+    const cleanIns = (emp.employment_insurance_number || '').replace(/[^0-9]/g, '');
     // マイナンバー（数字12桁）
-    const cleanMyNumber = (currentEmployee.my_number || '').replace(/[^0-9]/g, '');
+    const cleanMyNumber = (emp.my_number || '').replace(/[^0-9]/g, '');
 
     // 賃金月額（千円単位、4桁）例: 250,000 -> 0250
-    const monthlyThousand = Math.round((currentEmployee.base_salary || 250000) / 1000);
+    const monthlyThousand = Math.round((emp.base_salary || 250000) / 1000);
     const wageStr = String(monthlyThousand).padStart(4, '0');
 
     // 氏名カタカナ（全角スペース空け）
-    const rawKana = currentEmployee.name_kana || currentEmployee.name || 'コマイ　シュウイチロウ';
+    const rawKana = emp.name_kana || emp.name || 'コマイ　シュウイチロウ';
 
-    // 雇用形態コード
-    const formCode = currentEmployee.employment_type === 'part-time' ? '3' : '7';
+    // 雇用形態コード（3: パート、4: 有期、7: 正社員等）
+    const isPart = emp.employment_type === 'part-time' || (emp.weekly_hours && emp.weekly_hours < 30);
+    const isFixed = emp.contract_type === 'fixed_term' || emp.employment_type === 'contract';
+    const formCode = isPart ? '3' : isFixed ? '4' : '7';
+
     // 性別コード（1:男, 2:女）
-    const genderCode = currentEmployee.gender === '女' || currentEmployee.gender === 'female' ? '2' : '1';
+    const genderCode = emp.gender === '女' || emp.gender === 'female' ? '2' : '1';
 
-    const newValues: Record<string, string> = {
+    return {
       docTypeFixed: '19101',
       myNumber: cleanMyNumber,
       // 被保険者番号（元値および分割3ブロック）
@@ -151,7 +160,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
       insuredNumber_3: cleanIns.slice(10, 11),
       acqType: cleanIns.trim() ? '2' : '1', // 番号があれば再取得、なければ新規
       // 氏名
-      nameKanji: currentEmployee.name || '駒井　修一郎',
+      nameKanji: emp.name || '',
       nameKana: rawKana,
       gender: genderCode,
       // 生年月日
@@ -167,7 +176,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
       officeNumber_3: cleanOffice.slice(10, 11),
       // 雇用条件・賃金・取得年月日
       causeCode: '2', // 新規雇用（中途・その他）
-      wageType: currentEmployee.salary_type === 'hourly' ? '4' : '1',
+      wageType: emp.salary_type === 'hourly' ? '4' : '1',
       wageAmount: wageStr,
       wageThousands: wageStr,
       joinEra: join.eraCode,
@@ -178,9 +187,9 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
       employmentForm: formCode,
       jobCode: '03', // 事務的職業
       routeCode: '2', // 自己就職
-      weeklyHours: String(currentEmployee.weekly_hours || 40).padStart(2, '0'),
+      weeklyHours: String(emp.weekly_hours || (isPart ? 20 : 40)).padStart(2, '0'),
       weeklyMins: '00',
-      contractFixed: '2', // 無
+      contractFixed: isFixed ? '1' : '2', // 1:有, 2:無
       // 事業主情報
       employerAddress: companyInfo.address,
       employerName: companyInfo.name,
@@ -188,9 +197,21 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
       employerPhone: companyInfo.phone_number,
       targetHelloWork: '大津'
     };
+  }, [officeNumber, companyInfo]);
 
-    setFormValues(newValues);
-  }, [currentEmployee, officeNumber, companyInfo]);
+  // 従業員切り替え時に初期値を自動計算・反映（SSOT連動）
+  useEffect(() => {
+    if (!currentEmployee) return;
+    const values = calculateMasterValues(currentEmployee);
+    setFormValues(values);
+  }, [currentEmployee, calculateMasterValues]);
+
+  // 🔄 大元マスタから最新データを強制再同期するハンドラー
+  const handleSyncFromMaster = () => {
+    if (!currentEmployee) return;
+    const values = calculateMasterValues(currentEmployee);
+    setFormValues(values);
+  };
 
   // 座標変更イベントリスナー（統制本部での微調整が即時反映）
   useEffect(() => {
@@ -442,355 +463,468 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
       {/* メインレイアウト: 入力コントロールパネル ＆ 原本リアルタイムプレビュー */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
 
-        {/* ⬅️ 【入力フォームパネル】（印刷時非表示） */}
+        {/* ⬅️ 【入退社労務マスタ 自動転記ステータス＆微調整パネル】（印刷時非表示） */}
         <div className="print:hidden lg:col-span-4 space-y-4">
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4 max-h-[calc(100vh-140px)] overflow-y-auto">
+            {/* パネルヘッダー */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-emerald-600" />
-                取得届 入力・編集パネル
+              <h3 className="font-black text-sm text-slate-900 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                入退社労務マスタ 自動転記ステータス
               </h3>
-              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold border border-emerald-200">
-                原本リアルタイム連動
+              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-black border border-emerald-200 flex items-center gap-1">
+                <Check className="w-3 h-3 text-emerald-600" />
+                二重入力ゼロ
               </span>
             </div>
 
-            <div className="space-y-3.5 text-xs">
-              {/* 1. 個人番号 */}
-              <div>
-                <label className="text-slate-600 font-bold block mb-1">1. 個人番号（マイナンバー12桁）</label>
-                <input
-                  type="text"
-                  maxLength={12}
-                  value={formValues.myNumber || ''}
-                  onChange={(e) => handleInputChange('myNumber', e.target.value.replace(/[^0-9]/g, ''))}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-black text-slate-800 tracking-widest"
-                  placeholder="123456789012"
-                />
+            {/* SSOT自動連携バナー */}
+            <div className="bg-emerald-50/80 border border-emerald-200/90 p-3.5 rounded-2xl space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-900">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  大元台帳より全項目自動流動済
+                </span>
+                <button
+                  type="button"
+                  onClick={handleSyncFromMaster}
+                  className="text-[11px] bg-white hover:bg-emerald-50 border border-emerald-300 text-emerald-800 px-2.5 py-1 rounded-xl font-bold flex items-center gap-1 transition shadow-2xs cursor-pointer"
+                  title="入退社労務書類管理システムから最新データを再同期"
+                >
+                  <RotateCcw className="w-3 h-3 text-emerald-600" />
+                  大元から再同期
+                </button>
+              </div>
+              <p className="text-[11px] text-emerald-800 leading-relaxed font-medium">
+                入退社・労務書類管理システム（従業員台帳・労働条件通知書・提出書類）の最新データが原本プレビューの各マス目へ<strong>100%自動で転記・印字</strong>されています。
+              </p>
+            </div>
+
+            {/* 📋 自動転記データ確認カード（見やすいサマリー） */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                <span className="font-black text-slate-700 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-slate-500" />
+                  対象者データ（大元SSOT）
+                </span>
+                <span className="text-[10px] font-bold text-slate-500 font-mono">
+                  {currentEmployee?.join_date} 雇入
+                </span>
               </div>
 
-              {/* 2. 3. 被保険者番号 ＆ 取得区分 */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">3. 取得区分</label>
-                  <select
-                    value={formValues.acqType || '1'}
-                    onChange={(e) => handleInputChange('acqType', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-bold text-slate-800"
-                  >
-                    <option value="1">1: 新規（初めて）</option>
-                    <option value="2">2: 再取得（番号あり）</option>
-                  </select>
+              <div className="space-y-1.5 text-[11px]">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-bold">氏名（漢字）:</span>
+                  <span className="font-black text-slate-900">{formValues.nameKanji || currentEmployee?.name}</span>
                 </div>
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">2. 被保険者番号</label>
-                  <input
-                    type="text"
-                    maxLength={11}
-                    value={formValues.insuredNumber || ''}
-                    onChange={(e) => handleInputChange('insuredNumber', e.target.value.replace(/[^0-9]/g, ''))}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-mono font-black text-slate-800 tracking-wider"
-                    placeholder="12345678901"
-                  />
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-bold">フリガナ:</span>
+                  <span className="font-bold text-slate-800 font-mono">{formValues.nameKana}</span>
                 </div>
-              </div>
-
-              {/* 4. 氏名（漢字 ＆ カタカナフリガナ） */}
-              <div className="space-y-2">
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">4. 被保険者氏名（漢字氏名）</label>
-                  <input
-                    type="text"
-                    value={formValues.nameKanji || ''}
-                    onChange={(e) => handleInputChange('nameKanji', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-black text-slate-800"
-                    placeholder="駒井　修一郎"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">4. 被保険者氏名 フリガナ（カタカナ）</label>
-                  <input
-                    type="text"
-                    value={formValues.nameKana || ''}
-                    onChange={(e) => handleInputChange('nameKana', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                    placeholder="コマイ　シュウイチロウ"
-                  />
-                  <span className="text-[10px] text-slate-400 block mt-0.5">※ 姓と名の間は1マス空けて原本マス目に印字されます</span>
-                </div>
-              </div>
-
-              {/* 6. 性別 ＆ 7. 生年月日 */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">6. 性別</label>
-                  <select
-                    value={formValues.gender || '1'}
-                    onChange={(e) => handleInputChange('gender', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-bold text-slate-800"
-                  >
-                    <option value="1">1: 男</option>
-                    <option value="2">2: 女</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">7. 生年月日（元号 / 年月日）</label>
-                  <div className="flex gap-1.5">
-                    <select
-                      value={formValues.birthEra || '5'}
-                      onChange={(e) => handleInputChange('birthEra', e.target.value)}
-                      className="bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 w-16 text-xs shrink-0"
-                    >
-                      <option value="3">昭和</option>
-                      <option value="4">平成</option>
-                      <option value="5">令和</option>
-                    </select>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      value={formValues.birthYMD || ''}
-                      onChange={(e) => handleInputChange('birthYMD', e.target.value.replace(/[^0-9]/g, ''))}
-                      className="flex-1 min-w-0 bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-mono font-bold text-slate-800 tracking-wider text-xs"
-                      placeholder="020510"
-                      title="年2桁・月2桁・日2桁（例: 020510）"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 8. 事業所番号 */}
-              <div>
-                <label className="text-slate-600 font-bold block mb-1">8. 事業所番号（4桁-6桁-1桁）</label>
-                <input
-                  type="text"
-                  maxLength={11}
-                  value={formValues.officeNumber || ''}
-                  onChange={(e) => handleInputChange('officeNumber', e.target.value.replace(/[^0-9]/g, ''))}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-black text-slate-800 tracking-wider"
-                  placeholder="25011234567"
-                />
-              </div>
-
-              {/* 9. 原因 ＆ 10. 賃金態様 */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">9. 原因コード</label>
-                  <select
-                    value={formValues.causeCode || '2'}
-                    onChange={(e) => handleInputChange('causeCode', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
-                  >
-                    <option value="1">1: 新規学卒</option>
-                    <option value="2">2: 中途・その他雇用</option>
-                    <option value="3">3: 日雇からの切替</option>
-                    <option value="4">4: その他</option>
-                    <option value="8">8: 出向元復帰(65歳以上)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">10. 賃金態様</label>
-                  <select
-                    value={formValues.wageType || '1'}
-                    onChange={(e) => handleInputChange('wageType', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
-                  >
-                    <option value="1">1: 月給</option>
-                    <option value="2">2: 週給</option>
-                    <option value="3">3: 日給</option>
-                    <option value="4">4: 時間給</option>
-                    <option value="5">5: その他</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* 賃金月額 ＆ 11. 取得年月日 */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">賃金月額（千円単位 4桁）</label>
-                  <input
-                    type="text"
-                    maxLength={4}
-                    value={formValues.wageAmount || ''}
-                    onChange={(e) => handleInputChange('wageAmount', e.target.value.replace(/[^0-9]/g, ''))}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-black text-slate-800 text-right pr-3"
-                    placeholder="0250"
-                  />
-                </div>
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">11. 取得年月日</label>
-                  <div className="flex gap-1.5">
-                    <select
-                      value={formValues.joinEra || '5'}
-                      onChange={(e) => handleInputChange('joinEra', e.target.value)}
-                      className="bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 w-16 text-xs shrink-0"
-                    >
-                      <option value="4">平成</option>
-                      <option value="5">令和</option>
-                    </select>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      value={formValues.acqYMD || ''}
-                      onChange={(e) => handleInputChange('acqYMD', e.target.value.replace(/[^0-9]/g, ''))}
-                      className="flex-1 min-w-0 bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-mono font-bold text-slate-800 tracking-wider text-xs"
-                      placeholder="080401"
-                      title="年2桁・月2桁・日2桁（例: 080401）"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 12. 雇用形態 ＆ 13. 職種 */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">12. 雇用形態コード</label>
-                  <select
-                    value={formValues.employmentForm || '7'}
-                    onChange={(e) => handleInputChange('employmentForm', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
-                  >
-                    <option value="7">7: その他（正社員等）</option>
-                    <option value="3">3: パートタイム</option>
-                    <option value="4">4: 有期契約労働者</option>
-                    <option value="2">2: 派遣</option>
-                    <option value="1">1: 日雇</option>
-                    <option value="5">5: 季節的雇用</option>
-                    <option value="6">6: 船員</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">13. 職種コード（01〜11）</label>
-                  <select
-                    value={formValues.jobCode || '03'}
-                    onChange={(e) => handleInputChange('jobCode', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
-                  >
-                    <option value="01">01: 管理的職業</option>
-                    <option value="02">02: 専門・技術的職業</option>
-                    <option value="03">03: 事務的職業</option>
-                    <option value="04">04: 販売の職業</option>
-                    <option value="05">05: サービスの職業</option>
-                    <option value="06">06: 保安の職業</option>
-                    <option value="07">07: 農林漁業の職業</option>
-                    <option value="08">08: 生産工程の職業</option>
-                    <option value="09">09: 輸送・機械運転</option>
-                    <option value="10">10: 建設・採掘の職業</option>
-                    <option value="11">11: 運搬・清掃・包装</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* 14. 就職経路 ＆ 16. 契約期間の定め */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">14. 就職経路コード</label>
-                  <select
-                    value={formValues.routeCode || '2'}
-                    onChange={(e) => handleInputChange('routeCode', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
-                  >
-                    <option value="1">1: 安定所紹介</option>
-                    <option value="2">2: 自己就職</option>
-                    <option value="3">3: 民間紹介</option>
-                    <option value="4">4: 把握していない</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-slate-600 font-bold block mb-1">16. 契約期間の定め</label>
-                  <select
-                    value={formValues.contractFixed || '2'}
-                    onChange={(e) => handleInputChange('contractFixed', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
-                  >
-                    <option value="2">2: 無（期間の定めなし）</option>
-                    <option value="1">1: 有（有期雇用契約）</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* 15. 週所定労働時間 */}
-              <div>
-                <label className="text-slate-600 font-bold block mb-1">15. 週所定労働時間（時間分 4桁）</label>
-                <input
-                  type="text"
-                  maxLength={4}
-                  value={formValues.weeklyHoursRaw || (formValues.weeklyHours ? `${formValues.weeklyHours}${formValues.weeklyMins || '00'}` : '4000')}
-                  onChange={(e) => {
-                    const raw = e.target.value.replace(/[^0-9]/g, '');
-                    handleInputChange('weeklyHoursRaw', raw);
-                  }}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-800"
-                  placeholder="4000（40時間00分）"
-                />
-              </div>
-
-              {/* 🏢 事業主・事業所情報（原本最下部に自動印字） */}
-              <div className="border-t border-slate-200 pt-3 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
-                    🏢 事業所・事業主情報（原本下部印字）
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-bold">生年月日:</span>
+                  <span className="font-bold text-slate-800">
+                    {formValues.birthEra === '3' ? '昭和' : formValues.birthEra === '4' ? '平成' : '令和'}{formValues.birthYear}年{formValues.birthMonth}月{formValues.birthDay}日
+                    <span className="text-slate-500 ml-1">（{formValues.gender === '1' ? '男' : '女'}）</span>
                   </span>
-                  <span className="text-[10px] text-slate-500 font-bold">原本最下部へ反映</span>
                 </div>
-
-                <div>
-                  <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">事業主 所在地</label>
-                  <input
-                    type="text"
-                    value={formValues.employerAddress || ''}
-                    onChange={(e) => handleInputChange('employerAddress', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-800 text-xs"
-                    placeholder="滋賀県大津市..."
-                  />
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-bold">個人番号（マイナンバー）:</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {formValues.myNumber ? `${formValues.myNumber.slice(0, 4)}******** (登録済)` : '未登録'}
+                  </span>
                 </div>
-
-                <div>
-                  <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">事業主 名称</label>
-                  <input
-                    type="text"
-                    value={formValues.employerName || ''}
-                    onChange={(e) => handleInputChange('employerName', e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-800 text-xs"
-                    placeholder="株式会社cocotte"
-                  />
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-bold">雇用保険番号:</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {formValues.insuredNumber ? `${formValues.insuredNumber_1}-${formValues.insuredNumber_2}-${formValues.insuredNumber_3}` : '新規取得（番号なし）'}
+                  </span>
                 </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">代表者職氏名</label>
-                    <input
-                      type="text"
-                      value={formValues.employerRep || ''}
-                      onChange={(e) => handleInputChange('employerRep', e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-800 text-xs"
-                      placeholder="代表取締役 駒井 修一郎"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">電話番号</label>
-                    <input
-                      type="text"
-                      value={formValues.employerPhone || ''}
-                      onChange={(e) => handleInputChange('employerPhone', e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-mono font-bold text-slate-800 text-xs"
-                      placeholder="077-574-6907"
-                    />
-                  </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-bold">賃金月額:</span>
+                  <span className="font-black text-emerald-700">
+                    ¥{Number(formValues.wageAmount ? Number(formValues.wageAmount) * 1000 : currentEmployee?.base_salary || 250000).toLocaleString()}
+                    <span className="text-[10px] text-slate-400 font-normal ml-1">（千円単位: {formValues.wageThousands}）</span>
+                  </span>
                 </div>
-
-                <div>
-                  <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">所轄公共職業安定所名</label>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      value={formValues.targetHelloWork || '大津'}
-                      onChange={(e) => handleInputChange('targetHelloWork', e.target.value)}
-                      className="w-28 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-800 text-xs"
-                    />
-                    <span className="text-slate-600 font-bold text-xs">公共職業安定所長 殿</span>
-                  </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-bold">雇用形態 / 労働時間:</span>
+                  <span className="font-bold text-slate-800">
+                    {formValues.employmentForm === '3' ? 'パートタイム' : formValues.employmentForm === '4' ? '有期契約' : '正社員'}
+                    <span className="text-slate-500 ml-1 font-mono">（週{formValues.weeklyHours}時間）</span>
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 font-bold">事業所番号:</span>
+                  <span className="font-mono font-bold text-slate-800">
+                    {formValues.officeNumber_1}-{formValues.officeNumber_2}-{formValues.officeNumber_3}
+                  </span>
                 </div>
               </div>
+            </div>
+
+            {/* ✏️ 提出直前の一時微調整（開閉アコーディオン） */}
+            <div className="border border-slate-200 rounded-2xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setIsAdjustOpen(!isAdjustOpen)}
+                className="w-full bg-slate-50 hover:bg-slate-100 p-3 flex items-center justify-between text-xs font-black text-slate-800 transition cursor-pointer select-none"
+              >
+                <div className="flex items-center gap-2">
+                  <Edit3 className="w-3.5 h-3.5 text-slate-600" />
+                  <span>提出用の一時微調整・項目上書き</span>
+                  <span className="text-[10px] font-bold text-slate-400">（通常は編集不要）</span>
+                </div>
+                {isAdjustOpen ? (
+                  <ChevronUp className="w-4 h-4 text-slate-500" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-slate-500" />
+                )}
+              </button>
+
+              {isAdjustOpen && (
+                <div className="p-4 space-y-3.5 text-xs bg-white border-t border-slate-200">
+                  <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-xl text-[11px] text-amber-800">
+                    ※ここでの編集内容は原本プレビューへ即時反映されますが、大元の台帳データは変更されません。
+                  </div>
+
+                  {/* 1. 個人番号 */}
+                  <div>
+                    <label className="text-slate-600 font-bold block mb-1">1. 個人番号（マイナンバー12桁）</label>
+                    <input
+                      type="text"
+                      maxLength={12}
+                      value={formValues.myNumber || ''}
+                      onChange={(e) => handleInputChange('myNumber', e.target.value.replace(/[^0-9]/g, ''))}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-black text-slate-800 tracking-widest"
+                      placeholder="123456789012"
+                    />
+                  </div>
+
+                  {/* 2. 3. 被保険者番号 ＆ 取得区分 */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">3. 取得区分</label>
+                      <select
+                        value={formValues.acqType || '1'}
+                        onChange={(e) => handleInputChange('acqType', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-bold text-slate-800"
+                      >
+                        <option value="1">1: 新規（初めて）</option>
+                        <option value="2">2: 再取得（番号あり）</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">2. 被保険者番号</label>
+                      <input
+                        type="text"
+                        maxLength={11}
+                        value={formValues.insuredNumber || ''}
+                        onChange={(e) => handleInputChange('insuredNumber', e.target.value.replace(/[^0-9]/g, ''))}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-mono font-black text-slate-800 tracking-wider"
+                        placeholder="12345678901"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 4. 氏名（漢字 ＆ カタカナフリガナ） */}
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">4. 被保険者氏名（漢字氏名）</label>
+                      <input
+                        type="text"
+                        value={formValues.nameKanji || ''}
+                        onChange={(e) => handleInputChange('nameKanji', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-black text-slate-800"
+                        placeholder="駒井　修一郎"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">4. 被保険者氏名 フリガナ（カタカナ）</label>
+                      <input
+                        type="text"
+                        value={formValues.nameKana || ''}
+                        onChange={(e) => handleInputChange('nameKana', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                        placeholder="コマイ　シュウイチロウ"
+                      />
+                      <span className="text-[10px] text-slate-400 block mt-0.5">※ 姓と名の間は1マス空けて原本マス目に印字されます</span>
+                    </div>
+                  </div>
+
+                  {/* 6. 性別 ＆ 7. 生年月日 */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">6. 性別</label>
+                      <select
+                        value={formValues.gender || '1'}
+                        onChange={(e) => handleInputChange('gender', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-bold text-slate-800"
+                      >
+                        <option value="1">1: 男</option>
+                        <option value="2">2: 女</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">7. 生年月日（元号 / 年月日）</label>
+                      <div className="flex gap-1.5">
+                        <select
+                          value={formValues.birthEra || '5'}
+                          onChange={(e) => handleInputChange('birthEra', e.target.value)}
+                          className="bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 w-16 text-xs shrink-0"
+                        >
+                          <option value="3">昭和</option>
+                          <option value="4">平成</option>
+                          <option value="5">令和</option>
+                        </select>
+                        <input
+                          type="text"
+                          maxLength={6}
+                          value={formValues.birthYMD || ''}
+                          onChange={(e) => handleInputChange('birthYMD', e.target.value.replace(/[^0-9]/g, ''))}
+                          className="flex-1 min-w-0 bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-mono font-bold text-slate-800 tracking-wider text-xs"
+                          placeholder="020510"
+                          title="年2桁・月2桁・日2桁（例: 020510）"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 8. 事業所番号 */}
+                  <div>
+                    <label className="text-slate-600 font-bold block mb-1">8. 事業所番号（4桁-6桁-1桁）</label>
+                    <input
+                      type="text"
+                      maxLength={11}
+                      value={formValues.officeNumber || ''}
+                      onChange={(e) => handleInputChange('officeNumber', e.target.value.replace(/[^0-9]/g, ''))}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-black text-slate-800 tracking-wider"
+                      placeholder="25011234567"
+                    />
+                  </div>
+
+                  {/* 9. 原因 ＆ 10. 賃金態様 */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">9. 原因コード</label>
+                      <select
+                        value={formValues.causeCode || '2'}
+                        onChange={(e) => handleInputChange('causeCode', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
+                      >
+                        <option value="1">1: 新規学卒</option>
+                        <option value="2">2: 中途・その他雇用</option>
+                        <option value="3">3: 日雇からの切替</option>
+                        <option value="4">4: その他</option>
+                        <option value="8">8: 出向元復帰(65歳以上)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">10. 賃金態様</label>
+                      <select
+                        value={formValues.wageType || '1'}
+                        onChange={(e) => handleInputChange('wageType', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
+                      >
+                        <option value="1">1: 月給</option>
+                        <option value="2">2: 週給</option>
+                        <option value="3">3: 日給</option>
+                        <option value="4">4: 時間給</option>
+                        <option value="5">5: その他</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 賃金月額 ＆ 11. 取得年月日 */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">賃金月額（千円単位 4桁）</label>
+                      <input
+                        type="text"
+                        maxLength={4}
+                        value={formValues.wageAmount || ''}
+                        onChange={(e) => handleInputChange('wageAmount', e.target.value.replace(/[^0-9]/g, ''))}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-black text-slate-800 text-right pr-3"
+                        placeholder="0250"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">11. 取得年月日</label>
+                      <div className="flex gap-1.5">
+                        <select
+                          value={formValues.joinEra || '5'}
+                          onChange={(e) => handleInputChange('joinEra', e.target.value)}
+                          className="bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 w-16 text-xs shrink-0"
+                        >
+                          <option value="4">平成</option>
+                          <option value="5">令和</option>
+                        </select>
+                        <input
+                          type="text"
+                          maxLength={6}
+                          value={formValues.acqYMD || ''}
+                          onChange={(e) => handleInputChange('acqYMD', e.target.value.replace(/[^0-9]/g, ''))}
+                          className="flex-1 min-w-0 bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-2 font-mono font-bold text-slate-800 tracking-wider text-xs"
+                          placeholder="080401"
+                          title="年2桁・月2桁・日2桁（例: 080401）"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 12. 雇用形態 ＆ 13. 職種 */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">12. 雇用形態コード</label>
+                      <select
+                        value={formValues.employmentForm || '7'}
+                        onChange={(e) => handleInputChange('employmentForm', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
+                      >
+                        <option value="7">7: その他（正社員等）</option>
+                        <option value="3">3: パートタイム</option>
+                        <option value="4">4: 有期契約労働者</option>
+                        <option value="2">2: 派遣</option>
+                        <option value="1">1: 日雇</option>
+                        <option value="5">5: 季節的雇用</option>
+                        <option value="6">6: 船員</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">13. 職種コード（01〜11）</label>
+                      <select
+                        value={formValues.jobCode || '03'}
+                        onChange={(e) => handleInputChange('jobCode', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
+                      >
+                        <option value="01">01: 管理的職業</option>
+                        <option value="02">02: 専門・技術的職業</option>
+                        <option value="03">03: 事務的職業</option>
+                        <option value="04">04: 販売の職業</option>
+                        <option value="05">05: サービスの職業</option>
+                        <option value="06">06: 保安の職業</option>
+                        <option value="07">07: 農林漁業の職業</option>
+                        <option value="08">08: 生産工程の職業</option>
+                        <option value="09">09: 輸送・機械運転</option>
+                        <option value="10">10: 建設・採掘の職業</option>
+                        <option value="11">11: 運搬・清掃・包装</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 14. 就職経路 ＆ 16. 契約期間の定め */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">14. 就職経路コード</label>
+                      <select
+                        value={formValues.routeCode || '2'}
+                        onChange={(e) => handleInputChange('routeCode', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
+                      >
+                        <option value="1">1: 安定所紹介</option>
+                        <option value="2">2: 自己就職</option>
+                        <option value="3">3: 民間紹介</option>
+                        <option value="4">4: 把握していない</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-1">16. 契約期間の定め</label>
+                      <select
+                        value={formValues.contractFixed || '2'}
+                        onChange={(e) => handleInputChange('contractFixed', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-2 py-2 font-bold text-slate-800 text-xs"
+                      >
+                        <option value="2">2: 無（期間の定めなし）</option>
+                        <option value="1">1: 有（有期雇用契約）</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 15. 週所定労働時間 */}
+                  <div>
+                    <label className="text-slate-600 font-bold block mb-1">15. 週所定労働時間（時間分 4桁）</label>
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={formValues.weeklyHoursRaw || (formValues.weeklyHours ? `${formValues.weeklyHours}${formValues.weeklyMins || '00'}` : '4000')}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '');
+                        handleInputChange('weeklyHoursRaw', raw);
+                      }}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-mono font-bold text-slate-800"
+                      placeholder="4000（40時間00分）"
+                    />
+                  </div>
+
+                  {/* 🏢 事業主・事業所情報（原本最下部に自動印字） */}
+                  <div className="border-t border-slate-200 pt-3 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                        🏢 事業所・事業主情報（原本下部印字）
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-bold">原本最下部へ反映</span>
+                    </div>
+
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">事業主 所在地</label>
+                      <input
+                        type="text"
+                        value={formValues.employerAddress || ''}
+                        onChange={(e) => handleInputChange('employerAddress', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-800 text-xs"
+                        placeholder="滋賀県大津市..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">事業主 名称</label>
+                      <input
+                        type="text"
+                        value={formValues.employerName || ''}
+                        onChange={(e) => handleInputChange('employerName', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-800 text-xs"
+                        placeholder="株式会社cocotte"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">代表者職氏名</label>
+                        <input
+                          type="text"
+                          value={formValues.employerRep || ''}
+                          onChange={(e) => handleInputChange('employerRep', e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-800 text-xs"
+                          placeholder="代表取締役 駒井 修一郎"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">電話番号</label>
+                        <input
+                          type="text"
+                          value={formValues.employerPhone || ''}
+                          onChange={(e) => handleInputChange('employerPhone', e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-mono font-bold text-slate-800 text-xs"
+                          placeholder="077-574-6907"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-slate-600 font-bold block mb-0.5 text-[11px]">所轄公共職業安定所名</label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={formValues.targetHelloWork || '大津'}
+                          onChange={(e) => handleInputChange('targetHelloWork', e.target.value)}
+                          className="w-28 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-800 text-xs"
+                        />
+                        <span className="text-slate-600 font-bold text-xs">公共職業安定所長 殿</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

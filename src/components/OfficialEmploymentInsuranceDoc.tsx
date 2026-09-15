@@ -20,6 +20,10 @@ export interface EmploymentInsuranceEmployee {
   salary_type?: 'monthly' | 'hourly' | 'daily';
   employment_type?: string;
   weekly_hours?: number;
+  address?: string;
+  phone?: string;
+  contract_type?: string;
+  retirement_reason?: string;
 }
 
 export interface OfficialEmploymentInsuranceDocProps {

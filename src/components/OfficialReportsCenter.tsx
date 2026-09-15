@@ -56,6 +56,10 @@ interface EmployeeItem {
   employment_insurance_joined?: boolean;
   health_standard_monthly_remuneration?: number;
   pension_standard_monthly_remuneration?: number;
+  employment_insurance_number?: string;
+  weekly_hours?: number;
+  contract_type?: 'indefinite' | 'fixed_term' | string;
+  retirement_reason?: string;
 }
 
 export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ tenantId }) => {
@@ -227,6 +231,26 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
         const ph = depDoc.phone || depDoc.phoneNumber || conDoc.phone || u.phone || ob.phone || localBackup?.phone || '';
         const myNum = myDoc.my_number || myDoc.myNumber || depDoc.my_number || depDoc.myNumber || ob.my_number || localBackup?.my_number || '';
 
+        // 雇用保険被保険者番号の大元マスタ抽出
+        const empInsDoc = mergedDocs['employment_insurance'] || {};
+        const empInsNum = empInsDoc.employment_insurance_number ||
+                          myDoc.employment_insurance_number ||
+                          depDoc.employment_insurance_number ||
+                          conDoc.employment_insurance_number ||
+                          ob.employment_insurance_number ||
+                          pp.employment_insurance_number ||
+                          localBackup?.employment_insurance_number || '';
+
+        // 週所定労働時間の自動算出（労働条件通知書・オンボーディングから）
+        const weeklyHrs = Number(conDoc.weekly_working_hours || conDoc.weekly_hours || ob.weekly_hours || pp.weekly_hours) || 
+                          (conDoc.employment_type === 'part-time' || ob.employment_type === 'part-time' ? 20 : 40);
+
+        // 契約期間の定め
+        const cType = conDoc.contract_type || ob.contract_type || (conDoc.contract_period_type === 'fixed' ? 'fixed_term' : 'indefinite');
+
+        // 退職理由
+        const retReason = ob.retirement_reason || u.retirement_reason || '自己都合による退職（一身上の都合・転職のため）';
+
         const base = conDoc.base_salary || pp.base_salary || ob.base_salary || localBackup?.base_salary || 250000;
 
         return {
@@ -239,6 +263,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           join_date: conDoc.join_date || ob.join_date || u.join_date || '2024-04-01',
           retirement_date: ob.retirement_date || u.retirement_date,
           is_retired: u.status === 'retired' || !!ob.retirement_date,
+          retirement_reason: retReason,
           birth_date: bDate,
           address: addr,
           phone: ph,
@@ -258,7 +283,10 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           pension_insurance_joined: ob.pension_insurance_joined !== false,
           employment_insurance_joined: ob.employment_insurance_joined !== false,
           health_standard_monthly_remuneration: ob.health_standard_monthly_remuneration || pp.health_standard_monthly_remuneration || base,
-          pension_standard_monthly_remuneration: ob.pension_standard_monthly_remuneration || pp.pension_standard_monthly_remuneration || base
+          pension_standard_monthly_remuneration: ob.pension_standard_monthly_remuneration || pp.pension_standard_monthly_remuneration || base,
+          employment_insurance_number: empInsNum,
+          weekly_hours: weeklyHrs,
+          contract_type: cType
         };
       });
 
@@ -1087,7 +1115,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
             <OfficialEmploymentInsuranceDoc
               initialType="acquisition"
               companyInfo={companyInfo}
-              officeNumber="2501-123456-7"
+              officeNumber={tenantInfo?.employment_insurance_office_number || tenantInfo?.office_number || '2501-123456-7'}
               employees={employees as any}
               selectedEmployeeId={selectedEmployeeId === 'all' ? (employees[0]?.id || '') : selectedEmployeeId}
               onSelectEmployee={(id) => setSelectedEmployeeId(id)}
