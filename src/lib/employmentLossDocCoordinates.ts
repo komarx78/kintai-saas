@@ -26,7 +26,7 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
   // ══════════════════════════════════════════════════════════════════════
   {
     id: 'docTypeNumber',
-    name: '帳票種別（17191）',
+    name: '帳票種別（17191・プレプリント済）',
     section: 'header',
     x: 7.2,
     y: 8.6,
@@ -34,7 +34,8 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
     pitch: 2.86,
     width: 14.5,
     example: '17191',
-    description: '帳票種別固定5桁'
+    description: '原本にプレプリント印刷済のため印字不要',
+    disabled: true
   },
   {
     id: 'myNumber',

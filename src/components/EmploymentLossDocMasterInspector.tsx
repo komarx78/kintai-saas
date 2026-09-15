@@ -22,7 +22,7 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
   // インスペクター用State
   const [fields, setFields] = useState<EmploymentLossFieldConfig[]>(() => loadEmploymentLossCoordinates());
   const [selectedSection, setSelectedSection] = useState<'header' | 'employee_basic' | 'loss_detail' | 'lower_table' | 'office'>('header');
-  const [selectedFieldId, setSelectedFieldId] = useState<string>('docTypeNumber');
+  const [selectedFieldId, setSelectedFieldId] = useState<string>('myNumber');
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [previewZoom, setPreviewZoom] = useState<number>(100);

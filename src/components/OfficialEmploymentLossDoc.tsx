@@ -204,7 +204,7 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
     const cleanKana = toKatakana(rawKana.replace(/[\s　]+/g, ' ')).trim();
 
     return {
-      docTypeNumber: '17191',
+      docTypeNumber: '', // 原本プレプリント済のため印字不要
       myNumber: cleanMyNumber,
       // 被保険者番号（4桁-6桁-1桁）
       insuredNumber_1: cleanInsured.slice(0, 4),
@@ -898,7 +898,7 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
 
             {/* 各マス目へのオーバーレイ入力文字印字（直接ドラッグ微調整可能） */}
             {coords.map((field) => {
-              if (field.disabled) return null;
+              if (field.disabled || field.id === 'docTypeNumber') return null;
 
               const val = formValues[field.id] || '';
               const isDraggingThis = draggingFieldId === field.id;
