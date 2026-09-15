@@ -9,6 +9,7 @@ import {
   loadEmploymentLossCoordinates,
   saveEmploymentLossCoordinates,
   saveEmploymentLossCoordinatesToDb,
+  fetchEmploymentLossCoordinatesFromDb,
   broadcastEmploymentLossCoordinates,
   type EmploymentLossFieldConfig
 } from '../lib/employmentLossDocCoordinates';
@@ -25,6 +26,17 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [previewZoom, setPreviewZoom] = useState<number>(100);
+
+  // マウント時にDBから全社共有座標を取得
+  useEffect(() => {
+    let isCancelled = false;
+    fetchEmploymentLossCoordinatesFromDb().then(dbCoords => {
+      if (!isCancelled && dbCoords && dbCoords.length > 0) {
+        setFields(dbCoords);
+      }
+    });
+    return () => { isCancelled = true; };
+  }, []);
 
   // 原本背景画像
   const [bgPdfImg, setBgPdfImg] = useState<string | null>(null);
@@ -269,7 +281,7 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
               id: 'demo-retiree-1',
               name: '駒井 秀一朗',
               name_kana: 'コマイ　シュウイチロウ',
-              birth_date: '1979-03-18',
+              birth_date: '1979-03-18', // 昭和54年・男
               gender: '男',
               my_number: '123456789012',
               employment_insurance_number: '1234-567890-1',
@@ -279,6 +291,51 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
               employment_type: 'regular',
               weekly_hours: 40,
               retirement_reason: '自己都合退職（転職のため）'
+            },
+            {
+              id: 'demo-retiree-2',
+              name: '坂本 花子',
+              name_kana: 'サカモト　ハナコ',
+              birth_date: '2000-05-15', // 平成12年・女
+              gender: '女',
+              my_number: '987654321098',
+              employment_insurance_number: '2345-678901-2',
+              join_date: '2022-04-01',
+              retirement_date: '2026-08-31',
+              base_salary: 240000,
+              employment_type: 'regular',
+              weekly_hours: 40,
+              retirement_reason: '契約期間満了'
+            },
+            {
+              id: 'demo-retiree-3',
+              name: '令和 美咲',
+              name_kana: 'レイワ　ミサキ',
+              birth_date: '2020-08-10', // 令和2年・女性
+              gender: '女性',
+              my_number: '112233445566',
+              employment_insurance_number: '3456-789012-3',
+              join_date: '2025-01-01',
+              retirement_date: '2026-07-31',
+              base_salary: 200000,
+              employment_type: 'regular',
+              weekly_hours: 30,
+              retirement_reason: '自己都合退職'
+            },
+            {
+              id: 'demo-retiree-4',
+              name: '大正 太郎',
+              name_kana: 'タイショウ　タロウ',
+              birth_date: '1924-11-03', // 大正13年・男
+              gender: '男',
+              my_number: '556677889900',
+              employment_insurance_number: '4567-890123-4',
+              join_date: '2010-04-01',
+              retirement_date: '2026-06-30',
+              base_salary: 350000,
+              employment_type: 'regular',
+              weekly_hours: 40,
+              retirement_reason: '定年退職'
             }
           ]}
         />

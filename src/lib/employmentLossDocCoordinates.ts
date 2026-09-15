@@ -335,7 +335,7 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
     y: 56.4,
     fontSize: 13,
     width: 3.5,
-    example: '',
+    example: '○',
     description: '女性の場合に原本の「女」へ○印'
   },
   // 22. 生年月日（原本に元号選択肢と年月日の文字がプレプリントされているため、元号○印と数字を分割印字）
@@ -347,7 +347,7 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
     y: 55.4,
     fontSize: 12,
     width: 3.0,
-    example: '',
+    example: '○',
     description: '大正生まれの場合に○印'
   },
   {
@@ -358,7 +358,7 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
     y: 55.4,
     fontSize: 12,
     width: 3.0,
-    example: '',
+    example: '○',
     description: '昭和生まれの場合に○印'
   },
   {
@@ -380,7 +380,7 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
     y: 57.4,
     fontSize: 12,
     width: 3.0,
-    example: '',
+    example: '○',
     description: '令和生まれの場合に○印'
   },
   {
@@ -532,12 +532,12 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
   }
 ];
 
-const STORAGE_KEY = 'employment_loss_doc_coordinates_custom_v1';
+const STORAGE_KEY = 'employment_loss_doc_coordinates_custom_v2';
 
 // ローカルストレージからの読み込み（デフォルトフォールバック付き）
 export function loadEmploymentLossCoordinates(): EmploymentLossFieldConfig[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('employment_loss_doc_coordinates_custom_v1');
     if (!raw) return DEFAULT_EMPLOYMENT_LOSS_FIELDS;
     const parsed: Partial<EmploymentLossFieldConfig>[] = JSON.parse(raw);
     return DEFAULT_EMPLOYMENT_LOSS_FIELDS.map(def => {

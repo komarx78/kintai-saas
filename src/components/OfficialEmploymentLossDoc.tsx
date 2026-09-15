@@ -54,21 +54,59 @@ export interface OfficialEmploymentLossDocProps {
 // 和暦変換ヘルパー（元号コード: 2大正, 3昭和, 4平成, 5令和）
 function parseWarekiEraCode(dateStr?: string): { eraCode: string; eraName: string; year2: string; month2: string; day2: string } {
   if (!dateStr) return { eraCode: '5', eraName: '令和', year2: '08', month2: '09', day2: '30' };
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return { eraCode: '5', eraName: '令和', year2: '08', month2: '09', day2: '30' };
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
 
-  if (y >= 2019) {
+  // 和暦文字列（例: 昭和54年3月18日, 昭54.3.18, S54-03-18 等）の直接パース対応
+  const trimmed = dateStr.trim();
+  const warekiMatch = trimmed.match(/^(令和|平成|昭和|大正|令|平|昭|大|R|H|S|T)\s*(\d{1,2}|元)[.年/-]\s*(\d{1,2})[.月/-]\s*(\d{1,2})日?$/i);
+  if (warekiMatch) {
+    const eraStr = warekiMatch[1].toUpperCase();
+    const yVal = warekiMatch[2] === '元' ? 1 : parseInt(warekiMatch[2], 10);
+    const m = String(parseInt(warekiMatch[3], 10)).padStart(2, '0');
+    const d = String(parseInt(warekiMatch[4], 10)).padStart(2, '0');
+    const y2 = String(yVal).padStart(2, '0');
+
+    if (['令和', '令', 'R'].includes(eraStr)) {
+      return { eraCode: '5', eraName: '令和', year2: y2, month2: m, day2: d };
+    } else if (['平成', '平', 'H'].includes(eraStr)) {
+      return { eraCode: '4', eraName: '平成', year2: y2, month2: m, day2: d };
+    } else if (['昭和', '昭', 'S'].includes(eraStr)) {
+      return { eraCode: '3', eraName: '昭和', year2: y2, month2: m, day2: d };
+    } else if (['大正', '大', 'T'].includes(eraStr)) {
+      return { eraCode: '2', eraName: '大正', year2: y2, month2: m, day2: d };
+    }
+  }
+
+  // 西暦日付 (YYYY-MM-DD 等) のパース
+  const parts = trimmed.split(/[-/T\s]/);
+  let y = 0, mNum = 0, dNum = 0;
+  if (parts.length >= 3 && !isNaN(Number(parts[0])) && !isNaN(Number(parts[1])) && !isNaN(Number(parts[2]))) {
+    y = parseInt(parts[0], 10);
+    mNum = parseInt(parts[1], 10);
+    dNum = parseInt(parts[2], 10);
+  } else {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return { eraCode: '5', eraName: '令和', year2: '08', month2: '09', day2: '30' };
+    y = d.getFullYear();
+    mNum = d.getMonth() + 1;
+    dNum = d.getDate();
+  }
+
+  const m = String(mNum).padStart(2, '0');
+  const day = String(dNum).padStart(2, '0');
+  const ymdNum = y * 10000 + mNum * 100 + dNum;
+
+  if (ymdNum >= 20190501) {
     const ry = y - 2018;
     return { eraCode: '5', eraName: '令和', year2: String(ry).padStart(2, '0'), month2: m, day2: day };
-  } else if (y >= 1989) {
+  } else if (ymdNum >= 19890108) {
     const hy = y - 1988;
     return { eraCode: '4', eraName: '平成', year2: String(hy).padStart(2, '0'), month2: m, day2: day };
-  } else if (y >= 1926) {
+  } else if (ymdNum >= 19261225) {
     const sy = y - 1925;
     return { eraCode: '3', eraName: '昭和', year2: String(sy).padStart(2, '0'), month2: m, day2: day };
+  } else if (ymdNum >= 19120730) {
+    const ty = y - 1911;
+    return { eraCode: '2', eraName: '大正', year2: String(ty).padStart(2, '0'), month2: m, day2: day };
   } else {
     return { eraCode: '2', eraName: '大正', year2: '01', month2: m, day2: day };
   }
@@ -198,8 +236,8 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
       empNameKana: cleanKana,
       empName: emp.name,
       // 21. 性別（原本に「男 ・ 女」がプレプリントされているため○印を付加）
-      genderCircle_male: emp.gender === 'female' || emp.gender === '女' ? '' : '○',
-      genderCircle_female: emp.gender === 'female' || emp.gender === '女' ? '○' : '',
+      genderCircle_male: (emp.gender === 'female' || emp.gender === '女' || emp.gender === '女性' || emp.gender === '2') ? '' : '○',
+      genderCircle_female: (emp.gender === 'female' || emp.gender === '女' || emp.gender === '女性' || emp.gender === '2') ? '○' : '',
       // 22. 生年月日（原本に元号選択肢と年月日の文字がプレプリントされているため、元号○印と数字を分割印字）
       birthEra_taisho: birthWareki.eraCode === '2' ? '○' : '',
       birthEra_showa: birthWareki.eraCode === '3' ? '○' : '',
@@ -662,7 +700,8 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
                           value={
                             formValues.birthEra_reiwa === '○' ? '5' :
                             formValues.birthEra_heisei === '○' ? '4' :
-                            formValues.birthEra_showa === '○' ? '3' : '2'
+                            formValues.birthEra_showa === '○' ? '3' :
+                            formValues.birthEra_taisho === '○' ? '2' : '4'
                           }
                           onChange={(e) => handleInputChange('birthEraSelect', e.target.value)}
                           className="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1.5 font-bold text-slate-800"
