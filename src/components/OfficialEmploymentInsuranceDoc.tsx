@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  Printer, ArrowLeft, AlertCircle, Search, Calendar, 
+  Printer, ArrowLeft, Search, Calendar, 
   RotateCcw, UserCheck, Users 
 } from 'lucide-react';
 import { OfficialSeparationCertificateDoc } from './OfficialSeparationCertificateDoc';
 import { OfficialEmploymentAcquisitionDoc } from './OfficialEmploymentAcquisitionDoc';
+import { OfficialEmploymentLossDoc } from './OfficialEmploymentLossDoc';
 
 export interface EmploymentInsuranceEmployee {
   id: string;
@@ -53,15 +54,12 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
   onBack
 }) => {
   const [docType, setDocType] = useState<'acquisition' | 'loss' | 'separation'>(initialType);
-  const [submissionDate] = useState<string>(new Date().toISOString().split('T')[0]);
   
   // 🔍 検索・フィルタリングState
   const [searchKeyword, setSearchKeyword] = useState<string>('');
   const [selectedRetirementMonth, setSelectedRetirementMonth] = useState<string>('all');
   // 喪失届・離職票はデフォルトで退職者のみ、取得届は全員（在職・新入社優先）
   const [onlyRetired, setOnlyRetired] = useState<boolean>(initialType !== 'acquisition');
-
-  const weeklyWorkingHours = 40;
 
   // 書式タブ切り替え時に適切な退職者フィルタ状態へ自動適応
   const handleTabChange = (type: 'acquisition' | 'loss' | 'separation') => {
@@ -344,140 +342,15 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
           hideHeader={true}
         />
       ) : (
-        /* 印刷・公式A4原本コンテナ（資格喪失届） */
-        <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl flex justify-center overflow-x-auto print:p-0 print:m-0 print:bg-white print:overflow-visible">
-        <div className="w-[210mm] min-h-[297mm] bg-white p-[15mm] shadow-lg border border-slate-300 text-slate-900 font-sans print:shadow-none print:border-none print:p-0 print:w-full print:m-0 box-border text-[11px] leading-tight">
-
-          {/* 表題部 */}
-          <div className="border-b-2 border-slate-900 pb-3 mb-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-[10px] font-bold border border-slate-700 px-2 py-0.5">
-                  公共職業安定所長（ハローワーク）提出用
-                </span>
-                <h1 className="text-xl font-black tracking-wider mt-2">
-                  雇用保険被保険者資格喪失届
-                </h1>
-                <p className="text-[10px] text-slate-600 mt-0.5">
-                  労働保険・雇用保険適用事業所提出書式
-                </p>
-              </div>
-
-              <div className="text-right text-[10px] space-y-1">
-                <div>提出日: 令和 {new Date(submissionDate).getFullYear() - 2018} 年 {new Date(submissionDate).getMonth() + 1} 月 {new Date(submissionDate).getDate()} 日</div>
-                <div className="text-slate-600">所轄公共職業安定所長 殿</div>
-              </div>
-            </div>
-          </div>
-
-          {/* 事業所情報 */}
-          <div className="border border-slate-800 mb-4 p-3 rounded-xs relative">
-            <div className="text-[10px] font-black bg-slate-800 text-white px-2 py-0.5 absolute -top-2.5 left-2">
-              事業所情報
-            </div>
-            <div className="grid grid-cols-12 gap-2 mt-1">
-              <div className="col-span-3">
-                <span className="text-[9px] text-slate-500 block">雇用保険適用事業所番号</span>
-                <span className="font-mono font-black text-sm tracking-widest">{officeNumber}</span>
-              </div>
-              <div className="col-span-5">
-                <span className="text-[9px] text-slate-500 block">事業所所在地</span>
-                <span className="font-bold">{companyInfo.address}</span>
-              </div>
-              <div className="col-span-4 relative">
-                <span className="text-[9px] text-slate-500 block">事業所名称・事業主氏名</span>
-                <span className="font-black block">{companyInfo.name}</span>
-                <span className="font-bold text-xs">{companyInfo.representative_name} 印</span>
-                {companyInfo.company_seal_url && (
-                  <img
-                    src={companyInfo.company_seal_url}
-                    alt="社印"
-                    className="absolute right-2 top-0 w-12 h-12 object-contain pointer-events-none opacity-85"
-                  />
-                )}
-              </div>
-            </div>
-            <div className="mt-2 text-[10px] text-slate-600 flex justify-between border-t border-slate-200 pt-1.5">
-              <span>電話番号: {companyInfo.phone_number || '077-574-6907'}</span>
-              <span>労働保険番号: 25-1-02-123456-000</span>
-            </div>
-          </div>
-
-          {/* 被保険者情報 */}
-          <div className="border border-slate-800 mb-4 rounded-xs overflow-hidden">
-            <div className="bg-slate-100 border-b border-slate-800 p-2 font-black text-xs flex justify-between items-center">
-              <span>被保険者情報</span>
-              <span className="text-[10px] text-slate-500 font-mono">
-                被保険者番号: {currentEmployee.employment_insurance_number || '1234-567890-1'}
-              </span>
-            </div>
-
-            <table className="w-full text-[10px] border-collapse">
-              <tbody>
-                <tr className="border-b border-slate-300">
-                  <td className="bg-slate-50 p-2 font-bold w-28 border-r border-slate-300">氏名（フリガナ）</td>
-                  <td className="p-2 border-r border-slate-300">
-                    <div className="text-[9px] text-slate-500">{currentEmployee.name_kana || 'コマイ シュウイチロウ'}</div>
-                    <div className="font-black text-sm text-slate-900">{currentEmployee.name}</div>
-                  </td>
-                  <td className="bg-slate-50 p-2 font-bold w-24 border-r border-slate-300">生年月日 / 性別</td>
-                  <td className="p-2 font-mono">
-                    <span className="font-bold">{currentEmployee.birth_date || '1990-01-01'}</span>
-                    <span className="ml-3 font-bold">（{currentEmployee.gender || '男'}）</span>
-                  </td>
-                </tr>
-
-                <tr className="border-b border-slate-300">
-                  <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">
-                    雇入年月日 〜 離職日
-                  </td>
-                  <td className="p-2 border-r border-slate-300 font-bold text-xs">
-                    <span>{currentEmployee.join_date} 〜 {currentEmployee.retirement_date || '退職日未定'}</span>
-                  </td>
-                  <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">週所定労働時間</td>
-                  <td className="p-2">
-                    <span className="font-mono font-bold text-xs">{weeklyWorkingHours}</span> 時間 00 分
-                  </td>
-                </tr>
-
-                <tr className="border-b border-slate-300">
-                  <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">雇用形態 / 賃金</td>
-                  <td className="p-2 border-r border-slate-300">
-                    {currentEmployee.employment_type === 'part-time' ? 'パート・アルバイト' : '正社員（期間の定めなし）'}
-                  </td>
-                  <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">賃金支払態様</td>
-                  <td className="p-2 font-bold">
-                    月給（基本給: ¥{currentEmployee.base_salary?.toLocaleString() || '250,000'}）
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-
-
-          {/* 法定特記事項 */}
-          <div className="border border-slate-400 p-2.5 rounded-xs text-[9px] text-slate-600 space-y-1 mb-6 bg-slate-50/50">
-            <div className="font-bold text-slate-800 flex items-center gap-1">
-              <AlertCircle className="w-3.5 h-3.5 text-emerald-600" />
-              ハローワーク提出・離職票取扱上の注意
-            </div>
-            <p>1. 資格喪失届および離職証明書は、離職日の翌日から起算して10日以内に所轄公共職業安定所（ハローワーク）へご提出ください。</p>
-            <p>2. 離職票の交付を希望する労働者には、本証明書に基づく離職票用紙（安定所交付）を速やかに交付してください。</p>
-          </div>
-
-          {/* 署名欄 */}
-          <div className="border-t border-slate-300 pt-3 flex justify-between items-end text-[10px]">
-            <div>
-              記載内容に相違ないことを証明します。　事業主印: ＿＿＿＿＿ 印
-            </div>
-            <div className="text-right text-slate-400 text-[9px]">
-              自律開発要塞 SSOT労務管理システム 雇用保険公式作成済
-            </div>
-          </div>
-
-        </div>
-      </div>
+        <OfficialEmploymentLossDoc
+          companyInfo={companyInfo}
+          officeNumber={officeNumber}
+          employees={(filteredEmployees.length > 0 ? filteredEmployees : employees) as any}
+          selectedEmployeeId={currentEmployee.id}
+          onSelectEmployee={onSelectEmployee}
+          onBack={onBack}
+          hideHeader={true}
+        />
       )}
     </div>
   );
