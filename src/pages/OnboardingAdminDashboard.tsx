@@ -40,6 +40,8 @@ import { OfficialMaternityLeaveDoc } from '../components/OfficialMaternityLeaveD
 import { 
   fetchMaternityLeaveRecord, 
   approveEmployeeMaternityApplication, 
+  generateResidentTaxAdvanceSchedule,
+  DEFAULT_MATERNITY_CHECKLIST,
   type MaternityLeaveRecord 
 } from '../lib/maternityLeave';
 import { BonusPaymentReportModal } from '../components/BonusPaymentReportModal';
@@ -553,7 +555,11 @@ export default function OnboardingAdminDashboard() {
             admin_comment = rejectedCache[s.id].admin_comment || admin_comment;
           }
 
-          const sName = (s.data?.name || '').trim();
+          let sName = (s.data?.name || s.data?.employee_name || s.data?.applicant_signature_name || '').trim();
+          if (!sName && s.title) {
+            const titleMatch = s.title.match(/[（(](.+?)[）)]/);
+            if (titleMatch && titleMatch[1]) sName = titleMatch[1].trim();
+          }
 
           // ユーザーIDマップへの蓄積
           if (s.user_id) {
@@ -1716,14 +1722,27 @@ export default function OnboardingAdminDashboard() {
         if (bDate) localMaster.birth_date = bDate;
 
       } else if (sub.document_type === 'maternity_leave') {
-        // 👶 産前産後・育児休業申請の承認
+        // 👶 産前産後・育児休業申請の承認（原本確定）
         try {
+          const effectiveTId = tenantId || (sub as any).tenant_id || '';
           await approveEmployeeMaternityApplication({
-            tenantId,
+            tenantId: effectiveTId,
             userId: uId,
             submissionId: sub.id,
             adminUserId: currentAdminName || '管理者'
           });
+
+          // フルレコードをローカルおよびStateへ即時確定反映
+          const empDisplayName = sub.user_name || (sub.data as any)?.employee_name || '従業員';
+          const matRec = resolveMaternityRecordForEmployee({ user_id: uId, name: empDisplayName }, sub);
+          if (matRec) {
+            matRec.status = 'approved';
+            matRec.approved_at = new Date().toISOString();
+            setCabinetMaternityRecord(matRec);
+            try {
+              localStorage.setItem(`maternity_leave_record_${uId}`, JSON.stringify(matRec));
+            } catch (_) {}
+          }
         } catch (mErr) {
           console.error('Maternity approval error:', mErr);
         }
@@ -2390,7 +2409,11 @@ export default function OnboardingAdminDashboard() {
   // 提出書類データ、ローカルストレージバックアップ、DB従業員台帳から、最新の完全な従業員情報を合成
   const resolveEmployeeFullData = (subOrEmp: any): EmployeeOnboardingData => {
     const targetUserId = subOrEmp?.user_id || subOrEmp?.id || '';
-    const targetName = (subOrEmp?.data?.name || subOrEmp?.user_name || subOrEmp?.name || '').trim();
+    let targetName = (subOrEmp?.data?.name || subOrEmp?.data?.employee_name || subOrEmp?.data?.applicant_signature_name || subOrEmp?.user_name || subOrEmp?.name || '').trim();
+    if (!targetName && subOrEmp?.title) {
+      const match = subOrEmp.title.match(/[（(](.+?)[）)]/);
+      if (match && match[1]) targetName = match[1].trim();
+    }
     
     // 1. 既存のDB従業員データ
     const matchedEmp = employees.find(e => (targetUserId && e.user_id === targetUserId) || (targetName && e.name?.trim() === targetName)) || ({} as any);
@@ -2404,7 +2427,7 @@ export default function OnboardingAdminDashboard() {
 
     // 3. このユーザーの全提出書類を取得（最新順）
     const userSubs = submissions
-      .filter(s => (targetUserId && s.user_id === targetUserId) || (targetName && (s.data?.name?.trim() === targetName || s.user_name?.trim() === targetName)))
+      .filter(s => (targetUserId && s.user_id === targetUserId) || (targetName && (s.data?.name?.trim() === targetName || s.data?.employee_name?.trim() === targetName || s.data?.applicant_signature_name?.trim() === targetName || s.user_name?.trim() === targetName || s.title?.includes(targetName))))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     const contractSub = userSubs.find(s => s.document_type === 'labor_contract');
@@ -2413,6 +2436,7 @@ export default function OnboardingAdminDashboard() {
     const commutingSub = userSubs.find(s => s.document_type === 'commuting_pass');
     const bankSub = userSubs.find(s => s.document_type === 'bank_passbook');
     const myNumSub = userSubs.find(s => s.document_type === 'my_number');
+    const matSub = userSubs.find(s => s.document_type === 'maternity_leave');
 
     const contractData = contractSub?.data || (subOrEmp?.document_type === 'labor_contract' ? subOrEmp.data : {}) || {};
     const residentData = residentSub?.data || (subOrEmp?.document_type === 'resident_certificate' ? subOrEmp.data : {}) || {};
@@ -2420,6 +2444,7 @@ export default function OnboardingAdminDashboard() {
     const commutingData = commutingSub?.data || (subOrEmp?.document_type === 'commuting_pass' ? subOrEmp.data : {}) || {};
     const bankData = bankSub?.data || (subOrEmp?.document_type === 'bank_passbook' ? subOrEmp.data : {}) || {};
     const myNumData = myNumSub?.data || (subOrEmp?.document_type === 'my_number' ? subOrEmp.data : {}) || {};
+    const matData = matSub?.data || (subOrEmp?.document_type === 'maternity_leave' ? subOrEmp.data : {}) || {};
 
     // 住所の解決（優先度: 住民票 ➔ 扶養控除申告書 ➔ バックアップ ➔ 従業員マスタ ➔ subOrEmp）
     const resolvedAddress = residentData.address || taxData.address || contractData.address || localMaster.address || matchedEmp.address || subOrEmp?.address || '';
@@ -2437,6 +2462,7 @@ export default function OnboardingAdminDashboard() {
 
     // 電話番号の解決
     const resolvedPhone = 
+      matData.contact_phone ||
       residentData.phone || residentData.phoneNumber ||
       taxData.phone || taxData.phoneNumber ||
       contractData.phone || contractData.phoneNumber ||
@@ -2519,6 +2545,78 @@ export default function OnboardingAdminDashboard() {
       resident_tax_monthly: matchedEmp.resident_tax_monthly || localMaster.resident_tax_monthly || 0,
       resident_tax_details: matchedEmp.resident_tax_details || localMaster.resident_tax_details || {},
       signed_at: resolvedSignedAt
+    };
+  };
+
+  // 👶 産前産後・育児休業レコードの完全解決（DBレコード ➔ 提出書類 ➔ 自動立替計算）
+  const resolveMaternityRecordForEmployee = (emp: any, selectedSub?: any): MaternityLeaveRecord | null => {
+    const targetUserId = emp?.user_id || emp?.id || '';
+    const targetName = (emp?.name || emp?.user_name || '').trim();
+
+    // 1. 渡された selectedSub が maternity_leave なら最優先
+    let matSub = (selectedSub?.document_type === 'maternity_leave') ? selectedSub : null;
+
+    // 2. なければ submissions から該当ユーザーの maternity_leave を検索
+    if (!matSub) {
+      matSub = submissions.find(s => 
+        s.document_type === 'maternity_leave' && (
+          (targetUserId && s.user_id === targetUserId) ||
+          (targetName && (s.data?.employee_name?.trim() === targetName || s.data?.applicant_signature_name?.trim() === targetName || s.user_name?.trim() === targetName || s.title?.includes(targetName)))
+        )
+      );
+    }
+
+    const d = matSub?.data || {};
+    const base: any = cabinetMaternityRecord || {};
+
+    const expDate = base.expected_birth_date || d.expected_birth_date;
+    if (!expDate && !base.maternity_leave_start_date && !d.maternity_leave_start_date) {
+      return null;
+    }
+
+    const startD = base.maternity_leave_start_date || d.maternity_leave_start_date || '';
+    const endD = base.childcare_leave_end_date || d.childcare_leave_end_date || base.maternity_leave_end_date || d.maternity_leave_end_date || '';
+
+    let adv = base.resident_tax_advance || d.resident_tax_advance;
+    if (!adv || !Array.isArray(adv.records) || adv.records.length === 0) {
+      adv = generateResidentTaxAdvanceSchedule({
+        leaveStartDate: startD,
+        leaveEndDate: endD,
+        monthlyResidentTax: emp?.resident_tax_monthly || 0
+      });
+    }
+
+    return {
+      id: base.id || matSub?.id || undefined,
+      tenant_id: base.tenant_id || matSub?.tenant_id || emp?.tenant_id || tenantId || '',
+      user_id: base.user_id || matSub?.user_id || targetUserId,
+      application_date: base.application_date || (matSub?.created_at ? matSub.created_at.split('T')[0] : (d.application_date || new Date().toISOString().split('T')[0])),
+      pregnancy_type: base.pregnancy_type || d.pregnancy_type || 'single',
+      expected_birth_date: expDate || '',
+      actual_birth_date: base.actual_birth_date || d.actual_birth_date || null,
+      maternity_leave_start_date: startD,
+      maternity_leave_end_date: base.maternity_leave_end_date || d.maternity_leave_end_date || '',
+      childcare_leave_start_date: base.childcare_leave_start_date || d.childcare_leave_start_date || null,
+      childcare_leave_end_date: base.childcare_leave_end_date || d.childcare_leave_end_date || null,
+      return_to_work_date: base.return_to_work_date || d.return_to_work_date || null,
+      childcare_extended: base.childcare_extended || d.childcare_extended || 'none',
+      child_name: base.child_name || d.child_name || '',
+      child_birth_date: base.child_birth_date || d.child_birth_date || null,
+      child_relationship: base.child_relationship || d.child_relationship || '実子',
+      child_my_number: base.child_my_number || d.child_my_number || '',
+      contact_phone: base.contact_phone || d.contact_phone || emp?.phone || '',
+      contact_email: base.contact_email || d.contact_email || emp?.email || '',
+      contact_line_id: base.contact_line_id || d.contact_line_id || '',
+      remarks: base.remarks || d.remarks || '',
+      checklist: base.checklist || d.checklist || DEFAULT_MATERNITY_CHECKLIST,
+      attachment_handbook_url: base.attachment_handbook_url || matSub?.attachment_data || d.attachment_handbook_url || null,
+      attachment_handbook_filename: base.attachment_handbook_filename || matSub?.attachment_filename || d.attachment_handbook_filename || '母子手帳写真.jpg',
+      resident_tax_advance: adv,
+      status: base.status || (matSub?.status === 'approved' ? 'approved' : 'submitted'),
+      submitted_at: base.submitted_at || matSub?.created_at || new Date().toISOString(),
+      approved_at: base.approved_at || matSub?.approved_at || null,
+      resident_tax_settlement_preference: base.resident_tax_settlement_preference || d.resident_tax_settlement_preference || 'deduct_from_salary',
+      applicant_signature_name: base.applicant_signature_name || d.applicant_signature_name || d.employee_name || emp?.name || ''
     };
   };
 
@@ -3258,6 +3356,10 @@ export default function OnboardingAdminDashboard() {
                           <button
                             onClick={() => {
                               const fullEmp = resolveEmployeeFullData(sub);
+                              const matRec = resolveMaternityRecordForEmployee(fullEmp, sub);
+                              if (matRec) {
+                                setCabinetMaternityRecord(matRec);
+                              }
                               setCabinetModal({
                                 isOpen: true,
                                 employee: fullEmp,
@@ -3436,8 +3538,15 @@ export default function OnboardingAdminDashboard() {
               <button
                 onClick={async () => {
                   setCabinetModal(prev => ({ ...prev, activeDoc: 'maternity_leave' }));
-                  if (tenantId && cabinetModal.employee) {
-                    const rec = await fetchMaternityLeaveRecord(tenantId, cabinetModal.employee.user_id);
+                  const resolvedEmp = resolveEmployeeFullData(cabinetModal.employee);
+                  let rec: MaternityLeaveRecord | null = null;
+                  if (tenantId && resolvedEmp?.user_id) {
+                    rec = await fetchMaternityLeaveRecord(tenantId, resolvedEmp.user_id);
+                  }
+                  if (!rec) {
+                    rec = resolveMaternityRecordForEmployee(resolvedEmp, cabinetModal.selectedSubmission);
+                  }
+                  if (rec) {
                     setCabinetMaternityRecord(rec);
                   }
                 }}
@@ -3738,7 +3847,8 @@ export default function OnboardingAdminDashboard() {
               {/* 👶 6. 産前産後・育児休業 申請書＆住民税立替表 */}
               {cabinetModal.activeDoc === 'maternity_leave' && (() => {
                 const resolvedEmp = resolveEmployeeFullData(cabinetModal.employee);
-                if (!cabinetMaternityRecord) {
+                const activeMaternityRecord = cabinetMaternityRecord || resolveMaternityRecordForEmployee(resolvedEmp, cabinetModal.selectedSubmission);
+                if (!activeMaternityRecord) {
                   return (
                     <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300 space-y-3">
                       <div className="w-12 h-12 rounded-full bg-pink-100 text-pink-600 flex items-center justify-center mx-auto">
@@ -3792,12 +3902,12 @@ export default function OnboardingAdminDashboard() {
                           <Baby className="w-4 h-4" />
                           申請データ登録済
                         </span>
-                        {cabinetMaternityRecord.status === 'approved' && (
+                        {activeMaternityRecord.status === 'approved' && (
                           <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-300">
                             承認完了・原本確定
                           </span>
                         )}
-                        {cabinetMaternityRecord.status === 'submitted' && (
+                        {activeMaternityRecord.status === 'submitted' && (
                           <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-300">
                             社員申請済・未審査
                           </span>
@@ -3844,16 +3954,16 @@ export default function OnboardingAdminDashboard() {
                       }}
                       employee={{
                         id: resolvedEmp.user_id,
-                        name: resolvedEmp.name,
+                        name: activeMaternityRecord.applicant_signature_name || resolvedEmp.name,
                         name_kana: resolvedEmp.name_kana,
                         department: resolvedEmp.department,
                         birth_date: resolvedEmp.birth_date,
                         join_date: resolvedEmp.join_date,
                         address: resolvedEmp.address,
-                        phone: cabinetMaternityRecord.contact_phone || resolvedEmp.phone,
-                        email: cabinetMaternityRecord.contact_email || resolvedEmp.email
+                        phone: activeMaternityRecord.contact_phone || resolvedEmp.phone,
+                        email: activeMaternityRecord.contact_email || resolvedEmp.email
                       }}
-                      record={cabinetMaternityRecord}
+                      record={activeMaternityRecord}
                     />
                   </div>
                 );
