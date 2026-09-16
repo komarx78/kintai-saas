@@ -668,7 +668,8 @@ export default function OnboardingAdminDashboard() {
         const resTaxDetails = onb?.resident_tax_details ?? pay?.resident_tax_details ?? localBackup?.resident_tax_details ?? {};
 
         // 💡 提出書類にフリガナがあるが users / onb に未反映の場合の自動バックフィル同期（大元台帳へ自動確定反映）
-        if (kana && (!u.name_kana || !onb?.name_kana)) {
+        const effectiveTenantId = tenantIdData || u.tenant_id || tenantId;
+        if (effectiveTenantId && kana && (!u.name_kana || !onb?.name_kana)) {
           void (async () => {
             try {
               await supabase.from('users').update({ name_kana: kana }).eq('id', u.id);
@@ -678,13 +679,13 @@ export default function OnboardingAdminDashboard() {
                 // 既存レコードが存在する場合は安全なupdate（onConflict不要・400エラーゼロ）
                 await supabase.from('employee_onboarding_profiles')
                   .update({ name_kana: kana, updated_at: new Date().toISOString() })
-                  .eq('tenant_id', tenantId)
+                  .eq('tenant_id', effectiveTenantId)
                   .eq('user_id', u.id);
               } else {
                 // 新規の場合はNOT NULLカラム（join_date）を完備してupsert
                 const jDate = conDoc.join_date || u.join_date || '2026-04-01';
                 await supabase.from('employee_onboarding_profiles').upsert({
-                  tenant_id: tenantId,
+                  tenant_id: effectiveTenantId,
                   user_id: u.id,
                   name_kana: kana,
                   join_date: jDate,
