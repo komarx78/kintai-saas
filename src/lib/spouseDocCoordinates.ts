@@ -277,17 +277,6 @@ export const DEFAULT_SPOUSE_DOC_FIELDS: SpouseDocFieldConfig[] = [
     isCircle: true 
   },
   { 
-    id: 'spouseEraReiwa', 
-    name: '配偶者元号 令（○印）', 
-    section: 'spouse_deduction', 
-    x: 57.0, 
-    y: 26.2, 
-    fontSize: 8, 
-    example: '○', 
-    description: '配偶者生年月日「令」○印', 
-    isCircle: true 
-  },
-  { 
     id: 'spouseBirthY', 
     name: '配偶者生年（年）', 
     section: 'spouse_deduction', 
@@ -517,28 +506,6 @@ export const DEFAULT_SPOUSE_DOC_FIELDS: SpouseDocFieldConfig[] = [
     fontSize: 10, 
     example: '長男', 
     description: '特定親族の続柄' 
-  },
-  { 
-    id: 'specificEraHeisei', 
-    name: '特定親族元号 平（○印）', 
-    section: 'specific_relative', 
-    x: 43.0, 
-    y: 55.2, 
-    fontSize: 8, 
-    example: '○', 
-    description: '生年月日元号「平」○印', 
-    isCircle: true 
-  },
-  { 
-    id: 'specificEraReiwa', 
-    name: '特定親族元号 令（○印）', 
-    section: 'specific_relative', 
-    x: 44.0, 
-    y: 55.2, 
-    fontSize: 8, 
-    example: '○', 
-    description: '生年月日元号「令」○印', 
-    isCircle: true 
   },
   { 
     id: 'specificBirthY', 

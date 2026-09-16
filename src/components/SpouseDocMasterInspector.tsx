@@ -435,7 +435,7 @@ export const SpouseDocMasterInspector: React.FC = () => {
                     <Building2 className="w-3.5 h-3.5" />
                     ① 会社・本人ヘッダー
                   </span>
-                  <span className="text-[10px] opacity-70 font-mono">7項目</span>
+                  <span className="text-[10px] opacity-70 font-mono">{fields.filter(f => f.section === 'header').length}項目</span>
                 </button>
 
                 <button
@@ -455,7 +455,7 @@ export const SpouseDocMasterInspector: React.FC = () => {
                     <UserCheck className="w-3.5 h-3.5" />
                     ② 基礎控除申告書
                   </span>
-                  <span className="text-[10px] opacity-70 font-mono">9項目</span>
+                  <span className="text-[10px] opacity-70 font-mono">{fields.filter(f => f.section === 'basic_deduction').length}項目</span>
                 </button>
 
                 <button
@@ -475,7 +475,7 @@ export const SpouseDocMasterInspector: React.FC = () => {
                     <Heart className="w-3.5 h-3.5" />
                     ③ 配偶者控除等申告書
                   </span>
-                  <span className="text-[10px] opacity-70 font-mono">23項目</span>
+                  <span className="text-[10px] opacity-70 font-mono">{fields.filter(f => f.section === 'spouse_deduction').length}項目</span>
                 </button>
 
                 <button
@@ -495,7 +495,7 @@ export const SpouseDocMasterInspector: React.FC = () => {
                     <GraduationCap className="w-3.5 h-3.5" />
                     ④ 特定親族特別控除申告書
                   </span>
-                  <span className="text-[10px] opacity-70 font-mono">11項目</span>
+                  <span className="text-[10px] opacity-70 font-mono">{fields.filter(f => f.section === 'specific_relative').length}項目</span>
                 </button>
 
                 <button
@@ -515,7 +515,7 @@ export const SpouseDocMasterInspector: React.FC = () => {
                     <Scale className="w-3.5 h-3.5" />
                     ⑤ 所得金額調整控除申告書
                   </span>
-                  <span className="text-[10px] opacity-70 font-mono">12項目</span>
+                  <span className="text-[10px] opacity-70 font-mono">{fields.filter(f => f.section === 'adjustment').length}項目</span>
                 </button>
               </div>
             </div>

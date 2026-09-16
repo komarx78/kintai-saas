@@ -395,15 +395,19 @@ export default function OfficialSpouseDeductionDoc({
           const y = b.getFullYear();
           const m = b.getMonth() + 1;
           const d = b.getDate();
-          if (y <= 1989) {
+          if (y <= 1912) {
+            map.set('spouseEraMeiji', { value: '○', isCircle: true });
+            map.set('spouseBirthY', { value: String(y - 1867) });
+          } else if (y <= 1926) {
+            map.set('spouseEraTaisho', { value: '○', isCircle: true });
+            map.set('spouseBirthY', { value: String(y - 1911) });
+          } else if (y <= 1989) {
             map.set('spouseEraShowa', { value: '○', isCircle: true });
             map.set('spouseBirthY', { value: String(y - 1925) });
-          } else if (y <= 2019) {
+          } else {
+            // 配偶者控除等申告書用紙には令和が存在しないため平成に対応
             map.set('spouseEraHeisei', { value: '○', isCircle: true });
             map.set('spouseBirthY', { value: String(y - 1988) });
-          } else {
-            map.set('spouseEraReiwa', { value: '○', isCircle: true });
-            map.set('spouseBirthY', { value: String(y - 2018) });
           }
           map.set('spouseBirthM', { value: String(m) });
           map.set('spouseBirthD', { value: String(d) });
