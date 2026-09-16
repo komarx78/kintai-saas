@@ -23,11 +23,16 @@ export const SystemGuideUiPreview: React.FC<GuideUiPreviewProps> = ({
   previewType,
   htmlPreview
 }) => {
-  // カスタムHTMLが登録されている場合は、そのHTMLコードをそのままレンダリング
+  // カスタムHTMLが登録されている場合は、XSS防止サニタイズ処理を施して安全にレンダリング
   if (htmlPreview && htmlPreview.trim()) {
+    const sanitizedHtml = htmlPreview
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/\bon\w+\s*=\s*(['"]).*?\1/gi, '')
+      .replace(/\bjavascript:/gi, '');
+
     return (
       <div className="mt-3 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 overflow-x-auto">
-        <div dangerouslySetInnerHTML={{ __html: htmlPreview }} />
+        <div dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
       </div>
     );
   }

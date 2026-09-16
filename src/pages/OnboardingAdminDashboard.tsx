@@ -389,6 +389,7 @@ export default function OnboardingAdminDashboard() {
   // 📱 個人別 労働条件設定 ＆ 専用入社URL発行モーダルState
   const [inviteUrlModal, setInviteUrlModal] = useState({
     isOpen: false,
+    targetUserId: '',
     name: '',
     employmentType: '正社員（無期雇用）',
     salaryType: 'monthly' as 'monthly' | 'hourly',
@@ -2806,6 +2807,7 @@ export default function OnboardingAdminDashboard() {
               onClick={() => {
                 setInviteUrlModal({
                   isOpen: true,
+                  targetUserId: '',
                   name: '',
                   employmentType: '正社員（無期雇用）',
                   salaryType: 'monthly',
@@ -3101,6 +3103,7 @@ export default function OnboardingAdminDashboard() {
                                   const isH = emp.salary_type === 'hourly';
                                   setInviteUrlModal({
                                     isOpen: true,
+                                    targetUserId: emp.user_id || '',
                                     name: emp.name || '',
                                     employmentType: emp.employment_type === 'part-time' ? 'パート・アルバイト' : '正社員（無期雇用）',
                                     salaryType: isH ? 'hourly' : 'monthly',
@@ -6589,6 +6592,8 @@ export default function OnboardingAdminDashboard() {
           : inviteUrlModal.baseSalary + inviteUrlModal.positionAllowance + inviteUrlModal.qualificationAllowance + inviteUrlModal.fixedOvertimeAllowance;
 
         const params = new URLSearchParams({
+          tenant_id: tenantId || '',
+          user_id: inviteUrlModal.targetUserId || '',
           name: inviteUrlModal.name.trim(),
           employment_type: inviteUrlModal.employmentType,
           salary_type: inviteUrlModal.salaryType,

@@ -225,17 +225,31 @@ export default function EmployeeOnboardingWelcome() {
 
   const fetchTenant = async () => {
     try {
+      let tId: string | null = null;
+
+      // 1. URLパラメータから tenant_id を優先読取（未ログイン新入社員の完全サポート）
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlTenantId = searchParams.get('tenant_id') || searchParams.get('tenant');
+      if (urlTenantId) {
+        tId = urlTenantId;
+      }
+
+      // 2. ログインセッションからのフォールバック取得
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: tId } = await supabase.rpc('get_user_tenant_id');
-        if (tId) {
-          setTenantId(tId);
-          const { data: tData } = await supabase.from('tenants').select('*').eq('id', tId).maybeSingle();
-          setTenantInfo(tData);
+        if (!tId) {
+          const { data: rpcTId } = await supabase.rpc('get_user_tenant_id');
+          if (rpcTId) tId = rpcTId;
         }
         if (user.user_metadata?.name) {
           setBasicData(prev => ({ ...prev, name: user.user_metadata.name }));
         }
+      }
+
+      if (tId) {
+        setTenantId(tId);
+        const { data: tData } = await supabase.from('tenants').select('*').eq('id', tId).maybeSingle();
+        if (tData) setTenantInfo(tData);
       }
     } catch (e) {
       console.error(e);
@@ -505,8 +519,35 @@ export default function EmployeeOnboardingWelcome() {
     setIsSubmitting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id || `anon_${Date.now()}`;
-      const effectiveTenantId = tenantId || (await supabase.rpc('get_user_tenant_id')).data;
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlUserId = searchParams.get('user_id');
+      const urlTenantId = searchParams.get('tenant_id') || searchParams.get('tenant');
+
+      let effectiveTenantId = tenantId || urlTenantId;
+      if (!effectiveTenantId) {
+        try {
+          const { data: rpcTId } = await supabase.rpc('get_user_tenant_id');
+          if (rpcTId) effectiveTenantId = rpcTId;
+        } catch (_) {}
+      }
+
+      let userId = user?.id || (urlUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(urlUserId) ? urlUserId : null);
+
+      if (!userId && effectiveTenantId && basicData.name) {
+        try {
+          const { data: matchedUser } = await supabase
+            .from('users')
+            .select('id')
+            .eq('tenant_id', effectiveTenantId)
+            .eq('name', basicData.name.trim())
+            .maybeSingle();
+          if (matchedUser?.id) userId = matchedUser.id;
+        } catch (_) {}
+      }
+
+      if (!userId) {
+        userId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-4000-8000-000000000000';
+      }
 
       // 0. 労働条件通知書 兼 雇用契約書（労働者 電子合意締結）の送信
       await supabase.from('employee_document_submissions').insert({
