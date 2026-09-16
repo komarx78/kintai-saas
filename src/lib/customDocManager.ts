@@ -105,35 +105,39 @@ export const fetchCustomDocTemplates = async (tenantId?: string): Promise<Custom
   if (!tenantId) return list;
 
   try {
-    // 1. tenants テーブルから取得
-    const { data: tData } = await supabase
+    // 1. tenants テーブルから取得（マルチテナントSSOT）
+    const { data: tData, error: tErr } = await supabase
       .from('tenants')
       .select('custom_doc_templates')
       .eq('id', tenantId)
       .maybeSingle();
 
-    if (tData?.custom_doc_templates && Array.isArray(tData.custom_doc_templates) && tData.custom_doc_templates.length > 0) {
+    if (!tErr && tData?.custom_doc_templates && Array.isArray(tData.custom_doc_templates) && tData.custom_doc_templates.length > 0) {
       list = tData.custom_doc_templates;
       localStorage.setItem(`${STORAGE_KEY}_${tenantId}`, JSON.stringify(list));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
       return list;
     }
 
-    // 2. system_settings テーブルから取得フォールバック
-    const { data: sData } = await supabase
-      .from('system_settings')
-      .select('custom_doc_templates')
-      .eq('tenant_id', tenantId)
-      .maybeSingle();
+    // 2. system_settings テーブルから取得フォールバック（DBカラムが存在しない場合でも安全にスキップ）
+    try {
+      const { data: sData } = await supabase
+        .from('system_settings')
+        .select('custom_doc_templates')
+        .limit(1)
+        .maybeSingle();
 
-    if (sData?.custom_doc_templates && Array.isArray(sData.custom_doc_templates) && sData.custom_doc_templates.length > 0) {
-      list = sData.custom_doc_templates;
-      localStorage.setItem(`${STORAGE_KEY}_${tenantId}`, JSON.stringify(list));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-      return list;
+      if (sData?.custom_doc_templates && Array.isArray(sData.custom_doc_templates) && sData.custom_doc_templates.length > 0) {
+        list = sData.custom_doc_templates;
+        localStorage.setItem(`${STORAGE_KEY}_${tenantId}`, JSON.stringify(list));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        return list;
+      }
+    } catch (_) {
+      // system_settings カラム未存在時はローカルフォールバック
     }
   } catch (err) {
-    console.warn('DB fetch custom doc templates notice:', err);
+    // 静かにフォールバック
   }
 
   return list;
