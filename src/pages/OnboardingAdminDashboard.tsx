@@ -37,7 +37,11 @@ import {
 } from 'lucide-react';
 import { MaternityLeaveModal } from '../components/MaternityLeaveModal';
 import { OfficialMaternityLeaveDoc } from '../components/OfficialMaternityLeaveDoc';
-import { fetchMaternityLeaveRecord, type MaternityLeaveRecord } from '../lib/maternityLeave';
+import { 
+  fetchMaternityLeaveRecord, 
+  approveEmployeeMaternityApplication, 
+  type MaternityLeaveRecord 
+} from '../lib/maternityLeave';
 import { BonusPaymentReportModal } from '../components/BonusPaymentReportModal';
 import { 
   getQualificationsFromStorage, 
@@ -397,6 +401,19 @@ export default function OnboardingAdminDashboard() {
     workLocation: '本社 および 会社が指定する就業場所',
     generatedUrl: '',
     copied: false
+  });
+
+  // 👶 産前産後・育児休業 社員入力用専用URL発行モーダルState
+  const [maternityInviteModal, setMaternityInviteModal] = useState<{
+    isOpen: boolean;
+    employee: any;
+    copied: boolean;
+    copiedMessage: boolean;
+  }>({
+    isOpen: false,
+    employee: null,
+    copied: false,
+    copiedMessage: false
   });
 
   useEffect(() => {
@@ -1684,6 +1701,19 @@ export default function OnboardingAdminDashboard() {
         const bDate = d.birth_date || d.birthDate || '';
         if (myNum) localMaster.my_number = myNum;
         if (bDate) localMaster.birth_date = bDate;
+
+      } else if (sub.document_type === 'maternity_leave') {
+        // 👶 産前産後・育児休業申請の承認
+        try {
+          await approveEmployeeMaternityApplication({
+            tenantId,
+            userId: uId,
+            submissionId: sub.id,
+            adminUserId: currentAdminName || '管理者'
+          });
+        } catch (mErr) {
+          console.error('Maternity approval error:', mErr);
+        }
       }
 
       // LocalStorage への永続保存
@@ -3134,6 +3164,22 @@ export default function OnboardingAdminDashboard() {
                           {sub.document_type === 'my_number' && (
                             <div>マイナンバー: <span className="font-bold tracking-widest">{d.my_number ? '************' : '書類添付済'}</span></div>
                           )}
+                          {sub.document_type === 'maternity_leave' && (
+                            <>
+                              <div>出産予定日: <span className="font-bold text-pink-700">{d.expected_birth_date || '未設定'}</span> ({d.pregnancy_type === 'multiple' ? '多胎' : '単胎'})</div>
+                              <div>産前産後休業: <span className="font-bold">{d.maternity_leave_start_date || '未定'} 〜 {d.maternity_leave_end_date || '未定'}</span></div>
+                              <div>育児休業期間: <span className="font-bold">{d.childcare_leave_start_date || '未定'} 〜 {d.childcare_leave_end_date || '未定'}</span></div>
+                              <div>復職予定日: <span className="font-black text-indigo-700">{d.return_to_work_date || '未定'}</span></div>
+                              {d.resident_tax_settlement_preference && (
+                                <div className="sm:col-span-2 text-[11px] text-slate-500">
+                                  住民税精算希望: <span className="font-bold text-slate-700">
+                                    {d.resident_tax_settlement_preference === 'deduct_from_salary' ? '復職後の給与から天引き（推奨）' :
+                                     d.resident_tax_settlement_preference === 'monthly_transfer' ? '休業中に毎月振込精算' : '復職時に一括精算'}
+                                  </span>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -3191,6 +3237,25 @@ export default function OnboardingAdminDashboard() {
                           >
                             <Train className="w-3.5 h-3.5 text-blue-600" />
                             通勤届
+                          </button>
+                        )}
+
+                        {/* 👶 産前産後・育児休業 申請書＆立替表プレビューボタン */}
+                        {sub.document_type === 'maternity_leave' && (
+                          <button
+                            onClick={() => {
+                              const fullEmp = resolveEmployeeFullData(sub);
+                              setCabinetModal({
+                                isOpen: true,
+                                employee: fullEmp,
+                                activeDoc: 'maternity_leave',
+                                selectedSubmission: sub
+                              });
+                            }}
+                            className="bg-pink-50 hover:bg-pink-100 border border-pink-300 text-pink-900 font-bold text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1 shadow-xs cursor-pointer"
+                          >
+                            <Baby className="w-3.5 h-3.5 text-pink-600" />
+                            申請書・立替表
                           </button>
                         )}
 
@@ -3672,24 +3737,89 @@ export default function OnboardingAdminDashboard() {
                       <p className="text-xs text-slate-500 max-w-md mx-auto">
                         出産予定日を入力することで、産前・産後・育休期間、復職予定日、および無給期間中の住民税立替スケジュールを自動計算できます。
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const targetEmp = resolvedEmp;
-                          setCabinetModal(prev => ({ ...prev, isOpen: false }));
-                          setMaternityModal({ isOpen: true, employee: targetEmp });
-                        }}
-                        className="mt-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold text-xs rounded-xl shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Baby className="w-4 h-4" />
-                        👶 産休・育休手続きステーションを開く
-                      </button>
+                      <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const targetEmp = resolvedEmp;
+                            setCabinetModal(prev => ({ ...prev, isOpen: false }));
+                            setMaternityModal({ isOpen: true, employee: targetEmp });
+                          }}
+                          className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold text-xs rounded-xl shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Baby className="w-4 h-4" />
+                          👶 産休・育休手続きステーションを開く
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCabinetModal(prev => ({ ...prev, isOpen: false }));
+                            setMaternityInviteModal({
+                              isOpen: true,
+                              employee: resolvedEmp,
+                              copied: false,
+                              copiedMessage: false
+                            });
+                          }}
+                          className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs rounded-xl shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Smartphone className="w-4 h-4 text-indigo-600" />
+                          📱 社員に専用入力URLを送付
+                        </button>
+                      </div>
                     </div>
                   );
                 }
 
                 return (
                   <div className="space-y-4">
+                    <div className="flex items-center justify-between bg-pink-50/60 p-3 rounded-2xl border border-pink-100">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-pink-700 flex items-center gap-1">
+                          <Baby className="w-4 h-4" />
+                          申請データ登録済
+                        </span>
+                        {cabinetMaternityRecord.status === 'approved' && (
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-300">
+                            承認完了・原本確定
+                          </span>
+                        )}
+                        {cabinetMaternityRecord.status === 'submitted' && (
+                          <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-300">
+                            社員申請済・未審査
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCabinetModal(prev => ({ ...prev, isOpen: false }));
+                            setMaternityInviteModal({
+                              isOpen: true,
+                              employee: resolvedEmp,
+                              copied: false,
+                              copiedMessage: false
+                            });
+                          }}
+                          className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs rounded-xl shadow-xs transition inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <Smartphone className="w-3.5 h-3.5 text-pink-600" />
+                          URL再発行
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCabinetModal(prev => ({ ...prev, isOpen: false }));
+                            setMaternityModal({ isOpen: true, employee: resolvedEmp });
+                          }}
+                          className="px-3 py-1.5 bg-pink-600 hover:bg-pink-700 text-white font-bold text-xs rounded-xl shadow-xs transition inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <Baby className="w-3.5 h-3.5" />
+                          編集・再計算
+                        </button>
+                      </div>
+                    </div>
                     <OfficialMaternityLeaveDoc
                       companyInfo={{
                         name: tenantInfo?.name || '会社名未設定',
@@ -5189,6 +5319,12 @@ export default function OnboardingAdminDashboard() {
           isOpen={maternityModal.isOpen}
           onClose={() => setMaternityModal({ isOpen: false, employee: null })}
           tenantId={tenantId || ''}
+          onOpenInviteUrl={() => setMaternityInviteModal({
+            isOpen: true,
+            employee: maternityModal.employee,
+            copied: false,
+            copiedMessage: false
+          })}
           companyInfo={{
             name: tenantInfo?.name || '会社名未設定',
             address: tenantInfo?.address || '',
@@ -6604,6 +6740,103 @@ export default function OnboardingAdminDashboard() {
                 >
                   閉じる
                 </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 👶 産休・育休 社員入力専用URL発行モーダル */}
+      {maternityInviteModal.isOpen && maternityInviteModal.employee && (() => {
+        const emp = maternityInviteModal.employee;
+        const targetUrl = `${window.location.origin}/maternity/apply?tenant_id=${tenantId}&user_id=${emp.user_id}&name=${encodeURIComponent(emp.name || '')}`;
+        const defaultMessage = `${emp.name} 様\n\nお疲れ様です。${tenantInfo?.name || '会社'} 労務担当です。\n産前産後休業・育児休業の手続きのため、以下の専用URLより出産予定日や休業期間等の入力、および母子健康手帳の写真提出をお願い申し上げます。\n\n▼ 産休・育休申請フォーム（スマートフォン対応）\n${targetUrl}\n\n※ ご不明な点がございましたら労務担当までお気軽にご連絡ください。`;
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 my-8 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-pink-50 text-pink-600 flex items-center justify-center font-bold shadow-xs">
+                    <Baby className="w-5 h-5 text-pink-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-800 text-base">
+                      産休・育休 社員入力用URLの発行
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {emp.name} 様専用の申請フォームURLを発行し、LINEやメールで送信できます
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setMaternityInviteModal({ isOpen: false, employee: null, copied: false, copiedMessage: false })}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    専用申請URL（スマートフォン・PC両対応）
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={targetUrl}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[11px] text-slate-600 select-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(targetUrl);
+                        setMaternityInviteModal(prev => ({ ...prev, copied: true }));
+                        setTimeout(() => setMaternityInviteModal(prev => ({ ...prev, copied: false })), 2500);
+                      }}
+                      className="shrink-0 px-3.5 py-2.5 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1"
+                    >
+                      {maternityInviteModal.copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {maternityInviteModal.copied ? 'コピー完了' : 'URLコピー'}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    社員送信用メッセージ定型文（LINE・チャット・メール用）
+                  </label>
+                  <textarea
+                    readOnly
+                    rows={5}
+                    value={defaultMessage}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 leading-relaxed font-sans select-all resize-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(defaultMessage);
+                      setMaternityInviteModal(prev => ({ ...prev, copiedMessage: true }));
+                      setTimeout(() => setMaternityInviteModal(prev => ({ ...prev, copiedMessage: false })), 2500);
+                    }}
+                    className="mt-2 w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    {maternityInviteModal.copiedMessage ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {maternityInviteModal.copiedMessage ? '定型文をコピーしました！' : 'メッセージ全文をコピーしてLINE・メールに貼付け'}
+                  </button>
+                </div>
+
+                <div className="bg-pink-50/60 p-3 rounded-xl border border-pink-100 text-[11px] text-slate-600 space-y-1">
+                  <div className="font-bold text-pink-700 flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    社員入力後の自動連携について
+                  </div>
+                  <p>
+                    社員様がスマホから出産予定日や母子手帳の写真を送信すると、本システムの「提出書類審査」ビューに自動で届きます。管理者が承認するだけで、公的A4帳票（原本4枚）が即座に自動完成します。
+                  </p>
+                </div>
               </div>
             </div>
           </div>

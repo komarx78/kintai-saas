@@ -7,7 +7,7 @@ import { compressImageFile } from '../lib/imageCompressor';
 import { 
   CreditCard, Train, Shield, Users, FileText, 
   Upload, CheckCircle2, ArrowLeft, 
-  LogOut, Loader2, Trash2, Send, Check
+  LogOut, Loader2, Trash2, Send, Check, Baby
 } from 'lucide-react';
 
 export default function EmployeeOnboardingSubmission() {
@@ -364,6 +364,14 @@ export default function EmployeeOnboardingSubmission() {
           >
             <FileText className="w-4 h-4" />
             前職の源泉徴収票
+          </button>
+
+          <button
+            onClick={() => navigate('/maternity/apply')}
+            className="px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer bg-pink-50 text-pink-700 hover:bg-pink-100 border border-pink-200"
+          >
+            <Baby className="w-4 h-4 text-pink-600" />
+            👶 産前産後・育児休業申請
           </button>
         </div>
 

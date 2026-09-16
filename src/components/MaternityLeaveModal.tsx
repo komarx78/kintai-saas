@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, Save, Printer, Calendar, Clock, CheckSquare, 
   AlertCircle, Sparkles, Upload, Eye, Loader2,
-  Baby, ShieldCheck, CheckCircle2, UserCheck, DollarSign
+  Baby, ShieldCheck, CheckCircle2, UserCheck, DollarSign,
+  Smartphone, Copy, Check
 } from 'lucide-react';
 import { 
   type MaternityLeaveRecord, 
@@ -19,6 +20,7 @@ export interface MaternityLeaveModalProps {
   isOpen: boolean;
   onClose: () => void;
   tenantId: string;
+  onOpenInviteUrl?: () => void;
   companyInfo: {
     name: string;
     address: string;
@@ -47,6 +49,7 @@ export const MaternityLeaveModal: React.FC<MaternityLeaveModalProps> = ({
   isOpen,
   onClose,
   tenantId,
+  onOpenInviteUrl,
   companyInfo,
   employee,
   onSaved
@@ -55,6 +58,9 @@ export const MaternityLeaveModal: React.FC<MaternityLeaveModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedMessage, setCopiedMessage] = useState(false);
 
   // フォームステート
   const [record, setRecord] = useState<MaternityLeaveRecord>({
@@ -266,6 +272,22 @@ export const MaternityLeaveModal: React.FC<MaternityLeaveModalProps> = ({
                 読込中...
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenInviteUrl) {
+                  onOpenInviteUrl();
+                } else {
+                  setShowInviteModal(true);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-pink-50 hover:bg-pink-100 text-pink-700 border border-pink-200 transition cursor-pointer shadow-xs"
+              title="社員のスマホで入力してもらう専用URLを発行"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-pink-600" />
+              <span>📱 社員にURLを送付</span>
+            </button>
+
             <button
               onClick={handleSave}
               disabled={isSaving}
@@ -1223,6 +1245,102 @@ export const MaternityLeaveModal: React.FC<MaternityLeaveModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* 📱 社員向け 産休・育休申請URL発行モーダル */}
+      {showInviteModal && (() => {
+        const targetUrl = `${window.location.origin}/maternity/apply?tenant_id=${tenantId}&user_id=${employee.user_id}&name=${encodeURIComponent(employee.name || '')}`;
+        const defaultMessage = `${employee.name} 様\n\nお疲れ様です。${companyInfo.name || '会社'} 労務担当です。\n産前産後休業・育児休業の手続きのため、以下の専用URLより出産予定日や休業期間等の入力、および母子健康手帳の写真提出をお願い申し上げます。\n\n▼ 産休・育休申請フォーム（スマートフォン対応）\n${targetUrl}\n\n※ ご不明な点がございましたら労務担当までお気軽にご連絡ください。`;
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-60 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 my-8 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-pink-50 text-pink-600 flex items-center justify-center font-bold shadow-xs">
+                    <Baby className="w-5 h-5 text-pink-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-800 text-base">
+                      産休・育休 社員入力用URLの発行
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {employee.name} 様専用の申請フォームURLを発行し、LINEやメールで送信できます
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowInviteModal(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    専用申請URL（スマートフォン・PC両対応）
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={targetUrl}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[11px] text-slate-600 select-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(targetUrl);
+                        setCopiedUrl(true);
+                        setTimeout(() => setCopiedUrl(false), 2500);
+                      }}
+                      className="shrink-0 px-3.5 py-2.5 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1"
+                    >
+                      {copiedUrl ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copiedUrl ? 'コピー完了' : 'URLコピー'}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                    社員送信用メッセージ定型文（LINE・チャット・メール用）
+                  </label>
+                  <textarea
+                    readOnly
+                    rows={5}
+                    value={defaultMessage}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 leading-relaxed font-sans select-all resize-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(defaultMessage);
+                      setCopiedMessage(true);
+                      setTimeout(() => setCopiedMessage(false), 2500);
+                    }}
+                    className="mt-2 w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    {copiedMessage ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedMessage ? '定型文をコピーしました！' : 'メッセージ全文をコピーしてLINE・メールに貼付け'}
+                  </button>
+                </div>
+
+                <div className="bg-pink-50/60 p-3 rounded-xl border border-pink-100 text-[11px] text-slate-600 space-y-1">
+                  <div className="font-bold text-pink-700 flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    社員入力後の自動連携について
+                  </div>
+                  <p>
+                    社員様がスマホから出産予定日や母子手帳の写真を送信すると、本システムの「提出書類審査」ビューに自動で届きます。管理者が承認するだけで、公的A4帳票（原本4枚）が即座に自動完成します。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

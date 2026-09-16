@@ -20,6 +20,7 @@ import PayrollUserDashboard from './pages/PayrollUserDashboard';
 import OnboardingAdminDashboard from './pages/OnboardingAdminDashboard';
 import EmployeeOnboardingSubmission from './pages/EmployeeOnboardingSubmission';
 import EmployeeOnboardingWelcome from './pages/EmployeeOnboardingWelcome';
+import EmployeeMaternityApplication from './pages/EmployeeMaternityApplication';
 import CompanySettingsDashboard from './pages/CompanySettingsDashboard';
 import CommunitySupportDashboard from './pages/CommunitySupportDashboard';
 import TrialEnded from './pages/TrialEnded';
@@ -194,6 +195,7 @@ function App() {
           </PrivateRoute>
         } />
         <Route path="/onboarding/welcome" element={<EmployeeOnboardingWelcome />} />
+        <Route path="/maternity/apply" element={<EmployeeMaternityApplication />} />
         <Route path="/settings/company/*" element={
           <PrivateRoute requiredRole="admin">
             <CompanySettingsDashboard />

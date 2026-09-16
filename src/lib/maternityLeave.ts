@@ -1,4 +1,4 @@
-﻿import { supabase } from './supabase';
+import { supabase } from './supabase';
 
 export interface MaternityChecklist {
   internal_maternity_app_1: boolean;      // 産前産後休業取得（変更）申請書① (休業前)
@@ -61,6 +61,11 @@ export interface MaternityLeaveRecord {
   attachment_mynumber_url?: string;
   attachment_mynumber_filename?: string;
   resident_tax_advance: ResidentTaxAdvanceData;
+  status?: 'draft' | 'submitted' | 'approved';
+  submitted_at?: string;
+  approved_at?: string;
+  resident_tax_settlement_preference?: string;
+  applicant_signature_name?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -289,3 +294,139 @@ export async function saveMaternityLeaveRecord(record: MaternityLeaveRecord): Pr
     return { success: false, error: err };
   }
 }
+
+// 👶 社員向け：産前産後・育児休業申請の送信（実DB永続化 & 提出書類審査へ登録）
+export async function submitEmployeeMaternityApplication(params: {
+  tenantId: string;
+  userId: string;
+  employeeName: string;
+  record: MaternityLeaveRecord;
+}): Promise<{ success: boolean; error?: any }> {
+  try {
+    const { tenantId, userId, employeeName, record } = params;
+    const nowIso = new Date().toISOString();
+
+    // 1. employee_maternity_leaves へ Upsert
+    const upsertData: any = {
+      ...record,
+      tenant_id: tenantId,
+      user_id: userId,
+      status: 'submitted',
+      submitted_at: nowIso,
+      updated_at: nowIso
+    };
+
+    const { error: upsertErr } = await supabase
+      .from('employee_maternity_leaves')
+      .upsert(upsertData, { onConflict: 'tenant_id,user_id' });
+
+    if (upsertErr) {
+      console.error('submitEmployeeMaternityApplication upsert error:', upsertErr);
+      return { success: false, error: upsertErr };
+    }
+
+    // 2. employee_document_submissions へ提出申請書として登録（管理者の提出書類審査へ直結）
+    const submissionData = {
+      tenant_id: tenantId,
+      user_id: userId,
+      document_type: 'maternity_leave',
+      title: `産前産後・育児休業取得申請（${employeeName}）`,
+      data: {
+        employee_name: employeeName,
+        expected_birth_date: record.expected_birth_date,
+        actual_birth_date: record.actual_birth_date,
+        pregnancy_type: record.pregnancy_type,
+        maternity_leave_start_date: record.maternity_leave_start_date,
+        maternity_leave_end_date: record.maternity_leave_end_date,
+        childcare_leave_start_date: record.childcare_leave_start_date,
+        childcare_leave_end_date: record.childcare_leave_end_date,
+        return_to_work_date: record.return_to_work_date,
+        childcare_extended: record.childcare_extended,
+        child_name: record.child_name,
+        child_birth_date: record.child_birth_date,
+        contact_phone: record.contact_phone,
+        contact_email: record.contact_email,
+        contact_line_id: record.contact_line_id,
+        remarks: record.remarks,
+        resident_tax_settlement_preference: record.resident_tax_settlement_preference,
+        applicant_signature_name: record.applicant_signature_name
+      },
+      attachment_data: record.attachment_handbook_url || null,
+      attachment_filename: record.attachment_handbook_filename || '母子手帳写真.jpg',
+      attachment_mime_type: 'image/jpeg',
+      status: 'pending',
+      created_at: nowIso,
+      updated_at: nowIso
+    };
+
+    const { error: subErr } = await supabase
+      .from('employee_document_submissions')
+      .insert(submissionData);
+
+    if (subErr) {
+      console.warn('submitEmployeeMaternityApplication submission notice:', subErr.message);
+      // テーブルへの反映自体は成功しているので続行
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('submitEmployeeMaternityApplication catch:', err);
+    return { success: false, error: err };
+  }
+}
+
+// 🏛️ 管理者向け：産前産後・育児休業申請の承認
+export async function approveEmployeeMaternityApplication(params: {
+  tenantId: string;
+  userId: string;
+  submissionId?: string;
+  adminUserId?: string;
+}): Promise<{ success: boolean; error?: any }> {
+  try {
+    const { tenantId, userId, submissionId, adminUserId } = params;
+    const nowIso = new Date().toISOString();
+
+    // 1. employee_maternity_leaves のステータスを approved に更新
+    await supabase
+      .from('employee_maternity_leaves')
+      .update({
+        status: 'approved',
+        approved_at: nowIso,
+        updated_at: nowIso
+      })
+      .eq('tenant_id', tenantId)
+      .eq('user_id', userId);
+
+    // 2. employee_document_submissions があれば approved に更新
+    if (submissionId) {
+      await supabase
+        .from('employee_document_submissions')
+        .update({
+          status: 'approved',
+          approved_by: adminUserId || null,
+          approved_at: nowIso,
+          updated_at: nowIso
+        })
+        .eq('id', submissionId);
+    } else {
+      await supabase
+        .from('employee_document_submissions')
+        .update({
+          status: 'approved',
+          approved_by: adminUserId || null,
+          approved_at: nowIso,
+          updated_at: nowIso
+        })
+        .eq('tenant_id', tenantId)
+        .eq('user_id', userId)
+        .eq('document_type', 'maternity_leave')
+        .eq('status', 'pending');
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('approveEmployeeMaternityApplication catch:', err);
+    return { success: false, error: err };
+  }
+}
+
