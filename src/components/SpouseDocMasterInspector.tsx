@@ -772,18 +772,15 @@ export const SpouseDocMasterInspector: React.FC = () => {
                         </div>
                       )}
 
-                      {/* ○印の場合 */}
+                      {/* ○印の場合（二重丸にならず綺麗な単一の○印を描画） */}
                       {field.isCircle ? (
                         <div
-                          className="pointer-events-none flex items-center justify-center border-2 border-red-600 rounded-full"
+                          className="pointer-events-none rounded-full border-2 border-red-600"
                           style={{
                             width: `${(field.fontSize || 10) * 1.5}pt`,
-                            height: `${(field.fontSize || 10) * 1.5}pt`,
-                            color: '#dc2626'
+                            height: `${(field.fontSize || 10) * 1.5}pt`
                           }}
-                        >
-                          <span style={{ fontSize: `${field.fontSize}pt`, fontWeight: 900, lineHeight: 1 }}>○</span>
-                        </div>
+                        />
                       ) : field.isCheck ? (
                         /* ✓チェックの場合 */
                         <div
