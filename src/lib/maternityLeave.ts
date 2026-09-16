@@ -277,12 +277,31 @@ export async function fetchMaternityLeaveRecord(tenantId: string, userId: string
 // DB保存 (Upsert)
 export async function saveMaternityLeaveRecord(record: MaternityLeaveRecord): Promise<{ success: boolean; error?: any }> {
   try {
+    const sanitizeDate = (val?: string | null) => (val && typeof val === 'string' && val.trim() !== '' ? val.trim() : null);
+
+    const dataToSave = {
+      ...record,
+      expected_birth_date: sanitizeDate(record.expected_birth_date),
+      actual_birth_date: sanitizeDate(record.actual_birth_date),
+      maternity_leave_start_date: sanitizeDate(record.maternity_leave_start_date),
+      maternity_leave_end_date: sanitizeDate(record.maternity_leave_end_date),
+      childcare_leave_start_date: sanitizeDate(record.childcare_leave_start_date),
+      childcare_leave_end_date: sanitizeDate(record.childcare_leave_end_date),
+      return_to_work_date: sanitizeDate(record.return_to_work_date),
+      child_birth_date: sanitizeDate(record.child_birth_date),
+      updated_at: new Date().toISOString()
+    };
+
+    // 念のためローカルキャッシュに即座にバックアップ
+    try {
+      if (record.user_id) {
+        localStorage.setItem(`maternity_leave_record_${record.user_id}`, JSON.stringify(dataToSave));
+      }
+    } catch (_) {}
+
     const { error } = await supabase
       .from('employee_maternity_leaves')
-      .upsert({
-        ...record,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'tenant_id,user_id' });
+      .upsert(dataToSave, { onConflict: 'tenant_id,user_id' });
 
     if (error) {
       console.error('saveMaternityLeaveRecord error:', error);

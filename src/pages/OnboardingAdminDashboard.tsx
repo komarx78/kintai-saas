@@ -40,6 +40,7 @@ import { OfficialMaternityLeaveDoc } from '../components/OfficialMaternityLeaveD
 import { 
   fetchMaternityLeaveRecord, 
   approveEmployeeMaternityApplication, 
+  calculateMaternityDates,
   generateResidentTaxAdvanceSchedule,
   DEFAULT_MATERNITY_CHECKLIST,
   type MaternityLeaveRecord 
@@ -327,9 +328,11 @@ export default function OnboardingAdminDashboard() {
   const [maternityModal, setMaternityModal] = useState<{
     isOpen: boolean;
     employee: EmployeeOnboardingData | null;
+    initialRecord?: MaternityLeaveRecord | null;
   }>({
     isOpen: false,
-    employee: null
+    employee: null,
+    initialRecord: null
   });
 
   // 🖨️ 全社カスタム公的書類一覧 State
@@ -2552,18 +2555,25 @@ export default function OnboardingAdminDashboard() {
   const resolveMaternityRecordForEmployee = (emp: any, selectedSub?: any): MaternityLeaveRecord | null => {
     const targetUserId = emp?.user_id || emp?.id || '';
     const targetName = (emp?.name || emp?.user_name || '').trim();
+    const cleanTargetName = targetName.replace(/[\s　]+/g, '');
 
     // 1. 渡された selectedSub が maternity_leave なら最優先
     let matSub = (selectedSub?.document_type === 'maternity_leave') ? selectedSub : null;
 
-    // 2. なければ submissions から該当ユーザーの maternity_leave を検索
+    // 2. なければ submissions から該当ユーザーの maternity_leave を検索（UUID一致 ＆ 空白無視氏名一致）
     if (!matSub) {
-      matSub = submissions.find(s => 
-        s.document_type === 'maternity_leave' && (
-          (targetUserId && s.user_id === targetUserId) ||
-          (targetName && (s.data?.employee_name?.trim() === targetName || s.data?.applicant_signature_name?.trim() === targetName || s.user_name?.trim() === targetName || s.title?.includes(targetName)))
-        )
-      );
+      matSub = submissions.find(s => {
+        if (s.document_type !== 'maternity_leave') return false;
+        if (targetUserId && s.user_id === targetUserId) return true;
+        if (cleanTargetName) {
+          const sEmpName = (s.data?.employee_name || '').replace(/[\s　]+/g, '');
+          const sSigName = (s.data?.applicant_signature_name || '').replace(/[\s　]+/g, '');
+          const sUserName = (s.user_name || '').replace(/[\s　]+/g, '');
+          const sTitle = (s.title || '').replace(/[\s　]+/g, '');
+          return sEmpName.includes(cleanTargetName) || sSigName.includes(cleanTargetName) || sUserName.includes(cleanTargetName) || sTitle.includes(cleanTargetName);
+        }
+        return false;
+      });
     }
 
     const d = matSub?.data || {};
@@ -2574,15 +2584,34 @@ export default function OnboardingAdminDashboard() {
       return null;
     }
 
-    const startD = base.maternity_leave_start_date || d.maternity_leave_start_date || '';
-    const endD = base.childcare_leave_end_date || d.childcare_leave_end_date || base.maternity_leave_end_date || d.maternity_leave_end_date || '';
+    // 予定日から期間を自動補完計算
+    const pType = base.pregnancy_type || d.pregnancy_type || 'single';
+    const cExt = base.childcare_extended || d.childcare_extended || 'none';
+    const actDate = base.actual_birth_date || d.actual_birth_date || undefined;
+
+    let calc = null;
+    if (expDate) {
+      calc = calculateMaternityDates({
+        expectedBirthDate: expDate,
+        pregnancyType: pType,
+        actualBirthDate: actDate,
+        childcareExtended: cExt
+      });
+    }
+
+    const startD = base.maternity_leave_start_date || d.maternity_leave_start_date || calc?.maternityLeaveStartDate || '';
+    const endMaternityD = base.maternity_leave_end_date || d.maternity_leave_end_date || calc?.maternityLeaveEndDate || '';
+    const startChildcareD = base.childcare_leave_start_date || d.childcare_leave_start_date || calc?.childcareLeaveStartDate || null;
+    const endChildcareD = base.childcare_leave_end_date || d.childcare_leave_end_date || calc?.childcareLeaveEndDate || null;
+    const returnD = base.return_to_work_date || d.return_to_work_date || calc?.returnToWorkDate || null;
 
     let adv = base.resident_tax_advance || d.resident_tax_advance;
     if (!adv || !Array.isArray(adv.records) || adv.records.length === 0) {
       adv = generateResidentTaxAdvanceSchedule({
         leaveStartDate: startD,
-        leaveEndDate: endD,
-        monthlyResidentTax: emp?.resident_tax_monthly || 0
+        leaveEndDate: endChildcareD || endMaternityD,
+        monthlyResidentTax: emp?.resident_tax_monthly || 0,
+        monthlyDetails: emp?.resident_tax_details
       });
     }
 
@@ -2591,15 +2620,15 @@ export default function OnboardingAdminDashboard() {
       tenant_id: base.tenant_id || matSub?.tenant_id || emp?.tenant_id || tenantId || '',
       user_id: base.user_id || matSub?.user_id || targetUserId,
       application_date: base.application_date || (matSub?.created_at ? matSub.created_at.split('T')[0] : (d.application_date || new Date().toISOString().split('T')[0])),
-      pregnancy_type: base.pregnancy_type || d.pregnancy_type || 'single',
+      pregnancy_type: pType,
       expected_birth_date: expDate || '',
-      actual_birth_date: base.actual_birth_date || d.actual_birth_date || null,
+      actual_birth_date: actDate || null,
       maternity_leave_start_date: startD,
-      maternity_leave_end_date: base.maternity_leave_end_date || d.maternity_leave_end_date || '',
-      childcare_leave_start_date: base.childcare_leave_start_date || d.childcare_leave_start_date || null,
-      childcare_leave_end_date: base.childcare_leave_end_date || d.childcare_leave_end_date || null,
-      return_to_work_date: base.return_to_work_date || d.return_to_work_date || null,
-      childcare_extended: base.childcare_extended || d.childcare_extended || 'none',
+      maternity_leave_end_date: endMaternityD,
+      childcare_leave_start_date: startChildcareD,
+      childcare_leave_end_date: endChildcareD,
+      return_to_work_date: returnD,
+      childcare_extended: cExt,
       child_name: base.child_name || d.child_name || '',
       child_birth_date: base.child_birth_date || d.child_birth_date || null,
       child_relationship: base.child_relationship || d.child_relationship || '実子',
@@ -3106,10 +3135,15 @@ export default function OnboardingAdminDashboard() {
                               </button>
 
                               <button
-                                onClick={() => setMaternityModal({
-                                  isOpen: true,
-                                  employee: resolveEmployeeFullData(emp)
-                                })}
+                                onClick={() => {
+                                  const fullEmp = resolveEmployeeFullData(emp);
+                                  const matRec = resolveMaternityRecordForEmployee(fullEmp);
+                                  setMaternityModal({
+                                    isOpen: true,
+                                    employee: fullEmp,
+                                    initialRecord: matRec
+                                  });
+                                }}
                                 className="bg-pink-50 hover:bg-pink-100 text-pink-700 font-bold text-xs p-1.5 rounded-lg border border-pink-200 transition cursor-pointer"
                                 title="産前産後・育児休業の手続き＆申請書・立替表作成"
                               >
@@ -3865,8 +3899,13 @@ export default function OnboardingAdminDashboard() {
                           type="button"
                           onClick={() => {
                             const targetEmp = resolvedEmp;
+                            const matRec = resolveMaternityRecordForEmployee(targetEmp, cabinetModal.selectedSubmission);
                             setCabinetModal(prev => ({ ...prev, isOpen: false }));
-                            setMaternityModal({ isOpen: true, employee: targetEmp });
+                            setMaternityModal({
+                              isOpen: true,
+                              employee: targetEmp,
+                              initialRecord: matRec
+                            });
                           }}
                           className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold text-xs rounded-xl shadow-sm transition inline-flex items-center gap-1.5 cursor-pointer"
                         >
@@ -3933,8 +3972,14 @@ export default function OnboardingAdminDashboard() {
                         <button
                           type="button"
                           onClick={() => {
+                            const targetEmp = resolvedEmp;
+                            const matRec = activeMaternityRecord || resolveMaternityRecordForEmployee(targetEmp, cabinetModal.selectedSubmission);
                             setCabinetModal(prev => ({ ...prev, isOpen: false }));
-                            setMaternityModal({ isOpen: true, employee: resolvedEmp });
+                            setMaternityModal({
+                              isOpen: true,
+                              employee: targetEmp,
+                              initialRecord: matRec
+                            });
                           }}
                           className="px-3 py-1.5 bg-pink-600 hover:bg-pink-700 text-white font-bold text-xs rounded-xl shadow-xs transition inline-flex items-center gap-1 cursor-pointer"
                         >
@@ -5440,8 +5485,9 @@ export default function OnboardingAdminDashboard() {
       {maternityModal.isOpen && maternityModal.employee && (
         <MaternityLeaveModal
           isOpen={maternityModal.isOpen}
-          onClose={() => setMaternityModal({ isOpen: false, employee: null })}
+          onClose={() => setMaternityModal({ isOpen: false, employee: null, initialRecord: null })}
           tenantId={tenantId || ''}
+          initialRecord={maternityModal.initialRecord}
           onOpenInviteUrl={() => setMaternityInviteModal({
             isOpen: true,
             employee: maternityModal.employee,

@@ -5,6 +5,7 @@ import {
   Baby, ShieldCheck, CheckCircle2, UserCheck, DollarSign,
   Smartphone, Copy, Check
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { 
   type MaternityLeaveRecord, 
   DEFAULT_MATERNITY_CHECKLIST,
@@ -21,6 +22,7 @@ export interface MaternityLeaveModalProps {
   onClose: () => void;
   tenantId: string;
   onOpenInviteUrl?: () => void;
+  initialRecord?: MaternityLeaveRecord | null;
   companyInfo: {
     name: string;
     address: string;
@@ -50,6 +52,7 @@ export const MaternityLeaveModal: React.FC<MaternityLeaveModalProps> = ({
   onClose,
   tenantId,
   onOpenInviteUrl,
+  initialRecord,
   companyInfo,
   employee,
   onSaved
@@ -93,17 +96,153 @@ export const MaternityLeaveModal: React.FC<MaternityLeaveModalProps> = ({
     }
   });
 
-  // 初期データ取得
+  // 初期データ取得＆社員申請原本からの多重フォールバック完全復元
   useEffect(() => {
     if (!isOpen || !tenantId || !employee.user_id) return;
     const loadData = async () => {
       setIsLoading(true);
-      const existing = await fetchMaternityLeaveRecord(tenantId, employee.user_id);
-      if (existing) {
+
+      let foundRecord: MaternityLeaveRecord | null = null;
+
+      // 1. propsで渡された initialRecord があれば最優先
+      if (initialRecord && (initialRecord.expected_birth_date || initialRecord.maternity_leave_start_date)) {
+        foundRecord = initialRecord;
+      }
+
+      // 2. DB (employee_maternity_leaves) から検索
+      if (!foundRecord) {
+        const existing = await fetchMaternityLeaveRecord(tenantId, employee.user_id);
+        if (existing && (existing.expected_birth_date || existing.maternity_leave_start_date)) {
+          foundRecord = existing;
+        }
+      }
+
+      // 3. localStorage から検索
+      if (!foundRecord) {
+        try {
+          const localStr = localStorage.getItem(`maternity_leave_record_${employee.user_id}`);
+          if (localStr) {
+            const parsed = JSON.parse(localStr);
+            if (parsed && (parsed.expected_birth_date || parsed.maternity_leave_start_date)) {
+              foundRecord = parsed;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 4. employee_document_submissions から検索（社員がスマホで申請した大元データ！）
+      if (!foundRecord) {
+        try {
+          // user_id で検索
+          let { data: subData } = await supabase
+            .from('employee_document_submissions')
+            .select('*')
+            .eq('tenant_id', tenantId)
+            .eq('document_type', 'maternity_leave')
+            .eq('user_id', employee.user_id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          // user_id でヒットしなければ氏名で検索（名前の空白ゆれにも完全対応）
+          if ((!subData || subData.length === 0) && employee.name) {
+            const { data: nameSubData } = await supabase
+              .from('employee_document_submissions')
+              .select('*')
+              .eq('tenant_id', tenantId)
+              .eq('document_type', 'maternity_leave')
+              .order('created_at', { ascending: false })
+              .limit(20);
+
+            if (nameSubData && nameSubData.length > 0) {
+              const cleanTarget = (employee.name || '').replace(/[\s　]+/g, '').trim();
+              const matched = nameSubData.find((s: any) => {
+                const sName = (s.data?.employee_name || s.data?.applicant_signature_name || s.user_name || '').replace(/[\s　]+/g, '').trim();
+                return (cleanTarget && sName.includes(cleanTarget)) || (s.title && s.title.replace(/[\s　]+/g, '').includes(cleanTarget));
+              });
+              if (matched) subData = [matched];
+            }
+          }
+
+          if (subData && subData.length > 0) {
+            const sub = subData[0];
+            const d = sub.data || {};
+            foundRecord = {
+              id: sub.id,
+              tenant_id: tenantId,
+              user_id: employee.user_id,
+              application_date: sub.created_at ? sub.created_at.split('T')[0] : (d.application_date || new Date().toISOString().split('T')[0]),
+              pregnancy_type: d.pregnancy_type || 'single',
+              expected_birth_date: d.expected_birth_date || '',
+              actual_birth_date: d.actual_birth_date || null,
+              maternity_leave_start_date: d.maternity_leave_start_date || '',
+              maternity_leave_end_date: d.maternity_leave_end_date || '',
+              childcare_leave_start_date: d.childcare_leave_start_date || null,
+              childcare_leave_end_date: d.childcare_leave_end_date || null,
+              return_to_work_date: d.return_to_work_date || null,
+              childcare_extended: d.childcare_extended || 'none',
+              child_name: d.child_name || '',
+              child_birth_date: d.child_birth_date || null,
+              child_relationship: d.child_relationship || '実子',
+              child_my_number: d.child_my_number || '',
+              contact_phone: d.contact_phone || employee.phone || '',
+              contact_email: d.contact_email || employee.email || '',
+              contact_line_id: d.contact_line_id || '',
+              remarks: d.remarks || '',
+              checklist: d.checklist || DEFAULT_MATERNITY_CHECKLIST,
+              attachment_handbook_url: sub.attachment_data || d.attachment_handbook_url || null,
+              attachment_handbook_filename: sub.attachment_filename || d.attachment_handbook_filename || '母子手帳写真.jpg',
+              status: sub.status === 'approved' ? 'approved' : 'submitted',
+              submitted_at: sub.created_at || new Date().toISOString(),
+              approved_at: sub.approved_at || null,
+              resident_tax_advance: d.resident_tax_advance || {
+                startDate: '',
+                records: [],
+                totalAmount: 0,
+                settledAmount: 0
+              },
+              resident_tax_settlement_preference: d.resident_tax_settlement_preference || 'deduct_from_salary',
+              applicant_signature_name: d.applicant_signature_name || d.employee_name || employee.name || ''
+            };
+          }
+        } catch (subErr) {
+          console.warn('Fallback fetch from employee_document_submissions error:', subErr);
+        }
+      }
+
+      if (foundRecord) {
+        // 出産予定日がある場合、期間や住民税スケジュールが未計算であれば自動計算
+        let updatedRecord = { ...foundRecord };
+        const expDate = updatedRecord.expected_birth_date;
+        if (expDate) {
+          if (!updatedRecord.maternity_leave_start_date || !updatedRecord.return_to_work_date) {
+            const calc = calculateMaternityDates({
+              expectedBirthDate: expDate,
+              pregnancyType: updatedRecord.pregnancy_type || 'single',
+              actualBirthDate: updatedRecord.actual_birth_date || undefined,
+              childcareExtended: updatedRecord.childcare_extended || 'none'
+            });
+            updatedRecord.maternity_leave_start_date = calc.maternityLeaveStartDate;
+            updatedRecord.maternity_leave_end_date = calc.maternityLeaveEndDate;
+            updatedRecord.childcare_leave_start_date = calc.childcareLeaveStartDate;
+            updatedRecord.childcare_leave_end_date = calc.childcareLeaveEndDate;
+            updatedRecord.return_to_work_date = calc.returnToWorkDate;
+          }
+
+          if (!updatedRecord.resident_tax_advance || !Array.isArray(updatedRecord.resident_tax_advance.records) || updatedRecord.resident_tax_advance.records.length === 0) {
+            const taxSched = generateResidentTaxAdvanceSchedule({
+              leaveStartDate: updatedRecord.maternity_leave_start_date,
+              leaveEndDate: updatedRecord.childcare_leave_end_date || updatedRecord.maternity_leave_end_date,
+              monthlyResidentTax: employee.resident_tax_monthly || 0,
+              monthlyDetails: employee.resident_tax_details
+            });
+            updatedRecord.resident_tax_advance = taxSched;
+          }
+        }
+
         setRecord({
-          ...existing,
-          checklist: { ...DEFAULT_MATERNITY_CHECKLIST, ...(existing.checklist || {}) },
-          resident_tax_advance: existing.resident_tax_advance || {
+          ...updatedRecord,
+          checklist: { ...DEFAULT_MATERNITY_CHECKLIST, ...(updatedRecord.checklist || {}) },
+          resident_tax_advance: updatedRecord.resident_tax_advance || {
             startDate: '',
             records: [],
             totalAmount: 0,
@@ -123,7 +262,7 @@ export const MaternityLeaveModal: React.FC<MaternityLeaveModalProps> = ({
       setIsLoading(false);
     };
     loadData();
-  }, [isOpen, tenantId, employee.user_id]);
+  }, [isOpen, tenantId, employee.user_id, initialRecord]);
 
   // 出産予定日・単胎多胎・実出産日の変更時に期間を自動計算
   const handleAutoCalculateDates = (overrideParams?: {
