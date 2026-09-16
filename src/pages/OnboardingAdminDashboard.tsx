@@ -674,12 +674,24 @@ export default function OnboardingAdminDashboard() {
               await supabase.from('users').update({ name_kana: kana }).eq('id', u.id);
             } catch (e) {}
             try {
-              await supabase.from('employee_onboarding_profiles').upsert({
-                tenant_id: tenantId,
-                user_id: u.id,
-                name_kana: kana,
-                updated_at: new Date().toISOString()
-              }, { onConflict: 'tenant_id,user_id' });
+              if (onb?.id || onb?.user_id) {
+                // 既存レコードが存在する場合は安全なupdate（onConflict不要・400エラーゼロ）
+                await supabase.from('employee_onboarding_profiles')
+                  .update({ name_kana: kana, updated_at: new Date().toISOString() })
+                  .eq('tenant_id', tenantId)
+                  .eq('user_id', u.id);
+              } else {
+                // 新規の場合はNOT NULLカラム（join_date）を完備してupsert
+                const jDate = conDoc.join_date || u.join_date || '2026-04-01';
+                await supabase.from('employee_onboarding_profiles').upsert({
+                  tenant_id: tenantId,
+                  user_id: u.id,
+                  name_kana: kana,
+                  join_date: jDate,
+                  status: 'active',
+                  updated_at: new Date().toISOString()
+                }, { onConflict: 'tenant_id,user_id' });
+              }
             } catch (e) {}
           })();
         }

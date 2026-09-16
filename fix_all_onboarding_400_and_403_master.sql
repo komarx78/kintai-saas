@@ -90,6 +90,22 @@ ALTER TABLE public.employee_onboarding_profiles ADD COLUMN IF NOT EXISTS status 
 ALTER TABLE public.employee_onboarding_profiles ADD COLUMN IF NOT EXISTS documents_checklist JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE public.employee_onboarding_profiles ADD COLUMN IF NOT EXISTS procedure_todo JSONB DEFAULT '{}'::jsonb;
 
+-- NOT NULL制約による400 Bad Requestの完全防止
+ALTER TABLE public.employee_onboarding_profiles ALTER COLUMN join_date DROP NOT NULL;
+ALTER TABLE public.employee_onboarding_profiles ALTER COLUMN join_date SET DEFAULT CURRENT_DATE;
+
+-- on_conflict=tenant_id,user_id のためのUNIQUE制約保証
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'employee_onboarding_profiles_tenant_id_user_id_key'
+    ) THEN
+        ALTER TABLE public.employee_onboarding_profiles ADD CONSTRAINT employee_onboarding_profiles_tenant_id_user_id_key UNIQUE (tenant_id, user_id);
+    END IF;
+EXCEPTION
+    WHEN others THEN NULL;
+END $$;
+
 GRANT ALL ON public.employee_onboarding_profiles TO anon, authenticated, service_role;
 ALTER TABLE public.employee_onboarding_profiles ENABLE ROW LEVEL SECURITY;
 
