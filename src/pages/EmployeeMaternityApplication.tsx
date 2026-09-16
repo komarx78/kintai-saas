@@ -244,9 +244,38 @@ export default function EmployeeMaternityApplication() {
 
     setIsSubmitting(true);
     try {
-      const effectiveTenantId = tenantId || '00000000-0000-0000-0000-000000000000';
-      const effectiveUserId = userId || `user_${Date.now()}`;
-      const effectiveName = employeeName || formData.applicantSignature || '申請社員';
+      let effectiveTenantId = tenantId;
+      let effectiveUserId = userId;
+      let effectiveName = (employeeName || formData.applicantSignature || '申請社員').trim();
+
+      // セッションからテナント・ユーザーUUIDをフォールバック解決
+      if (!effectiveTenantId || !effectiveUserId) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            if (!effectiveUserId) effectiveUserId = session.user.id;
+            if (!effectiveTenantId) {
+              const { data: tId } = await supabase.rpc('get_user_tenant_id');
+              if (tId) effectiveTenantId = tId;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 氏名で users テーブルから正規UUIDを照合解決（UUID形式違反の400エラー完全防止）
+      if (effectiveTenantId && (!effectiveUserId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(effectiveUserId))) {
+        try {
+          const { data: matchedUser } = await supabase
+            .from('users')
+            .select('id, name')
+            .eq('tenant_id', effectiveTenantId)
+            .eq('name', effectiveName)
+            .maybeSingle();
+          if (matchedUser?.id) {
+            effectiveUserId = matchedUser.id;
+          }
+        } catch (_) {}
+      }
 
       // 住民税立替スケジュール自動生成（SSOT連動）
       const taxSchedule = generateResidentTaxAdvanceSchedule({
@@ -257,8 +286,8 @@ export default function EmployeeMaternityApplication() {
       });
 
       const record: MaternityLeaveRecord = {
-        tenant_id: effectiveTenantId,
-        user_id: effectiveUserId,
+        tenant_id: effectiveTenantId || '',
+        user_id: effectiveUserId || '',
         application_date: new Date().toISOString().split('T')[0],
         pregnancy_type: formData.pregnancyType,
         expected_birth_date: formData.expectedBirthDate,
@@ -285,8 +314,8 @@ export default function EmployeeMaternityApplication() {
       };
 
       const res = await submitEmployeeMaternityApplication({
-        tenantId: effectiveTenantId,
-        userId: effectiveUserId,
+        tenantId: effectiveTenantId || '',
+        userId: effectiveUserId || '',
         employeeName: effectiveName,
         record
       });
@@ -294,11 +323,12 @@ export default function EmployeeMaternityApplication() {
       if (res.success) {
         setIsCompleted(true);
       } else {
-        alert('申請の送信に失敗しました。通信環境をご確認のうえ、再度お試しください。');
+        const errMsg = res.error?.message || res.error?.details || JSON.stringify(res.error) || '通信環境をご確認ください';
+        alert(`申請の送信に失敗しました: ${errMsg}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('handleSubmit error:', err);
-      alert('エラーが発生しました。労務担当者へお問い合わせください。');
+      alert(`エラーが発生しました: ${err?.message || '労務担当者へお問い合わせください'}`);
     } finally {
       setIsSubmitting(false);
     }
