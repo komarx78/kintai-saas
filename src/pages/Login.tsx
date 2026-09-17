@@ -25,6 +25,7 @@ const Login = () => {
   const [resendSuccessMessage, setResendSuccessMessage] = useState<string | null>(null);
   const [isEmailNotConfirmed, setIsEmailNotConfirmed] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState('');
+  const [isAlreadyRegistered, setIsAlreadyRegistered] = useState(false);
   const navigate = useNavigate();
 
   // メールアドレス保存の復元
@@ -68,6 +69,7 @@ const Login = () => {
     setLoading(true);
     setError(null);
     setIsEmailNotConfirmed(false);
+    setIsAlreadyRegistered(false);
 
     try {
       if (mode === 'signup') {
@@ -130,14 +132,30 @@ const Login = () => {
       }
     } catch (err: any) {
       const raw = err.message || '';
+      const code = err.code || err.error_code || err.status || '';
+
       if (raw.includes('Email not confirmed') || raw.includes('email_not_confirmed')) {
         setIsEmailNotConfirmed(true);
         setUnconfirmedEmail(email.trim());
         setError('メールアドレスの確認（本登録）が完了していません。届いた確認メールのリンクをクリックするか、下記のボタンから確認メールを再送してください。');
-      } else if (raw.includes('User already registered')) {
-        setError('このメールアドレスは既に登録されています。パスワードを入力してログインしてください。確認メールが届いていない場合は下の「確認メールの再送」をお試しください。');
+      } else if (
+        raw.includes('User already registered') ||
+        raw.includes('user_already_exists') ||
+        code === 'user_already_exists' ||
+        raw.includes('already registered') ||
+        raw.includes('already exists')
+      ) {
+        setIsAlreadyRegistered(true);
+        setError('このメールアドレスは既に登録されています。パスワードを入力してログインしてください。');
       } else if (raw.includes('Invalid login credentials')) {
         setError('メールアドレスまたはパスワードが正しくありません。');
+      } else if (
+        raw.includes('Failed to fetch') ||
+        raw.includes('NetworkError') ||
+        raw.includes('INTERNET_DISCONNECTED') ||
+        raw.includes('network error')
+      ) {
+        setError('インターネット接続が一時的に切断されているか、サーバーと通信できませんでした。通信環境をご確認の上、再度お試しください。');
       } else {
         setError(err.message || '認証に失敗しました');
       }
@@ -295,6 +313,24 @@ const Login = () => {
                   <p className="text-[11px] text-red-600 mt-1.5 text-center">
                     ※ 迷惑メールフォルダや「プロモーション」タブも併せてご確認ください。
                   </p>
+                </div>
+              )}
+
+              {/* 💡 既に登録済みエラー時の救済：ワンタップでログイン画面に切り替え */}
+              {isAlreadyRegistered && (
+                <div className="pt-2 border-t border-red-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('login');
+                      setError(null);
+                      setIsAlreadyRegistered(false);
+                    }}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm transition cursor-pointer"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    すでに登録済みのためログイン画面へ進む
+                  </button>
                 </div>
               )}
             </div>
