@@ -4,7 +4,7 @@ import {
   Settings, Users, Save, Database, Edit, X, Sparkles, 
   CheckCircle2, Loader2, Building2, FileText, 
   Activity, ShieldAlert, RefreshCw, ExternalLink, Shield,
-  Plus, Trash2, Edit3, HelpCircle
+  Plus, Trash2, Edit3, HelpCircle, AlertCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { OfficialDocMasterInspector } from '../components/OfficialDocMasterInspector';
@@ -18,6 +18,7 @@ import {
 } from '../lib/customDocManager';
 import { BILLING_MODELS, type BillingModelType } from '../lib/subscriptionBilling';
 import { fetchSystemSuggestions } from '../lib/systemSupportManager';
+import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
 
 export default function SuperAdminDashboard() {
   const navigate = useNavigate();
@@ -25,6 +26,10 @@ export default function SuperAdminDashboard() {
   // タブ: 'tenants_monitor', 'tax_docs', 'system_health', 'billing', 'ai_settings', 'staff'
   const [activeTab, setActiveTab] = useState('tenants_monitor');
   const [pendingSuggestionsCount, setPendingSuggestionsCount] = useState(0);
+
+  // 🏢 契約企業フィルター State ('all' | 'paid' | 'trial' | 'terminated' | 'suspended')
+  const [tenantFilter, setTenantFilter] = useState<'all' | 'paid' | 'trial' | 'terminated' | 'suspended'>('all');
+  const [isDeletingTenant, setIsDeletingTenant] = useState(false);
 
   // Settings State
   const [settingsId, setSettingsId] = useState<string | null>(null);
@@ -206,6 +211,7 @@ export default function SuperAdminDashboard() {
       const updatePayload = {
         name: editingTenant.name,
         plan_type: editingTenant.plan_type,
+        status: editingTenant.status || (editingTenant.plan_type === 'terminated' ? 'terminated' : editingTenant.plan_type === 'suspended' ? 'suspended' : 'active'),
         trial_ends_at: editingTenant.trial_ends_at,
         custom_billing_model: editingTenant.custom_billing_model || null,
         custom_unit_price_per_user: editingTenant.custom_unit_price_per_user ? Number(editingTenant.custom_unit_price_per_user) : null,
@@ -223,6 +229,59 @@ export default function SuperAdminDashboard() {
     } catch (err) {
       console.error(err);
       alert('テナントの保存に失敗しました。');
+    }
+  };
+
+  // 🗑️ 【テスト中専用】会社（テナント）そのものと関連全データの完全削除処理
+  const handleDeleteTenant = async (tenant: any) => {
+    if (!tenant) return;
+    const tenantName = tenant.name || '名称未設定';
+    
+    const confirm1 = window.confirm(
+      `⚠️【テスト用・会社完全削除】\n` +
+      `会社名: ${tenantName}\n` +
+      `テナントID: ${tenant.id}\n\n` +
+      `この会社および配下の全データ（従業員台帳、勤怠打刻、有給申請、給与プロファイル、就業規則等）をデータベースから完全に抹消しますか？\n` +
+      `※この操作は元に戻せません。`
+    );
+    if (!confirm1) return;
+
+    const confirm2 = window.prompt(
+      `誤削除を防止するため、確認として会社名「${tenantName}」をそのまま入力してください。`
+    );
+    if (confirm2 !== tenantName) {
+      alert('会社名が一致しなかったため、削除をキャンセルしました。');
+      return;
+    }
+
+    setIsDeletingTenant(true);
+    try {
+      // 1. 外部キー参照テーブルの関連データを先行クリーンアップ
+      try { await supabase.from('attendance_records').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('leave_applications').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('salary_revision_history').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('employee_payroll_profiles').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('users').delete().eq('tenant_id', tenant.id); } catch (_) {}
+
+      // 2. テナント本体の削除
+      const { error: delErr } = await supabase.from('tenants').delete().eq('id', tenant.id);
+      if (delErr) throw delErr;
+
+      // 3. ローカルストレージの該当他社キャッシュを即時破棄
+      purgeTenantLocalStorageCache(tenant.id);
+
+      // 4. 一覧StateおよびモーダルStateの即時更新
+      setTenants(prev => prev.filter(t => t.id !== tenant.id));
+      if (editingTenant?.id === tenant.id) {
+        setEditingTenant(null);
+      }
+
+      alert(`✅ 会社「${tenantName}」の全データを完全に削除いたしました。`);
+    } catch (err: any) {
+      console.error('Delete tenant error:', err);
+      alert('会社の削除に失敗しました: ' + (err.message || JSON.stringify(err)));
+    } finally {
+      setIsDeletingTenant(false);
     }
   };
 
@@ -407,112 +466,252 @@ export default function SuperAdminDashboard() {
               </button>
             </div>
 
-            {/* サマリーメトリクス */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded-2xl shadow-xs border border-slate-200">
-                <span className="text-xs font-bold text-slate-400">総契約社数</span>
-                <p className="text-2xl font-black text-slate-900 mt-1">{tenants.length} <span className="text-xs font-normal text-slate-500">社</span></p>
-              </div>
+            {/* サマリーメトリクス（クリックで即時絞り込み可能） */}
+            {(() => {
+              const paidList = tenants.filter(t => t.plan_type === 'paid' || t.plan_type === 'standard' || t.plan_type === 'pro');
+              const trialList = tenants.filter(t => (t.plan_type === 'trial' || !t.plan_type) && t.plan_type !== 'terminated' && t.plan_type !== 'suspended' && t.status !== 'terminated' && t.status !== 'suspended');
+              const terminatedList = tenants.filter(t => t.plan_type === 'terminated' || t.status === 'terminated' || t.plan_type === 'canceled');
+              const suspendedList = tenants.filter(t => t.plan_type === 'suspended' || t.status === 'suspended');
 
-              <div className="bg-white p-4 rounded-2xl shadow-xs border border-slate-200">
-                <span className="text-xs font-bold text-emerald-600">本契約中（有料）</span>
-                <p className="text-2xl font-black text-emerald-600 mt-1">
-                  {tenants.filter(t => t.plan_type === 'paid' || t.plan_type === 'standard' || t.plan_type === 'pro').length} <span className="text-xs font-normal text-slate-500">社</span>
-                </p>
-              </div>
+              const filteredList = tenants.filter(t => {
+                if (tenantFilter === 'paid') return t.plan_type === 'paid' || t.plan_type === 'standard' || t.plan_type === 'pro';
+                if (tenantFilter === 'trial') return (t.plan_type === 'trial' || !t.plan_type) && t.plan_type !== 'terminated' && t.plan_type !== 'suspended' && t.status !== 'terminated' && t.status !== 'suspended';
+                if (tenantFilter === 'terminated') return t.plan_type === 'terminated' || t.status === 'terminated' || t.plan_type === 'canceled';
+                if (tenantFilter === 'suspended') return t.plan_type === 'suspended' || t.status === 'suspended';
+                return true;
+              });
 
-              <div className="bg-white p-4 rounded-2xl shadow-xs border border-slate-200">
-                <span className="text-xs font-bold text-amber-600">トライアル中</span>
-                <p className="text-2xl font-black text-amber-600 mt-1">
-                  {tenants.filter(t => t.plan_type === 'trial' || !t.plan_type).length} <span className="text-xs font-normal text-slate-500">社</span>
-                </p>
-              </div>
+              return (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div 
+                      onClick={() => setTenantFilter('all')}
+                      className={`bg-white p-4 rounded-2xl shadow-xs border transition cursor-pointer hover:border-slate-400 ${tenantFilter === 'all' ? 'ring-2 ring-indigo-500 border-indigo-400' : 'border-slate-200'}`}
+                    >
+                      <span className="text-xs font-bold text-slate-400">総契約社数</span>
+                      <p className="text-2xl font-black text-slate-900 mt-1">{tenants.length} <span className="text-xs font-normal text-slate-500">社</span></p>
+                    </div>
 
-              <div className="bg-white p-4 rounded-2xl shadow-xs border border-slate-200">
-                <span className="text-xs font-bold text-slate-500">システム正常稼働率</span>
-                <p className="text-2xl font-black text-indigo-600 mt-1">100.0 <span className="text-xs font-normal text-slate-500">%</span></p>
-              </div>
-            </div>
+                    <div 
+                      onClick={() => setTenantFilter('paid')}
+                      className={`bg-white p-4 rounded-2xl shadow-xs border transition cursor-pointer hover:border-emerald-400 ${tenantFilter === 'paid' ? 'ring-2 ring-emerald-500 border-emerald-400' : 'border-slate-200'}`}
+                    >
+                      <span className="text-xs font-bold text-emerald-600">本契約中（有料）</span>
+                      <p className="text-2xl font-black text-emerald-600 mt-1">
+                        {paidList.length} <span className="text-xs font-normal text-slate-500">社</span>
+                      </p>
+                    </div>
 
-            {/* テナント一覧テーブル */}
-            <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-              <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="font-bold text-sm text-slate-800">契約企業リスト</h3>
-                <span className="text-xs text-slate-400">リアルタイム同期中</span>
-              </div>
+                    <div 
+                      onClick={() => setTenantFilter('trial')}
+                      className={`bg-white p-4 rounded-2xl shadow-xs border transition cursor-pointer hover:border-amber-400 ${tenantFilter === 'trial' ? 'ring-2 ring-amber-500 border-amber-400' : 'border-slate-200'}`}
+                    >
+                      <span className="text-xs font-bold text-amber-600">トライアル中</span>
+                      <p className="text-2xl font-black text-amber-600 mt-1">
+                        {trialList.length} <span className="text-xs font-normal text-slate-500">社</span>
+                      </p>
+                    </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[11px]">
-                    <tr>
-                      <th className="py-3 px-4">企業・農家名</th>
-                      <th className="py-3 px-4">テナントID</th>
-                      <th className="py-3 px-4">プラン状態</th>
-                      <th className="py-3 px-4">トライアル期限</th>
-                      <th className="py-3 px-4">ステータス</th>
-                      <th className="py-3 px-4 text-right">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {tenants.map(tenant => (
-                      <tr key={tenant.id} className="hover:bg-slate-50/80 transition">
-                        <td className="py-3 px-4 font-bold text-slate-900">
-                          {tenant.name || '名称未設定'}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                          {tenant.id.slice(0, 8)}...
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black border ${
-                            tenant.plan_type === 'paid' || tenant.plan_type === 'standard' || tenant.plan_type === 'pro'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                              : 'bg-amber-50 text-amber-700 border-amber-300'
-                          }`}>
-                            {tenant.plan_type === 'paid' ? '有料本契約' : tenant.plan_type === 'standard' ? 'スタンダード' : tenant.plan_type === 'pro' ? 'プロ' : 'トライアル'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-slate-600 font-mono">
-                          {tenant.trial_ends_at ? (
-                            <div className="flex flex-col gap-0.5">
-                              <span>{new Date(tenant.trial_ends_at).toLocaleDateString('ja-JP')}</span>
-                              {tenant.plan_type === 'trial' && (() => {
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-                                const target = new Date(tenant.trial_ends_at);
-                                target.setHours(0, 0, 0, 0);
-                                const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                                if (diffDays < 0) {
-                                  return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-700 w-fit">期限切れ ({Math.abs(diffDays)}日経過)</span>;
-                                } else if (diffDays <= 7) {
-                                  return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 w-fit">残り{diffDays}日（要フォロー）</span>;
-                                } else {
-                                  return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 w-fit">残り{diffDays}日</span>;
-                                }
-                              })()}
-                            </div>
+                    <div 
+                      onClick={() => setTenantFilter('terminated')}
+                      className={`bg-white p-4 rounded-2xl shadow-xs border transition cursor-pointer hover:border-red-400 ${tenantFilter === 'terminated' ? 'ring-2 ring-red-500 border-red-400' : 'border-slate-200'}`}
+                    >
+                      <span className="text-xs font-bold text-red-600">契約終了・解約</span>
+                      <p className="text-2xl font-black text-red-600 mt-1">
+                        {terminatedList.length} <span className="text-xs font-normal text-slate-500">社</span>
+                      </p>
+                    </div>
+
+                    <div 
+                      onClick={() => setTenantFilter('suspended')}
+                      className={`bg-white p-4 rounded-2xl shadow-xs border transition cursor-pointer hover:border-orange-400 ${tenantFilter === 'suspended' ? 'ring-2 ring-orange-500 border-orange-400' : 'border-slate-200'}`}
+                    >
+                      <span className="text-xs font-bold text-orange-600">一時利用停止</span>
+                      <p className="text-2xl font-black text-orange-600 mt-1">
+                        {suspendedList.length} <span className="text-xs font-normal text-slate-500">社</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* テナント一覧テーブル */}
+                  <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+                    <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-sm text-slate-800">契約企業リスト</h3>
+                        <span className="text-xs text-slate-500 font-medium">({filteredList.length} / {tenants.length}社 表示中)</span>
+                      </div>
+
+                      {/* 🔍 フィルター切り替えタブ */}
+                      <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                        <button
+                          onClick={() => setTenantFilter('all')}
+                          className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${tenantFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          すべて ({tenants.length})
+                        </button>
+                        <button
+                          onClick={() => setTenantFilter('paid')}
+                          className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${tenantFilter === 'paid' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          本契約 ({paidList.length})
+                        </button>
+                        <button
+                          onClick={() => setTenantFilter('trial')}
+                          className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${tenantFilter === 'trial' ? 'bg-white text-amber-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          トライアル ({trialList.length})
+                        </button>
+                        <button
+                          onClick={() => setTenantFilter('terminated')}
+                          className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${tenantFilter === 'terminated' ? 'bg-white text-red-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          契約終了 ({terminatedList.length})
+                        </button>
+                        <button
+                          onClick={() => setTenantFilter('suspended')}
+                          className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${tenantFilter === 'suspended' ? 'bg-white text-orange-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          停止中 ({suspendedList.length})
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[11px]">
+                          <tr>
+                            <th className="py-3 px-4">企業・農家名</th>
+                            <th className="py-3 px-4">テナントID</th>
+                            <th className="py-3 px-4">プラン状態</th>
+                            <th className="py-3 px-4">トライアル期限</th>
+                            <th className="py-3 px-4">ステータス</th>
+                            <th className="py-3 px-4 text-right">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filteredList.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="py-8 text-center text-slate-400">
+                                該当する契約企業はありません。
+                              </td>
+                            </tr>
                           ) : (
-                            <span className="text-slate-400 text-[11px]">- (無期限)</span>
+                            filteredList.map(tenant => {
+                              const isTerminated = tenant.plan_type === 'terminated' || tenant.status === 'terminated' || tenant.plan_type === 'canceled';
+                              const isSuspended = tenant.plan_type === 'suspended' || tenant.status === 'suspended';
+                              const isPaid = tenant.plan_type === 'paid' || tenant.plan_type === 'standard' || tenant.plan_type === 'pro';
+
+                              return (
+                                <tr key={tenant.id} className="hover:bg-slate-50/80 transition">
+                                  <td className="py-3 px-4 font-bold text-slate-900">
+                                    <div className="flex items-center gap-1.5">
+                                      <span>{tenant.name || '名称未設定'}</span>
+                                      {isTerminated && (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-700">解約済</span>
+                                      )}
+                                      {isSuspended && (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-orange-100 text-orange-800">停止中</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
+                                    {tenant.id.slice(0, 8)}...
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black border ${
+                                      isTerminated
+                                        ? 'bg-red-50 text-red-700 border-red-300'
+                                        : isSuspended
+                                        ? 'bg-orange-50 text-orange-700 border-orange-300'
+                                        : isPaid
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                        : 'bg-amber-50 text-amber-700 border-amber-300'
+                                    }`}>
+                                      {isTerminated
+                                        ? '契約終了・解約'
+                                        : isSuspended
+                                        ? '一時利用停止'
+                                        : tenant.plan_type === 'paid'
+                                        ? '有料本契約'
+                                        : tenant.plan_type === 'standard'
+                                        ? 'スタンダード'
+                                        : tenant.plan_type === 'pro'
+                                        ? 'プロ'
+                                        : 'トライアル'}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-slate-600 font-mono">
+                                    {isTerminated ? (
+                                      <span className="text-red-500 font-bold text-[11px]">契約終了</span>
+                                    ) : isSuspended ? (
+                                      <span className="text-orange-600 font-bold text-[11px]">一時停止中</span>
+                                    ) : tenant.trial_ends_at ? (
+                                      <div className="flex flex-col gap-0.5">
+                                        <span>{new Date(tenant.trial_ends_at).toLocaleDateString('ja-JP')}</span>
+                                        {tenant.plan_type === 'trial' && (() => {
+                                          const today = new Date();
+                                          today.setHours(0, 0, 0, 0);
+                                          const target = new Date(tenant.trial_ends_at);
+                                          target.setHours(0, 0, 0, 0);
+                                          const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                          if (diffDays < 0) {
+                                            return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-700 w-fit">期限切れ ({Math.abs(diffDays)}日経過)</span>;
+                                          } else if (diffDays <= 7) {
+                                            return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-800 w-fit">残り{diffDays}日（要フォロー）</span>;
+                                          } else {
+                                            return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 w-fit">残り{diffDays}日</span>;
+                                          }
+                                        })()}
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-400 text-[11px]">- (無期限)</span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    {isTerminated ? (
+                                      <span className="flex items-center gap-1 text-slate-400 font-bold">
+                                        <X className="w-3.5 h-3.5" /> 契約終了
+                                      </span>
+                                    ) : isSuspended ? (
+                                      <span className="flex items-center gap-1 text-orange-600 font-bold">
+                                        <AlertCircle className="w-3.5 h-3.5" /> 利用停止中
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center gap-1 text-emerald-600 font-bold">
+                                        <CheckCircle2 className="w-3.5 h-3.5" /> 正常稼働
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      <button
+                                        onClick={() => setEditingTenant(tenant)}
+                                        className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                                        title="企業情報・プラン・ステータス設定"
+                                      >
+                                        <Edit className="w-3.5 h-3.5" /> 詳細・設定
+                                      </button>
+                                      <button
+                                        disabled={isDeletingTenant}
+                                        onClick={() => handleDeleteTenant(tenant)}
+                                        className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer border border-red-200"
+                                        title="【テスト用】この会社と全データを完全に削除"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" /> 削除
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
                           )}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="flex items-center gap-1 text-emerald-600 font-bold">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> 正常稼働
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <button
-                            onClick={() => setEditingTenant(tenant)}
-                            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition flex items-center gap-1 ml-auto cursor-pointer"
-                          >
-                            <Edit className="w-3.5 h-3.5" /> 詳細・個別設定
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -959,34 +1158,52 @@ export default function SuperAdminDashboard() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block font-bold text-slate-700">プラン種別</label>
-                    {editingTenant.plan_type !== 'paid' && editingTenant.plan_type !== 'standard' && editingTenant.plan_type !== 'pro' ? (
-                      <button
-                        type="button"
-                        onClick={() => setEditingTenant({ ...editingTenant, plan_type: 'paid' })}
-                        className="text-[10px] text-emerald-600 font-black hover:underline cursor-pointer"
-                      >
-                        ⚡有料本契約へ切替
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setEditingTenant({ ...editingTenant, plan_type: 'trial' })}
-                        className="text-[10px] text-amber-600 font-black hover:underline cursor-pointer"
-                      >
-                        ↩トライアルへ切替
-                      </button>
-                    )}
+                    <label className="block font-bold text-slate-700">プラン状態・ステータス</label>
+                    <div className="flex gap-1.5">
+                      {editingTenant.plan_type !== 'paid' && editingTenant.plan_type !== 'standard' && editingTenant.plan_type !== 'pro' && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingTenant({ ...editingTenant, plan_type: 'paid' })}
+                          className="text-[10px] text-emerald-600 font-black hover:underline cursor-pointer"
+                        >
+                          ⚡有料本契約
+                        </button>
+                      )}
+                      {editingTenant.plan_type !== 'trial' && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingTenant({ ...editingTenant, plan_type: 'trial' })}
+                          className="text-[10px] text-amber-600 font-black hover:underline cursor-pointer"
+                        >
+                          ↩トライアル
+                        </button>
+                      )}
+                      {editingTenant.plan_type !== 'terminated' && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingTenant({ ...editingTenant, plan_type: 'terminated', status: 'terminated' })}
+                          className="text-[10px] text-red-600 font-black hover:underline cursor-pointer"
+                        >
+                          🛑契約終了
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <select
                     value={editingTenant.plan_type || 'trial'}
-                    onChange={e => setEditingTenant({ ...editingTenant, plan_type: e.target.value })}
+                    onChange={e => setEditingTenant({ 
+                      ...editingTenant, 
+                      plan_type: e.target.value,
+                      status: e.target.value === 'terminated' ? 'terminated' : e.target.value === 'suspended' ? 'suspended' : 'active'
+                    })}
                     className="w-full p-2.5 border border-slate-300 rounded-xl font-bold"
                   >
-                    <option value="trial">トライアル</option>
-                    <option value="standard">スタンダード</option>
-                    <option value="pro">プロ</option>
+                    <option value="trial">トライアル中</option>
+                    <option value="standard">スタンダード（有料）</option>
+                    <option value="pro">プロ（有料）</option>
                     <option value="paid">有料本契約</option>
+                    <option value="terminated">契約終了・解約</option>
+                    <option value="suspended">一時利用停止</option>
                   </select>
                 </div>
 
@@ -1073,19 +1290,34 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+            <div className="flex items-center justify-between border-t border-slate-100 pt-3">
               <button
-                onClick={() => setEditingTenant(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold"
+                type="button"
+                disabled={isDeletingTenant}
+                onClick={() => handleDeleteTenant(editingTenant)}
+                className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold border border-red-200 transition flex items-center gap-1.5 cursor-pointer text-xs"
+                title="【テスト用】この会社と配下の全データを完全抹消します"
               >
-                キャンセル
+                <Trash2 className="w-4 h-4" />
+                この会社を完全削除（テスト用）
               </button>
-              <button
-                onClick={handleSaveTenantCustomPrices}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold"
-              >
-                保存する
-              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingTenant(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveTenantCustomPrices}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer shadow-xs"
+                >
+                  変更を保存する
+                </button>
+              </div>
             </div>
           </div>
         </div>
