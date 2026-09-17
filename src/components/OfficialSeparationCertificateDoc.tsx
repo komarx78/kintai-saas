@@ -643,9 +643,9 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
                   </button>
                 </div>
                 <div className="mt-2 pl-6 text-xs text-slate-800 font-bold">
-                  <div>{currentEmployee.address || '滋賀県大津市坂本3丁目21-16'}</div>
+                  <div>{currentEmployee.address || ''}</div>
                   <div className="text-[10px] text-slate-500 font-normal mt-0.5">
-                    電話番号: {currentEmployee.phone || '090-1234-5678'}
+                    電話番号: {currentEmployee.phone || ''}
                   </div>
                 </div>
               </div>
@@ -996,8 +996,8 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
                 {/* ⑥ 住所 */}
                 <div className="border-b border-slate-300 pb-1.5">
                   <span className="text-[8px] text-slate-500 font-bold block">⑥ 離職者の住所又は居所</span>
-                  <div className="text-[9px] font-bold">{currentEmployee.address || '滋賀県大津市坂本3丁目21-16'}</div>
-                  <div className="text-[8px] text-slate-500">電話: {currentEmployee.phone || '090-1234-5678'}</div>
+                  <div className="text-[9px] font-bold">{currentEmployee.address || ''}</div>
+                  <div className="text-[8px] text-slate-500">電話: {currentEmployee.phone || ''}</div>
                 </div>
 
                 {/* ⑦ 離職理由 */}

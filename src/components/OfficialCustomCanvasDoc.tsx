@@ -44,13 +44,13 @@ export default function OfficialCustomCanvasDoc({ template, employeeData, compan
 
     switch (key) {
       // 会社情報
-      case 'company.name': return comp.name || '株式会社KAP';
-      case 'company.address': return comp.address || '滋賀県大津市坂本3丁目21-16';
-      case 'company.representative_name': return comp.representative_name || '代表取締役 駒井 秀一朗';
-      case 'company.corporate_number': return comp.corporate_number || '1010001999999';
+      case 'company.name': return comp.name || '';
+      case 'company.address': return comp.address || '';
+      case 'company.representative_name': return comp.representative_name || '';
+      case 'company.corporate_number': return comp.corporate_number || '';
       case 'company.phone': return comp.phone || '';
-      case 'company.tax_office_name': return comp.tax_office_name || '大津';
-      case 'company.nenkin_office_name': return comp.nenkin_office_name || '大津年金事務所';
+      case 'company.tax_office_name': return comp.tax_office_name || '';
+      case 'company.nenkin_office_name': return comp.nenkin_office_name || '';
 
       // 従業員基本
       case 'employee.name': return emp.name || '従業員';

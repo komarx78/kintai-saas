@@ -265,19 +265,19 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
         <OfficialEmploymentAcquisitionDoc
           customCoords={fields}
           companyInfo={{
-            name: '株式会社KAP',
-            address: '滋賀県大津市坂本3丁目21-16',
-            representative_name: '代表取締役 駒井 秀一朗',
-            phone_number: '077-574-6907',
+            name: 'サンプル株式会社',
+            address: '東京都千代田区霞が関1-1-1',
+            representative_name: '代表取締役 山田 太郎',
+            phone_number: '03-1234-5678',
             corporate_number: '',
             company_seal_url: ''
           }}
-          officeNumber="2501-123456-7"
+          officeNumber="1301-123456-7"
           employees={[
             {
               id: 'demo-1',
-              name: '駒井 秀一朗',
-              name_kana: 'コマイ　シュウイチロウ',
+              name: '山田 太郎',
+              name_kana: 'ヤマダ　タロウ',
               birth_date: '1979-03-18',
               gender: '男',
               my_number: '123456789012',

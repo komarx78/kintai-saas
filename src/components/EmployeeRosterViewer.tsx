@@ -258,15 +258,13 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
   const workPeriod = calculateWorkYears(currentEmployee?.join_date, currentEmployee?.retirement_date);
 
   // 代表者職氏名の正規化（「代表取締役」の重複を防止）
-  const rawRep = companyInfo?.representative_name || '駒井 秀一朗';
+  const rawRep = companyInfo?.representative_name || '';
   const cleanRepName = rawRep.replace(/^(代表取締役|代表|社長|取締役|役員)\s*/, '');
 
-  // 会社電子印鑑（localStorage およびフォールバック）
+  // 会社電子印鑑（自社tenantIdキーのみ）
   const companySealImg = useMemo(() => {
     if (typeof window === 'undefined') return '';
-    return (tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null) ||
-           localStorage.getItem('company_seal_image') ||
-           '';
+    return (tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null) || '';
   }, [tenantId]);
 
   return (
@@ -378,8 +376,10 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
 
         <div className="flex items-center gap-3">
           <div className="text-right text-xs">
-            <span className="font-bold text-slate-800">{companyInfo?.name || '株式会社KAP'}</span>
-            <span className="text-slate-400 ml-2">担当: {companyInfo?.representative_name || '駒井 秀一朗'}</span>
+            <span className="font-bold text-slate-800">{companyInfo?.name || '会社名未設定'}</span>
+            {companyInfo?.representative_name ? (
+              <span className="text-slate-400 ml-2">担当: {companyInfo.representative_name}</span>
+            ) : null}
           </div>
           {onBackToReports && (
             <button
@@ -501,7 +501,7 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
               {/* ═════════════════════════════════════════════════════════════ */}
               <div className="roster-screen-view max-w-4xl mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
                 
-                {/* 1. モーダル風タイトルバー（✕ 駒井秀一朗 ＋ メニュー） */}
+                {/* 1. モーダル風タイトルバー（✕ 従業員氏名 ＋ メニュー） */}
                 <div className="px-6 py-3.5 border-b border-slate-200 flex items-center justify-between bg-white">
                   <div className="flex items-center gap-3">
                     {onBackToReports && (
@@ -975,7 +975,7 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                   </div>
                   <div className="text-right text-[8pt] text-slate-700 leading-tight">
                     <div>調製年月日: {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-                    <div className="font-black text-slate-900 mt-0.5">事業所名: {companyInfo?.name || '株式会社KAP'}</div>
+                    <div className="font-black text-slate-900 mt-0.5">事業所名: {companyInfo?.name || '会社名未設定'}</div>
                   </div>
                 </div>
 
@@ -1109,14 +1109,16 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                   <div className="flex items-center gap-3 shrink-0 ml-4 font-sans">
                     <div className="text-right leading-tight">
                       <div className="text-[7.5pt] text-slate-600">
-                        {companyInfo?.address || '京都府京都市山科区大塚西浦町３−５７'}
+                        {companyInfo?.address || ''}
                       </div>
                       <div className="font-black text-slate-950 text-[9pt] mt-1">
-                        {companyInfo?.name || '株式会社KAP'}
+                        {companyInfo?.name || '会社名未設定'}
                       </div>
-                      <div className="text-slate-900 text-[8.5pt] font-bold mt-1">
-                        代表取締役　{cleanRepName}
-                      </div>
+                      {cleanRepName ? (
+                        <div className="text-slate-900 text-[8.5pt] font-bold mt-1">
+                          代表取締役　{cleanRepName}
+                        </div>
+                      ) : null}
                     </div>
 
                     {/* 💮 電子印鑑（登録社印画像または伝統的朱色印影グラフィック） */}
@@ -1137,7 +1139,7 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                             style={{ borderColor: '#dc2626' }}
                           >
                             <span className="text-[5.5pt] font-black text-red-600 tracking-tighter scale-90 mb-0.5">
-                              {companyInfo?.name || '株式会社KAP'}
+                              {companyInfo?.name || '社印'}
                             </span>
                             <span className="text-[6.5pt] font-black text-red-600 tracking-wider">
                               代表之印

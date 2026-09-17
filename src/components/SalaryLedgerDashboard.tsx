@@ -245,9 +245,9 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
 
       // 会社基本情報取得（DB & LocalStorage & 社印フォールバック）
       let compInfo: any = {
-        name: '株式会社KAP',
-        address: '滋賀県大津市坂本3丁目21-16',
-        representative_name: '代表取締役 駒井 秀一朗',
+        name: '',
+        address: '',
+        representative_name: '',
         company_seal_url: ''
       };
 
@@ -265,12 +265,12 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
       } catch (e) {}
 
       try {
-        const rawLocal = localStorage.getItem(`company_basic_settings_${tenantId}`) || localStorage.getItem('company_basic_info');
+        const rawLocal = localStorage.getItem(`company_basic_settings_${tenantId}`);
         if (rawLocal) {
           const parsed = JSON.parse(rawLocal);
           compInfo = { ...compInfo, ...parsed };
         }
-        const sealStored = localStorage.getItem(`company_seal_image_${tenantId}`) || localStorage.getItem('company_seal_image');
+        const sealStored = localStorage.getItem(`company_seal_image_${tenantId}`);
         if (sealStored) compInfo.company_seal_url = sealStored;
       } catch (e) {}
 
@@ -2390,20 +2390,19 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                 const prof = payrollProfiles[previewContractDoc.user_id];
                 const tpl = getLaborContractTemplateFromStorage(tenantId || '');
                 const repName = companySettings?.representative_name || 
-                                (companySettings?.representative ? `代表取締役 ${companySettings.representative}` : '代表取締役 駒井 秀一朗');
+                                (companySettings?.representative ? `代表取締役 ${companySettings.representative}` : '');
                 const sealFromLocal = (tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null) || 
-                                      localStorage.getItem('company_seal_image') || 
                                       companySettings?.company_seal_url || 
                                       tpl?.company_seal_url;
-                const compAddress = companySettings?.address || '滋賀県大津市坂本3丁目21-16';
+                const compAddress = companySettings?.address || '';
 
                 const contractData: LaborContractData = {
-                  companyName: companySettings?.name || '株式会社KAP',
+                  companyName: companySettings?.name || '会社名未設定',
                   companyAddress: compAddress,
                   representativeName: repName,
                   companySealUrl: sealFromLocal,
                   employeeName: previewContractDoc.user_name,
-                  employeeAddress: targetEmp?.address || '滋賀県大津市',
+                  employeeAddress: targetEmp?.address || '',
                   joinDate: targetEmp?.join_date || '2024-04-01',
                   contractType: 'indefinite',
                   trialPeriodMonths: 3,

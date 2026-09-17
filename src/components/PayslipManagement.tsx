@@ -426,8 +426,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       if (!companyAddress) {
         try {
           const rawLocal = localStorage.getItem(`company_basic_settings_${tenantId}`) || 
-                           localStorage.getItem(`company_settings_${tenantId}`) ||
-                           localStorage.getItem('company_basic_info');
+                           localStorage.getItem(`company_settings_${tenantId}`);
           if (rawLocal) {
             const parsed = JSON.parse(rawLocal);
             companyAddress = parsed.address || '';
@@ -438,8 +437,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       // 住所から都道府県コード（滋賀県 = '25' 等）をスマート自動検出！
       const detectedPrefCode = extractPrefectureCodeFromAddress(companyAddress) || 
                                (companyAddress?.includes('滋賀') ? '25' : null) || 
-                               '25'; // 滋賀県を最優先デフォルトに！
-      setTenantInfo({ ...tData, ...cmsData, address: companyAddress || '滋賀県大津市坂本3丁目21-16', prefecture_code: detectedPrefCode });
+                               '13'; // デフォルト東京都
+      setTenantInfo({ ...tData, ...cmsData, address: companyAddress || '', prefecture_code: detectedPrefCode });
 
       // 2. 給与基本設定取得
       const { data: setRow } = await supabase.from('payroll_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
@@ -3517,7 +3516,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               <OfficialPayslipDoc 
                 payslip={previewModal.payslip} 
                 tenantName={tenantInfo?.name} 
-                companySealUrl={(tenantInfo as any)?.company_seal_url || localStorage.getItem(`company_seal_image_${tenantInfo?.id}`) || localStorage.getItem('company_seal_image') || undefined}
+                companySealUrl={(tenantInfo as any)?.company_seal_url || (tenantInfo?.id ? localStorage.getItem(`company_seal_image_${tenantInfo.id}`) : null) || undefined}
               />
             </div>
 

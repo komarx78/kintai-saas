@@ -29,12 +29,12 @@ export interface RevisionContractDoc {
 const getStorageKey = (tenantId: string) => `revision_contracts_${tenantId}`;
 
 /**
- * 同期取得（LocalStorageキャッシュの即時読み出し）
+ * 同期取得（LocalStorageキャッシュの即時読み出し・テナント厳格分離）
  */
 export function getRevisionContracts(tenantId: string): RevisionContractDoc[] {
   if (!tenantId) return [];
   try {
-    const raw = localStorage.getItem(getStorageKey(tenantId)) || localStorage.getItem('revision_contracts');
+    const raw = localStorage.getItem(getStorageKey(tenantId));
     if (raw) return JSON.parse(raw);
   } catch (e) {
     console.error('getRevisionContracts error:', e);
@@ -64,7 +64,7 @@ export async function fetchRevisionContracts(tenantId: string): Promise<Revision
       if (tData.revision_contracts_data.length > 0) {
         result = tData.revision_contracts_data;
         localStorage.setItem(getStorageKey(tenantId), JSON.stringify(result));
-        localStorage.setItem('revision_contracts', JSON.stringify(result));
+        localStorage.removeItem('revision_contracts');
       } else if (localDocs.length > 0) {
         // クラウド側が空でローカルにのみデータがある場合、クラウドへ自動アップロード（全端末同期）
         console.log(`[Auto-Sync] Uploading ${localDocs.length} local revision contracts to Supabase...`);
@@ -86,10 +86,10 @@ export async function fetchRevisionContracts(tenantId: string): Promise<Revision
  */
 export async function saveRevisionContracts(tenantId: string, docs: RevisionContractDoc[]): Promise<void> {
   if (!tenantId) return;
-  // 1. ローカルキャッシュへ即時保存
+  // 1. ローカルキャッシュへ即時保存（テナント厳格分離）
   try {
     localStorage.setItem(getStorageKey(tenantId), JSON.stringify(docs));
-    localStorage.setItem('revision_contracts', JSON.stringify(docs));
+    localStorage.removeItem('revision_contracts');
   } catch (e) {
     console.error('saveRevisionContracts local error:', e);
   }

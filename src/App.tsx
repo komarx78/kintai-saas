@@ -24,7 +24,11 @@ import EmployeeMaternityApplication from './pages/EmployeeMaternityApplication';
 import CompanySettingsDashboard from './pages/CompanySettingsDashboard';
 import CommunitySupportDashboard from './pages/CommunitySupportDashboard';
 import TrialEnded from './pages/TrialEnded';
+import { LandingPage } from './pages/LandingPage';
+import { LandingFeatureDetail } from './pages/LandingFeatureDetail';
+import { FloatingSupportAssistant } from './components/FloatingSupportAssistant';
 import { supabase } from './lib/supabase';
+import { purgeAllLegacyGlobalCache } from './lib/tenantCache';
 
 const PrivateRoute = ({ children, requiredRole }: { children: React.ReactNode, requiredRole?: string }) => {
   const [loading, setLoading] = useState(true);
@@ -107,6 +111,11 @@ const PrivateRoute = ({ children, requiredRole }: { children: React.ReactNode, r
 };
 
 function App() {
+  useEffect(() => {
+    // 🛡️ アプリ起動時にレガシーなグローバルキャッシュ（他社汚染原因）を完全消去
+    purgeAllLegacyGlobalCache();
+  }, []);
+
   return (
     <Router>
       <Routes>
@@ -207,11 +216,15 @@ function App() {
           </PrivateRoute>
         } />
         <Route path="/community" element={<Navigate to="/support" replace />} />
+        <Route path="/lp" element={<LandingPage />} />
+        <Route path="/lp/features/:featureId" element={<LandingFeatureDetail />} />
         {/* 旧URLや未定義ルートへのアクセス対策リダイレクト */}
         <Route path="/admin/*" element={<Navigate to="/kintai/admin" replace />} />
         <Route path="/user/*" element={<Navigate to="/kintai/user" replace />} />
         <Route path="*" element={<Navigate to="/portal" replace />} />
       </Routes>
+      {/* 🤖 24時間常駐・全画面対応 労務＆操作AI自律サポート門番 */}
+      <FloatingSupportAssistant />
     </Router>
   );
 }

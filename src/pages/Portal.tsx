@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2, Sparkles, Bell, Edit3, HelpCircle } from 'lucide-react';
 import { fetchAnnouncements, type AnnouncementItem } from '../lib/announcements';
 import { fetchRevisionContracts, type RevisionContractDoc } from '../lib/revisionContracts';
+import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
 
 type UserData = {
   id: string;
@@ -56,6 +57,7 @@ export default function Portal() {
 
       // 📄 未押印の労働条件通知書チェック（DB自動同期）
       if (data?.tenant_id) {
+        purgeTenantLocalStorageCache(data.tenant_id);
         const contracts = await fetchRevisionContracts(data.tenant_id);
         const pending = contracts.find(c => (c.user_id === user.id || c.user_name === data.name) && c.status === 'pending_signature');
         setPendingContractDoc(pending || null);
@@ -69,6 +71,7 @@ export default function Portal() {
   };
 
   const handleLogout = async () => {
+    purgeTenantLocalStorageCache();
     await supabase.auth.signOut();
     navigate('/');
   };
@@ -154,7 +157,7 @@ export default function Portal() {
           </div>
           <div>
             <h1 className="text-xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 tracking-tight">
-              KAP Base
+              みんなの らくまる労務
             </h1>
             <p className="text-xs text-gray-500 font-medium">統合ポータルダッシュボード</p>
           </div>
@@ -231,7 +234,7 @@ export default function Portal() {
             利用するアプリケーションを選択してください
           </h2>
           <p className="text-gray-500 text-lg">
-            KAP Base へようこそ。以下のサービスが利用可能です。
+            みんなの らくまる労務 へようこそ。以下のサービスが利用可能です。
           </p>
         </div>
 

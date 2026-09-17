@@ -20,16 +20,16 @@ export const DEFAULT_TAX_FIELDS: TaxDocFieldConfig[] = [
   // ① 給与支払者
   { id: 'taxOffice', name: '所轄税務署長', section: 'header', x: 8.5, y: 13.0, fontSize: 10, example: '千代田', description: '左上「税務署長等」枠内' },
   { id: 'municipality', name: '市区町村長', section: 'header', x: 8.5, y: 17.2, fontSize: 10, example: '千代田区', description: '「市区町村長」枠内' },
-  { id: 'companyName', name: '給与支払者の名称（会社名）', section: 'header', x: 23.5, y: 11.5, fontSize: 11, example: '株式会社KAP', description: '給与支払者 1段目' },
+  { id: 'companyName', name: '給与支払者の名称（会社名）', section: 'header', x: 23.5, y: 11.5, fontSize: 11, example: 'サンプル株式会社', description: '給与支払者 1段目' },
   { id: 'corporateNumber', name: '法人番号（13桁）', section: 'header', x: 23.5, y: 14.8, fontSize: 10, pitch: 1.02, example: '1010001999999', description: '給与支払者 2段目' },
-  { id: 'companyAddress', name: '所在地（住所）', section: 'header', x: 23.5, y: 17.5, fontSize: 9, example: '滋賀県大津市坂本3丁目21-16', description: '給与支払者 3段目' },
+  { id: 'companyAddress', name: '所在地（住所）', section: 'header', x: 23.5, y: 17.5, fontSize: 9, example: '東京都千代田区霞が関1-1-1', description: '給与支払者 3段目' },
 
   // ② 申告者本人
   { id: 'empKana', name: 'あなたのフリガナ', section: 'employee', x: 44.5, y: 10.5, fontSize: 7, example: 'テスト タロウ', description: '「（フリガナ）」行' },
-  { id: 'empName', name: 'あなたの氏名', section: 'employee', x: 44.5, y: 12.8, fontSize: 12, example: '駒井 秀一朗', description: '「あなたの氏名」枠内' },
+  { id: 'empName', name: 'あなたの氏名', section: 'employee', x: 44.5, y: 12.8, fontSize: 12, example: '山田 太郎', description: '「あなたの氏名」枠内' },
   { id: 'empMyNumber', name: 'あなたの個人番号（12桁マス目）', section: 'employee', x: 42.8, y: 15.0, fontSize: 10, pitch: 1.80, example: '123456789012', description: '12マスの四角枠' },
-  { id: 'empPostal', name: 'あなたの郵便番号', section: 'employee', x: 50.8, y: 16.5, fontSize: 8, example: '160-0023', description: '住所欄の〒右側' },
-  { id: 'empAddress', name: 'あなたの住所', section: 'employee', x: 42.8, y: 18.0, fontSize: 9, example: '京都市山科区大塚西浦町3-57', description: 'あなたの住所又は居所' },
+  { id: 'empPostal', name: 'あなたの郵便番号', section: 'employee', x: 50.8, y: 16.5, fontSize: 8, example: '100-0001', description: '住所欄の〒右側' },
+  { id: 'empAddress', name: 'あなたの住所', section: 'employee', x: 42.8, y: 18.0, fontSize: 9, example: '東京都千代田区1-1-1', description: 'あなたの住所又は居所' },
   
   // 生年月日・元号○印
   { id: 'empEraMeiji', name: '本人元号 明（○印）', section: 'employee', x: 65.2, y: 10.3, fontSize: 8, example: '○', description: '生年月日の「明」を囲む○印', isCircle: true },
@@ -40,7 +40,7 @@ export const DEFAULT_TAX_FIELDS: TaxDocFieldConfig[] = [
   { id: 'empBirthY', name: '生年月日（年）', section: 'employee', x: 68.8, y: 10.8, fontSize: 10, example: '7', description: '生年月日の「年」枠' },
   { id: 'empBirthM', name: '生年月日（月）', section: 'employee', x: 73.0, y: 10.8, fontSize: 10, example: '4', description: '生年月日の「月」枠' },
   { id: 'empBirthD', name: '生年月日（日）', section: 'employee', x: 76.0, y: 10.8, fontSize: 10, example: '1', description: '生年月日の「日」枠' },
-  { id: 'householderName', name: '世帯主の氏名', section: 'employee', x: 67.5, y: 13.0, fontSize: 10, example: '駒井 秀一朗', description: '世帯主欄' },
+  { id: 'householderName', name: '世帯主の氏名', section: 'employee', x: 67.5, y: 13.0, fontSize: 10, example: '山田 太郎', description: '世帯主欄' },
   { id: 'householderRel', name: 'あなたとの続柄', section: 'employee', x: 74.0, y: 13.0, fontSize: 10, example: '本人', description: '続柄欄' },
   { id: 'hasSpouseYes', name: '配偶者 有（○印）', section: 'employee', x: 74.6, y: 16.2, fontSize: 10, example: '○', description: '「有」の文字を囲む円', isCircle: true },
   { id: 'hasSpouseNo', name: '配偶者 無（○印）', section: 'employee', x: 76.8, y: 16.2, fontSize: 10, example: '○', description: '「無」の文字を囲む円', isCircle: true },

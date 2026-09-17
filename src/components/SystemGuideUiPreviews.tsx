@@ -802,7 +802,7 @@ function RealMonthlyAttendancePreview() {
               <div className="w-full md:w-56 bg-slate-900 text-slate-200 p-3 rounded-xl flex flex-col justify-between shrink-0 relative">
                 <div>
                   <div className="pb-3 mb-3 border-b border-slate-700 font-bold text-white text-xs">
-                    駒井 秀一朗 さん
+                    山田 太郎 さん
                   </div>
                   <nav className="space-y-1 text-xs">
                     <div className="flex items-center gap-2 px-2.5 py-1.5 rounded text-slate-400">
@@ -1333,7 +1333,7 @@ function RealPayslipPreview() {
 
                 <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 text-right">
                   <div>
-                    <div className="text-xs font-black text-slate-800">株式会社KAP</div>
+                    <div className="text-xs font-black text-slate-800">サンプル株式会社</div>
                     <div className="text-[9px] text-slate-500">支給日: 2026年09月30日</div>
                   </div>
                   <div className="w-9 h-9 rounded-lg border-2 border-red-500/40 bg-red-50/50 flex flex-col items-center justify-center text-red-600 font-serif font-black text-[8px] leading-tight select-none">
@@ -1346,9 +1346,9 @@ function RealPayslipPreview() {
               {/* 従業員情報 ＆ 3連ハイライトサマリーカード */}
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
                 <div className="sm:col-span-4 bg-slate-50 border border-slate-200 p-3 rounded-xl">
-                  <div className="text-[10px] font-bold text-slate-500">社員番号: #2</div>
+                  <div className="text-[10px] font-bold text-slate-500">社員番号: #101</div>
                   <div className="text-base font-black text-slate-900 tracking-wide mt-0.5">
-                    駒井 秀一朗 <span className="text-xs font-normal text-slate-600">様</span>
+                    山田 太郎 <span className="text-xs font-normal text-slate-600">様</span>
                   </div>
                   <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1 font-medium">
                     <CheckCircle2 className="w-3 h-3 text-emerald-600" />
@@ -1560,8 +1560,8 @@ function RealAttendanceAdminPreview() {
                   <tbody className="divide-y divide-slate-100">
                     <tr className="hover:bg-blue-50/30">
                       <td className="p-2.5 font-bold text-slate-900 flex items-center gap-2">
-                        <div className="w-6 h-6 rounded bg-blue-100 text-blue-700 font-black text-[10px] flex items-center justify-center">駒</div>
-                        駒井 秀一朗
+                        <div className="w-6 h-6 rounded bg-blue-100 text-blue-700 font-black text-[10px] flex items-center justify-center">佐</div>
+                        佐藤 次郎
                       </td>
                       <td className="p-2.5 text-slate-600">開発部</td>
                       <td className="p-2.5 text-right font-bold">2 日</td>
@@ -1606,7 +1606,7 @@ function RealAttendanceAdminPreview() {
             <div className="max-w-md mx-auto bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden space-y-4">
               <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex items-center justify-between">
                 <div>
-                  <h4 className="font-black text-sm">駒井 秀一朗 の打刻修正（09/02）</h4>
+                  <h4 className="font-black text-sm">佐藤 次郎 の打刻修正（09/02）</h4>
                   <p className="text-[10px] text-blue-100">管理者の権限で打刻時刻や休憩時間を直接修正します</p>
                 </div>
                 <span className="text-[10px] bg-white/20 text-white font-bold px-2 py-0.5 rounded-full">
@@ -2325,8 +2325,8 @@ function RealContractSignPreview() {
                 </div>
                 <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 text-right">
                   <div>
-                    <div className="text-xs font-black text-slate-800">株式会社KAP</div>
-                    <div className="text-[9px] text-slate-500">代表取締役 駒井 秀一朗</div>
+                    <div className="text-xs font-black text-slate-800">株式会社サンプル</div>
+                    <div className="text-[9px] text-slate-500">代表取締役 サンプル 太郎</div>
                   </div>
                   <div className="w-9 h-9 rounded-lg border-2 border-red-500/40 bg-red-50/50 flex flex-col items-center justify-center text-red-600 font-serif font-black text-[8px] leading-tight select-none">
                     <span>社印</span>
@@ -2516,7 +2516,7 @@ function RealOfficialLedgerPreview() {
             <div className="max-w-2xl mx-auto bg-white p-5 rounded-2xl border border-slate-300 shadow-lg text-slate-800 space-y-3 text-xs">
               <div className="flex justify-between items-center border-b pb-2">
                 <span className="font-black text-slate-900 text-sm">労働者名簿（労基法第107条）原本プレビュー</span>
-                <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded font-mono">社員番号: #2 駒井 秀一朗</span>
+                <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded font-mono">社員番号: #101 山田 太郎</span>
               </div>
 
               <div className="border border-slate-300 rounded-lg overflow-hidden text-[11px]">
@@ -2524,13 +2524,13 @@ function RealOfficialLedgerPreview() {
                   <tbody className="divide-y divide-slate-200">
                     <tr>
                       <td className="bg-slate-50 p-2 font-bold w-1/4">氏名（フリガナ）</td>
-                      <td className="p-2 font-bold text-slate-900">駒井 秀一朗（コマイ シュウイチロウ）</td>
+                      <td className="p-2 font-bold text-slate-900">山田 太郎（ヤマダ タロウ）</td>
                       <td className="bg-slate-50 p-2 font-bold w-1/5">生年月日</td>
                       <td className="p-2 font-mono">1990年05月15日生</td>
                     </tr>
                     <tr>
                       <td className="bg-slate-50 p-2 font-bold">現住所</td>
-                      <td className="p-2" colSpan={3}>滋賀県大津市坂本3丁目21-16</td>
+                      <td className="p-2" colSpan={3}>東京都千代田区霞が関1丁目1-1</td>
                     </tr>
                     <tr>
                       <td className="bg-slate-50 p-2 font-bold">雇入年月日</td>
@@ -2674,7 +2674,7 @@ function RealPayrollAdminPreview() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     <tr>
-                      <td className="p-2 font-bold text-slate-900">駒井 秀一朗</td>
+                      <td className="p-2 font-bold text-slate-900">山田 太郎</td>
                       <td className="p-2 text-right font-mono">160h / 10h</td>
                       <td className="p-2 text-right font-mono font-bold text-slate-800">¥285,000</td>
                       <td className="p-2 text-right font-mono text-rose-700">¥49,200</td>
@@ -2987,7 +2987,7 @@ function RealShiftAdminPreview() {
               </div>
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
                 <div>
-                  <span className="font-bold text-slate-900">駒井 秀一朗 (開発部)</span>
+                  <span className="font-bold text-slate-900">佐藤 次郎 (開発部)</span>
                   <div className="text-slate-500 text-[11px] mt-0.5">2026/10/01 (木) 希望勤務: 09:00 〜 18:00</div>
                 </div>
                 <div className="flex items-center gap-1.5">

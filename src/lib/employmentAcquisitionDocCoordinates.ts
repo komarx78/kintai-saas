@@ -108,7 +108,7 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
     y: 17.85,
     fontSize: 10.5,
     width: 18.0,
-    example: '駒井　修一郎',
+    example: '山田　太郎',
     description: '氏名漢字記入枠（フリガナの下段枠）'
   },
   {

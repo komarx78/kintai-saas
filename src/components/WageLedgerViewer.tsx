@@ -116,7 +116,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
     if (!currentEmployee) return [];
 
     const isPartTime = currentEmployee.employment_type === 'part-time' || currentEmployee.salary_type === 'hourly';
-    const isExecutive = currentEmployee.is_executive || currentEmployee.department?.includes('役員') || currentEmployee.name === '駒井 秀一朗';
+    const isExecutive = currentEmployee.is_executive || currentEmployee.department?.includes('役員');
     const base = Number(currentEmployee.base_salary) || (isPartTime ? 1200 : 250000);
 
     return Array.from({ length: 12 }, (_, i) => {
@@ -422,8 +422,10 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
 
         <div className="flex items-center gap-3">
           <div className="text-right text-xs">
-            <span className="font-bold text-slate-800">{companyInfo?.name || '株式会社KAP'}</span>
-            <span className="text-slate-400 ml-2">担当: {companyInfo?.representative_name || '駒井 秀一朗'}</span>
+            <span className="font-bold text-slate-800">{companyInfo?.name || '会社名未設定'}</span>
+            {companyInfo?.representative_name ? (
+              <span className="text-slate-400 ml-2">担当: {companyInfo.representative_name}</span>
+            ) : null}
           </div>
           {onBackToReports && (
             <button
@@ -629,7 +631,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
                   </div>
                   <div className="text-[8pt] text-slate-600 font-sans text-right">
                     <span>対象期間: {selectedYear}年01月01日 〜 {selectedYear}年12月31日</span>
-                    <span className="ml-3 font-bold text-slate-900">事業所名: {companyInfo?.name || '株式会社KAP'}</span>
+                    <span className="ml-3 font-bold text-slate-900">事業所名: {companyInfo?.name || '会社名未設定'}</span>
                   </div>
                 </div>
 
@@ -823,7 +825,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
                   ※ 労働基準法第109条に基づき、本台帳は最後の記入をした日から起算して5年間（当面の間3年間）適切に保存する義務があります。
                 </div>
                 <div className="font-mono">
-                  発行事業所: {companyInfo?.name || '株式会社KAP'}（代表: {companyInfo?.representative_name || '駒井 秀一朗'}）
+                  発行事業所: {companyInfo?.name || '会社名未設定'}{companyInfo?.representative_name ? `（代表: ${companyInfo.representative_name}）` : ''}
                 </div>
               </div>
             </div>

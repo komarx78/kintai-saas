@@ -73,10 +73,10 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
     corporate_number: string;
     company_seal_url: string;
   }>({
-    name: '株式会社KAP',
-    address: '滋賀県大津市坂本3丁目21-16',
-    representative_name: '代表取締役 駒井 秀一朗',
-    phone_number: '077-574-6907',
+    name: '',
+    address: '',
+    representative_name: '',
+    phone_number: '',
     corporate_number: '',
     company_seal_url: ''
   });
@@ -94,7 +94,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
   const [bonusReportModalOpen, setBonusReportModalOpen] = useState(false);
   // 🔔 公的届出・社保改定通知マスタモーダル用State
   const [reminderModalOpen, setReminderModalOpen] = useState(false);
-  const [officeSymbol, setOfficeSymbol] = useState<string>('01-イロハ');
+  const [officeSymbol, setOfficeSymbol] = useState<string>('');
   const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [payrollProfiles, setPayrollProfiles] = useState<Record<string, any>>({});
   const [bonusUpdateTick, setBonusUpdateTick] = useState(0);
@@ -112,25 +112,25 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
       setTenantInfo(tData);
 
       const shakai = tData?.shakai_hoken_settings || {};
-      const sym = shakai.office_symbol || tData?.shakai_hoken_office_number || '25-カア 12345';
+      const sym = shakai.office_symbol || tData?.shakai_hoken_office_number || '';
       setOfficeSymbol(sym);
 
       let comp = {
-        name: tData?.name || '株式会社KAP',
-        address: tData?.address || '滋賀県大津市坂本3丁目21-16',
-        representative_name: tData?.representative_name || '代表取締役 駒井 秀一朗',
-        phone_number: tData?.phone_number || '077-574-6907',
+        name: tData?.name || '',
+        address: tData?.address || '',
+        representative_name: tData?.representative_name || '',
+        phone_number: tData?.phone_number || '',
         corporate_number: '',
         company_seal_url: ''
       };
 
       try {
-        const rawLocal = localStorage.getItem(`company_basic_settings_${tenantId}`) || localStorage.getItem('company_basic_info');
+        const rawLocal = localStorage.getItem(`company_basic_settings_${tenantId}`);
         if (rawLocal) {
           const parsed = JSON.parse(rawLocal);
           comp = { ...comp, ...parsed };
         }
-        const seal = localStorage.getItem(`company_seal_image_${tenantId}`) || localStorage.getItem('company_seal_image');
+        const seal = localStorage.getItem(`company_seal_image_${tenantId}`);
         if (seal) comp.company_seal_url = seal;
       } catch (e) {}
       setCompanyInfo(comp);

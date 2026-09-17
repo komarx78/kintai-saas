@@ -649,7 +649,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                         value={formValues.nameKanji || ''}
                         onChange={(e) => handleInputChange('nameKanji', e.target.value)}
                         className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-black text-slate-800"
-                        placeholder="駒井　修一郎"
+                        placeholder="山田　太郎"
                       />
                     </div>
                     <div>
@@ -908,7 +908,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                           value={formValues.employerRep || ''}
                           onChange={(e) => handleInputChange('employerRep', e.target.value)}
                           className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-bold text-slate-800 text-xs"
-                          placeholder="代表取締役 駒井 修一郎"
+                          placeholder="代表取締役 山田 太郎"
                         />
                       </div>
                       <div>

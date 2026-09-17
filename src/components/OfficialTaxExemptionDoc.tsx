@@ -289,14 +289,16 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         ctx.fillStyle = '#0f172a';
 
         // 🏢 給与支払者
-        renderText(data.taxOfficeName || '千代田', getField('taxOffice'));
-        renderText(data.municipalityName || '千代田区', getField('municipality'));
-        renderText(data.companyName || '株式会社KAP', getField('companyName'));
+        if (data.taxOfficeName) renderText(data.taxOfficeName, getField('taxOffice'));
+        if (data.municipalityName) renderText(data.municipalityName, getField('municipality'));
+        if (data.companyName) renderText(data.companyName, getField('companyName'));
         
-        const corpNumStr = (data.corporateNumber || '1010001999999').replace(/[^0-9]/g, '').padEnd(13, ' ').slice(0, 13);
-        renderPitchText(corpNumStr, getField('corporateNumber'));
+        if (data.corporateNumber) {
+          const corpNumStr = data.corporateNumber.replace(/[^0-9]/g, '').padEnd(13, ' ').slice(0, 13);
+          renderPitchText(corpNumStr, getField('corporateNumber'));
+        }
         
-        renderText(data.companyAddress || '本社所在地', getField('companyAddress'));
+        if (data.companyAddress) renderText(data.companyAddress, getField('companyAddress'));
 
         // 👤 申告者本人
         renderText(data.employeeNameKana || '', getField('empKana'), 'left', false);

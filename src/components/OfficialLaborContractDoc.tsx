@@ -77,55 +77,18 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
 
   const isValidImage = (src?: string) => !!src && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:image/') || src.startsWith('blob:'));
 
-  // 社印画像の全方位超堅牢フォールバック
+  // 社印画像（自社データおよび自社テンプレートからのみ解決）
   const sealImg = (() => {
     if (isValidImage(data.companySealUrl)) return data.companySealUrl;
     if (isValidImage(tpl.company_seal_url)) return tpl.company_seal_url;
-    if (typeof window !== 'undefined') {
-      try {
-        const keys = [
-          'company_seal_image',
-          ...Object.keys(localStorage).filter(k => k.startsWith('company_seal_image_')),
-          ...Object.keys(localStorage).filter(k => k.startsWith('company_basic_settings_')),
-          'company_basic_info',
-          ...Object.keys(localStorage).filter(k => k.startsWith('labor_contract_template_')),
-          'labor_contract_template'
-        ];
-        for (const k of keys) {
-          const val = localStorage.getItem(k);
-          if (!val) continue;
-          if (isValidImage(val)) return val;
-          try {
-            const parsed = JSON.parse(val);
-            if (isValidImage(parsed.company_seal_url)) return parsed.company_seal_url;
-          } catch {}
-        }
-      } catch (e) {}
-    }
     return undefined;
   })();
 
-  // 会社住所の全方位超堅牢フォールバック
+  // 会社住所
   const displayCompanyAddress = (() => {
     const raw = (data.companyAddress || '').trim();
     if (raw && raw !== '本社所在地' && raw !== '本社') return raw;
-    if (typeof window !== 'undefined') {
-      try {
-        const keys = [
-          'company_basic_info',
-          ...Object.keys(localStorage).filter(k => k.startsWith('company_basic_settings_'))
-        ];
-        for (const k of keys) {
-          const val = localStorage.getItem(k);
-          if (!val) continue;
-          try {
-            const parsed = JSON.parse(val);
-            if (parsed.address && parsed.address.trim()) return parsed.address.trim();
-          } catch {}
-        }
-      } catch (e) {}
-    }
-    return '滋賀県大津市坂本3丁目21-16';
+    return raw || '';
   })();
 
   const docDate = data.createdDate || new Date().toISOString().split('T')[0];
@@ -134,33 +97,10 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
   // 労働者の姓（印鑑用）
   const empLastName = (data.employeeName || '印').trim().split(/[\s　]+/)[0] || '印';
 
-  // 代表者表示名の整形（役職＋氏名を確実に結合＆LocalStorageフォールバック）
+  // 代表者表示名の整形（役職＋氏名を確実に結合）
   const displayRepName = (() => {
-    let r = (data.representativeName || '').trim();
-    if (!r || r === '代表取締役' || r === '代表') {
-      if (typeof window !== 'undefined') {
-        try {
-          const keys = [
-            'company_basic_info',
-            ...Object.keys(localStorage).filter(k => k.startsWith('company_basic_settings_'))
-          ];
-          for (const k of keys) {
-            const val = localStorage.getItem(k);
-            if (!val) continue;
-            try {
-              const parsed = JSON.parse(val);
-              if (parsed.representative_name && parsed.representative_name.trim()) {
-                r = parsed.representative_name.trim();
-                break;
-              }
-            } catch {}
-          }
-        } catch (e) {}
-      }
-    }
-    if (!r || r === '代表取締役' || r === '代表') {
-      return '代表取締役 駒井 秀一朗';
-    }
+    const r = (data.representativeName || '').trim();
+    if (!r) return '';
     if (!r.includes('代表') && !r.includes('役員') && !r.includes('社長') && !r.includes('理事')) {
       return `代表取締役 ${r}`;
     }

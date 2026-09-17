@@ -32,9 +32,8 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
     const fetchRules = async () => {
       let resolvedTenantId = tenantId;
 
-      // 1. まずローカルストレージのキャッシュから即時復元
-      const saved = (resolvedTenantId ? localStorage.getItem(`company_employment_rules_${resolvedTenantId}`) : null) || 
-                    localStorage.getItem('company_employment_rules');
+      // 1. まずローカルストレージのキャッシュから即時復元（テナント厳格分離）
+      const saved = resolvedTenantId ? localStorage.getItem(`company_employment_rules_${resolvedTenantId}`) : null;
       if (saved) setCompanyRules(saved);
 
       // 2. tenantIdが未指定の場合はログインユーザーから自動解決

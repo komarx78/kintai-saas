@@ -87,7 +87,7 @@ export const OrgChartPrintModal: FC<OrgChartPrintModalProps> = ({
             <div>
               <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Organization Tree Chart</div>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                {companyInfo.name || '株式会社KAP'}　組織図
+                {companyInfo.name || '会社名未設定'}　組織図
               </h1>
             </div>
             <div className="text-right text-xs space-y-0.5">

@@ -51,11 +51,12 @@ export const DEFAULT_ANNOUNCEMENTS: AnnouncementItem[] = [
 
 export const getAnnouncementsFromStorage = (tenantId?: string): AnnouncementItem[] => {
   try {
-    const key = tenantId ? `portal_announcements_${tenantId}` : 'portal_announcements';
-    const raw = localStorage.getItem(key) || localStorage.getItem('portal_announcements');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    if (tenantId) {
+      const raw = localStorage.getItem(`portal_announcements_${tenantId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     }
   } catch (e) {
     console.warn('LocalStorage announcements parse error:', e);
@@ -81,7 +82,7 @@ export const fetchAnnouncements = async (tenantId?: string): Promise<Announcemen
       result = tData.portal_announcements_data;
       const key = `portal_announcements_${tenantId}`;
       localStorage.setItem(key, JSON.stringify(result));
-      localStorage.setItem('portal_announcements', JSON.stringify(result));
+      localStorage.removeItem('portal_announcements');
     }
   } catch (e) {
     console.warn('DB fetch announcements notice:', e);
@@ -92,9 +93,10 @@ export const fetchAnnouncements = async (tenantId?: string): Promise<Announcemen
 
 export const saveAnnouncementsToStorage = async (announcements: AnnouncementItem[], tenantId?: string) => {
   try {
-    const key = tenantId ? `portal_announcements_${tenantId}` : 'portal_announcements';
-    localStorage.setItem(key, JSON.stringify(announcements));
-    localStorage.setItem('portal_announcements', JSON.stringify(announcements));
+    if (tenantId) {
+      localStorage.setItem(`portal_announcements_${tenantId}`, JSON.stringify(announcements));
+    }
+    localStorage.removeItem('portal_announcements');
   } catch (e) {
     console.warn('LocalStorage announcements save error:', e);
   }
@@ -115,7 +117,7 @@ export const saveAnnouncementsToStorage = async (announcements: AnnouncementItem
 /**
  * AIによるお知らせ告知文のテンプレート自動生成
  */
-export const generateAiAnnouncementDraft = (topic: string, companyName: string = '株式会社KAP'): { title: string; content: string; tag: string } => {
+export const generateAiAnnouncementDraft = (topic: string, companyName: string = '当社'): { title: string; content: string; tag: string } => {
   if (topic.includes('給与') || topic.includes('支給')) {
     return {
       title: '今月度の給与明細をWeb公開（発行）いたしました。',

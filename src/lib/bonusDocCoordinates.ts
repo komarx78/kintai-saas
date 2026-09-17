@@ -93,7 +93,7 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     y: 12.0,
     fontSize: 9,
     width: 38.0,
-    example: '滋賀県大津市坂本3丁目21-16',
+    example: '東京都千代田区霞が関1-1-1',
     description: '事業所所在地欄'
   },
   {
@@ -104,7 +104,7 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     y: 18.0,
     fontSize: 11,
     width: 38.0,
-    example: '株式会社cocotte',
+    example: 'サンプル株式会社',
     description: '事業所名称欄'
   },
   {
@@ -115,7 +115,7 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     y: 21.8,
     fontSize: 11,
     width: 38.0,
-    example: '代表取締役 駒井 秀一朗',
+    example: '代表取締役 山田 太郎',
     description: '事業主氏名欄'
   },
   {

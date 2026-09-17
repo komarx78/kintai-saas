@@ -47,6 +47,7 @@ import {
   saveAnnouncementsToStorage, 
   generateAiAnnouncementDraft 
 } from '../lib/announcements';
+import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
 
 interface DepartmentMaster {
   id: string;
@@ -91,7 +92,8 @@ const NATIONAL_HOLIDAYS_2026: { [key: string]: string } = {
 
 const getDepartmentsFromStorage = (tId: string): DepartmentMaster[] => {
   try {
-    const raw = localStorage.getItem(`company_departments_${tId}`) || localStorage.getItem('company_departments');
+    if (!tId) return [];
+    const raw = localStorage.getItem(`company_departments_${tId}`);
     if (raw) return JSON.parse(raw);
   } catch (e) {
     console.warn('LocalStorage departments parse error:', e);
@@ -101,8 +103,9 @@ const getDepartmentsFromStorage = (tId: string): DepartmentMaster[] => {
 
 const saveDepartmentsToStorage = (tId: string, depts: DepartmentMaster[]) => {
   try {
-    localStorage.setItem(`company_departments_${tId}`, JSON.stringify(depts));
-    localStorage.setItem('company_departments', JSON.stringify(depts));
+    if (tId) {
+      localStorage.setItem(`company_departments_${tId}`, JSON.stringify(depts));
+    }
   } catch (e) {
     console.warn('LocalStorage departments save error:', e);
   }
@@ -130,9 +133,10 @@ export const DEFAULT_QUALIFICATIONS: QualificationMaster[] = [
 
 export const getQualificationsFromStorage = (tId?: string | null): QualificationMaster[] => {
   try {
-    const key = tId ? `company_qualifications_${tId}` : 'company_qualifications';
-    const raw = localStorage.getItem(key) || localStorage.getItem('company_qualifications');
-    if (raw) return JSON.parse(raw);
+    if (tId) {
+      const raw = localStorage.getItem(`company_qualifications_${tId}`);
+      if (raw) return JSON.parse(raw);
+    }
   } catch (e) {
     console.warn('LocalStorage qualifications parse error:', e);
   }
@@ -141,16 +145,17 @@ export const getQualificationsFromStorage = (tId?: string | null): Qualification
 
 export const saveQualificationsToStorage = (tId: string | null, quals: QualificationMaster[]) => {
   try {
-    if (tId) localStorage.setItem(`company_qualifications_${tId}`, JSON.stringify(quals));
-    localStorage.setItem('company_qualifications', JSON.stringify(quals));
+    if (tId) {
+      localStorage.setItem(`company_qualifications_${tId}`, JSON.stringify(quals));
+    }
   } catch (e) {
     console.warn('LocalStorage qualifications save error:', e);
   }
 };
 
-// 🏢 本格公式角印（株式会社KAP之印）の朱肉画像（透過PNG DataURL）を自動生成するエンジン
-export const generateOfficialSealDataUrl = (companyName: string = '株式会社KAP'): string => {
-  if (typeof document === 'undefined') return '';
+// 🏢 本格公式角印（企業名之印）の朱肉画像（透過PNG DataURL）を自動生成するエンジン
+export const generateOfficialSealDataUrl = (companyName: string = ''): string => {
+  if (typeof document === 'undefined' || !companyName.trim()) return '';
   try {
     const canvas = document.createElement('canvas');
     canvas.width = 240;
@@ -308,10 +313,10 @@ export default function CompanySettingsDashboard() {
 
   // 1. 会社基本情報State
   const [basicInfo, setBasicInfo] = useState({
-    name: '株式会社KAP',
-    address: '滋賀県大津市坂本3丁目21-16',
-    representative_name: '代表取締役 駒井 秀一朗',
-    phone_number: '077-574-6907',
+    name: '',
+    address: '',
+    representative_name: '',
+    phone_number: '',
     corporate_number: '',
     company_seal_url: ''
   });
@@ -412,74 +417,43 @@ export default function CompanySettingsDashboard() {
         corporate_number: string;
         company_seal_url: string;
       } = {
-        name: tData?.name || '株式会社KAP',
-        address: tData?.address || '滋賀県大津市坂本3丁目21-16',
-        representative_name: tData?.representative_name || '代表取締役 駒井 秀一朗',
-        phone_number: tData?.phone_number || '077-574-6907',
+        name: tData?.name || '',
+        address: tData?.address || '',
+        representative_name: tData?.representative_name || '',
+        phone_number: tData?.phone_number || '',
         corporate_number: tData?.corporate_number || '',
         company_seal_url: tData?.company_seal_url || ''
       };
 
+      // 🛡️ 危険なテナント非分離グローバルキーおよび他社キャッシュの完全パージ（憲法9条：他社キャッシュ即時強制パージ）
+      purgeTenantLocalStorageCache(tenantIdData);
+
+      // 自社テナント専用キーからのみローカル最新設定を復元
       try {
-        const rawLocal = localStorage.getItem(`company_basic_settings_${tenantIdData}`) || 
-                         localStorage.getItem('company_basic_info');
+        const rawLocal = localStorage.getItem(`company_basic_settings_${tenantIdData}`);
         if (rawLocal) {
           const parsed = JSON.parse(rawLocal);
           loadedBasic = {
             ...loadedBasic,
             ...parsed,
-            address: parsed.address || loadedBasic.address,
-            name: parsed.name || loadedBasic.name,
-            company_seal_url: parsed.company_seal_url || loadedBasic.company_seal_url
+            address: parsed.address !== undefined ? parsed.address : loadedBasic.address,
+            name: parsed.name !== undefined ? parsed.name : loadedBasic.name,
+            representative_name: parsed.representative_name !== undefined ? parsed.representative_name : loadedBasic.representative_name,
+            phone_number: parsed.phone_number !== undefined ? parsed.phone_number : loadedBasic.phone_number,
+            company_seal_url: parsed.company_seal_url !== undefined ? parsed.company_seal_url : loadedBasic.company_seal_url
           };
         }
       } catch (e) {}
 
-      // 社印画像の全方位超堅牢復元（消失ゼロ設計）
+      // 社印画像：自社DBまたは自社テナント専用キーからのみ安全に復元
       let sealLoaded = loadedBasic.company_seal_url || '';
-      try {
-        const isValid = (s?: string | null) => !!s && (s.startsWith('data:image/') || s.startsWith('http://') || s.startsWith('https://'));
-        
-        // 1. 主要キー探索
-        const candidateKeys = [
-          `company_seal_image_${tenantIdData}`,
-          'company_seal_image',
-          `company_basic_settings_${tenantIdData}`,
-          'company_basic_info',
-          `labor_contract_template_${tenantIdData}`,
-          'labor_contract_template'
-        ];
-
-        for (const k of candidateKeys) {
-          const v = localStorage.getItem(k);
-          if (!v) continue;
-          if (isValid(v)) { sealLoaded = v; break; }
-          try {
-            const p = JSON.parse(v);
-            if (isValid(p.company_seal_url)) { sealLoaded = p.company_seal_url; break; }
-          } catch {}
-        }
-
-        // 2. LocalStorage全体のワイルドカード探索
-        if (!sealLoaded) {
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (!key) continue;
-            if (key.includes('seal') || key.includes('logo') || key.includes('inkan')) {
-              const val = localStorage.getItem(key);
-              if (isValid(val)) { sealLoaded = val!; break; }
-            }
-          }
-        }
-      } catch (e) {}
-
-      // 3. それでも空の場合は、公式角印を自動生成してデフォルト適用！
       if (!sealLoaded) {
-        sealLoaded = generateOfficialSealDataUrl(loadedBasic.name || '株式会社KAP');
-        if (tenantIdData) {
-          localStorage.setItem(`company_seal_image_${tenantIdData}`, sealLoaded);
-          localStorage.setItem('company_seal_image', sealLoaded);
-        }
+        try {
+          const localSeal = localStorage.getItem(`company_seal_image_${tenantIdData}`);
+          if (localSeal && (localSeal.startsWith('data:image/') || localSeal.startsWith('http'))) {
+            sealLoaded = localSeal;
+          }
+        } catch (_) {}
       }
 
       setCompanySealUrl(sealLoaded);
@@ -928,16 +902,14 @@ export default function CompanySettingsDashboard() {
         holiday_text_summary: holSummary
       };
 
-      // ローカルストレージに即時最優先保存（全画面で100%同期）
+      // ローカルストレージに即時最優先保存（自社テナントIDで完全隔離）
       const updatedBasicInfo = {
         ...basicInfo,
         company_seal_url: companySealUrl
       };
       localStorage.setItem(`company_basic_settings_${tenantId}`, JSON.stringify(updatedBasicInfo));
-      localStorage.setItem('company_basic_info', JSON.stringify(updatedBasicInfo));
       if (companySealUrl) {
         localStorage.setItem(`company_seal_image_${tenantId}`, companySealUrl);
-        localStorage.setItem('company_seal_image', companySealUrl);
       }
       saveLaborContractTemplateToStorage(tenantId, {
         ...contractTemplate,
@@ -947,9 +919,8 @@ export default function CompanySettingsDashboard() {
       savePositionsToStorage(positions);
       saveDepartmentsToStorage(tenantId, departments);
       saveAnnouncementsToStorage(announcements, tenantId);
-      localStorage.setItem('mock_company_holidays', JSON.stringify(Array.from(computedHolidaysSet)));
+      localStorage.setItem(`mock_company_holidays_${tenantId}`, JSON.stringify(Array.from(computedHolidaysSet)));
       localStorage.setItem(`company_employment_rules_${tenantId}`, employmentRulesText);
-      localStorage.setItem('company_employment_rules', employmentRulesText);
       if (geminiApiKey) {
         localStorage.setItem(`gemini_api_key_${tenantId}`, geminiApiKey);
         localStorage.setItem('gemini_api_key_custom', geminiApiKey);
@@ -1837,20 +1808,20 @@ export default function CompanySettingsDashboard() {
                     <button
                       type="button"
                       onClick={() => {
-                        const generated = generateOfficialSealDataUrl(basicInfo.name || '株式会社KAP');
+                        const targetName = basicInfo.name.trim() || '自社名';
+                        const generated = generateOfficialSealDataUrl(targetName);
                         if (generated) {
                           setCompanySealUrl(generated);
                           setContractTemplate(prev => ({ ...prev, company_seal_url: generated }));
                           setBasicInfo(prev => ({ ...prev, company_seal_url: generated }));
                           if (tenantId) {
                             localStorage.setItem(`company_seal_image_${tenantId}`, generated);
-                            localStorage.setItem('company_seal_image', generated);
                           }
-                          alert('✨ 株式会社KAPの公式朱肉角印（透過PNG）を自動生成してセットしました！\n右下の「設定を一括保存する」をクリックして保存を確定してください。');
+                          alert(`✨ 「${targetName}」の公式朱肉角印（透過PNG）を自動生成してセットしました！\n右下の「設定を一括保存する」をクリックして保存を確定してください。`);
                         }
                       }}
                       className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-2xs"
-                      title="公式朱肉角印（株式会社KAP之印）を自動生成して登録します"
+                      title="公式朱肉角印を自社名で自動生成して登録します"
                     >
                       <Sparkles className="w-4 h-4" />
                       公式角印を自動生成
@@ -3901,9 +3872,9 @@ export default function CompanySettingsDashboard() {
             <div className="border border-slate-200 rounded-2xl p-6 bg-slate-50/50 print:border-none print:p-0 print:bg-white print:max-h-none print:overflow-visible max-h-[70vh] overflow-y-auto">
               <OfficialLaborContractDoc 
                 data={{
-                  companyName: basicInfo.name || '株式会社KAP',
-                  companyAddress: basicInfo.address || '滋賀県大津市坂本3丁目21-16',
-                  representativeName: basicInfo.representative_name || '代表取締役 駒井 秀一朗',
+                  companyName: basicInfo.name || '（会社名未設定）',
+                  companyAddress: basicInfo.address || '（所在地未設定）',
+                  representativeName: basicInfo.representative_name || '（代表者名未設定）',
                   employeeName: '山田 太郎（サンプル）',
                   employeeAddress: '滋賀県大津市〇〇 1-1',
                   joinDate: '2026-04-01',

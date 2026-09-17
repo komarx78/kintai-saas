@@ -84,29 +84,27 @@ export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip,
   };
 
   const { titleYearMonth, subYearMonth, payDateFormatted } = getFormattedDates();
-  const empName = userName || payslip.employee_name || payslip.user?.name || '駒井 秀一朗';
-  const empNumber = payslip.employee_number || payslip.user?.employee_code || '2';
+  const empName = userName || payslip.employee_name || payslip.user?.name || '';
+  const empNumber = payslip.employee_number || payslip.user?.employee_code || '';
   
-  // 社印画像の多重フォールバック
+  // 社印画像（自社テナント専用キーからのみ取得）
   const activeSealUrl = companySealUrl || 
     (typeof window !== 'undefined' ? (
-      (payslip.tenant_id ? localStorage.getItem(`company_seal_image_${payslip.tenant_id}`) : null) ||
-      localStorage.getItem('company_seal_image')
-    ) : '');
+      (payslip.tenant_id ? localStorage.getItem(`company_seal_image_${payslip.tenant_id}`) : null)
+    ) : '') || '';
 
-  // 会社名の多重フォールバック
+  // 会社名（自社テナント専用キーからのみ取得）
   let resolvedCompanyName = tenantName || '';
   if (!resolvedCompanyName && typeof window !== 'undefined') {
     try {
-      const basicRaw = (payslip.tenant_id ? localStorage.getItem(`company_basic_settings_${payslip.tenant_id}`) : null) || 
-                       localStorage.getItem('company_basic_info');
+      const basicRaw = payslip.tenant_id ? localStorage.getItem(`company_basic_settings_${payslip.tenant_id}`) : null;
       if (basicRaw) {
         const parsed = JSON.parse(basicRaw);
         if (parsed.name) resolvedCompanyName = parsed.name;
       }
     } catch (e) {}
   }
-  const companyName = resolvedCompanyName || '株式会社KAP';
+  const companyName = resolvedCompanyName || '';
 
   // 1. 勤怠項目
   const attendanceList: { label: string; value: string; unit?: string }[] = [];

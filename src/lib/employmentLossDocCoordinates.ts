@@ -300,7 +300,7 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
     y: 57.5,
     fontSize: 11,
     width: 38.0,
-    example: '駒井　秀一郎',
+    example: '山田　太郎',
     description: '被保険者氏名漢字'
   },
   // 21. 性別（原本に「男 ・ 女」がプレプリントされているため○印を付加）
@@ -412,7 +412,7 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
     y: 61.8,
     fontSize: 9.5,
     width: 82.0,
-    example: '滋賀県大津市坂本3丁目21-16',
+    example: '東京都千代田区1-1-1',
     description: '退職時の現住所'
   },
   {
@@ -423,7 +423,7 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
     y: 65.8,
     fontSize: 10,
     width: 50.0,
-    example: '株式会社KAP',
+    example: 'サンプル株式会社',
     description: '事業所名称（会社名）'
   },
   {
@@ -482,7 +482,7 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
     y: 76.8,
     fontSize: 9.5,
     width: 65.0,
-    example: '滋賀県大津市坂本3丁目21-16',
+    example: '東京都千代田区霞が関1-1-1',
     description: '事業主の所在地'
   },
   {
@@ -493,7 +493,7 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
     y: 79.8,
     fontSize: 10.5,
     width: 65.0,
-    example: '株式会社KAP 代表取締役 駒井 秀一郎',
+    example: 'サンプル株式会社 代表取締役 山田 太郎',
     description: '事業主の会社名および代表者名'
   },
   {

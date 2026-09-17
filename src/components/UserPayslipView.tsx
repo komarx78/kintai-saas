@@ -23,11 +23,11 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
   const [selectedPayslip, setSelectedPayslip] = useState<any | null>(null);
   const [selectedKey, setSelectedKey] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
-  const [tenantName, setTenantName] = useState<string>('株式会社KAP');
+  const [tenantName, setTenantName] = useState<string>('');
   const [companySealUrl, setCompanySealUrl] = useState<string>('');
-  const [companyAddress, setCompanyAddress] = useState<string>('滋賀県大津市坂本3丁目21-16');
-  const [companyPhone, setCompanyPhone] = useState<string>('077-574-6907');
-  const [corporateNumber, setCorporateNumber] = useState<string>('1010001999999');
+  const [companyAddress, setCompanyAddress] = useState<string>('');
+  const [companyPhone, setCompanyPhone] = useState<string>('');
+  const [corporateNumber, setCorporateNumber] = useState<string>('');
 
   // 👤 本人労務・給与プロファイル（SSOT一元連携）
   const [userProfile, setUserProfile] = useState<{
@@ -78,12 +78,10 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
 
         // LocalStorage からの会社設定フォールバック取得
         try {
-          const sealStored = (tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null) || 
-                             localStorage.getItem('company_seal_image');
+          const sealStored = tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null;
           if (sealStored) setCompanySealUrl(sealStored);
 
-          const basicRaw = (tenantId ? localStorage.getItem(`company_basic_settings_${tenantId}`) : null) || 
-                           localStorage.getItem('company_basic_info');
+          const basicRaw = tenantId ? localStorage.getItem(`company_basic_settings_${tenantId}`) : null;
           if (basicRaw) {
             const bp = JSON.parse(basicRaw);
             if (bp.name) setTenantName(bp.name);
@@ -995,22 +993,21 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
               {(() => {
                 const tpl = getLaborContractTemplateFromStorage(tenantId || '');
                 const repName = companySettings?.representative_name || 
-                                (companySettings?.representative ? `代表取締役 ${companySettings.representative}` : '代表取締役 駒井 秀一朗');
+                                (companySettings?.representative ? `代表取締役 ${companySettings.representative}` : '');
                 const sealFromLocal = companySealUrl || 
                                       (tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null) || 
-                                      localStorage.getItem('company_seal_image') || 
                                       companySettings?.company_seal_url || 
                                       tpl?.company_seal_url;
-                const compAddress = companySettings?.address || '滋賀県大津市坂本3丁目21-16';
+                const compAddress = companySettings?.address || companyAddress || '';
 
                 const contractData: LaborContractData = {
-                  companyName: companySettings?.name || tenantName || '株式会社KAP',
+                  companyName: companySettings?.name || tenantName || '会社名未設定',
                   companyAddress: compAddress,
                   representativeName: repName,
                   companySealUrl: sealFromLocal,
                   employeeName: userName,
-                  employeeAddress: '滋賀県大津市',
-                  joinDate: '2024-04-01',
+                  employeeAddress: userProfile.address || '',
+                  joinDate: userProfile.join_date || '2024-04-01',
                   contractType: 'indefinite',
                   trialPeriodMonths: 3,
                   workLocation: companySettings?.address || '本社',

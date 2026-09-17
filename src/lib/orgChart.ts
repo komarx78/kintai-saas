@@ -40,13 +40,16 @@ export const DEFAULT_POSITIONS: PositionMaster[] = [
   { id: 'pos_10', name: 'パート・アルバイト', rank_level: 5, display_order: 10, default_allowance: 0 },
 ];
 
-export const getPositionsFromStorage = (): PositionMaster[] => {
+export const getPositionsFromStorage = (tenantId?: string | null): PositionMaster[] => {
   try {
-    const saved = localStorage.getItem('company_position_masters');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+    const key = tenantId ? `company_position_masters_${tenantId}` : null;
+    if (key) {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       }
     }
   } catch (e) {
@@ -55,9 +58,12 @@ export const getPositionsFromStorage = (): PositionMaster[] => {
   return DEFAULT_POSITIONS;
 };
 
-export const savePositionsToStorage = (positions: PositionMaster[]) => {
+export const savePositionsToStorage = (positions: PositionMaster[], tenantId?: string | null) => {
   try {
-    localStorage.setItem('company_position_masters', JSON.stringify(positions));
+    if (tenantId) {
+      localStorage.setItem(`company_position_masters_${tenantId}`, JSON.stringify(positions));
+    }
+    localStorage.removeItem('company_position_masters');
   } catch (e) {
     console.warn('Save positions error:', e);
   }

@@ -199,12 +199,10 @@ ${tenantId || '（エラー：コード取得失敗）'}
 
   useEffect(() => {
     const loadCompanyRules = async () => {
-      // 1. ローカルストレージからの即時読み込み
-      const savedLocal = (tenantId ? localStorage.getItem(`company_employment_rules_${tenantId}`) : null) || 
-                         localStorage.getItem('company_employment_rules');
+      // 1. ローカルストレージからの即時読み込み（テナント厳格分離）
+      const savedLocal = tenantId ? localStorage.getItem(`company_employment_rules_${tenantId}`) : null;
       if (savedLocal) setCompanyRulesText(savedLocal);
-      const savedKeyLocal = (tenantId ? localStorage.getItem(`gemini_api_key_${tenantId}`) : null) || 
-                            localStorage.getItem('gemini_api_key_custom');
+      const savedKeyLocal = tenantId ? localStorage.getItem(`gemini_api_key_${tenantId}`) : null;
       if (savedKeyLocal) setGeminiApiKeyCustom(savedKeyLocal);
 
       // 2. データベース（Supabase tenants テーブル）からの同期取得
@@ -229,7 +227,6 @@ ${tenantId || '（エラー：コード取得失敗）'}
               const rUnit = parseInt(tData.payroll_common_settings.rounding_unit);
               setRoundingUnit(rUnit);
               localStorage.setItem(`mock_rounding_unit_${tenantId}`, rUnit.toString());
-              localStorage.setItem('mock_rounding_unit', rUnit.toString());
             }
           }
         } catch (e) {
@@ -246,16 +243,15 @@ ${tenantId || '（エラー：コード取得失敗）'}
     try {
       const trimmedKey = geminiApiKeyCustom.trim();
 
-      // 1. ローカルストレージにキャッシュ保存
+      // 1. ローカルストレージにキャッシュ保存（テナント厳格分離）
       localStorage.setItem(`company_employment_rules_${tenantId}`, companyRulesText);
-      localStorage.setItem('company_employment_rules', companyRulesText);
+      localStorage.removeItem('company_employment_rules'); // 旧グローバルキーの消去
       if (trimmedKey) {
         localStorage.setItem(`gemini_api_key_${tenantId}`, trimmedKey);
-        localStorage.setItem('gemini_api_key_custom', trimmedKey);
       } else {
         localStorage.removeItem(`gemini_api_key_${tenantId}`);
-        localStorage.removeItem('gemini_api_key_custom');
       }
+      localStorage.removeItem('gemini_api_key_custom'); // 旧グローバルキーの消去
 
       // 2. データベース（Supabase tenants テーブル）へ永続保存（全社同期の要）
       const { error: updateErr } = await supabase
@@ -883,7 +879,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
             </button>
             <div className="h-4 w-px bg-slate-200" />
             <div className="text-xs font-bold text-slate-500">
-              {tenantName || '株式会社KAP'}
+              {tenantName || '会社名未設定'}
             </div>
           </div>
 

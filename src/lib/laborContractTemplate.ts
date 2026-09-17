@@ -49,7 +49,7 @@ export const DEFAULT_LABOR_CONTRACT_TEMPLATE: LaborContractTemplate = {
   fixed_term_renew_text: '契約更新の有無: 自動更新する / 契約満了時の業務量、従事している業務の進捗状況、勤務成績・態度、会社の経営状況等により判断する。',
   trial_period_template: '試用期間: 入社日より {months} ヶ月間（労働条件・賃金の変更なし）',
 
-  work_location_default: '本社（滋賀県大津市坂本3丁目21-16）または会社が指定する就業場所',
+  work_location_default: '本社 または 会社が指定する就業場所',
   work_location_scope: '就業場所の変更の範囲: 会社の本社および会社が指定するすべての就業場所（テレワーク実施場所を含む）',
   job_description_default: '業務全般 および 会社の指示する業務',
   job_description_scope: '従事すべき業務の変更の範囲: 会社の定めるすべての業務',
@@ -193,8 +193,9 @@ export function generateOfficialClausesFromNotes(
 }
 
 export function getLaborContractTemplateFromStorage(tId: string): LaborContractTemplate {
+  if (!tId) return DEFAULT_LABOR_CONTRACT_TEMPLATE;
   try {
-    const raw = localStorage.getItem(`labor_contract_template_${tId}`) || localStorage.getItem('labor_contract_template');
+    const raw = localStorage.getItem(`labor_contract_template_${tId}`);
     if (raw) {
       return { ...DEFAULT_LABOR_CONTRACT_TEMPLATE, ...JSON.parse(raw) };
     }

@@ -211,7 +211,7 @@ export const OfficialReminderSettingsModal: React.FC<OfficialReminderSettingsMod
             type="text"
             value={settings.recipient_name}
             onChange={(e) => setSettings({ ...settings, recipient_name: e.target.value })}
-            placeholder="例: 人事労務部 駒井 様"
+            placeholder="例: 人事労務部 担当者 様"
             className="w-full text-xs font-bold border border-slate-300 rounded-xl px-3 py-2 outline-hidden focus:ring-2 focus:ring-indigo-500"
           />
         </div>

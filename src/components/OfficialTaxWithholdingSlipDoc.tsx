@@ -23,7 +23,10 @@ export interface TaxWithholdingDocProps {
 
     // 控除・扶養
     hasSpouse?: boolean;
+    spouseName?: string;
     spouseDeduction?: number; // 配偶者控除額 (G12)
+    dependentNames?: string[];
+    under16Names?: string[];
     dependentsCount?: number; // 扶養親族数 (G13)
     under16Count?: number; // 16歳未満扶養数 (G20)
     socialInsuranceAmount?: number; // 社会保険料等の金額 (G25)
@@ -186,7 +189,7 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
               <span className="text-[7px] text-slate-400 font-mono">E03</span>
             </div>
             <div className="col-span-6 border-r border-b border-black p-1 font-bold text-xs">
-              {data.recipientName || '駒井 秀一朗'}
+              {data.recipientName || ''}
             </div>
             <div className="col-span-2 border-r border-b border-black p-1 bg-slate-50 flex items-center justify-between">
               <span>(役職名)</span>
@@ -417,7 +420,7 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
               <span className="text-[6px] font-mono text-slate-400">E08</span>
             </div>
             <div className="col-span-3 border-r border-black p-0.5 truncate font-bold text-[8.5px]">
-              {data.hasSpouse ? '駒井 花子' : ''}
+              {data.hasSpouse ? (data.spouseName || '配偶者') : ''}
             </div>
             <div className="col-span-2 border-r border-black p-0.5 bg-slate-50 text-center">
               配偶者の合計所得
@@ -442,7 +445,7 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
               </div>
               <div className="space-y-1 font-mono text-[8px]">
                 <div className="flex justify-between border-b border-slate-200 pb-0.5">
-                  <span className="font-sans font-bold">{data.dependentsCount ? '駒井 一郎' : '-'}</span>
+                  <span className="font-sans font-bold">{data.dependentsCount ? (data.dependentNames?.[0] || '扶養親族') : '-'}</span>
                   <span>{data.dependentsCount ? '区分 G48' : ''}</span>
                 </div>
                 <div className="flex justify-between border-b border-slate-200 pb-0.5">
@@ -459,7 +462,7 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
               </div>
               <div className="space-y-1 font-mono text-[8px]">
                 <div className="flex justify-between border-b border-slate-200 pb-0.5">
-                  <span className="font-sans font-bold">{data.under16Count ? '駒井 二郎' : '-'}</span>
+                  <span className="font-sans font-bold">{data.under16Count ? (data.under16Names?.[0] || '年少扶養') : '-'}</span>
                   <span>{data.under16Count ? '区分 G56' : ''}</span>
                 </div>
                 <div className="flex justify-between border-b border-slate-200 pb-0.5">
@@ -526,7 +529,7 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
               <span className="text-[6.5px] font-mono text-slate-400">F06</span>
             </div>
             <div className="col-span-10 border-b border-black p-1 truncate">
-              {data.companyAddress || '滋賀県大津市坂本3丁目21-16'}
+              {data.companyAddress || ''}
             </div>
 
             <div className="col-span-2 border-r border-b border-black p-1 bg-slate-50 flex items-center justify-between">
@@ -534,14 +537,14 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
               <span className="text-[6.5px] font-mono text-slate-400">F04</span>
             </div>
             <div className="col-span-6 border-r border-b border-black p-1 font-bold text-xs">
-              {data.companyName || '株式会社KAP'}
+              {data.companyName || ''}
             </div>
             <div className="col-span-2 border-r border-b border-black p-1 bg-slate-50 flex items-center justify-between">
               <span>電話番号</span>
               <span className="text-[6.5px] font-mono text-slate-400">F07</span>
             </div>
             <div className="col-span-2 border-b border-black p-1 font-mono text-[8px]">
-              {data.companyPhone || '077-574-6907'}
+              {data.companyPhone || ''}
             </div>
 
             <div className="col-span-2 border-r border-black p-1 bg-slate-50 flex items-center justify-between">
@@ -549,11 +552,11 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
               <span className="text-[6.5px] font-mono text-slate-400">F02</span>
             </div>
             <div className="col-span-10 p-1 font-mono tracking-widest text-[9px]">
-              {data.corporateNumber || '1010001999999'}
+              {data.corporateNumber || ''}
             </div>
           </div>
 
-          {/* 🏢 公式朱肉角印（株式会社KAP之印）自動捺印 */}
+          {/* 🏢 公式朱肉角印 自動捺印 */}
           <div className="absolute right-3 top-1 pointer-events-none">
             {data.companySealUrl ? (
               <img

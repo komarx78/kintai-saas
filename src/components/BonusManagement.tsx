@@ -52,7 +52,7 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string>('');
   const [previewEmployee, setPreviewEmployee] = useState<BonusEmployeeRecord | null>(null);
-  const [companyName, setCompanyName] = useState<string>('株式会社KAP');
+  const [companyName, setCompanyName] = useState<string>('');
   const [companySealUrl, setCompanySealUrl] = useState<string>('');
 
   // 一括倍率・金額入力用のState
@@ -79,8 +79,8 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
         if (tData.company_seal_url) setCompanySealUrl(tData.company_seal_url);
       }
 
-      // LocalStorageから会社社印フォールバック
-      const sealStored = localStorage.getItem(`company_seal_image_${tenantId}`) || localStorage.getItem('company_seal_image');
+      // LocalStorageから会社社印フォールバック（自社キー限定）
+      const sealStored = tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null;
       if (sealStored) setCompanySealUrl(sealStored);
 
       // 全従業員の取得（SSOT大元マスタ連携）

@@ -250,7 +250,7 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
       birthMonth: String(parseInt(birthWareki.month2, 10)),
       birthDay: String(parseInt(birthWareki.day2, 10)),
       // 23. 被保険者の住所
-      empAddress: emp.address || '滋賀県大津市坂本3丁目21-16',
+      empAddress: emp.address || '',
       // 24. 事業所名称
       officeName: companyInfo.name,
       // 26. 喪失原因詳細

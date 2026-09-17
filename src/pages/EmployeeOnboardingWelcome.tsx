@@ -810,7 +810,7 @@ export default function EmployeeOnboardingWelcome() {
           </div>
           <div>
             <div className="text-xs font-black text-white">新入社員 公式入社手続きWebフォーム</div>
-            <div className="text-[10px] text-indigo-400 font-bold">{tenantInfo?.name || '株式会社KAP'}</div>
+            <div className="text-[10px] text-indigo-400 font-bold">{tenantInfo?.name || '会社名未設定'}</div>
           </div>
         </div>
         <div className="text-[10px] bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full border border-slate-700 font-bold">
@@ -887,7 +887,7 @@ export default function EmployeeOnboardingWelcome() {
               <div className="flex justify-between items-center pb-2 border-b border-slate-800 text-[11px]">
                 <span className="text-slate-400">事業者（甲）:</span>
                 <span className="font-bold text-white">
-                  {tenantInfo?.name || '株式会社KAP'} 代表取締役 {(tenantInfo?.representative_name || '駒井 秀一朗').replace(/^代表取締役\s*/, '')}
+                  {tenantInfo?.name || '会社名未設定'}{tenantInfo?.representative_name ? ` ${tenantInfo.representative_name.startsWith('代表取締役') ? tenantInfo.representative_name : `代表取締役 ${tenantInfo.representative_name}`}` : ''}
                 </span>
               </div>
 

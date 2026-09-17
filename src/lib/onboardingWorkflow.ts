@@ -73,13 +73,16 @@ export const DEFAULT_ONBOARDING_STEPS: OnboardingWorkflowStep[] = [
   }
 ];
 
-export const getWorkflowStepsFromStorage = (): OnboardingWorkflowStep[] => {
+export const getWorkflowStepsFromStorage = (tenantId?: string | null): OnboardingWorkflowStep[] => {
   try {
-    const saved = localStorage.getItem('onboarding_workflow_steps');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+    const key = tenantId ? `onboarding_workflow_steps_${tenantId}` : null;
+    if (key) {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       }
     }
   } catch (e) {
@@ -88,9 +91,12 @@ export const getWorkflowStepsFromStorage = (): OnboardingWorkflowStep[] => {
   return DEFAULT_ONBOARDING_STEPS;
 };
 
-export const saveWorkflowStepsToStorage = (steps: OnboardingWorkflowStep[]) => {
+export const saveWorkflowStepsToStorage = (steps: OnboardingWorkflowStep[], tenantId?: string | null) => {
   try {
-    localStorage.setItem('onboarding_workflow_steps', JSON.stringify(steps));
+    if (tenantId) {
+      localStorage.setItem(`onboarding_workflow_steps_${tenantId}`, JSON.stringify(steps));
+    }
+    localStorage.removeItem('onboarding_workflow_steps');
   } catch (e) {
     console.warn('Save onboarding steps error:', e);
   }

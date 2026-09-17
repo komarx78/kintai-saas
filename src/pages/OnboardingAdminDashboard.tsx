@@ -2695,7 +2695,7 @@ export default function OnboardingAdminDashboard() {
                   全マスタ即時連動
                 </span>
               </div>
-              <div className="text-[10px] text-slate-400 font-bold">{tenantInfo?.name || '株式会社KAP'}</div>
+              <div className="text-[10px] text-slate-400 font-bold">{tenantInfo?.name || '会社名未設定'}</div>
             </div>
           </div>
         </div>
@@ -3624,15 +3624,15 @@ export default function OnboardingAdminDashboard() {
             <div className="border border-slate-200 rounded-2xl overflow-hidden p-6 bg-slate-50/50 print:border-none print:p-0 print:bg-white max-h-[65vh] print:max-h-none overflow-y-auto print:overflow-visible">
               {cabinetModal.activeDoc === 'contract' && (() => {
                 const contractTpl = getLaborContractTemplateFromStorage(tenantId || '');
-                const sealImg = (tenantInfo as any)?.company_seal_url || contractTpl.company_seal_url || localStorage.getItem(`company_seal_image_${tenantId}`) || localStorage.getItem('company_seal_image') || undefined;
+                const sealImg = (tenantInfo as any)?.company_seal_url || contractTpl.company_seal_url || (tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null) || undefined;
                 const resolvedEmp = resolveEmployeeFullData(cabinetModal.employee);
 
                 return (
                   <OfficialLaborContractDoc 
                     data={{
-                      companyName: tenantInfo?.name || '株式会社KAP',
-                      companyAddress: tenantInfo?.address || '滋賀県大津市坂本3丁目21-16',
-                      representativeName: (tenantInfo?.representative_name || '代表取締役 駒井 秀一朗').replace(/^代表取締役\s*/, '代表取締役 '),
+                      companyName: tenantInfo?.name || '',
+                      companyAddress: tenantInfo?.address || '',
+                      representativeName: tenantInfo?.representative_name ? (tenantInfo.representative_name.startsWith('代表取締役') ? tenantInfo.representative_name : `代表取締役 ${tenantInfo.representative_name}`) : '',
                       employeeName: resolvedEmp.name,
                       employeeAddress: resolvedEmp.address || '未登録',
                       joinDate: resolvedEmp.join_date,
@@ -3686,7 +3686,7 @@ export default function OnboardingAdminDashboard() {
 
                 return (
                   <OfficialCommutingPassDoc data={{
-                    companyName: tenantInfo?.name || '株式会社KAP',
+                    companyName: tenantInfo?.name || '',
                     employeeName: cData.name || resolvedEmp.name,
                     department: resolvedEmp.department || '営業部',
                     transportMode: cData.transport_mode || 'train_bus',
@@ -3714,7 +3714,7 @@ export default function OnboardingAdminDashboard() {
 
                 return (
                   <OfficialBankPassbookDoc data={{
-                    companyName: tenantInfo?.name || '株式会社KAP',
+                    companyName: tenantInfo?.name || '',
                     employeeName: bData.name || resolvedEmp.name,
                     department: resolvedEmp.department || '営業部',
                     bankName: bData.bank_name || resolvedEmp.bank_name || '未登録',
@@ -3817,15 +3817,15 @@ export default function OnboardingAdminDashboard() {
 
                     <OfficialTaxExemptionDoc data={{
                       year: tData.year || 2026,
-                      companyName: tenantInfo?.name || '株式会社KAP',
-                      companyAddress: tenantInfo?.address || '滋賀県大津市坂本3丁目21-16',
-                      corporateNumber: tenantInfo?.corporate_number || '1010001999999',
-                      taxOfficeName: tenantInfo?.tax_office_name || '大津',
-                      municipalityName: tenantInfo?.municipality_name || '大津市',
+                      companyName: tenantInfo?.name || '',
+                      companyAddress: tenantInfo?.address || '',
+                      corporateNumber: tenantInfo?.corporate_number || '',
+                      taxOfficeName: tenantInfo?.tax_office_name || '',
+                      municipalityName: tenantInfo?.municipality_name || '',
                       employeeName: tData.name || rData.name || cabinetModal.employee.name,
                       employeeNameKana: tData.name_kana || rData.name_kana || (cabinetModal.employee as any).name_kana || '',
-                      employeeAddress: tData.address || rData.address || cabinetModal.employee.address || '滋賀県大津市坂本3丁目21-16',
-                      postalCode: tData.postal_code || rData.postal_code || '520-0113',
+                      employeeAddress: tData.address || rData.address || cabinetModal.employee.address || '',
+                      postalCode: tData.postal_code || rData.postal_code || '',
                       myNumber: tData.my_number || '',
                       birthDate: rData.birth_date || tData.birth_date || cabinetModal.employee.birth_date || '1998-04-01',
                       householderName: tData.householder_name || rData.householder_name || tData.name || cabinetModal.employee.name,
@@ -3863,11 +3863,11 @@ export default function OnboardingAdminDashboard() {
                   <div className="space-y-4">
                     <OfficialSpouseDeductionDoc data={{
                       year: tData.year || 2026,
-                      companyName: tenantInfo?.name || '株式会社KAP',
-                      companyAddress: tenantInfo?.address || '滋賀県大津市坂本3丁目21-16',
-                      corporateNumber: tenantInfo?.corporate_number || '1010001999999',
+                      companyName: tenantInfo?.name || '',
+                      companyAddress: tenantInfo?.address || '',
+                      corporateNumber: tenantInfo?.corporate_number || '',
                       employeeName: resolvedEmp.name,
-                      employeeAddress: resolvedEmp.address || '滋賀県大津市坂本3丁目21-16',
+                      employeeAddress: resolvedEmp.address || '',
                       employeeIncomeEstimate: resolvedEmp.base_salary ? resolvedEmp.base_salary * 12 : 3500000,
                       hasSpouse: tData.has_spouse || resolvedEmp.has_spouse || false,
                       spouseName: tData.spouse_name || '',

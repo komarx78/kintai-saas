@@ -97,14 +97,14 @@ const UserDashboard = () => {
           else if (record.check_in_time) setStatus('勤務中');
         }
 
-        // 🏢 会社カレンダー休日設定 ＆ 打刻丸め単位のDB自動同期（全端末完全共有）
+        // 🏢 会社カレンダー休日設定 ＆ 打刻丸め単位のDB自動同期（全端末完全共有・テナント厳格分離）
         if (profile?.tenant_id) {
           // 初期ローカルキャッシュ復元
-          const storedHols = localStorage.getItem(`mock_company_holidays_${profile.tenant_id}`) || localStorage.getItem('mock_company_holidays');
+          const storedHols = localStorage.getItem(`mock_company_holidays_${profile.tenant_id}`);
           if (storedHols) {
             try { setCompanyHolidays(new Set(JSON.parse(storedHols))); } catch (_) {}
           }
-          const storedRound = localStorage.getItem(`mock_rounding_unit_${profile.tenant_id}`) || localStorage.getItem('mock_rounding_unit');
+          const storedRound = localStorage.getItem(`mock_rounding_unit_${profile.tenant_id}`);
           if (storedRound) setRoundingUnit(parseInt(storedRound));
 
           try {

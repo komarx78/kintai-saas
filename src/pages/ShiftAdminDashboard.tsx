@@ -331,7 +331,7 @@ const ShiftAdminDashboard: React.FC = () => {
                   管理画面
                 </span>
               </div>
-              <div className="text-[10px] text-slate-400 font-bold">{tenantName || '株式会社KAP'}</div>
+              <div className="text-[10px] text-slate-400 font-bold">{tenantName || '会社名未設定'}</div>
             </div>
           </div>
         </div>

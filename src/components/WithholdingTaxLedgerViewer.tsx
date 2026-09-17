@@ -123,12 +123,10 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // 会社印鑑画像の取得（tenantId連動）
+  // 会社印鑑画像の取得（tenantId連動・他社混入完全防止）
   const companySealImg = useMemo(() => {
     if (typeof window === 'undefined') return '';
-    return (tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null) ||
-           localStorage.getItem('company_seal_image') ||
-           '';
+    return (tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null) || '';
   }, [tenantId]);
 
   // 部署一覧
@@ -478,7 +476,7 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
           </div>
 
           <div className="text-right text-xs">
-            <span className="font-bold text-slate-800">{companyInfo?.name || '株式会社KAP'}</span>
+            <span className="font-bold text-slate-800">{companyInfo?.name || '会社名未設定'}</span>
           </div>
 
           {onBackToReports && (
@@ -700,10 +698,10 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
                       </div>
                       <div className="flex-1 px-1.5 py-0.5 flex flex-col justify-center border-r border-slate-900">
                         <div className="text-[6pt] text-slate-500 leading-none">
-                          （フリガナ）{currentEmployee?.name_kana || 'コマイシュウイチロウ'}
+                          （フリガナ）{currentEmployee?.name_kana || ''}
                         </div>
                         <div className="text-[10pt] font-black text-slate-950 leading-tight">
-                          {currentEmployee?.name || '駒井 秀一朗'}
+                          {currentEmployee?.name || ''}
                         </div>
                       </div>
                       <div className="w-28 px-1.5 py-0.5 text-[7pt] flex flex-col justify-center">
@@ -1082,7 +1080,7 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
                 <div className="text-slate-400">（所得税法第226条、国税庁告示様式・7年間保存）</div>
               </div>
               <div className="flex items-center gap-2 font-bold text-slate-900">
-                <span>給与支払者: {companyInfo?.name || '株式会社KAP'}（{companyInfo?.address || '滋賀県大津市坂本3丁目21-16'}）</span>
+                <span>給与支払者: {companyInfo?.name || '会社名未設定'}{companyInfo?.address ? `（${companyInfo.address}）` : ''}</span>
                 {/* 💮 電子印鑑 */}
                 <div className="w-8 h-8 relative flex items-center justify-center select-none pointer-events-none shrink-0">
                   {companySealImg ? (
@@ -1101,7 +1099,7 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
                         style={{ borderColor: '#dc2626' }}
                       >
                         <span className="text-[4pt] font-black text-red-600 tracking-tighter scale-90">
-                          {companyInfo?.name ? companyInfo.name.substring(0, 4) : 'KAP'}
+                          {companyInfo?.name ? companyInfo.name.substring(0, 4) : '社印'}
                         </span>
                         <span className="text-[4.5pt] font-black text-red-600 tracking-wider">
                           印
