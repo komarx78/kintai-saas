@@ -118,13 +118,37 @@ const Login = () => {
 
         // ログイン成功後、ユーザーのRoleを取得して遷移
         if (authData.user) {
-          const { error: userError } = await supabase
+          const { data: userRecord, error: userError } = await supabase
             .from('users')
-            .select('role')
+            .select('role, tenant_id')
             .eq('id', authData.user.id)
-            .single();
+            .maybeSingle();
 
-          if (userError) throw userError;
+          if (userError) {
+            console.error('User fetch error:', userError);
+            throw userError;
+          }
+
+          // 🛡️ もし auth.users には存在するが public.users にレコードがない場合（台帳削除後のゴースト残存時）
+          if (!userRecord) {
+            console.warn('Orphaned auth user detected (no public.users row):', authData.user.id);
+            // 1. 自動修復（self_heal_user）を試みる
+            try {
+              const { data: healData, error: healError } = await supabase.rpc('self_heal_user');
+              if (!healError && healData && healData.success) {
+                console.log('User account successfully self-healed:', healData);
+                navigate('/portal');
+                return;
+              }
+            } catch (healErr) {
+              console.warn('self_heal_user RPC call failed:', healErr);
+            }
+
+            // 2. 修復できない場合、Cannot coerce等の不親切な英語エラーを出さず、分かりやすい日本語案内を表示してセッション破棄
+            await supabase.auth.signOut();
+            setError('このアカウント（メールアドレス）は過去に従業員台帳から削除されています。再登録される場合は、システム管理者へアカウントの完全抹消をご依頼いただくか、別のアドレスをご利用ください。');
+            return;
+          }
 
           // 管理者も一般ユーザーも、まずは総合ポータルへ遷移する
           navigate('/portal');
@@ -318,7 +342,7 @@ const Login = () => {
 
               {/* 💡 既に登録済みエラー時の救済：ワンタップでログイン画面に切り替え */}
               {isAlreadyRegistered && (
-                <div className="pt-2 border-t border-red-200">
+                <div className="pt-2 border-t border-red-200 space-y-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -331,6 +355,9 @@ const Login = () => {
                     <LogIn className="w-3.5 h-3.5" />
                     すでに登録済みのためログイン画面へ進む
                   </button>
+                  <p className="text-[11px] text-gray-500 text-center leading-relaxed">
+                    ※ 過去に削除したメールアドレスで「既に登録されています」と出る場合は、一度上記からログインをお試しいただくか、管理者へ完全抹消をご依頼ください。
+                  </p>
                 </div>
               )}
             </div>

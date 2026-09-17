@@ -38,9 +38,14 @@ export default function Portal() {
         .from('users')
         .select('name, role, tenant_id, has_kintai_access, has_shift_access')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error || !data) {
+        console.warn('User record missing in Portal, signing out:', user.id);
+        await supabase.auth.signOut();
+        navigate('/');
+        return;
+      }
       const fullUserData: UserData = {
         id: user.id,
         name: data.name,

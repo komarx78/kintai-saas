@@ -48,13 +48,15 @@ const PrivateRoute = ({ children, requiredRole }: { children: React.ReactNode, r
         return;
       }
 
-      const { data: userData } = await supabase
+      const { data: userData, error: userError } = await supabase
         .from('users')
         .select('role, tenant_id')
         .eq('id', session.user.id)
-        .single();
+        .maybeSingle();
 
-      if (!userData) {
+      if (!userData || userError) {
+        console.warn('User has auth session but no public.users record:', session.user.id);
+        await supabase.auth.signOut();
         setAuthorized(false);
         setLoading(false);
         return;

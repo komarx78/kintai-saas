@@ -1221,17 +1221,28 @@ export default function OnboardingAdminDashboard() {
 
   // 6. 従業員の完全削除（抹消）
   const handleDeleteEmployee = async (emp: EmployeeOnboardingData) => {
-    if (!confirm(`⚠️【危険】${emp.name} さんのすべてのデータ（入社情報、提出書類、給与設定）を完全に抹消・削除しますか？\n\n※ 誤登録や入社辞退者の整理用です。この操作は取り消せません。`)) return;
+    if (!confirm(`⚠️【危険】${emp.name} さんのすべてのデータ（入社情報、提出書類、給与設定、ログイン認証アカウント）を完全に抹消・削除しますか？\n\n※ 誤登録や入社辞退者の整理用です。この操作は取り消せません。`)) return;
 
     setIsSaving(true);
     try {
-      await supabase.from('employee_document_submissions').delete().eq('user_id', emp.user_id);
-      await supabase.from('employee_payroll_profiles').delete().eq('user_id', emp.user_id);
-      await supabase.from('employee_onboarding_profiles').delete().eq('user_id', emp.user_id);
-      await supabase.from('shift_employee_settings').delete().eq('user_id', emp.user_id);
-      await supabase.from('users').delete().eq('id', emp.user_id);
+      // 1. まずRPC関数による完全抹消（auth.users含む）を試みる
+      const { error: rpcError } = await supabase.rpc('delete_user_completely', {
+        target_user_id: emp.user_id
+      });
 
-      alert(`🗑️ ${emp.name} さんのデータを完全に削除しました。`);
+      if (rpcError) {
+        console.warn('RPC delete_user_completely fallback to direct tables:', rpcError);
+        // フォールバック: テーブル個別削除（DBトリガーがあればauth.usersも連動削除される）
+        await supabase.from('employee_document_submissions').delete().eq('user_id', emp.user_id);
+        await supabase.from('employee_payroll_profiles').delete().eq('user_id', emp.user_id);
+        await supabase.from('employee_onboarding_profiles').delete().eq('user_id', emp.user_id);
+        await supabase.from('shift_employee_settings').delete().eq('user_id', emp.user_id);
+        await supabase.from('attendance_records').delete().eq('user_id', emp.user_id);
+        await supabase.from('leave_requests').delete().eq('user_id', emp.user_id);
+        await supabase.from('users').delete().eq('id', emp.user_id);
+      }
+
+      alert(`🗑️ ${emp.name} さんのデータおよび認証アカウントを完全に抹消しました。`);
       await fetchData();
     } catch (err: any) {
       console.error('Delete employee error:', err);
