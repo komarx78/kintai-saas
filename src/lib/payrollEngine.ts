@@ -303,7 +303,7 @@ export function calculatePayroll(
     holidayAllowance = round(attendance.holiday_hours * hourlyFromDaily * 1.35);
   } else {
     // 【月給制】
-    baseSalary = profile.base_salary || 250000;
+    baseSalary = profile.base_salary || 0;
     // 1時間あたり基礎賃金（所定労働時間 160h 想定）
     const monthlyStandardHours = 160;
     const baseForOvertime = baseSalary + (profile.position_allowance || 0) + (profile.qualification_allowance || 0);

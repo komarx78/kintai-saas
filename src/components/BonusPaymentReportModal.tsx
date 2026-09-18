@@ -149,7 +149,7 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
               ...r,
               employment_type: empType,
               salary_type: r.salary_type || emp.salary_type || prof.salary_type || 'monthly',
-              base_salary: r.base_salary || prof.base_salary || localMaster.base_salary || emp.base_salary || 250000,
+              base_salary: r.base_salary || prof.base_salary || localMaster.base_salary || emp.base_salary || 0,
             };
           });
           setBonusRows(supplemented);
@@ -171,7 +171,7 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
 
       const bDate = prof.birth_date || emp.birth_date || localMaster.birth_date || '';
       const myNum = localMaster.my_number || emp.my_number || '';
-      const baseSalary = prof.base_salary || localMaster.base_salary || emp.base_salary || 250000;
+      const baseSalary = prof.base_salary || localMaster.base_salary || emp.base_salary || 0;
 
       // 雇用形態と給与体系の判別（SSOT大元連携）
       const empType = emp.employment_type || localMaster.employment_type || prof.employment_type || 
@@ -276,7 +276,7 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
       const isPart = row.employment_type === 'part-time' || row.salary_type === 'hourly';
       if (isPart) return row; // パートは変更しない
       const prof = payrollProfiles[row.user_id] || {};
-      const base = row.base_salary || prof.base_salary || 250000;
+      const base = row.base_salary || prof.base_salary || 0;
       return {
         ...row,
         currencyAmount: Math.round(base * m)
@@ -316,7 +316,7 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
         };
       } else {
         const prof = payrollProfiles[row.user_id] || {};
-        const base = row.base_salary || prof.base_salary || 250000;
+        const base = row.base_salary || prof.base_salary || 0;
         return {
           ...row,
           currencyAmount: Math.round(base * m)

@@ -280,7 +280,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
       const initialBatch: Record<string, BatchEditItem> = {};
       activeUsers.filter(u => !u.is_retired).forEach(u => {
         const p = profilesMap[u.id];
-        const base = p?.base_salary || 250000;
+        const base = p?.base_salary || 0;
         initialBatch[u.id] = {
           userId: u.id,
           name: u.name,
@@ -384,7 +384,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
 
       const b = batchData[e.id];
       const p = payrollProfiles[e.id];
-      const prevBase = b ? b.currentBase : (p?.base_salary || 250000);
+      const prevBase = b ? b.currentBase : (p?.base_salary || 0);
       const newBase = b ? b.newBase : prevBase;
       const prevAllowances = (p?.position_allowance || 0) + (p?.qualification_allowance || 0) + 
                              (p?.housing_allowance || 0) + (p?.commuting_allowance || 0) + 
@@ -487,7 +487,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
     const initialBatch: Record<string, BatchEditItem> = {};
     employees.filter(u => !u.is_retired).forEach(u => {
       const p = payrollProfiles[u.id];
-      const base = p?.base_salary || 250000;
+      const base = p?.base_salary || 0;
       initialBatch[u.id] = {
         userId: u.id,
         name: u.name,
@@ -690,7 +690,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
     if (!target) return;
     setFormUserId(target.id);
     const p = payrollProfiles[target.id];
-    const currentBase = p?.base_salary || 250000;
+    const currentBase = p?.base_salary || 0;
     setFormNewBaseSalary(currentBase);
     setFormPositionAllowance(p?.position_allowance || 0);
     setFormQualificationAllowance(p?.qualification_allowance || 0);
@@ -716,7 +716,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
     try {
       const targetUser = employees.find(e => e.id === formUserId);
       const p = payrollProfiles[formUserId];
-      const currentBase = p?.base_salary || 250000;
+      const currentBase = p?.base_salary || 0;
       const prevAllowances = (p?.position_allowance || 0) + (p?.qualification_allowance || 0) + 
                              (p?.housing_allowance || 0) + (p?.commuting_allowance || 0) + 
                              (p?.family_allowance || 0) + (p?.special_allowance || 0);
@@ -1027,7 +1027,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
 
     const rows = filteredEmployees.map(emp => {
       const p = payrollProfiles[emp.id];
-      const base = p?.base_salary || 250000;
+      const base = p?.base_salary || 0;
       const pos = p?.position_allowance || 0;
       const qual = p?.qualification_allowance || 0;
       const house = p?.housing_allowance || 0;
@@ -1325,7 +1325,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                     基本給（月額）
                   </td>
                   {filteredEmployees.map(emp => {
-                    const base = payrollProfiles[emp.id]?.base_salary || 250000;
+                    const base = payrollProfiles[emp.id]?.base_salary || 0;
                     return (
                       <td key={emp.id} className="py-3 px-3 text-right font-mono font-black text-slate-900 text-sm border-r border-slate-100">
                         ¥{base.toLocaleString()}
@@ -1432,7 +1432,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                   </td>
                   {filteredEmployees.map(emp => {
                     const p = payrollProfiles[emp.id];
-                    const base = p?.base_salary || 250000;
+                    const base = p?.base_salary || 0;
                     const allowances = (p?.position_allowance || 0) + (p?.qualification_allowance || 0) + 
                                        (p?.housing_allowance || 0) + (p?.commuting_allowance || 0) + 
                                        (p?.family_allowance || 0) + (p?.special_allowance || 0);
@@ -1827,7 +1827,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
               <tbody className="divide-y divide-slate-100">
                 {filteredEmployees.map(emp => {
                   const p = payrollProfiles[emp.id];
-                  const base = p?.base_salary || 250000;
+                  const base = p?.base_salary || 0;
                   const pos = p?.position_allowance || 0;
                   const qual = p?.qualification_allowance || 0;
                   const house = p?.housing_allowance || 0;
@@ -2064,7 +2064,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                   onChange={e => {
                     setFormUserId(e.target.value);
                     const p = payrollProfiles[e.target.value];
-                    const b = p?.base_salary || 250000;
+                    const b = p?.base_salary || 0;
                     setFormNewBaseSalary(b);
                     setFormPositionAllowance(p?.position_allowance || 0);
                     setFormQualificationAllowance(p?.qualification_allowance || 0);
@@ -2077,7 +2077,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                 >
                   {employees.filter(e => !e.is_retired).map(emp => (
                     <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.department || '所属なし'} / 現在基本給: ¥{(payrollProfiles[emp.id]?.base_salary || 250000).toLocaleString()})
+                      {emp.name} ({emp.department || '所属なし'} / 現在基本給: ¥{(payrollProfiles[emp.id]?.base_salary || 0).toLocaleString()})
                     </option>
                   ))}
                 </select>
@@ -2138,7 +2138,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black text-emerald-950">基本給（月額）の改定</span>
                   <span className="text-[11px] font-mono text-slate-500">
-                    現在: ¥{(payrollProfiles[formUserId]?.base_salary || 250000).toLocaleString()}
+                    現在: ¥{(payrollProfiles[formUserId]?.base_salary || 0).toLocaleString()}
                   </span>
                 </div>
 
@@ -2155,7 +2155,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                   </div>
 
                   {(() => {
-                    const cBase = payrollProfiles[formUserId]?.base_salary || 250000;
+                    const cBase = payrollProfiles[formUserId]?.base_salary || 0;
                     const diff = formNewBaseSalary - cBase;
                     const rate = cBase > 0 ? parseFloat(((diff / cBase) * 100).toFixed(2)) : 0;
                     return (
@@ -2231,7 +2231,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                   昇給履歴タイムライン: {selectedEmployeeForTimeline.name}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  {selectedEmployeeForTimeline.department || '所属なし'} / 現在基本給: ¥{(payrollProfiles[selectedEmployeeForTimeline.id]?.base_salary || 250000).toLocaleString()}
+                  {selectedEmployeeForTimeline.department || '所属なし'} / 現在基本給: ¥{(payrollProfiles[selectedEmployeeForTimeline.id]?.base_salary || 0).toLocaleString()}
                 </p>
               </div>
               <button

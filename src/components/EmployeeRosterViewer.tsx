@@ -821,13 +821,13 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                             <tr>
                               <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">基本給（月額）</td>
                               <td className="px-4 py-2.5 font-mono font-bold text-emerald-700 text-sm">
-                                ¥{(currentEmployee.base_salary || 250000).toLocaleString()}
+                                {currentEmployee.base_salary ? `¥${currentEmployee.base_salary.toLocaleString()}` : '未設定'}
                               </td>
                             </tr>
                             <tr>
                               <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">時間給（時給換算額）</td>
                               <td className="px-4 py-2.5 font-mono font-bold text-slate-800">
-                                ¥{(currentEmployee.hourly_wage || 1200).toLocaleString()}
+                                {currentEmployee.hourly_wage ? `¥${currentEmployee.hourly_wage.toLocaleString()}` : '未設定'}
                               </td>
                             </tr>
                             <tr>

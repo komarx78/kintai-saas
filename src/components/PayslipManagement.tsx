@@ -339,7 +339,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       tenant_id: tId,
       user_id: uId,
       salary_type: 'monthly',
-      base_salary: 250000,
+      base_salary: 0,
       hourly_wage: 1100,
       position_allowance: 0,
       qualification_allowance: 0,
@@ -385,7 +385,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       paid_leave_days: 0,
       absence_days: 0,
       late_early_hours: 0,
-      base_salary: 250000,
+      base_salary: 0,
       overtime_allowance: 0,
       midnight_allowance: 0,
       holiday_allowance: 0,
@@ -587,8 +587,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
         // 給与形態：給与マスタ > 労務マスタ > バックアップ > 雇用形態判定
         const salType = pay?.salary_type || localPayProfile?.salary_type || onb?.salary_type || localBackup?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly');
-        // 基本給：給与マスタ（最新改定） > ローカル給与 > 労務マスタ > バックアップ > 250000
-        const bSalary = pay?.base_salary ?? localPayProfile?.base_salary ?? onb?.base_salary ?? localBackup?.base_salary ?? 250000;
+        // 基本給：給与マスタ（最新改定） > ローカル給与 > 労務マスタ > バックアップ > 0
+        const bSalary = pay?.base_salary ?? localPayProfile?.base_salary ?? onb?.base_salary ?? localBackup?.base_salary ?? 0;
         // 時給：給与マスタ > ローカル給与 > 労務マスタ > バックアップ > 1150
         const hWage = pay?.hourly_wage ?? localPayProfile?.hourly_wage ?? onb?.hourly_wage ?? localBackup?.hourly_wage ?? 1150;
         // 役職手当
@@ -894,7 +894,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           tenant_id: tenantId,
           user_id: emp.id,
           salary_type: existingProf?.salary_type || ((emp.employment_type === 'part-time' || emp.role?.includes('パート')) ? 'hourly' : 'monthly'),
-          base_salary: existingProf?.base_salary ?? 250000,
+          base_salary: existingProf?.base_salary ?? 0,
           hourly_wage: existingProf?.hourly_wage ?? 1150,
           position_allowance: existingProf?.position_allowance ?? 0,
           qualification_allowance: existingProf?.qualification_allowance ?? 0,
@@ -1030,7 +1030,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         tenant_id: tenantId,
         user_id: userId,
         salary_type: dbPay?.salary_type || dbOnb?.salary_type || localBackup?.salary_type || cachedProf?.salary_type || (emp.employment_type === 'part-time' ? 'hourly' : 'monthly'),
-        base_salary: dbPay?.base_salary ?? dbOnb?.base_salary ?? localBackup?.base_salary ?? cachedProf?.base_salary ?? 250000,
+        base_salary: dbPay?.base_salary ?? dbOnb?.base_salary ?? localBackup?.base_salary ?? cachedProf?.base_salary ?? 0,
         hourly_wage: dbPay?.hourly_wage ?? dbOnb?.hourly_wage ?? localBackup?.hourly_wage ?? cachedProf?.hourly_wage ?? 1150,
         position_allowance: dbPay?.position_allowance ?? dbOnb?.position_allowance ?? localBackup?.position_allowance ?? cachedProf?.position_allowance ?? 0,
         qualification_allowance: dbPay?.qualification_allowance ?? dbOnb?.qualification_allowance ?? localBackup?.qualification_allowance ?? cachedProf?.qualification_allowance ?? 0,

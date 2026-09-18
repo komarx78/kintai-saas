@@ -133,7 +133,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
               account_number: obData?.account_number || pyData?.account_number || myLocalPay?.account_number || '1234567',
               account_holder: obData?.account_holder || pyData?.account_holder || userName,
               dependents_count: obData?.dependents_count || pyData?.dependents_count || 0,
-              base_salary: pyData?.base_salary || myLocalPay?.base_salary || obData?.base_salary || 250000,
+              base_salary: pyData?.base_salary || myLocalPay?.base_salary || obData?.base_salary || 0,
               position_name: obData?.position_name || '一般社員',
               department: obData?.department || uData?.department || '本社営業部'
             });
@@ -546,7 +546,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
           );
         }
 
-        const base = record.base_salary || userProfile.base_salary || 250000;
+        const base = record.base_salary || userProfile.base_salary || 0;
         const multiplier = record.multiplier || 1.5;
         const adjustment = record.adjustment_amount || 0;
         const bonusAmount = record.bonus_gross;
@@ -732,7 +732,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
       {/* 3. 🧾 源泉徴収票（国税庁公式原本様式 NTAOHSZ062010060）                     */}
       {/* ========================================================================= */}
       {activeDocTab === 'tax_slip' && (() => {
-        const base = userProfile.base_salary || 250000;
+        const base = userProfile.base_salary || 0;
         const totalPaid = base * (userProfile.is_retired ? 8 : 12) + Math.round(base * 2.0);
         const socialDeducted = Math.round(totalPaid * 0.1475);
         const deductionAfterPayment = Math.round(totalPaid * 0.7);

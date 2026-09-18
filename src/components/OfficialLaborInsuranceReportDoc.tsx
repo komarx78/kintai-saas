@@ -52,7 +52,7 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
     const isPartTime = emp.employment_type === 'part-time';
     
     // 年間賃金概算（月給 × 12 + 賞与2ヶ月想定）
-    const monthlyWage = emp.base_salary || 250000;
+    const monthlyWage = emp.base_salary || 0;
     const annualWage = monthlyWage * 14;
 
     const isAccidentEligible = !isExecutive; // 役員以外は全員労災対象

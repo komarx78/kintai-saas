@@ -139,7 +139,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
     const cleanMyNumber = (emp.my_number || '').replace(/[^0-9]/g, '');
 
     // 賃金月額（千円単位、4桁）例: 250,000 -> 0250
-    const monthlyThousand = Math.round((emp.base_salary || 250000) / 1000);
+    const monthlyThousand = Math.round((emp.base_salary || 0) / 1000);
     const wageStr = String(monthlyThousand).padStart(4, '0');
 
     // 氏名カタカナ（全角スペース空け）
@@ -556,7 +556,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500 font-bold">賃金月額:</span>
                   <span className="font-black text-emerald-700">
-                    ¥{Number(formValues.wageAmount ? Number(formValues.wageAmount) * 1000 : currentEmployee?.base_salary || 250000).toLocaleString()}
+                    ¥{Number(formValues.wageAmount ? Number(formValues.wageAmount) * 1000 : currentEmployee?.base_salary || 0).toLocaleString()}
                     <span className="text-[10px] text-slate-400 font-normal ml-1">（千円単位: {formValues.wageThousands}）</span>
                   </span>
                 </div>

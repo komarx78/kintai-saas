@@ -117,7 +117,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
 
     const isPartTime = currentEmployee.employment_type === 'part-time' || currentEmployee.salary_type === 'hourly';
     const isExecutive = currentEmployee.is_executive || currentEmployee.department?.includes('役員');
-    const base = Number(currentEmployee.base_salary) || (isPartTime ? 1200 : 250000);
+    const base = Number(currentEmployee.base_salary) || 0;
 
     return Array.from({ length: 12 }, (_, i) => {
       const m = i + 1;

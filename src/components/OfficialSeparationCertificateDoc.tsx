@@ -130,7 +130,7 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
     return new Date();
   }, [currentEmployee?.retirement_date]);
 
-  const monthlyBaseWage = currentEmployee?.base_salary || 250000;
+  const monthlyBaseWage = currentEmployee?.base_salary || 0;
 
   // 賃金支払状況テーブルの自動算定（退職日から逆算）
   const wageRows = useMemo(() => {

@@ -1246,6 +1246,12 @@ export default function OnboardingAdminDashboard() {
         await supabase.from('users').delete().eq('id', emp.user_id);
       }
 
+      // LocalStorage のバックアップキャッシュも完全削除
+      try {
+        localStorage.removeItem(`employee_master_backup_${emp.user_id}`);
+        localStorage.removeItem(`maternity_leave_record_${emp.user_id}`);
+      } catch (e) {}
+
       alert(`🗑️ ${emp.name} さんのデータおよび認証アカウントを完全に抹消しました。`);
       await fetchData();
     } catch (err: any) {
@@ -3058,7 +3064,9 @@ export default function OnboardingAdminDashboard() {
 
                           <td className="py-3.5 px-3 text-slate-700 text-[11px]">
                             <div className="font-bold flex items-center gap-1">
-                              {isHourly ? `時給 ¥${emp.hourly_wage?.toLocaleString()}` : `月給 ¥${emp.base_salary?.toLocaleString()}`}
+                              {isHourly 
+                                ? (emp.hourly_wage && emp.hourly_wage > 0 ? `時給 ¥${emp.hourly_wage.toLocaleString()}` : <span className="text-slate-400 font-normal">時給 未設定</span>)
+                                : (emp.base_salary && emp.base_salary > 0 ? `月給 ¥${emp.base_salary.toLocaleString()}` : <span className="text-slate-400 font-normal">月給 未設定</span>)}
                               {emp.qualification_allowance ? (
                                 <span 
                                   className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${

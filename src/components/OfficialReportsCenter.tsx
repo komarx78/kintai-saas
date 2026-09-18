@@ -268,7 +268,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
         // 退職理由
         const retReason = ob.retirement_reason || u.retirement_reason || '自己都合による退職（一身上の都合・転職のため）';
 
-        const base = conDoc.base_salary || pp.base_salary || ob.base_salary || localBackup?.base_salary || 250000;
+        const base = conDoc.base_salary || pp.base_salary || ob.base_salary || localBackup?.base_salary || 0;
 
         return {
           id: u.id,

@@ -129,7 +129,7 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
             if (raw) localMaster = JSON.parse(raw);
           } catch (_) {}
 
-          const baseSalary = Number(profile.base_salary) || Number(localMaster.base_salary) || 250000;
+          const baseSalary = Number(profile.base_salary) || Number(localMaster.base_salary) || 0;
           const empType = profile.employment_type || u.employment_type || localMaster.employment_type || 
             (profile.salary_type === 'hourly' || localMaster.salary_type === 'hourly' ? 'part-time' : 'full-time');
           const salaryType = profile.salary_type || localMaster.salary_type || (empType === 'part-time' ? 'hourly' : 'monthly');
@@ -208,7 +208,7 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
               ...r,
               employment_type: empType,
               salary_type: salType,
-              base_salary: r.base_salary || profile.base_salary || localMaster.base_salary || 250000
+              base_salary: r.base_salary || profile.base_salary || localMaster.base_salary || 0
             };
           });
 
@@ -221,7 +221,7 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
                 if (raw) localMaster = JSON.parse(raw);
               } catch (_) {}
 
-              const baseSalary = Number(profile.base_salary) || Number(localMaster.base_salary) || 250000;
+              const baseSalary = Number(profile.base_salary) || Number(localMaster.base_salary) || 0;
               const empType = profile.employment_type || u.employment_type || localMaster.employment_type || 
                 (profile.salary_type === 'hourly' || localMaster.salary_type === 'hourly' ? 'part-time' : 'full-time');
               const salaryType = profile.salary_type || localMaster.salary_type || (empType === 'part-time' ? 'hourly' : 'monthly');

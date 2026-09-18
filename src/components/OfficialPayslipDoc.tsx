@@ -141,7 +141,7 @@ export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip,
   if ((payslip as any).late_early_deduction && (payslip as any).late_early_deduction > 0) earningsList.push({ label: '遅刻早退控除', amount: -(payslip as any).late_early_deduction });
 
   if (earningsList.length === 0) {
-    earningsList.push({ label: '基本給', amount: payslip.total_earnings || 250000 });
+    earningsList.push({ label: '基本給', amount: payslip.total_earnings || 0 });
   }
 
   // 3. 控除項目
