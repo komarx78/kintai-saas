@@ -118,8 +118,7 @@ ${companyRules || '（就業規則が登録されていません。労働基準�
   });
 
   try {
-    // 最新の Gemini 3.5 Flash を最優先で呼び出し
-    const models = ['gemini-3.5-flash', 'gemini-3.5-flash-latest', 'gemini-3.5-pro'];
+    const models = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-pro-latest'];
     let lastError: any = null;
     let answer: string | null = null;
 
@@ -171,11 +170,16 @@ ${companyRules || '（就業規則が登録されていません。労働基準�
 
 /**
  * システム公式操作マニュアル＆FAQをもとにGemini AIに質問する（システムAIサポートデスク）
+ * @param query ユーザーの質問
+ * @param faqKnowledge システム公式FAQ知識ベース
+ * @param tenantId テナントID（任意）
+ * @param pageContext 現在ユーザーが開いている画面のコンテキスト情報（任意）
  */
 export async function askSystemOperationAI(
   query: string,
   faqKnowledge: string,
-  tenantId?: string
+  tenantId?: string,
+  pageContext?: string
 ): Promise<string> {
   const apiKey = await getResolvedGeminiApiKey(tenantId);
   if (!apiKey) {
@@ -185,6 +189,26 @@ export async function askSystemOperationAI(
   const systemInstruction = `
 あなたは「KAP 勤怠・シフト・労務管理クラウドシステム」の公式AIサポートデスク担当者です。
 利用企業（テナント）の従業員および管理者からの「システムの操作方法・機能の使い方・困りごと」に対して、親切・丁寧・的確に操作手順を回答してください。
+
+【ユーザーが現在開いている画面・コンテキスト】
+${pageContext || '現在画面: 不明（全システム共通画面）'}
+
+【最重要：画面コンテキストに基づく回答判定ルール（推測・嘘の完全禁止）】
+1. ユーザーが「基本情報ってどう入れるの？」「基本情報の入力方法」「基本設定はどうするの？」などの質問をした場合：
+   - 現在の画面が「🏢 会社・全社労務マスタ設定センター」（パス: /company/settings）である場合、または会社設定を開いている場合は、100%【会社基本情報（企業名・住所・代表者役職/氏名・代表電話番号・会社実印/社印の登録・一括保存）】の登録手順を案内してください。従業員の入社手続きの基本情報と誤認して回答することを固く禁じます。
+   - 現在の画面が「入退社労務管理（入社手続き）」である場合のみ、従業員の入社手続き基本情報（氏名・生年月日・現住所・口座情報等）の入力手順を回答してください。
+2. 操作案内を行う際は、実際の画面構成（タブ名、ボタン名、入力項目名）と100%一致させて案内してください：
+   - 会社マスタの場合: 「1. 会社基本情報」タブ、右上の「設定を一括保存」ボタン、企業名/屋号、本社所在地、代表者役職・氏名、会社実印・社印の印影登録（印影画像をアップロード / 本格公式角印を自動生成）
+3. 箇条書きやステップ番号（1. 2. 3.）を用いて、ユーザーが迷わず直感的に操作できるようにわかりやすく解説してください。
+
+【システム全体マップ（主要7大機能）】
+- 🏢 会社・全社労務マスタ設定センター（/company/settings）: 会社基本情報、組織図・役職・部署、就業時間パターン・営業カレンダー、給与締め日、労働条件通知書、入社手続きステップ
+- ⏰ 勤怠・打刻管理（/kintai/user, /kintai/admin）: 出退勤打刻、休憩打刻、月次勤怠照会、打刻修正申請、月間出勤簿承認・締め確定
+- 🌴 有給・各種申請（/kintai/user, /kintai/admin）: 有給休暇申請、半日有休、特別休暇、有給残数確認、年5日義務管理
+- 📅 シフト管理（/shift/user, /shift/admin）: シフト希望カレンダー提出、必要枠設定、シフト作成・確定Publish
+- 💰 給与計算・明細（/payroll/user, /payroll/admin）: 勤怠一括自動計算、Web給与明細・賞与明細発行、国税庁様式源泉徴収簿、賃金台帳、公式A4印刷
+- 📄 入退社・労務手続き（/onboarding/admin, /onboarding/input）: 新入社員基本情報入力・通帳写真提出、マイナンバー、労働条件通知書電子同意、労働者名簿、離職票・公的書類発行
+- ⚙️ 共通・アカウント（/portal, /reset-password）: 統合ポータル、パスワード再設定、招待コード発行、退職・復職処理
 
 【システム公式操作マニュアル・FAQ知識ベース】
 ${faqKnowledge}
@@ -197,7 +221,7 @@ ${faqKnowledge}
 `;
 
   try {
-    const models = ['gemini-3.5-flash', 'gemini-3.5-flash-latest', 'gemini-3.5-pro'];
+    const models = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash', 'gemini-pro-latest'];
     let answer: string | null = null;
     let lastError: string | null = null;
 

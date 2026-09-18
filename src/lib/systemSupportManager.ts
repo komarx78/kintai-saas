@@ -114,7 +114,7 @@ export function resolveGuidePreviewType(item: Partial<SystemFaqItem>): string {
   if (q.includes('契約書') || q.includes('電子押印') || q.includes('電子署名') || q.includes('同意') || q.includes('労働条件通知書')) return 'contract_sign';
   if (q.includes('名簿') || q.includes('名ぼ') || q.includes('源泉徴収簿') || q.includes('賃金台帳') || q.includes('法定帳票') || q.includes('公式A4印刷')) return 'official_ledger_print';
   if (q.includes('営業カレンダー') || q.includes('営業日・休日マップ') || q.includes('年間休日')) return 'company_calendar_settings';
-  if (q.includes('所定時間') || q.includes('締め日') || q.includes('会社マスタ') || q.includes('全社労務マスタ')) return 'company_master_settings';
+  if (q.includes('所定時間') || q.includes('締め日') || q.includes('会社マスタ') || q.includes('全社労務マスタ') || q.includes('会社基本情報') || q.includes('企業名') || q.includes('代表者') || q.includes('社印') || q.includes('角印') || q.includes('組織図') || q.includes('部署マスタ')) return 'company_master_settings';
   if (q.includes('勤怠から一括自動計算') || q.includes('給与計算') || q.includes('一括確定')) return 'payroll_admin_calc';
   if (q.includes('賞与明細') || q.includes('源泉徴収票')) return 'payslip_bonus_tax';
   if (q.includes('必要枠') || q.includes('Publish') || q.includes('シフト確定') || q.includes('シフト管理')) return 'shift_admin_manage';
@@ -361,6 +361,15 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
 
   // ─── 🏢 会社マスタ・休日設定 ───
   {
+    id: 'sfaq-c-0',
+    category: 'settings',
+    question: '【管理者】会社の基本情報（企業名・住所・代表者・社印・角印）の登録・変更方法は？',
+    answer: '【会社基本情報の登録・変更手順】\n1. ポータルの「🏢 会社・全社労務マスタ設定センター」カード（管理者専用）をクリックします（または画面上の「会社・全社労務マスタ設定」を開きます）。\n2. 「1. 会社基本情報」タブを選択します。\n3. 以下の各項目を入力・登録します：\n   ・企業名 / 屋号（必須）：会社名や屋号を入力します。\n   ・本社所在地（住所）（必須）：郵便番号および本社住所を入力します。\n   ・代表者役職・氏名（必須）：例「代表取締役 山田 太郎」のように入力します。\n   ・代表電話番号：会社の公式代表電話番号を入力します。\n   ・会社実印・社印（角印 / 丸印）の印影登録：手元の社印画像（透過PNG推奨）を「印影画像をアップロード」するか、「本格公式角印を自動生成」ボタンを押すと入力した企業名から朱肉角印（透過PNG）が即座に自動生成されます。\n4. 画面右上の青い「設定を一括保存」（または画面下の「設定を一括保存する」）ボタンを必ずクリックして完了します。\n※ ここで保存した会社名・住所・代表者名・社印は、「給与支払明細書」「労働条件通知書 兼 雇用契約書」「労働者名簿」等の全公的帳票・書類の事業主捺印欄へ100%完全自動連動されます。',
+    keyword: '会社基本情報 企業名 屋号 本社所在地 住所 代表者役職 代表者氏名 代表電話番号 会社実印 社印 角印 印影登録 会社・全社労務マスタ設定センター 設定を一括保存 基本情報 管理者',
+    preview_type: 'company_master_settings',
+    updated_at: '2026-09-18'
+  },
+  {
     id: 'sfaq-c-1',
     category: 'settings',
     question: '【管理者】会社の所定労働時間、休憩時間、締め日・支払日を設定するには？',
@@ -377,6 +386,33 @@ export const DEFAULT_SYSTEM_FAQS: SystemFaqItem[] = [
     keyword: '年間休日 営業日・休日マップ カレンダー 所定休日 祝日 盆休み 年末年始 年間営業カレンダー ＆ 就業時間 設定を一括保存 営業カレンダー A4印刷 / PDF出力 管理者',
     preview_type: 'company_calendar_settings',
     updated_at: '2026-09-06'
+  },
+  {
+    id: 'sfaq-c-3',
+    category: 'settings',
+    question: '【管理者】会社組織図・役職マスタ・部署の登録・設定方法は？',
+    answer: '【会社組織図・部署・役職の設定手順】\n1. ポータルの「🏢 会社・全社労務マスタ設定センター」を開き、「2. 会社組織図 ＆ 役職・部署」タブをクリックします。\n2. 「部署マスタ」にて「＋ 新しい部署を追加」を押し、部署名（営業部、開発部等）や所属長（マネージャー）を設定します。\n3. 「役職マスタ」にて「＋ 役職を追加」を押し、役職名（部長、課長、リーダー等）や承認権限レベルを設定します。\n4. 「全社組織ツリー」で全社員の所属部署・役職を視覚的に確認・調整できます。\n5. 右上の「設定を一括保存」をクリックすると、勤怠の承認ルートやシフト作成、給与計算へ自動連動されます。',
+    keyword: '会社組織図 役職マスタ 部署マスタ 組織図 役職 部署 承認ルート 会社・全社労務マスタ設定センター 設定を一括保存 管理者',
+    preview_type: 'company_master_settings',
+    updated_at: '2026-09-18'
+  },
+  {
+    id: 'sfaq-c-4',
+    category: 'settings',
+    question: '【管理者】労働条件通知書・雇用契約書のテンプレートや印字設定を行うには？',
+    answer: '【労働条件通知書・雇用契約書テンプレート設定手順】\n1. ポータルの「🏢 会社・全社労務マスタ設定センター」を開き、「5. 労働条件通知書 ＆ 雇用契約書」タブをクリックします。\n2. 契約期間の定め（無期・有期）、就業場所、従事すべき業務の内容、始業・終業時刻、賃金締切日・支払日、社会保険の加入状況などの標準テンプレートを設定します。\n3. 「会社実印・社印の自動捺印」を有効にすると、基本情報で設定した社印が契約書原本へ自動捺印されます。\n4. 右上の「設定を一括保存」をクリックすると、新入社員の入社手続き時にこのテンプレートが自動適用されます。',
+    keyword: '労働条件通知書 雇用契約書 契約書テンプレート 雇用契約 社印捺印 会社・全社労務マスタ設定センター 設定を一括保存 管理者',
+    preview_type: 'contract_sign',
+    updated_at: '2026-09-18'
+  },
+  {
+    id: 'sfaq-c-5',
+    category: 'settings',
+    question: '【管理者】入社手続きステップ（ワークフロー）や承認者をカスタマイズするには？',
+    answer: '【入社手続きステップの設定手順】\n1. ポータルの「🏢 会社・全社労務マスタ設定センター」を開き、「6. 入社手続きステップ ＆ 承認者マスタ」タブをクリックします。\n2. 入社手続きの各ステップ（基本情報入力、通帳・口座写真提出、マイナンバー提出、雇用契約書同意など）の有効/無効の切り替えや、並び替え（↑上へ / ↓下へ）を行います。\n3. 各ステップの担当承認者（労務担当、人事部長、最終承認者等）を設定します。\n4. 右上の「設定を一括保存」をクリックすると、新規入社者の手続きフローへ即座に反映されます。',
+    keyword: '入社手続きステップ ワークフロー 承認者マスタ 手続き設定 入社フロー 会社・全社労務マスタ設定センター 設定を一括保存 管理者',
+    preview_type: 'company_master_settings',
+    updated_at: '2026-09-18'
   },
 
   // ─── ⚙️ ログイン・基本操作 ───

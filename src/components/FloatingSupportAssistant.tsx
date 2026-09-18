@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Bot, X, Send, Sparkles, HelpCircle, ChevronRight, 
   ExternalLink, ShieldCheck
@@ -26,6 +26,12 @@ interface ChatMessage {
 
 // 労務制度・公的帳票・有給基準のオフライン完全知識辞書（Geminiキーなしでも100%即答）
 const LABOR_KNOWLEDGE_BASE = [
+  {
+    keywords: ['会社基本情報', '企業情報', '会社名', '社印', '代表者', '全社マスタ', '会社設定', 'マスタ設定', '企業名', '住所変更'],
+    question: '会社基本情報（企業名・住所・代表者・社印）の登録・変更方法は？',
+    answer: `【会社基本情報の登録・変更手順】\n\n1. ポータルの「🏢 会社・全社労務マスタ設定センター」カード（管理者専用）を開きます（/settings/company）。\n2. 「1. 会社基本情報」タブを選択します。\n3. 以下の項目を入力・設定します：\n   ・企業名 / 屋号（必須）\n   ・本社所在地（住所）（必須）\n   ・代表者役職・氏名（必須）\n   ・代表電話番号\n   ・会社実印・社印（角印/丸印）の印影登録：「印影画像をアップロード」または「本格公式角印を自動生成」ボタンで朱肉角印（透過PNG）を即時作成できます。\n4. 画面右上の「設定を一括保存」（または画面下の「設定を一括保存する」）ボタンを必ずクリックしてください。\n\n※ここで設定した会社情報と社印は、「給与支払明細書」「労働条件通知書 兼 雇用契約書」「労働者名簿」等の各種公的帳票へ100%自動連動されます。`,
+    action: { label: '🏢 会社・全社労務マスタ設定へ', path: '/settings/company' }
+  },
   {
     keywords: ['有給', '有休', '付与', '日数', 'いつ', 'タイミング', '比例付与', '基準'],
     question: '有給休暇の付与基準と日数は？',
@@ -64,18 +70,99 @@ const LABOR_KNOWLEDGE_BASE = [
   }
 ];
 
+// 🧭 現在のURLパスから開いている画面と役割を判定するヘルパー
+function getCurrentPageContext(pathname: string): { name: string; description: string; preferredCategory?: string } {
+  if (pathname.startsWith('/settings/company')) {
+    return {
+      name: '🏢 会社・全社労務マスタ設定センター（/settings/company）',
+      description: '会社基本情報（企業名・住所・代表者・社印/角印）、組織図・部署・役職、年間営業カレンダー、給与締め日、労働条件通知書、入社手続きステップの一元管理画面',
+      preferredCategory: 'settings'
+    };
+  }
+  if (pathname.startsWith('/kintai/admin')) {
+    return {
+      name: '⏰ 管理者：月間勤怠・出勤簿管理（/kintai/admin）',
+      description: '全社員の月間勤怠実績、打刻・休憩修正、締め処理、各種申請の承認画面',
+      preferredCategory: 'kintai'
+    };
+  }
+  if (pathname.startsWith('/kintai/user')) {
+    return {
+      name: '⏰ 従業員：月次勤怠・有給照会 ＆ 打刻修正申請（/kintai/user）',
+      description: '自身の打刻実績、打刻修正申請、有給休暇の残数確認と取得申請画面',
+      preferredCategory: 'kintai'
+    };
+  }
+  if (pathname.startsWith('/shift/admin')) {
+    return {
+      name: '📅 管理者：シフト管理・作成（/shift/admin）',
+      description: 'シフトの必要人数枠設定、スタッフ希望集約、シフト確定Publish画面',
+      preferredCategory: 'shift'
+    };
+  }
+  if (pathname.startsWith('/shift/user')) {
+    return {
+      name: '📅 従業員：シフト希望提出・確定シフト確認（/shift/user）',
+      description: '希望シフトの提出、確定カレンダーの確認画面',
+      preferredCategory: 'shift'
+    };
+  }
+  if (pathname.startsWith('/payroll/admin')) {
+    return {
+      name: '💰 管理者：給与計算・明細発行・法定帳票発行センター（/payroll/admin）',
+      description: '勤怠連動の給与一括自動計算、Web明細発行、労働者名簿・源泉徴収簿・賃金台帳の公式A4印刷画面',
+      preferredCategory: 'payroll'
+    };
+  }
+  if (pathname.startsWith('/payroll/user')) {
+    return {
+      name: '💰 従業員：Web給与明細・源泉徴収票照会（/payroll/user）',
+      description: '自身の給与明細、賞与明細、源泉徴収票の閲覧およびPDF保存画面',
+      preferredCategory: 'payroll'
+    };
+  }
+  if (pathname.startsWith('/onboarding/admin')) {
+    return {
+      name: '📄 管理者：入退社労務書類管理（/onboarding/admin）',
+      description: '新入社員の手続き進捗、公的帳票・キャビネット管理、離職票原本出力画面',
+      preferredCategory: 'onboarding'
+    };
+  }
+  if (pathname.startsWith('/onboarding/my') || pathname.startsWith('/onboarding/welcome')) {
+    return {
+      name: '📄 新入社員：入社手続き画面（/onboarding/my）',
+      description: '新入社員ご本人による基本情報入力、通帳写真・口座登録、マイナンバー提出、契約書同意画面',
+      preferredCategory: 'onboarding'
+    };
+  }
+  if (pathname.startsWith('/portal')) {
+    return {
+      name: '🏠 全社統合ポータル（/portal）',
+      description: '各業務システム（勤怠、シフト、給与、労務、会社マスタ）への総合ポータル画面',
+      preferredCategory: 'general'
+    };
+  }
+  return {
+    name: `現在の画面（パス: ${pathname}）`,
+    description: 'KAP統合クラウドシステム共通画面'
+  };
+}
+
 export const FloatingSupportAssistant: React.FC<FloatingSupportAssistantProps> = ({
   tenantId,
   userName,
   role
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputQuery, setInputQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [apiKeyAvailable, setApiKeyAvailable] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const pageCtx = getCurrentPageContext(location.pathname);
 
   // 初期化：APIキーの確認とウェルカムメッセージ
   useEffect(() => {
@@ -87,13 +174,13 @@ export const FloatingSupportAssistant: React.FC<FloatingSupportAssistantProps> =
       const initialMessage: ChatMessage = {
         id: 'welcome',
         role: 'assistant',
-        content: `こんにちは、${userName || roleLabel}様！🤖\n【KAP 労務・操作AIアシスタント】です。\n\nシステムの操作手順、有給の付与基準、帳票の出し方、各種申請など、お困りごとは何でもお尋ねください。24時間365日即座にご案内いたします。`,
+        content: `こんにちは、${userName || roleLabel}様！🤖\n【KAP 労務・操作AIアシスタント】です。\n\n現在開かれている「${pageCtx.name}」の操作はもちろん、全システムの操作手順、有給基準、帳票発行など何でもお尋ねください。24時間365日即座にご案内いたします。`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages([initialMessage]);
     };
     init();
-  }, [tenantId, userName]);
+  }, [tenantId, userName, location.pathname]);
 
   // メッセージスクロール
   useEffect(() => {
@@ -120,14 +207,31 @@ export const FloatingSupportAssistant: React.FC<FloatingSupportAssistantProps> =
     setIsLoading(true);
 
     try {
-      // 1. まずローカルナレッジベースから最適一致を探索（超高速＆確実）
       const lower = textToSend.toLowerCase();
-      const matchedKnowledge = LABOR_KNOWLEDGE_BASE.find(kb => 
-        kb.keywords.some(kw => lower.includes(kw.toLowerCase()))
-      );
+      const isCompanySettings = location.pathname.startsWith('/settings/company');
+      const isOnboarding = location.pathname.startsWith('/onboarding');
 
-      // 2. FAQ一覧からも関連するQ&Aを探索
-      const matchedFaq = DEFAULT_SYSTEM_FAQS.find(f => 
+      // 1. まずローカルナレッジベースから最適一致を探索（画面コンテキストを最優先で照合）
+      let matchedKnowledge = LABOR_KNOWLEDGE_BASE.find(kb => {
+        // 会社設定画面で「基本情報」「基本」が聞かれた場合は会社基本情報を100%最優先
+        if (isCompanySettings && (lower.includes('基本情報') || lower.includes('基本') || lower.includes('会社'))) {
+          return kb.keywords.includes('会社基本情報');
+        }
+        return kb.keywords.some(kw => lower.includes(kw.toLowerCase()));
+      });
+
+      // 2. FAQ一覧からも関連するQ&Aを探索（画面優先カテゴリ＆キーワード照合）
+      let matchedFaq = DEFAULT_SYSTEM_FAQS.find(f => {
+        if (isCompanySettings && (lower.includes('基本情報') || lower.includes('基本'))) {
+          return f.id === 'sfaq-c-0';
+        }
+        if (isOnboarding && (lower.includes('基本情報') || lower.includes('通帳') || lower.includes('口座'))) {
+          return f.id === 'sfaq-o-1';
+        }
+        const matchesCategory = pageCtx.preferredCategory ? f.category === pageCtx.preferredCategory : false;
+        const textMatch = f.question.toLowerCase().includes(lower) || f.keyword.toLowerCase().includes(lower);
+        return matchesCategory && textMatch;
+      }) || DEFAULT_SYSTEM_FAQS.find(f => 
         f.question.toLowerCase().includes(lower) || 
         f.keyword.toLowerCase().includes(lower)
       );
@@ -139,9 +243,14 @@ export const FloatingSupportAssistant: React.FC<FloatingSupportAssistantProps> =
       if (apiKeyAvailable) {
         // FAQナレッジをプロンプトに統合
         const knowledgeText = DEFAULT_SYSTEM_FAQS.map(f => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n');
-        const aiAnswer = await askSystemOperationAI(textToSend, knowledgeText, tenantId || undefined);
+        const pageContextInfo = `【現在ユーザーが開いている画面】\n画面名: ${pageCtx.name}\n画面の役割: ${pageCtx.description}\nURLパス: ${location.pathname}`;
+        
+        const aiAnswer = await askSystemOperationAI(textToSend, knowledgeText, tenantId || undefined, pageContextInfo);
         replyContent = aiAnswer;
-        if (matchedKnowledge?.action) {
+
+        if (isCompanySettings) {
+          suggestedAction = { label: '🏢 会社・全社労務マスタ設定へ', path: '/settings/company' };
+        } else if (matchedKnowledge?.action) {
           suggestedAction = matchedKnowledge.action;
         }
       } else {
@@ -151,9 +260,11 @@ export const FloatingSupportAssistant: React.FC<FloatingSupportAssistantProps> =
           suggestedAction = matchedKnowledge.action;
         } else if (matchedFaq) {
           replyContent = `【回答】\n${matchedFaq.answer}`;
-          suggestedAction = { label: '該当画面を確認する', path: '/kintai/user' };
+          suggestedAction = isCompanySettings 
+            ? { label: '🏢 会社・全社労務マスタ設定へ', path: '/settings/company' }
+            : { label: '該当画面を確認する', path: '/portal' };
         } else {
-          replyContent = `ご質問ありがとうございます！\n\n該当の操作については、以下のクイックガイドまたは各業務メニューよりご確認いただけます。\n\n・打刻修正：左メニュー「月次勤怠・有給照会」➔「申請する」\n・有給申請：左メニュー「各種申請」\n・離職票等の公的原本：管理者メニュー「入退社労務管理」\n・給与明細：メニュー「給与明細」\n\n※具体的な法律上の判断や例外対応につきましては、自社の管理者様または顧問社労士・税理士の先生へご確認ください。`;
+          replyContent = `ご質問ありがとうございます！\n\n該当の操作については、以下のクイックガイドまたは各業務メニューよりご確認いただけます。\n\n・会社基本情報設定：ポータル「🏢 会社・全社労務マスタ設定センター」\n・打刻修正：左メニュー「月次勤怠・有給照会」➔「申請する」\n・有給申請：左メニュー「各種申請」\n・離職票等の公的原本：管理者メニュー「入退社労務管理」\n・給与明細：メニュー「給与明細」\n\n※具体的な法律上の判断や例外対応につきましては、自社の管理者様または顧問社労士・税理士の先生へご確認ください。`;
         }
       }
 
