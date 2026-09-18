@@ -102,7 +102,7 @@ export default function CommunitySupportDashboard() {
                 システム公式操作ガイド ＆ 改善要望窓口
               </h1>
               <p className="text-[11px] text-slate-500 mt-1 hidden sm:block">
-                KAP勤怠・シフトシステムの公式操作マニュアル、システム機能改善リクエスト受付
+                「みんなの らくまる労務」の公式操作マニュアル、システム機能改善リクエスト受付
               </p>
             </div>
           </div>

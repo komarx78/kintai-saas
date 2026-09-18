@@ -28,7 +28,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS: SystemNotificationSettings = {
 
 // 📋 GAS（Google Apps Script）用メール送信テンプレート
 export const GAS_MAIL_SCRIPT_TEMPLATE = `/**
- * 【KAP勤怠・システム改善要望＆Q&A 自動メール通知スクリプト】
+ * 【みんなの らくまる労務・システム改善要望＆Q&A 自動メール通知スクリプト】
  * 
  * 1. Google Drive または script.google.com で新規スクリプトを作成
  * 2. このコードをそのまま貼り付けて保存
@@ -50,7 +50,7 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    var subject = data.subject || "【KAP勤怠】新しいシステム改善要望・Q&Aが届きました";
+    var subject = data.subject || "【みんなの らくまる労務】新しいシステム改善要望・Q&Aが届きました";
     var tenantName = data.tenant_name || "未設定企業";
     var userName = data.user_name || "未設定ユーザー";
     var categoryLabel = data.category_label || "その他";
@@ -61,7 +61,7 @@ function doPost(e) {
 
     var body = 
       "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n" +
-      "【KAP勤怠】システム改善要望・Q&Aが届きました\\n" +
+      "【みんなの らくまる労務】システム改善要望・Q&Aが届きました\\n" +
       "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\n" +
       "■ 受信日時: " + createdAt + "\\n" +
       "■ 送信元企業: " + tenantName + "\\n" +
@@ -74,13 +74,13 @@ function doPost(e) {
       "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\\n" +
       "▼ 特権管理画面（改善要望回収デスク）で確認・対応する:\\n" +
       adminUrl + "\\n\\n" +
-      "※ 本メールはKAP勤怠システムより自動送信されています。";
+      "※ 本メールは「みんなの らくまる労務」システムより自動送信されています。";
 
     var htmlBody = 
       "<div style='font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;'>" +
       "  <div style='background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 16px 20px; border-radius: 8px; margin-bottom: 20px;'>" +
       "    <h2 style='margin: 0; font-size: 18px;'>📬 新しい改善要望・Q&Aが届きました</h2>" +
-      "    <p style='margin: 4px 0 0; font-size: 12px; opacity: 0.9;'>KAP勤怠・有給管理システム 特権統括通知</p>" +
+      "    <p style='margin: 4px 0 0; font-size: 12px; opacity: 0.9;'>みんなの らくまる労務 特権統括通知</p>" +
       "  </div>" +
       "  <table style='width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px;'>" +
       "    <tr><td style='padding: 8px; border-bottom: 1px solid #f1f5f9; color: #64748b; width: 120px;'><strong>送信元企業</strong></td><td style='padding: 8px; border-bottom: 1px solid #f1f5f9; font-weight: bold; color: #1e293b;'>" + tenantName + "</td></tr>" +
@@ -96,14 +96,14 @@ function doPost(e) {
       "  <div style='text-align: center; margin-top: 24px;'>" +
       "    <a href='" + adminUrl + "' style='display: inline-block; background-color: #4f46e5; color: white; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px;'>特権管理画面で確認・返信する</a>" +
       "  </div>" +
-      "  <p style='margin-top: 24px; text-align: center; font-size: 11px; color: #94a3b8;'>※ 本メールはKAP勤怠システムからの自動通知です。</p>" +
+      "  <p style='margin-top: 24px; text-align: center; font-size: 11px; color: #94a3b8;'>※ 本メールは「みんなの らくまる労務」システムからの自動通知です。</p>" +
       "</div>";
 
     recipients.forEach(function(email) {
       if (email && email.indexOf('@') !== -1) {
         GmailApp.sendEmail(email.trim(), subject, body, {
           htmlBody: htmlBody,
-          name: "KAP勤怠 サポート本部"
+          name: "みんなの らくまる労務 サポート本部"
         });
       }
     });
@@ -204,7 +204,7 @@ export async function sendSuggestionNotification(
     };
 
     const categoryLabel = categoryLabels[suggestion.category] || suggestion.category;
-    const subject = `【KAP勤怠】${suggestion.tenant_name} 様より改善要望・Q&Aが届きました（${suggestion.title}）`;
+    const subject = `【みんなの らくまる労務】${suggestion.tenant_name} 様より改善要望・Q&Aが届きました（${suggestion.title}）`;
 
     const payload = {
       action: 'new_suggestion',
@@ -273,13 +273,13 @@ export async function sendTestNotificationEmail(
   const testPayload = {
     action: 'test_notification',
     recipient_emails: [targetEmail],
-    subject: '【KAP勤怠・テスト通知】メール送信連携テストが成功しました',
+    subject: '【みんなの らくまる労務・テスト通知】メール送信連携テストが成功しました',
     tenant_name: '株式会社テスト（システム検証）',
     user_name: 'システム管理者',
     category: 'feature',
     category_label: '🔔 メール連携接続テスト',
     title: 'メール通知機能のテスト疎通確認',
-    content: 'このメールは、KAP勤怠システムの特権管理画面より送信された接続テスト通知です。\n本メールが正常に届いていれば、新着の改善要望やQ&Aが投稿された際にも自動でメール通知が送信されます！',
+    content: 'このメールは、「みんなの らくまる労務」システムの特権管理画面より送信された接続テスト通知です。\n本メールが正常に届いていれば、新着の改善要望やQ&Aが投稿された際にも自動でメール通知が送信されます！',
     created_at: new Date().toISOString(),
     admin_url: 'https://kintai.kap-cocotte.com/super-admin'
   };

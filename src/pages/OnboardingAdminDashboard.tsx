@@ -223,8 +223,8 @@ export default function OnboardingAdminDashboard() {
     break_time_minutes: 60,
     holidays_text: '完全週休2日制（土日・祝日）',
     salary_type: 'monthly',
-    base_salary: 250000,
-    hourly_wage: 1150,
+    base_salary: 0,
+    hourly_wage: 0,
     position_allowance: 0,
     qualification_allowance: 0,
     housing_allowance: 0,
@@ -393,8 +393,8 @@ export default function OnboardingAdminDashboard() {
     name: '',
     employmentType: '正社員（無期雇用）',
     salaryType: 'monthly' as 'monthly' | 'hourly',
-    baseSalary: 250000,
-    hourlyWage: 1200,
+    baseSalary: 0,
+    hourlyWage: 0,
     positionName: '',
     positionAllowance: 0,
     qualificationAllowance: 0,
@@ -731,8 +731,8 @@ export default function OnboardingAdminDashboard() {
           break_time_minutes: onb?.break_time_minutes || defaultBreak,
           holidays_text: onb?.holidays_text || defaultHolText,
           salary_type: conDoc.salary_type || onb?.salary_type || pay?.salary_type || localBackup?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly'),
-          base_salary: conDoc.base_salary ?? onb?.base_salary ?? pay?.base_salary ?? localBackup?.base_salary ?? 250000,
-          hourly_wage: conDoc.hourly_wage ?? onb?.hourly_wage ?? pay?.hourly_wage ?? localBackup?.hourly_wage ?? 1150,
+          base_salary: conDoc.base_salary ?? onb?.base_salary ?? pay?.base_salary ?? localBackup?.base_salary ?? 0,
+          hourly_wage: conDoc.hourly_wage ?? onb?.hourly_wage ?? pay?.hourly_wage ?? localBackup?.hourly_wage ?? 0,
           position_allowance: conDoc.position_allowance ?? onb?.position_allowance ?? pay?.position_allowance ?? localBackup?.position_allowance ?? 0,
           qualification_allowance: conDoc.qualification_allowance ?? onb?.qualification_allowance ?? pay?.qualification_allowance ?? localBackup?.qualification_allowance ?? 0,
           qualification_name: onb?.qualification_name || pay?.qualification_name || localBackup?.qualification_name || '',
@@ -868,7 +868,7 @@ export default function OnboardingAdminDashboard() {
             const accNum = bankDoc.account_number || d.account_number || '';
             const accHolder = bankDoc.account_holder || d.account_holder || empName;
             const commAllowance = commDoc.one_month_pass_amount ?? d.one_month_pass_amount ?? 15000;
-            const bSalary = conDoc.base_salary ?? d.base_salary ?? 250000;
+            const bSalary = conDoc.base_salary ?? d.base_salary ?? 0;
 
             // 台帳一覧に確実に追加（画面の在職人数に即時反映！）
             combined.push({
@@ -893,7 +893,7 @@ export default function OnboardingAdminDashboard() {
               holidays_text: defaultHolText,
               salary_type: conDoc.salary_type || d.salary_type || 'monthly',
               base_salary: bSalary,
-              hourly_wage: conDoc.hourly_wage || d.hourly_wage || 1150,
+              hourly_wage: conDoc.hourly_wage || d.hourly_wage || 0,
               position_allowance: conDoc.position_allowance || d.position_allowance || 0,
               qualification_allowance: conDoc.qualification_allowance || d.qualification_allowance || 0,
               housing_allowance: 0,
@@ -1562,8 +1562,8 @@ export default function OnboardingAdminDashboard() {
             user_id: uId,
             name_kana: kana || undefined,
             salary_type: d.salary_type || 'monthly',
-            base_salary: d.base_salary || 250000,
-            hourly_wage: d.hourly_wage || 1200,
+            base_salary: d.base_salary || 0,
+            hourly_wage: d.hourly_wage || 0,
             position_allowance: d.position_allowance || 0,
             qualification_allowance: d.qualification_allowance || 0
           }, { onConflict: 'tenant_id,user_id' });
@@ -1577,8 +1577,8 @@ export default function OnboardingAdminDashboard() {
             name_kana: kana || undefined,
             join_date: d.join_date || new Date().toISOString().split('T')[0],
             salary_type: d.salary_type || 'monthly',
-            base_salary: d.base_salary || 250000,
-            hourly_wage: d.hourly_wage || 1200,
+            base_salary: d.base_salary || 0,
+            hourly_wage: d.hourly_wage || 0,
             position_allowance: d.position_allowance || 0,
             updated_at: new Date().toISOString()
           }, { onConflict: 'tenant_id,user_id' });
@@ -1872,7 +1872,7 @@ export default function OnboardingAdminDashboard() {
         max_hours_per_week: wizardData.employment_type === 'part-time' ? 25 : 40,
         priority_score: 3,
         default_role: 'ホール',
-        base_wage: wizardData.salary_type === 'hourly' ? wizardData.hourly_wage : 1150
+        base_wage: wizardData.salary_type === 'hourly' ? (wizardData.hourly_wage || 0) : (wizardData.base_salary ? Math.round(wizardData.base_salary / 160) : 0)
       }, { onConflict: 'user_id' });
 
       await supabase.from('employee_payroll_profiles').upsert({
@@ -2203,7 +2203,7 @@ export default function OnboardingAdminDashboard() {
           tenant_id: tenantId,
           user_id: data.user_id,
           hire_date: data.join_date,
-          base_wage: data.salary_type === 'hourly' ? data.hourly_wage : 1150
+          base_wage: data.salary_type === 'hourly' ? (data.hourly_wage || 0) : (data.base_salary ? Math.round(data.base_salary / 160) : 0)
         }, { onConflict: 'user_id' });
 
       // 4. employee_onboarding_profiles の更新（標準報酬月額・住民税・資格証憑・扶養含む）
@@ -2498,8 +2498,8 @@ export default function OnboardingAdminDashboard() {
 
     // 給与・雇用形態の解決
     const resolvedSalaryType = contractData.salary_type || localMaster.salary_type || matchedEmp.salary_type || 'monthly';
-    const resolvedBaseSalary = contractData.base_salary !== undefined ? Number(contractData.base_salary) : (localMaster.base_salary !== undefined ? Number(localMaster.base_salary) : (matchedEmp.base_salary || 250000));
-    const resolvedHourlyWage = contractData.hourly_wage !== undefined ? Number(contractData.hourly_wage) : (localMaster.hourly_wage !== undefined ? Number(localMaster.hourly_wage) : (matchedEmp.hourly_wage || 1200));
+    const resolvedBaseSalary = contractData.base_salary !== undefined ? Number(contractData.base_salary) : (localMaster.base_salary !== undefined ? Number(localMaster.base_salary) : (matchedEmp.base_salary || 0));
+    const resolvedHourlyWage = contractData.hourly_wage !== undefined ? Number(contractData.hourly_wage) : (localMaster.hourly_wage !== undefined ? Number(localMaster.hourly_wage) : (matchedEmp.hourly_wage || 0));
     const resolvedQualificationAllowance = contractData.qualification_allowance !== undefined ? Number(contractData.qualification_allowance) : (localMaster.qualification_allowance || matchedEmp.qualification_allowance || 0);
     const resolvedFixedOvertimeAllowance = contractData.fixed_overtime_allowance !== undefined ? Number(contractData.fixed_overtime_allowance) : (localMaster.fixed_overtime_allowance || matchedEmp.fixed_overtime_allowance || 0);
 
@@ -2822,8 +2822,8 @@ export default function OnboardingAdminDashboard() {
                   name: '',
                   employmentType: '正社員（無期雇用）',
                   salaryType: 'monthly',
-                  baseSalary: 250000,
-                  hourlyWage: 1200,
+                  baseSalary: 0,
+                  hourlyWage: 0,
                   positionName: '',
                   positionAllowance: 0,
                   qualificationAllowance: 0,
@@ -3118,8 +3118,8 @@ export default function OnboardingAdminDashboard() {
                                     name: emp.name || '',
                                     employmentType: emp.employment_type === 'part-time' ? 'パート・アルバイト' : '正社員（無期雇用）',
                                     salaryType: isH ? 'hourly' : 'monthly',
-                                    baseSalary: emp.base_salary || 250000,
-                                    hourlyWage: emp.hourly_wage || 1200,
+                                    baseSalary: emp.base_salary || 0,
+                                    hourlyWage: emp.hourly_wage || 0,
                                     positionName: emp.position_name || '',
                                     positionAllowance: emp.position_allowance || 0,
                                     qualificationAllowance: emp.qualification_allowance || 0,
@@ -4852,14 +4852,15 @@ export default function OnboardingAdminDashboard() {
                   {(() => {
                     const curSalaryType = editModal.data.salary_type || (editModal.data.employment_type === 'part-time' ? 'hourly' : 'monthly');
                     const baseAmount = curSalaryType === 'hourly'
-                      ? ((editModal.data.hourly_wage || 1200) * 160)
-                      : (editModal.data.base_salary || 250000);
+                      ? ((editModal.data.hourly_wage || 0) * 160)
+                      : (editModal.data.base_salary || 0);
                     const allowanceSum = (editModal.data.position_allowance || 0) +
                       (editModal.data.qualification_allowance || 0) +
                       (editModal.data.housing_allowance || 0) +
                       (editModal.data.family_allowance || 0) +
                       (editModal.data.commuting_allowance || 0);
                     const estimatedMonthlySalary = Math.round(baseAmount + allowanceSum);
+                    if (estimatedMonthlySalary <= 0) return null;
                     const recHealthVal = lookupStandardMonthlyRemuneration(estimatedMonthlySalary, 'health');
                     const recPensionVal = lookupStandardMonthlyRemuneration(estimatedMonthlySalary, 'pension');
                     const recHealthObj = HEALTH_REMUNERATION_TABLE.find(t => t.standard === recHealthVal);
@@ -4902,8 +4903,8 @@ export default function OnboardingAdminDashboard() {
                 {(() => {
                   const curSalaryType = editModal.data.salary_type || (editModal.data.employment_type === 'part-time' ? 'hourly' : 'monthly');
                   const baseAmount = curSalaryType === 'hourly'
-                    ? ((editModal.data.hourly_wage || 1200) * 160)
-                    : (editModal.data.base_salary || 250000);
+                    ? ((editModal.data.hourly_wage || 0) * 160)
+                    : (editModal.data.base_salary || 0);
                   const allowanceSum = (editModal.data.position_allowance || 0) +
                     (editModal.data.qualification_allowance || 0) +
                     (editModal.data.housing_allowance || 0) +

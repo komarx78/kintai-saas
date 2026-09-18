@@ -377,7 +377,7 @@ export const sendOfficialReminderNotification = async (params: {
     `    <a href="https://kintai.kap-cocotte.com" style="display: inline-block; background: linear-gradient(135deg, #0ea5e9, #4f46e5); color: white; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: 900; font-size: 14px; box-shadow: 0 4px 12px rgba(14,165,233,0.3);">労務・法定帳票発行センターを開く</a>` +
     `  </div>` +
     `  <p style="margin-top: 24px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; pt: 16px;">` +
-    `    ※ 本メールはKAP勤怠システムよりマスタ設定されたご担当者様宛に自動送信されています。<br>` +
+    `    ※ 本メールは「みんなの らくまる労務」よりマスタ設定されたご担当者様宛に自動送信されています。<br>` +
     `    ※ 通知先アドレスの追加・変更は【🏢 会社設定 ➔ 公的届出・社保改定通知マスタ】より随時設定いただけます。` +
     `  </p>` +
     `</div>`;

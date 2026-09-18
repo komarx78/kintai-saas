@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 /**
- * 全社ポータル（KAP Base）お知らせ掲示板管理ライブラリ
+ * 全社ポータル（みんなの らくまる労務）お知らせ掲示板管理ライブラリ
  */
 
 export interface AnnouncementItem {
@@ -26,7 +26,7 @@ export const DEFAULT_ANNOUNCEMENTS: AnnouncementItem[] = [
   {
     id: 'ann-2',
     date: '2026.08.18',
-    title: 'KAP Base (統合ポータルダッシュボード) が新しくリリースされました。',
+    title: 'みんなの らくまる労務 (統合ポータルダッシュボード) が新しくリリースされました。',
     content: '勤怠管理・シフト管理・給与計算・入退社労務手続きを一つの画面からシームレスに操作いただけます。',
     category: 'info',
     tag: 'お知らせ'

@@ -26,7 +26,7 @@ export default function AppSwitcher({ currentApp, role }: AppSwitcherProps) {
   const apps = [
     {
       id: 'portal',
-      name: 'KAP Base',
+      name: 'らくまるポータル',
       icon: <LayoutDashboard className="w-4 h-4 text-white drop-shadow-sm" />,
       path: '/portal',
       description: 'すべてのシステムの入口',

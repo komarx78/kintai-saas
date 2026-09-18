@@ -193,14 +193,14 @@ export const sendMasterRateAlertIfNeeded = async (options?: {
   }
 
   // 3. アラートメール本文の生成
-  const subject = `${forceTest ? '【疎通テスト】' : '【至急・要更新】'}【KAP勤怠販売本部】全国社会保険料率マスタが未更新です（1日1回定期通知）`;
+  const subject = `${forceTest ? '【疎通テスト】' : '【至急・要更新】'}【みんなの らくまる労務 販売本部】全国社会保険料率マスタが未更新です（1日1回定期通知）`;
 
   const textBody =
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
     `【重要・販売管理者専用】全国社会保険料率マスタ 未更新アラート\n` +
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
     `${settings.recipient_name} 様\n\n` +
-    `いつもKAP勤怠システムを統括管理いただきありがとうございます。\n\n` +
+    `いつも「みんなの らくまる労務」を統括管理いただきありがとうございます。\n\n` +
     `令和${targetYear - 2018}年度（${targetYear}年度）の社会保険料改定時期が到来しておりますが、\n` +
     `販売用【全国社会保険料率マスタ】がまだ最新年度へ更新・保存されておりません。\n\n` +
     `■ 現況ステータス: 未更新（未反映）\n` +
@@ -259,7 +259,7 @@ export const sendMasterRateAlertIfNeeded = async (options?: {
       subject: subject,
       body: textBody,
       html_body: htmlBody,
-      tenant_name: 'KAP勤怠 販売本部（特権統括）',
+      tenant_name: 'みんなの らくまる労務 販売本部（特権統括）',
       user_name: settings.recipient_name,
       event_id: 'master_rate_outdated_alert',
       event_title: `令和${targetYear - 2018}年度 全国社会保険料率マスタ未更新`,

@@ -144,7 +144,7 @@ function getCurrentPageContext(pathname: string): { name: string; description: s
   }
   return {
     name: `現在の画面（パス: ${pathname}）`,
-    description: 'KAP統合クラウドシステム共通画面'
+    description: 'みんなの らくまる労務 共通画面'
   };
 }
 
@@ -174,7 +174,7 @@ export const FloatingSupportAssistant: React.FC<FloatingSupportAssistantProps> =
       const initialMessage: ChatMessage = {
         id: 'welcome',
         role: 'assistant',
-        content: `こんにちは、${userName || roleLabel}様！🤖\n【KAP 労務・操作AIアシスタント】です。\n\n現在開かれている「${pageCtx.name}」の操作はもちろん、全システムの操作手順、有給基準、帳票発行など何でもお尋ねください。24時間365日即座にご案内いたします。`,
+        content: `こんにちは、${userName || roleLabel}様！🤖\n【みんなの らくまる労務 AIアシスタント】です。\n\n現在開かれている「${pageCtx.name}」の操作はもちろん、全システムの操作手順、有給基準、帳票発行など何でもお尋ねください。24時間365日即座にご案内いたします。`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages([initialMessage]);
@@ -345,7 +345,7 @@ export const FloatingSupportAssistant: React.FC<FloatingSupportAssistantProps> =
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <h3 className="text-sm font-bold tracking-tight">KAP 労務・操作AIコンシェルジュ</h3>
+                  <h3 className="text-sm font-bold tracking-tight">みんなの らくまる労務 AIコンシェルジュ</h3>
                   <span className="bg-emerald-500/30 text-emerald-300 text-[10px] px-1.5 py-0.2 rounded-full font-medium border border-emerald-400/30">稼働中</span>
                 </div>
                 <p className="text-[11px] text-blue-200">操作手順・有給基準・公的原本の出し方を即答</p>

@@ -212,7 +212,21 @@ export const generateOfficialSealDataUrl = (companyName: string = ''): string =>
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    if (companyName.includes('KAP')) {
+    if (companyName.includes('cocotte') || companyName.includes('ココット')) {
+      // 右列: 株式会社
+      ctx.font = 'bold 36px "Hiragino Mincho ProN", "Yu Mincho", "MS PMincho", serif';
+      ctx.fillText('株', 158, 56);
+      ctx.fillText('式', 158, 98);
+      ctx.fillText('会', 158, 140);
+      ctx.fillText('社', 158, 182);
+
+      // 左列: cocotte之印
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText('cocotte', 78, 70);
+      ctx.font = 'bold 36px "Hiragino Mincho ProN", "Yu Mincho", "MS PMincho", serif';
+      ctx.fillText('之', 78, 126);
+      ctx.fillText('印', 78, 175);
+    } else if (companyName.includes('KAP')) {
       // 右列: 株式会社
       ctx.font = 'bold 36px "Hiragino Mincho ProN", "Yu Mincho", "MS PMincho", serif';
       ctx.fillText('株', 158, 56);
@@ -3225,7 +3239,7 @@ export default function CompanySettingsDashboard() {
                   全社ポータル お知らせ掲示板 管理
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  ここで登録・編集したお知らせは、全従業員・管理者のトップポータル（KAP Base）にリアルタイムで掲示されます。
+                  ここで登録・編集したお知らせは、全従業員・管理者のトップポータル（みんなの らくまる労務）にリアルタイムで掲示されます。
                 </p>
               </div>
               <button

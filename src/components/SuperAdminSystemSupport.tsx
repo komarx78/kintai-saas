@@ -154,7 +154,7 @@ export function SuperAdminSystemSupport() {
     setDesktopPermission(perm);
     if (perm === 'granted') {
       triggerDesktopNotification(
-        '🔔 KAP勤怠 デスクトップ通知設定完了',
+        '🔔 みんなの らくまる労務 デスクトップ通知設定完了',
         '改善要望やQ&Aが届いた際にブラウザ通知でお知らせします。'
       );
     }
@@ -502,7 +502,7 @@ export function SuperAdminSystemSupport() {
                   {/* アクションボタン */}
                   <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-slate-100">
                     <a
-                      href={`mailto:?subject=${encodeURIComponent(`【KAP勤怠】${item.tenant_name}様からの改善要望・Q&Aへのご案内（${item.title}）`)}&body=${encodeURIComponent(`【送信元企業】: ${item.tenant_name}\n【送信者】: ${item.user_name} 様\n【カテゴリ】: ${SYSTEM_SUGGESTION_CATEGORIES[item.category] || item.category}\n【タイトル】: ${item.title}\n\n【ご要望・質問内容】:\n${item.content}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【KAP勤怠サポート本部より】\nいつもご利用ありがとうございます。\nいただいたご要望・ご質問につきまして、以下の通りご案内申し上げます。\n\n`)}`}
+                      href={`mailto:?subject=${encodeURIComponent(`【みんなの らくまる労務】${item.tenant_name}様からの改善要望・Q&Aへのご案内（${item.title}）`)}&body=${encodeURIComponent(`【送信元企業】: ${item.tenant_name}\n【送信者】: ${item.user_name} 様\n【カテゴリ】: ${SYSTEM_SUGGESTION_CATEGORIES[item.category] || item.category}\n【タイトル】: ${item.title}\n\n【ご要望・質問内容】:\n${item.content}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【みんなの らくまる労務 サポート本部より】\nいつもご利用ありがとうございます。\nいただいたご要望・ご質問につきまして、以下の通りご案内申し上げます。\n\n`)}`}
                       className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                       title="メーラーを起動して返信下書きを作成"
                     >

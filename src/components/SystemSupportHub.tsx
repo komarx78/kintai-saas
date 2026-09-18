@@ -188,7 +188,7 @@ export const SystemSupportHub: React.FC<SystemSupportHubProps> = ({
                   </div>
                   <div>
                     <h4 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
-                      KAPシステム操作 AIサポートデスク
+                      「みんなの らくまる労務」AIサポートデスク
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-600 text-white shadow-2xs">
                         AI自動即答
                       </span>
@@ -494,7 +494,7 @@ export const SystemSupportHub: React.FC<SystemSupportHubProps> = ({
                 システム機能追加・アップデート履歴（全社共通）
               </h4>
               <p className="text-xs text-slate-500 mt-0.5">
-                KAP勤怠・シフト管理システムの機能追加・改善情報の公式リリースノートです。
+                「みんなの らくまる労務」の機能追加・改善情報の公式リリースノートです。
               </p>
             </div>
 

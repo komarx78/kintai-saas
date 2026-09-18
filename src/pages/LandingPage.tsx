@@ -915,7 +915,7 @@ export const LandingPage: React.FC = () => {
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
                 <span className="text-slate-400 font-bold min-w-[90px]">開発・運営</span>
-                <span className="text-white font-semibold">株式会社KAP</span>
+                <span className="text-white font-semibold">株式会社cocotte</span>
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
                 <span className="text-slate-400 font-bold min-w-[90px]">代表者</span>

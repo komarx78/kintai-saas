@@ -56,8 +56,8 @@ export default function EmployeeOnboardingWelcome() {
     employeeSignatureName: '',
     employmentType: '正社員（無期雇用）',
     salaryType: 'monthly' as 'monthly' | 'hourly',
-    baseSalary: 250000,
-    hourlyWage: 1200,
+    baseSalary: 0,
+    hourlyWage: 0,
     positionName: '',
     positionAllowance: 0,
     qualificationAllowance: 0,
@@ -908,9 +908,9 @@ export default function EmployeeOnboardingWelcome() {
                   </span>
                   <span className="font-black text-emerald-400 font-mono text-sm">
                     {contractAgreement.salaryType === 'hourly' 
-                      ? `¥${contractAgreement.hourlyWage.toLocaleString()} / 時間` 
-                      : `¥${contractAgreement.baseSalary.toLocaleString()} / 月`}
-                    {contractAgreement.salaryType !== 'hourly' && (
+                      ? (contractAgreement.hourlyWage > 0 ? `¥${contractAgreement.hourlyWage.toLocaleString()} / 時間` : '未設定（会社規程に準ずる）')
+                      : (contractAgreement.baseSalary > 0 ? `¥${contractAgreement.baseSalary.toLocaleString()} / 月` : '未設定（会社規程に準ずる）')}
+                    {contractAgreement.salaryType !== 'hourly' && contractAgreement.hourlyWage > 0 && (
                       <span className="text-[10px] text-slate-400 font-normal ml-1">
                         （時給換算 約¥{contractAgreement.hourlyWage.toLocaleString()}）
                       </span>
