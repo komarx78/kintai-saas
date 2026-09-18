@@ -9,6 +9,7 @@ import { OfficialLaborContractDoc } from '../components/OfficialLaborContractDoc
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { BonusDocMasterInspector } from '../components/BonusDocMasterInspector';
 import { OfficialReminderSettingsModal } from '../components/OfficialReminderSettingsModal';
+import { EmployeeCsvImportModal } from '../components/EmployeeCsvImportModal';
 import { 
   type LaborContractTemplate, 
   DEFAULT_LABOR_CONTRACT_TEMPLATE, 
@@ -38,7 +39,7 @@ import {
   Sparkles, Bot, Clock, ShieldCheck, Printer, X,
   UserCheck, ArrowUp, ArrowDown, RotateCcw, Edit3,
   Network, Award, Crown, Shield, FileText, Upload,
-  ImageIcon, Wand2, CheckCircle2, Eye, Bell
+  ImageIcon, Wand2, CheckCircle2, Eye, Bell, FileSpreadsheet
 } from 'lucide-react';
 import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress } from '../lib/socialInsurance';
 import { 
@@ -319,6 +320,7 @@ export default function CompanySettingsDashboard() {
 
   // 新規社員登録State
   const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
+  const [isCsvImportModalOpen, setIsCsvImportModalOpen] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserDept, setNewUserDept] = useState('');
@@ -1927,6 +1929,15 @@ export default function CompanySettingsDashboard() {
                   >
                     <Plus className="w-4 h-4" />
                     社員を新規登録
+                  </button>
+
+                  <button
+                    onClick={() => setIsCsvImportModalOpen(true)}
+                    className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
+                    title="Excel等で作成した社員リストCSVを一括で取り込みます"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                    社員一括CSVインポート
                   </button>
 
                   <button
@@ -4359,6 +4370,17 @@ export default function CompanySettingsDashboard() {
           </div>
         </div>
       )}
+
+      {/* 📥 社員一括CSVインポートモーダル */}
+      <EmployeeCsvImportModal
+        isOpen={isCsvImportModalOpen}
+        onClose={() => setIsCsvImportModalOpen(false)}
+        tenantId={tenantId || ''}
+        departments={departments.map(d => ({ id: d.id, name: d.name }))}
+        onSuccess={() => {
+          fetchData();
+        }}
+      />
 
       {/* 🛠️ 賞与支払届 印字座標マスタ微調整モーダル（最高権限者専用） */}
       {showBonusInspectorModal && (

@@ -9,6 +9,7 @@ import { OfficialTaxExemptionDoc } from '../components/OfficialTaxExemptionDoc';
 import OfficialSpouseDeductionDoc from '../components/OfficialSpouseDeductionDoc';
 import OfficialCustomCanvasDoc from '../components/OfficialCustomCanvasDoc';
 import { HelpGuideModal } from '../components/HelpGuideModal';
+import { EmployeeCsvImportModal } from '../components/EmployeeCsvImportModal';
 import { 
   type CustomDocTemplate, 
   fetchCustomDocTemplates 
@@ -33,7 +34,7 @@ import {
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
   FolderOpen, Settings, Clock, Smartphone, AlertCircle, ArrowRight, CornerDownLeft,
   Copy, DollarSign, Sparkles, Award, ShieldCheck, FileCheck,
-  ExternalLink, Gift, Baby
+  ExternalLink, Gift, Baby, FileSpreadsheet
 } from 'lucide-react';
 import { MaternityLeaveModal } from '../components/MaternityLeaveModal';
 import { OfficialMaternityLeaveDoc } from '../components/OfficialMaternityLeaveDoc';
@@ -421,6 +422,9 @@ export default function OnboardingAdminDashboard() {
     copied: false,
     copiedMessage: false
   });
+
+  // 📥 社員一括CSVインポートモーダルState
+  const [isCsvImportModalOpen, setIsCsvImportModalOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -2843,6 +2847,15 @@ export default function OnboardingAdminDashboard() {
             >
               <Smartphone className="w-4 h-4 text-cyan-300" />
               ✨ 給与設定 ＆ 専用入社URLを発行
+            </button>
+
+            <button
+              onClick={() => setIsCsvImportModalOpen(true)}
+              className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs px-3.5 py-2 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              title="Excel等で作成した社員リストCSVを一括で取り込みます"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              社員一括CSVインポート
             </button>
 
             <button
@@ -7366,6 +7379,17 @@ export default function OnboardingAdminDashboard() {
         screenKey="onboarding_admin" 
         isOpen={isHelpOpen} 
         onClose={() => setIsHelpOpen(false)} 
+      />
+
+      {/* 📥 社員一括CSVインポートモーダル */}
+      <EmployeeCsvImportModal
+        isOpen={isCsvImportModalOpen}
+        onClose={() => setIsCsvImportModalOpen(false)}
+        tenantId={tenantId || ''}
+        departments={departments.map(d => ({ id: d.id, name: d.name }))}
+        onSuccess={() => {
+          fetchData();
+        }}
       />
     </div>
   );
