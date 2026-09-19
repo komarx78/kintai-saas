@@ -1878,9 +1878,9 @@ export default function OnboardingAdminDashboard() {
       return;
     }
 
-    const finalLastNameKana = wizardData.last_name_kana?.trim() || '';
-    const finalFirstNameKana = wizardData.first_name_kana?.trim() || '';
-    const finalNameKana = [finalLastNameKana, finalFirstNameKana].filter(Boolean).join(' ') || wizardData.name_kana?.trim() || null;
+    const finalLastNameKana = toKatakana(wizardData.last_name_kana?.trim() || '');
+    const finalFirstNameKana = toKatakana(wizardData.first_name_kana?.trim() || '');
+    const finalNameKana = [finalLastNameKana, finalFirstNameKana].filter(Boolean).join(' ') || (wizardData.name_kana ? toKatakana(wizardData.name_kana.trim()) : null);
 
     setIsSaving(true);
     try {
@@ -5733,9 +5733,20 @@ export default function OnboardingAdminDashboard() {
                           placeholder="例: サトウ"
                           value={wizardData.last_name_kana || ''}
                           onChange={e => {
-                            const lk = toKatakana(e.target.value);
-                            const fullK = [lk, wizardData.first_name_kana].filter(Boolean).join(' ');
-                            setWizardData({ ...wizardData, last_name_kana: lk, name_kana: fullK });
+                            const val = e.target.value;
+                            setWizardData(prev => ({
+                              ...prev,
+                              last_name_kana: val,
+                              name_kana: [val, prev.first_name_kana].filter(Boolean).join(' ')
+                            }));
+                          }}
+                          onBlur={e => {
+                            const lk = toKatakana(e.target.value.trim());
+                            setWizardData(prev => ({
+                              ...prev,
+                              last_name_kana: lk,
+                              name_kana: [lk, prev.first_name_kana].filter(Boolean).join(' ')
+                            }));
                           }}
                           className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 font-bold text-indigo-950 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition"
                         />
@@ -5747,9 +5758,20 @@ export default function OnboardingAdminDashboard() {
                           placeholder="例: ケンイチ"
                           value={wizardData.first_name_kana || ''}
                           onChange={e => {
-                            const fk = toKatakana(e.target.value);
-                            const fullK = [wizardData.last_name_kana, fk].filter(Boolean).join(' ');
-                            setWizardData({ ...wizardData, first_name_kana: fk, name_kana: fullK });
+                            const val = e.target.value;
+                            setWizardData(prev => ({
+                              ...prev,
+                              first_name_kana: val,
+                              name_kana: [prev.last_name_kana, val].filter(Boolean).join(' ')
+                            }));
+                          }}
+                          onBlur={e => {
+                            const fk = toKatakana(e.target.value.trim());
+                            setWizardData(prev => ({
+                              ...prev,
+                              first_name_kana: fk,
+                              name_kana: [prev.last_name_kana, fk].filter(Boolean).join(' ')
+                            }));
                           }}
                           className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 font-bold text-indigo-950 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition"
                         />
