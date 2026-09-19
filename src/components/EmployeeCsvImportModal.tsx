@@ -432,16 +432,12 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
       setImportProgress(prev => ({ ...prev, current: i + 1 }));
 
       try {
-        // ① ユーザーIDの確定（新規ユニークID発行）
-        const timestamp = Date.now();
-        const rand = Math.floor(Math.random() * 10000);
-        const userId = `emp_${timestamp}_${rand}`;
-        const finalEmail = item.email || `${userId}@company.local`;
+        // ① メールアドレスの確定（未入力時は一時ローカルアドレス）
+        const finalEmail = item.email ? item.email.trim() : `emp_${Date.now()}_${Math.floor(Math.random() * 1000)}@company.local`;
 
         // ② users テーブルへの登録（全社基本マスタ・SSOT）
-        // どんなDBスキーマ構成でも100%確実に成功する3重フォールバック防壁
+        // idは渡さずDBの gen_random_uuid() に完全委任（PostgreSQL UUID型制約の100%完全遵守）
         const userBasePayload: Record<string, any> = {
-          id: userId,
           tenant_id: tenantId,
           name: item.name,
           email: finalEmail,
@@ -456,50 +452,66 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
           has_shift_access: true
         };
 
-        let userInsertSuccess = false;
+        let registeredUserId: string | null = null;
         let lastUserErr: any = null;
 
         // 1st 試行: position_name 付きで試行（DBにカラムが存在する場合）
         if (item.positionName) {
-          const { error: pErr } = await supabase.from('users').insert({
-            ...userBasePayload,
-            position_name: item.positionName
-          });
-          if (!pErr) {
-            userInsertSuccess = true;
+          const { data: uData1, error: pErr } = await supabase
+            .from('users')
+            .insert({
+              ...userBasePayload,
+              position_name: item.positionName
+            })
+            .select()
+            .single();
+
+          if (!pErr && uData1?.id) {
+            registeredUserId = uData1.id;
           } else {
-            console.warn('users with position_name insert note, falling back:', pErr.message);
+            console.warn('users with position_name insert note, falling back:', pErr?.message);
             lastUserErr = pErr;
           }
         }
 
         // 2nd 試行: position_name を除外した標準構成で実行
-        if (!userInsertSuccess) {
-          const { error: baseErr } = await supabase.from('users').insert(userBasePayload);
-          if (!baseErr) {
-            userInsertSuccess = true;
+        if (!registeredUserId) {
+          const { data: uData2, error: baseErr } = await supabase
+            .from('users')
+            .insert(userBasePayload)
+            .select()
+            .single();
+
+          if (!baseErr && uData2?.id) {
+            registeredUserId = uData2.id;
           } else {
-            console.warn('users base insert note, falling back to minimal:', baseErr.message);
-            // 3rd 試行: 最小限の確実なカラム（id, tenant_id, name, email, role, department）で実行
-            const { error: minErr } = await supabase.from('users').insert({
-              id: userId,
-              tenant_id: tenantId,
-              name: item.name,
-              email: finalEmail,
-              role: item.role,
-              department: item.department || null
-            });
-            if (!minErr) {
-              userInsertSuccess = true;
+            console.warn('users base insert note, falling back to minimal:', baseErr?.message);
+            // 3rd 試行: 最小限の確実なカラム（tenant_id, name, email, role, department）で実行
+            const { data: uData3, error: minErr } = await supabase
+              .from('users')
+              .insert({
+                tenant_id: tenantId,
+                name: item.name,
+                email: finalEmail,
+                role: item.role,
+                department: item.department || null
+              })
+              .select()
+              .single();
+
+            if (!minErr && uData3?.id) {
+              registeredUserId = uData3.id;
             } else {
               lastUserErr = minErr;
             }
           }
         }
 
-        if (!userInsertSuccess) {
+        if (!registeredUserId) {
           throw new Error(`users登録失敗: ${lastUserErr?.message || '不明なエラー'}`);
         }
+
+        const userId = registeredUserId;
 
         // 役職情報のLocalStorageバックアップ（組織図等との即時連動保証）
         if (item.positionName) {
