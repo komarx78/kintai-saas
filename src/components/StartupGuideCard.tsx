@@ -86,11 +86,9 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
   const isStep2Done = departments.length > 0;
 
   // STEP 3: 会社カレンダー・締め日が実際に保存・確認されたか
-  // （※単なるデフォルト値31日・土日ではなく、明示的な保存実績またはカスタマイズ実績があること）
+  // （※初期値や会社基本情報保存による誤判定を完全排除。社長様がカレンダー・給与タブで明示的に保存した実績のみで判定）
   const isStep3Saved = Boolean(
-    (tenantId && localStorage.getItem(`company_calendar_payroll_saved_${tenantId}`) === 'true') ||
-    (tenantId && localStorage.getItem(`company_master_settings_saved_${tenantId}`) === 'true') ||
-    Boolean(calendarSettings.holiday_text_summary && !calendarSettings.holiday_text_summary.includes('未設定'))
+    tenantId && localStorage.getItem(`step3_calendar_payroll_explicitly_saved_${tenantId}`) === 'true'
   );
   const isStep3Done = isStep3Saved;
 
@@ -98,10 +96,20 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
   // （※初期アカウントやテスト用管理者の存在による誤判定を完全遮断）
   const generalEmployees = companyUsers.filter(u => {
     const r = (u.role || '').toLowerCase();
-    const isOwnerOrAdmin = r === 'admin' || r === 'superadmin' || (u.name && u.name.includes('代表'));
+    const name = (u.name || '').trim();
+    const isOwnerOrAdmin = r === 'admin' || r === 'superadmin' || name.includes('代表') || (basicInfo.representative_name && name === basicInfo.representative_name.trim());
     return !isOwnerOrAdmin;
   });
-  const isStep4Done = generalEmployees.length > 0;
+
+  // テスト用データ（「福留 太郎」「テスト」「サンプル」等）は本番登録とみなさない
+  const realEmployees = generalEmployees.filter(u => {
+    const name = (u.name || '').trim();
+    const isTestData = name.includes('福留') || name.includes('テスト') || name.includes('サンプル') || name.toLowerCase().includes('test');
+    return !isTestData;
+  });
+
+  // 本番の一般社員・パートさんが1名以上登録されていればSTEP 4完了
+  const isStep4Done = realEmployees.length > 0;
 
   // STEP 5: スタッフへ案内済み、またはタイムカード打刻が開始されているか
   // （※準備完了なだけで勝手に「設定済み」には絶対にしない！）
@@ -115,6 +123,16 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
 
   const completedCount = [isStep1Done, isStep2Done, isStep3Done, isStep4Done, isStep5Done].filter(Boolean).length;
   const progressPercent = Math.round((completedCount / 5) * 100);
+
+  // STEP 4 の現状サマリー文言（テスト社員の存在も明示して社長様が混乱しないよう配慮）
+  let step4Summary = '未登録（0名）';
+  if (realEmployees.length > 0) {
+    const names = realEmployees.slice(0, 2).map(u => u.name).join('、');
+    step4Summary = `登録完了: ${realEmployees.length}名（${names}${realEmployees.length > 2 ? ' 他' : ''}）`;
+  } else if (generalEmployees.length > 0) {
+    const names = generalEmployees.slice(0, 2).map(u => u.name).join('、');
+    step4Summary = `テスト用社員のみ: ${generalEmployees.length}名（${names}）※本番社員の登録が必要です`;
+  }
 
   const steps = [
     {
@@ -146,7 +164,9 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
       isDone: isStep3Done,
       actionText: isStep3Done ? '締め日・休日を確認・変更' : '締め日・休日を設定する',
       doneSummary: isStep3Done 
-        ? (payrollSettings.closing_day ? `設定済み: ${payrollSettings.closing_day}日締` : '設定済み') 
+        ? (payrollSettings.closing_day 
+            ? `設定済み: ${payrollSettings.closing_day}日締 / 年間休日${calendarSettings.annual_holidays_count || 125}日` 
+            : '設定済み') 
         : '未設定（確認・保存してください）'
     },
     {
@@ -158,9 +178,7 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
       icon: Users,
       isDone: isStep4Done,
       actionText: isStep4Done ? '労務台帳を確認・追加' : '労務台帳で登録する',
-      doneSummary: isStep4Done 
-        ? `登録社員数: ${generalEmployees.length} 名（一般スタッフ）` 
-        : '一般社員・パート: 未登録（0名）'
+      doneSummary: step4Summary
     },
     {
       stepNumber: 5,

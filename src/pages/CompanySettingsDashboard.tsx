@@ -931,7 +931,10 @@ export default function CompanySettingsDashboard() {
       localStorage.setItem(`mock_company_holidays_${tenantId}`, JSON.stringify(Array.from(computedHolidaysSet)));
       localStorage.setItem(`company_employment_rules_${tenantId}`, employmentRulesText);
       localStorage.setItem(`company_master_settings_saved_${tenantId}`, 'true');
-      localStorage.setItem(`company_calendar_payroll_saved_${tenantId}`, 'true');
+      // STEP 3（休日カレンダー・給与締め日）は、実際にそのタブを開いて確認・保存された時のみ完了フラグを付与
+      if (activeTab === 'calendar' || activeTab === 'payroll') {
+        localStorage.setItem(`step3_calendar_payroll_explicitly_saved_${tenantId}`, 'true');
+      }
       if (geminiApiKey) {
         localStorage.setItem(`gemini_api_key_${tenantId}`, geminiApiKey);
         localStorage.setItem('gemini_api_key_custom', geminiApiKey);
