@@ -22,6 +22,11 @@ import {
   getPositionsFromStorage 
 } from '../lib/orgChart';
 import { 
+  type CompanyCalendarPattern, 
+  DEFAULT_CALENDAR_PATTERNS, 
+  getCalendarPatternsFromStorage 
+} from './CompanySettingsDashboard';
+import { 
   type OnboardingWorkflowStep, 
   DEFAULT_ONBOARDING_STEPS, 
   getWorkflowStepsFromStorage, 
@@ -145,20 +150,21 @@ interface DocumentSubmission {
   approved_at?: string;
 }
 
-interface DepartmentMaster {
+export interface DepartmentMaster {
   id: string;
   name: string;
   manager_user_id?: string;
   manager_user_name?: string;
   display_order: number;
+  calendar_pattern_id?: string; // 📅 適用営業カレンダーID
 }
 
 // 🏢 標準初期部署（DBまたはLocalStorageが空の場合でも選択肢0件を絶対に防ぐ安全防壁）
 export const DEFAULT_DEPARTMENTS: DepartmentMaster[] = [
-  { id: 'dept-default-1', name: '営業部', display_order: 1 },
-  { id: 'dept-default-2', name: '店舗運営部', display_order: 2 },
-  { id: 'dept-default-3', name: '本社・管理部', display_order: 3 },
-  { id: 'dept-default-4', name: '製造・工事部', display_order: 4 }
+  { id: 'dept-default-1', name: '営業部', display_order: 1, calendar_pattern_id: 'cal-default' },
+  { id: 'dept-default-2', name: '店舗運営部', display_order: 2, calendar_pattern_id: 'cal-shift' },
+  { id: 'dept-default-3', name: '本社・管理部', display_order: 3, calendar_pattern_id: 'cal-default' },
+  { id: 'dept-default-4', name: '製造・工事部', display_order: 4, calendar_pattern_id: 'cal-factory' }
 ];
 
 // 🧹 部署名の安全クレンジング（Excel数式・セル番地・記号などのコピペ混入ゴミデータを完全排除）
@@ -274,6 +280,7 @@ export default function OnboardingAdminDashboard() {
   const [employees, setEmployees] = useState<EmployeeOnboardingData[]>([]);
   const [submissions, setSubmissions] = useState<DocumentSubmission[]>([]);
   const [departments, setDepartments] = useState<DepartmentMaster[]>([]);
+  const [calendarPatterns, setCalendarPatterns] = useState<CompanyCalendarPattern[]>(DEFAULT_CALENDAR_PATTERNS);
   const [positions, setPositions] = useState<PositionMaster[]>(DEFAULT_POSITIONS);
   const [schedulePatterns, setSchedulePatterns] = useState<WorkSchedulePattern[]>([]);
   const [workflowSteps, setWorkflowSteps] = useState<OnboardingWorkflowStep[]>(DEFAULT_ONBOARDING_STEPS);
@@ -664,8 +671,17 @@ export default function OnboardingAdminDashboard() {
       ];
       setSchedulePatterns(patterns);
 
+      // カレンダーパターンの復元
+      const localCalPatterns = getCalendarPatternsFromStorage(tenantIdData);
+      let resolvedCalPatterns = localCalPatterns;
+      if (tData?.work_calendar_settings?.calendar_patterns && Array.isArray(tData.work_calendar_settings.calendar_patterns) && tData.work_calendar_settings.calendar_patterns.length > 0) {
+        resolvedCalPatterns = tData.work_calendar_settings.calendar_patterns;
+      }
+      setCalendarPatterns(resolvedCalPatterns);
+
       // ウィザードの初期休日と時間帯を全社設定から反映
-      let defaultHolText = tData?.work_calendar_settings?.holiday_text_summary || '';
+      const defaultCalendarPattern = resolvedCalPatterns.find(p => p.is_default) || resolvedCalPatterns[0];
+      let defaultHolText = defaultCalendarPattern?.holiday_text_summary || tData?.work_calendar_settings?.holiday_text_summary || '';
       if (!defaultHolText) {
         try {
           const rawCal = localStorage.getItem(`calendar_settings_${tenantIdData}`);
@@ -1470,19 +1486,51 @@ export default function OnboardingAdminDashboard() {
     }
   };
 
-  // 部署変更時に就業時間パターンを自動セット
+  // 部署変更時に就業時間パターン ＆ 会社休日規程カレンダーを完全自動連動セット
   const handleDepartmentChange = (deptName: string) => {
-    const matchedPattern = schedulePatterns.find(p => p.target_department === deptName);
+    const cleanDeptName = sanitizeDepartmentName(deptName);
+    const matchedDept = (departments.length > 0 ? departments : DEFAULT_DEPARTMENTS).find(
+      d => sanitizeDepartmentName(d.name) === cleanDeptName
+    );
+
+    // 1. 部署に紐づく営業カレンダー（休日規程）の特定
+    let targetCalendarPattern: CompanyCalendarPattern | undefined;
+    if (matchedDept?.calendar_pattern_id) {
+      targetCalendarPattern = calendarPatterns.find(p => p.id === matchedDept.calendar_pattern_id);
+    }
+    // 見つからない場合は部署名による推測フォールバック（例: 店舗＝店舗シフト用、工場＝工場用、営業・本社＝標準用）
+    if (!targetCalendarPattern) {
+      if (cleanDeptName.includes('店舗') || cleanDeptName.includes('サービス') || cleanDeptName.includes('飲食')) {
+        targetCalendarPattern = calendarPatterns.find(p => p.id === 'cal-shift') || calendarPatterns.find(p => p.name.includes('シフト'));
+      } else if (cleanDeptName.includes('工場') || cleanDeptName.includes('製造') || cleanDeptName.includes('現場') || cleanDeptName.includes('工事')) {
+        targetCalendarPattern = calendarPatterns.find(p => p.id === 'cal-factory') || calendarPatterns.find(p => p.name.includes('製造') || p.name.includes('現場'));
+      }
+    }
+    // それでもなければ全社代表（標準）カレンダー
+    if (!targetCalendarPattern) {
+      targetCalendarPattern = calendarPatterns.find(p => p.is_default) || calendarPatterns[0];
+    }
+
+    const resolvedHolidaysText = targetCalendarPattern?.holiday_text_summary || wizardData.holidays_text;
+
+    // 2. 就業時間パターンの特定
+    const matchedPattern = schedulePatterns.find(p => sanitizeDepartmentName(p.target_department || '') === cleanDeptName);
+
     if (matchedPattern) {
       setWizardData(prev => ({
         ...prev,
         department: deptName,
+        holidays_text: resolvedHolidaysText,
         start_time: matchedPattern.start_time,
         end_time: matchedPattern.end_time,
         break_time_minutes: matchedPattern.break_minutes
       }));
     } else {
-      setWizardData(prev => ({ ...prev, department: deptName }));
+      setWizardData(prev => ({
+        ...prev,
+        department: deptName,
+        holidays_text: resolvedHolidaysText
+      }));
     }
   };
 
@@ -6063,7 +6111,7 @@ export default function OnboardingAdminDashboard() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署（時間帯自動連動）</label>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署（時間帯＆休日規程 自動連動）</label>
                   <select
                     value={wizardData.department}
                     onChange={e => handleDepartmentChange(e.target.value)}
@@ -6074,7 +6122,7 @@ export default function OnboardingAdminDashboard() {
                     ))}
                   </select>
                   <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
-                    <span>💡 選択した部署の勤務時間帯がSTEP 2に自動反映されます</span>
+                    <span>💡 選択した部署の勤務時間帯および営業休日規程がSTEP 2に自動反映されます</span>
                   </div>
                 </div>
               </div>
@@ -6143,20 +6191,20 @@ export default function OnboardingAdminDashboard() {
                 </div>
 
                 <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4">
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
                     <label className="text-[11px] font-black text-emerald-900 flex items-center gap-1.5">
                       <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                      会社休日規程（全社共通ルール・自動適用）
+                      会社休日規程（【{wizardData.department || '配属部署'}】カレンダー連動）
                     </label>
                     <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-300">
-                      全社マスタ連動
+                      部署カレンダー自動連動
                     </span>
                   </div>
                   <div className="text-xs font-bold text-slate-800 bg-white px-3 py-2.5 rounded-xl border border-emerald-200/80 shadow-2xs">
                     {wizardData.holidays_text || '完全週休2日制（土日・祝日）、年末年始休暇、夏季休暇'}
                   </div>
                   <p className="text-[10px] text-slate-500 mt-1.5">
-                    ※ 会社マスタ設定で確定した休日規程が雇用契約書に自動反映されます（全社共通のため新入社員登録で都度変更する必要はありません）。
+                    ※ 会社マスタで【{wizardData.department || '配属部署'}】に設定された営業カレンダーの休日規程が雇用契約書に自動反映されます。
                   </p>
                 </div>
               </div>

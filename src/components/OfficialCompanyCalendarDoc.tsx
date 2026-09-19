@@ -9,6 +9,7 @@ interface CompanyCalendarDocProps {
     annualHolidaysCount: number;
     holidaysSet: Set<string>; // 'YYYY-MM-DD'
     holidaySummaryText?: string;
+    calendarPatternName?: string;
   };
 }
 
@@ -80,8 +81,13 @@ export const OfficialCompanyCalendarDoc: React.FC<CompanyCalendarDocProps> = ({ 
             <h1 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
               {data.companyName}
             </h1>
-            <span className="text-xs sm:text-sm font-bold text-slate-600">
-              {year}年 年間営業カレンダー ＆ 翌年1月（年始仕事始め）
+            <span className="text-xs sm:text-sm font-bold text-slate-600 flex items-center gap-1.5">
+              <span>{year}年 年間営業カレンダー ＆ 翌年1月（年始仕事始め）</span>
+              {data.calendarPatternName && (
+                <span className="text-indigo-800 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded text-[11px] font-black print:text-black print:border-black">
+                  【{data.calendarPatternName}】
+                </span>
+              )}
             </span>
           </div>
           {data.companyAddress && (

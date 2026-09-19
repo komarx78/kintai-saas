@@ -51,14 +51,117 @@ import {
 } from '../lib/announcements';
 import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
 
-interface DepartmentMaster {
+export interface DepartmentMaster {
   id: string;
   name: string;
   code?: string;
   manager_user_id?: string;
   manager_user_name?: string;
   display_order: number;
+  calendar_pattern_id?: string; // 📅 適用営業カレンダーID
 }
+
+// 📅 会社営業カレンダー・休日パターン定義（複数カレンダー対応SSOT）
+export interface CompanyCalendarPattern {
+  id: string;
+  name: string; // 例: 標準カレンダー（本社・営業）、店舗・サービス（シフト制）、製造・現場（日祝隔週土）
+  is_default?: boolean; // 代表（全社標準）カレンダーかどうか
+  fixed_holidays: number[]; // 0:日, 6:土 など
+  national_holidays_enabled: boolean;
+  winter_vacation_enabled: boolean;
+  winter_vacation_start: string;
+  winter_vacation_end: string;
+  summer_vacation_enabled: boolean;
+  summer_vacation_start: string;
+  summer_vacation_end: string;
+  custom_holidays: { date: string; name: string }[];
+  individual_overrides: { [key: string]: boolean };
+  annual_holidays_count: number;
+  holiday_text_summary: string;
+  description?: string; // 部門・業務の説明
+}
+
+export const DEFAULT_CALENDAR_PATTERNS: CompanyCalendarPattern[] = [
+  {
+    id: 'cal-default',
+    name: '標準カレンダー（本社・営業）',
+    is_default: true,
+    fixed_holidays: [0, 6],
+    national_holidays_enabled: true,
+    winter_vacation_enabled: true,
+    winter_vacation_start: '2026-12-29',
+    winter_vacation_end: '2027-01-03',
+    summer_vacation_enabled: true,
+    summer_vacation_start: '2026-08-13',
+    summer_vacation_end: '2026-08-16',
+    custom_holidays: [],
+    individual_overrides: {},
+    annual_holidays_count: 125,
+    holiday_text_summary: '完全週休2日制（土日・祝日）、年末年始休暇、夏季休暇（年間休日125日）',
+    description: '本社・管理部門・営業職など土日祝休みの部署向け'
+  },
+  {
+    id: 'cal-shift',
+    name: '店舗・サービス（シフト制）',
+    is_default: false,
+    fixed_holidays: [],
+    national_holidays_enabled: false,
+    winter_vacation_enabled: false,
+    winter_vacation_start: '2026-12-29',
+    winter_vacation_end: '2027-01-03',
+    summer_vacation_enabled: false,
+    summer_vacation_start: '2026-08-13',
+    summer_vacation_end: '2026-08-16',
+    custom_holidays: [],
+    individual_overrides: {},
+    annual_holidays_count: 105,
+    holiday_text_summary: '週休2日シフト制（月8〜9日公休）、有給休暇、特別休暇（年間休日105日）',
+    description: '店舗運営・飲食・小売・サービス部門向け（年中無休・シフト制）'
+  },
+  {
+    id: 'cal-factory',
+    name: '製造・物流・現場（日祝・隔週土曜）',
+    is_default: false,
+    fixed_holidays: [0],
+    national_holidays_enabled: true,
+    winter_vacation_enabled: true,
+    winter_vacation_start: '2026-12-29',
+    winter_vacation_end: '2027-01-03',
+    summer_vacation_enabled: true,
+    summer_vacation_start: '2026-08-13',
+    summer_vacation_end: '2026-08-16',
+    custom_holidays: [],
+    individual_overrides: {},
+    annual_holidays_count: 100,
+    holiday_text_summary: '日曜日、祝日、隔週土曜日（第2・第4土曜）、年末年始、夏季（年間休日100日）',
+    description: '工場ライン・物流倉庫・配送・施工現場など隔週稼働の部門向け'
+  }
+];
+
+export const getCalendarPatternsFromStorage = (tId?: string | null): CompanyCalendarPattern[] => {
+  try {
+    if (tId) {
+      const raw = localStorage.getItem(`company_calendar_patterns_${tId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('LocalStorage calendar patterns parse error:', e);
+  }
+  return DEFAULT_CALENDAR_PATTERNS;
+};
+
+export const saveCalendarPatternsToStorage = (tId: string | null, patterns: CompanyCalendarPattern[]) => {
+  try {
+    if (tId) {
+      localStorage.setItem(`company_calendar_patterns_${tId}`, JSON.stringify(patterns));
+    }
+  } catch (e) {
+    console.warn('LocalStorage calendar patterns save error:', e);
+  }
+};
 
 export interface WorkSchedulePattern {
   id: string;
@@ -384,7 +487,9 @@ export default function CompanySettingsDashboard() {
   const [newPatternBreakMinutes, setNewPatternBreakMinutes] = useState(60);
   const [newPatternDept, setNewPatternDept] = useState('');
 
-  // 4. カレンダー・休日State
+  // 4. カレンダー・休日State（複数カレンダーパターン完全対応）
+  const [calendarPatterns, setCalendarPatterns] = useState<CompanyCalendarPattern[]>(DEFAULT_CALENDAR_PATTERNS);
+  const [activeCalendarId, setActiveCalendarId] = useState<string>('cal-default');
   const [calendarSettings, setCalendarSettings] = useState({
     year: 2026,
     fixed_holidays: [0, 6], // 0:日, 6:土
@@ -524,7 +629,39 @@ export default function CompanySettingsDashboard() {
 
 
       if (tData) {
-        if (tData.work_calendar_settings) {
+        // 営業カレンダーパターンの復元（複数パターン＆後方互換性完全担保）
+        const localCalPatterns = getCalendarPatternsFromStorage(tenantIdData);
+        let resolvedCalPatterns = localCalPatterns;
+
+        if (tData.work_calendar_settings?.calendar_patterns && Array.isArray(tData.work_calendar_settings.calendar_patterns) && tData.work_calendar_settings.calendar_patterns.length > 0) {
+          resolvedCalPatterns = tData.work_calendar_settings.calendar_patterns;
+        } else if (tData.work_calendar_settings) {
+          resolvedCalPatterns = resolvedCalPatterns.map(p => {
+            if (p.id === 'cal-default' || p.is_default) {
+              return {
+                ...p,
+                ...tData.work_calendar_settings
+              };
+            }
+            return p;
+          });
+        }
+        setCalendarPatterns(resolvedCalPatterns);
+
+        const defaultActiveId = tData.work_calendar_settings?.active_pattern_id 
+          || resolvedCalPatterns.find(p => p.is_default)?.id 
+          || resolvedCalPatterns[0]?.id 
+          || 'cal-default';
+        setActiveCalendarId(defaultActiveId);
+
+        const curPattern = resolvedCalPatterns.find(p => p.id === defaultActiveId) || resolvedCalPatterns[0];
+        if (curPattern) {
+          setCalendarSettings(prev => ({
+            ...prev,
+            ...curPattern,
+            year: prev.year || 2026
+          }));
+        } else if (tData.work_calendar_settings) {
           setCalendarSettings(prev => ({
             ...prev,
             ...tData.work_calendar_settings
@@ -846,6 +983,178 @@ export default function CompanySettingsDashboard() {
     return companyUsers.filter(u => !u.department && !computedExecutives.some(e => e.id === u.id));
   }, [companyUsers, computedExecutives]);
 
+  // 休日要約テキストの自動生成ヘルパー
+  const generateHolidaySummaryText = (cal: typeof calendarSettings, holCount: number): string => {
+    const satSun = cal.fixed_holidays.includes(0) && cal.fixed_holidays.includes(6);
+    const sunOnly = cal.fixed_holidays.includes(0) && !cal.fixed_holidays.includes(6);
+    let holSummary = satSun 
+      ? '完全週休2日制（土日・祝日）' 
+      : sunOnly 
+        ? '週休制（日曜・祝日）' 
+        : cal.fixed_holidays.length === 0 
+          ? '週休2日シフト制（公休月8〜9日）' 
+          : '会社カレンダーによる指定休日';
+    if (cal.winter_vacation_enabled) holSummary += '、年末年始休暇';
+    if (cal.summer_vacation_enabled) holSummary += '、夏季休暇';
+    holSummary += `（年間休日${holCount}日）`;
+    return holSummary;
+  };
+
+  // 📅 カレンダーパターンの切り替え
+  const handleSelectCalendarPattern = (targetId: string) => {
+    if (targetId === activeCalendarId) return;
+
+    // 現在の編集内容を現在のアクティブパターンに反映保存
+    const updatedPatterns = calendarPatterns.map(p => {
+      if (p.id === activeCalendarId) {
+        return {
+          ...p,
+          ...calendarSettings,
+          annual_holidays_count: computedHolidaysSet.size,
+          holiday_text_summary: generateHolidaySummaryText(calendarSettings, computedHolidaysSet.size)
+        };
+      }
+      return p;
+    });
+
+    const nextPattern = updatedPatterns.find(p => p.id === targetId);
+    if (!nextPattern) return;
+
+    setCalendarPatterns(updatedPatterns);
+    setActiveCalendarId(targetId);
+    setCalendarSettings({
+      year: calendarSettings.year || 2026,
+      fixed_holidays: nextPattern.fixed_holidays || [],
+      national_holidays_enabled: nextPattern.national_holidays_enabled ?? true,
+      winter_vacation_enabled: nextPattern.winter_vacation_enabled ?? true,
+      winter_vacation_start: nextPattern.winter_vacation_start || '2026-12-29',
+      winter_vacation_end: nextPattern.winter_vacation_end || '2027-01-03',
+      summer_vacation_enabled: nextPattern.summer_vacation_enabled ?? true,
+      summer_vacation_start: nextPattern.summer_vacation_start || '2026-08-13',
+      summer_vacation_end: nextPattern.summer_vacation_end || '2026-08-16',
+      custom_holidays: nextPattern.custom_holidays || [],
+      individual_overrides: nextPattern.individual_overrides || {},
+      annual_holidays_count: nextPattern.annual_holidays_count || 125,
+      holiday_text_summary: nextPattern.holiday_text_summary || ''
+    });
+  };
+
+  // 📅 カレンダーパターンの新規追加
+  const handleAddCalendarPattern = () => {
+    const newId = `cal-${Date.now()}`;
+    const newPat: CompanyCalendarPattern = {
+      id: newId,
+      name: `新規カレンダー (${calendarPatterns.length + 1})`,
+      is_default: false,
+      fixed_holidays: [0, 6],
+      national_holidays_enabled: true,
+      winter_vacation_enabled: true,
+      winter_vacation_start: '2026-12-29',
+      winter_vacation_end: '2027-01-03',
+      summer_vacation_enabled: true,
+      summer_vacation_start: '2026-08-13',
+      summer_vacation_end: '2026-08-16',
+      custom_holidays: [],
+      individual_overrides: {},
+      annual_holidays_count: 125,
+      holiday_text_summary: '完全週休2日制（土日・祝日）、年末年始休暇、夏季休暇（年間休日125日）',
+      description: '追加の営業日・休日パターン'
+    };
+
+    const updated = calendarPatterns.map(p => {
+      if (p.id === activeCalendarId) {
+        return {
+          ...p,
+          ...calendarSettings,
+          annual_holidays_count: computedHolidaysSet.size,
+          holiday_text_summary: generateHolidaySummaryText(calendarSettings, computedHolidaysSet.size)
+        };
+      }
+      return p;
+    });
+
+    setCalendarPatterns([...updated, newPat]);
+    setActiveCalendarId(newId);
+    setCalendarSettings({
+      year: calendarSettings.year || 2026,
+      fixed_holidays: [0, 6],
+      national_holidays_enabled: true,
+      winter_vacation_enabled: true,
+      winter_vacation_start: '2026-12-29',
+      winter_vacation_end: '2027-01-03',
+      summer_vacation_enabled: true,
+      summer_vacation_start: '2026-08-13',
+      summer_vacation_end: '2026-08-16',
+      custom_holidays: [],
+      individual_overrides: {},
+      annual_holidays_count: 125,
+      holiday_text_summary: '完全週休2日制（土日・祝日）、年末年始休暇、夏季休暇（年間休日125日）'
+    });
+  };
+
+  // 📅 カレンダーパターンの削除
+  const handleDeleteCalendarPattern = (patId: string) => {
+    const pat = calendarPatterns.find(p => p.id === patId);
+    if (pat?.is_default) {
+      alert('⚠️ 全社標準（代表）カレンダーは削除できません。別のカレンダーを全社標準に指定してから削除してください。');
+      return;
+    }
+    if (calendarPatterns.length <= 1) {
+      alert('⚠️ 最低1つの営業カレンダーが必要です。');
+      return;
+    }
+    if (!confirm(`営業カレンダー「${pat?.name}」を削除しますか？\n※ 削除しても、過去の勤怠実績データは保持されます。`)) return;
+
+    const remaining = calendarPatterns.filter(p => p.id !== patId);
+    setCalendarPatterns(remaining);
+    if (activeCalendarId === patId) {
+      const nextPat = remaining[0];
+      setActiveCalendarId(nextPat.id);
+      setCalendarSettings({
+        year: calendarSettings.year || 2026,
+        ...nextPat
+      });
+    }
+  };
+
+  // 📅 全社標準（代表）カレンダーの指定
+  const handleSetDefaultCalendarPattern = (patId: string) => {
+    setCalendarPatterns(prev => prev.map(p => ({
+      ...p,
+      is_default: p.id === patId
+    })));
+  };
+
+  // 📅 パターン名称・説明の更新
+  const handleUpdatePatternName = (patId: string, newName: string) => {
+    setCalendarPatterns(prev => prev.map(p => p.id === patId ? { ...p, name: newName } : p));
+  };
+
+  const handleUpdatePatternDesc = (patId: string, newDesc: string) => {
+    setCalendarPatterns(prev => prev.map(p => p.id === patId ? { ...p, description: newDesc } : p));
+  };
+
+  // 🏢 部署の適用カレンダー更新
+  const handleUpdateDepartmentCalendar = (deptName: string, patternId: string) => {
+    setDepartments(prev => {
+      const cleanName = sanitizeDepartmentName(deptName);
+      const exists = prev.some(d => sanitizeDepartmentName(d.name) === cleanName);
+      if (exists) {
+        return prev.map(d => sanitizeDepartmentName(d.name) === cleanName ? { ...d, calendar_pattern_id: patternId } : d);
+      } else {
+        return [
+          ...prev,
+          {
+            id: `dept_${Date.now()}`,
+            name: cleanName,
+            display_order: prev.length + 1,
+            calendar_pattern_id: patternId
+          }
+        ];
+      }
+    });
+  };
+
   // カレンダーの日付クリックで休日/出勤日をトグル
   const handleToggleDay = (dateKey: string) => {
     const isCurrentlyHoliday = computedHolidaysSet.has(dateKey);
@@ -948,17 +1257,31 @@ export default function CompanySettingsDashboard() {
     setIsSaving(true);
     try {
       // 休日要約テキストの自動生成
-      const satSun = calendarSettings.fixed_holidays.includes(0) && calendarSettings.fixed_holidays.includes(6);
-      const sunOnly = calendarSettings.fixed_holidays.includes(0) && !calendarSettings.fixed_holidays.includes(6);
-      let holSummary = satSun ? '完全週休2日制（土日・祝日）' : sunOnly ? '週休制（日曜・祝日）' : '会社カレンダーによる指定休日';
-      if (calendarSettings.winter_vacation_enabled) holSummary += '、年末年始休暇';
-      if (calendarSettings.summer_vacation_enabled) holSummary += '、夏季休暇';
-      holSummary += `（年間休日${computedHolidaysSet.size}日）`;
+      const holSummary = generateHolidaySummaryText(calendarSettings, computedHolidaysSet.size);
+
+      // 全カレンダーパターンの最新化（現在アクティブなパターンを最新の編集Stateで同期）
+      const updatedCalendarPatterns = calendarPatterns.map(p => {
+        if (p.id === activeCalendarId) {
+          return {
+            ...p,
+            ...calendarSettings,
+            annual_holidays_count: computedHolidaysSet.size,
+            holiday_text_summary: holSummary
+          };
+        }
+        return p;
+      });
+
+      // 代表カレンダーの特定（is_default優先、なければ先頭）
+      const defaultPattern = updatedCalendarPatterns.find(p => p.is_default) || updatedCalendarPatterns[0];
 
       const updatedCalendar = {
-        ...calendarSettings,
-        annual_holidays_count: computedHolidaysSet.size,
-        holiday_text_summary: holSummary
+        ...defaultPattern,
+        calendar_patterns: updatedCalendarPatterns,
+        active_pattern_id: activeCalendarId,
+        year: calendarSettings.year || 2026,
+        annual_holidays_count: defaultPattern.annual_holidays_count || computedHolidaysSet.size,
+        holiday_text_summary: defaultPattern.holiday_text_summary || holSummary
       };
 
       // ローカルストレージに即時最優先保存（自社テナントIDで完全隔離）
@@ -974,6 +1297,7 @@ export default function CompanySettingsDashboard() {
         ...contractTemplate,
         company_seal_url: companySealUrl
       });
+      saveCalendarPatternsToStorage(tenantId, updatedCalendarPatterns);
       saveWorkflowStepsToStorage(onboardingSteps);
       savePositionsToStorage(positions);
       saveDepartmentsToStorage(tenantId, departments);
@@ -2125,6 +2449,30 @@ export default function CompanySettingsDashboard() {
                           </select>
                         </div>
 
+                        {/* 📅 適用営業カレンダー（休日規程）アサイン枠 */}
+                        <div className="bg-indigo-50/70 border border-indigo-200 p-2.5 rounded-xl space-y-1">
+                          <div className="text-[9px] font-black text-indigo-900 flex items-center justify-between">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-indigo-600" />
+                              適用営業カレンダー（休日規程）
+                            </span>
+                            <span className="text-[9px] text-indigo-600 font-bold">
+                              連動設定
+                            </span>
+                          </div>
+                          <select
+                            value={departments.find(d => sanitizeDepartmentName(d.name) === sanitizeDepartmentName(dept.name))?.calendar_pattern_id || (calendarPatterns.find(p => p.is_default)?.id || calendarPatterns[0]?.id || '')}
+                            onChange={e => handleUpdateDepartmentCalendar(dept.name, e.target.value)}
+                            className="w-full text-xs font-bold px-2 py-1.5 rounded-lg border bg-white text-slate-900 border-indigo-300 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-200 transition"
+                          >
+                            {calendarPatterns.map(pat => (
+                              <option key={pat.id} value={pat.id}>
+                                {pat.name} ({pat.annual_holidays_count}日{pat.is_default ? ' / 全社標準' : ''})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
                         {/* 所属メンバーリスト */}
                         <div className="space-y-1">
                           <div className="text-[10px] font-bold text-slate-400">所属メンバー一覧:</div>
@@ -2291,6 +2639,133 @@ export default function CompanySettingsDashboard() {
                   営業カレンダー A4印刷 / PDF出力
                 </button>
               </div>
+            </div>
+
+            {/* 📅 複数カレンダーパターン切替タブ ＆ 管理ヘッダー */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                    <span>🏢 営業日・休日パターンの選択（複数カレンダー対応）</span>
+                    <span className="text-[10px] text-indigo-700 bg-indigo-100 font-bold px-2 py-0.5 rounded-full">
+                      全{calendarPatterns.length}パターン
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    本社（土日祝休み）、店舗（シフト制）、現場（日祝・隔週土曜）など、部門ごとに異なる営業カレンダーを個別に設定・印刷できます。
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddCalendarPattern}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer self-start sm:self-auto"
+                >
+                  <Plus className="w-4 h-4" />
+                  新規カレンダーを追加
+                </button>
+              </div>
+
+              {/* カレンダーパターン選択タブ */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {calendarPatterns.map(pat => {
+                  const isActive = activeCalendarId === pat.id;
+                  const isDef = pat.is_default;
+                  return (
+                    <button
+                      key={pat.id}
+                      type="button"
+                      onClick={() => handleSelectCalendarPattern(pat.id)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                        isActive
+                          ? 'bg-white text-indigo-700 border-2 border-indigo-600 shadow-sm'
+                          : 'bg-white/80 text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-white'
+                      }`}
+                    >
+                      <Calendar className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
+                      <span>{pat.name}</span>
+                      {isDef && (
+                        <span className="bg-indigo-100 text-indigo-800 text-[9px] px-1.5 py-0.5 rounded font-black">
+                          全社標準
+                        </span>
+                      )}
+                      <span className={`text-[10px] font-normal ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}>
+                        ({isActive ? computedHolidaysSet.size : pat.annual_holidays_count}日)
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 選択中パターンの詳細設定バー */}
+              {(() => {
+                const curPat = calendarPatterns.find(p => p.id === activeCalendarId) || calendarPatterns[0];
+                if (!curPat) return null;
+                return (
+                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-3 pt-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-black text-slate-800">
+                          編集中のカレンダー設定:
+                        </span>
+                        <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
+                          {curPat.name}
+                        </span>
+                        {curPat.is_default ? (
+                          <span className="text-[10px] font-black text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                            ★ 全社標準（代表）カレンダー
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleSetDefaultCalendarPattern(curPat.id)}
+                            className="text-[10px] font-bold text-slate-600 hover:text-indigo-700 bg-slate-100 hover:bg-indigo-50 px-2 py-0.5 rounded-md border border-slate-200 transition cursor-pointer"
+                            title="このカレンダーを全社標準（代表）に指定します"
+                          >
+                            ⭐ 全社標準に設定
+                          </button>
+                        )}
+                      </div>
+
+                      {!curPat.is_default && calendarPatterns.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCalendarPattern(curPat.id)}
+                          className="text-[11px] font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-2.5 py-1 rounded-lg transition flex items-center gap-1 cursor-pointer self-end sm:self-auto"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          このカレンダーを削除
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1">
+                          カレンダー名称（例: 標準カレンダー（本社・営業） / 店舗・シフト制）
+                        </label>
+                        <input
+                          type="text"
+                          value={curPat.name}
+                          onChange={e => handleUpdatePatternName(curPat.id, e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800 focus:bg-white focus:border-indigo-500 transition"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1">
+                          説明・対象部署メモ（例: 本社・管理部門・営業職向け）
+                        </label>
+                        <input
+                          type="text"
+                          value={curPat.description || ''}
+                          placeholder="例: 店舗運営部・飲食サービス部門向け"
+                          onChange={e => handleUpdatePatternDesc(curPat.id, e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800 focus:bg-white focus:border-indigo-500 transition"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* 📅 12ヶ月 インタラクティブ営業カレンダー */}
@@ -3888,7 +4363,8 @@ export default function CompanySettingsDashboard() {
                 year: calendarSettings.year || 2026,
                 annualHolidaysCount: computedHolidaysSet.size,
                 holidaysSet: computedHolidaysSet,
-                holidaySummaryText: calendarSettings.holiday_text_summary
+                holidaySummaryText: calendarSettings.holiday_text_summary,
+                calendarPatternName: calendarPatterns.find(p => p.id === activeCalendarId)?.name
               }} />
             </div>
 
