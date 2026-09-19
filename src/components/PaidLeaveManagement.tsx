@@ -673,12 +673,16 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
         <div className={`rounded-2xl p-5 border shadow-sm flex flex-col justify-between ${
           summary.alertCount > 0 
             ? 'bg-rose-50/70 border-rose-200 text-rose-900' 
-            : 'bg-white border-slate-200 text-slate-800'
+            : summary.obligatedCount === 0
+              ? 'bg-white border-slate-200 text-slate-800'
+              : 'bg-emerald-50/30 border-emerald-200 text-slate-800'
         }`}>
           <div className="flex items-center justify-between">
             <span className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
               {summary.alertCount > 0 ? (
                 <AlertTriangle className="w-4 h-4 text-rose-600 animate-pulse" />
+              ) : summary.obligatedCount === 0 ? (
+                <Info className="w-4 h-4 text-slate-400" />
               ) : (
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
               )}
@@ -693,6 +697,11 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
               <>
                 <span className="text-3xl font-black text-rose-600">{summary.alertCount}</span>
                 <span className="text-xs font-bold text-rose-700">名が5日未達</span>
+              </>
+            ) : summary.obligatedCount === 0 ? (
+              <>
+                <span className="text-2xl font-black text-slate-400">対象者なし</span>
+                <span className="text-xs font-bold text-slate-400">(付与10日未満)</span>
               </>
             ) : (
               <>
@@ -710,8 +719,10 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
               >
                 未達者を表示 <ChevronRight className="w-3 h-3" />
               </button>
+            ) : summary.obligatedCount === 0 ? (
+              <span className="text-slate-400 font-bold">義務発生者なし</span>
             ) : (
-              <span className="text-emerald-600 font-bold">基準クリア</span>
+              <span className="text-emerald-600 font-bold">基準クリア ({summary.obligatedCount}名達成)</span>
             )}
           </div>
         </div>
