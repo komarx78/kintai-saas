@@ -10,6 +10,7 @@ import { HelpGuideModal } from '../components/HelpGuideModal';
 import { BonusDocMasterInspector } from '../components/BonusDocMasterInspector';
 import { OfficialReminderSettingsModal } from '../components/OfficialReminderSettingsModal';
 import { EmployeeCsvImportModal } from '../components/EmployeeCsvImportModal';
+import { StartupGuideCard } from '../components/StartupGuideCard';
 import { 
   type LaborContractTemplate, 
   DEFAULT_LABOR_CONTRACT_TEMPLATE, 
@@ -1619,6 +1620,23 @@ export default function CompanySettingsDashboard() {
           </div>
         )}
 
+        {/* 🚀 社長・初心者管理者向け かんたん初期設定スタートガイド（最短10分・5ステップ） */}
+        <StartupGuideCard
+          basicInfo={basicInfo}
+          departments={departments}
+          payrollSettings={payrollSettings}
+          calendarSettings={calendarSettings}
+          companyUsers={companyUsers}
+          activeTab={activeTab}
+          onSelectTab={(tab) => {
+            setActiveTab(tab);
+            const el = document.getElementById('company-settings-tabs-header');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }}
+          onOpenCsvImport={() => setIsCsvImportModalOpen(true)}
+          onNavigateToOnboarding={() => navigate('/onboarding-admin')}
+        />
+
         {/* ガイドバナー */}
         <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 rounded-3xl p-6 text-white shadow-md shadow-indigo-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
@@ -1633,7 +1651,7 @@ export default function CompanySettingsDashboard() {
         </div>
 
         {/* タブナビゲーション */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200">
+        <div id="company-settings-tabs-header" className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200 scroll-mt-20">
           <button
             onClick={() => setActiveTab('basic')}
             className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
