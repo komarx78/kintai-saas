@@ -153,6 +153,41 @@ interface DepartmentMaster {
   display_order: number;
 }
 
+// 🏢 標準初期部署（DBまたはLocalStorageが空の場合でも選択肢0件を絶対に防ぐ安全防壁）
+export const DEFAULT_DEPARTMENTS: DepartmentMaster[] = [
+  { id: 'dept-default-1', name: '営業部', display_order: 1 },
+  { id: 'dept-default-2', name: '店舗運営部', display_order: 2 },
+  { id: 'dept-default-3', name: '本社・管理部', display_order: 3 },
+  { id: 'dept-default-4', name: '製造・工事部', display_order: 4 }
+];
+
+export const getDepartmentsFromStorage = (tId?: string | null): DepartmentMaster[] => {
+  try {
+    if (tId) {
+      const raw = localStorage.getItem(`company_departments_${tId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('LocalStorage departments parse error in OnboardingAdmin:', e);
+  }
+  return [];
+};
+
+export const saveDepartmentsToStorage = (tId: string | null | undefined, depts: DepartmentMaster[]) => {
+  try {
+    if (tId && depts && depts.length > 0) {
+      localStorage.setItem(`company_departments_${tId}`, JSON.stringify(depts));
+    }
+  } catch (e) {
+    console.warn('LocalStorage departments save error in OnboardingAdmin:', e);
+  }
+};
+
 interface WorkSchedulePattern {
   id: string;
   name: string;
@@ -514,13 +549,48 @@ export default function OnboardingAdminDashboard() {
         setWorkflowSteps(getWorkflowStepsFromStorage());
       }
 
-      // 部署マスタ取得
-      const { data: deptData } = await supabase
-        .from('department_masters')
-        .select('*')
-        .eq('tenant_id', tenantIdData)
-        .order('display_order', { ascending: true });
-      setDepartments(deptData || []);
+      // 部署マスタ取得（DB、会社設定LocalStorage、標準初期部署の多層フォールバック）
+      let deptsLoaded: DepartmentMaster[] = [];
+      try {
+        const { data: deptData } = await supabase
+          .from('department_masters')
+          .select('*')
+          .eq('tenant_id', tenantIdData)
+          .order('display_order', { ascending: true });
+        if (deptData && deptData.length > 0) {
+          deptsLoaded = deptData;
+        }
+      } catch (e) {
+        console.warn('Fetch department masters from DB error:', e);
+      }
+
+      // 会社設定センター（CompanySettingsDashboard）で保存されたLocalStorageと確実にマージ復元
+      const storageDepts = getDepartmentsFromStorage(tenantIdData);
+      if (storageDepts.length > 0) {
+        const mergedMap = new Map<string, DepartmentMaster>();
+        deptsLoaded.forEach(d => mergedMap.set(d.name, d));
+        storageDepts.forEach(sd => {
+          if (!mergedMap.has(sd.name)) {
+            mergedMap.set(sd.name, sd);
+          } else {
+            const cur = mergedMap.get(sd.name)!;
+            mergedMap.set(sd.name, {
+              ...cur,
+              manager_user_id: sd.manager_user_id || cur.manager_user_id,
+              manager_user_name: sd.manager_user_name || cur.manager_user_name
+            });
+          }
+        });
+        deptsLoaded = Array.from(mergedMap.values());
+      }
+
+      // それでも部署が0件の場合は、標準初期部署を自動配備（空っぽで選択不能を100%防止）
+      if (deptsLoaded.length === 0) {
+        deptsLoaded = [...DEFAULT_DEPARTMENTS];
+      }
+
+      saveDepartmentsToStorage(tenantIdData, deptsLoaded);
+      setDepartments(deptsLoaded);
 
       // 役職マスタ取得
       let posList: PositionMaster[] = getPositionsFromStorage();
@@ -648,6 +718,28 @@ export default function OnboardingAdminDashboard() {
         .select('*')
         .eq('tenant_id', tenantIdData)
         .order('created_at', { ascending: false });
+
+      // 社員台帳・ユーザーに登録されている部署も漏れなく自動補完（孤立部署ゼロ化）
+      if (uData && uData.length > 0) {
+        const deptNames = new Set(deptsLoaded.map(d => d.name));
+        let addedDept = false;
+        uData.forEach((u: any) => {
+          const uDept = (u.department || '').trim();
+          if (uDept && !deptNames.has(uDept)) {
+            deptNames.add(uDept);
+            deptsLoaded.push({
+              id: `dept-user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              name: uDept,
+              display_order: deptsLoaded.length + 1
+            });
+            addedDept = true;
+          }
+        });
+        if (addedDept) {
+          saveDepartmentsToStorage(tenantIdData, deptsLoaded);
+          setDepartments([...deptsLoaded]);
+        }
+      }
 
       // 入退社詳細データ取得
       const { data: onbData } = await supabase
@@ -2886,7 +2978,14 @@ export default function OnboardingAdminDashboard() {
               <div className="text-sm font-black mt-1">新規入社手続きウィザード</div>
             </div>
             <button
-              onClick={() => { setWizardStep(1); setWizardOpen(true); }}
+              onClick={() => {
+                setWizardStep(1);
+                const activeDepts = departments.length > 0 ? departments : DEFAULT_DEPARTMENTS;
+                const currentDeptExists = activeDepts.some(d => d.name === wizardData.department);
+                const initialDept = currentDeptExists ? wizardData.department : (activeDepts[0]?.name || '営業部');
+                handleDepartmentChange(initialDept);
+                setWizardOpen(true);
+              }}
               className="mt-3 bg-white hover:bg-blue-50 text-blue-700 font-black text-xs py-2 px-3 rounded-xl transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <UserPlus className="w-4 h-4" />
@@ -4502,7 +4601,7 @@ export default function OnboardingAdminDashboard() {
                       }}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
                     >
-                      {departments.map(d => (
+                      {(departments.length > 0 ? departments : DEFAULT_DEPARTMENTS).map(d => (
                         <option key={d.id} value={d.name}>{d.name}</option>
                       ))}
                     </select>
@@ -5904,10 +6003,13 @@ export default function OnboardingAdminDashboard() {
                     onChange={e => handleDepartmentChange(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
                   >
-                    {departments.map(d => (
+                    {(departments.length > 0 ? departments : DEFAULT_DEPARTMENTS).map(d => (
                       <option key={d.id} value={d.name}>{d.name}</option>
                     ))}
                   </select>
+                  <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
+                    <span>💡 選択した部署の勤務時間帯がSTEP 2に自動反映されます</span>
+                  </div>
                 </div>
               </div>
             )}
@@ -6968,7 +7070,7 @@ export default function OnboardingAdminDashboard() {
                         onChange={e => setInviteUrlModal(prev => ({ ...prev, department: e.target.value, copied: false }))}
                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
                       >
-                        {departments.map(d => (
+                        {(departments.length > 0 ? departments : DEFAULT_DEPARTMENTS).map(d => (
                           <option key={d.id} value={d.name}>{d.name}</option>
                         ))}
                       </select>
@@ -7667,7 +7769,7 @@ export default function OnboardingAdminDashboard() {
         isOpen={isCsvImportModalOpen}
         onClose={() => setIsCsvImportModalOpen(false)}
         tenantId={tenantId || ''}
-        departments={departments.map(d => ({ id: d.id, name: d.name }))}
+        departments={(departments.length > 0 ? departments : DEFAULT_DEPARTMENTS).map(d => ({ id: d.id, name: d.name }))}
         onSuccess={() => {
           fetchData();
           if (isFromCompanySettings) {
