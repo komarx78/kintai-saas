@@ -92,11 +92,45 @@ const NATIONAL_HOLIDAYS_2026: { [key: string]: string } = {
   '2026-11-23': '勤労感謝の日'
 };
 
+// 🧹 部署名の安全クレンジング（Excel数式・セル番地・記号などのコピペ混入ゴミデータを完全排除）
+export const sanitizeDepartmentName = (name: string): string => {
+  if (!name) return '';
+  let cleaned = name.trim();
+  // 「営業部+P3D2:P2D2...」のように + 以降にセル番地や記号が混入している場合、+ より前の正常な部署名を救出
+  if (cleaned.includes('+')) {
+    cleaned = cleaned.split('+')[0].trim();
+  }
+  // コロン、セミコロン、等号などの数式・セル範囲記号以降を除去
+  cleaned = cleaned.replace(/[:;=<>].*$/, '').trim();
+  return cleaned;
+};
+
+export const isValidDepartmentName = (name: string): boolean => {
+  if (!name) return false;
+  const cleaned = sanitizeDepartmentName(name);
+  if (!cleaned || cleaned.length < 2) return false;
+  // セル番地風（例: P3D2:P2D2）や英数字記号のみの文字列を排除
+  if (/^[A-Za-z0-9:+_\-.]+$/.test(cleaned)) return false;
+  return true;
+};
+
 const getDepartmentsFromStorage = (tId: string): DepartmentMaster[] => {
   try {
     if (!tId) return [];
     const raw = localStorage.getItem(`company_departments_${tId}`);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const validMap = new Map<string, DepartmentMaster>();
+        parsed.forEach((d: DepartmentMaster) => {
+          const cleanName = sanitizeDepartmentName(d.name);
+          if (isValidDepartmentName(cleanName) && !validMap.has(cleanName)) {
+            validMap.set(cleanName, { ...d, name: cleanName });
+          }
+        });
+        return Array.from(validMap.values());
+      }
+    }
   } catch (e) {
     console.warn('LocalStorage departments parse error:', e);
   }
@@ -106,7 +140,14 @@ const getDepartmentsFromStorage = (tId: string): DepartmentMaster[] => {
 const saveDepartmentsToStorage = (tId: string, depts: DepartmentMaster[]) => {
   try {
     if (tId) {
-      localStorage.setItem(`company_departments_${tId}`, JSON.stringify(depts));
+      const validMap = new Map<string, DepartmentMaster>();
+      depts.forEach(d => {
+        const cleanName = sanitizeDepartmentName(d.name);
+        if (isValidDepartmentName(cleanName) && !validMap.has(cleanName)) {
+          validMap.set(cleanName, { ...d, name: cleanName });
+        }
+      });
+      localStorage.setItem(`company_departments_${tId}`, JSON.stringify(Array.from(validMap.values())));
     }
   } catch (e) {
     console.warn('LocalStorage departments save error:', e);
@@ -770,16 +811,25 @@ export default function CompanySettingsDashboard() {
       };
     });
 
-    // 2. 社員が入退社台帳等で所属しているが、部署マスタに未登録の部署（人事部、経理部等）を自動補完
+    // 2. 社員が入退社台帳等で所属しているが、部署マスタに未登録の部署（人事部、経理部等）を自動補完（ゴミデータ排除）
     const existingNames = new Set(deptList.map(d => d.name));
     companyUsers.forEach(u => {
-      if (u.department && !existingNames.has(u.department)) {
-        existingNames.add(u.department);
-        const members = companyUsers.filter(m => m.department === u.department);
-        const matchedMasterDept = departments.find(d => d.name === u.department);
+      const rawDept = (u.department || '').trim();
+      if (!rawDept) return;
+      const cleanDept = sanitizeDepartmentName(rawDept);
+
+      // 🧹 ゴミ部署データの自動修復
+      if (rawDept !== cleanDept && cleanDept && u.id) {
+        supabase.from('users').update({ department: cleanDept }).eq('id', u.id).then(() => {}, () => {});
+      }
+
+      if (cleanDept && isValidDepartmentName(cleanDept) && !existingNames.has(cleanDept)) {
+        existingNames.add(cleanDept);
+        const members = companyUsers.filter(m => sanitizeDepartmentName(m.department || '') === cleanDept);
+        const matchedMasterDept = departments.find(d => sanitizeDepartmentName(d.name) === cleanDept);
         deptList.push({
-          id: matchedMasterDept ? matchedMasterDept.id : `auto_${u.department}`,
-          name: u.department,
+          id: matchedMasterDept ? matchedMasterDept.id : `auto_${cleanDept}`,
+          name: cleanDept,
           manager_user_id: matchedMasterDept?.manager_user_id,
           manager_user_name: matchedMasterDept?.manager_user_name,
           members,

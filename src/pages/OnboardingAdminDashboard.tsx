@@ -161,6 +161,28 @@ export const DEFAULT_DEPARTMENTS: DepartmentMaster[] = [
   { id: 'dept-default-4', name: '製造・工事部', display_order: 4 }
 ];
 
+// 🧹 部署名の安全クレンジング（Excel数式・セル番地・記号などのコピペ混入ゴミデータを完全排除）
+export const sanitizeDepartmentName = (name: string): string => {
+  if (!name) return '';
+  let cleaned = name.trim();
+  // 「営業部+P3D2:P2D2...」のように + 以降にセル番地や記号が混入している場合、+ より前の正常な部署名を救出
+  if (cleaned.includes('+')) {
+    cleaned = cleaned.split('+')[0].trim();
+  }
+  // コロン、セミコロン、等号などの数式・セル範囲記号以降を除去
+  cleaned = cleaned.replace(/[:;=<>].*$/, '').trim();
+  return cleaned;
+};
+
+export const isValidDepartmentName = (name: string): boolean => {
+  if (!name) return false;
+  const cleaned = sanitizeDepartmentName(name);
+  if (!cleaned || cleaned.length < 2) return false;
+  // セル番地風（例: P3D2:P2D2）や英数字記号のみの文字列を排除
+  if (/^[A-Za-z0-9:+_\-.]+$/.test(cleaned)) return false;
+  return true;
+};
+
 export const getDepartmentsFromStorage = (tId?: string | null): DepartmentMaster[] => {
   try {
     if (tId) {
@@ -168,7 +190,14 @@ export const getDepartmentsFromStorage = (tId?: string | null): DepartmentMaster
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          const validMap = new Map<string, DepartmentMaster>();
+          parsed.forEach((d: DepartmentMaster) => {
+            const cleanName = sanitizeDepartmentName(d.name);
+            if (isValidDepartmentName(cleanName) && !validMap.has(cleanName)) {
+              validMap.set(cleanName, { ...d, name: cleanName });
+            }
+          });
+          return Array.from(validMap.values());
         }
       }
     }
@@ -181,7 +210,14 @@ export const getDepartmentsFromStorage = (tId?: string | null): DepartmentMaster
 export const saveDepartmentsToStorage = (tId: string | null | undefined, depts: DepartmentMaster[]) => {
   try {
     if (tId && depts && depts.length > 0) {
-      localStorage.setItem(`company_departments_${tId}`, JSON.stringify(depts));
+      const validMap = new Map<string, DepartmentMaster>();
+      depts.forEach(d => {
+        const cleanName = sanitizeDepartmentName(d.name);
+        if (isValidDepartmentName(cleanName) && !validMap.has(cleanName)) {
+          validMap.set(cleanName, { ...d, name: cleanName });
+        }
+      });
+      localStorage.setItem(`company_departments_${tId}`, JSON.stringify(Array.from(validMap.values())));
     }
   } catch (e) {
     console.warn('LocalStorage departments save error in OnboardingAdmin:', e);
@@ -558,7 +594,14 @@ export default function OnboardingAdminDashboard() {
           .eq('tenant_id', tenantIdData)
           .order('display_order', { ascending: true });
         if (deptData && deptData.length > 0) {
-          deptsLoaded = deptData;
+          const cleanMap = new Map<string, DepartmentMaster>();
+          deptData.forEach(d => {
+            const clean = sanitizeDepartmentName(d.name);
+            if (isValidDepartmentName(clean) && !cleanMap.has(clean)) {
+              cleanMap.set(clean, { ...d, name: clean });
+            }
+          });
+          deptsLoaded = Array.from(cleanMap.values());
         }
       } catch (e) {
         console.warn('Fetch department masters from DB error:', e);
@@ -719,17 +762,27 @@ export default function OnboardingAdminDashboard() {
         .eq('tenant_id', tenantIdData)
         .order('created_at', { ascending: false });
 
-      // 社員台帳・ユーザーに登録されている部署も漏れなく自動補完（孤立部署ゼロ化）
+      // 社員台帳・ユーザーに登録されている部署も漏れなく自動補完（ゴミデータサニタイズ＆DB自動修復）
       if (uData && uData.length > 0) {
         const deptNames = new Set(deptsLoaded.map(d => d.name));
         let addedDept = false;
         uData.forEach((u: any) => {
-          const uDept = (u.department || '').trim();
-          if (uDept && !deptNames.has(uDept)) {
-            deptNames.add(uDept);
+          const rawDept = (u.department || '').trim();
+          if (!rawDept) return;
+          const cleanDept = sanitizeDepartmentName(rawDept);
+
+          // 🧹 DB内のゴミ部署名（「営業部+P3D2...」等のコピペ混入）を検知した場合はバックグラウンドで自動修復
+          if (rawDept !== cleanDept && cleanDept) {
+            console.log(`[Sanitize] Auto-repairing invalid user department: "${rawDept}" -> "${cleanDept}" (User: ${u.id})`);
+            u.department = cleanDept;
+            supabase.from('users').update({ department: cleanDept }).eq('id', u.id).then(() => {}, () => {});
+          }
+
+          if (cleanDept && isValidDepartmentName(cleanDept) && !deptNames.has(cleanDept)) {
+            deptNames.add(cleanDept);
             deptsLoaded.push({
               id: `dept-user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              name: uDept,
+              name: cleanDept,
               display_order: deptsLoaded.length + 1
             });
             addedDept = true;
