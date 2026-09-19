@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 
 interface StartupGuideCardProps {
+  tenantId?: string | null;
   basicInfo: {
     name: string;
     representative_name: string;
@@ -34,6 +35,7 @@ interface StartupGuideCardProps {
   calendarSettings: {
     fixed_holidays?: number[];
     annual_holidays_count?: number;
+    holiday_text_summary?: string;
   };
   companyUsers: Array<{ id: string; name: string; role?: string; department?: string }>;
   activeTab: string;
@@ -44,6 +46,7 @@ interface StartupGuideCardProps {
 }
 
 export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
+  tenantId,
   basicInfo,
   departments,
   payrollSettings,
@@ -75,15 +78,40 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
     } catch (_) {}
   };
 
-  // 1. 各ステップの完了状況を実データからリアルタイム自動判定（憲法2条）
+  // 1. 各ステップの完了状況を実データからリアルタイム厳格判定（憲法1条・憲法2条）
+  // STEP 1: 会社名と代表者名の入力
   const isStep1Done = Boolean(basicInfo.name?.trim() && basicInfo.representative_name?.trim());
+
+  // STEP 2: 部署が1件以上登録されているか
   const isStep2Done = departments.length > 0;
-  const isStep3Done = Boolean(payrollSettings.closing_day || (calendarSettings.fixed_holidays && calendarSettings.fixed_holidays.length > 0));
-  // 社員登録判定（管理者以外の社員がいるか、または登録数が1名以上）
-  const regularEmployeesCount = companyUsers.filter(u => u.role !== 'admin' || (u.name && !u.name.includes('代表'))).length;
-  const isStep4Done = companyUsers.length > 1 || regularEmployeesCount > 0;
-  // 運用開始ステップ（社員が登録されていれば準備完了）
-  const isStep5Done = isStep4Done && isStep1Done && isStep3Done;
+
+  // STEP 3: 会社カレンダー・締め日が実際に保存・確認されたか
+  // （※単なるデフォルト値31日・土日ではなく、明示的な保存実績またはカスタマイズ実績があること）
+  const isStep3Saved = Boolean(
+    (tenantId && localStorage.getItem(`company_calendar_payroll_saved_${tenantId}`) === 'true') ||
+    (tenantId && localStorage.getItem(`company_master_settings_saved_${tenantId}`) === 'true') ||
+    Boolean(calendarSettings.holiday_text_summary && !calendarSettings.holiday_text_summary.includes('未設定'))
+  );
+  const isStep3Done = isStep3Saved;
+
+  // STEP 4: 管理者（admin/superadmin/代表）以外の「一般社員・パートさん」が実際に1名以上登録されているか
+  // （※初期アカウントやテスト用管理者の存在による誤判定を完全遮断）
+  const generalEmployees = companyUsers.filter(u => {
+    const r = (u.role || '').toLowerCase();
+    const isOwnerOrAdmin = r === 'admin' || r === 'superadmin' || (u.name && u.name.includes('代表'));
+    return !isOwnerOrAdmin;
+  });
+  const isStep4Done = generalEmployees.length > 0;
+
+  // STEP 5: スタッフへ案内済み、またはタイムカード打刻が開始されているか
+  // （※準備完了なだけで勝手に「設定済み」には絶対にしない！）
+  const isStep5Ready = isStep1Done && isStep2Done && isStep3Done && isStep4Done;
+  const isStep5Done = Boolean(
+    tenantId && (
+      localStorage.getItem(`staff_invitation_sent_${tenantId}`) === 'true' ||
+      localStorage.getItem(`kintai_started_${tenantId}`) === 'true'
+    )
+  );
 
   const completedCount = [isStep1Done, isStep2Done, isStep3Done, isStep4Done, isStep5Done].filter(Boolean).length;
   const progressPercent = Math.round((completedCount / 5) * 100);
@@ -96,7 +124,7 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
       targetTab: 'basic',
       icon: Building2,
       isDone: isStep1Done,
-      actionText: '会社情報を入力する',
+      actionText: isStep1Done ? '会社情報を確認・変更' : '会社情報を入力する',
       doneSummary: basicInfo.name ? `登録済み: ${basicInfo.name}` : '未登録'
     },
     {
@@ -106,8 +134,8 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
       targetTab: 'departments',
       icon: Network,
       isDone: isStep2Done,
-      actionText: '部署・役職を確認する',
-      doneSummary: `登録数: ${departments.length} 部署`
+      actionText: isStep2Done ? '部署・役職を確認・変更' : '部署・役職を追加する',
+      doneSummary: isStep2Done ? `登録数: ${departments.length} 部署` : '未登録（0部署）'
     },
     {
       stepNumber: 3,
@@ -116,8 +144,10 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
       targetTab: 'calendar',
       icon: Calendar,
       isDone: isStep3Done,
-      actionText: '締め日・休日を設定する',
-      doneSummary: payrollSettings.closing_day ? `締日: ${payrollSettings.closing_day}日締` : '設定済み'
+      actionText: isStep3Done ? '締め日・休日を確認・変更' : '締め日・休日を設定する',
+      doneSummary: isStep3Done 
+        ? (payrollSettings.closing_day ? `設定済み: ${payrollSettings.closing_day}日締` : '設定済み') 
+        : '未設定（確認・保存してください）'
     },
     {
       stepNumber: 4,
@@ -127,8 +157,10 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
       targetTab: 'onboarding_admin',
       icon: Users,
       isDone: isStep4Done,
-      actionText: '労務台帳で登録する',
-      doneSummary: `登録社員数: ${companyUsers.length} 名`
+      actionText: isStep4Done ? '労務台帳を確認・追加' : '労務台帳で登録する',
+      doneSummary: isStep4Done 
+        ? `登録社員数: ${generalEmployees.length} 名（一般スタッフ）` 
+        : '一般社員・パート: 未登録（0名）'
     },
     {
       stepNumber: 5,
@@ -137,8 +169,11 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
       targetTab: 'onboarding_nav',
       icon: Send,
       isDone: isStep5Done,
-      actionText: '社員台帳・案内画面へ進む',
-      doneSummary: isStep5Done ? '運用開始可能！' : '事前設定をお待ちください'
+      isReady: isStep5Ready,
+      actionText: isStep5Done ? '運用状況を確認' : (isStep5Ready ? 'スタッフへ案内する（準備完了）' : '社員台帳・案内へ進む'),
+      doneSummary: isStep5Done 
+        ? '🎉 運用開始中！' 
+        : (isStep5Ready ? '✨ 準備完了！スタッフへ案内できます' : 'STEP 1〜4 の完了をお待ちください')
     }
   ];
 
@@ -275,6 +310,10 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
                           <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-md">
                             ✔ 設定済み
                           </span>
+                        ) : step.stepNumber === 5 && !step.isReady ? (
+                          <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                            🔒 STEP 1〜4 完了後に開始
+                          </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-md animate-pulse">
                             👉 ここを設定
@@ -320,13 +359,35 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
                         </button>
                       </div>
                     ) : step.stepNumber === 5 ? (
-                      <button
-                        onClick={onNavigateToOnboarding}
-                        className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-5 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
-                      >
-                        <span>社員台帳・案内へ進む</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+                        <button
+                          onClick={onNavigateToOnboarding}
+                          className={`flex-1 sm:flex-none text-xs font-black px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer ${
+                            step.isDone
+                              ? 'bg-white hover:bg-slate-50 border border-slate-300 text-slate-700'
+                              : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                          }`}
+                        >
+                          <span>{step.actionText}</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                        {!step.isDone && (step as any).isReady && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (tenantId) {
+                                localStorage.setItem(`staff_invitation_sent_${tenantId}`, 'true');
+                                window.location.reload();
+                              }
+                            }}
+                            className="flex-1 sm:flex-none bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold px-3 py-2.5 rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
+                            title="スタッフへの案内が完了したらクリックして完了済みにします"
+                          >
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <span>案内完了にする</span>
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <button
                         onClick={() => onSelectTab(step.targetTab)}

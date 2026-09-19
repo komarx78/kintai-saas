@@ -930,6 +930,8 @@ export default function CompanySettingsDashboard() {
       saveAnnouncementsToStorage(announcements, tenantId);
       localStorage.setItem(`mock_company_holidays_${tenantId}`, JSON.stringify(Array.from(computedHolidaysSet)));
       localStorage.setItem(`company_employment_rules_${tenantId}`, employmentRulesText);
+      localStorage.setItem(`company_master_settings_saved_${tenantId}`, 'true');
+      localStorage.setItem(`company_calendar_payroll_saved_${tenantId}`, 'true');
       if (geminiApiKey) {
         localStorage.setItem(`gemini_api_key_${tenantId}`, geminiApiKey);
         localStorage.setItem('gemini_api_key_custom', geminiApiKey);
@@ -1578,6 +1580,7 @@ export default function CompanySettingsDashboard() {
 
         {/* 🚀 社長・初心者管理者向け かんたん初期設定スタートガイド（最短10分・5ステップ） */}
         <StartupGuideCard
+          tenantId={tenantId}
           basicInfo={basicInfo}
           departments={departments}
           payrollSettings={payrollSettings}
