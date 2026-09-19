@@ -7318,7 +7318,6 @@ export default function OnboardingAdminDashboard() {
           user_id: inviteUrlModal.targetUserId || '',
           name: inviteUrlModal.name.trim(),
           name_kana: inviteUrlModal.nameKana.trim(),
-          email: inviteUrlModal.email.trim(),
           phone: inviteUrlModal.phone.trim(),
           employment_type: inviteUrlModal.employmentType,
           salary_type: inviteUrlModal.salaryType,
@@ -7333,6 +7332,9 @@ export default function OnboardingAdminDashboard() {
           work_location: inviteUrlModal.workLocation,
           work_hours: `${inviteUrlModal.startTime} 〜 ${inviteUrlModal.endTime}（休憩${inviteUrlModal.breakMinutes}分）`
         });
+        if (inviteUrlModal.email.trim()) {
+          params.set('email', inviteUrlModal.email.trim());
+        }
         const currentGeneratedUrl = `${window.location.origin}/onboarding/welcome?${params.toString()}`;
 
         // 💾 労働条件を台帳・実DBに保存（永続化）し、専用URLまたはLINE文面を発行・コピーする関数
@@ -7419,7 +7421,6 @@ export default function OnboardingAdminDashboard() {
               user_id: activeUserId || '',
               name: inviteUrlModal.name.trim(),
               name_kana: inviteUrlModal.nameKana.trim(),
-              email: cleanEmail,
               phone: inviteUrlModal.phone.trim(),
               employment_type: inviteUrlModal.employmentType,
               salary_type: inviteUrlModal.salaryType,
@@ -7434,6 +7435,9 @@ export default function OnboardingAdminDashboard() {
               work_location: inviteUrlModal.workLocation,
               work_hours: `${inviteUrlModal.startTime} 〜 ${inviteUrlModal.endTime}（休憩${inviteUrlModal.breakMinutes}分）`
             });
+            if (cleanEmail) {
+              updatedParams.set('email', cleanEmail);
+            }
             const finalUrl = `${window.location.origin}/onboarding/welcome?${updatedParams.toString()}`;
 
             // 5. アクションに応じたクリップボードコピー
@@ -7453,12 +7457,12 @@ ${inviteUrlModal.name} 様
 ▼ 専用入社手続きURL（スマホ対応）
 ${finalUrl}
 
-▼ あなたの初期設定内容
-・氏名: ${inviteUrlModal.name}（${inviteUrlModal.nameKana || '未設定'}）
-・配属部署: ${inviteUrlModal.department}
-・雇用形態: ${inviteUrlModal.employmentType}
-・給与: ${isHourly ? `時給 ¥${inviteUrlModal.hourlyWage.toLocaleString()}` : `基本給 ¥${inviteUrlModal.baseSalary.toLocaleString()}`}
-※ 入力いただいたメールアドレスが今後の打刻ログインIDとなります。
+▼ お手続きの流れ（スマホで約5分）
+① 上記URLをタップして開く
+② 提示された労働条件・給与内容を確認
+③ ご自身の情報（メールアドレス・住所・給与振込口座など）の入力・書類提出
+
+※ 手続き画面でご入力いただくメールアドレス宛に、入社後のタイムカード打刻用アカウントをご案内いたします。
 よろしくお願いいたします。`;
               await navigator.clipboard.writeText(lineMsg);
               setInviteUrlModal(prev => ({ ...prev, copied: true }));
@@ -7559,17 +7563,17 @@ ${finalUrl}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-[11px] font-bold text-slate-700 block mb-1 flex items-center justify-between">
-                        <span>🔑 メールアドレス（連絡先・ログインID）</span>
-                        <span className="text-[10px] text-indigo-600 font-normal">私用または社用</span>
+                        <span>📧 連絡先メールアドレス（任意・空欄可）</span>
+                        <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">空欄発行OK</span>
                       </label>
                       <input
                         type="email"
-                        placeholder="例: staff@gmail.com または 社用メール"
+                        placeholder="空欄可（社員がスマホで私用メールを入力）"
                         value={inviteUrlModal.email}
                         onChange={e => setInviteUrlModal(prev => ({ ...prev, email: e.target.value, copied: false }))}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 placeholder:text-slate-400 placeholder:font-normal"
                       />
-                      <span className="text-[10px] text-slate-400">※ 入社完了後の打刻・給与明細ログインIDになります</span>
+                      <span className="text-[10px] text-slate-500 block mt-0.5">※ 空欄のままで構いません。社員本人がスマホ手続き画面で自身のメール（私用Gmail等）を入力します。事前に社用メール等を指定する場合のみご入力ください。</span>
                     </div>
                     <div>
                       <label className="text-[11px] font-bold text-slate-700 block mb-1">
