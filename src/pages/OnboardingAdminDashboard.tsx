@@ -39,8 +39,9 @@ import {
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
   FolderOpen, Settings, Clock, Smartphone, AlertCircle, ArrowRight, CornerDownLeft,
   Copy, DollarSign, Sparkles, Award, ShieldCheck, FileCheck,
-  ExternalLink, Gift, Baby, FileSpreadsheet
+  ExternalLink, Gift, Baby, FileSpreadsheet, Send
 } from 'lucide-react';
+import { StaffInviteModal } from '../components/StaffInviteModal';
 import { MaternityLeaveModal } from '../components/MaternityLeaveModal';
 import { OfficialMaternityLeaveDoc } from '../components/OfficialMaternityLeaveDoc';
 import { 
@@ -500,6 +501,9 @@ export default function OnboardingAdminDashboard() {
 
   // 労務手続きガイドモーダルState
   const [guideModalOpen, setGuideModalOpen] = useState(false);
+
+  // 💌 スタッフ案内＆招待URL共通モーダルState
+  const [isStaffInviteModalOpen, setIsStaffInviteModalOpen] = useState(false);
 
   // 📱 個人別 労働条件設定 ＆ 専用入社URL発行モーダルState
   const [inviteUrlModal, setInviteUrlModal] = useState({
@@ -3037,6 +3041,14 @@ export default function OnboardingAdminDashboard() {
             <span>{isFromCompanySettings ? '🏢 会社マスタ設定に戻る' : '会社・全社マスタ設定'}</span>
           </button>
           <button
+            onClick={() => setIsStaffInviteModalOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+            title="新入社員の入社手続きURLやスタッフ打刻URL（LINE定型文・QRコード）を案内します"
+          >
+            <Send className="w-3.5 h-3.5 text-cyan-200" />
+            <span>案内・招待URL</span>
+          </button>
+          <button
             onClick={() => setIsHelpOpen(true)}
             className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-3.5 py-2 rounded-xl transition border border-indigo-200 flex items-center gap-1.5 cursor-pointer shadow-xs"
             title="大元台帳(SSOT)の役割・入社手続きの流れを見る"
@@ -3137,7 +3149,16 @@ export default function OnboardingAdminDashboard() {
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setIsStaffInviteModalOpen(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-4 py-2.5 rounded-xl shadow-md shadow-indigo-200 transition flex items-center gap-1.5 cursor-pointer"
+              title="新入社員への入社書類提出URLやスタッフへのタイムカード打刻URL（LINE定型文・QRコード）を案内します"
+            >
+              <Send className="w-4 h-4 text-cyan-300" />
+              <span>💌 スタッフ案内 ＆ 招待URL（LINE・QR）</span>
+            </button>
+
             <button
               onClick={() => {
                 setInviteUrlModal({
@@ -3162,11 +3183,11 @@ export default function OnboardingAdminDashboard() {
                   copied: false
                 });
               }}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-4 py-2 rounded-xl shadow-md shadow-indigo-200 transition flex items-center gap-1.5 cursor-pointer"
+              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs px-3.5 py-2.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
               title="新入社員の給与・役職・労働条件を設定して専用入社URLを発行"
             >
-              <Smartphone className="w-4 h-4 text-cyan-300" />
-              ✨ 給与設定 ＆ 専用入社URLを発行
+              <Smartphone className="w-4 h-4 text-indigo-600" />
+              <span>個別給与設定付き専用URL</span>
             </button>
 
             <button
@@ -7112,6 +7133,39 @@ export default function OnboardingAdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* 💌 スタッフ案内 ＆ 招待URL共通モーダル */}
+      <StaffInviteModal
+        isOpen={isStaffInviteModalOpen}
+        onClose={() => setIsStaffInviteModalOpen(false)}
+        companyName={tenantInfo?.name || '会社'}
+        tenantId={tenantId}
+        defaultTab="onboarding"
+        onNavigateToCustomInvite={() => {
+          setInviteUrlModal({
+            isOpen: true,
+            targetUserId: '',
+            name: '',
+            employmentType: '正社員（無期雇用）',
+            salaryType: 'monthly',
+            baseSalary: 0,
+            hourlyWage: 0,
+            positionName: '',
+            positionAllowance: 0,
+            qualificationAllowance: 0,
+            fixedOvertimeAllowance: 0,
+            department: departments[0]?.name || '営業部',
+            joinDate: new Date().toISOString().split('T')[0],
+            startTime: '09:00',
+            endTime: '18:00',
+            breakMinutes: 60,
+            workLocation: tenantInfo?.address || '本社 および 会社が指定する就業場所',
+            generatedUrl: '',
+            copied: false
+          });
+        }}
+      />
+
       {/* 📱 個人別 労働条件設定 ＆ 専用入社手続きURL発行モーダル */}
       {inviteUrlModal.isOpen && (() => {
         const isHourly = inviteUrlModal.salaryType === 'hourly';
