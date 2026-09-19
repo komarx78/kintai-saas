@@ -162,6 +162,11 @@ interface WorkSchedulePattern {
   target_department?: string;
 }
 
+// ひらがな ➔ 全角カタカナ自動変換ヘルパー（PC初心者向け親切設計）
+const toKatakana = (str: string): string => {
+  return str.replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60));
+};
+
 export default function OnboardingAdminDashboard() {
   const navigate = useNavigate();
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -209,6 +214,10 @@ export default function OnboardingAdminDashboard() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [wizardData, setWizardData] = useState({
+    last_name: '',
+    first_name: '',
+    last_name_kana: '',
+    first_name_kana: '',
     name: '',
     name_kana: '',
     email: '',
@@ -1860,10 +1869,18 @@ export default function OnboardingAdminDashboard() {
 
   // 新規入社ウィザード完了
   const handleCompleteOnboardingWizard = async () => {
-    if (!tenantId || !wizardData.name) {
-      alert('氏名を入力してください。');
+    const finalLastName = wizardData.last_name?.trim() || '';
+    const finalFirstName = wizardData.first_name?.trim() || '';
+    const finalName = [finalLastName, finalFirstName].filter(Boolean).join(' ') || wizardData.name?.trim();
+
+    if (!tenantId || !finalName) {
+      alert('氏名（姓・名）を入力してください。');
       return;
     }
+
+    const finalLastNameKana = wizardData.last_name_kana?.trim() || '';
+    const finalFirstNameKana = wizardData.first_name_kana?.trim() || '';
+    const finalNameKana = [finalLastNameKana, finalFirstNameKana].filter(Boolean).join(' ') || wizardData.name_kana?.trim() || null;
 
     setIsSaving(true);
     try {
@@ -1872,8 +1889,8 @@ export default function OnboardingAdminDashboard() {
         .from('users')
         .insert({
           tenant_id: tenantId,
-          name: wizardData.name,
-          name_kana: wizardData.name_kana || null,
+          name: finalName,
+          name_kana: finalNameKana,
           email: tempEmail,
           phone: wizardData.phone || null,
           birth_date: wizardData.birth_date || null,
@@ -1913,7 +1930,7 @@ export default function OnboardingAdminDashboard() {
         family_allowance: wizardData.family_allowance,
         commuting_allowance: wizardData.commuting_allowance,
         birth_date: wizardData.birth_date || null,
-        name_kana: wizardData.name_kana || null,
+        name_kana: finalNameKana,
         health_insurance_enabled: wizardData.health_insurance_joined,
         pension_insurance_enabled: wizardData.pension_insurance_joined,
         employment_insurance_enabled: wizardData.employment_insurance_joined,
@@ -1921,7 +1938,7 @@ export default function OnboardingAdminDashboard() {
         branch_name: wizardData.branch_name,
         account_type: wizardData.account_type,
         account_number: wizardData.account_number,
-        account_holder: wizardData.account_holder || wizardData.name_kana || wizardData.name,
+        account_holder: wizardData.account_holder || finalNameKana || finalName,
         dependents_count: wizardData.dependents_count || 0,
         has_spouse: wizardData.has_spouse || false
       }, { onConflict: 'tenant_id,user_id' });
@@ -1930,7 +1947,7 @@ export default function OnboardingAdminDashboard() {
         tenant_id: tenantId,
         user_id: newUserId,
         status: 'active',
-        name_kana: wizardData.name_kana || null,
+        name_kana: finalNameKana,
         join_date: wizardData.join_date,
         contract_type: wizardData.contract_type,
         trial_period_months: wizardData.trial_period_months,
@@ -1958,12 +1975,12 @@ export default function OnboardingAdminDashboard() {
       await fetchData();
 
       if (isFromCompanySettings) {
-        if (confirm(`🎉 ${wizardData.name} さんの登録が完了しました！\n\n会社マスタ設定センター（初期設定 STEP 5：就労時間・休日設定等）に戻りますか？`)) {
+        if (confirm(`🎉 ${finalName} さんの登録が完了しました！\n\n会社マスタ設定センター（初期設定 STEP 5：就労時間・休日設定等）に戻りますか？`)) {
           navigate('/settings/company');
           return;
         }
       } else {
-        alert(`🎉 ${wizardData.name} さんの入社手続きが完了しました！\n「勤怠管理」「シフト管理」「給与計算」の全システムに即座に同期されました。`);
+        alert(`🎉 ${finalName} さんの入社手続きが完了しました！\n「勤怠管理」「シフト管理」「給与計算」の全システムに即座に同期されました。`);
       }
     } catch (err: any) {
       console.error('Onboarding save error:', err);
@@ -5652,28 +5669,92 @@ export default function OnboardingAdminDashboard() {
 
             {wizardStep === 1 && (
               <div className="space-y-4 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 氏名（漢字）＆ フリガナ（カタカナ）の分割入力（スペース完全不要） */}
+                <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200 space-y-3.5">
+                  {/* 1. 氏名（漢字） */}
                   <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">氏名（フルネーム） <span className="text-rose-500">*</span></label>
-                    <input
-                      type="text"
-                      placeholder="例: 佐藤 健一"
-                      value={wizardData.name}
-                      onChange={e => setWizardData({ ...wizardData, name: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:bg-white focus:border-blue-500 transition"
-                    />
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                        <span>氏名（漢字）</span>
+                        <span className="text-rose-500">*</span>
+                      </label>
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-bold">
+                        ✔ スペース不要（枠ごとにご入力ください）
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-500 block mb-1">姓（名字） <span className="text-rose-500">*</span></span>
+                        <input
+                          type="text"
+                          placeholder="例: 佐藤"
+                          value={wizardData.last_name || ''}
+                          onChange={e => {
+                            const l = e.target.value;
+                            const full = [l, wizardData.first_name].filter(Boolean).join(' ');
+                            setWizardData({ ...wizardData, last_name: l, name: full });
+                          }}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-500 block mb-1">名（名前） <span className="text-rose-500">*</span></span>
+                        <input
+                          type="text"
+                          placeholder="例: 健一"
+                          value={wizardData.first_name || ''}
+                          onChange={e => {
+                            const f = e.target.value;
+                            const full = [wizardData.last_name, f].filter(Boolean).join(' ');
+                            setWizardData({ ...wizardData, first_name: f, name: full });
+                          }}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                        />
+                      </div>
+                    </div>
                   </div>
+
+                  {/* 2. フリガナ（カタカナ） */}
                   <div>
-                    <label className="text-[11px] font-bold text-indigo-700 block mb-1">
-                      氏名フリガナ（カタカナ） <span className="text-slate-400 font-normal">※全銀/労務連動</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="例: サトウ ケンイチ"
-                      value={wizardData.name_kana}
-                      onChange={e => setWizardData({ ...wizardData, name_kana: e.target.value })}
-                      className="w-full bg-indigo-50/40 border border-indigo-200 rounded-xl px-3 py-2 font-bold text-indigo-950 focus:bg-white focus:border-indigo-500 transition"
-                    />
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[11px] font-bold text-indigo-700 flex items-center gap-1">
+                        <span>氏名フリガナ（カタカナ）</span>
+                        <span className="text-slate-400 font-normal">（全銀振込・労務連動）</span>
+                      </label>
+                      <span className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md font-bold">
+                        ※ひらがな入力も自動でカタカナに変換されます
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-[10px] font-bold text-indigo-600 block mb-1">セイ（名字カナ）</span>
+                        <input
+                          type="text"
+                          placeholder="例: サトウ"
+                          value={wizardData.last_name_kana || ''}
+                          onChange={e => {
+                            const lk = toKatakana(e.target.value);
+                            const fullK = [lk, wizardData.first_name_kana].filter(Boolean).join(' ');
+                            setWizardData({ ...wizardData, last_name_kana: lk, name_kana: fullK });
+                          }}
+                          className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 font-bold text-indigo-950 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-indigo-600 block mb-1">メイ（名前カナ）</span>
+                        <input
+                          type="text"
+                          placeholder="例: ケンイチ"
+                          value={wizardData.first_name_kana || ''}
+                          onChange={e => {
+                            const fk = toKatakana(e.target.value);
+                            const fullK = [wizardData.last_name_kana, fk].filter(Boolean).join(' ');
+                            setWizardData({ ...wizardData, first_name_kana: fk, name_kana: fullK });
+                          }}
+                          className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 font-bold text-indigo-950 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -5895,7 +5976,14 @@ export default function OnboardingAdminDashboard() {
                     以下の内容で入社登録および全マスタ同期を実行します
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-slate-700 pt-2 border-t border-emerald-200/60">
-                    <div>氏名: <span className="font-bold">{wizardData.name}</span>{wizardData.name_kana ? <span className="text-slate-500 font-normal ml-1">（{wizardData.name_kana}）</span> : ''}</div>
+                    <div>
+                      氏名: <span className="font-bold">{[wizardData.last_name, wizardData.first_name].filter(Boolean).join(' ') || wizardData.name}</span>
+                      {([wizardData.last_name_kana, wizardData.first_name_kana].filter(Boolean).join(' ') || wizardData.name_kana) ? (
+                        <span className="text-slate-500 font-normal ml-1">
+                          （{[wizardData.last_name_kana, wizardData.first_name_kana].filter(Boolean).join(' ') || wizardData.name_kana}）
+                        </span>
+                      ) : ''}
+                    </div>
                     <div>部署: <span className="font-bold">{wizardData.department}</span></div>
                     <div>就業時間: <span className="font-bold text-indigo-700">{wizardData.start_time} 〜 {wizardData.end_time}</span></div>
                     <div>入社日: <span className="font-bold">{wizardData.join_date}</span></div>
@@ -5926,9 +6014,12 @@ export default function OnboardingAdminDashboard() {
               {wizardStep < 4 ? (
                 <button
                   onClick={() => {
-                    if (wizardStep === 1 && !wizardData.name) {
-                      alert('氏名を入力してください。');
-                      return;
+                    if (wizardStep === 1) {
+                      const finalName = [wizardData.last_name, wizardData.first_name].filter(Boolean).join(' ') || wizardData.name?.trim();
+                      if (!finalName) {
+                        alert('氏名（姓・名）を入力してください。');
+                        return;
+                      }
                     }
                     setWizardStep((wizardStep + 1) as any);
                   }}
