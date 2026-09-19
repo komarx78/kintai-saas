@@ -428,6 +428,14 @@ export default function OnboardingAdminDashboard() {
 
   useEffect(() => {
     fetchData();
+    // 🔗 URLパラメータによる自動モーダル起動（スタートガイド等からの誘導連携）
+    const searchParams = new URLSearchParams(window.location.search);
+    const action = searchParams.get('action');
+    if (action === 'import' || action === 'csv') {
+      setIsCsvImportModalOpen(true);
+    } else if (action === 'add' || action === 'new') {
+      setWizardOpen(true);
+    }
   }, []);
 
   const fetchData = async () => {

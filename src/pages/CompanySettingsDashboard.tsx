@@ -9,7 +9,6 @@ import { OfficialLaborContractDoc } from '../components/OfficialLaborContractDoc
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { BonusDocMasterInspector } from '../components/BonusDocMasterInspector';
 import { OfficialReminderSettingsModal } from '../components/OfficialReminderSettingsModal';
-import { EmployeeCsvImportModal } from '../components/EmployeeCsvImportModal';
 import { StartupGuideCard } from '../components/StartupGuideCard';
 import { 
   type LaborContractTemplate, 
@@ -319,14 +318,6 @@ export default function CompanySettingsDashboard() {
   });
 
 
-  // 新規社員登録State
-  const [isCreateUserModalOpen, setIsCreateUserModalOpen] = useState(false);
-  const [isCsvImportModalOpen, setIsCsvImportModalOpen] = useState(false);
-  const [newUserName, setNewUserName] = useState('');
-  const [newUserEmail, setNewUserEmail] = useState('');
-  const [newUserDept, setNewUserDept] = useState('');
-  const [newUserPosId, setNewUserPosId] = useState('');
-  const [newUserRole, setNewUserRole] = useState<'admin' | 'manager' | 'user'>('user');
 
   // 1. 会社基本情報State
   const [basicInfo, setBasicInfo] = useState({
@@ -1231,42 +1222,6 @@ export default function CompanySettingsDashboard() {
     }
   };
 
-  // 新規社員の直接登録（usersテーブルへの一元追加）
-  const handleCreateCompanyUser = async () => {
-    if (!tenantId) return;
-    if (!newUserName.trim()) {
-      alert('社員氏名を入力してください。');
-      return;
-    }
-    const targetPos = positions.find(p => p.id === newUserPosId);
-    const posName = targetPos ? targetPos.name : '';
-
-    try {
-      const newUserId = `user_${Date.now()}`;
-      await supabase.from('users').insert({
-        id: newUserId,
-        tenant_id: tenantId,
-        name: newUserName.trim(),
-        email: newUserEmail.trim() || `${newUserId}@company.local`,
-        role: newUserRole,
-        department: newUserDept || null,
-        position_id: newUserPosId || null,
-        position_name: posName || null
-      });
-
-      setIsCreateUserModalOpen(false);
-      setNewUserName('');
-      setNewUserEmail('');
-      setNewUserDept('');
-      setNewUserPosId('');
-      setNewUserRole('user');
-      await fetchData();
-      alert('🎉 新しい社員を全社マスタ（users）に登録し、組織図へ即座に反映しました！');
-    } catch (e: any) {
-      console.error('Create user error:', e);
-      alert('社員登録に失敗しました: ' + e.message);
-    }
-  };
 
   // 部署追加
   const handleAddDepartment = async () => {
@@ -1633,8 +1588,8 @@ export default function CompanySettingsDashboard() {
             const el = document.getElementById('company-settings-tabs-header');
             if (el) el.scrollIntoView({ behavior: 'smooth' });
           }}
-          onOpenCsvImport={() => setIsCsvImportModalOpen(true)}
-          onOpenManualAdd={() => setIsCreateUserModalOpen(true)}
+          onOpenCsvImport={() => navigate('/onboarding/admin?action=import')}
+          onOpenManualAdd={() => navigate('/onboarding/admin?action=add')}
           onNavigateToOnboarding={() => navigate('/onboarding/admin')}
         />
 
@@ -1943,20 +1898,21 @@ export default function CompanySettingsDashboard() {
                   </div>
 
                   <button
-                    onClick={() => setIsCreateUserModalOpen(true)}
+                    onClick={() => navigate('/onboarding/admin?action=add')}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
+                    title="入退社・労務書類管理システムを開いて新しい社員を登録します"
                   >
                     <Plus className="w-4 h-4" />
-                    社員を新規登録
+                    社員を追加（労務台帳へ）
                   </button>
 
                   <button
-                    onClick={() => setIsCsvImportModalOpen(true)}
+                    onClick={() => navigate('/onboarding/admin?action=import')}
                     className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
-                    title="Excel等で作成した社員リストCSVを一括で取り込みます"
+                    title="入退社・労務書類管理システムを開いて社員リストCSVを一括取り込みします"
                   >
                     <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                    社員一括CSVインポート
+                    社員一括CSVインポート（労務台帳へ）
                   </button>
 
                   <button
@@ -4279,127 +4235,6 @@ export default function CompanySettingsDashboard() {
           </div>
         </div>
       )}
-
-      {/* 👤 新規社員・役員 直接登録モーダル */}
-      {isCreateUserModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
-              <div>
-                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-emerald-600" />
-                  新しい社員・役員を登録
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  全社マスタ（users）に直接追加され、組織図・勤怠・入退社管理へ即時反映されます。
-                </p>
-              </div>
-              <button
-                onClick={() => setIsCreateUserModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4 text-xs">
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  社員氏名 <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="例: 山田 太郎"
-                  value={newUserName}
-                  onChange={e => setNewUserName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  メールアドレス（任意）
-                </label>
-                <input
-                  type="email"
-                  placeholder="例: yamada@company.com（未入力時は自動生成）"
-                  value={newUserEmail}
-                  onChange={e => setNewUserEmail(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">配属部署</label>
-                <select
-                  value={newUserDept}
-                  onChange={e => setNewUserDept(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                >
-                  <option value="">（部署未設定 / 本部直属）</option>
-                  {departments.map(d => (
-                    <option key={d.id} value={d.name}>{d.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">役職（Position）</label>
-                <select
-                  value={newUserPosId}
-                  onChange={e => setNewUserPosId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                >
-                  <option value="">（役職なし / 一般社員）</option>
-                  {positions.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} (Lv.{p.rank_level})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">システム権限</label>
-                <select
-                  value={newUserRole}
-                  onChange={e => setNewUserRole(e.target.value as any)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                >
-                  <option value="user">一般従業員（自分の勤怠・申請のみ）</option>
-                  <option value="manager">マネージャー（部門承認・閲覧権限）</option>
-                  <option value="admin">全社管理者（マスタ設定・承認・管理権限）</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-2 pt-4 border-t border-slate-100">
-              <button
-                onClick={() => setIsCreateUserModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={handleCreateCompanyUser}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
-              >
-                <Save className="w-3.5 h-3.5" />
-                登録して組織図へ反映
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 📥 社員一括CSVインポートモーダル */}
-      <EmployeeCsvImportModal
-        isOpen={isCsvImportModalOpen}
-        onClose={() => setIsCsvImportModalOpen(false)}
-        tenantId={tenantId || ''}
-        departments={departments.map(d => ({ id: d.id, name: d.name }))}
-        onSuccess={() => {
-          fetchData();
-        }}
-      />
 
       {/* 🛠️ 賞与支払届 印字座標マスタ微調整モーダル（最高権限者専用） */}
       {showBonusInspectorModal && (

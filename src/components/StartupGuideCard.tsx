@@ -120,12 +120,12 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
     },
     {
       stepNumber: 4,
-      title: '社員さん・パートさんの登録',
-      desc: '働くスタッフの名簿を登録します。エクセル（CSV）で全員一気に取り込むか、画面から1人ずつ手動追加できます。',
-      targetTab: 'csv_or_roster',
+      title: '社員さん・パートさんの登録（入退社労務台帳）',
+      desc: 'スタッフの基本台帳登録・契約書作成は「入退社・労務書類管理システム」で行います。エクセル(CSV)一括取り込み、または手動追加が可能です。',
+      targetTab: 'onboarding_admin',
       icon: Users,
       isDone: isStep4Done,
-      actionText: 'エクセル(CSV)で一括登録する',
+      actionText: '労務台帳で登録する',
       doneSummary: `登録社員数: ${companyUsers.length} 名`
     },
     {
@@ -440,10 +440,10 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
                   </span>
                   <div>
                     <div className="flex items-center gap-2">
-                      <strong className="text-slate-900 text-sm">STEP 4: 社員・パートの名簿登録</strong>
+                      <strong className="text-slate-900 text-sm">STEP 4: 社員・パートの名簿登録（入退社労務台帳）</strong>
                       {isStep4Done && <span className="text-emerald-700 font-bold text-[10px]">【設定済: {companyUsers.length}名】</span>}
                     </div>
-                    <p className="text-slate-600 text-[11px] mt-0.5">「社員一括CSVインポート」でExcelファイルを読み込むか、手動でスタッフ情報を追加。</p>
+                    <p className="text-slate-600 text-[11px] mt-0.5">「入退社・労務書類管理システム」でCSV一括取り込み、または手動でスタッフ情報を登録。</p>
                   </div>
                 </div>
 
