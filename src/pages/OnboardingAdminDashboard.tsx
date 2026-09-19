@@ -162,9 +162,35 @@ interface WorkSchedulePattern {
   target_department?: string;
 }
 
-// ひらがな ➔ 全角カタカナ自動変換ヘルパー（PC初心者向け親切設計）
+// ひらがな・半角カナ ➔ 全角カタカナ強力自動変換ヘルパー（PC初心者向け親切設計）
 const toKatakana = (str: string): string => {
-  return str.replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60));
+  if (!str) return '';
+  const hankakuMap: Record<string, string> = {
+    'ｶﾞ': 'ガ', 'ｷﾞ': 'ギ', 'ｸﾞ': 'グ', 'ｹﾞ': 'ゲ', 'ｺﾞ': 'ゴ',
+    'ｻﾞ': 'ザ', 'ｼﾞ': 'ジ', 'ｽﾞ': 'ズ', 'ｾﾞ': 'ゼ', 'ｿﾞ': 'ゾ',
+    'ﾀﾞ': 'ダ', 'ﾁﾞ': 'ヂ', 'ﾂﾞ': 'ヅ', 'ﾃﾞ': 'デ', 'ﾄﾞ': 'ド',
+    'ﾊﾞ': 'バ', 'ﾋﾞ': 'ビ', 'ﾌﾞ': 'ブ', 'ﾍﾞ': 'ベ', 'ﾎﾞ': 'ボ',
+    'ﾊﾟ': 'パ', 'ﾋﾟ': 'ピ', 'ﾌﾟ': 'プ', 'ﾍﾟ': 'ペ', 'ﾎﾟ': 'ポ',
+    'ｳﾞ': 'ヴ',
+    'ｱ': 'ア', 'ｲ': 'イ', 'ｳ': 'ウ', 'ｴ': 'エ', 'ｵ': 'オ',
+    'ｶ': 'カ', 'ｷ': 'キ', 'ｸ': 'ク', 'ｹ': 'ケ', 'ｺ': 'コ',
+    'ｻ': 'サ', 'ｼ': 'シ', 'ｽ': 'ス', 'ｾ': 'セ', 'ｿ': 'ソ',
+    'ﾀ': 'タ', 'ﾁ': 'チ', 'ﾂ': 'ツ', 'ﾃ': 'テ', 'ﾄ': 'ト',
+    'ﾅ': 'ナ', 'ﾆ': 'ニ', 'ﾇ': 'ヌ', 'ﾈ': 'ネ', 'ノ': 'ノ',
+    'ﾊ': 'ハ', 'ﾋ': 'ヒ', 'ﾌ': 'フ', 'ﾍ': 'ヘ', 'ﾎ': 'ホ',
+    'ﾏ': 'マ', 'ﾐ': 'ミ', 'ﾑ': 'ム', 'ﾒ': 'メ', 'ﾓ': 'モ',
+    'ﾔ': 'ヤ', 'ﾕ': 'ユ', 'ﾖ': 'ヨ',
+    'ﾗ': 'ラ', 'ﾘ': 'リ', 'ﾙ': 'ル', 'ﾚ': 'レ', 'ﾛ': 'ロ',
+    'ﾜ': 'ワ', 'ｦ': 'ヲ', 'ﾝ': 'ン',
+    'ｧ': 'ァ', 'ｨ': 'ィ', 'ｩ': 'ゥ', 'ｪ': 'ェ', 'ｫ': 'ォ',
+    'ｯ': 'ッ', 'ｬ': 'ャ', 'ｭ': 'ュ', 'ｮ': 'ョ',
+    'ｰ': 'ー'
+  };
+  let result = str;
+  for (const [hk, zk] of Object.entries(hankakuMap)) {
+    result = result.split(hk).join(zk);
+  }
+  return result.replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60));
 };
 
 export default function OnboardingAdminDashboard() {
@@ -5716,14 +5742,33 @@ export default function OnboardingAdminDashboard() {
 
                   {/* 2. フリガナ（カタカナ） */}
                   <div>
-                    <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
                       <label className="text-[11px] font-bold text-indigo-700 flex items-center gap-1">
                         <span>氏名フリガナ（カタカナ）</span>
                         <span className="text-slate-400 font-normal">（全銀振込・労務連動）</span>
                       </label>
-                      <span className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md font-bold">
-                        ※ひらがな入力も自動でカタカナに変換されます
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md font-bold">
+                          💡 確定（Enter）や枠移動で自動カタカナ変換
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const lk = toKatakana(wizardData.last_name_kana || '');
+                            const fk = toKatakana(wizardData.first_name_kana || '');
+                            setWizardData(prev => ({
+                              ...prev,
+                              last_name_kana: lk,
+                              first_name_kana: fk,
+                              name_kana: [lk, fk].filter(Boolean).join(' ')
+                            }));
+                          }}
+                          className="text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-2 py-0.5 rounded-md shadow-2xs cursor-pointer transition"
+                          title="入力中のひらがなを今すぐカタカナに変換します"
+                        >
+                          カタカナに変換
+                        </button>
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
@@ -5739,6 +5784,28 @@ export default function OnboardingAdminDashboard() {
                               last_name_kana: val,
                               name_kana: [val, prev.first_name_kana].filter(Boolean).join(' ')
                             }));
+                          }}
+                          onCompositionEnd={e => {
+                            const val = e.currentTarget.value;
+                            setTimeout(() => {
+                              const lk = toKatakana(val.trim());
+                              setWizardData(prev => ({
+                                ...prev,
+                                last_name_kana: lk,
+                                name_kana: [lk, prev.first_name_kana].filter(Boolean).join(' ')
+                              }));
+                            }, 10);
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              const val = (e.currentTarget as HTMLInputElement).value;
+                              const lk = toKatakana(val.trim());
+                              setWizardData(prev => ({
+                                ...prev,
+                                last_name_kana: lk,
+                                name_kana: [lk, prev.first_name_kana].filter(Boolean).join(' ')
+                              }));
+                            }
                           }}
                           onBlur={e => {
                             const lk = toKatakana(e.target.value.trim());
@@ -5764,6 +5831,28 @@ export default function OnboardingAdminDashboard() {
                               first_name_kana: val,
                               name_kana: [prev.last_name_kana, val].filter(Boolean).join(' ')
                             }));
+                          }}
+                          onCompositionEnd={e => {
+                            const val = e.currentTarget.value;
+                            setTimeout(() => {
+                              const fk = toKatakana(val.trim());
+                              setWizardData(prev => ({
+                                ...prev,
+                                first_name_kana: fk,
+                                name_kana: [prev.last_name_kana, fk].filter(Boolean).join(' ')
+                              }));
+                            }, 10);
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              const val = (e.currentTarget as HTMLInputElement).value;
+                              const fk = toKatakana(val.trim());
+                              setWizardData(prev => ({
+                                ...prev,
+                                first_name_kana: fk,
+                                name_kana: [prev.last_name_kana, fk].filter(Boolean).join(' ')
+                              }));
+                            }
                           }}
                           onBlur={e => {
                             const fk = toKatakana(e.target.value.trim());
