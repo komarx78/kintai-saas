@@ -17,7 +17,6 @@ import {
   ExternalLink,
   X
 } from 'lucide-react';
-import { StaffInviteModal } from './StaffInviteModal';
 
 interface StartupGuideCardProps {
   tenantId?: string | null;
@@ -70,7 +69,6 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
   });
 
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
-  const [isInviteModalOpen, setIsInviteModalOpen] = useState<boolean>(false);
 
   const toggleOpen = () => {
     const next = !isOpen;
@@ -185,15 +183,16 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
     {
       stepNumber: 5,
       title: 'スタッフへ案内してタイムカード開始！',
-      desc: 'スタッフに「招待URL」を送るか、管理者画面からタイムカード打刻をスタートします。スマホから自分の給与明細も見られます。',
+      desc: 'スタッフのログインアカウント発行・タイムカード案内は「従業員台帳（入退社労務管理）」から行います。社員ごとに初期パスワード付きで安全に案内文を送れます。',
+      notice: '※会社マスタから直接飛ばさず、従業員台帳でスタッフ一覧を確認しながら確実にアカウントを発行・案内します',
       targetTab: 'onboarding_nav',
       icon: Send,
       isDone: isStep5Done,
       isReady: isStep5Ready,
-      actionText: isStep5Done ? '案内文・招待URLを確認' : (isStep5Ready ? '招待URL・案内文を送る（準備完了）' : '社員台帳・案内へ進む'),
+      actionText: isStep5Done ? '従業員台帳で案内状況を確認' : (isStep5Ready ? '従業員台帳を開いてスタッフに案内する' : '社員台帳・案内へ進む'),
       doneSummary: isStep5Done 
         ? '🎉 運用開始中！' 
-        : (isStep5Ready ? '✨ 準備完了！スタッフへ案内できます' : 'STEP 1〜4 の完了をお待ちください')
+        : (isStep5Ready ? '✨ 準備完了！従業員台帳から案内できます' : 'STEP 1〜4 の完了をお待ちください')
     }
   ];
 
@@ -381,15 +380,17 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
                     ) : step.stepNumber === 5 ? (
                       <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
                         <button
-                          onClick={() => setIsInviteModalOpen(true)}
+                          onClick={onNavigateToOnboarding}
                           className={`flex-1 sm:flex-none text-xs font-black px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer ${
                             step.isDone
                               ? 'bg-white hover:bg-slate-50 border border-slate-300 text-slate-700'
                               : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
                           }`}
+                          title="従業員台帳（入退社労務管理）へ移動し、スタッフごとにログインアカウント（初期パスワード付き）を発行・案内します"
                         >
                           <Send className="w-4 h-4" />
                           <span>{step.actionText}</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
                         </button>
                         {!step.isDone && (step as any).isReady && (
                           <button
@@ -582,23 +583,6 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
         document.body
       )}
 
-      {/* 🚀 スタッフ案内 ＆ 招待URL一発送信モーダル */}
-      <StaffInviteModal
-        isOpen={isInviteModalOpen}
-        onClose={() => setIsInviteModalOpen(false)}
-        companyName={basicInfo.name}
-        tenantId={tenantId}
-        defaultTab="kintai"
-        showCompleteButton={true}
-        onCompleteStep={() => {
-          if (tenantId) {
-            localStorage.setItem(`staff_invitation_sent_${tenantId}`, 'true');
-          }
-          setIsInviteModalOpen(false);
-          window.location.reload();
-        }}
-        onNavigateToCustomInvite={onNavigateToOnboarding}
-      />
     </div>
   );
 };

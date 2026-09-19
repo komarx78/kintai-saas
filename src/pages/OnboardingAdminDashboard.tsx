@@ -39,9 +39,10 @@ import {
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
   FolderOpen, Settings, Clock, Smartphone, AlertCircle, ArrowRight, CornerDownLeft,
   Copy, DollarSign, Sparkles, Award, ShieldCheck, FileCheck,
-  ExternalLink, Gift, Baby, FileSpreadsheet, Send
+  ExternalLink, Gift, Baby, FileSpreadsheet, Send, KeyRound
 } from 'lucide-react';
 import { StaffInviteModal } from '../components/StaffInviteModal';
+import { StaffAccountIssueModal, type TargetStaffForAccount } from '../components/StaffAccountIssueModal';
 import { MaternityLeaveModal } from '../components/MaternityLeaveModal';
 import { OfficialMaternityLeaveDoc } from '../components/OfficialMaternityLeaveDoc';
 import { 
@@ -504,6 +505,15 @@ export default function OnboardingAdminDashboard() {
 
   // 💌 スタッフ案内＆招待URL共通モーダルState
   const [isStaffInviteModalOpen, setIsStaffInviteModalOpen] = useState(false);
+
+  // 🔑 個別スタッフ ログインアカウント発行＆LINE案内モーダルState
+  const [accountIssueModal, setAccountIssueModal] = useState<{
+    isOpen: boolean;
+    staff: TargetStaffForAccount | null;
+  }>({
+    isOpen: false,
+    staff: null
+  });
 
   // 📱 個人別 労働条件設定 ＆ 専用入社URL発行モーダルState
   const [inviteUrlModal, setInviteUrlModal] = useState({
@@ -3465,6 +3475,29 @@ export default function OnboardingAdminDashboard() {
 
                           <td className="py-3.5 px-4 text-center">
                             <div className="flex items-center justify-center gap-1.5">
+                              {/* 🔑 ログインアカウント発行・初期パスワード＆LINE案内ボタン */}
+                              <button
+                                onClick={() => {
+                                  const fullEmp = resolveEmployeeFullData(emp);
+                                  setAccountIssueModal({
+                                    isOpen: true,
+                                    staff: {
+                                      id: fullEmp.user_id || '',
+                                      name: fullEmp.name || '',
+                                      email: fullEmp.email || '',
+                                      department: fullEmp.department || '',
+                                      role: fullEmp.role || 'user',
+                                      employment_type: fullEmp.employment_type || ''
+                                    }
+                                  });
+                                }}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-2.5 py-1.5 rounded-lg shadow-xs transition flex items-center gap-1 cursor-pointer shrink-0"
+                                title="この従業員のログインアカウント・初期パスワードを発行し、LINE用案内文をコピーします"
+                              >
+                                <KeyRound className="w-3.5 h-3.5 text-cyan-200" />
+                                <span>🔑 ログイン案内</span>
+                              </button>
+
                               <button
                                 onClick={() => {
                                   const isH = emp.salary_type === 'hourly';
@@ -7163,6 +7196,17 @@ export default function OnboardingAdminDashboard() {
             generatedUrl: '',
             copied: false
           });
+        }}
+      />
+
+      {/* 🔑 個別スタッフ ログインアカウント発行 ＆ LINE案内モーダル */}
+      <StaffAccountIssueModal
+        isOpen={accountIssueModal.isOpen}
+        onClose={() => setAccountIssueModal({ isOpen: false, staff: null })}
+        staff={accountIssueModal.staff}
+        companyName={tenantInfo?.name || '会社'}
+        onSuccess={({ id, email: newEmail }) => {
+          setEmployees(prev => prev.map(e => (e.user_id === id) ? { ...e, email: newEmail } : e));
         }}
       />
 
