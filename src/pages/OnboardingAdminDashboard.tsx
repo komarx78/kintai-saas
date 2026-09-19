@@ -665,7 +665,20 @@ export default function OnboardingAdminDashboard() {
       setSchedulePatterns(patterns);
 
       // ウィザードの初期休日と時間帯を全社設定から反映
-      const defaultHolText = tData?.work_calendar_settings?.holiday_text_summary || '完全週休2日制（土日・祝日）';
+      let defaultHolText = tData?.work_calendar_settings?.holiday_text_summary || '';
+      if (!defaultHolText) {
+        try {
+          const rawCal = localStorage.getItem(`calendar_settings_${tenantIdData}`);
+          if (rawCal) {
+            const parsed = JSON.parse(rawCal);
+            if (parsed.holiday_text_summary) defaultHolText = parsed.holiday_text_summary;
+          }
+        } catch (_) {}
+      }
+      if (!defaultHolText) {
+        defaultHolText = '完全週休2日制（土日・祝日）、年末年始休暇、夏季休暇（年間休日125日）';
+      }
+
       const defaultStartTime = tData?.work_calendar_settings?.standard_start_time || '09:00';
       const defaultEndTime = tData?.work_calendar_settings?.standard_end_time || '18:00';
       const defaultBreak = tData?.work_calendar_settings?.standard_break_minutes || 60;
@@ -6129,16 +6142,22 @@ export default function OnboardingAdminDashboard() {
                   <p className="text-[10px] text-slate-400">※ 部署に設定された時間帯が初期入力されます。時短勤務等で個人ごとに異なる場合はここで自由に調整してください。</p>
                 </div>
 
-                <div>
-                  <label className="text-[11px] font-bold text-slate-600 block mb-1">休日規定（会社マスタ連動）</label>
-                  <input
-                    type="text"
-                    value={wizardData.holidays_text}
-                    onChange={e => setWizardData({ ...wizardData, holidays_text: e.target.value })}
-                    placeholder="例: 完全週休2日制（土日・祝日）、年末年始休暇"
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">※ 全社マスタ設定（カレンダー）で設定した会社休日がデフォルト反映されます。</p>
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-black text-emerald-900 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      会社休日規程（全社共通ルール・自動適用）
+                    </label>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-300">
+                      全社マスタ連動
+                    </span>
+                  </div>
+                  <div className="text-xs font-bold text-slate-800 bg-white px-3 py-2.5 rounded-xl border border-emerald-200/80 shadow-2xs">
+                    {wizardData.holidays_text || '完全週休2日制（土日・祝日）、年末年始休暇、夏季休暇'}
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1.5">
+                    ※ 会社マスタ設定で確定した休日規程が雇用契約書に自動反映されます（全社共通のため新入社員登録で都度変更する必要はありません）。
+                  </p>
                 </div>
               </div>
             )}
