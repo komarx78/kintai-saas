@@ -38,6 +38,7 @@ interface StartupGuideCardProps {
   activeTab: string;
   onSelectTab: (tab: any) => void;
   onOpenCsvImport: () => void;
+  onOpenManualAdd?: () => void;
   onNavigateToOnboarding: () => void;
 }
 
@@ -50,6 +51,7 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
   activeTab,
   onSelectTab,
   onOpenCsvImport,
+  onOpenManualAdd,
   onNavigateToOnboarding
 }) => {
   // 初期状態は開いた状態（LocalStorageで開閉状態を記憶）
@@ -299,7 +301,7 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
                           CSVで一括登録
                         </button>
                         <button
-                          onClick={onNavigateToOnboarding}
+                          onClick={onOpenManualAdd || onNavigateToOnboarding}
                           className="flex-1 sm:flex-none bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold px-3 py-2.5 rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
                         >
                           手動追加

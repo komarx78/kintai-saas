@@ -1634,7 +1634,8 @@ export default function CompanySettingsDashboard() {
             if (el) el.scrollIntoView({ behavior: 'smooth' });
           }}
           onOpenCsvImport={() => setIsCsvImportModalOpen(true)}
-          onNavigateToOnboarding={() => navigate('/onboarding-admin')}
+          onOpenManualAdd={() => setIsCreateUserModalOpen(true)}
+          onNavigateToOnboarding={() => navigate('/onboarding/admin')}
         />
 
         {/* ガイドバナー */}
