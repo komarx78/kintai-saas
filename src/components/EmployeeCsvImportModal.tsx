@@ -176,6 +176,83 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
     return lines;
   };
 
+  // 📅 日付の超柔軟・堅牢正規化（YYYY/M/D, YYYY.M.D, YYYY-M-D, 和暦, Excelシリアル値, 全角対応）
+  const normalizeDate = (raw: string): string | null => {
+    if (!raw) return null;
+    // 全角英数・記号を半角に変換、トリム
+    let str = raw.trim()
+      .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+      .replace(/[／]/g, '/')
+      .replace(/[－ー―]/g, '-')
+      .replace(/[．]/g, '.');
+
+    if (!str) return null;
+
+    // 1. すでに YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      return str;
+    }
+
+    // 2. YYYY/M/D, YYYY-M-D, YYYY.M.D, YYYY年M月D日
+    const match = str.match(/^(\d{4})[\/\-\.年](\d{1,2})[\/\-\.月](\d{1,2})日?$/);
+    if (match) {
+      const y = match[1];
+      const m = match[2].padStart(2, '0');
+      const d = match[3].padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    // 3. 8桁の連続数字 YYYYMMDD (例: 20260401)
+    if (/^\d{8}$/.test(str)) {
+      const y = str.slice(0, 4);
+      const m = str.slice(4, 6);
+      const d = str.slice(6, 8);
+      return `${y}-${m}-${d}`;
+    }
+
+    // 4. 和暦表記 (例: 令和8年4月1日, R8/4/1, 平成10年5月3日, H10.5.3, 昭和60年1月1日)
+    const warekiMatch = str.match(/^(令和|平成|昭和|R|H|S)(\d{1,2}|元)[\/\-\.年](\d{1,2})[\/\-\.月](\d{1,2})日?$/i);
+    if (warekiMatch) {
+      const era = warekiMatch[1].toUpperCase();
+      const eraYear = warekiMatch[2] === '元' ? 1 : parseInt(warekiMatch[2], 10);
+      let christianYear = 0;
+      if (era === '令和' || era === 'R') christianYear = 2018 + eraYear;
+      else if (era === '平成' || era === 'H') christianYear = 1988 + eraYear;
+      else if (era === '昭和' || era === 'S') christianYear = 1925 + eraYear;
+      if (christianYear > 0) {
+        const m = warekiMatch[3].padStart(2, '0');
+        const d = warekiMatch[4].padStart(2, '0');
+        return `${christianYear}-${m}-${d}`;
+      }
+    }
+
+    // 5. Excel シリアル値 (例: 46113 など 20000〜60000 付近の5桁数値)
+    if (/^\d{5}$/.test(str)) {
+      const serial = parseInt(str, 10);
+      if (serial >= 20000 && serial <= 60000) {
+        const excelEpoch = new Date(1899, 11, 30);
+        const date = new Date(excelEpoch.getTime() + serial * 86400000);
+        if (!isNaN(date.getTime())) {
+          const y = date.getFullYear();
+          const m = String(date.getMonth() + 1).padStart(2, '0');
+          const d = String(date.getDate()).padStart(2, '0');
+          return `${y}-${m}-${d}`;
+        }
+      }
+    }
+
+    // 6. JavaScript Date で解釈可能 (例: "2026/4/1", "2026-4-1" 等)
+    const parsedDate = new Date(str.replace(/\./g, '-'));
+    if (!isNaN(parsedDate.getTime()) && parsedDate.getFullYear() >= 1900 && parsedDate.getFullYear() <= 2100) {
+      const y = parsedDate.getFullYear();
+      const m = String(parsedDate.getMonth() + 1).padStart(2, '0');
+      const d = String(parsedDate.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    return null;
+  };
+
   // 📂 2. CSVファイルの読み込み ＆ エンコーディング自動判別（Shift-JIS / UTF-8）
   const handleFileSelect = async (file: File) => {
     setIsProcessingFile(true);
@@ -258,16 +335,25 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
         const hourlyWage = rawHourlyWage ? parseInt(rawHourlyWage.replace(/[^0-9]/g, ''), 10) || 0 : 0;
 
         // バリデーション 5: 入社年月日
-        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
         const todayStr = new Date().toISOString().split('T')[0];
-        let validJoinDate = joinDate || todayStr;
-        if (joinDate && !dateRegex.test(joinDate)) {
-          // 2026/04/01 形式の救済
-          const slashes = joinDate.replace(/\//g, '-');
-          if (dateRegex.test(slashes)) {
-            validJoinDate = slashes;
+        let validJoinDate = todayStr;
+        if (joinDate) {
+          const normalized = normalizeDate(joinDate);
+          if (normalized) {
+            validJoinDate = normalized;
           } else {
-            errors.push(`入社日「${joinDate}」の形式が正しくありません (YYYY-MM-DD)`);
+            errors.push(`入社日「${joinDate}」の形式が正しくありません (例: 2026-04-01 または 2026/4/1)`);
+          }
+        }
+
+        // 生年月日（入力がある場合のみ正規化＆検証）
+        let validBirthDate: string | undefined = undefined;
+        if (birthDate) {
+          const normalizedBirth = normalizeDate(birthDate);
+          if (normalizedBirth) {
+            validBirthDate = normalizedBirth;
+          } else {
+            errors.push(`生年月日「${birthDate}」の形式が正しくありません (例: 1990-05-15 または 1990/5/15)`);
           }
         }
 
@@ -284,6 +370,15 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
           role = 'manager';
         }
 
+        // 郵便番号の全角半角正規化
+        let cleanPostalCode = postalCode ? postalCode.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).trim() : undefined;
+        if (cleanPostalCode && /^\d{7}$/.test(cleanPostalCode)) {
+          cleanPostalCode = `${cleanPostalCode.slice(0, 3)}-${cleanPostalCode.slice(3)}`;
+        }
+
+        // 電話番号の全角半角正規化
+        const cleanPhoneNumber = phoneNumber ? phoneNumber.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).trim() : undefined;
+
         parsed.push({
           rowIndex,
           name,
@@ -296,11 +391,11 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
           baseSalary,
           hourlyWage,
           joinDate: validJoinDate,
-          birthDate: birthDate || undefined,
+          birthDate: validBirthDate,
           gender: gender || undefined,
-          postalCode: postalCode || undefined,
+          postalCode: cleanPostalCode,
           address: address || undefined,
-          phoneNumber: phoneNumber || undefined,
+          phoneNumber: cleanPhoneNumber,
           role,
           isValid: errors.length === 0,
           errors
@@ -538,6 +633,7 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
                 </div>
                 <ul className="list-disc list-inside space-y-0.5 text-[11px] leading-relaxed">
                   <li>氏名、雇用形態、入社年月日は必須項目です。</li>
+                  <li>日付（入社日・生年月日）は「2026-04-01」「2026/4/1」「2026.4.1」「令和8年4月1日」など柔軟に自動判定・補正されます。</li>
                   <li>メールアドレスが空欄の場合は、システムログイン用のアカウントが自動採番されます。</li>
                   <li>給与が未入力の場合は、勝手な推測値は入らず「未設定（0円）」として登録されます。</li>
                 </ul>
