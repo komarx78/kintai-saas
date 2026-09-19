@@ -39,7 +39,7 @@ import {
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
   FolderOpen, Settings, Clock, Smartphone, AlertCircle, ArrowRight, CornerDownLeft,
   Copy, DollarSign, Sparkles, Award, ShieldCheck, FileCheck,
-  ExternalLink, Gift, Baby, FileSpreadsheet, Send, KeyRound
+  ExternalLink, Gift, Baby, FileSpreadsheet, Send, KeyRound, MessageSquare
 } from 'lucide-react';
 import { StaffInviteModal } from '../components/StaffInviteModal';
 import { StaffAccountIssueModal, type TargetStaffForAccount } from '../components/StaffAccountIssueModal';
@@ -7335,6 +7335,148 @@ export default function OnboardingAdminDashboard() {
         });
         const currentGeneratedUrl = `${window.location.origin}/onboarding/welcome?${params.toString()}`;
 
+        // 💾 労働条件を台帳・実DBに保存（永続化）し、専用URLまたはLINE文面を発行・コピーする関数
+        const handleSaveAndCopy = async (actionType: 'save_only' | 'copy_url' | 'copy_line') => {
+          if (!inviteUrlModal.name.trim()) {
+            alert('氏名（フルネーム）を入力してください。');
+            return;
+          }
+
+          setIsSaving(true);
+          try {
+            let activeUserId = inviteUrlModal.targetUserId;
+            const empType = inviteUrlModal.employmentType === 'パート・アルバイト' ? 'part-time' : 'full-time';
+            const cleanEmail = inviteUrlModal.email.trim();
+            const fallbackEmail = cleanEmail || `emp_${Date.now()}@sample.local`;
+
+            // 1. users テーブルの登録 または 更新（SSOT永続化）
+            if (activeUserId) {
+              const uPayload: any = {
+                name: inviteUrlModal.name.trim(),
+                name_kana: inviteUrlModal.nameKana.trim() || null,
+                department: inviteUrlModal.department,
+                employment_type: empType,
+                join_date: inviteUrlModal.joinDate
+              };
+              if (cleanEmail) uPayload.email = cleanEmail;
+              if (inviteUrlModal.phone.trim()) uPayload.phone = inviteUrlModal.phone.trim();
+
+              await supabase.from('users').update(uPayload).eq('id', activeUserId);
+            } else {
+              const { data: newUser, error: uErr } = await supabase
+                .from('users')
+                .insert({
+                  tenant_id: tenantId,
+                  name: inviteUrlModal.name.trim(),
+                  name_kana: inviteUrlModal.nameKana.trim() || null,
+                  email: fallbackEmail,
+                  phone: inviteUrlModal.phone.trim() || null,
+                  role: 'user',
+                  department: inviteUrlModal.department,
+                  employment_type: empType,
+                  join_date: inviteUrlModal.joinDate,
+                  has_kintai_access: true,
+                  has_shift_access: true
+                })
+                .select('id')
+                .single();
+              if (uErr) throw uErr;
+              activeUserId = newUser.id;
+              setInviteUrlModal(prev => ({ ...prev, targetUserId: newUser.id }));
+            }
+
+            // 2. employee_payroll_profiles への給与条件保存
+            await supabase.from('employee_payroll_profiles').upsert({
+              tenant_id: tenantId,
+              user_id: activeUserId,
+              salary_type: inviteUrlModal.salaryType,
+              base_salary: isHourly ? 0 : inviteUrlModal.baseSalary,
+              hourly_wage: isHourly ? inviteUrlModal.hourlyWage : Math.round(inviteUrlModal.baseSalary / 160),
+              position_allowance: inviteUrlModal.positionAllowance || 0,
+              qualification_allowance: inviteUrlModal.qualificationAllowance || 0,
+              name_kana: inviteUrlModal.nameKana.trim() || null
+            }, { onConflict: 'tenant_id,user_id' });
+
+            // 3. employee_onboarding_profiles への労働条件保存
+            await supabase.from('employee_onboarding_profiles').upsert({
+              tenant_id: tenantId,
+              user_id: activeUserId,
+              join_date: inviteUrlModal.joinDate,
+              start_time: inviteUrlModal.startTime,
+              end_time: inviteUrlModal.endTime,
+              break_time_minutes: inviteUrlModal.breakMinutes,
+              salary_type: inviteUrlModal.salaryType,
+              base_salary: isHourly ? 0 : inviteUrlModal.baseSalary,
+              hourly_wage: isHourly ? inviteUrlModal.hourlyWage : Math.round(inviteUrlModal.baseSalary / 160),
+              position_allowance: inviteUrlModal.positionAllowance || 0,
+              qualification_allowance: inviteUrlModal.qualificationAllowance || 0,
+              status: 'onboarding'
+            }, { onConflict: 'tenant_id,user_id' });
+
+            // 4. 最新URLの再生成（確定した activeUserId を含む正規URL）
+            const updatedParams = new URLSearchParams({
+              tenant_id: tenantId || '',
+              user_id: activeUserId || '',
+              name: inviteUrlModal.name.trim(),
+              name_kana: inviteUrlModal.nameKana.trim(),
+              email: cleanEmail,
+              phone: inviteUrlModal.phone.trim(),
+              employment_type: inviteUrlModal.employmentType,
+              salary_type: inviteUrlModal.salaryType,
+              base_salary: String(isHourly ? 0 : inviteUrlModal.baseSalary),
+              hourly_wage: String(isHourly ? inviteUrlModal.hourlyWage : Math.round(inviteUrlModal.baseSalary / 160)),
+              position_name: inviteUrlModal.positionName.trim(),
+              position_allowance: String(inviteUrlModal.positionAllowance || 0),
+              qualification_allowance: String(inviteUrlModal.qualificationAllowance || 0),
+              fixed_overtime_allowance: String(inviteUrlModal.fixedOvertimeAllowance || 0),
+              department: inviteUrlModal.department,
+              join_date: inviteUrlModal.joinDate,
+              work_location: inviteUrlModal.workLocation,
+              work_hours: `${inviteUrlModal.startTime} 〜 ${inviteUrlModal.endTime}（休憩${inviteUrlModal.breakMinutes}分）`
+            });
+            const finalUrl = `${window.location.origin}/onboarding/welcome?${updatedParams.toString()}`;
+
+            // 5. アクションに応じたクリップボードコピー
+            if (actionType === 'copy_url') {
+              await navigator.clipboard.writeText(finalUrl);
+              setInviteUrlModal(prev => ({ ...prev, copied: true }));
+              setTimeout(() => setInviteUrlModal(prev => ({ ...prev, copied: false })), 4000);
+              alert(`🎉 【台帳に保存完了】\n${inviteUrlModal.name} さんの労働条件を従業員台帳に保存し、専用入社手続きURLをコピーしました！\n\n新入社員へLINEやメールでお送りください。`);
+            } else if (actionType === 'copy_line') {
+              const lineMsg = `【${tenantInfo?.name || '会社'} 入社手続きのご案内】
+${inviteUrlModal.name} 様
+
+この度はご入社誠におめでとうございます。
+入社に伴う労働条件の確認および各種書類（通勤交通費申請・給与口座・扶養控除等）の提出をお願い申し上げます。
+以下の専用URLより、スマートフォンにてご入力ください。
+
+▼ 専用入社手続きURL（スマホ対応）
+${finalUrl}
+
+▼ あなたの初期設定内容
+・氏名: ${inviteUrlModal.name}（${inviteUrlModal.nameKana || '未設定'}）
+・配属部署: ${inviteUrlModal.department}
+・雇用形態: ${inviteUrlModal.employmentType}
+・給与: ${isHourly ? `時給 ¥${inviteUrlModal.hourlyWage.toLocaleString()}` : `基本給 ¥${inviteUrlModal.baseSalary.toLocaleString()}`}
+※ 入力いただいたメールアドレスが今後の打刻ログインIDとなります。
+よろしくお願いいたします。`;
+              await navigator.clipboard.writeText(lineMsg);
+              setInviteUrlModal(prev => ({ ...prev, copied: true }));
+              setTimeout(() => setInviteUrlModal(prev => ({ ...prev, copied: false })), 4000);
+              alert(`🎉 【台帳に保存完了】\n${inviteUrlModal.name} さんの労働条件を台帳に保存し、LINE送信用案内文をコピーしました！\n\n新入社員のLINEへそのまま貼り付けて送信してください。`);
+            } else {
+              alert(`🎉 【台帳に保存完了】\n${inviteUrlModal.name} さんの労働条件を従業員台帳に保存しました。`);
+            }
+
+            await fetchData();
+          } catch (err: any) {
+            console.error('Save invite settings error:', err);
+            alert('保存に失敗しました: ' + err.message);
+          } finally {
+            setIsSaving(false);
+          }
+        };
+
         return (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 my-8 animate-in fade-in zoom-in-95 duration-150">
@@ -7668,43 +7810,103 @@ export default function OnboardingAdminDashboard() {
                     {currentGeneratedUrl}
                   </div>
 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => handleSaveAndCopy('copy_line')}
+                      className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-emerald-100" />
+                      <span>💬 保存＆LINE案内文をコピー</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => handleSaveAndCopy('copy_url')}
+                      className={`py-2.5 px-3 rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50 ${
+                        inviteUrlModal.copied
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          : 'bg-gradient-to-r from-indigo-500 to-cyan-600 hover:from-indigo-600 hover:to-cyan-700 text-white'
+                      }`}
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>台帳に保存中...</span>
+                        </>
+                      ) : inviteUrlModal.copied ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
+                          <span>専用URLをコピー済！</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>💾 保存＆専用URLをコピー</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-5 flex items-center justify-between gap-2 pt-4 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setInviteUrlModal(prev => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2.5 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                >
+                  閉じる
+                </button>
+
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {/* 💾 台帳に保存のみ */}
                   <button
                     type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(currentGeneratedUrl);
-                      setInviteUrlModal(prev => ({ ...prev, copied: true }));
-                      setTimeout(() => {
-                        setInviteUrlModal(prev => ({ ...prev, copied: false }));
-                      }, 4000);
-                    }}
-                    className={`w-full py-3 px-4 rounded-xl font-black text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-md ${
-                      inviteUrlModal.copied
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-900/50'
-                        : 'bg-gradient-to-r from-indigo-500 to-cyan-600 hover:from-indigo-600 hover:to-cyan-700 text-white shadow-indigo-900/50'
-                    }`}
+                    disabled={isSaving}
+                    onClick={() => handleSaveAndCopy('save_only')}
+                    className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="URLコピーをせず、入力内容を従業員台帳に下書き保存します"
                   >
-                    {inviteUrlModal.copied ? (
+                    <Save className="w-4 h-4 text-slate-500" />
+                    <span>💾 台帳に保存</span>
+                  </button>
+
+                  {/* 💬 LINE案内文をコピー */}
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={() => handleSaveAndCopy('copy_line')}
+                    className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="台帳に保存し、LINE送信用案内文をコピーします"
+                  >
+                    <MessageSquare className="w-4 h-4 text-emerald-100" />
+                    <span>💬 保存してLINE案内文をコピー</span>
+                  </button>
+
+                  {/* 💾 台帳に保存 ＆ 専用URLをコピー（メインCTAボタン） */}
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={() => handleSaveAndCopy('copy_url')}
+                    className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="入力した労働条件を台帳に保存し、専用入社URLをクリップボードにコピーします"
+                  >
+                    {isSaving ? (
                       <>
-                        <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-                        <span>専用入社URLをコピーしました！（LINEやメールに貼り付け可能）</span>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>保存中...</span>
                       </>
                     ) : (
                       <>
-                        <Copy className="w-4 h-4" />
-                        <span>📋 この条件で専用入社URLをコピーする</span>
+                        <Save className="w-4 h-4 text-cyan-200" />
+                        <span>💾 台帳に保存 ＆ 専用URLをコピー</span>
                       </>
                     )}
                   </button>
                 </div>
-              </div>
-
-              <div className="mt-5 flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  onClick={() => setInviteUrlModal(prev => ({ ...prev, isOpen: false }))}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
-                >
-                  閉じる
-                </button>
               </div>
             </div>
           </div>
