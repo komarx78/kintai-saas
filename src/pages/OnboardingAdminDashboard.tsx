@@ -2401,6 +2401,7 @@ export default function OnboardingAdminDashboard() {
           .update({
             name: data.name,
             name_kana: data.name_kana || null,
+            email: data.email ? data.email.trim() : null,
             department: data.department,
             employment_type: data.employment_type,
             join_date: data.join_date,
@@ -2417,6 +2418,7 @@ export default function OnboardingAdminDashboard() {
           .update({
             name: data.name,
             name_kana: data.name_kana || null,
+            email: data.email ? data.email.trim() : null,
             department: data.department,
             employment_type: data.employment_type,
             join_date: data.join_date
@@ -4748,6 +4750,33 @@ export default function OnboardingAdminDashboard() {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-indigo-900 block mb-1 flex items-center justify-between">
+                      <span>🔑 メールアドレス（ログインID）</span>
+                      <span className="text-[10px] text-indigo-600 font-normal">私用または社用</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={editModal.data.email || ''}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, email: e.target.value } })}
+                      placeholder="例: staff@gmail.com または 社用メール"
+                      className="w-full bg-white border border-indigo-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800 focus:border-indigo-500"
+                    />
+                    <span className="text-[10px] text-slate-400">※ タイムカード打刻・給与明細確認用アカウントのIDになります</span>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">電話番号（連絡先）</label>
+                    <input
+                      type="tel"
+                      value={editModal.data.phone || ''}
+                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, phone: e.target.value } })}
+                      placeholder="例: 090-1234-5678"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800"
+                    />
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署</label>
@@ -6177,6 +6206,43 @@ export default function OnboardingAdminDashboard() {
                   </select>
                   <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
                     <span>💡 選択した部署の勤務時間帯および営業休日規程がSTEP 2に自動反映されます</span>
+                  </div>
+                </div>
+
+                {/* 🔑 メールアドレス（連絡先 兼 タイムカード打刻ID） ＆ 電話番号 */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-200">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                        <span>メールアドレス（連絡先 兼 ログインID）</span>
+                      </label>
+                      <span className="text-[10px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md font-bold">
+                        🔑 打刻・給与のログインID
+                      </span>
+                    </div>
+                    <input
+                      type="email"
+                      placeholder="例: staff@gmail.com または 社用メール"
+                      value={wizardData.email || ''}
+                      onChange={e => setWizardData({ ...wizardData, email: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:bg-white focus:border-blue-500 transition"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      ※ スタッフ本人のGmailや社用メール。打刻アカウントのログインIDになります。
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">電話番号（連絡先）</label>
+                    <input
+                      type="tel"
+                      placeholder="例: 090-1234-5678"
+                      value={wizardData.phone || ''}
+                      onChange={e => setWizardData({ ...wizardData, phone: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:bg-white focus:border-blue-500 transition"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      ※ 労務書類作成や緊急連絡用として登録されます。
+                    </p>
                   </div>
                 </div>
               </div>

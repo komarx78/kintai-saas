@@ -65,10 +65,8 @@ export const StaffAccountIssueModal: React.FC<StaffAccountIssueModalProps> = ({
       if (!isDummyEmail && existingEmail.trim() !== '') {
         setEmail(existingEmail.trim());
       } else {
-        // 社員名から英字サジェスト、または空欄
-        const safeName = staff.name ? staff.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : '';
-        const defaultDomain = 'company.local';
-        setEmail(safeName ? `${safeName}@${defaultDomain}` : `user_${staff.id.slice(0, 6)}@${defaultDomain}`);
+        // 架空ドメインの捏造を完全撤廃：未登録・仮アドレスの場合は空欄にして管理者に本物のアドレスを入力してもらう
+        setEmail('');
       }
       
       setPassword(generateInitialPassword());
@@ -83,6 +81,7 @@ export const StaffAccountIssueModal: React.FC<StaffAccountIssueModalProps> = ({
   const loginUrl = `${window.location.origin}/kintai/user`;
 
   const generateLineMessage = (targetEmail: string, targetPass: string) => {
+    const displayEmail = targetEmail.trim() || '（スタッフ本人のメールアドレス）';
     return `【${companyName || '勤怠管理システム'} ログインのご案内】
 ${staff.name} 様
 
@@ -93,7 +92,7 @@ ${staff.name} 様
 ${loginUrl}
 
 ▼ あなたのログイン情報
-メールアドレス（ログインID）: ${targetEmail}
+メールアドレス（ログインID）: ${displayEmail}
 初期パスワード: ${targetPass}
 
 💡【スマホでアプリのように使う方法】
@@ -124,7 +123,7 @@ URLを開いた後、スマホ画面のメニューから「ホーム画面に�
     const cleanPassword = password.trim();
 
     if (!cleanEmail || !cleanEmail.includes('@')) {
-      setError('有効なメールアドレス（ログインID）を入力してください。');
+      setError('スタッフ本人の有効なメールアドレス（例: staff@gmail.com）を入力してください。');
       return;
     }
     if (cleanPassword.length < 6) {
@@ -145,11 +144,16 @@ URLを開いた後、スマホ画面のメニューから「ホーム画面に�
 
       if (rpcError) {
         console.warn('RPC create_or_update_staff_auth_account warning/fallback:', rpcError);
-        // RPC関数未作成時も、public.users のメール更新と案内文コピーを実行
-        await supabase.from('users').update({ email: cleanEmail }).eq('id', staff.id);
       }
 
-      // 2. LINE用案内文を自動コピー
+      // 2. public.users のメールアドレスも最新の実アドレスで確実に永続化（台帳同期）
+      try {
+        await supabase.from('users').update({ email: cleanEmail }).eq('id', staff.id);
+      } catch (uErr) {
+        console.warn('Failed to sync email to public.users:', uErr);
+      }
+
+      // 3. LINE用案内文を自動コピー
       const msg = generateLineMessage(cleanEmail, cleanPassword);
       await copyToClipboard(msg);
 
@@ -222,6 +226,7 @@ URLを開いた後、スマホ画面のメニューから「ホーム画面に�
               <span className="flex items-center gap-1.5">
                 <Mail className="w-4 h-4 text-indigo-600" />
                 ログイン用メールアドレス（ID）
+                <span className="text-rose-500">*</span>
               </span>
               <span className="text-[10px] text-slate-400 font-normal">本人の私用メールまたは社用メール</span>
             </label>
@@ -229,9 +234,14 @@ URLを開いた後、スマホ画面のメニューから「ホーム画面に�
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="例: tanaka@example.com"
+              placeholder="例: staff@gmail.com または yamada@company.co.jp"
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition"
             />
+            {(!staff.email || staff.email.startsWith('emp_') || staff.email.includes('@sample.local') || staff.email.includes('@company.local')) && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 font-medium">
+                💡 <strong>メール未登録：</strong> スタッフ本人のメールアドレスをご入力ください。アカウント発行と同時に従業員台帳にも自動保存されます。
+              </p>
+            )}
           </div>
 
           {/* 初期パスワード */}
