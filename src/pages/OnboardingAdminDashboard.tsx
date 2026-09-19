@@ -210,6 +210,7 @@ export default function OnboardingAdminDashboard() {
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [wizardData, setWizardData] = useState({
     name: '',
+    name_kana: '',
     email: '',
     phone: '',
     birth_date: '1995-01-01',
@@ -1872,6 +1873,7 @@ export default function OnboardingAdminDashboard() {
         .insert({
           tenant_id: tenantId,
           name: wizardData.name,
+          name_kana: wizardData.name_kana || null,
           email: tempEmail,
           phone: wizardData.phone || null,
           birth_date: wizardData.birth_date || null,
@@ -1911,6 +1913,7 @@ export default function OnboardingAdminDashboard() {
         family_allowance: wizardData.family_allowance,
         commuting_allowance: wizardData.commuting_allowance,
         birth_date: wizardData.birth_date || null,
+        name_kana: wizardData.name_kana || null,
         health_insurance_enabled: wizardData.health_insurance_joined,
         pension_insurance_enabled: wizardData.pension_insurance_joined,
         employment_insurance_enabled: wizardData.employment_insurance_joined,
@@ -1918,7 +1921,7 @@ export default function OnboardingAdminDashboard() {
         branch_name: wizardData.branch_name,
         account_type: wizardData.account_type,
         account_number: wizardData.account_number,
-        account_holder: wizardData.account_holder || wizardData.name,
+        account_holder: wizardData.account_holder || wizardData.name_kana || wizardData.name,
         dependents_count: wizardData.dependents_count || 0,
         has_spouse: wizardData.has_spouse || false
       }, { onConflict: 'tenant_id,user_id' });
@@ -1927,6 +1930,7 @@ export default function OnboardingAdminDashboard() {
         tenant_id: tenantId,
         user_id: newUserId,
         status: 'active',
+        name_kana: wizardData.name_kana || null,
         join_date: wizardData.join_date,
         contract_type: wizardData.contract_type,
         trial_period_months: wizardData.trial_period_months,
@@ -5656,21 +5660,33 @@ export default function OnboardingAdminDashboard() {
                       placeholder="例: 佐藤 健一"
                       value={wizardData.name}
                       onChange={e => setWizardData({ ...wizardData, name: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:bg-white focus:border-blue-500 transition"
                     />
                   </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-indigo-700 block mb-1">
+                      氏名フリガナ（カタカナ） <span className="text-slate-400 font-normal">※全銀/労務連動</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="例: サトウ ケンイチ"
+                      value={wizardData.name_kana}
+                      onChange={e => setWizardData({ ...wizardData, name_kana: e.target.value })}
+                      className="w-full bg-indigo-50/40 border border-indigo-200 rounded-xl px-3 py-2 font-bold text-indigo-950 focus:bg-white focus:border-indigo-500 transition"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-1">入社年月日 <span className="text-rose-500">*</span></label>
                     <input
                       type="date"
                       value={wizardData.join_date}
                       onChange={e => setWizardData({ ...wizardData, join_date: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:bg-white focus:border-blue-500 transition"
                     />
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-1">雇用形態</label>
                     <select
@@ -5687,18 +5703,19 @@ export default function OnboardingAdminDashboard() {
                       <option value="contract">契約社員（有期雇用）</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署（時間帯自動連動）</label>
-                    <select
-                      value={wizardData.department}
-                      onChange={e => handleDepartmentChange(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                    >
-                      {departments.map(d => (
-                        <option key={d.id} value={d.name}>{d.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署（時間帯自動連動）</label>
+                  <select
+                    value={wizardData.department}
+                    onChange={e => handleDepartmentChange(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                  >
+                    {departments.map(d => (
+                      <option key={d.id} value={d.name}>{d.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             )}
@@ -5878,7 +5895,7 @@ export default function OnboardingAdminDashboard() {
                     以下の内容で入社登録および全マスタ同期を実行します
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-slate-700 pt-2 border-t border-emerald-200/60">
-                    <div>氏名: <span className="font-bold">{wizardData.name}</span></div>
+                    <div>氏名: <span className="font-bold">{wizardData.name}</span>{wizardData.name_kana ? <span className="text-slate-500 font-normal ml-1">（{wizardData.name_kana}）</span> : ''}</div>
                     <div>部署: <span className="font-bold">{wizardData.department}</span></div>
                     <div>就業時間: <span className="font-bold text-indigo-700">{wizardData.start_time} 〜 {wizardData.end_time}</span></div>
                     <div>入社日: <span className="font-bold">{wizardData.join_date}</span></div>
