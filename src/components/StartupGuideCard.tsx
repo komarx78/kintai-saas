@@ -14,6 +14,7 @@ import {
   Sparkles, 
   HelpCircle,
   FileSpreadsheet,
+  ExternalLink,
   X
 } from 'lucide-react';
 
@@ -122,6 +123,7 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
       stepNumber: 4,
       title: '社員さん・パートさんの登録（入退社労務台帳）',
       desc: 'スタッフの基本台帳登録・契約書作成は「入退社・労務書類管理システム」で行います。エクセル(CSV)一括取り込み、または手動追加が可能です。',
+      notice: '※ボタンを押すと「入退社・労務書類管理システム」へ安全に移動します（登録完了後、この画面に戻れます）',
       targetTab: 'onboarding_admin',
       icon: Users,
       isDone: isStep4Done,
@@ -282,6 +284,12 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
                       <p className="text-xs text-slate-500 leading-relaxed">
                         {step.desc}
                       </p>
+                      {step.notice && (
+                        <div className="bg-sky-50 border border-sky-200 rounded-xl px-2.5 py-1 text-[11px] font-bold text-sky-800 flex items-center gap-1.5 w-fit">
+                          <ExternalLink className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                          <span>{step.notice}</span>
+                        </div>
+                      )}
                       <div className="text-[11px] font-bold text-slate-400 flex items-center gap-1.5 pt-0.5">
                         <span className="text-slate-600 font-mono">現状:</span>
                         <span>{step.doneSummary}</span>
@@ -296,15 +304,19 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
                         <button
                           onClick={onOpenCsvImport}
                           className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-4 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                          title="入退社・労務書類管理システムへ移動してCSVを一括取り込みします"
                         >
                           <FileSpreadsheet className="w-4 h-4" />
-                          CSVで一括登録
+                          <span>CSVで一括登録</span>
+                          <ExternalLink className="w-3.5 h-3.5 opacity-80" />
                         </button>
                         <button
                           onClick={onOpenManualAdd || onNavigateToOnboarding}
-                          className="flex-1 sm:flex-none bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold px-3 py-2.5 rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
+                          className="flex-1 sm:flex-none bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold px-3.5 py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                          title="入退社・労務書類管理システムへ移動して手動で社員を追加します"
                         >
-                          手動追加
+                          <span>手動追加</span>
+                          <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
                         </button>
                       </div>
                     ) : step.stepNumber === 5 ? (

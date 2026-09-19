@@ -425,12 +425,18 @@ export default function OnboardingAdminDashboard() {
 
   // 📥 社員一括CSVインポートモーダルState
   const [isCsvImportModalOpen, setIsCsvImportModalOpen] = useState(false);
+  // 🏢 会社マスタ設定センター（スタートガイドSTEP 4等）からの移動検知
+  const [isFromCompanySettings, setIsFromCompanySettings] = useState(false);
 
   useEffect(() => {
     fetchData();
-    // 🔗 URLパラメータによる自動モーダル起動（スタートガイド等からの誘導連携）
+    // 🔗 URLパラメータによる自動モーダル起動 ＆ 遷移元検知
     const searchParams = new URLSearchParams(window.location.search);
     const action = searchParams.get('action');
+    const fromSource = searchParams.get('from');
+    if (fromSource === 'company_settings') {
+      setIsFromCompanySettings(true);
+    }
     if (action === 'import' || action === 'csv') {
       setIsCsvImportModalOpen(true);
     } else if (action === 'add' || action === 'new') {
@@ -1943,10 +1949,18 @@ export default function OnboardingAdminDashboard() {
         has_spouse: wizardData.has_spouse || false
       }, { onConflict: 'tenant_id,user_id' });
 
-      alert(`🎉 ${wizardData.name} さんの入社手続きが完了しました！\n「勤怠管理」「シフト管理」「給与計算」の全システムに即座に同期されました。`);
       setWizardOpen(false);
       setWizardStep(1);
       await fetchData();
+
+      if (isFromCompanySettings) {
+        if (confirm(`🎉 ${wizardData.name} さんの登録が完了しました！\n\n会社マスタ設定センター（初期設定 STEP 5：就労時間・休日設定等）に戻りますか？`)) {
+          navigate('/settings/company');
+          return;
+        }
+      } else {
+        alert(`🎉 ${wizardData.name} さんの入社手続きが完了しました！\n「勤怠管理」「シフト管理」「給与計算」の全システムに即座に同期されました。`);
+      }
     } catch (err: any) {
       console.error('Onboarding save error:', err);
       alert('入社登録処理に失敗しました: ' + err.message);
@@ -2701,6 +2715,33 @@ export default function OnboardingAdminDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
+      {/* 🏢 会社マスタ設定センター（初期セットアップ STEP 4）からの移動時専用 帰り道神バナー */}
+      {isFromCompanySettings && (
+        <aside aria-label="初期設定案内バナー" className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 text-white px-4 sm:px-6 py-2.5 shadow-md flex items-center justify-between border-b border-indigo-500/30 print:hidden animate-in slide-in-from-top duration-300">
+          <div className="flex items-center gap-2.5 text-xs sm:text-sm font-bold">
+            <span className="p-1 bg-white/15 rounded-lg text-sm border border-white/20">🏢</span>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-md shadow-2xs">
+                  初期設定 STEP 4 連携中
+                </span>
+                <span className="text-white font-black text-xs sm:text-sm">会社マスタ設定センターから移動してきました</span>
+              </div>
+              <p className="text-[11px] text-indigo-200 font-normal mt-0.5 hidden sm:block">
+                社員登録が完了したら、右側のボタンを押して「会社マスタ設定（STEP 5：就労時間・休日設定）」へいつでも戻れます。
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/settings/company')}
+            className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-4 py-2 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0 ml-3"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>会社マスタ設定に戻る</span>
+          </button>
+        </aside>
+      )}
+
       {/* Header */}
       <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs print:hidden">
         <div className="flex items-center space-x-3">
@@ -2732,10 +2773,15 @@ export default function OnboardingAdminDashboard() {
         <div className="flex items-center space-x-3">
           <button
             onClick={() => navigate('/settings/company')}
-            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-3.5 py-2 rounded-xl transition border border-indigo-200 flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className={`font-bold text-xs px-3.5 py-2 rounded-xl transition border flex items-center gap-1.5 cursor-pointer shadow-xs ${
+              isFromCompanySettings
+                ? 'bg-amber-100 hover:bg-amber-200 text-amber-950 border-amber-300 ring-2 ring-amber-400/40 font-black'
+                : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+            }`}
+            title="会社マスタ設定センターへ移動"
           >
-            <Settings className="w-4 h-4 text-indigo-600" />
-            会社・全社マスタ設定
+            <Settings className={`w-4 h-4 ${isFromCompanySettings ? 'text-amber-700' : 'text-indigo-600'}`} />
+            <span>{isFromCompanySettings ? '🏢 会社マスタ設定に戻る' : '会社・全社マスタ設定'}</span>
           </button>
           <button
             onClick={() => setIsHelpOpen(true)}
@@ -7405,6 +7451,13 @@ export default function OnboardingAdminDashboard() {
         departments={departments.map(d => ({ id: d.id, name: d.name }))}
         onSuccess={() => {
           fetchData();
+          if (isFromCompanySettings) {
+            setTimeout(() => {
+              if (confirm('🎉 社員CSVの一括取り込みが完了しました！\n\n会社マスタ設定センター（初期設定 STEP 5：就労時間・休日設定等）に戻りますか？')) {
+                navigate('/settings/company');
+              }
+            }, 300);
+          }
         }}
       />
     </div>

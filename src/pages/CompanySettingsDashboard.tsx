@@ -39,7 +39,8 @@ import {
   Sparkles, Bot, Clock, ShieldCheck, Printer, X,
   UserCheck, ArrowUp, ArrowDown, RotateCcw, Edit3,
   Network, Award, Crown, Shield, FileText, Upload,
-  ImageIcon, Wand2, CheckCircle2, Eye, Bell, FileSpreadsheet
+  ImageIcon, Wand2, CheckCircle2, Eye, Bell, FileSpreadsheet,
+  ExternalLink
 } from 'lucide-react';
 import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress } from '../lib/socialInsurance';
 import { 
@@ -1588,9 +1589,9 @@ export default function CompanySettingsDashboard() {
             const el = document.getElementById('company-settings-tabs-header');
             if (el) el.scrollIntoView({ behavior: 'smooth' });
           }}
-          onOpenCsvImport={() => navigate('/onboarding/admin?action=import')}
-          onOpenManualAdd={() => navigate('/onboarding/admin?action=add')}
-          onNavigateToOnboarding={() => navigate('/onboarding/admin')}
+          onOpenCsvImport={() => navigate('/onboarding/admin?action=import&from=company_settings')}
+          onOpenManualAdd={() => navigate('/onboarding/admin?action=add&from=company_settings')}
+          onNavigateToOnboarding={() => navigate('/onboarding/admin?from=company_settings')}
         />
 
         {/* ガイドバナー */}
@@ -1898,21 +1899,23 @@ export default function CompanySettingsDashboard() {
                   </div>
 
                   <button
-                    onClick={() => navigate('/onboarding/admin?action=add')}
+                    onClick={() => navigate('/onboarding/admin?action=add&from=company_settings')}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
-                    title="入退社・労務書類管理システムを開いて新しい社員を登録します"
+                    title="入退社・労務書類管理システムを開いて新しい社員を登録します（登録完了後、戻るボタンでこの画面に戻れます）"
                   >
                     <Plus className="w-4 h-4" />
-                    社員を追加（労務台帳へ）
+                    <span>社員を追加（労務台帳へ）</span>
+                    <ExternalLink className="w-3 h-3 opacity-80" />
                   </button>
 
                   <button
-                    onClick={() => navigate('/onboarding/admin?action=import')}
+                    onClick={() => navigate('/onboarding/admin?action=import&from=company_settings')}
                     className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
-                    title="入退社・労務書類管理システムを開いて社員リストCSVを一括取り込みします"
+                    title="入退社・労務書類管理システムを開いて社員リストCSVを一括取り込みします（取り込み後、戻るボタンでこの画面に戻れます）"
                   >
                     <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                    社員一括CSVインポート（労務台帳へ）
+                    <span>社員一括CSVインポート（労務台帳へ）</span>
+                    <ExternalLink className="w-3 h-3 text-emerald-600" />
                   </button>
 
                   <button
