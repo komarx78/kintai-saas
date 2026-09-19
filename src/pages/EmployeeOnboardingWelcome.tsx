@@ -93,6 +93,7 @@ export default function EmployeeOnboardingWelcome() {
   const [basicData, setBasicData] = useState({
     name: '',
     nameKana: '',
+    email: '',
     birthDate: '1998-04-01',
     gender: 'unspecified',
     postalCode: '',
@@ -183,6 +184,9 @@ export default function EmployeeOnboardingWelcome() {
     try {
       const searchParams = new URLSearchParams(window.location.search);
       const nameParam = searchParams.get('name');
+      const nameKanaParam = searchParams.get('name_kana') || searchParams.get('nameKana');
+      const emailParam = searchParams.get('email');
+      const phoneParam = searchParams.get('phone') || searchParams.get('phone_number') || searchParams.get('phoneNumber');
       const salaryTypeParam = searchParams.get('salary_type');
       const baseSalaryParam = searchParams.get('base_salary');
       const hourlyWageParam = searchParams.get('hourly_wage');
@@ -196,10 +200,14 @@ export default function EmployeeOnboardingWelcome() {
       const locParam = searchParams.get('work_location');
       const hoursParam = searchParams.get('work_hours');
 
-      if (nameParam || baseSalaryParam || hourlyWageParam || deptParam || posNameParam) {
-        if (nameParam) {
-          setBasicData(prev => ({ ...prev, name: nameParam }));
-        }
+      if (nameParam || nameKanaParam || emailParam || phoneParam || baseSalaryParam || hourlyWageParam || deptParam || posNameParam) {
+        setBasicData(prev => ({
+          ...prev,
+          name: nameParam || prev.name,
+          nameKana: nameKanaParam || prev.nameKana,
+          email: emailParam || prev.email,
+          phoneNumber: phoneParam || prev.phoneNumber
+        }));
 
         setContractAgreement(prev => ({
           ...prev,
@@ -558,6 +566,7 @@ export default function EmployeeOnboardingWelcome() {
         data: {
           name: basicData.name,
           name_kana: basicData.nameKana,
+          email: basicData.email ? basicData.email.trim() : null,
           birth_date: basicData.birthDate,
           phone: basicData.phoneNumber,
           address: basicData.address,
@@ -716,14 +725,18 @@ export default function EmployeeOnboardingWelcome() {
 
       // 💡 大元従業員台帳（users / employee_onboarding_profiles / payroll）へフリガナ・基本情報を即時確定反映
       try {
-        // 1. users テーブルのフリガナ・生年月日・住所・電話番号を即時同期
-        await supabase.from('users').update({
+        // 1. users テーブルのフリガナ・メール・生年月日・住所・電話番号を即時同期
+        const userUpdatePayload: any = {
           name: basicData.name,
           name_kana: basicData.nameKana || null,
           birth_date: basicData.birthDate || null,
           address: basicData.address || null,
           phone: basicData.phoneNumber || null,
-        }).eq('id', userId);
+        };
+        if (basicData.email && basicData.email.trim()) {
+          userUpdatePayload.email = basicData.email.trim();
+        }
+        await supabase.from('users').update(userUpdatePayload).eq('id', userId);
       } catch (uSyncErr) {
         console.warn('users table name_kana sync note:', uSyncErr);
       }
@@ -1143,6 +1156,29 @@ export default function EmployeeOnboardingWelcome() {
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 font-bold text-white focus:border-indigo-500 focus:outline-hidden"
                   />
                 </div>
+              </div>
+
+              {/* 🔑 メールアドレス（連絡先 兼 タイムカード打刻・給与明細ログインID） */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-300 flex items-center gap-1">
+                    <span>メールアドレス（連絡先 兼 ログインID）</span>
+                    <span className="text-rose-400">*</span>
+                  </label>
+                  <span className="text-[10px] text-cyan-300 bg-cyan-950/60 border border-cyan-800 px-2 py-0.5 rounded font-bold">
+                    🔑 タイムカード打刻・給与明細用ID
+                  </span>
+                </div>
+                <input
+                  type="email"
+                  placeholder="例: yamada@gmail.com または 社用メール"
+                  value={basicData.email}
+                  onChange={e => setBasicData({ ...basicData, email: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 font-bold text-white focus:border-indigo-500 focus:outline-hidden"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  ※ 入社後のタイムカード打刻やWEB給与明細のログインIDになります。本人の私用メール（Gmail等）または社用メールを入力してください。
+                </p>
               </div>
 
               <div>
@@ -2137,6 +2173,7 @@ export default function EmployeeOnboardingWelcome() {
                 <div><span className="text-slate-400">フリガナ:</span> <span className="text-slate-200">{basicData.nameKana || '未入力'}</span></div>
                 <div><span className="text-slate-400">生年月日:</span> <span className="font-bold text-white">{basicData.birthDate || '未入力'}</span></div>
                 <div><span className="text-slate-400">電話番号:</span> <span className="text-white">{basicData.phoneNumber || '未入力'}</span></div>
+                <div className="col-span-2"><span className="text-slate-400">メールアドレス（ログインID）:</span> <span className="font-bold text-cyan-300">{basicData.email || '未入力'}</span></div>
                 <div className="col-span-2"><span className="text-slate-400">現住所:</span> <span className="font-bold text-white">{basicData.address || '未入力'}</span></div>
                 <div><span className="text-slate-400">世帯主:</span> <span className="text-slate-200">{basicData.householderName || basicData.name} ({basicData.householderRelation})</span></div>
                 <div><span className="text-slate-400">緊急連絡先:</span> <span className="text-slate-200">{basicData.emergencyContactName} ({basicData.emergencyContactRelation}) {basicData.emergencyContactPhone}</span></div>

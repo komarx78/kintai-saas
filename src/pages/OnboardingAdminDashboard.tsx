@@ -520,6 +520,9 @@ export default function OnboardingAdminDashboard() {
     isOpen: false,
     targetUserId: '',
     name: '',
+    nameKana: '',
+    email: '',
+    phone: '',
     employmentType: '正社員（無期雇用）',
     salaryType: 'monthly' as 'monthly' | 'hourly',
     baseSalary: 0,
@@ -1733,6 +1736,22 @@ export default function OnboardingAdminDashboard() {
 
         if (existingUser) {
           uId = existingUser.id;
+          // 既存ユーザーのメール・フリガナ・電話番号・生年月日を最新データで同期
+          try {
+            const updatePayload: any = {};
+            if (d.name_kana) updatePayload.name_kana = d.name_kana;
+            if (d.email && !d.email.startsWith('emp_') && !d.email.includes('@sample.local') && !d.email.includes('@company.local')) {
+              updatePayload.email = d.email.trim();
+            }
+            if (d.phone) updatePayload.phone = d.phone;
+            if (d.birth_date) updatePayload.birth_date = d.birth_date;
+            if (d.address) updatePayload.address = d.address;
+            if (Object.keys(updatePayload).length > 0) {
+              await supabase.from('users').update(updatePayload).eq('id', uId);
+            }
+          } catch (uSyncErr) {
+            console.warn('handleApproveSubmission existing user sync note:', uSyncErr);
+          }
         } else {
           // 新規従業員として users テーブルに本登録（多重フォールバック）！
           const tempEmail = d.email || `emp_${Date.now()}@sample.local`;
@@ -1744,6 +1763,7 @@ export default function OnboardingAdminDashboard() {
               .insert({
                 tenant_id: tenantId,
                 name: empName,
+                name_kana: d.name_kana || null,
                 email: tempEmail,
                 role: 'user',
                 department: d.department || '営業部',
@@ -3177,6 +3197,9 @@ export default function OnboardingAdminDashboard() {
                   isOpen: true,
                   targetUserId: '',
                   name: '',
+                  nameKana: '',
+                  email: '',
+                  phone: '',
                   employmentType: '正社員（無期雇用）',
                   salaryType: 'monthly',
                   baseSalary: 0,
@@ -3503,10 +3526,14 @@ export default function OnboardingAdminDashboard() {
                               <button
                                 onClick={() => {
                                   const isH = emp.salary_type === 'hourly';
+                                  const cleanEmail = (!emp.email || emp.email.startsWith('emp_') || emp.email.includes('@sample.local') || emp.email.includes('@company.local')) ? '' : emp.email;
                                   setInviteUrlModal({
                                     isOpen: true,
                                     targetUserId: emp.user_id || '',
                                     name: emp.name || '',
+                                    nameKana: emp.name_kana || '',
+                                    email: cleanEmail,
+                                    phone: emp.phone || '',
                                     employmentType: emp.employment_type === 'part-time' ? 'パート・アルバイト' : '正社員（無期雇用）',
                                     salaryType: isH ? 'hourly' : 'monthly',
                                     baseSalary: emp.base_salary || 0,
@@ -7245,6 +7272,9 @@ export default function OnboardingAdminDashboard() {
             isOpen: true,
             targetUserId: '',
             name: '',
+            nameKana: '',
+            email: '',
+            phone: '',
             employmentType: '正社員（無期雇用）',
             salaryType: 'monthly',
             baseSalary: 0,
@@ -7287,6 +7317,9 @@ export default function OnboardingAdminDashboard() {
           tenant_id: tenantId || '',
           user_id: inviteUrlModal.targetUserId || '',
           name: inviteUrlModal.name.trim(),
+          name_kana: inviteUrlModal.nameKana.trim(),
+          email: inviteUrlModal.email.trim(),
+          phone: inviteUrlModal.phone.trim(),
           employment_type: inviteUrlModal.employmentType,
           salary_type: inviteUrlModal.salaryType,
           base_salary: String(isHourly ? 0 : inviteUrlModal.baseSalary),
@@ -7328,15 +7361,17 @@ export default function OnboardingAdminDashboard() {
               </div>
 
               <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1 text-xs">
-                {/* 1. 基本設定（役職含む） */}
+                {/* 1. 基本設定（氏名・フリガナ・連絡先・役職含む） */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                   <h4 className="font-bold text-slate-700 flex items-center gap-1.5">
                     <UserCheck className="w-4 h-4 text-indigo-600" />
-                    新入社員のお名前 ＆ 配属・役職
+                    新入社員のお名前 ＆ 配属・役職・連絡先
                   </h4>
+                  
+                  {/* 氏名 ＆ フリガナ */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
                         氏名（フルネーム）<span className="text-rose-500">*</span>
                       </label>
                       <input
@@ -7347,6 +7382,70 @@ export default function OnboardingAdminDashboard() {
                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
                       />
                     </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-indigo-700">
+                          氏名フリガナ（カタカナ）
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const k = toKatakana(inviteUrlModal.nameKana || '');
+                            setInviteUrlModal(prev => ({ ...prev, nameKana: k, copied: false }));
+                          }}
+                          className="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-1.5 py-0.5 rounded border border-indigo-200 cursor-pointer"
+                          title="カタカナに変換"
+                        >
+                          カタカナ変換
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="例: サトウ ケンイチ"
+                        value={inviteUrlModal.nameKana}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, nameKana: e.target.value, copied: false }))}
+                        onBlur={e => {
+                          const k = toKatakana(e.target.value.trim());
+                          setInviteUrlModal(prev => ({ ...prev, nameKana: k, copied: false }));
+                        }}
+                        className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 font-bold text-indigo-950 focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 🔑 メールアドレス（ログインID） ＆ 電話番号 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1 flex items-center justify-between">
+                        <span>🔑 メールアドレス（連絡先・ログインID）</span>
+                        <span className="text-[10px] text-indigo-600 font-normal">私用または社用</span>
+                      </label>
+                      <input
+                        type="email"
+                        placeholder="例: staff@gmail.com または 社用メール"
+                        value={inviteUrlModal.email}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, email: e.target.value, copied: false }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                      />
+                      <span className="text-[10px] text-slate-400">※ 入社完了後の打刻・給与明細ログインIDになります</span>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        電話番号（連絡先）
+                      </label>
+                      <input
+                        type="tel"
+                        placeholder="例: 090-1234-5678"
+                        value={inviteUrlModal.phone}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, phone: e.target.value, copied: false }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                      />
+                      <span className="text-[10px] text-slate-400">※ スマホ入社フォームに初期反映されます</span>
+                    </div>
+                  </div>
+
+                  {/* 配属部署 ＆ 役職 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署</label>
                       <select
@@ -7359,9 +7458,6 @@ export default function OnboardingAdminDashboard() {
                         ))}
                       </select>
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-[11px] font-bold text-slate-600 block mb-1 flex items-center justify-between">
                         <span>👑 役職（役職マスタ連携）</span>
@@ -7391,6 +7487,10 @@ export default function OnboardingAdminDashboard() {
                         ))}
                       </select>
                     </div>
+                  </div>
+
+                  {/* 雇用形態 ＆ 入社予定日 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-[11px] font-bold text-slate-600 block mb-1">雇用形態</label>
                       <select
@@ -7404,16 +7504,15 @@ export default function OnboardingAdminDashboard() {
                         <option value="業務委託">業務委託</option>
                       </select>
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">入社予定日</label>
-                    <input
-                      type="date"
-                      value={inviteUrlModal.joinDate}
-                      onChange={e => setInviteUrlModal(prev => ({ ...prev, joinDate: e.target.value, copied: false }))}
-                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                    />
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1">入社予定日</label>
+                      <input
+                        type="date"
+                        value={inviteUrlModal.joinDate}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, joinDate: e.target.value, copied: false }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                      />
+                    </div>
                   </div>
                 </div>
 
