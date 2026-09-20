@@ -89,15 +89,59 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
         .select('id, name, department, role, employment_type')
         .eq('tenant_id', tenantId);
 
+      // 労務・入社手続きマスタ
       const { data: onboardingData } = await supabase
         .from('employee_onboarding_profiles')
         .select('user_id, base_salary, department, position_name, employment_type, salary_type')
         .eq('tenant_id', tenantId);
 
+      // 給与基本マスタ（employee_payroll_profiles: 最新改定基本給のSSOT）
+      const { data: payrollProfilesData } = await supabase
+        .from('employee_payroll_profiles')
+        .select('*')
+        .eq('tenant_id', tenantId);
+
+      // 月給明細（payslips: 実際に計算・支給された基本給）
+      const { data: payslipsData } = await supabase
+        .from('payslips')
+        .select('user_id, base_salary, salary_type, year_month')
+        .eq('tenant_id', tenantId)
+        .order('year_month', { ascending: false });
+
+      // LocalStorage 給与プロファイルバックアップ
+      let localPayrollProfiles: Record<string, any> = {};
+      try {
+        const rawLocal = localStorage.getItem(`payroll_profiles_${tenantId}`);
+        if (rawLocal) localPayrollProfiles = JSON.parse(rawLocal);
+      } catch (_) {}
+
       const obMap: Record<string, any> = {};
       (onboardingData || []).forEach(p => {
         if (p.user_id) obMap[p.user_id] = p;
       });
+
+      const payMap = new Map((payrollProfilesData || []).map(p => [p.user_id, p]));
+      const slipMap = new Map((payslipsData || []).map(s => [s.user_id, s]));
+
+      // 従業員の最新基本給（算定基準給）を多層SSOTで完全解決する関数
+      const resolveEmployeeBaseSalary = (userId: string) => {
+        const pay = payMap.get(userId);
+        const onb = obMap[userId];
+        const slip = slipMap.get(userId);
+        const lp = localPayrollProfiles[userId];
+        let lm: any = {};
+        try {
+          const raw = localStorage.getItem(`employee_master_backup_${userId}`);
+          if (raw) lm = JSON.parse(raw);
+        } catch (_) {}
+
+        return Number(pay?.base_salary) || 
+               Number(lp?.base_salary) || 
+               Number(onb?.base_salary) || 
+               Number(slip?.base_salary) || 
+               Number(lm?.base_salary) || 
+               0;
+      };
 
       // 保存済み賞与キャンペーンの読み込み（LocalStorage ＆ DB）
       const localKey = `mf_bonus_campaigns_${tenantId}`;
@@ -129,7 +173,7 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
             if (raw) localMaster = JSON.parse(raw);
           } catch (_) {}
 
-          const baseSalary = Number(profile.base_salary) || Number(localMaster.base_salary) || 0;
+          const baseSalary = resolveEmployeeBaseSalary(u.id);
           const empType = profile.employment_type || u.employment_type || localMaster.employment_type || 
             (profile.salary_type === 'hourly' || localMaster.salary_type === 'hourly' ? 'part-time' : 'full-time');
           const salaryType = profile.salary_type || localMaster.salary_type || (empType === 'part-time' ? 'hourly' : 'monthly');
@@ -184,13 +228,13 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
         loadedCampaigns = [initialCampaign];
         localStorage.setItem(localKey, JSON.stringify(loadedCampaigns));
       } else {
-        // 既存キャンペーンに対して、新規追加された社員の補完および雇用形態プロパティの補正
+        // 既存キャンペーンに対して、新規追加された社員の補完および基準給0の自動救済・補正
         const activeUsers = usersData || [];
         loadedCampaigns = loadedCampaigns.map(camp => {
           const existingUserIds = new Set(camp.records.map(r => r.user_id));
           const missingUsers = activeUsers.filter(u => !existingUserIds.has(u.id));
           
-          // 既存レコードに employment_type / salary_type を補完
+          // 既存レコードに employment_type / salary_type を補完し、base_salaryが0なら最新マスタから自動解決
           const updatedExistingRecords = camp.records.map(r => {
             const profile = obMap[r.user_id] || {};
             const u = activeUsers.find(user => user.id === r.user_id);
@@ -204,11 +248,29 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
               (profile.salary_type === 'hourly' || localMaster.salary_type === 'hourly' ? 'part-time' : 'full-time');
             const salType = r.salary_type || profile.salary_type || localMaster.salary_type || (empType === 'part-time' ? 'hourly' : 'monthly');
 
+            const masterBase = resolveEmployeeBaseSalary(r.user_id);
+            // 算定基準給が0、または未設定の場合は最新マスタから自動補完
+            const effectiveBase = r.base_salary > 0 ? r.base_salary : masterBase;
+            const mult = r.multiplier > 0 ? r.multiplier : (empType === 'part-time' ? 0 : 2.0);
+
+            // 基準給が0から復元された場合は賞与額面・控除・手取りを即座に再計算
+            if (r.base_salary === 0 && effectiveBase > 0) {
+              const recalc = recalculateRecord(effectiveBase, mult, r.adjustment_amount || 0);
+              return {
+                ...r,
+                employment_type: empType,
+                salary_type: salType,
+                base_salary: effectiveBase,
+                multiplier: mult,
+                ...recalc
+              };
+            }
+
             return {
               ...r,
               employment_type: empType,
               salary_type: salType,
-              base_salary: r.base_salary || profile.base_salary || localMaster.base_salary || 0
+              base_salary: effectiveBase
             };
           });
 
@@ -221,7 +283,7 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
                 if (raw) localMaster = JSON.parse(raw);
               } catch (_) {}
 
-              const baseSalary = Number(profile.base_salary) || Number(localMaster.base_salary) || 0;
+              const baseSalary = resolveEmployeeBaseSalary(u.id);
               const empType = profile.employment_type || u.employment_type || localMaster.employment_type || 
                 (profile.salary_type === 'hourly' || localMaster.salary_type === 'hourly' ? 'part-time' : 'full-time');
               const salaryType = profile.salary_type || localMaster.salary_type || (empType === 'part-time' ? 'hourly' : 'monthly');
@@ -258,15 +320,9 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
                 salary_type: salaryType
               };
             });
-            return {
-              ...camp,
-              records: [...updatedExistingRecords, ...addedRecords]
-            };
+            return { ...camp, records: [...updatedExistingRecords, ...addedRecords] };
           }
-          return {
-            ...camp,
-            records: updatedExistingRecords
-          };
+          return { ...camp, records: updatedExistingRecords };
         });
       }
 
@@ -274,8 +330,8 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
       if (loadedCampaigns.length > 0) {
         setActiveCampaignId(loadedCampaigns[0].id);
       }
-    } catch (err) {
-      console.error('Failed to load bonus data:', err);
+    } catch (err: any) {
+      console.error('Error loading bonus data:', err);
     } finally {
       setIsLoading(false);
     }
@@ -320,13 +376,18 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
   };
 
   // 4. 社員レコード変更ハンドラー
-  const handleRecordChange = (userId: string, field: 'multiplier' | 'adjustment_amount' | 'memo' | 'bonus_gross', value: any) => {
+  const handleRecordChange = (userId: string, field: 'multiplier' | 'adjustment_amount' | 'memo' | 'bonus_gross' | 'base_salary', value: any) => {
     if (!currentCampaign) return;
 
     const updatedRecords = currentCampaign.records.map(rec => {
       if (rec.user_id !== userId) return rec;
 
-      if (field === 'multiplier') {
+      if (field === 'base_salary') {
+        // 算定基準給を直接手入力・変更した場合
+        const newBase = parseInt(value, 10) || 0;
+        const recalc = recalculateRecord(newBase, rec.multiplier, rec.adjustment_amount);
+        return { ...rec, ...recalc, base_salary: newBase };
+      } else if (field === 'multiplier') {
         const num = parseFloat(value) || 0;
         const recalc = recalculateRecord(rec.base_salary, num, rec.adjustment_amount);
         return { ...rec, ...recalc };
@@ -367,6 +428,63 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
       c.id === currentCampaign.id ? { ...c, records: updatedRecords, updated_at: new Date().toISOString() } : c
     );
     setCampaigns(updatedCampaigns);
+  };
+
+  // 🔄 大元給与マスタ（SSOT）から全社員の最新基本給を一括再取得・同期
+  const handleSyncBaseSalaryFromMaster = async () => {
+    if (!currentCampaign) return;
+    if (!confirm('大元給与マスタ（標準基本給）の最新データを再取得し、全社員の算定基準給および賞与額を一括再同期しますか？')) return;
+
+    setIsLoading(true);
+    try {
+      // 最新マスタ再取得
+      const { data: payData } = await supabase.from('employee_payroll_profiles').select('*').eq('tenant_id', tenantId);
+      const { data: onbData } = await supabase.from('employee_onboarding_profiles').select('*').eq('tenant_id', tenantId);
+      const { data: slipData } = await supabase.from('payslips').select('*').eq('tenant_id', tenantId).order('year_month', { ascending: false });
+      
+      let localPayProfiles: Record<string, any> = {};
+      try {
+        const raw = localStorage.getItem(`payroll_profiles_${tenantId}`);
+        if (raw) localPayProfiles = JSON.parse(raw);
+      } catch (_) {}
+
+      const payMap = new Map((payData || []).map(p => [p.user_id, p]));
+      const onbMap = new Map((onbData || []).map(p => [p.user_id, p]));
+      const slipMap = new Map((slipData || []).map(s => [s.user_id, s]));
+
+      const updatedRecords = currentCampaign.records.map(rec => {
+        const p = payMap.get(rec.user_id);
+        const o = onbMap.get(rec.user_id);
+        const s = slipMap.get(rec.user_id);
+        const lp = localPayProfiles[rec.user_id];
+        let lm: any = {};
+        try {
+          const raw = localStorage.getItem(`employee_master_backup_${rec.user_id}`);
+          if (raw) lm = JSON.parse(raw);
+        } catch (_) {}
+
+        const latestBase = Number(p?.base_salary) || Number(lp?.base_salary) || Number(o?.base_salary) || Number(s?.base_salary) || Number(lm?.base_salary) || rec.base_salary || 0;
+        const recalc = recalculateRecord(latestBase, rec.multiplier, rec.adjustment_amount);
+
+        return {
+          ...rec,
+          base_salary: latestBase,
+          ...recalc
+        };
+      });
+
+      const updatedCampaigns = campaigns.map(c => 
+        c.id === currentCampaign.id ? { ...c, records: updatedRecords, updated_at: new Date().toISOString() } : c
+      );
+      setCampaigns(updatedCampaigns);
+      saveCampaignsData(updatedCampaigns);
+      showNotice('🔄 大元給与マスタから最新の基本給（算定基準給）を同期し、賞与を再計算しました！');
+    } catch (e: any) {
+      console.error(e);
+      alert('マスタ同期エラー: ' + e.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // 5-1. 【正社員のみ】一括査定倍率適用
@@ -879,9 +997,21 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
               </h2>
               <span className="text-xs font-bold text-slate-400">（全 {currentCampaign.records.length} 名）</span>
             </div>
-            <div className="text-xs font-bold text-slate-500">
-              支給日: <span className="font-black text-slate-800">{currentCampaign.payment_date}</span> ｜ 
-              対象期間: <span className="font-bold text-slate-600">{currentCampaign.assessment_period}</span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSyncBaseSalaryFromMaster}
+                disabled={isLoading}
+                className="flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-black px-3 py-1.5 rounded-xl border border-indigo-200 shadow-2xs transition cursor-pointer"
+                title="大元給与マスタ（雇用契約・基本給）の最新データを再取得し、全社員の算定基準給を一括更新します"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-indigo-600" />
+                🔄 給与マスタから基準給を一括同期
+              </button>
+              <div className="text-xs font-bold text-slate-500">
+                支給日: <span className="font-black text-slate-800">{currentCampaign.payment_date}</span> ｜ 
+                対象期間: <span className="font-bold text-slate-600">{currentCampaign.assessment_period}</span>
+              </div>
             </div>
           </div>
 
@@ -890,7 +1020,10 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
               <thead>
                 <tr className="bg-slate-100/75 border-b border-slate-200 text-slate-600 font-black">
                   <th className="py-3 px-4">社員名 / 所属</th>
-                  <th className="py-3 px-3 text-right">算定基準給</th>
+                  <th className="py-3 px-3 text-right w-36">
+                    算定基準給
+                    <span className="block text-[9px] font-normal text-slate-400">（直接編集可）</span>
+                  </th>
                   <th className="py-3 px-3 text-center w-28">査定月数</th>
                   <th className="py-3 px-3 text-right w-28">調整手当</th>
                   <th className="py-3 px-3 text-right">額面総支給額</th>
@@ -925,9 +1058,20 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
                       <div className="text-[10px] font-bold text-slate-400 mt-0.5">{rec.department || '未所属'}</div>
                     </td>
 
-                    {/* 算定基準給与（大元マスタ連携） */}
-                    <td className="py-3 px-3 text-right font-mono text-slate-600">
-                      ¥{rec.base_salary.toLocaleString()}
+                    {/* 算定基準給与（大元マスタ連携 ＆ 直接手入力調整可能） */}
+                    <td className="py-3 px-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <span className="text-slate-400 text-[10px] font-bold">¥</span>
+                        <input
+                          type="number"
+                          step="10000"
+                          min="0"
+                          value={rec.base_salary}
+                          onChange={(e) => handleRecordChange(rec.user_id, 'base_salary', e.target.value)}
+                          className="w-28 text-right font-mono font-bold text-xs bg-slate-50 border border-slate-300 rounded-lg py-1 px-1.5 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
+                          title="算定基準給（基本給）を直接変更できます。月数に応じた額面が即時自動計算されます"
+                        />
+                      </div>
                     </td>
 
                     {/* 査定月数入力 */}
