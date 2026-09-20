@@ -378,8 +378,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       year_month: targetMonth,
       payment_date: defaultPayDate,
       salary_type: 'monthly',
-      work_days: 20,
-      actual_hours: 160,
+      work_days: 0,
+      actual_hours: 0,
       overtime_hours: 0,
       midnight_hours: 0,
       holiday_hours: 0,
@@ -392,22 +392,22 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       holiday_allowance: 0,
       position_allowance: 0,
       qualification_allowance: 0,
-      commuting_allowance: 15000,
+      commuting_allowance: 0,
       housing_allowance: 0,
       family_allowance: 0,
       special_allowance: 0,
       absence_deduction: 0,
       late_early_deduction: 0,
-      total_earnings: 265000,
-      health_insurance: 13000,
+      total_earnings: 0,
+      health_insurance: 0,
       nursing_insurance: 0,
-      pension_insurance: 24000,
-      employment_insurance: 1590,
-      income_tax: 6000,
+      pension_insurance: 0,
+      employment_insurance: 0,
+      income_tax: 0,
       resident_tax: 0,
       other_deductions: 0,
-      total_deductions: 44590,
-      net_salary: 220410,
+      total_deductions: 0,
+      net_salary: 0,
       note: '今月も勤務お疲れ様でした。',
       status: 'draft'
     };
@@ -686,6 +686,52 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
       setIsMonthCalculated(combinedPayslips.length > 0);
 
+      // 締め日設定に基づく当月の集計期間算出
+      const targetYear = currentMonth.getFullYear();
+      const targetMonth = currentMonth.getMonth() + 1;
+      let monthStartDate = `${targetYear}-${targetMonth.toString().padStart(2, '0')}-01`;
+      let monthEndDate = new Date(targetYear, targetMonth, 0).toISOString().split('T')[0];
+
+      if (setRow?.closing_day === '20' || payrollSettings.closing_day === '20') {
+        const prevM = targetMonth === 1 ? 12 : targetMonth - 1;
+        const prevY = targetMonth === 1 ? targetYear - 1 : targetYear;
+        monthStartDate = `${prevY}-${prevM.toString().padStart(2, '0')}-21`;
+        monthEndDate = `${targetYear}-${targetMonth.toString().padStart(2, '0')}-20`;
+      } else if (setRow?.closing_day === '25' || payrollSettings.closing_day === '25') {
+        const prevM = targetMonth === 1 ? 12 : targetMonth - 1;
+        const prevY = targetMonth === 1 ? targetYear - 1 : targetYear;
+        monthStartDate = `${prevY}-${prevM.toString().padStart(2, '0')}-26`;
+        monthEndDate = `${targetYear}-${targetMonth.toString().padStart(2, '0')}-25`;
+      }
+
+      // 当月の実際の打刻データ取得 (attendance_records)
+      let attRecords: any[] = [];
+      try {
+        const { data: aData } = await supabase
+          .from('attendance_records')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .gte('date', monthStartDate)
+          .lte('date', monthEndDate);
+        if (aData) attRecords = aData;
+      } catch (aErr) {
+        console.warn('attendance_records fetch error:', aErr);
+      }
+
+      // 当月の有給申請データ取得 (leave_requests)
+      let leaveReqs: any[] = [];
+      try {
+        const { data: lData } = await supabase
+          .from('leave_requests')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .gte('start_date', monthStartDate)
+          .lte('start_date', monthEndDate);
+        if (lData) leaveReqs = lData;
+      } catch (lErr) {
+        console.warn('leave_requests fetch error:', lErr);
+      }
+
       // 6. 各従業員の給与明細を大元労務マスタ（SSOT）に基づいて完全最新化
       const prefRateDataLatest = getPrefectureRate(activePrefCode);
       const latestPayrollSettings: any = {
@@ -702,17 +748,62 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         const prof = profileMap[u.id];
         const existingSlip = combinedPayslips.find(cp => cp.user_id === u.id);
 
-        const isHourly = prof?.salary_type === 'hourly';
-        const defaultWorkDays = isHourly ? 0 : 20;
-        const defaultActualHours = isHourly ? 0 : 160;
+        // 実際の勤怠打刻（attendance_records）の集計
+        const empAtt = attRecords.filter(r => r.user_id === u.id);
+        const empReqs = leaveReqs.filter(r => 
+          r.user_id === u.id && 
+          (r.status === '承認' || !r.status || r.status === 'approved') &&
+          (r.type?.includes('有給') || r.type?.includes('年休') || r.leave_type?.includes('有給') || r.reason?.includes('有給'))
+        );
 
+        let realWorkDays = 0;
+        let realActualMins = 0;
+        let realOvertimeMins = 0;
+        let realMidnightMins = 0;
+        let realHolidayHours = 0;
+
+        if (empAtt.length > 0) {
+          realWorkDays = empAtt.filter(r => r.check_in_time).length;
+          empAtt.forEach(r => {
+            if (r.check_in_time && r.check_out_time) {
+              const [inH, inM] = r.check_in_time.split(':').map(Number);
+              const [outH, outM] = r.check_out_time.split(':').map(Number);
+              let inTotal = inH * 60 + inM;
+              let outTotal = outH * 60 + outM;
+              if (outTotal < inTotal) outTotal += 24 * 60;
+
+              const total = Math.max(0, outTotal - inTotal);
+              const breakM = r.break_minutes ?? (total >= 480 ? 60 : (total >= 360 ? 45 : 0));
+              const work = Math.max(0, total - breakM);
+              realActualMins += work;
+
+              if (r.overtime_minutes && r.overtime_minutes > 0) {
+                realOvertimeMins += r.overtime_minutes;
+              } else {
+                realOvertimeMins += Math.max(0, work - 480);
+              }
+
+              for (let m = inTotal; m < outTotal; m++) {
+                const h = Math.floor(m / 60) % 24;
+                if (h >= 22 || h < 5) realMidnightMins++;
+              }
+            }
+          });
+        }
+
+        const realActualHours = realActualMins > 0 ? Number((realActualMins / 60).toFixed(1)) : 0;
+        const realOvertimeHours = realOvertimeMins > 0 ? Number((realOvertimeMins / 60).toFixed(1)) : 0;
+        const realMidnightHours = realMidnightMins > 0 ? Number((realMidnightMins / 60).toFixed(1)) : 0;
+        const realPaidLeaveDays = empReqs.length;
+
+        // 【本来あるべき姿】：出退勤打刻が0なら正直に0日・0時間とする（架空の20日・160時間は完全根絶）
         const attSummary: AttendanceSummary = {
-          work_days: existingSlip?.work_days ?? defaultWorkDays,
-          actual_hours: existingSlip?.actual_hours ?? defaultActualHours,
-          overtime_hours: existingSlip?.overtime_hours ?? 0,
-          midnight_hours: existingSlip?.midnight_hours ?? 0,
-          holiday_hours: existingSlip?.holiday_hours ?? 0,
-          paid_leave_days: existingSlip?.paid_leave_days ?? 0,
+          work_days: existingSlip?.work_days ?? realWorkDays,
+          actual_hours: existingSlip?.actual_hours ?? realActualHours,
+          overtime_hours: existingSlip?.overtime_hours ?? realOvertimeHours,
+          midnight_hours: existingSlip?.midnight_hours ?? realMidnightHours,
+          holiday_hours: existingSlip?.holiday_hours ?? realHolidayHours,
+          paid_leave_days: existingSlip?.paid_leave_days ?? realPaidLeaveDays,
           absence_days: existingSlip?.absence_days ?? 0,
           late_early_hours: existingSlip?.late_early_hours ?? 0
         };
@@ -917,13 +1008,10 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           tax_bracket: existingProf?.tax_bracket || 'kou'
         };
 
-        const isHourly = profile.salary_type === 'hourly';
-        const defaultWorkDays = isHourly ? 0 : 20;
-        const defaultActualHours = isHourly ? 0 : 160;
-
+        // 実打刻データを100%忠実に反映（打刻が0件なら0日・0時間とする）
         const attSummary: AttendanceSummary = {
-          work_days: workDays || defaultWorkDays,
-          actual_hours: actualMins > 0 ? Number((actualMins / 60).toFixed(1)) : defaultActualHours,
+          work_days: workDays,
+          actual_hours: actualMins > 0 ? Number((actualMins / 60).toFixed(1)) : 0,
           overtime_hours: Number((overtimeMins / 60).toFixed(1)),
           midnight_hours: Number((midnightMins / 60).toFixed(1)),
           holiday_hours: holidayHours,
@@ -1060,8 +1148,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       };
 
       const attSummary: AttendanceSummary = {
-        work_days: existingSlip?.work_days || (resolvedProf.salary_type === 'hourly' ? 0 : 20),
-        actual_hours: existingSlip?.actual_hours || (resolvedProf.salary_type === 'hourly' ? 0 : 160),
+        work_days: existingSlip?.work_days ?? 0,
+        actual_hours: existingSlip?.actual_hours ?? 0,
         overtime_hours: existingSlip?.overtime_hours || 0,
         midnight_hours: existingSlip?.midnight_hours || 0,
         holiday_hours: existingSlip?.holiday_hours || 0,
@@ -2240,7 +2328,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                           <Clock className="w-4 h-4 text-blue-600" />
                           ① 勤怠・就業実績
                         </span>
-                        <span className="text-xs text-blue-700 font-mono font-black">{slip.work_days}日 出勤</span>
+                        <span className={`text-xs font-mono font-bold ${slip.work_days > 0 ? 'text-blue-700 font-black' : 'text-slate-500'}`}>
+                          {slip.work_days > 0 ? `${slip.work_days}日 出勤` : '出勤 0日 (未打刻)'}
+                        </span>
                       </div>
                       <div className="space-y-2 text-slate-700 text-xs pt-1">
                         <div className="flex justify-between">
@@ -2503,7 +2593,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                         </td>
 
                         <td className="py-3.5 px-3 text-right font-medium text-slate-700">
-                          <div className="font-bold text-slate-800">{slip.work_days}日 出勤</div>
+                          <div className={`font-bold ${slip.work_days > 0 ? 'text-slate-800' : 'text-slate-400'}`}>
+                            {slip.work_days > 0 ? `${slip.work_days}日 出勤` : '出勤 0日 (未打刻)'}
+                          </div>
                           <div className="text-[10px] text-slate-400 font-mono">総労働 {slip.actual_hours}h</div>
                         </td>
 
@@ -2636,7 +2728,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                   <div className="space-y-1.5 text-slate-600 pt-1 text-[11px]">
                                     <div className="flex justify-between">
                                       <span>出勤日数:</span>
-                                      <span className="font-bold text-slate-800">{slip.work_days} 日</span>
+                                      <span className="font-bold text-slate-800">{slip.work_days > 0 ? `${slip.work_days} 日` : '0 日 (未打刻)'}</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span>総労働時間:</span>
