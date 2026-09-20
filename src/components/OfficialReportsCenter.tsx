@@ -403,9 +403,22 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
     };
   };
 
-  // CSVダウンロードヘルパー
+  // CSVセルエスケープヘルパー（カンマ・二重引用符・改行を安全に保護）
+  const escapeCsvCell = (val: any) => {
+    if (val === null || val === undefined) return '';
+    const str = String(val);
+    if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  // CSVダウンロードヘルパー（Windows Excel対応・BOM付きUTF-8）
   const downloadCsv = (filename: string, headers: string[], rows: (string | number)[][]) => {
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csvContent = [
+      headers.map(escapeCsvCell).join(','), 
+      ...rows.map(r => r.map(escapeCsvCell).join(','))
+    ].join('\r\n');
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -1605,11 +1618,45 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
 
                 return (
                   <div className="bg-white p-8 rounded-2xl border border-slate-300 text-slate-900 font-sans text-xs max-w-5xl mx-auto shadow-sm print:p-0 print:border-none print:shadow-none">
-                    <div className="border-b-2 border-slate-900 pb-3 mb-5">
-                      <h2 className="text-xl font-black text-slate-950">
-                        {selectedYear}年 {selectedMonth}月度 支給控除一覧表（賞与部門別）
-                      </h2>
-                      <div className="text-xs text-slate-500 mt-0.5">部署別 人件費・社会保険負担 集計台帳 / {companyInfo.name}</div>
+                    <div className="border-b-2 border-slate-900 pb-3 mb-5 flex items-center justify-between">
+                      <div>
+                        <h2 className="text-xl font-black text-slate-950">
+                          {selectedYear}年 {selectedMonth}月度 支給控除一覧表（賞与部門別）
+                        </h2>
+                        <div className="text-xs text-slate-500 mt-0.5">部署別 人件費・社会保険負担 集計台帳 / {companyInfo.name}</div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const csvRows = Array.from(deptMap.entries()).map(([deptName, deptEmps]) => {
+                            const deptGross = deptEmps.reduce((s, e) => s + resolveEmployeeBonusData(e, targetMonthKey).bonusGross, 0);
+                            const deptHealth = deptEmps.reduce((s, e) => s + (e.health_insurance_joined ? Math.round(resolveEmployeeBonusData(e, targetMonthKey).bonusGross * 0.05) : 0), 0);
+                            const deptPension = deptEmps.reduce((s, e) => s + (e.pension_insurance_joined ? Math.round(resolveEmployeeBonusData(e, targetMonthKey).bonusGross * 0.0915) : 0), 0);
+                            const deptEmpIns = deptEmps.reduce((s, e) => s + (e.employment_insurance_joined ? Math.round(resolveEmployeeBonusData(e, targetMonthKey).bonusGross * 0.006) : 0), 0);
+                            const deptSocial = deptHealth + deptPension + deptEmpIns;
+                            const deptTax = Math.round((deptGross - deptSocial) * 0.05);
+                            const deptNet = deptGross - (deptSocial + deptTax);
+                            return [
+                              deptName,
+                              deptEmps.length,
+                              deptGross,
+                              deptHealth,
+                              deptPension,
+                              deptEmpIns,
+                              deptSocial,
+                              deptTax,
+                              deptNet
+                            ];
+                          });
+                          downloadCsv(
+                            `支給控除一覧表_賞与部門別_${selectedYear}_${selectedMonth}.csv`,
+                            ['部署・部門名', '対象人数', '賞与総支給額', '健康保険（折半後）', '厚生年金（折半後）', '雇用保険', '社会保険計', '源泉所得税', '差引支給総額'],
+                            csvRows
+                          );
+                        }}
+                        className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1 text-xs print:hidden cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" /> 部門別CSV出力
+                      </button>
                     </div>
 
                     <div className="space-y-6">
@@ -1721,13 +1768,41 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                           </p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => setBonusReportModalOpen(true)}
-                        className="shrink-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                        賞与算定・一括入力エディタを開く
-                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => {
+                            const csvRows = bonusEmployees.map(e => [
+                              e.insuranceNumber || '',
+                              e.nameKana || '',
+                              e.name,
+                              e.birthDate || '',
+                              e.individualPaymentDate || commonPayDate,
+                              Math.floor(e.currencyAmount / 1000) * 1000,
+                              e.currencyAmount,
+                              e.goodsAmount || 0,
+                              e.isOver70 ? '1' : '0',
+                              e.isDualWork ? '1' : '0'
+                            ]);
+                            downloadCsv(
+                              `被保険者賞与支払届_${selectedYear}_${selectedMonth}.csv`,
+                              ['被保険者整理番号', '氏名（カナ）', '氏名（漢字）', '生年月日', '賞与支給日', '算定賞与額（千円未満切捨）', '通貨賞与額', '現物賞与額', '70歳以上該当', '二以上勤務該当'],
+                              csvRows
+                            );
+                          }}
+                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                          title="日本年金機構の電子申請・届出作成プログラム向けCSVをエクスポートします"
+                        >
+                          <Download className="w-4 h-4" />
+                          届出用CSVエクスポート
+                        </button>
+                        <button
+                          onClick={() => setBonusReportModalOpen(true)}
+                          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-xs hover:shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                          賞与算定・一括入力エディタを開く
+                        </button>
+                      </div>
                     </div>
 
                     {/* 公式様式ドキュメントプレビュー本体 */}
