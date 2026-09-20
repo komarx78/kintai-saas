@@ -3,8 +3,24 @@ import { supabase } from '../lib/supabase';
 import { 
   Gift, CheckCircle2, Save, Send, RotateCcw, 
   Printer, Plus, Trash2, Eye, Users, Award,
-  ChevronDown, Lock, Unlock
+  ChevronDown, Lock, Unlock, Settings as SettingsIcon, Check, X
 } from 'lucide-react';
+
+export interface BonusBaseSalaryConfig {
+  include_base: boolean; // 基本給（常時 true）
+  include_position: boolean; // 役職手当
+  include_qualification: boolean; // 資格手当
+  include_housing: boolean; // 住宅手当
+  include_family: boolean; // 家族手当
+}
+
+export const defaultBonusBaseConfig: BonusBaseSalaryConfig = {
+  include_base: true,
+  include_position: false,
+  include_qualification: false,
+  include_housing: false,
+  include_family: false
+};
 
 export interface BonusEmployeeRecord {
   user_id: string;
@@ -37,6 +53,7 @@ export interface BonusCampaign {
   assessment_period: string; // 算定対象期間 (例: 2025/10/01 〜 2026/03/31)
   status: 'draft' | 'published'; // 下書き or 確定・公開中
   records: BonusEmployeeRecord[];
+  base_allowance_config?: BonusBaseSalaryConfig;
   created_at: string;
   updated_at: string;
 }
@@ -63,6 +80,10 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
   const [newCampaignType, setNewCampaignType] = useState<'summer' | 'winter' | 'fiscal_end' | 'special'>('summer');
   const [newPaymentDate, setNewPaymentDate] = useState<string>('');
   const [newPeriod, setNewPeriod] = useState<string>('');
+
+  // 算定基準（手当算入）設定モーダル用のState
+  const [showBaseConfigModal, setShowBaseConfigModal] = useState<boolean>(false);
+  const [baseConfig, setBaseConfig] = useState<BonusBaseSalaryConfig>(defaultBonusBaseConfig);
 
   // 1. 初期ロード（データ復元 & 社員一覧取得）
   useEffect(() => {
@@ -340,6 +361,26 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
   // 2. 現在選択中のキャンペーン
   const currentCampaign = campaigns.find(c => c.id === activeCampaignId) || campaigns[0];
 
+  // 選択中キャンペーンの手当算入設定を同期
+  useEffect(() => {
+    if (currentCampaign?.base_allowance_config) {
+      setBaseConfig(currentCampaign.base_allowance_config);
+    } else {
+      setBaseConfig(defaultBonusBaseConfig);
+    }
+  }, [activeCampaignId, campaigns]);
+
+  // 手当算入ルールの要約テキストヘルパー
+  const getBaseConfigSummary = (cfg?: BonusBaseSalaryConfig) => {
+    const active = cfg || defaultBonusBaseConfig;
+    const items = ['基本給'];
+    if (active.include_position) items.push('役職');
+    if (active.include_qualification) items.push('資格');
+    if (active.include_housing) items.push('住宅');
+    if (active.include_family) items.push('家族');
+    return items.join('＋');
+  };
+
   // 3. レコードの金額・控除自動再計算ヘルパー
   const recalculateRecord = (
     baseSalary: number, 
@@ -430,18 +471,16 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
     setCampaigns(updatedCampaigns);
   };
 
-  // 🔄 大元給与マスタ（SSOT）から全社員の最新基本給を一括再取得・同期
-  const handleSyncBaseSalaryFromMaster = async () => {
+  // ⚙️ 算定基準（手当算入）ルールの適用 ＆ 全社員一括再計算
+  const handleApplyBaseAllowanceConfig = async (configToApply: BonusBaseSalaryConfig) => {
     if (!currentCampaign) return;
-    if (!confirm('大元給与マスタ（標準基本給）の最新データを再取得し、全社員の算定基準給および賞与額を一括再同期しますか？')) return;
-
     setIsLoading(true);
     try {
-      // 最新マスタ再取得
+      // 最新マスタ再取得（手当含む）
       const { data: payData } = await supabase.from('employee_payroll_profiles').select('*').eq('tenant_id', tenantId);
       const { data: onbData } = await supabase.from('employee_onboarding_profiles').select('*').eq('tenant_id', tenantId);
       const { data: slipData } = await supabase.from('payslips').select('*').eq('tenant_id', tenantId).order('year_month', { ascending: false });
-      
+
       let localPayProfiles: Record<string, any> = {};
       try {
         const raw = localStorage.getItem(`payroll_profiles_${tenantId}`);
@@ -463,12 +502,97 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
           if (raw) lm = JSON.parse(raw);
         } catch (_) {}
 
-        const latestBase = Number(p?.base_salary) || Number(lp?.base_salary) || Number(o?.base_salary) || Number(s?.base_salary) || Number(lm?.base_salary) || rec.base_salary || 0;
-        const recalc = recalculateRecord(latestBase, rec.multiplier, rec.adjustment_amount);
+        // 基本給
+        const base = Number(p?.base_salary) || Number(lp?.base_salary) || Number(o?.base_salary) || Number(s?.base_salary) || Number(lm?.base_salary) || 0;
+        // 役職手当
+        const pos = configToApply.include_position ? (Number(p?.position_allowance) || Number(lp?.position_allowance) || Number(o?.position_allowance) || Number(lm?.position_allowance) || 0) : 0;
+        // 資格手当
+        const qual = configToApply.include_qualification ? (Number(p?.qualification_allowance) || Number(lp?.qualification_allowance) || Number(o?.qualification_allowance) || Number(lm?.qualification_allowance) || 0) : 0;
+        // 住宅手当
+        const house = configToApply.include_housing ? (Number(p?.housing_allowance) || Number(lp?.housing_allowance) || Number(o?.housing_allowance) || Number(lm?.housing_allowance) || 0) : 0;
+        // 家族手当
+        const fam = configToApply.include_family ? (Number(p?.family_allowance) || Number(lp?.family_allowance) || Number(o?.family_allowance) || Number(lm?.family_allowance) || 0) : 0;
+
+        const totalBase = base + pos + qual + house + fam;
+        const recalc = recalculateRecord(totalBase, rec.multiplier, rec.adjustment_amount);
 
         return {
           ...rec,
-          base_salary: latestBase,
+          base_salary: totalBase,
+          ...recalc
+        };
+      });
+
+      const updatedCampaigns = campaigns.map(c => 
+        c.id === currentCampaign.id ? { 
+          ...c, 
+          records: updatedRecords, 
+          base_allowance_config: configToApply,
+          updated_at: new Date().toISOString() 
+        } : c
+      );
+
+      setCampaigns(updatedCampaigns);
+      await saveCampaignsData(updatedCampaigns);
+      setShowBaseConfigModal(false);
+      showNotice('⚙️ 算定基準（手当算入ルール）を保存し、全社員の算定基準給および賞与額を再計算しました！');
+    } catch (err: any) {
+      console.error(err);
+      alert('手当算入ルール反映エラー: ' + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 🔄 大元給与マスタ（SSOT）から全社員の最新基本給を一括再取得・同期
+  const handleSyncBaseSalaryFromMaster = async () => {
+    if (!currentCampaign) return;
+    if (!confirm('大元給与マスタ（標準基本給・各種手当）の最新データを再取得し、現在の算定基準ルールに従って全社員の算定基準給および賞与額を一括再同期しますか？')) return;
+
+    setIsLoading(true);
+    try {
+      // 最新マスタ再取得
+      const { data: payData } = await supabase.from('employee_payroll_profiles').select('*').eq('tenant_id', tenantId);
+      const { data: onbData } = await supabase.from('employee_onboarding_profiles').select('*').eq('tenant_id', tenantId);
+      const { data: slipData } = await supabase.from('payslips').select('*').eq('tenant_id', tenantId).order('year_month', { ascending: false });
+      
+      let localPayProfiles: Record<string, any> = {};
+      try {
+        const raw = localStorage.getItem(`payroll_profiles_${tenantId}`);
+        if (raw) localPayProfiles = JSON.parse(raw);
+      } catch (_) {}
+
+      const payMap = new Map((payData || []).map(p => [p.user_id, p]));
+      const onbMap = new Map((onbData || []).map(p => [p.user_id, p]));
+      const slipMap = new Map((slipData || []).map(s => [s.user_id, s]));
+
+      const cfg = currentCampaign.base_allowance_config || defaultBonusBaseConfig;
+
+      const updatedRecords = currentCampaign.records.map(rec => {
+        const p = payMap.get(rec.user_id);
+        const o = onbMap.get(rec.user_id);
+        const s = slipMap.get(rec.user_id);
+        const lp = localPayProfiles[rec.user_id];
+        let lm: any = {};
+        try {
+          const raw = localStorage.getItem(`employee_master_backup_${rec.user_id}`);
+          if (raw) lm = JSON.parse(raw);
+        } catch (_) {}
+
+        // 基本給
+        const base = Number(p?.base_salary) || Number(lp?.base_salary) || Number(o?.base_salary) || Number(s?.base_salary) || Number(lm?.base_salary) || rec.base_salary || 0;
+        // 手当加算
+        const pos = cfg.include_position ? (Number(p?.position_allowance) || Number(lp?.position_allowance) || Number(o?.position_allowance) || Number(lm?.position_allowance) || 0) : 0;
+        const qual = cfg.include_qualification ? (Number(p?.qualification_allowance) || Number(lp?.qualification_allowance) || Number(o?.qualification_allowance) || Number(lm?.qualification_allowance) || 0) : 0;
+        const house = cfg.include_housing ? (Number(p?.housing_allowance) || Number(lp?.housing_allowance) || Number(o?.housing_allowance) || Number(lm?.housing_allowance) || 0) : 0;
+        const fam = cfg.include_family ? (Number(p?.family_allowance) || Number(lp?.family_allowance) || Number(o?.family_allowance) || Number(lm?.family_allowance) || 0) : 0;
+
+        const totalBase = base + pos + qual + house + fam;
+        const recalc = recalculateRecord(totalBase, rec.multiplier, rec.adjustment_amount);
+
+        return {
+          ...rec,
+          base_salary: totalBase,
           ...recalc
         };
       });
@@ -478,7 +602,7 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
       );
       setCampaigns(updatedCampaigns);
       saveCampaignsData(updatedCampaigns);
-      showNotice('🔄 大元給与マスタから最新の基本給（算定基準給）を同期し、賞与を再計算しました！');
+      showNotice('🔄 大元給与マスタから最新の基準給・各種手当を同期し、賞与を再計算しました！');
     } catch (e: any) {
       console.error(e);
       alert('マスタ同期エラー: ' + e.message);
@@ -949,6 +1073,23 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
                 <Award className="w-4 h-4 text-amber-300" />
                 ⚡ 雇用形態別にまとめて一括算定
               </button>
+
+              {/* ⚙️ 算定基準（手当算入）設定ボタン */}
+              <button
+                type="button"
+                onClick={() => {
+                  setBaseConfig(currentCampaign.base_allowance_config || defaultBonusBaseConfig);
+                  setShowBaseConfigModal(true);
+                }}
+                className="flex items-center gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 text-xs font-black px-3.5 py-2 rounded-2xl shadow-2xs transition cursor-pointer"
+                title="賞与算定基準額に含める手当（役職・資格・住宅・家族）を設定します"
+              >
+                <SettingsIcon className="w-4 h-4 text-purple-600" />
+                <span>⚙️ 算定基準設定</span>
+                <span className="text-[10px] bg-purple-200/70 text-purple-900 px-2 py-0.5 rounded-full font-bold">
+                  {getBaseConfigSummary(currentCampaign.base_allowance_config)}
+                </span>
+              </button>
             </div>
 
             {/* 右側：下書き保存 ＆ 確定・公開 */}
@@ -997,18 +1138,30 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
               </h2>
               <span className="text-xs font-bold text-slate-400">（全 {currentCampaign.records.length} 名）</span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setBaseConfig(currentCampaign.base_allowance_config || defaultBonusBaseConfig);
+                  setShowBaseConfigModal(true);
+                }}
+                className="flex items-center gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-black px-3 py-1.5 rounded-xl border border-purple-200 shadow-2xs transition cursor-pointer"
+                title="賞与算定基準額に含める手当（役職・資格・住宅・家族）を設定します"
+              >
+                <SettingsIcon className="w-3.5 h-3.5 text-purple-600" />
+                ⚙️ 算定手当設定
+              </button>
               <button
                 type="button"
                 onClick={handleSyncBaseSalaryFromMaster}
                 disabled={isLoading}
                 className="flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-black px-3 py-1.5 rounded-xl border border-indigo-200 shadow-2xs transition cursor-pointer"
-                title="大元給与マスタ（雇用契約・基本給）の最新データを再取得し、全社員の算定基準給を一括更新します"
+                title="大元給与マスタ（雇用契約・基本給・各種手当）の最新データを再取得し、現在の算定手当設定に従って全社員の基準給を一括同期します"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-indigo-600" />
-                🔄 給与マスタから基準給を一括同期
+                🔄 給与マスタ同期
               </button>
-              <div className="text-xs font-bold text-slate-500">
+              <div className="text-xs font-bold text-slate-500 ml-1">
                 支給日: <span className="font-black text-slate-800">{currentCampaign.payment_date}</span> ｜ 
                 対象期間: <span className="font-bold text-slate-600">{currentCampaign.assessment_period}</span>
               </div>
@@ -1020,8 +1173,11 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
               <thead>
                 <tr className="bg-slate-100/75 border-b border-slate-200 text-slate-600 font-black">
                   <th className="py-3 px-4">社員名 / 所属</th>
-                  <th className="py-3 px-3 text-right w-36">
-                    算定基準給
+                  <th className="py-3 px-3 text-right w-40">
+                    <div>算定基準給</div>
+                    <div className="text-[9px] font-bold text-purple-600">
+                      [{getBaseConfigSummary(currentCampaign.base_allowance_config)}]
+                    </div>
                     <span className="block text-[9px] font-normal text-slate-400">（直接編集可）</span>
                   </th>
                   <th className="py-3 px-3 text-center w-28">査定月数</th>
@@ -1368,6 +1524,159 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
                 className="px-5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition cursor-pointer"
               >
                 作成する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⚙️ 賞与算定基準（手当算入）設定モーダル */}
+      {showBaseConfigModal && currentCampaign && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-scale-up">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <SettingsIcon className="w-5 h-5 text-purple-600" />
+                賞与算定基準額の手当算入ルール設定
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowBaseConfigModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-4 text-xs font-bold text-slate-700">
+              <div className="bg-purple-50/70 border border-purple-200 p-3.5 rounded-2xl text-purple-900 space-y-1">
+                <div className="font-black text-[13px] flex items-center gap-1.5">
+                  <span>💡 賞与の算定基準額（基本給 × ◯ヶ月分の基準）</span>
+                </div>
+                <p className="text-[11px] font-medium leading-relaxed text-purple-800">
+                  賞与査定の計算ベースとなる「算定基準給」に含める手当を選択してください。<br />
+                  保存すると、大元給与マスタ（SSOT）から全社員の最新手当額を自動合算し、賞与額面・控除・手取りを即座に再計算します。
+                </p>
+              </div>
+
+              <div className="space-y-2.5">
+                {/* 基本給（必須固定） */}
+                <label className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200 opacity-90 cursor-not-allowed">
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={true}
+                      disabled={true}
+                      className="w-4 h-4 text-emerald-600 rounded cursor-not-allowed"
+                    />
+                    <div>
+                      <div className="font-black text-slate-800 text-xs flex items-center gap-1.5">
+                        <span>💵 基本給</span>
+                        <span className="text-[10px] font-bold bg-slate-200 text-slate-700 px-2 py-0.2 rounded-full">必須・標準算入</span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-medium">雇用契約または最新給与改定の基本給</div>
+                    </div>
+                  </div>
+                  <Check className="w-4 h-4 text-emerald-600" />
+                </label>
+
+                {/* 役職手当 */}
+                <label className="flex items-center justify-between p-3 rounded-2xl border border-slate-200 hover:bg-slate-50/80 cursor-pointer transition">
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={baseConfig.include_position}
+                      onChange={(e) => setBaseConfig({ ...baseConfig, include_position: e.target.checked })}
+                      className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 cursor-pointer"
+                    />
+                    <div>
+                      <div className="font-black text-slate-800 text-xs">🏢 役職手当</div>
+                      <div className="text-[10px] text-slate-500 font-medium">管理職手当・役付手当を算定基準給に合算</div>
+                    </div>
+                  </div>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${baseConfig.include_position ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-500'}`}>
+                    {baseConfig.include_position ? '算入する' : '算入しない'}
+                  </span>
+                </label>
+
+                {/* 資格手当 */}
+                <label className="flex items-center justify-between p-3 rounded-2xl border border-slate-200 hover:bg-slate-50/80 cursor-pointer transition">
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={baseConfig.include_qualification}
+                      onChange={(e) => setBaseConfig({ ...baseConfig, include_qualification: e.target.checked })}
+                      className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 cursor-pointer"
+                    />
+                    <div>
+                      <div className="font-black text-slate-800 text-xs">📜 資格手当</div>
+                      <div className="text-[10px] text-slate-500 font-medium">国家資格・技能手当を算定基準給に合算</div>
+                    </div>
+                  </div>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${baseConfig.include_qualification ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-500'}`}>
+                    {baseConfig.include_qualification ? '算入する' : '算入しない'}
+                  </span>
+                </label>
+
+                {/* 住宅手当 */}
+                <label className="flex items-center justify-between p-3 rounded-2xl border border-slate-200 hover:bg-slate-50/80 cursor-pointer transition">
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={baseConfig.include_housing}
+                      onChange={(e) => setBaseConfig({ ...baseConfig, include_housing: e.target.checked })}
+                      className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 cursor-pointer"
+                    />
+                    <div>
+                      <div className="font-black text-slate-800 text-xs">🏠 住宅手当</div>
+                      <div className="text-[10px] text-slate-500 font-medium">住宅補助・家賃手当を算定基準給に合算</div>
+                    </div>
+                  </div>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${baseConfig.include_housing ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-500'}`}>
+                    {baseConfig.include_housing ? '算入する' : '算入しない'}
+                  </span>
+                </label>
+
+                {/* 家族手当 */}
+                <label className="flex items-center justify-between p-3 rounded-2xl border border-slate-200 hover:bg-slate-50/80 cursor-pointer transition">
+                  <div className="flex items-center gap-2.5">
+                    <input
+                      type="checkbox"
+                      checked={baseConfig.include_family}
+                      onChange={(e) => setBaseConfig({ ...baseConfig, include_family: e.target.checked })}
+                      className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 cursor-pointer"
+                    />
+                    <div>
+                      <div className="font-black text-slate-800 text-xs">👨‍👩‍👧 家族手当</div>
+                      <div className="text-[10px] text-slate-500 font-medium">扶養手当・子ども手当を算定基準給に合算</div>
+                    </div>
+                  </div>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${baseConfig.include_family ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-500'}`}>
+                    {baseConfig.include_family ? '算入する' : '算入しない'}
+                  </span>
+                </label>
+              </div>
+
+              <div className="text-[10px] text-slate-500 font-medium bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                ※社員ごとに個別の事情で基準給を微調整したい場合は、一覧テーブル上の「算定基準給」欄から直接金額を手入力することも可能です。
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowBaseConfigModal(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-black text-slate-500 hover:bg-slate-100 transition cursor-pointer"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyBaseAllowanceConfig(baseConfig)}
+                className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/20 transition cursor-pointer"
+              >
+                <Save className="w-4 h-4 text-purple-200" />
+                設定を保存して全社員に反映
               </button>
             </div>
           </div>
