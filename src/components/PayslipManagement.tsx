@@ -6,7 +6,7 @@ import {
   Users, Sparkles, Loader2, X, FileSpreadsheet,
   Settings as SettingsIcon, Download, UserCheck, CreditCard, Building2, Save,
   ChevronDown, ChevronUp, Clock, Calendar, TrendingUp, MapPin, LayoutGrid, List, RotateCcw,
-  ShieldCheck, Gift
+  ShieldCheck, Gift, Edit, Trash2
 } from 'lucide-react';
 import { OfficialPayslipDoc } from './OfficialPayslipDoc';
 import { BonusPaymentReportModal } from './BonusPaymentReportModal';
@@ -147,6 +147,31 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     requests: [],
     shifts: [],
     loading: false
+  });
+
+  // 🕒 出勤簿内 打刻個別編集モーダルState
+  const [attEditModal, setAttEditModal] = useState<{
+    isOpen: boolean;
+    userId: string;
+    userName: string;
+    date: string;
+    dayOfWeekStr: string;
+    recordId?: string | null;
+    checkIn: string;
+    checkOut: string;
+    breakMinutes: number;
+    note: string;
+  }>({
+    isOpen: false,
+    userId: '',
+    userName: '',
+    date: '',
+    dayOfWeekStr: '',
+    recordId: null,
+    checkIn: '',
+    checkOut: '',
+    breakMinutes: 60,
+    note: ''
   });
 
   // 勤怠・給与の内訳詳細アコーディオン展開中のユーザーID
@@ -1555,6 +1580,153 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     } catch (e) {
       console.error('Fetch attendance sheet error:', e);
       setAttendanceSheetModal(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  // 🕒 出勤簿モーダルから打刻個別編集を開く
+  const handleOpenAttEdit = (dateStr: string, dayOfWeekStr: string, rec?: any) => {
+    // 同日のシフトがあれば参考取得
+    const shift = attendanceSheetModal.shifts.find(s => s.work_date === dateStr);
+    const defaultCheckIn = shift?.start_time ? shift.start_time.substring(0, 5) : '09:00';
+    const defaultCheckOut = shift?.end_time ? shift.end_time.substring(0, 5) : '18:00';
+
+    setAttEditModal({
+      isOpen: true,
+      userId: attendanceSheetModal.user?.id || attendanceSheetModal.payslip?.user_id || '',
+      userName: attendanceSheetModal.user?.name || '従業員',
+      date: dateStr,
+      dayOfWeekStr,
+      recordId: rec?.id || null,
+      checkIn: rec?.check_in_time ? rec.check_in_time.substring(0, 5) : defaultCheckIn,
+      checkOut: rec?.check_out_time ? rec.check_out_time.substring(0, 5) : defaultCheckOut,
+      breakMinutes: (rec?.break_minutes !== undefined && rec?.break_minutes !== null) ? Number(rec.break_minutes) : 60,
+      note: rec?.note || ''
+    });
+  };
+
+  // 🕒 打刻レコードの保存（Upsert）＆給与即時自動再計算連動
+  const handleSaveAttRecord = async () => {
+    if (!tenantId || !attEditModal.userId || !attEditModal.date) return;
+    setIsSaving(true);
+    try {
+      let status = '退勤済';
+      if (attEditModal.checkIn && !attEditModal.checkOut) {
+        status = '勤務中';
+      } else if (!attEditModal.checkIn && !attEditModal.checkOut) {
+        status = '未打刻';
+      }
+
+      const payload: any = {
+        tenant_id: tenantId,
+        user_id: attEditModal.userId,
+        date: attEditModal.date,
+        check_in_time: attEditModal.checkIn ? `${attEditModal.checkIn}:00` : null,
+        check_out_time: attEditModal.checkOut ? `${attEditModal.checkOut}:00` : null,
+        break_minutes: Number(attEditModal.breakMinutes || 0),
+        status,
+        note: attEditModal.note || '管理者による出勤簿直接修正',
+        updated_at: new Date().toISOString()
+      };
+
+      let targetId = attEditModal.recordId;
+      if (!targetId) {
+        const { data: existRow } = await supabase
+          .from('attendance_records')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('user_id', attEditModal.userId)
+          .eq('date', attEditModal.date)
+          .maybeSingle();
+        if (existRow?.id) {
+          targetId = existRow.id;
+        }
+      }
+
+      if (targetId) {
+        payload.id = targetId;
+        const { error: updErr } = await supabase
+          .from('attendance_records')
+          .update(payload)
+          .eq('id', targetId);
+        if (updErr) throw updErr;
+      } else {
+        const { error: insErr } = await supabase
+          .from('attendance_records')
+          .insert(payload);
+        if (insErr) throw insErr;
+      }
+
+      setAttEditModal(prev => ({ ...prev, isOpen: false }));
+
+      // 1. 給与単独社員再計算（サイレント実行）
+      await handleRecalculateSingle(attEditModal.userId, true);
+
+      // 2. 画面全体の最新化
+      await fetchData();
+
+      // 3. 出勤簿モーダルを最新の給与データで再取得・更新
+      const { data: latestSlip } = await supabase
+        .from('payslips')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', attEditModal.userId)
+        .eq('year_month', attendanceSheetModal.payslip?.year_month || currentYearMonth)
+        .maybeSingle();
+
+      const updatedSlip = latestSlip ? { ...latestSlip, user: attendanceSheetModal.user } : attendanceSheetModal.payslip;
+      if (updatedSlip) {
+        await handleOpenAttendanceSheet(updatedSlip);
+      }
+
+      alert(`✅ ${attEditModal.date} の勤怠打刻を更新し、給与明細を自動再計算しました！`);
+    } catch (e: any) {
+      console.error('Save attendance record error:', e);
+      alert('打刻の保存に失敗しました: ' + e.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 🕒 打刻レコードの削除（未打刻に戻す）
+  const handleDeleteAttRecord = async () => {
+    if (!tenantId || !attEditModal.userId || !attEditModal.date) return;
+    if (!confirm(`【${attEditModal.date}】の打刻データを削除し、未打刻に戻しますか？\n（給与明細の出勤日数や実働時間も自動で再計算されます）`)) return;
+
+    setIsSaving(true);
+    try {
+      await supabase
+        .from('attendance_records')
+        .delete()
+        .eq('tenant_id', tenantId)
+        .eq('user_id', attEditModal.userId)
+        .eq('date', attEditModal.date);
+
+      setAttEditModal(prev => ({ ...prev, isOpen: false }));
+
+      // 給与再計算 & 画面最新化
+      await handleRecalculateSingle(attEditModal.userId, true);
+      await fetchData();
+
+      // 出勤簿モーダル再読込
+      const { data: latestSlip } = await supabase
+        .from('payslips')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', attEditModal.userId)
+        .eq('year_month', attendanceSheetModal.payslip?.year_month || currentYearMonth)
+        .maybeSingle();
+
+      const updatedSlip = latestSlip ? { ...latestSlip, user: attendanceSheetModal.user } : attendanceSheetModal.payslip;
+      if (updatedSlip) {
+        await handleOpenAttendanceSheet(updatedSlip);
+      }
+
+      alert(`🗑️ ${attEditModal.date} の打刻データを削除し、給与明細を再計算しました。`);
+    } catch (e: any) {
+      console.error('Delete attendance record error:', e);
+      alert('打刻の削除に失敗しました: ' + e.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -3769,6 +3941,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                         <th className="py-2.5 px-2 text-right">残業</th>
                         <th className="py-2.5 px-3">申請・状況</th>
                         <th className="py-2.5 px-3">備考</th>
+                        <th className="py-2.5 px-3 text-center print:hidden">打刻修正</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -3850,6 +4023,20 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                               <td className="py-2 px-3 text-slate-500 text-[11px] truncate max-w-[150px]">
                                 {rec?.note || req?.reason || ''}
                               </td>
+                              <td className="py-2 px-3 text-center print:hidden whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAttEdit(dateStr, dayNames[dayOfWeek], rec)}
+                                  className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition inline-flex items-center gap-1 cursor-pointer border shadow-2xs ${
+                                    rec?.check_in_time 
+                                      ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200' 
+                                      : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
+                                  }`}
+                                >
+                                  <Edit className="w-3 h-3" />
+                                  {rec?.check_in_time ? '修正' : '打刻'}
+                                </button>
+                              </td>
                             </tr>
                           );
                         }
@@ -3862,8 +4049,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             )}
 
             <div className="mt-6 flex justify-between items-center pt-4 border-t border-slate-100 print:hidden">
-              <span className="text-xs text-slate-400">
-                ※打刻の修正や休暇申請の承認は「勤怠管理メニュー」からも行えます
+              <span className="text-xs text-slate-500 font-medium">
+                💡 各日の「修正 / 打刻」ボタンから出退勤を直接編集できます。保存すると当月の給与が即座に自動再計算されます。
               </span>
               <div className="flex gap-2">
                 <button
@@ -3878,6 +4065,161 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 >
                   <Printer className="w-4 h-4" />
                   出勤簿を印刷 / PDF保存
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🕒 出勤簿内 打刻個別編集モーダル */}
+      {attEditModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-[60] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150 print:hidden">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 my-8">
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base">
+                    勤怠打刻の直接修正
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {attEditModal.userName} 殿（{attEditModal.date} {attEditModal.dayOfWeekStr}）
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAttEditModal(prev => ({ ...prev, isOpen: false }))}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full cursor-pointer transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 案内バナー */}
+            <div className="mb-5 bg-indigo-50/70 border border-indigo-100 rounded-2xl p-3 text-xs text-indigo-900 flex items-start gap-2.5">
+              <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">勤怠SSOT ＆ 給与即時連動</span>
+                打刻時刻を修正して保存すると、勤怠データベース（<code>attendance_records</code>）が更新され、当月の給与明細（出勤日数・実働・残業・遅刻早退・控除）が1秒で自動再計算されます。
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {/* 出勤・退勤時刻入力 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1.5 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    出勤時刻
+                  </label>
+                  <input
+                    type="time"
+                    value={attEditModal.checkIn}
+                    onChange={e => setAttEditModal(prev => ({ ...prev, checkIn: e.target.value }))}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-bold mb-1.5 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                    退勤時刻
+                  </label>
+                  <input
+                    type="time"
+                    value={attEditModal.checkOut}
+                    onChange={e => setAttEditModal(prev => ({ ...prev, checkOut: e.target.value }))}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+                  />
+                </div>
+              </div>
+
+              {/* 休憩時間入力 ＆ クイックボタン */}
+              <div>
+                <label className="block text-slate-600 font-bold mb-1.5">
+                  休憩時間（分）
+                </label>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="15"
+                    value={attEditModal.breakMinutes}
+                    onChange={e => setAttEditModal(prev => ({ ...prev, breakMinutes: parseInt(e.target.value, 10) || 0 }))}
+                    className="w-28 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+                  />
+                  <span className="text-slate-500 font-bold">分</span>
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    {[0, 45, 60].map(mins => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => setAttEditModal(prev => ({ ...prev, breakMinutes: mins }))}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer border ${
+                          attEditModal.breakMinutes === mins
+                            ? 'bg-indigo-600 text-white border-indigo-600'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        {mins}分
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 備考・事由 */}
+              <div>
+                <label className="block text-slate-600 font-bold mb-1.5">
+                  備考・修正理由
+                </label>
+                <input
+                  type="text"
+                  placeholder="例: 管理者による打刻漏れ修正、直行直帰など"
+                  value={attEditModal.note}
+                  onChange={e => setAttEditModal(prev => ({ ...prev, note: e.target.value }))}
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+                />
+              </div>
+            </div>
+
+            {/* フッターアクション */}
+            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+              {attEditModal.recordId ? (
+                <button
+                  type="button"
+                  onClick={handleDeleteAttRecord}
+                  disabled={isSaving}
+                  className="px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-xl font-bold text-xs transition inline-flex items-center gap-1 cursor-pointer border border-rose-200 disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  打刻削除
+                </button>
+              ) : (
+                <div></div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAttEditModal(prev => ({ ...prev, isOpen: false }))}
+                  disabled={isSaving}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAttRecord}
+                  disabled={isSaving}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-100 transition inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  保存して給与再計算
                 </button>
               </div>
             </div>
