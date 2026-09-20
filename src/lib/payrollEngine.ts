@@ -284,6 +284,7 @@ export function calculatePayroll(
   let holidayAllowance = 0;
   let absenceDeduction = 0;
   let lateEarlyDeduction = 0;
+  let finalAbsenceDays = attendance.absence_days || 0;
 
   if (profile.salary_type === 'hourly') {
     // 【時給制】
@@ -324,10 +325,28 @@ export function calculatePayroll(
     // 休日割増手当 (1.35倍)
     holidayAllowance = round(attendance.holiday_hours * hourlyFromMonthly * 1.35);
 
-    // 欠勤控除 (1日あたり控除額 = 基本給 / 所定日数20日)
-    if (attendance.absence_days > 0) {
-      absenceDeduction = round(attendance.absence_days * (baseSalary / 20));
+    const standardWorkDays = 20;
+    const totalWorkedDays = (attendance.work_days || 0) + (attendance.paid_leave_days || 0);
+
+    // 欠勤日数の自動判定（明示的な指定がない場合、所定日数20日との差分を欠勤とする）
+    if (finalAbsenceDays === 0 && totalWorkedDays < standardWorkDays) {
+      finalAbsenceDays = standardWorkDays - totalWorkedDays;
     }
+
+    const allAllowances = (profile.position_allowance || 0) + 
+      (profile.qualification_allowance || 0) + 
+      (profile.housing_allowance || 0) + 
+      (profile.family_allowance || 0);
+
+    // 欠勤控除 (1日あたり控除額 = 基本給 / 所定日数20日)
+    // 出勤0日かつ有休0日の全休（未打刻・未就労）の場合は、ノーワーク・ノーペイに基づき基本給および諸手当全額を控除
+    if (totalWorkedDays === 0) {
+      finalAbsenceDays = standardWorkDays;
+      absenceDeduction = baseSalary + allAllowances;
+    } else if (finalAbsenceDays > 0) {
+      absenceDeduction = round(finalAbsenceDays * (baseSalary / standardWorkDays));
+    }
+
     // 遅刻早退控除
     if (attendance.late_early_hours > 0) {
       lateEarlyDeduction = round(attendance.late_early_hours * hourlyFromMonthly);
@@ -339,16 +358,18 @@ export function calculatePayroll(
   const housingAllowance = profile.housing_allowance || 0;
   const familyAllowance = profile.family_allowance || 0;
 
-  // 通勤手当の自動計算（時給制アルバイト・日額実費は「出勤日数 × 1日往復交通費」、月給者は「月額定期代」）
+  // 通勤手当の自動計算
+  // ① 時給制・日額実費は「出勤日数 × 1日往復交通費」
+  // ② 月額固定（定期代）でも出勤日数が0日（全休・未出勤）の場合は通勤実費が発生しないため0円（全額不支給）
   let commutingAllowance = 0;
   if (profile.commuting_type === 'none') {
     commutingAllowance = 0;
   } else if (profile.commuting_type === 'daily' || profile.salary_type === 'hourly' || profile.salary_type === 'daily') {
     const dailyAmount = profile.commuting_daily_amount ?? profile.commuting_allowance ?? 0;
-    commutingAllowance = round(dailyAmount * attendance.work_days);
+    commutingAllowance = round(dailyAmount * (attendance.work_days || 0));
   } else {
-    // 月額固定（定期代）
-    commutingAllowance = profile.commuting_allowance || 0;
+    // 月額固定（定期代）: 出勤が1日以上あれば満額、0日（未就労・全休）なら0円
+    commutingAllowance = (attendance.work_days || 0) > 0 ? (profile.commuting_allowance || 0) : 0;
   }
 
   const specialAllowance = 0;
@@ -432,8 +453,23 @@ export function calculatePayroll(
 
   const otherDeductions = 0;
 
-  // 総控除額
-  const totalDeductions = totalSocialInsurance + incomeTax + residentTax + otherDeductions;
+  // 総控除額（総支給額が0円の場合は給与天引き不能のため控除額も0円とする）
+  const finalHealthInsurance = totalEarnings === 0 ? 0 : healthInsurance;
+  const finalNursingInsurance = totalEarnings === 0 ? 0 : nursingInsurance;
+  const finalPensionInsurance = totalEarnings === 0 ? 0 : pensionInsurance;
+  const finalEmploymentInsurance = totalEarnings === 0 ? 0 : employmentInsurance;
+  const finalIncomeTax = totalEarnings === 0 ? 0 : incomeTax;
+  const finalResidentTax = totalEarnings === 0 ? 0 : residentTax;
+
+  const totalDeductions = totalEarnings === 0 ? 0 : (
+    finalHealthInsurance + 
+    finalNursingInsurance + 
+    finalPensionInsurance + 
+    finalEmploymentInsurance + 
+    finalIncomeTax + 
+    finalResidentTax + 
+    otherDeductions
+  );
 
   // 4. 差引支給額（手取り）
   const netSalary = Math.max(0, totalEarnings - totalDeductions);
@@ -446,7 +482,7 @@ export function calculatePayroll(
     midnight_hours: attendance.midnight_hours,
     holiday_hours: attendance.holiday_hours,
     paid_leave_days: attendance.paid_leave_days,
-    absence_days: attendance.absence_days,
+    absence_days: finalAbsenceDays,
     late_early_hours: attendance.late_early_hours,
 
     base_salary: baseSalary,
@@ -464,12 +500,12 @@ export function calculatePayroll(
     late_early_deduction: lateEarlyDeduction,
     total_earnings: totalEarnings,
 
-    health_insurance: healthInsurance,
-    nursing_insurance: nursingInsurance,
-    pension_insurance: pensionInsurance,
-    employment_insurance: employmentInsurance,
-    income_tax: incomeTax,
-    resident_tax: residentTax,
+    health_insurance: finalHealthInsurance,
+    nursing_insurance: finalNursingInsurance,
+    pension_insurance: finalPensionInsurance,
+    employment_insurance: finalEmploymentInsurance,
+    income_tax: finalIncomeTax,
+    resident_tax: finalResidentTax,
     other_deductions: otherDeductions,
     total_deductions: totalDeductions,
 

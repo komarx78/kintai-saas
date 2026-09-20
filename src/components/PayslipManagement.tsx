@@ -797,14 +797,21 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         const realPaidLeaveDays = empReqs.length;
 
         // 【本来あるべき姿】：出退勤打刻が0なら正直に0日・0時間とする（架空の20日・160時間は完全根絶）
+        const isMonthlyProf = prof?.salary_type === 'monthly' || (!prof?.salary_type && u.employment_type !== 'part-time');
+        const effectiveWorkDays = existingSlip?.work_days ?? realWorkDays;
+        const effectiveLeaveDays = existingSlip?.paid_leave_days ?? realPaidLeaveDays;
+        const defaultAbsenceDays = isMonthlyProf 
+          ? (effectiveWorkDays === 0 && effectiveLeaveDays === 0 ? 20 : Math.max(0, 20 - effectiveWorkDays - effectiveLeaveDays))
+          : 0;
+
         const attSummary: AttendanceSummary = {
-          work_days: existingSlip?.work_days ?? realWorkDays,
+          work_days: effectiveWorkDays,
           actual_hours: existingSlip?.actual_hours ?? realActualHours,
           overtime_hours: existingSlip?.overtime_hours ?? realOvertimeHours,
           midnight_hours: existingSlip?.midnight_hours ?? realMidnightHours,
           holiday_hours: existingSlip?.holiday_hours ?? realHolidayHours,
-          paid_leave_days: existingSlip?.paid_leave_days ?? realPaidLeaveDays,
-          absence_days: existingSlip?.absence_days ?? 0,
+          paid_leave_days: effectiveLeaveDays,
+          absence_days: existingSlip?.absence_days ?? defaultAbsenceDays,
           late_early_hours: existingSlip?.late_early_hours ?? 0
         };
 
@@ -1008,6 +1015,11 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           tax_bracket: existingProf?.tax_bracket || 'kou'
         };
 
+        const isMonthlyEmp = profile.salary_type === 'monthly';
+        const autoAbsenceDays = isMonthlyEmp
+          ? (workDays === 0 && paidLeaveDays === 0 ? 20 : Math.max(0, 20 - workDays - paidLeaveDays))
+          : 0;
+
         // 実打刻データを100%忠実に反映（打刻が0件なら0日・0時間とする）
         const attSummary: AttendanceSummary = {
           work_days: workDays,
@@ -1016,7 +1028,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           midnight_hours: Number((midnightMins / 60).toFixed(1)),
           holiday_hours: holidayHours,
           paid_leave_days: paidLeaveDays,
-          absence_days: 0,
+          absence_days: autoAbsenceDays,
           late_early_hours: 0
         };
 
@@ -1147,14 +1159,21 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         tax_bracket: dbPay?.tax_bracket || cachedProf?.tax_bracket || 'kou'
       };
 
+      const isMonthlyRes = resolvedProf.salary_type === 'monthly';
+      const wDays = existingSlip?.work_days ?? 0;
+      const pDays = existingSlip?.paid_leave_days ?? 0;
+      const autoAbsenceDays = isMonthlyRes
+        ? (existingSlip?.absence_days ?? (wDays === 0 && pDays === 0 ? 20 : Math.max(0, 20 - wDays - pDays)))
+        : (existingSlip?.absence_days || 0);
+
       const attSummary: AttendanceSummary = {
-        work_days: existingSlip?.work_days ?? 0,
+        work_days: wDays,
         actual_hours: existingSlip?.actual_hours ?? 0,
         overtime_hours: existingSlip?.overtime_hours || 0,
         midnight_hours: existingSlip?.midnight_hours || 0,
         holiday_hours: existingSlip?.holiday_hours || 0,
-        paid_leave_days: existingSlip?.paid_leave_days || 0,
-        absence_days: existingSlip?.absence_days || 0,
+        paid_leave_days: pDays,
+        absence_days: autoAbsenceDays,
         late_early_hours: existingSlip?.late_early_hours || 0
       };
 
@@ -2361,9 +2380,15 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                             <span className="text-slate-400 font-mono">0 日</span>
                           )}
                         </div>
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                           <span className="text-slate-500">欠勤日数:</span>
-                          <span className="font-mono text-slate-800">{slip.absence_days || 0} 日</span>
+                          {slip.absence_days && slip.absence_days > 0 ? (
+                            <span className="font-black font-mono text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md border border-rose-200 text-xs">
+                              {slip.absence_days} 日
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-mono">0 日</span>
+                          )}
                         </div>
                         <div className="flex justify-between items-center bg-blue-100/80 px-2.5 py-1.5 rounded-xl border border-blue-200 mt-2">
                           <span className="font-black text-blue-900 text-xs">🏖️ 有休残日数 (合計):</span>
@@ -2417,9 +2442,14 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                             </span>
                           </div>
                         ) : null}
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                           <span className="text-slate-500">通勤手当 (非課税):</span>
-                          <span className="font-mono text-slate-800">¥{(slip.commuting_allowance || 0).toLocaleString()}</span>
+                          <span className="font-mono text-slate-800">
+                            ¥{(slip.commuting_allowance || 0).toLocaleString()}
+                            {slip.work_days === 0 && (!slip.commuting_allowance || slip.commuting_allowance === 0) ? (
+                              <span className="text-[10px] text-slate-400 font-sans ml-1">(未出勤不支給)</span>
+                            ) : null}
+                          </span>
                         </div>
                         {((slip.position_allowance || 0) + (slip.qualification_allowance || 0) + (slip.housing_allowance || 0) + (slip.family_allowance || 0)) > 0 ? (
                           <div className="flex justify-between text-blue-700">
@@ -2428,8 +2458,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                           </div>
                         ) : null}
                         {slip.absence_deduction && slip.absence_deduction > 0 ? (
-                          <div className="flex justify-between text-rose-600">
-                            <span className="text-slate-500">欠勤控除:</span>
+                          <div className="flex justify-between items-center text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border border-rose-200 font-bold">
+                            <span className="text-rose-700">欠勤控除:</span>
                             <span className="font-mono">-¥{slip.absence_deduction.toLocaleString()}</span>
                           </div>
                         ) : null}
@@ -2623,6 +2653,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                           <div className="font-bold text-slate-800">¥{(slip.total_earnings || 0).toLocaleString()}</div>
                           <div className="text-[10px] text-slate-400">
                             基本 ¥{(slip.base_salary || 0).toLocaleString()}
+                            {slip.absence_deduction && slip.absence_deduction > 0 ? (
+                              <span className="text-rose-600 font-bold ml-1">(欠控 -¥{slip.absence_deduction.toLocaleString()})</span>
+                            ) : null}
                           </div>
                         </td>
 
@@ -2750,9 +2783,15 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                       <span>有給取得日数:</span>
                                       <span>{slip.paid_leave_days || 0} 日</span>
                                     </div>
-                                    <div className="flex justify-between text-slate-400">
+                                    <div className="flex justify-between items-center text-slate-600">
                                       <span>欠勤日数:</span>
-                                      <span>{slip.absence_days || 0} 日</span>
+                                      {slip.absence_days && slip.absence_days > 0 ? (
+                                        <span className="font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                                          {slip.absence_days} 日
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-400">0 日</span>
+                                      )}
                                     </div>
                                     <div className="flex justify-between items-center bg-blue-100/70 p-1.5 rounded-lg border border-blue-200 text-blue-900 font-bold mt-1.5">
                                       <span>🏖️ 有休残日数 (合計):</span>
@@ -2795,6 +2834,12 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                       <div className="flex justify-between text-blue-600">
                                         <span>役職・資格・諸手当:</span>
                                         <span>¥{((slip.position_allowance || 0) + (slip.qualification_allowance || 0) + (slip.housing_allowance || 0) + (slip.family_allowance || 0)).toLocaleString()}</span>
+                                      </div>
+                                    ) : null}
+                                    {slip.absence_deduction && slip.absence_deduction > 0 ? (
+                                      <div className="flex justify-between text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                                        <span>欠勤控除:</span>
+                                        <span>-¥{slip.absence_deduction.toLocaleString()}</span>
                                       </div>
                                     ) : null}
                                     <div className="border-t border-emerald-200 pt-1.5 mt-1 flex justify-between font-black text-emerald-700 text-xs">
