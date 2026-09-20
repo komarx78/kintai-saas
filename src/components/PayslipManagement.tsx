@@ -853,23 +853,23 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         const realLateEarlyHours = realLateEarlyMins > 0 ? Number((realLateEarlyMins / 60).toFixed(1)) : 0;
         const realPaidLeaveDays = empReqs.length;
 
-        // 【本来あるべき姿】：出退勤打刻が0なら正直に0日・0時間とする（架空の20日・160時間は完全根絶）
+        // 【勤怠SSOT絶対原則】：実際の打刻データ（attendance_records）を100%忠実に反映
         const isMonthlyProf = prof?.salary_type === 'monthly' || (!prof?.salary_type && u.employment_type !== 'part-time');
-        const effectiveWorkDays = existingSlip?.work_days ?? realWorkDays;
-        const effectiveLeaveDays = existingSlip?.paid_leave_days ?? realPaidLeaveDays;
+        const effectiveWorkDays = realWorkDays;
+        const effectiveLeaveDays = realPaidLeaveDays;
         const defaultAbsenceDays = isMonthlyProf 
           ? (effectiveWorkDays === 0 && effectiveLeaveDays === 0 ? 20 : Math.max(0, 20 - effectiveWorkDays - effectiveLeaveDays))
           : 0;
 
         const attSummary: AttendanceSummary = {
           work_days: effectiveWorkDays,
-          actual_hours: existingSlip?.actual_hours ?? realActualHours,
-          overtime_hours: existingSlip?.overtime_hours ?? realOvertimeHours,
-          midnight_hours: existingSlip?.midnight_hours ?? realMidnightHours,
-          holiday_hours: existingSlip?.holiday_hours ?? realHolidayHours,
+          actual_hours: realActualHours,
+          overtime_hours: realOvertimeHours,
+          midnight_hours: realMidnightHours,
+          holiday_hours: realHolidayHours,
           paid_leave_days: effectiveLeaveDays,
-          absence_days: existingSlip?.absence_days ?? defaultAbsenceDays,
-          late_early_hours: existingSlip?.late_early_hours ?? realLateEarlyHours
+          absence_days: defaultAbsenceDays,
+          late_early_hours: realLateEarlyHours
         };
 
         // 大元労務マスタから最新の給与計算（個別基本給・各種手当＋生年月日の介護保険自動判定）を実行！
@@ -1233,22 +1233,129 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         tax_bracket: dbPay?.tax_bracket || cachedProf?.tax_bracket || 'kou'
       };
 
+      // 締め日設定に基づく当月の集計期間算出
+      const targetYear = currentMonth.getFullYear();
+      const targetMonth = currentMonth.getMonth() + 1;
+      let monthStartDate = `${targetYear}-${targetMonth.toString().padStart(2, '0')}-01`;
+      let monthEndDate = new Date(targetYear, targetMonth, 0).toISOString().split('T')[0];
+
+      if (payrollSettings.closing_day === '20') {
+        const prevM = targetMonth === 1 ? 12 : targetMonth - 1;
+        const prevY = targetMonth === 1 ? targetYear - 1 : targetYear;
+        monthStartDate = `${prevY}-${prevM.toString().padStart(2, '0')}-21`;
+        monthEndDate = `${targetYear}-${targetMonth.toString().padStart(2, '0')}-20`;
+      } else if (payrollSettings.closing_day === '25') {
+        const prevM = targetMonth === 1 ? 12 : targetMonth - 1;
+        const prevY = targetMonth === 1 ? targetYear - 1 : targetYear;
+        monthStartDate = `${prevY}-${prevM.toString().padStart(2, '0')}-26`;
+        monthEndDate = `${targetYear}-${targetMonth.toString().padStart(2, '0')}-25`;
+      }
+
+      // 当該社員の最新打刻データ (attendance_records) を取得
+      const { data: userAttData } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', userId)
+        .gte('date', monthStartDate)
+        .lte('date', monthEndDate);
+
+      // 当該社員の有給申請 (leave_requests) を取得
+      const { data: userLeaveData } = await supabase
+        .from('leave_requests')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', userId)
+        .gte('start_date', monthStartDate)
+        .lte('start_date', monthEndDate);
+
+      // 当該社員のシフト予定 (shifts) を取得
+      const { data: userShiftData } = await supabase
+        .from('shifts')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', userId)
+        .gte('date', monthStartDate)
+        .lte('date', monthEndDate);
+
+      const userAtt = userAttData || [];
+      const userReqs = (userLeaveData || []).filter((r: any) => 
+        (r.status === '承認' || !r.status || r.status === 'approved') &&
+        (r.type?.includes('有給') || r.type?.includes('年休') || r.leave_type?.includes('有給') || r.reason?.includes('有給'))
+      );
+
+      let calcWorkDays = 0;
+      let calcActualMins = 0;
+      let calcOvertimeMins = 0;
+      let calcMidnightMins = 0;
+      let calcHolidayHours = 0;
+      let calcLateEarlyMins = 0;
+
+      if (userAtt.length > 0) {
+        calcWorkDays = userAtt.filter((r: any) => r.check_in_time).length;
+        userAtt.forEach((r: any) => {
+          if (r.check_in_time && r.check_out_time) {
+            const [inH, inM] = r.check_in_time.split(':').map(Number);
+            const [outH, outM] = r.check_out_time.split(':').map(Number);
+            let inTotal = inH * 60 + inM;
+            let outTotal = outH * 60 + outM;
+            if (outTotal < inTotal) outTotal += 24 * 60;
+
+            const total = Math.max(0, outTotal - inTotal);
+            const breakM = r.break_minutes ?? (total >= 480 ? 60 : (total >= 360 ? 45 : 0));
+            const work = Math.max(0, total - breakM);
+            calcActualMins += work;
+
+            // 遅刻・早退判定（シフト予定時刻または会社標準09:00〜18:00と照合）
+            const dayShift = (userShiftData || []).find((s: any) => s.date === r.date);
+            const schedStart = dayShift?.start_time || '09:00';
+            const schedEnd = dayShift?.end_time || '18:00';
+            const [sInH, sInM] = schedStart.split(':').map(Number);
+            const [sOutH, sOutM] = schedEnd.split(':').map(Number);
+            const sInTotal = sInH * 60 + sInM;
+            const sOutTotal = sOutH * 60 + sOutM;
+
+            if (inTotal > sInTotal) {
+              calcLateEarlyMins += (inTotal - sInTotal);
+            }
+            if (outTotal < sOutTotal) {
+              calcLateEarlyMins += (sOutTotal - outTotal);
+            }
+
+            if (r.overtime_minutes && r.overtime_minutes > 0) {
+              calcOvertimeMins += r.overtime_minutes;
+            } else {
+              calcOvertimeMins += Math.max(0, work - 480);
+            }
+
+            for (let m = inTotal; m < outTotal; m++) {
+              const h = Math.floor(m / 60) % 24;
+              if (h >= 22 || h < 5) calcMidnightMins++;
+            }
+          }
+        });
+      }
+
+      const calcActualHours = calcActualMins > 0 ? Number((calcActualMins / 60).toFixed(1)) : 0;
+      const calcOvertimeHours = calcOvertimeMins > 0 ? Number((calcOvertimeMins / 60).toFixed(1)) : 0;
+      const calcMidnightHours = calcMidnightMins > 0 ? Number((calcMidnightMins / 60).toFixed(1)) : 0;
+      const calcLateEarlyHours = calcLateEarlyMins > 0 ? Number((calcLateEarlyMins / 60).toFixed(1)) : 0;
+      const calcPaidLeaveDays = userReqs.length;
+
       const isMonthlyRes = resolvedProf.salary_type === 'monthly';
-      const wDays = existingSlip?.work_days ?? 0;
-      const pDays = existingSlip?.paid_leave_days ?? 0;
       const autoAbsenceDays = isMonthlyRes
-        ? (existingSlip?.absence_days ?? (wDays === 0 && pDays === 0 ? 20 : Math.max(0, 20 - wDays - pDays)))
-        : (existingSlip?.absence_days || 0);
+        ? (calcWorkDays === 0 && calcPaidLeaveDays === 0 ? 20 : Math.max(0, 20 - calcWorkDays - calcPaidLeaveDays))
+        : 0;
 
       const attSummary: AttendanceSummary = {
-        work_days: wDays,
-        actual_hours: existingSlip?.actual_hours ?? 0,
-        overtime_hours: existingSlip?.overtime_hours || 0,
-        midnight_hours: existingSlip?.midnight_hours || 0,
-        holiday_hours: existingSlip?.holiday_hours || 0,
-        paid_leave_days: pDays,
+        work_days: calcWorkDays,
+        actual_hours: calcActualHours,
+        overtime_hours: calcOvertimeHours,
+        midnight_hours: calcMidnightHours,
+        holiday_hours: calcHolidayHours,
+        paid_leave_days: calcPaidLeaveDays,
         absence_days: autoAbsenceDays,
-        late_early_hours: existingSlip?.late_early_hours || 0
+        late_early_hours: calcLateEarlyHours
       };
 
       const activePrefecture = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '25';
@@ -3891,42 +3998,71 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               </div>
             ) : (
               <div className="space-y-4 text-xs">
-                {/* 勤怠サマリーカード */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 block font-bold">出勤日数</span>
-                    <span className="text-base font-black text-slate-800 font-mono">
-                      {attendanceSheetModal.payslip?.work_days ?? 0} <span className="text-xs font-normal">日</span>
-                    </span>
-                  </div>
-                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 block font-bold">総実労働時間</span>
-                    <span className="text-base font-black text-blue-600 font-mono">
-                      {attendanceSheetModal.payslip?.actual_hours ?? 0} <span className="text-xs font-normal">h</span>
-                    </span>
-                  </div>
-                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 block font-bold">残業時間</span>
-                    <span className="text-base font-black text-rose-600 font-mono">
-                      {attendanceSheetModal.payslip?.overtime_hours ?? 0} <span className="text-xs font-normal">h</span>
-                    </span>
-                  </div>
-                  <div className="bg-white p-2.5 rounded-xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 block font-bold">有休取得日数</span>
-                    <span className="text-base font-black text-emerald-600 font-mono">
-                      {attendanceSheetModal.payslip?.paid_leave_days ?? 0} <span className="text-xs font-normal">日</span>
-                    </span>
-                  </div>
-                  <div className="bg-blue-50/80 p-2.5 rounded-xl border border-blue-200">
-                    <span className="text-[10px] text-blue-800 block font-black">🏖️ 有休残日数 (合計)</span>
-                    <span className="text-base font-black text-blue-950 font-mono">
-                      {(attendanceSheetModal.payslip?.paid_leave_remaining !== undefined && attendanceSheetModal.payslip?.paid_leave_remaining !== null 
-                        ? Number(attendanceSheetModal.payslip.paid_leave_remaining) 
-                        : (Number(attendanceSheetModal.user?.paid_leave_balance || 0) + Number(attendanceSheetModal.user?.paid_leave_carryover || 0))
-                      ).toFixed(1)} <span className="text-xs font-normal">日</span>
-                    </span>
-                  </div>
-                </div>
+                {/* 勤怠サマリーカード（打刻レコードから即時リアルタイム集計） */}
+                {(() => {
+                  const mRecords = attendanceSheetModal.records || [];
+                  let mWorkDays = 0;
+                  let mActualMins = 0;
+                  let mOvertimeMins = 0;
+
+                  mRecords.forEach(r => {
+                    if (r.check_in_time) mWorkDays++;
+                    if (r.check_in_time && r.check_out_time) {
+                      const [inH, inM] = r.check_in_time.split(':').map(Number);
+                      const [outH, outM] = r.check_out_time.split(':').map(Number);
+                      let inTotal = inH * 60 + inM;
+                      let outTotal = outH * 60 + outM;
+                      if (outTotal < inTotal) outTotal += 24 * 60;
+                      const totalM = Math.max(0, outTotal - inTotal);
+                      const breakM = r.break_minutes ?? (totalM >= 480 ? 60 : (totalM >= 360 ? 45 : 0));
+                      const workM = Math.max(0, totalM - breakM);
+                      mActualMins += workM;
+                      if (workM > 480) mOvertimeMins += (workM - 480);
+                    }
+                  });
+
+                  const displayWorkDays = mWorkDays;
+                  const displayActualHours = Number((mActualMins / 60).toFixed(1));
+                  const displayOvertimeHours = Number((mOvertimeMins / 60).toFixed(1));
+
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                      <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 block font-bold">出勤日数</span>
+                        <span className="text-base font-black text-slate-800 font-mono">
+                          {displayWorkDays} <span className="text-xs font-normal">日</span>
+                        </span>
+                      </div>
+                      <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 block font-bold">総実労働時間</span>
+                        <span className="text-base font-black text-blue-600 font-mono">
+                          {displayActualHours} <span className="text-xs font-normal">h</span>
+                        </span>
+                      </div>
+                      <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 block font-bold">残業時間</span>
+                        <span className="text-base font-black text-rose-600 font-mono">
+                          {displayOvertimeHours} <span className="text-xs font-normal">h</span>
+                        </span>
+                      </div>
+                      <div className="bg-white p-2.5 rounded-xl border border-slate-200">
+                        <span className="text-[10px] text-slate-400 block font-bold">有休取得日数</span>
+                        <span className="text-base font-black text-emerald-600 font-mono">
+                          {attendanceSheetModal.payslip?.paid_leave_days ?? 0} <span className="text-xs font-normal">日</span>
+                        </span>
+                      </div>
+                      <div className="bg-blue-50/80 p-2.5 rounded-xl border border-blue-200">
+                        <span className="text-[10px] text-blue-800 block font-black">🏖️ 有休残日数 (合計)</span>
+                        <span className="text-base font-black text-blue-950 font-mono">
+                          {(attendanceSheetModal.payslip?.paid_leave_remaining !== undefined && attendanceSheetModal.payslip?.paid_leave_remaining !== null 
+                            ? Number(attendanceSheetModal.payslip.paid_leave_remaining) 
+                            : (Number(attendanceSheetModal.user?.paid_leave_balance || 0) + Number(attendanceSheetModal.user?.paid_leave_carryover || 0))
+                          ).toFixed(1)} <span className="text-xs font-normal">日</span>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* 日別出勤簿テーブル */}
                 <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs max-h-[55vh] overflow-y-auto">
