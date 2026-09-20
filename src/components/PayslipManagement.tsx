@@ -732,6 +732,20 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         console.warn('leave_requests fetch error:', lErr);
       }
 
+      // 当月のシフト予定データ取得 (shifts)
+      let shiftsList: any[] = [];
+      try {
+        const { data: sData } = await supabase
+          .from('shifts')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .gte('date', monthStartDate)
+          .lte('date', monthEndDate);
+        if (sData) shiftsList = sData;
+      } catch (sErr) {
+        console.warn('shifts fetch error:', sErr);
+      }
+
       // 6. 各従業員の給与明細を大元労務マスタ（SSOT）に基づいて完全最新化
       const prefRateDataLatest = getPrefectureRate(activePrefCode);
       const latestPayrollSettings: any = {
@@ -761,6 +775,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         let realOvertimeMins = 0;
         let realMidnightMins = 0;
         let realHolidayHours = 0;
+        let realLateEarlyMins = 0;
 
         if (empAtt.length > 0) {
           realWorkDays = empAtt.filter(r => r.check_in_time).length;
@@ -776,6 +791,22 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               const breakM = r.break_minutes ?? (total >= 480 ? 60 : (total >= 360 ? 45 : 0));
               const work = Math.max(0, total - breakM);
               realActualMins += work;
+
+              // 遅刻・早退判定（シフト予定時刻、または標準09:00〜18:00と照合）
+              const dayShift = shiftsList.find(s => s.user_id === u.id && s.date === r.date);
+              const schedStart = dayShift?.start_time || '09:00';
+              const schedEnd = dayShift?.end_time || '18:00';
+              const [sInH, sInM] = schedStart.split(':').map(Number);
+              const [sOutH, sOutM] = schedEnd.split(':').map(Number);
+              const sInTotal = sInH * 60 + sInM;
+              const sOutTotal = sOutH * 60 + sOutM;
+
+              if (inTotal > sInTotal) {
+                realLateEarlyMins += (inTotal - sInTotal);
+              }
+              if (outTotal < sOutTotal) {
+                realLateEarlyMins += (sOutTotal - outTotal);
+              }
 
               if (r.overtime_minutes && r.overtime_minutes > 0) {
                 realOvertimeMins += r.overtime_minutes;
@@ -794,6 +825,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         const realActualHours = realActualMins > 0 ? Number((realActualMins / 60).toFixed(1)) : 0;
         const realOvertimeHours = realOvertimeMins > 0 ? Number((realOvertimeMins / 60).toFixed(1)) : 0;
         const realMidnightHours = realMidnightMins > 0 ? Number((realMidnightMins / 60).toFixed(1)) : 0;
+        const realLateEarlyHours = realLateEarlyMins > 0 ? Number((realLateEarlyMins / 60).toFixed(1)) : 0;
         const realPaidLeaveDays = empReqs.length;
 
         // 【本来あるべき姿】：出退勤打刻が0なら正直に0日・0時間とする（架空の20日・160時間は完全根絶）
@@ -812,7 +844,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           holiday_hours: existingSlip?.holiday_hours ?? realHolidayHours,
           paid_leave_days: effectiveLeaveDays,
           absence_days: existingSlip?.absence_days ?? defaultAbsenceDays,
-          late_early_hours: existingSlip?.late_early_hours ?? 0
+          late_early_hours: existingSlip?.late_early_hours ?? realLateEarlyHours
         };
 
         // 大元労務マスタから最新の給与計算（個別基本給・各種手当＋生年月日の介護保険自動判定）を実行！
@@ -921,6 +953,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         let overtimeMins = 0;
         let midnightMins = 0;
         let holidayHours = 0;
+        let lateEarlyMins = 0;
 
         if (empRecords.length > 0) {
           // ① 打刻実績データが存在する場合
@@ -938,6 +971,22 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               const work = Math.max(0, total - breakM);
               actualMins += work;
               
+              // 遅刻・早退判定
+              const dayShift = empShifts.find(s => s.date === r.date);
+              const schedStart = dayShift?.start_time || '09:00';
+              const schedEnd = dayShift?.end_time || '18:00';
+              const [sInH, sInM] = schedStart.split(':').map(Number);
+              const [sOutH, sOutM] = schedEnd.split(':').map(Number);
+              const sInTotal = sInH * 60 + sInM;
+              const sOutTotal = sOutH * 60 + sOutM;
+
+              if (inTotal > sInTotal) {
+                lateEarlyMins += (inTotal - sInTotal);
+              }
+              if (outTotal < sOutTotal) {
+                lateEarlyMins += (sOutTotal - outTotal);
+              }
+
               // 残業時間の計算（明示残業分または8h超過分）
               if (r.overtime_minutes && r.overtime_minutes > 0) {
                 overtimeMins += r.overtime_minutes;
@@ -1029,7 +1078,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           holiday_hours: holidayHours,
           paid_leave_days: paidLeaveDays,
           absence_days: autoAbsenceDays,
-          late_early_hours: 0
+          late_early_hours: lateEarlyMins > 0 ? Number((lateEarlyMins / 60).toFixed(1)) : 0
         };
 
         // 給与計算エンジンの実行（都道府県・生年月日・社保料率・税金完全自動連動）
@@ -2390,6 +2439,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                             <span className="text-slate-400 font-mono">0 日</span>
                           )}
                         </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-500">遅刻早退時間:</span>
+                          {slip.late_early_hours && slip.late_early_hours > 0 ? (
+                            <span className="font-black font-mono text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-200 text-xs">
+                              {slip.late_early_hours} 時間
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-mono">0 時間</span>
+                          )}
+                        </div>
                         <div className="flex justify-between items-center bg-blue-100/80 px-2.5 py-1.5 rounded-xl border border-blue-200 mt-2">
                           <span className="font-black text-blue-900 text-xs">🏖️ 有休残日数 (合計):</span>
                           <span className="font-black font-mono text-blue-950 text-xs bg-white px-2 py-0.5 rounded-md border border-blue-300">
@@ -2464,8 +2523,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                           </div>
                         ) : null}
                         {slip.late_early_deduction && slip.late_early_deduction > 0 ? (
-                          <div className="flex justify-between text-rose-600">
-                            <span className="text-slate-500">遅刻早退控除:</span>
+                          <div className="flex justify-between items-center text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border border-rose-200 font-bold">
+                            <span className="text-rose-700">遅刻早退控除:</span>
                             <span className="font-mono">-¥{slip.late_early_deduction.toLocaleString()}</span>
                           </div>
                         ) : null}
@@ -2793,6 +2852,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                         <span className="text-slate-400">0 日</span>
                                       )}
                                     </div>
+                                    <div className="flex justify-between items-center text-slate-600">
+                                      <span>遅刻早退時間:</span>
+                                      {slip.late_early_hours && slip.late_early_hours > 0 ? (
+                                        <span className="font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                          {slip.late_early_hours} 時間
+                                        </span>
+                                      ) : (
+                                        <span className="text-slate-400">0 時間</span>
+                                      )}
+                                    </div>
                                     <div className="flex justify-between items-center bg-blue-100/70 p-1.5 rounded-lg border border-blue-200 text-blue-900 font-bold mt-1.5">
                                       <span>🏖️ 有休残日数 (合計):</span>
                                       <span className="font-mono font-black text-xs">
@@ -2840,6 +2909,12 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                       <div className="flex justify-between text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
                                         <span>欠勤控除:</span>
                                         <span>-¥{slip.absence_deduction.toLocaleString()}</span>
+                                      </div>
+                                    ) : null}
+                                    {slip.late_early_deduction && slip.late_early_deduction > 0 ? (
+                                      <div className="flex justify-between text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                                        <span>遅刻早退控除:</span>
+                                        <span>-¥{slip.late_early_deduction.toLocaleString()}</span>
                                       </div>
                                     ) : null}
                                     <div className="border-t border-emerald-200 pt-1.5 mt-1 flex justify-between font-black text-emerald-700 text-xs">
