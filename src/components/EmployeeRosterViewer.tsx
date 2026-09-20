@@ -854,21 +854,34 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                           <tbody className="divide-y divide-slate-100">
                             <tr>
                               <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">金融機関名</td>
-                              <td className="px-4 py-2.5 font-bold text-slate-900">{currentEmployee.bank_name || '滋賀銀行'}</td>
+                              <td className="px-4 py-2.5 font-bold text-slate-900">
+                                {currentEmployee.bank_name ? currentEmployee.bank_name : <span className="text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded text-[11px]">未登録</span>}
+                              </td>
                             </tr>
                             <tr>
                               <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">支店名</td>
-                              <td className="px-4 py-2.5 text-slate-800">{currentEmployee.branch_name || '坂本支店'}</td>
+                              <td className="px-4 py-2.5 text-slate-800">
+                                {currentEmployee.branch_name ? currentEmployee.branch_name : <span className="text-slate-400">-</span>}
+                              </td>
                             </tr>
                             <tr>
                               <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">預金種別 / 口座番号</td>
                               <td className="px-4 py-2.5 font-mono text-slate-800">
-                                {currentEmployee.account_type || '普通'} {currentEmployee.account_number || '1234567'}
+                                {currentEmployee.account_number ? (
+                                  <span>
+                                    {currentEmployee.account_type === 'ordinary' ? '普通' : (currentEmployee.account_type === 'current' || currentEmployee.account_type === 'checking') ? '当座' : (currentEmployee.account_type || '普通')}{' '}
+                                    {currentEmployee.account_number}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400">-</span>
+                                )}
                               </td>
                             </tr>
                             <tr>
                               <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">口座名義人</td>
-                              <td className="px-4 py-2.5 font-bold text-slate-900">{currentEmployee.account_holder || currentEmployee.name}</td>
+                              <td className="px-4 py-2.5 font-bold text-slate-900">
+                                {currentEmployee.bank_name || currentEmployee.account_number ? (currentEmployee.account_holder || currentEmployee.name) : <span className="text-slate-400 font-normal">-</span>}
+                              </td>
                             </tr>
                           </tbody>
                         </table>

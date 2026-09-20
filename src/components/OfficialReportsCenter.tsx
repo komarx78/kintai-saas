@@ -290,11 +290,11 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           hourly_wage: conDoc.hourly_wage || pp.hourly_wage || ob.hourly_wage || 1200,
           salary_type: conDoc.salary_type || pp.salary_type || ob.salary_type || 'monthly',
           employment_type: conDoc.employment_type || ob.employment_type || u.employment_type || localBackup?.employment_type || (conDoc.salary_type === 'hourly' || pp.salary_type === 'hourly' || ob.salary_type === 'hourly' ? 'part-time' : 'full-time'),
-          bank_name: bankDoc.bank_name || ob.bank_name || pp.bank_name || '滋賀銀行',
-          branch_name: bankDoc.branch_name || ob.branch_name || pp.branch_name || '坂本支店',
-          account_type: bankDoc.account_type || ob.account_type || pp.account_type || '普通',
-          account_number: bankDoc.account_number || ob.account_number || pp.account_number || '1234567',
-          account_holder: bankDoc.account_holder || ob.account_holder || pp.account_holder || u.name,
+          bank_name: bankDoc.bank_name || ob.bank_name || pp.bank_name || localBackup?.bank_name || '',
+          branch_name: bankDoc.branch_name || ob.branch_name || pp.branch_name || localBackup?.branch_name || '',
+          account_type: bankDoc.account_type || ob.account_type || pp.account_type || localBackup?.account_type || '',
+          account_number: bankDoc.account_number || ob.account_number || pp.account_number || localBackup?.account_number || '',
+          account_holder: bankDoc.account_holder || ob.account_holder || pp.account_holder || localBackup?.account_holder || '',
           dependents_count: depDoc.dependents_count !== undefined ? Number(depDoc.dependents_count) : (ob.dependents_count || pp.dependents_count || 0),
           health_insurance_joined: ob.health_insurance_joined !== false,
           pension_insurance_joined: ob.pension_insurance_joined !== false,
@@ -1346,7 +1346,13 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                           {/* 振込先情報 ＆ 会社印 */}
                           <div className="signature-box flex items-center justify-between border-t border-slate-200 pt-3 text-[10px] text-slate-500">
                             <div>
-                              振込先: {emp.bank_name} {emp.branch_name}（{emp.account_type || '普通'} {emp.account_number}）
+                              {emp.bank_name || emp.account_number ? (
+                                <span>
+                                  振込先: {emp.bank_name} {emp.branch_name}（{emp.account_type === 'ordinary' ? '普通' : (emp.account_type === 'current' || emp.account_type === 'checking') ? '当座' : (emp.account_type || '普通')} {emp.account_number}）
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 font-bold">振込先: 未登録</span>
+                              )}
                             </div>
                             <div className="relative">
                               <div className="text-slate-800 font-bold">{companyInfo.name}</div>
@@ -1397,16 +1403,20 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                       </div>
                       <button
                         onClick={() => {
-                          const csvRows = rows.map(r => [
-                            r.emp.id,
-                            r.emp.name,
-                            r.emp.bank_name || '滋賀銀行',
-                            r.emp.branch_name || '坂本支店',
-                            r.emp.account_type || '普通',
-                            r.emp.account_number || '',
-                            r.emp.account_holder || r.emp.name,
-                            r.netBonus
-                          ]);
+                          const csvRows = rows.map(r => {
+                            const rawType = r.emp.account_type || '';
+                            const accType = rawType === 'ordinary' ? '普通' : (rawType === 'current' || rawType === 'checking') ? '当座' : rawType;
+                            return [
+                              r.emp.id,
+                              r.emp.name,
+                              r.emp.bank_name || '未登録',
+                              r.emp.branch_name || '',
+                              accType || '',
+                              r.emp.account_number || '',
+                              r.emp.account_holder || r.emp.name_kana || r.emp.name || '',
+                              r.netBonus
+                            ];
+                          });
                           downloadCsv(
                             `賞与振込一覧表_${selectedYear}_${selectedMonth}.csv`,
                             ['社員番号', '社員名', '銀行名', '支店名', '口座種別', '口座番号', '口座名義', '振込金額'],
@@ -1434,20 +1444,42 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                         </tr>
                       </thead>
                       <tbody>
-                        {rows.map((r, i) => (
-                          <tr key={r.emp.id} className="border-b border-slate-200 hover:bg-slate-50">
-                            <td className="p-2 border-r border-slate-200 text-center font-mono">{i + 1}</td>
-                            <td className="p-2 border-r border-slate-200 font-bold">{r.emp.name}</td>
-                            <td className="p-2 border-r border-slate-200">{r.emp.department}</td>
-                            <td className="p-2 border-r border-slate-200">{r.emp.bank_name} {r.emp.branch_name}</td>
-                            <td className="p-2 border-r border-slate-200 text-center">{r.emp.account_type || '普通'}</td>
-                            <td className="p-2 border-r border-slate-200 font-mono">{r.emp.account_number}</td>
-                            <td className="p-2 border-r border-slate-200">{r.emp.account_holder || r.emp.name}</td>
-                            <td className="p-2 text-right font-mono font-bold text-emerald-700">
-                              ¥{r.netBonus.toLocaleString()}
-                            </td>
-                          </tr>
-                        ))}
+                        {rows.map((r, i) => {
+                          const hasBank = !!(r.emp.bank_name || r.emp.branch_name);
+                          const rawType = r.emp.account_type || '';
+                          const accType = rawType === 'ordinary' ? '普通' : (rawType === 'current' || rawType === 'checking') ? '当座' : rawType;
+                          const hasAccNum = !!r.emp.account_number;
+                          const accHolder = r.emp.account_holder || r.emp.name_kana || r.emp.name;
+
+                          return (
+                            <tr key={r.emp.id} className="border-b border-slate-200 hover:bg-slate-50">
+                              <td className="p-2 border-r border-slate-200 text-center font-mono">{i + 1}</td>
+                              <td className="p-2 border-r border-slate-200 font-bold">{r.emp.name}</td>
+                              <td className="p-2 border-r border-slate-200">{r.emp.department}</td>
+                              <td className="p-2 border-r border-slate-200">
+                                {hasBank ? (
+                                  <span>{r.emp.bank_name} {r.emp.branch_name}</span>
+                                ) : (
+                                  <span className="inline-block text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded text-[10px]">
+                                    未登録
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-2 border-r border-slate-200 text-center">
+                                {accType ? accType : <span className="text-slate-400">-</span>}
+                              </td>
+                              <td className="p-2 border-r border-slate-200 font-mono">
+                                {hasAccNum ? r.emp.account_number : <span className="text-slate-400">-</span>}
+                              </td>
+                              <td className="p-2 border-r border-slate-200">
+                                {hasBank || hasAccNum ? accHolder : <span className="text-slate-400">-</span>}
+                              </td>
+                              <td className="p-2 text-right font-mono font-bold text-emerald-700">
+                                ¥{r.netBonus.toLocaleString()}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                       <tfoot>
                         <tr className="bg-slate-100 font-black border-t-2 border-slate-400">
