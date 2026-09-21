@@ -63,15 +63,15 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
   // ══════════════════════════════════════════════════════════════════════
   {
     id: 'symbolDigits',
-    name: '事業所整理記号（数字2マス）',
+    name: '事業所整理記号（数字・マス目）',
     section: 'office',
     x: 9.88,
     y: 6.20,
     fontSize: 14,
-    pitch: 4.92,
-    width: 9.84,
+    pitch: 2.43,
+    width: 9.72,
     example: '25',
-    description: '整理記号左側2マス（数字、ハイフンの左）'
+    description: '整理記号左側4マス（数字・各マス中央揃え、ハイフンの左）'
   },
   {
     id: 'symbolKana',
@@ -80,10 +80,10 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     x: 22.34,
     y: 6.20,
     fontSize: 13,
-    pitch: 2.39,
-    width: 9.56,
+    pitch: 2.43,
+    width: 9.72,
     example: 'カア',
-    description: '整理記号右側4マス（カタカナ、ハイフンの右）'
+    description: '整理記号右側4マス（カタカナ・各マス中央揃え、ハイフンの右）'
   },
   {
     id: 'companyAddress',
@@ -301,13 +301,20 @@ export const mergeWithDefaultBonusFields = (customList: any[]): BonusDocFieldCon
   return DEFAULT_BONUS_FIELDS.map(def => {
     const custom = map.get(def.id);
     if (custom) {
+      // 過去の誤った2マス巨大ピッチ（4.0%以上）が残っている場合は、原本4マス黄金比率（2.43%）へ自動救済
+      let finalPitch = typeof custom.pitch === 'number' ? custom.pitch : def.pitch;
+      let finalWidth = typeof custom.width === 'number' ? custom.width : def.width;
+      if (def.id === 'symbolDigits' && finalPitch && finalPitch > 4.0) {
+        finalPitch = 2.43;
+        finalWidth = 9.72;
+      }
       return {
         ...def,
         x: typeof custom.x === 'number' ? custom.x : def.x,
         y: typeof custom.y === 'number' ? custom.y : def.y,
         fontSize: typeof custom.fontSize === 'number' ? custom.fontSize : def.fontSize,
-        pitch: typeof custom.pitch === 'number' ? custom.pitch : def.pitch,
-        width: typeof custom.width === 'number' ? custom.width : def.width,
+        pitch: finalPitch,
+        width: finalWidth,
         disabled: custom.disabled !== undefined ? custom.disabled : def.disabled
       };
     }
@@ -316,7 +323,7 @@ export const mergeWithDefaultBonusFields = (customList: any[]): BonusDocFieldCon
 };
 
 // 設定をローカルストレージから読み込むヘルパー（憲法第17条：ユーザー調整座標の不可侵絶対保証）
-export const BONUS_DOC_COORDINATES_VERSION = 'v5_no_furigana_official';
+export const BONUS_DOC_COORDINATES_VERSION = 'v6_4cells_pitch_243';
 
 export const loadBonusDocCoordinates = (): BonusDocFieldConfig[] => {
   try {

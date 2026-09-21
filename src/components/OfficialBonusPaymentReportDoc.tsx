@@ -164,8 +164,8 @@ const ExactPdfPageRenderer: React.FC<{
   const fSubM = getF('subDateM', 9.2, 5.3, 11.5, 3.5);
   const fSubD = getF('subDateD', 14.8, 5.3, 11.5, 4.5);
 
-  const fDigits = getF('symbolDigits', 9.88, 6.20, 14, 9.84);
-  const fKana = getF('symbolKana', 22.34, 6.20, 13, 9.56);
+  const fDigits = getF('symbolDigits', 9.88, 6.20, 14, 9.72);
+  const fKana = getF('symbolKana', 22.34, 6.20, 13, 9.72);
 
   const fAddress = getF('companyAddress', 11.0, 12.0, 9, 38.0);
   const fName = getF('companyName', 11.0, 18.0, 11, 38.0);
@@ -193,6 +193,15 @@ const ExactPdfPageRenderer: React.FC<{
   const fEmpCurrency = getF('empCurrencyAmount', 23.8, 3.60, 11.5, 14.6);
   const fEmpGoods = getF('empGoodsAmount', 39.8, 3.60, 11.5, 14.6);
   const fEmpTotal = getF('empTotalThousands', 55.8, 3.60, 11.5, 9.8);
+  const digitPitch = (fDigits.pitch && fDigits.pitch <= 4.0) ? fDigits.pitch : 2.43;
+  const digitsContainerWidth = fDigits.width || (digitPitch * 4);
+  const digitChars = symbolDigits ? symbolDigits.split('').slice(0, 4) : [];
+  while (digitChars.length < 4) digitChars.push('');
+
+  const kanaPitch = (fKana.pitch && fKana.pitch <= 4.0) ? fKana.pitch : 2.43;
+  const kanaContainerWidth = fKana.width || (kanaPitch * 4);
+  const kanaChars = symbolKana ? symbolKana.split('').slice(0, 4) : [];
+  while (kanaChars.length < 4) kanaChars.push('');
 
   return (
     <div
@@ -234,7 +243,7 @@ const ExactPdfPageRenderer: React.FC<{
         {submissionDateParsed.d}
       </div>
 
-      {/* 事業所整理記号 (左側2マス: 数字) */}
+      {/* 事業所整理記号 (左側4マス: 数字、原本マス目セル配置) */}
       {symbolDigits && (
         <div
           className="absolute flex items-center font-mono font-bold text-slate-950 z-10"
@@ -242,20 +251,28 @@ const ExactPdfPageRenderer: React.FC<{
             top: `${fDigits.y}%`,
             height: '2.90%',
             left: `${fDigits.x}%`,
-            width: `${(fDigits.pitch || 4.92) * 2}cqi`
+            width: `${digitsContainerWidth}%`
           }}
         >
-          {symbolDigits.split('').slice(0, 2).map((char, idx) => (
-            <span
+          {digitChars.map((char, idx) => (
+            <div
               key={idx}
-              className="inline-flex items-center justify-center font-black text-center shrink-0"
-              style={{ width: `${fDigits.pitch || 4.92}cqi`, height: '100%', fontSize: `${(fDigits.fontSize || 14) * 0.115}cqi` }}
+              className="h-full flex items-center justify-center shrink-0"
+              style={{
+                width: `${(digitPitch / digitsContainerWidth) * 100}%`,
+                fontSize: `${(fDigits.fontSize || 14) * 0.115}cqi`
+              }}
             >
-              {char}
-            </span>
+              {char && (
+                <span className="font-mono font-black text-slate-950 text-center">
+                  {char}
+                </span>
+              )}
+            </div>
           ))}
         </div>
       )}
+
       {/* 事業所整理記号 (右側4マス: カタカナ、ハイフン枠の右隣から開始) */}
       {symbolKana && (
         <div
@@ -264,21 +281,25 @@ const ExactPdfPageRenderer: React.FC<{
             top: `${fKana.y}%`,
             height: '2.90%',
             left: `${fKana.x}%`,
-            width: `${(fKana.pitch || 2.39) * 4}cqi`
+            width: `${kanaContainerWidth}%`
           }}
         >
-          {symbolKana.split('').slice(0, 4).map((char, idx) => {
-            const pitchVal = fKana.pitch || 2.39;
-            return (
-              <span
-                key={idx}
-                className="inline-flex items-center justify-center font-black text-center shrink-0"
-                style={{ width: `${pitchVal}cqi`, height: '100%', fontSize: `${(fKana.fontSize || 13) * 0.115}cqi` }}
-              >
-                {char}
-              </span>
-            );
-          })}
+          {kanaChars.map((char, idx) => (
+            <div
+              key={idx}
+              className="h-full flex items-center justify-center shrink-0"
+              style={{
+                width: `${(kanaPitch / kanaContainerWidth) * 100}%`,
+                fontSize: `${(fKana.fontSize || 13) * 0.115}cqi`
+              }}
+            >
+              {char && (
+                <span className="font-sans font-black text-slate-950 text-center">
+                  {char}
+                </span>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
