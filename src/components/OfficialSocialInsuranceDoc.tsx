@@ -31,6 +31,7 @@ export interface OfficialSocialInsuranceDocProps {
     company_seal_url?: string;
   };
   officeSymbol?: string; // 事業所整理記号 (例: 01-イロハ)
+  officeNumber?: string; // 事業所番号 (例: 12345)
   employees: SocialInsuranceEmployee[];
   selectedEmployeeId: string;
   onSelectEmployee: (id: string) => void;
@@ -41,6 +42,7 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
   type: initialType,
   companyInfo,
   officeSymbol = '01-イロハ',
+  officeNumber = '12345',
   employees,
   selectedEmployeeId,
   onSelectEmployee,
@@ -185,8 +187,11 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
             </div>
             <div className="grid grid-cols-12 gap-2 mt-1">
               <div className="col-span-3">
-                <span className="text-[9px] text-slate-500 block">事業所整理記号</span>
-                <span className="font-mono font-black text-sm tracking-widest">{officeSymbol}</span>
+                <span className="text-[9px] text-slate-500 block">事業所整理記号 / 番号</span>
+                <div className="flex items-center gap-1.5 font-mono font-black text-sm tracking-wider">
+                  <span>{officeSymbol}</span>
+                  {officeNumber && <span className="text-xs text-slate-500 font-normal">({officeNumber})</span>}
+                </div>
               </div>
               <div className="col-span-5">
                 <span className="text-[9px] text-slate-500 block">事業所所在地</span>

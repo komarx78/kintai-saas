@@ -95,6 +95,9 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
   // 🔔 公的届出・社保改定通知マスタモーダル用State
   const [reminderModalOpen, setReminderModalOpen] = useState(false);
   const [officeSymbol, setOfficeSymbol] = useState<string>('');
+  const [officeNumber, setOfficeNumber] = useState<string>('');
+  const [employmentInsuranceOfficeNumber, setEmploymentInsuranceOfficeNumber] = useState<string>('');
+  const [laborInsuranceNumber, setLaborInsuranceNumber] = useState<string>('');
   const [tenantInfo, setTenantInfo] = useState<any>(null);
   const [payrollProfiles, setPayrollProfiles] = useState<Record<string, any>>({});
   const [bonusUpdateTick, setBonusUpdateTick] = useState(0);
@@ -107,13 +110,32 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
     if (!tenantId) return;
     setLoading(true);
     try {
-      // 1. 会社基本情報
+      // 1. 会社基本情報 ＆ 社会保険・労働保険マスタ（SSOT一元取得）
       const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
       setTenantInfo(tData);
 
       const shakai = tData?.shakai_hoken_settings || {};
-      const sym = shakai.office_symbol || tData?.shakai_hoken_office_number || '';
+      let sym = shakai.office_symbol || '';
+      let num = tData?.shakai_hoken_office_number || shakai.office_number || '';
+      let empNum = tData?.employment_insurance_office_number || tData?.office_number || '';
+      let labNum = tData?.labor_insurance_number || '';
+
+      // 自社専用LocalStorageからも二重安全復元
+      try {
+        const rawIns = localStorage.getItem(`company_insurance_settings_${tenantId}`);
+        if (rawIns) {
+          const parsedIns = JSON.parse(rawIns);
+          if (parsedIns.shakai_hoken_office_symbol) sym = parsedIns.shakai_hoken_office_symbol;
+          if (parsedIns.shakai_hoken_office_number) num = parsedIns.shakai_hoken_office_number;
+          if (parsedIns.employment_insurance_office_number) empNum = parsedIns.employment_insurance_office_number;
+          if (parsedIns.labor_insurance_number) labNum = parsedIns.labor_insurance_number;
+        }
+      } catch (e) {}
+
       setOfficeSymbol(sym);
+      setOfficeNumber(num);
+      setEmploymentInsuranceOfficeNumber(empNum);
+      setLaborInsuranceNumber(labNum);
 
       let comp = {
         name: tData?.name || '',
@@ -1118,7 +1140,8 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
             <OfficialSocialInsuranceDoc
               type="acquisition"
               companyInfo={companyInfo}
-              officeSymbol={officeSymbol}
+              officeSymbol={officeSymbol || undefined}
+              officeNumber={officeNumber || undefined}
               employees={employees as any}
               selectedEmployeeId={selectedEmployeeId === 'all' ? (employees[0]?.id || '') : selectedEmployeeId}
               onSelectEmployee={(id) => setSelectedEmployeeId(id)}
@@ -1131,7 +1154,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           <div className="max-w-6xl mx-auto w-full">
             <OfficialSeparationCertificateDoc
               companyInfo={companyInfo}
-              officeNumber="2501-123456-7"
+              officeNumber={employmentInsuranceOfficeNumber || '2501-123456-7'}
               employees={employees as any}
               selectedEmployeeId={selectedEmployeeId === 'all' ? (employees[0]?.id || '') : selectedEmployeeId}
               onSelectEmployee={(id) => setSelectedEmployeeId(id)}
@@ -1145,7 +1168,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
             <OfficialEmploymentInsuranceDoc
               initialType="acquisition"
               companyInfo={companyInfo}
-              officeNumber={tenantInfo?.employment_insurance_office_number || tenantInfo?.office_number || '2501-123456-7'}
+              officeNumber={employmentInsuranceOfficeNumber || tenantInfo?.employment_insurance_office_number || tenantInfo?.office_number || '2501-123456-7'}
               employees={employees as any}
               selectedEmployeeId={selectedEmployeeId === 'all' ? (employees[0]?.id || '') : selectedEmployeeId}
               onSelectEmployee={(id) => setSelectedEmployeeId(id)}
@@ -1158,7 +1181,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           <div className="max-w-5xl mx-auto w-full">
             <OfficialLaborInsuranceReportDoc
               companyInfo={companyInfo}
-              laborInsuranceNumber="25-1-02-123456-000"
+              laborInsuranceNumber={laborInsuranceNumber || '25-1-02-123456-000'}
               employees={employees as any}
               targetFiscalYear={selectedYear}
               onBack={() => setSelectedDocType(null)}

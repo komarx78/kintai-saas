@@ -89,10 +89,19 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
     setCompanyOwnerName(tenantInfo?.representative_name || tenantInfo?.owner_name || '');
     setCompanyPhone(tenantInfo?.phone || '');
 
-    // 会社社会保険設定から整理記号を抽出
+    // 会社社会保険設定から整理記号を抽出（SSOT一元参照）
     const shakai = tenantInfo?.shakai_hoken_settings || {};
-    const sym = shakai.office_symbol || tenantInfo?.shakai_hoken_office_number || '01-イロハ';
-    setOfficeSymbol(sym);
+    let sym = shakai.office_symbol || tenantInfo?.shakai_hoken_office_number || '';
+    if (!sym && tenantId) {
+      try {
+        const rawIns = localStorage.getItem(`company_insurance_settings_${tenantId}`);
+        if (rawIns) {
+          const parsedIns = JSON.parse(rawIns);
+          if (parsedIns.shakai_hoken_office_symbol) sym = parsedIns.shakai_hoken_office_symbol;
+        }
+      } catch (_) {}
+    }
+    setOfficeSymbol(sym || '01-イロハ');
 
     // 過去の保存データがあればロード、無ければ他年月やクラウド給与計算から引き継ぎ
     const storageKey = `bonus_report_${tenantId}_${targetMonth}`;

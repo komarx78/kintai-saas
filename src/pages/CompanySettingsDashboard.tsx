@@ -464,6 +464,19 @@ export default function CompanySettingsDashboard() {
 
 
 
+  // 🏛️ 社会保険・労働保険 事業所マスタState（SSOT一元化）
+  const [insuranceMaster, setInsuranceMaster] = useState<{
+    shakai_hoken_office_symbol: string;      // 社会保険 事業所整理記号（例: 01-イロ, 13-トカ）
+    shakai_hoken_office_number: string;      // 社会保険 事業所番号（例: 12345）
+    employment_insurance_office_number: string; // 雇用保険 適用事業所番号（例: 1301-123456-7）
+    labor_insurance_number: string;             // 労働保険番号（例: 13-1-01-123456-000）
+  }>({
+    shakai_hoken_office_symbol: '',
+    shakai_hoken_office_number: '',
+    employment_insurance_office_number: '',
+    labor_insurance_number: ''
+  });
+
   // 1. 会社基本情報State
   const [basicInfo, setBasicInfo] = useState({
     name: '',
@@ -626,6 +639,27 @@ export default function CompanySettingsDashboard() {
       // お知らせ一覧の復元
       const annLoaded = getAnnouncementsFromStorage(tenantIdData);
       setAnnouncements(annLoaded);
+
+      // 🏛️ 社会保険・労働保険マスタの復元（DB + 自社専用LocalStorage）
+      let loadedInsurance = {
+        shakai_hoken_office_symbol: tData?.shakai_hoken_settings?.office_symbol || '',
+        shakai_hoken_office_number: tData?.shakai_hoken_office_number || tData?.shakai_hoken_settings?.office_number || '',
+        employment_insurance_office_number: tData?.employment_insurance_office_number || '',
+        labor_insurance_number: tData?.labor_insurance_number || ''
+      };
+      try {
+        const rawIns = localStorage.getItem(`company_insurance_settings_${tenantIdData}`);
+        if (rawIns) {
+          const parsedIns = JSON.parse(rawIns);
+          loadedInsurance = {
+            shakai_hoken_office_symbol: parsedIns.shakai_hoken_office_symbol || loadedInsurance.shakai_hoken_office_symbol,
+            shakai_hoken_office_number: parsedIns.shakai_hoken_office_number || loadedInsurance.shakai_hoken_office_number,
+            employment_insurance_office_number: parsedIns.employment_insurance_office_number || loadedInsurance.employment_insurance_office_number,
+            labor_insurance_number: parsedIns.labor_insurance_number || loadedInsurance.labor_insurance_number
+          };
+        }
+      } catch (e) {}
+      setInsuranceMaster(loadedInsurance);
 
 
       if (tData) {
@@ -1373,7 +1407,15 @@ export default function CompanySettingsDashboard() {
           labor_contract_template_data: contractTemplate,
           qualification_masters_data: qualifications,
           onboarding_workflow_settings: onboardingSteps,
-          position_settings: positions
+          position_settings: positions,
+          // 🏛️ 社会保険・雇用保険・労働保険 事業所マスタ（SSOT一元化）
+          shakai_hoken_settings: {
+            office_symbol: insuranceMaster.shakai_hoken_office_symbol,
+            office_number: insuranceMaster.shakai_hoken_office_number
+          },
+          shakai_hoken_office_number: insuranceMaster.shakai_hoken_office_number,
+          employment_insurance_office_number: insuranceMaster.employment_insurance_office_number,
+          labor_insurance_number: insuranceMaster.labor_insurance_number
         };
         const { error: fullErr } = await supabase.from('tenants').update(fullPayload).eq('id', tenantId);
         if (!fullErr) savedToTenants = true;
@@ -1389,9 +1431,23 @@ export default function CompanySettingsDashboard() {
             company_seal_url: companySealUrl,
             work_calendar_settings: updatedCalendar,
             payroll_common_settings: { ...payrollSettings, prefecture_code: autoPrefCode },
-            employment_rules_text: employmentRulesText
+            employment_rules_text: employmentRulesText,
+            shakai_hoken_settings: {
+              office_symbol: insuranceMaster.shakai_hoken_office_symbol,
+              office_number: insuranceMaster.shakai_hoken_office_number
+            },
+            shakai_hoken_office_number: insuranceMaster.shakai_hoken_office_number,
+            employment_insurance_office_number: insuranceMaster.employment_insurance_office_number,
+            labor_insurance_number: insuranceMaster.labor_insurance_number
           };
           await supabase.from('tenants').update(fbPayload).eq('id', tenantId);
+        } catch (e) {}
+      }
+
+      // 🛡️ 自社専用LocalStorageへ即時二重永続化（SSOT保護）
+      if (tenantId) {
+        try {
+          localStorage.setItem(`company_insurance_settings_${tenantId}`, JSON.stringify(insuranceMaster));
         } catch (e) {}
       }
 
@@ -3265,6 +3321,146 @@ export default function CompanySettingsDashboard() {
                 </div>
               );
             })()}
+
+            {/* 🏛️ 社会保険・雇用保険・労働保険 事業所マスタ（SSOT大元設定 ＆ 陸遜・親切ガイド付き） */}
+            <div className="bg-white p-5 rounded-2xl border-2 border-indigo-200/80 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2.5">
+                  <span className="p-2 bg-indigo-600 rounded-xl text-white shadow-xs">
+                    <Building2 className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-black text-slate-800 text-sm">
+                        社会保険・雇用保険・労働保険 事業所マスタ設定
+                      </h4>
+                      <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-bold border border-indigo-200">
+                        全公的届出に自動連動（SSOT）
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      ここで1度登録すると、資格取得届・離職票・賞与支払届・算定基礎届など、すべての公的帳票に100%自動で印字されます（二重入力ゼロ）。
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 陸遜（CX・顧客目線）の「何のこっちゃ？を1秒で解消する」手元書類チェックガイド */}
+              <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 text-xs space-y-3">
+                <div className="flex items-center gap-2 text-amber-900 font-black text-xs">
+                  <span className="text-base">🔰</span>
+                  <span>【陸遜のあんしんガイド】事業所整理記号や番号って何のこっちゃ？（手元の書類を確認！）</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] text-amber-950">
+                  <div className="bg-white/90 p-3 rounded-xl border border-amber-200/60 shadow-2xs space-y-1">
+                    <div className="font-bold text-indigo-900 flex items-center gap-1.5">
+                      <span>📮 日本年金機構からの通知書（社会保険）</span>
+                    </div>
+                    <p className="text-slate-600 leading-relaxed">
+                      年金事務所から届く「保険料納入告知額領収済額通知書」や「算定基礎届」の<strong>用紙の左上</strong>をご覧ください。<br/>
+                      ・<strong>事業所整理記号</strong>: 「数字2桁」＋「カタカナ」（例: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono font-bold text-slate-800">13-トカ</code>、<code className="bg-slate-100 px-1 py-0.5 rounded font-mono font-bold text-slate-800">01-イロ</code>）<br/>
+                      ・<strong>事業所番号</strong>: その隣にある「4〜5桁の数字」（例: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono font-bold text-slate-800">12345</code>）
+                    </p>
+                  </div>
+                  <div className="bg-white/90 p-3 rounded-xl border border-amber-200/60 shadow-2xs space-y-1">
+                    <div className="font-bold text-emerald-900 flex items-center gap-1.5">
+                      <span>🏢 ハローワークからの書類（雇用保険）</span>
+                    </div>
+                    <p className="text-slate-600 leading-relaxed">
+                      ハローワークから交付された「雇用保険適用事業所設置届（事業所控）」または「被保険者資格取得確認通知書」の<strong>上部</strong>をご覧ください。<br/>
+                      ・<strong>雇用保険適用事業所番号</strong>: 「4桁 - 6桁 - 1桁」の計11桁（例: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono font-bold text-slate-800">1301-123456-7</code>）
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 入力フォーム */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-1">
+                {/* 社会保険 事業所整理記号 */}
+                <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-800 text-[11px] flex items-center gap-1">
+                      <span>① 社会保険 事業所整理記号</span>
+                      <span className="text-[10px] text-indigo-600 font-normal">（年金事務所）</span>
+                    </label>
+                    <span className="text-[9px] text-slate-400">例: 13-トカ / 01-イロ</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={insuranceMaster.shakai_hoken_office_symbol}
+                    onChange={e => setInsuranceMaster(prev => ({ ...prev, shakai_hoken_office_symbol: e.target.value }))}
+                    placeholder="例: 13-トカ（数字2桁-カタカナ）"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    ※健康保険・厚生年金資格取得届、被保険者賞与支払届、算定基礎届に自動印字されます。
+                  </p>
+                </div>
+
+                {/* 社会保険 事業所番号 */}
+                <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-800 text-[11px] flex items-center gap-1">
+                      <span>② 社会保険 事業所番号</span>
+                      <span className="text-[10px] text-indigo-600 font-normal">（年金事務所）</span>
+                    </label>
+                    <span className="text-[9px] text-slate-400">例: 12345 (4〜5桁)</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={insuranceMaster.shakai_hoken_office_number}
+                    onChange={e => setInsuranceMaster(prev => ({ ...prev, shakai_hoken_office_number: e.target.value.replace(/[^0-9]/g, '') }))}
+                    placeholder="例: 12345"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    ※年金事務所が付与した4〜5桁の数字。資格取得届や各公的帳票に自動印字されます。
+                  </p>
+                </div>
+
+                {/* 雇用保険 適用事業所番号 */}
+                <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-800 text-[11px] flex items-center gap-1">
+                      <span>③ 雇用保険 適用事業所番号</span>
+                      <span className="text-[10px] text-emerald-600 font-normal">（ハローワーク）</span>
+                    </label>
+                    <span className="text-[9px] text-slate-400">例: 1301-123456-7</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={insuranceMaster.employment_insurance_office_number}
+                    onChange={e => setInsuranceMaster(prev => ({ ...prev, employment_insurance_office_number: e.target.value }))}
+                    placeholder="例: 1301-123456-7（4桁-6桁-1桁）"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    ※ハローワーク交付の適用事業所番号。雇用保険資格取得届、離職票、喪失届に自動印字されます。
+                  </p>
+                </div>
+
+                {/* 労働保険番号 */}
+                <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-slate-800 text-[11px] flex items-center gap-1">
+                      <span>④ 労働保険番号</span>
+                      <span className="text-[10px] text-purple-600 font-normal">（労働基準監督署）</span>
+                    </label>
+                    <span className="text-[9px] text-slate-400">例: 13-1-01-123456-000</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={insuranceMaster.labor_insurance_number}
+                    onChange={e => setInsuranceMaster(prev => ({ ...prev, labor_insurance_number: e.target.value }))}
+                    placeholder="例: 13-1-01-123456-000（計14桁）"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    ※労働保険概算・確定保険料申告書などに自動反映されます。
+                  </p>
+                </div>
+              </div>
+            </div>
 
             {/* 📜 日本年金機構 公式届出帳票 印字座標マスタ（軍律第23条：最高権限者専管） */}
             <div className="bg-gradient-to-r from-pink-50/60 via-purple-50/40 to-slate-50 p-5 rounded-2xl border border-pink-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-2xs">
