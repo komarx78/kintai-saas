@@ -401,6 +401,82 @@ export const generateOfficialSealDataUrl = (companyName: string = ''): string =>
   }
 };
 
+// 🔤 全角英数・記号の半角化
+export const toHalfWidth = (str: string): string => {
+  return str
+    .replace(/[！-～]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0))
+    .replace(/　/g, ' ')
+    .replace(/[―ー－‐–—]/g, '-');
+};
+
+// 🈢 ひらがな・半角カタカナの「全角カタカナ」統一化
+export const toFullWidthKana = (str: string): string => {
+  let kana = str.replace(/[\u3041-\u3096]/g, (match) => {
+    const chr = match.charCodeAt(0) + 0x60;
+    return String.fromCharCode(chr);
+  });
+  const kanaMap: { [key: string]: string } = {
+    'ｶﾞ': 'ガ', 'ｷﾞ': 'ギ', 'ｸﾞ': 'グ', 'ｹﾞ': 'ゲ', 'ｺﾞ': 'ゴ',
+    'ｻﾞ': 'ザ', 'ｼﾞ': 'ジ', 'ｽﾞ': 'ズ', 'ｾﾞ': 'ゼ', 'ｿﾞ': 'ゾ',
+    'ﾀﾞ': 'ダ', 'ﾁﾞ': 'ヂ', 'ﾂﾞ': 'ヅ', 'ﾃﾞ': 'デ', 'ﾄﾞ': 'ド',
+    'ﾊﾞ': 'バ', 'ﾋﾞ': 'ビ', 'ﾌﾞ': 'ブ', 'ﾍﾞ': 'ベ', 'ﾎﾞ': 'ボ',
+    'ﾊﾟ': 'パ', 'ﾋﾟ': 'ピ', 'ﾌﾟ': 'プ', 'ﾍﾟ': 'ペ', 'ﾎﾟ': 'ポ',
+    'ｳﾞ': 'ヴ', 'ﾜﾞ': 'ヷ', 'ｦﾞ': 'ヺ',
+    'ｱ': 'ア', 'ｲ': 'イ', 'ｳ': 'ウ', 'ｴ': 'エ', 'ｵ': 'オ',
+    'ｶ': 'カ', 'ｷ': 'キ', 'ｸ': 'ク', 'ｹ': 'ケ', 'ｺ': 'コ',
+    'ｻ': 'サ', 'ｼ': 'シ', 'ｽ': 'ス', 'ｾ': 'セ', 'ｿ': 'ソ',
+    'ﾀ': 'タ', 'ﾁ': 'チ', 'ﾂ': 'ツ', 'ﾃ': 'テ', 'ﾄ': 'ト',
+    'ﾅ': 'ナ', 'ﾆ': 'ニ', 'ﾇ': 'ヌ', 'ﾈ': 'ネ', 'ノ': 'ノ',
+    'ﾊ': 'ハ', 'ﾋ': 'ヒ', 'ﾌ': 'フ', 'ﾍ': 'ヘ', 'ﾎ': 'ホ',
+    'ﾏ': 'マ', 'ﾐ': 'ミ', 'ﾑ': 'ム', 'ﾒ': 'メ', 'ﾓ': 'モ',
+    'ﾔ': 'ヤ', 'ﾕ': 'ユ', 'ヨ': 'ヨ',
+    'ﾗ': 'ラ', 'ﾘ': 'リ', 'ﾙ': 'ル', 'ﾚ': 'レ', 'ﾛ': 'ロ',
+    'ﾜ': 'ワ', 'ｦ': 'ヲ', 'ﾝ': 'ン',
+    'ｧ': 'ァ', 'ｨ': 'ィ', 'ｩ': 'ゥ', 'ｪ': 'ェ', 'ｫ': 'ォ',
+    'ｯ': 'ッ', 'ｬ': 'ャ', 'ｭ': 'ュ', 'ｮ': 'ョ'
+  };
+  const reg = new RegExp(Object.keys(kanaMap).join('|'), 'g');
+  return kana.replace(reg, (match) => kanaMap[match] || match);
+};
+
+// ① 社会保険 事業所整理記号（数字2桁-カタカナ）の自動整形
+export const formatOfficeSymbol = (input: string): string => {
+  if (!input) return '';
+  let s = toHalfWidth(input).trim();
+  s = toFullWidthKana(s);
+  // 数字1〜2桁 + ハイフン等 + カタカナ の場合（例: 13トカ, 13-トカ, 1トカ -> 13-トカ, 01-トカ）
+  s = s.replace(/^([0-9]{1,2})\s*[-－ー―]?\s*([ァ-ヶー]+)$/, (_, num, kana) => {
+    return `${num.padStart(2, '0')}-${kana}`;
+  });
+  return s;
+};
+
+// ② 社会保険 事業所番号（4〜5桁半角数字）の自動整形
+export const formatOfficeNumber = (input: string): string => {
+  if (!input) return '';
+  return toHalfWidth(input).replace(/[^0-9]/g, '').slice(0, 5);
+};
+
+// ③ 雇用保険 適用事業所番号（4桁-6桁-1桁）の自動整形
+export const formatEmploymentInsuranceNumber = (input: string): string => {
+  if (!input) return '';
+  const digits = toHalfWidth(input).replace(/[^0-9]/g, '').slice(0, 11);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 10) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 10)}-${digits.slice(10, 11)}`;
+};
+
+// ④ 労働保険番号（2桁-1桁-2桁-6桁-3桁）の自動整形
+export const formatLaborInsuranceNumber = (input: string): string => {
+  if (!input) return '';
+  const digits = toHalfWidth(input).replace(/[^0-9]/g, '').slice(0, 14);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 3) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  if (digits.length <= 5) return `${digits.slice(0, 2)}-${digits.slice(2, 3)}-${digits.slice(3)}`;
+  if (digits.length <= 11) return `${digits.slice(0, 2)}-${digits.slice(2, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 3)}-${digits.slice(3, 5)}-${digits.slice(5, 11)}-${digits.slice(11, 14)}`;
+};
+
 export default function CompanySettingsDashboard() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1388,6 +1464,15 @@ export default function CompanySettingsDashboard() {
         console.warn('company_master_settings sync:', cmsErr);
       }
 
+      // 🏛️ 社会保険・雇用保険・労働保険マスタの最終正規化（念押し自動補正）
+      const cleanInsurance = {
+        shakai_hoken_office_symbol: formatOfficeSymbol(insuranceMaster.shakai_hoken_office_symbol),
+        shakai_hoken_office_number: formatOfficeNumber(insuranceMaster.shakai_hoken_office_number),
+        employment_insurance_office_number: formatEmploymentInsuranceNumber(insuranceMaster.employment_insurance_office_number),
+        labor_insurance_number: formatLaborInsuranceNumber(insuranceMaster.labor_insurance_number)
+      };
+      setInsuranceMaster(cleanInsurance);
+
       // 3. tenants テーブルへの更新（段階的フォールバックで400エラー完全回避）
       let savedToTenants = false;
       try {
@@ -1410,12 +1495,12 @@ export default function CompanySettingsDashboard() {
           position_settings: positions,
           // 🏛️ 社会保険・雇用保険・労働保険 事業所マスタ（SSOT一元化）
           shakai_hoken_settings: {
-            office_symbol: insuranceMaster.shakai_hoken_office_symbol,
-            office_number: insuranceMaster.shakai_hoken_office_number
+            office_symbol: cleanInsurance.shakai_hoken_office_symbol,
+            office_number: cleanInsurance.shakai_hoken_office_number
           },
-          shakai_hoken_office_number: insuranceMaster.shakai_hoken_office_number,
-          employment_insurance_office_number: insuranceMaster.employment_insurance_office_number,
-          labor_insurance_number: insuranceMaster.labor_insurance_number
+          shakai_hoken_office_number: cleanInsurance.shakai_hoken_office_number,
+          employment_insurance_office_number: cleanInsurance.employment_insurance_office_number,
+          labor_insurance_number: cleanInsurance.labor_insurance_number
         };
         const { error: fullErr } = await supabase.from('tenants').update(fullPayload).eq('id', tenantId);
         if (!fullErr) savedToTenants = true;
@@ -1433,12 +1518,12 @@ export default function CompanySettingsDashboard() {
             payroll_common_settings: { ...payrollSettings, prefecture_code: autoPrefCode },
             employment_rules_text: employmentRulesText,
             shakai_hoken_settings: {
-              office_symbol: insuranceMaster.shakai_hoken_office_symbol,
-              office_number: insuranceMaster.shakai_hoken_office_number
+              office_symbol: cleanInsurance.shakai_hoken_office_symbol,
+              office_number: cleanInsurance.shakai_hoken_office_number
             },
-            shakai_hoken_office_number: insuranceMaster.shakai_hoken_office_number,
-            employment_insurance_office_number: insuranceMaster.employment_insurance_office_number,
-            labor_insurance_number: insuranceMaster.labor_insurance_number
+            shakai_hoken_office_number: cleanInsurance.shakai_hoken_office_number,
+            employment_insurance_office_number: cleanInsurance.employment_insurance_office_number,
+            labor_insurance_number: cleanInsurance.labor_insurance_number
           };
           await supabase.from('tenants').update(fbPayload).eq('id', tenantId);
         } catch (e) {}
@@ -1447,7 +1532,7 @@ export default function CompanySettingsDashboard() {
       // 🛡️ 自社専用LocalStorageへ即時二重永続化（SSOT保護）
       if (tenantId) {
         try {
-          localStorage.setItem(`company_insurance_settings_${tenantId}`, JSON.stringify(insuranceMaster));
+          localStorage.setItem(`company_insurance_settings_${tenantId}`, JSON.stringify(cleanInsurance));
         } catch (e) {}
       }
 
@@ -3345,12 +3430,31 @@ export default function CompanySettingsDashboard() {
                 </div>
               </div>
 
-              {/* 陸遜（CX・顧客目線）の「何のこっちゃ？を1秒で解消する」手元書類チェックガイド */}
-              <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 text-xs space-y-3">
-                <div className="flex items-center gap-2 text-amber-900 font-black text-xs">
-                  <span className="text-base">🔰</span>
-                  <span>【陸遜のあんしんガイド】事業所整理記号や番号って何のこっちゃ？（手元の書類を確認！）</span>
+              {/* 陸遜（CX・顧客目線）の「何のこっちゃ？を1秒で解消する」手元書類チェックガイド ＆ 全角半角自動補正 */}
+              <div className="bg-gradient-to-br from-amber-50/90 via-emerald-50/40 to-indigo-50/40 border border-amber-200/90 rounded-2xl p-4 text-xs space-y-3 shadow-2xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-amber-950 font-black text-xs sm:text-sm">
+                    <span className="text-lg">🔰</span>
+                    <span>【陸遜のあんしんガイド】事業所整理記号や番号って何のこっちゃ？（手元の書類を確認！）</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-emerald-100/90 text-emerald-800 font-bold px-2.5 py-1 rounded-full text-[11px] border border-emerald-300 shadow-2xs">
+                    <span className="animate-pulse">✨</span>
+                    <span>全角・半角・大文字小文字・ハイフンなしOK！すべて自動補正</span>
+                  </div>
                 </div>
+
+                {/* 全角半角・ハイフン不安を完全に解消する案内メッセージ */}
+                <div className="bg-white/95 rounded-xl p-3 border border-emerald-200 text-[11px] text-slate-700 leading-relaxed shadow-2xs">
+                  <div className="font-bold text-emerald-900 flex items-center gap-1.5 mb-1">
+                    <span className="text-sm">💡</span>
+                    <span>「ハイフンは大文字？小文字？」「数字やカナは全角？半角？」と迷う必要はありません！</span>
+                  </div>
+                  <p className="text-slate-600">
+                    どう入力してもシステムが公的規格に合わせて<strong>自動で綺麗な形（半角数字・全角カタカナ・適切なハイフン）に即座に変換</strong>します。<br/>
+                    ハイフンを打つのが面倒な場合は、<strong>数字だけを続けて入力しても自動でハイフンが挿入</strong>されますのでご安心ください。
+                  </p>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] text-amber-950">
                   <div className="bg-white/90 p-3 rounded-xl border border-amber-200/60 shadow-2xs space-y-1">
                     <div className="font-bold text-indigo-900 flex items-center gap-1.5">
@@ -3383,17 +3487,21 @@ export default function CompanySettingsDashboard() {
                       <span>① 社会保険 事業所整理記号</span>
                       <span className="text-[10px] text-indigo-600 font-normal">（年金事務所）</span>
                     </label>
-                    <span className="text-[9px] text-slate-400">例: 13-トカ / 01-イロ</span>
+                    <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded border border-emerald-200">
+                      ✨全角半角・カナ自動補正
+                    </span>
                   </div>
                   <input
                     type="text"
                     value={insuranceMaster.shakai_hoken_office_symbol}
                     onChange={e => setInsuranceMaster(prev => ({ ...prev, shakai_hoken_office_symbol: e.target.value }))}
-                    placeholder="例: 13-トカ（数字2桁-カタカナ）"
+                    onBlur={e => setInsuranceMaster(prev => ({ ...prev, shakai_hoken_office_symbol: formatOfficeSymbol(e.target.value) }))}
+                    placeholder="例: 13-トカ（全角・半角・ひらがなOK）"
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
                   />
-                  <p className="text-[10px] text-slate-500">
-                    ※健康保険・厚生年金資格取得届、被保険者賞与支払届、算定基礎届に自動印字されます。
+                  <p className="text-[10px] text-slate-500 leading-tight">
+                    ※「13トカ」「13とか」「１３－トカ」でも入力完了時に自動で「13-トカ」に整います。<br/>
+                    ※健康保険・厚生年金資格取得届、賞与支払届、算定基礎届に自動印字されます。
                   </p>
                 </div>
 
@@ -3404,16 +3512,20 @@ export default function CompanySettingsDashboard() {
                       <span>② 社会保険 事業所番号</span>
                       <span className="text-[10px] text-indigo-600 font-normal">（年金事務所）</span>
                     </label>
-                    <span className="text-[9px] text-slate-400">例: 12345 (4〜5桁)</span>
+                    <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded border border-emerald-200">
+                      ✨全角でも自動で半角化
+                    </span>
                   </div>
                   <input
                     type="text"
                     value={insuranceMaster.shakai_hoken_office_number}
-                    onChange={e => setInsuranceMaster(prev => ({ ...prev, shakai_hoken_office_number: e.target.value.replace(/[^0-9]/g, '') }))}
-                    placeholder="例: 12345"
+                    onChange={e => setInsuranceMaster(prev => ({ ...prev, shakai_hoken_office_number: formatOfficeNumber(e.target.value) }))}
+                    onBlur={e => setInsuranceMaster(prev => ({ ...prev, shakai_hoken_office_number: formatOfficeNumber(e.target.value) }))}
+                    placeholder="例: 12345 (4〜5桁)"
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
                   />
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-[10px] text-slate-500 leading-tight">
+                    ※全角数字「１２３４５」で入力しても即座に半角数字に整います。<br/>
                     ※年金事務所が付与した4〜5桁の数字。資格取得届や各公的帳票に自動印字されます。
                   </p>
                 </div>
@@ -3425,17 +3537,24 @@ export default function CompanySettingsDashboard() {
                       <span>③ 雇用保険 適用事業所番号</span>
                       <span className="text-[10px] text-emerald-600 font-normal">（ハローワーク）</span>
                     </label>
-                    <span className="text-[9px] text-slate-400">例: 1301-123456-7</span>
+                    <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded border border-emerald-200">
+                      ✨ハイフン自動挿入
+                    </span>
                   </div>
                   <input
                     type="text"
                     value={insuranceMaster.employment_insurance_office_number}
-                    onChange={e => setInsuranceMaster(prev => ({ ...prev, employment_insurance_office_number: e.target.value }))}
-                    placeholder="例: 1301-123456-7（4桁-6桁-1桁）"
+                    onChange={e => {
+                      const val = toHalfWidth(e.target.value).replace(/[^0-9-]/g, '').slice(0, 13);
+                      setInsuranceMaster(prev => ({ ...prev, employment_insurance_office_number: val }));
+                    }}
+                    onBlur={e => setInsuranceMaster(prev => ({ ...prev, employment_insurance_office_number: formatEmploymentInsuranceNumber(e.target.value) }))}
+                    placeholder="例: 1301-123456-7（数字11桁のみでもOK）"
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
                   />
-                  <p className="text-[10px] text-slate-500">
-                    ※ハローワーク交付の適用事業所番号。雇用保険資格取得届、離職票、喪失届に自動印字されます。
+                  <p className="text-[10px] text-slate-500 leading-tight">
+                    ※ハイフンなしで数字だけ「13011234567」と打っても自動でハイフンが入ります。<br/>
+                    ※雇用保険資格取得届、離職票、喪失届に自動印字されます。
                   </p>
                 </div>
 
@@ -3446,16 +3565,23 @@ export default function CompanySettingsDashboard() {
                       <span>④ 労働保険番号</span>
                       <span className="text-[10px] text-purple-600 font-normal">（労働基準監督署）</span>
                     </label>
-                    <span className="text-[9px] text-slate-400">例: 13-1-01-123456-000</span>
+                    <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded border border-emerald-200">
+                      ✨ハイフン自動挿入
+                    </span>
                   </div>
                   <input
                     type="text"
                     value={insuranceMaster.labor_insurance_number}
-                    onChange={e => setInsuranceMaster(prev => ({ ...prev, labor_insurance_number: e.target.value }))}
-                    placeholder="例: 13-1-01-123456-000（計14桁）"
+                    onChange={e => {
+                      const val = toHalfWidth(e.target.value).replace(/[^0-9-]/g, '').slice(0, 18);
+                      setInsuranceMaster(prev => ({ ...prev, labor_insurance_number: val }));
+                    }}
+                    onBlur={e => setInsuranceMaster(prev => ({ ...prev, labor_insurance_number: formatLaborInsuranceNumber(e.target.value) }))}
+                    placeholder="例: 13-1-01-123456-000（数字14桁のみでもOK）"
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-bold font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
                   />
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-[10px] text-slate-500 leading-tight">
+                    ※数字だけ続けて「13101123456000」と打っても自動でハイフンが入ります。<br/>
                     ※労働保険概算・確定保険料申告書などに自動反映されます。
                   </p>
                 </div>
