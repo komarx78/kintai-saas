@@ -45,6 +45,72 @@ const ShiftAdminDashboard: React.FC = () => {
 
   // ⚙️ 運用基本設定アコーディオンの開閉状態
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  // 🧪 検証用ダミー希望シフトの一括投入（AI自動生成テスト用）
+  const handleSeedDummyRequests = async () => {
+    if (!window.confirm('今週（9/21〜9/27）の検証用ダミー希望シフト（全スタッフ分×7日分）を一括投入します。よろしいですか？\n※既存の今週の希望シフトと下書きシフトは一旦クリアされます。')) return;
+    setIsSeeding(true);
+    try {
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
+      if (!tenantId) return;
+
+      let { data: staffList } = await supabase.from('users').select('id, name').eq('tenant_id', tenantId);
+      if (!staffList || staffList.length === 0) {
+        alert('スタッフが登録されていません。');
+        return;
+      }
+
+      const startDateStr = format(weekStart, 'yyyy-MM-dd');
+      const endDateStr = format(weekEnd, 'yyyy-MM-dd');
+
+      // 今週の既存希望＆下書きシフトをクリア
+      await supabase.from('advanced_shift_requests').delete().eq('tenant_id', tenantId).gte('target_date', startDateStr).lte('target_date', endDateStr);
+      await supabase.from('advanced_shifts').delete().eq('tenant_id', tenantId).eq('status', 'draft').gte('target_date', startDateStr).lte('target_date', endDateStr);
+
+      // ホール・キッチンの時間帯パターン
+      const timeSlots = [
+        { start: '08:00', end: '14:00', role: 'ホール' },
+        { start: '10:00', end: '17:00', role: 'ホール' },
+        { start: '17:00', end: '21:00', role: 'ホール' },
+        { start: '09:00', end: '15:00', role: 'キッチン' },
+        { start: '12:00', end: '18:00', role: 'キッチン' },
+        { start: '17:00', end: '21:00', role: 'キッチン' },
+        { start: '10:00', end: '19:00', role: 'ホール' },
+      ];
+
+      const dummyRequests: any[] = [];
+      for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+        const targetDayStr = format(addDays(weekStart, dayIdx), 'yyyy-MM-dd');
+        staffList.forEach((staff, sIdx) => {
+          const slot = timeSlots[sIdx % timeSlots.length];
+          dummyRequests.push({
+            tenant_id: tenantId,
+            user_id: staff.id,
+            target_date: targetDayStr,
+            available_start_time: slot.start,
+            available_end_time: slot.end,
+            preferred_role: slot.role,
+            status: 'submitted'
+          });
+        });
+      }
+
+      if (dummyRequests.length > 0) {
+        const { error: insErr } = await supabase.from('advanced_shift_requests').insert(dummyRequests);
+        if (insErr) throw insErr;
+      }
+
+      alert(`🎉 スタッフ${staffList.length}名分のダミー希望シフト（今週7日分）を投入しました！\n次にカード②の「⚡ 今週のシフトをAI自動作成する」を押してAI割り振りをテストしてください！`);
+      setGenerationResult(null);
+      await fetchStats();
+    } catch (err: any) {
+      console.error('ダミー投入エラー:', err);
+      alert('ダミー投入に失敗しました: ' + err.message);
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   // 1. シフトデータの完全リセット（初期化）
   const handleResetAllShiftData = async () => {
@@ -581,6 +647,20 @@ const ShiftAdminDashboard: React.FC = () => {
                   <span>提出された希望一覧を確認する</span>
                 </button>
                 
+                <button
+                  onClick={handleSeedDummyRequests}
+                  disabled={isSeeding}
+                  className="w-full bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold py-2.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-amber-300 shadow-2xs"
+                  title="全スタッフの今週7日分の希望シフトを一発で投入してAI生成をテストできます"
+                >
+                  {isSeeding ? (
+                    <div className="animate-spin w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full"></div>
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600 fill-amber-600" />
+                  )}
+                  <span>{isSeeding ? 'ダミー希望を投入中...' : '🧪 検証用ダミー希望を一括投入する'}</span>
+                </button>
+
                 <button
                   onClick={handleToggleLock}
                   disabled={isSavingLock}
