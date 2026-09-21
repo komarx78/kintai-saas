@@ -414,5 +414,231 @@ export function generateAutoShift(
   return generatedShifts;
 }
 
+export interface RebalanceSwapLog {
+  shiftId: string;
+  targetDate: string;
+  timeRange: string;
+  role: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+}
+
+export interface RebalanceResult {
+  updatedShifts: { id: string; user_id: string }[];
+  swapLogs: RebalanceSwapLog[];
+  unassignedRemaining: number;
+}
+
+/**
+ * 稼働平準化（シフト・リバランサー）
+ * 多すぎる（過密な）スタッフのドラフトシフトから、未配置（または少なすぎる）スタッフへ安全にシフトをバトンタッチ
+ */
+export function rebalanceDraftShifts(
+  allPeriodShifts: AdvancedShift[],
+  rawRequests: ShiftRequest[],
+  users: { id: string; name: string }[],
+  employeeSettings: ShiftEmployeeSetting[] = []
+): RebalanceResult {
+  const updatedShifts: { id: string; user_id: string }[] = [];
+  const swapLogs: RebalanceSwapLog[] = [];
+  const userMap = new Map(users.map(u => [u.id, u.name]));
+  const empMap = new Map(employeeSettings.map(e => [e.user_id, e]));
+
+  // ドラフトシフトのコピー（変更追跡用）
+  const shiftsCopy = allPeriodShifts.map(s => ({ ...s }));
+
+  // 各スタッフの現在の稼働日数を集計するヘルパー関数
+  const getAssignedDaysMap = () => {
+    const map = new Map<string, number>();
+    users.forEach(u => map.set(u.id, 0));
+    
+    // 日付ユニークで集計
+    const userDatesMap = new Map<string, Set<string>>();
+    shiftsCopy.forEach(s => {
+      if (!userDatesMap.has(s.user_id)) userDatesMap.set(s.user_id, new Set());
+      userDatesMap.get(s.user_id)!.add(s.target_date);
+    });
+    userDatesMap.forEach((dates, uid) => {
+      map.set(uid, dates.size);
+    });
+    return map;
+  };
+
+  let daysMap = getAssignedDaysMap();
+
+  // 1. 未配置スタッフ（希望を出しているのに0日）を抽出
+  const unassignedReceivers = users.filter(u => {
+    const hasValidReq = rawRequests.some(r => r.user_id === u.id && r.available_start_time && r.available_end_time);
+    return hasValidReq && (daysMap.get(u.id) || 0) === 0;
+  });
+
+  // 未配置スタッフへの救済譲渡ループ
+  for (const receiver of unassignedReceivers) {
+    const receiverReqs = rawRequests.filter(r => 
+      r.user_id === receiver.id && r.available_start_time && r.available_end_time
+    );
+
+    for (const req of receiverReqs) {
+      if ((daysMap.get(receiver.id) || 0) >= 2) break; // 2日確保できたら一旦OK
+
+      // その日（req.target_date）にすでにレシーバーがシフトに入っていないか確認
+      const receiverAlreadyAssignedToday = shiftsCopy.some(s => s.user_id === receiver.id && s.target_date === req.target_date);
+      if (receiverAlreadyAssignedToday) continue;
+
+      // その日のドラフトシフトの中で、最も稼働日数が多いドナー（4日以上）を探す
+      const dayDraftShifts = shiftsCopy.filter(s => 
+        s.target_date === req.target_date && 
+        s.status === 'draft' && 
+        s.user_id !== receiver.id
+      );
+
+      // ドナーの日数が多い順にソート
+      dayDraftShifts.sort((a, b) => (daysMap.get(b.user_id) || 0) - (daysMap.get(a.user_id) || 0));
+
+      for (const targetShift of dayDraftShifts) {
+        if (!targetShift.id) continue;
+        const donorId = targetShift.user_id;
+        const donorDays = daysMap.get(donorId) || 0;
+        const receiverDays = daysMap.get(receiver.id) || 0;
+
+        // ドナーがレシーバーより2日以上多く持っている場合のみ譲渡可能（逆転防止）
+        if (donorDays <= receiverDays + 1) continue;
+
+        // 役割適合性チェック
+        const emp = empMap.get(receiver.id);
+        let roleAllowed = true;
+        if (emp) {
+          if (emp.default_role && emp.default_role !== targetShift.role) {
+            if (emp.roles) {
+              const rolesList = Array.isArray(emp.roles) ? emp.roles : [emp.roles];
+              if (!rolesList.includes(targetShift.role)) roleAllowed = false;
+            } else {
+              roleAllowed = false;
+            }
+          }
+        }
+        if (req.preferred_role && req.preferred_role !== targetShift.role) roleAllowed = false;
+        if (!roleAllowed) continue;
+
+        // 時間適合性チェック（希望時間内にシフトが収まっているか）
+        const [reqSh, reqSm = 0] = req.available_start_time!.split(':').map(Number);
+        const [reqEh, reqEm = 0] = req.available_end_time!.split(':').map(Number);
+        const [shiftSh, shiftSm = 0] = targetShift.start_time.split(':').map(Number);
+        const [shiftEh, shiftEm = 0] = targetShift.end_time.split(':').map(Number);
+
+        const reqStartMin = reqSh * 60 + reqSm;
+        const reqEndMin = reqEh * 60 + reqEm;
+        const shiftStartMin = shiftSh * 60 + shiftSm;
+        const shiftEndMin = shiftEh * 60 + shiftEm;
+
+        if (shiftStartMin >= reqStartMin && shiftEndMin <= reqEndMin) {
+          // バトンタッチ実行！
+          const donorName = userMap.get(donorId) || '不明';
+          targetShift.user_id = receiver.id;
+
+          updatedShifts.push({ id: targetShift.id, user_id: receiver.id });
+          swapLogs.push({
+            shiftId: targetShift.id,
+            targetDate: targetShift.target_date,
+            timeRange: `${targetShift.start_time.substring(0, 5)}〜${targetShift.end_time.substring(0, 5)}`,
+            role: targetShift.role,
+            fromUserId: donorId,
+            fromUserName: donorName,
+            toUserId: receiver.id,
+            toUserName: receiver.name
+          });
+
+          daysMap = getAssignedDaysMap();
+          break; // この希望日のマッチング完了
+        }
+      }
+    }
+  }
+
+  // 2. さらに偏りが大きい場合（5日以上の過密スタッフから、1〜2日の少なめスタッフへ平準化）
+  const allReceivers = users.filter(u => {
+    const hasValidReq = rawRequests.some(r => r.user_id === u.id && r.available_start_time && r.available_end_time);
+    return hasValidReq && (daysMap.get(u.id) || 0) <= 2;
+  });
+
+  for (const receiver of allReceivers) {
+    if ((daysMap.get(receiver.id) || 0) >= 3) continue;
+
+    const receiverReqs = rawRequests.filter(r => 
+      r.user_id === receiver.id && r.available_start_time && r.available_end_time
+    );
+
+    for (const req of receiverReqs) {
+      if ((daysMap.get(receiver.id) || 0) >= 3) break;
+
+      const receiverAlreadyAssignedToday = shiftsCopy.some(s => s.user_id === receiver.id && s.target_date === req.target_date);
+      if (receiverAlreadyAssignedToday) continue;
+
+      const dayDraftShifts = shiftsCopy.filter(s => 
+        s.target_date === req.target_date && 
+        s.status === 'draft' && 
+        s.user_id !== receiver.id &&
+        (daysMap.get(s.user_id) || 0) >= 5 // 5日以上の過密スタッフのみ対象
+      );
+
+      dayDraftShifts.sort((a, b) => (daysMap.get(b.user_id) || 0) - (daysMap.get(a.user_id) || 0));
+
+      for (const targetShift of dayDraftShifts) {
+        if (!targetShift.id) continue;
+        const donorId = targetShift.user_id;
+        const donorDays = daysMap.get(donorId) || 0;
+        const receiverDays = daysMap.get(receiver.id) || 0;
+
+        if (donorDays <= receiverDays + 2) continue;
+
+        // 時間適合性チェック
+        const [reqSh, reqSm = 0] = req.available_start_time!.split(':').map(Number);
+        const [reqEh, reqEm = 0] = req.available_end_time!.split(':').map(Number);
+        const [shiftSh, shiftSm = 0] = targetShift.start_time.split(':').map(Number);
+        const [shiftEh, shiftEm = 0] = targetShift.end_time.split(':').map(Number);
+
+        const reqStartMin = reqSh * 60 + reqSm;
+        const reqEndMin = reqEh * 60 + reqEm;
+        const shiftStartMin = shiftSh * 60 + shiftSm;
+        const shiftEndMin = shiftEh * 60 + shiftEm;
+
+        if (shiftStartMin >= reqStartMin && shiftEndMin <= reqEndMin) {
+          const donorName = userMap.get(donorId) || '不明';
+          targetShift.user_id = receiver.id;
+
+          updatedShifts.push({ id: targetShift.id, user_id: receiver.id });
+          swapLogs.push({
+            shiftId: targetShift.id,
+            targetDate: targetShift.target_date,
+            timeRange: `${targetShift.start_time.substring(0, 5)}〜${targetShift.end_time.substring(0, 5)}`,
+            role: targetShift.role,
+            fromUserId: donorId,
+            fromUserName: donorName,
+            toUserId: receiver.id,
+            toUserName: receiver.name
+          });
+
+          daysMap = getAssignedDaysMap();
+          break;
+        }
+      }
+    }
+  }
+
+  // 残存未配置数
+  const unassignedRemaining = users.filter(u => {
+    const hasValidReq = rawRequests.some(r => r.user_id === u.id && r.available_start_time && r.available_end_time);
+    return hasValidReq && (daysMap.get(u.id) || 0) === 0;
+  }).length;
+
+  return {
+    updatedShifts,
+    swapLogs,
+    unassignedRemaining
+  };
+}
+
 
 

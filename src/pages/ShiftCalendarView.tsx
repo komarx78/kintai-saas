@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { generateAutoShift } from '../lib/shiftAlgorithm';
+import { generateAutoShift, rebalanceDraftShifts } from '../lib/shiftAlgorithm';
 import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 
@@ -46,6 +46,7 @@ const ShiftCalendarView: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isRebalancing, setIsRebalancing] = useState(false);
 
   useEffect(() => {
     fetchSettingsAndData();
@@ -349,6 +350,69 @@ const ShiftCalendarView: React.FC = () => {
     }
   };
 
+  const handleRebalanceShifts = async () => {
+    if (isRebalancing) return;
+    setIsRebalancing(true);
+    try {
+      const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
+      if (!tenantIdData) return;
+
+      const { data: empSettingsData } = await supabase
+        .from('shift_employee_settings')
+        .select('*')
+        .eq('tenant_id', tenantIdData);
+
+      // 表示期間内のドラフトシフトのみを対象に平準化
+      const draftShifts = shifts.filter(s => s.status === 'draft');
+      if (draftShifts.length === 0) {
+        alert('現在、調整可能な下書き（ドラフト）シフトがありません。\n先に「⚡ AI自動割り当て」を実行してください。');
+        setIsRebalancing(false);
+        return;
+      }
+
+      const result = rebalanceDraftShifts(
+        shifts.filter(s => s.status !== 'request'), // 実働シフト（確定＋ドラフト）
+        rawRequests,
+        users,
+        empSettingsData || []
+      );
+
+      if (result.updatedShifts.length === 0) {
+        alert('ℹ️ すでに全員のシフトが均等に割り振られているか、希望条件に合致する交代可能な枠がありませんでした。');
+        setIsRebalancing(false);
+        return;
+      }
+
+      // Supabaseの advanced_shifts を更新
+      for (const updateItem of result.updatedShifts) {
+        const { error: updErr } = await supabase
+          .from('advanced_shifts')
+          .update({ user_id: updateItem.user_id })
+          .eq('id', updateItem.id)
+          .eq('tenant_id', tenantIdData);
+        if (updErr) throw updErr;
+      }
+
+      // レポートメッセージの作成
+      const logSummary = result.swapLogs.map(log => 
+        `・${format(new Date(log.targetDate), 'M/d(E)', { locale: ja })} ${log.timeRange} [${log.role}]:\n   ${log.fromUserName} ➔ ${log.toUserName} へバトンタッチ`
+      ).join('\n');
+
+      const remainingMsg = result.unassignedRemaining === 0 
+        ? '🎉 未配置スタッフが0名になり、全員均等になりました！'
+        : `⚠️ 残り未配置スタッフ: ${result.unassignedRemaining}名（希望枠の不足等により交代できず）`;
+
+      alert(`⚖️ AI稼働平準化が完了しました！（${result.updatedShifts.length}件のシフトを自動調整）\n\n【交代内容】\n${logSummary}\n\n${remainingMsg}`);
+
+      await fetchSettingsAndData();
+    } catch (err: any) {
+      console.error('リバランスエラー:', err);
+      alert('平準化処理中にエラーが発生しました: ' + (err.message || err));
+    } finally {
+      setIsRebalancing(false);
+    }
+  };
+
   let startDate: Date, endDate: Date;
   if (displayPeriod === '1day') {
     startDate = baseDate;
@@ -604,13 +668,23 @@ const ShiftCalendarView: React.FC = () => {
                 </div>
               </div>
             </div>
-            <button 
-              onClick={() => setIsWorkloadPanelOpen(true)}
-              className="shrink-0 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm hover:shadow cursor-pointer flex items-center gap-1.5 self-start md:self-center"
-            >
-              <Users className="w-4 h-4" />
-              稼働バランス盤で確認する ≫
-            </button>
+            <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+              <button 
+                onClick={handleRebalanceShifts}
+                disabled={isRebalancing}
+                className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all shadow-sm hover:shadow cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Scale className={`w-4 h-4 ${isRebalancing ? 'animate-spin' : ''}`} />
+                <span>{isRebalancing ? '平準化中...' : '⚡ AIで未配置を自動解消'}</span>
+              </button>
+              <button 
+                onClick={() => setIsWorkloadPanelOpen(true)}
+                className="bg-white hover:bg-rose-50 text-rose-800 border border-rose-200 text-xs font-bold px-3 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1"
+              >
+                <Users className="w-3.5 h-3.5 text-rose-600" />
+                バランス盤
+              </button>
+            </div>
           </div>
         )}
 
@@ -618,7 +692,7 @@ const ShiftCalendarView: React.FC = () => {
         <div className="mb-4 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden transition-all">
           <div 
             onClick={() => setIsWorkloadPanelOpen(!isWorkloadPanelOpen)}
-            className="p-3 sm:px-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors select-none"
+            className="p-3 sm:px-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors select-none flex-wrap gap-2"
           >
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-xl text-white shadow-xs ${unassignedStaffList.length > 0 ? 'bg-amber-500' : 'bg-indigo-600'}`}>
@@ -647,8 +721,26 @@ const ShiftCalendarView: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-indigo-600 hidden sm:inline">
-                {isWorkloadPanelOpen ? '閉じる' : 'クリックして全スタッフの稼働を見る'}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRebalanceShifts();
+                }}
+                disabled={isRebalancing}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs text-white shadow-sm transition-all cursor-pointer disabled:opacity-50 ${
+                  unassignedStaffList.length > 0
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 animate-pulse shadow-amber-200'
+                    : 'bg-indigo-600 hover:bg-indigo-700'
+                }`}
+                title="多めに入っているスタッフの下書きシフトを、未配置スタッフへ安全に自動バトンタッチして均等化します"
+              >
+                <Scale className={`w-3.5 h-3.5 ${isRebalancing ? 'animate-spin' : ''}`} />
+                <span>{isRebalancing ? '平準化中...' : '⚖️ AIで稼働バランスを自動平準化'}</span>
+              </button>
+
+              <span className="text-xs font-bold text-indigo-600 hidden md:inline ml-2">
+                {isWorkloadPanelOpen ? '閉じる' : '詳細を見る'}
               </span>
               <div className={`p-1.5 rounded-lg bg-slate-100 text-slate-600 transition-transform duration-200 ${isWorkloadPanelOpen ? 'rotate-180' : ''}`}>
                 <ChevronDown className="w-4 h-4" />
