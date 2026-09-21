@@ -5,8 +5,9 @@ import { BonusDocMasterInspector } from './BonusDocMasterInspector';
 import { EmploymentAcquisitionDocMasterInspector } from './EmploymentAcquisitionDocMasterInspector';
 import { EmploymentLossDocMasterInspector } from './EmploymentLossDocMasterInspector';
 import { SpouseDocMasterInspector } from './SpouseDocMasterInspector';
+import { HealthPensionAcquisitionDocMasterInspector } from './HealthPensionAcquisitionDocMasterInspector';
 
-export type PublicDocType = 'employment_acquisition' | 'employment_loss' | 'bonus_report' | 'tax_withholding' | 'spouse_deduction';
+export type PublicDocType = 'employment_acquisition' | 'employment_loss' | 'bonus_report' | 'health_pension_acquisition' | 'tax_withholding' | 'spouse_deduction';
 
 export const OfficialDocMasterInspector: React.FC = () => {
   const [activeDoc, setActiveDoc] = useState<PublicDocType>('spouse_deduction'); // 配偶者控除等をデフォルト表示
@@ -60,6 +61,19 @@ export const OfficialDocMasterInspector: React.FC = () => {
 
           <button
             type="button"
+            onClick={() => setActiveDoc('health_pension_acquisition')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer ${
+              activeDoc === 'health_pension_acquisition'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg ring-2 ring-blue-400/40'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <span className="text-base">🌸</span>
+            <span>日本年金機構 健康保険・厚生年金保険 被保険者資格取得届（コード2200様式）</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveDoc('bonus_report')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer ${
               activeDoc === 'bonus_report'
@@ -98,6 +112,8 @@ export const OfficialDocMasterInspector: React.FC = () => {
         <EmploymentLossDocMasterInspector />
       ) : activeDoc === 'employment_acquisition' ? (
         <EmploymentAcquisitionDocMasterInspector />
+      ) : activeDoc === 'health_pension_acquisition' ? (
+        <HealthPensionAcquisitionDocMasterInspector />
       ) : activeDoc === 'bonus_report' ? (
         <BonusDocMasterInspector />
       ) : (
