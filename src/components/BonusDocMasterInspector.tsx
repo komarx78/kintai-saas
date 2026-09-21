@@ -700,186 +700,157 @@ export const BonusDocMasterInspector: React.FC = () => {
 
               </div>
 
-              {/* 📏 ピッチ（マス目・文字間隔）調整（大幅強化：スライダー＆ボタン＆原本標準2.43%吸着） */}
-              <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-bold text-cyan-300 flex items-center gap-1.5">
-                    <span>📏</span>
-                    <span>マス目・文字間隔（ピッチ / gap %）</span>
-                  </label>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const standardPitch = 2.43;
-                        if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
-                          updateFieldMulti(selectedField.id, { pitch: standardPitch, width: Math.round(standardPitch * 4 * 100) / 100 });
-                        } else {
-                          updateField(selectedField.id, 'pitch', standardPitch);
-                        }
-                      }}
-                      className="px-2 py-0.5 bg-emerald-700/80 hover:bg-emerald-600 active:scale-95 text-emerald-100 rounded text-[10px] font-black border border-emerald-500/60 shadow-xs cursor-pointer transition flex items-center gap-1"
-                      title="原本用紙（コード2265）のマス目枠線（2.43%）に一発吸着"
-                    >
-                      <span>🌟</span>
-                      <span>原本標準(2.43%)</span>
-                    </button>
-                    <span className="text-xs font-mono text-cyan-300 font-black bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800">
-                      {(selectedField.pitch !== undefined ? selectedField.pitch : (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana' ? 2.43 : 2.0)).toFixed(2)}%
-                    </span>
-                  </div>
-                </div>
+              {/* 📏 ピッチ（マス目・文字間隔）調整（雇用保険方式：0.01%精密スライダー ＆ 微調整ボタン） */}
+              {(() => {
+                const currentPitch = selectedField.pitch !== undefined ? selectedField.pitch : (
+                  (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') ? 2.43 :
+                  selectedField.section === 'common_payment' ? 2.70 :
+                  selectedField.section === 'submission' ? 2.40 :
+                  selectedField.id === 'empMyNumber' ? 1.88 :
+                  selectedField.id === 'empInsuranceNumber' ? 2.50 : 2.40
+                );
+                const getStandardPitch = () => {
+                  if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') return 2.43;
+                  if (selectedField.section === 'common_payment') return 2.70;
+                  if (selectedField.section === 'submission') return 2.40;
+                  if (selectedField.id === 'empMyNumber') return 1.88;
+                  if (selectedField.id === 'empInsuranceNumber') return 2.50;
+                  return 2.40;
+                };
 
-                {/* スライダー調整（直感操作：1.0%〜5.0%） */}
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400 font-mono">1.0%</span>
-                  <input
-                    type="range"
-                    min="1.0"
-                    max="5.0"
-                    step="0.02"
-                    value={selectedField.pitch !== undefined ? selectedField.pitch : (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana' ? 2.43 : 2.0)}
-                    onChange={e => {
-                      const newPitch = parseFloat(e.target.value) || 2.43;
-                      if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
-                        updateFieldMulti(selectedField.id, { pitch: newPitch, width: Math.round(newPitch * 4 * 100) / 100 });
-                      } else {
-                        updateField(selectedField.id, 'pitch', newPitch);
-                      }
-                    }}
-                    className="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-900 rounded-lg"
-                  />
-                  <span className="text-[10px] text-slate-400 font-mono">5.0%</span>
-                </div>
+                return (
+                  <div className="bg-slate-800/90 p-3.5 rounded-xl border border-cyan-700/60 shadow-md space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-black text-cyan-300 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                        マス目ピッチ（1マスの幅）:
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const std = getStandardPitch();
+                            if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
+                              updateFieldMulti(selectedField.id, { pitch: std, width: Math.round(std * 4 * 100) / 100 });
+                            } else {
+                              updateField(selectedField.id, 'pitch', std);
+                            }
+                          }}
+                          className="px-2 py-0.5 bg-emerald-700 hover:bg-emerald-600 active:scale-95 text-emerald-100 rounded text-[10px] font-black border border-emerald-500 shadow-xs cursor-pointer transition flex items-center gap-1"
+                          title="原本用紙（コード2265）のマス目枠線に一発吸着"
+                        >
+                          <span>🌟</span>
+                          <span>原本標準({getStandardPitch()}%)</span>
+                        </button>
+                        <span className="font-mono text-xs font-black text-cyan-300 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-700">
+                          {currentPitch.toFixed(2)}% ({(currentPitch * 2.1).toFixed(2)}mm)
+                        </span>
+                      </div>
+                    </div>
 
-                {/* ボタン＆数値直接入力 */}
-                <div className="flex items-center justify-between gap-1 pt-0.5">
-                  {/* 縮小ボタン群 */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const cur = selectedField.pitch !== undefined ? selectedField.pitch : 2.43;
-                        const next = Math.max(0.5, Math.round((cur - 0.5) * 100) / 100);
-                        if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
-                          updateFieldMulti(selectedField.id, { pitch: next, width: Math.round(next * 4 * 100) / 100 });
-                        } else {
-                          updateField(selectedField.id, 'pitch', next);
-                        }
-                      }}
-                      className="px-1.5 py-1 bg-slate-700 hover:bg-slate-600 active:scale-95 rounded text-[10px] font-bold text-slate-200 cursor-pointer"
-                      title="ピッチを大きく縮小 (-0.5%)"
-                    >
-                      -0.5
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const cur = selectedField.pitch !== undefined ? selectedField.pitch : 2.43;
-                        const next = Math.max(0.5, Math.round((cur - 0.1) * 100) / 100);
-                        if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
-                          updateFieldMulti(selectedField.id, { pitch: next, width: Math.round(next * 4 * 100) / 100 });
-                        } else {
-                          updateField(selectedField.id, 'pitch', next);
-                        }
-                      }}
-                      className="px-2 py-1 bg-cyan-700 hover:bg-cyan-600 active:scale-95 rounded text-[11px] font-bold text-white cursor-pointer"
-                      title="ピッチを標準縮小 (-0.1%)"
-                    >
-                      -0.1
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const cur = selectedField.pitch !== undefined ? selectedField.pitch : 2.43;
-                        const next = Math.max(0.5, Math.round((cur - 0.02) * 100) / 100);
-                        if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
-                          updateFieldMulti(selectedField.id, { pitch: next, width: Math.round(next * 4 * 100) / 100 });
-                        } else {
-                          updateField(selectedField.id, 'pitch', next);
-                        }
-                      }}
-                      className="px-1.5 py-1 bg-cyan-900/80 hover:bg-cyan-800 active:scale-95 rounded text-[10px] font-bold text-cyan-200 cursor-pointer border border-cyan-700/50"
-                      title="ピッチを極小微調整 (-0.02%)"
-                    >
-                      -0.02
-                    </button>
-                  </div>
-
-                  {/* 数値直接入力 */}
-                  <div className="flex items-center gap-1">
+                    {/* スライダー調整（0.01%刻み：1.00%〜5.00%） */}
                     <input
-                      type="number"
+                      type="range"
+                      min="1.00"
+                      max="5.00"
                       step="0.01"
-                      min="0.5"
-                      max="10.0"
-                      value={selectedField.pitch !== undefined ? selectedField.pitch : (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana' ? 2.43 : 2.0)}
+                      value={currentPitch}
                       onChange={e => {
-                        const val = parseFloat(e.target.value) || 2.43;
+                        const newPitch = parseFloat(e.target.value) || 2.43;
                         if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
-                          updateFieldMulti(selectedField.id, { pitch: val, width: Math.round(val * 4 * 100) / 100 });
+                          updateFieldMulti(selectedField.id, { pitch: newPitch, width: Math.round(newPitch * 4 * 100) / 100 });
                         } else {
-                          updateField(selectedField.id, 'pitch', val);
+                          updateField(selectedField.id, 'pitch', newPitch);
                         }
                       }}
-                      className="w-16 bg-slate-900 border border-cyan-700/60 rounded px-1 py-1 text-center text-xs font-mono font-bold text-cyan-300 focus:outline-hidden focus:ring-1 focus:ring-cyan-400"
+                      className="w-full accent-cyan-400 cursor-pointer h-2 bg-slate-900 rounded-lg"
                     />
-                    <span className="text-[10px] text-cyan-400 font-bold">%</span>
-                  </div>
 
-                  {/* 拡大ボタン群 */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const cur = selectedField.pitch !== undefined ? selectedField.pitch : 2.43;
-                        const next = Math.min(10.0, Math.round((cur + 0.02) * 100) / 100);
-                        if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
-                          updateFieldMulti(selectedField.id, { pitch: next, width: Math.round(next * 4 * 100) / 100 });
-                        } else {
-                          updateField(selectedField.id, 'pitch', next);
-                        }
-                      }}
-                      className="px-1.5 py-1 bg-cyan-900/80 hover:bg-cyan-800 active:scale-95 rounded text-[10px] font-bold text-cyan-200 cursor-pointer border border-cyan-700/50"
-                      title="ピッチを極小微調整 (+0.02%)"
-                    >
-                      +0.02
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const cur = selectedField.pitch !== undefined ? selectedField.pitch : 2.43;
-                        const next = Math.min(10.0, Math.round((cur + 0.1) * 100) / 100);
-                        if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
-                          updateFieldMulti(selectedField.id, { pitch: next, width: Math.round(next * 4 * 100) / 100 });
-                        } else {
-                          updateField(selectedField.id, 'pitch', next);
-                        }
-                      }}
-                      className="px-2 py-1 bg-cyan-700 hover:bg-cyan-600 active:scale-95 rounded text-[11px] font-bold text-white cursor-pointer"
-                      title="ピッチを標準拡大 (+0.1%)"
-                    >
-                      +0.1
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const cur = selectedField.pitch !== undefined ? selectedField.pitch : 2.43;
-                        const next = Math.min(10.0, Math.round((cur + 0.5) * 100) / 100);
-                        if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
-                          updateFieldMulti(selectedField.id, { pitch: next, width: Math.round(next * 4 * 100) / 100 });
-                        } else {
-                          updateField(selectedField.id, 'pitch', next);
-                        }
-                      }}
-                      className="px-1.5 py-1 bg-slate-700 hover:bg-slate-600 active:scale-95 rounded text-[10px] font-bold text-slate-200 cursor-pointer"
-                      title="ピッチを大きく拡大 (+0.5%)"
-                    >
-                      +0.5
-                    </button>
+                    {/* ワンクリック微調整ボタン群（雇用保険方式：-0.05, -0.01, 直接入力, +0.01, +0.05） */}
+                    <div className="flex items-center justify-between gap-1 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = Math.max(0.5, Math.round((currentPitch - 0.05) * 100) / 100);
+                          if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
+                            updateFieldMulti(selectedField.id, { pitch: next, width: Math.round(next * 4 * 100) / 100 });
+                          } else {
+                            updateField(selectedField.id, 'pitch', next);
+                          }
+                        }}
+                        className="px-2 py-1 bg-slate-700 hover:bg-slate-600 active:scale-95 text-slate-200 border border-slate-600 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                        title="0.05% 狭くする"
+                      >
+                        -0.05
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = Math.max(0.5, Math.round((currentPitch - 0.01) * 100) / 100);
+                          if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
+                            updateFieldMulti(selectedField.id, { pitch: next, width: Math.round(next * 4 * 100) / 100 });
+                          } else {
+                            updateField(selectedField.id, 'pitch', next);
+                          }
+                        }}
+                        className="px-2 py-1 bg-slate-700 hover:bg-slate-600 active:scale-95 text-slate-200 border border-slate-600 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                        title="0.01% 狭くする"
+                      >
+                        -0.01
+                      </button>
+
+                      {/* 数値直接入力 */}
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.5"
+                        max="10.0"
+                        value={currentPitch}
+                        onChange={e => {
+                          const val = parseFloat(e.target.value) || 2.43;
+                          if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
+                            updateFieldMulti(selectedField.id, { pitch: val, width: Math.round(val * 4 * 100) / 100 });
+                          } else {
+                            updateField(selectedField.id, 'pitch', val);
+                          }
+                        }}
+                        className="w-16 bg-slate-900 border border-cyan-700/60 rounded-lg px-1 py-1 text-center text-xs font-mono font-bold text-cyan-300 focus:outline-hidden focus:ring-1 focus:ring-cyan-400"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = Math.min(6.0, Math.round((currentPitch + 0.01) * 100) / 100);
+                          if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
+                            updateFieldMulti(selectedField.id, { pitch: next, width: Math.round(next * 4 * 100) / 100 });
+                          } else {
+                            updateField(selectedField.id, 'pitch', next);
+                          }
+                        }}
+                        className="px-2 py-1 bg-slate-700 hover:bg-slate-600 active:scale-95 text-slate-200 border border-slate-600 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                        title="0.01% 広くする"
+                      >
+                        +0.01
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = Math.min(6.0, Math.round((currentPitch + 0.05) * 100) / 100);
+                          if (selectedField.id === 'symbolDigits' || selectedField.id === 'symbolKana') {
+                            updateFieldMulti(selectedField.id, { pitch: next, width: Math.round(next * 4 * 100) / 100 });
+                          } else {
+                            updateField(selectedField.id, 'pitch', next);
+                          }
+                        }}
+                        className="px-2 py-1 bg-slate-700 hover:bg-slate-600 active:scale-95 text-slate-200 border border-slate-600 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                        title="0.05% 広くする"
+                      >
+                        +0.05
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
               <div className="text-[10px] text-slate-400 bg-slate-950/60 p-2 rounded-xl border border-slate-800/80">
                 💡 PCの矢印キー（↑ ↓ ← →）で選択項目を直接移動できます（Shift+矢印で大きく移動）
@@ -1084,9 +1055,13 @@ export const BonusDocMasterInspector: React.FC = () => {
                     );
                   }
 
-                  const isCentered = f.section === 'submission' || f.section === 'common_payment';
-                  const pitchVal = f.pitch !== undefined ? f.pitch : 0;
-                  const textChars = String(f.example).split('');
+                  const isDatePart = f.section === 'submission' || f.section === 'common_payment';
+                  const pitchVal = f.pitch !== undefined ? f.pitch : (
+                    isDatePart ? (f.section === 'common_payment' ? 2.70 : 2.40) : 0
+                  );
+                  // 2マス日付枠で1文字の場合は右マスに寄せるため先頭に空白
+                  const displayStr = isDatePart && String(f.example).length === 1 ? ` ${f.example}` : String(f.example);
+                  const textChars = displayStr.split('');
 
                   return (
                     <div
@@ -1101,7 +1076,7 @@ export const BonusDocMasterInspector: React.FC = () => {
                         position: 'absolute',
                         left: `${f.x}%`,
                         top: `${f.y}%`,
-                        width: f.width ? `${f.width}%` : 'auto',
+                        width: pitchVal > 0 ? 'max-content' : (f.width ? `${f.width}%` : 'auto'),
                         fontSize: `${f.fontSize * 0.115}cqi`,
                         fontWeight: 'bold',
                         cursor: isDraggingThis ? 'grabbing' : 'grab',
@@ -1110,11 +1085,7 @@ export const BonusDocMasterInspector: React.FC = () => {
                         pointerEvents: 'auto',
                         lineHeight: 1,
                         display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: isCentered ? 'center' : 'flex-start',
-                        gap: pitchVal > 0 ? `${pitchVal * 0.35}cqi` : undefined,
-                        letterSpacing: pitchVal > 0 ? `${pitchVal * 0.08}em` : undefined,
-                        textAlign: isCentered ? 'center' : 'left'
+                        alignItems: 'center'
                       }}
                       className={`px-0.5 py-0.2 rounded transition-all ${
                         isSelected
@@ -1123,11 +1094,29 @@ export const BonusDocMasterInspector: React.FC = () => {
                       }`}
                       title={`${f.name} (クリックして選択・十字キーまたはドラッグで移動)`}
                     >
-                      {textChars.map((char, cIdx) => (
-                        <span key={cIdx} className="inline-block shrink-0">
-                          {char}
-                        </span>
-                      ))}
+                      {pitchVal > 0 ? (
+                        <div className="flex items-center pointer-events-none">
+                          {textChars.map((char, cIdx) => (
+                            <span
+                              key={cIdx}
+                              style={{
+                                display: 'inline-block',
+                                width: `${pitchVal}cqi`,
+                                fontSize: `${f.fontSize * 0.115}cqi`,
+                                fontWeight: 900,
+                                textAlign: 'center',
+                                fontFamily: 'monospace',
+                                lineHeight: 1,
+                                flexShrink: 0
+                              }}
+                            >
+                              {char}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span>{f.example}</span>
+                      )}
                     </div>
                   );
                 })}
@@ -1172,7 +1161,7 @@ export const BonusDocMasterInspector: React.FC = () => {
                               position: 'absolute',
                               left: `${rf.x}%`,
                               top: `${currRowTop + rf.y}%`,
-                              width: rf.width ? `${rf.width}%` : 'auto',
+                              width: rfPitch > 0 ? 'max-content' : (rf.width ? `${rf.width}%` : 'auto'),
                               fontSize: `${rf.fontSize * 0.11}cqi`,
                               fontWeight: rf.id === 'empName' ? 900 : 700,
                               cursor: rowIdx === 0 ? (isDraggingThis ? 'grabbing' : 'grab') : 'pointer',
@@ -1181,11 +1170,8 @@ export const BonusDocMasterInspector: React.FC = () => {
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: isRight ? 'flex-end' : isCenter ? 'center' : 'flex-start',
-                              gap: rfPitch > 0 ? `${rfPitch * 0.35}cqi` : undefined,
-                              letterSpacing: rfPitch > 0 ? `${rfPitch * 0.08}em` : undefined,
-                              textAlign: isRight ? 'right' : isCenter ? 'center' : 'left',
                               pointerEvents: 'auto',
-                              lineHeight: 1.1,
+                              lineHeight: 1,
                               opacity: rowIdx === 1 ? 0.6 : 1
                             }}
                             className={`px-0.5 py-0.2 rounded transition-all ${
@@ -1195,11 +1181,29 @@ export const BonusDocMasterInspector: React.FC = () => {
                             }`}
                             title={`${rf.name} (クリックして選択・十字キーで移動)`}
                           >
-                            {textChars.map((char, cIdx) => (
-                              <span key={cIdx} className="inline-block shrink-0">
-                                {char}
-                              </span>
-                            ))}
+                            {rfPitch > 0 ? (
+                              <div className="flex items-center pointer-events-none">
+                                {textChars.map((char, cIdx) => (
+                                  <span
+                                    key={cIdx}
+                                    style={{
+                                      display: 'inline-block',
+                                      width: `${rfPitch}cqi`,
+                                      fontSize: `${rf.fontSize * 0.11}cqi`,
+                                      fontWeight: 900,
+                                      textAlign: 'center',
+                                      fontFamily: 'monospace',
+                                      lineHeight: 1,
+                                      flexShrink: 0
+                                    }}
+                                  >
+                                    {char}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span>{textVal}</span>
+                            )}
                           </div>
                         );
                       })}

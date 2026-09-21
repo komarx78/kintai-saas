@@ -223,25 +223,80 @@ const ExactPdfPageRenderer: React.FC<{
         className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none z-0 print:w-full print:h-full"
         draggable={false}
       />
-      {/* 提出年月日（原本「令和」「年」「月」「日提出」の各空欄に配置） */}
-      <div
-        className="absolute font-mono font-bold text-slate-900 text-center flex items-center justify-center z-10"
-        style={{ top: `${fSubY.y}%`, left: `${fSubY.x}%`, width: `${fSubY.width || 3.2}%`, fontSize: `${(fSubY.fontSize || 11.5) * 0.115}cqi`, lineHeight: 1 }}
-      >
-        {submissionDateParsed.y}
-      </div>
-      <div
-        className="absolute font-mono font-bold text-slate-900 text-center flex items-center justify-center z-10"
-        style={{ top: `${fSubM.y}%`, left: `${fSubM.x}%`, width: `${fSubM.width || 3.5}%`, fontSize: `${(fSubM.fontSize || 11.5) * 0.115}cqi`, lineHeight: 1 }}
-      >
-        {submissionDateParsed.m}
-      </div>
-      <div
-        className="absolute font-mono font-bold text-slate-900 text-center flex items-center justify-center z-10"
-        style={{ top: `${fSubD.y}%`, left: `${fSubD.x}%`, width: `${fSubD.width || 4.5}%`, fontSize: `${(fSubD.fontSize || 11.5) * 0.115}cqi`, lineHeight: 1 }}
-      >
-        {submissionDateParsed.d}
-      </div>
+      {/* 提出年月日（原本「令和」「年」「月」「日提出」の各空欄に配置：雇用保険マス目方式） */}
+      {(() => {
+        const pY = fSubY.pitch || 2.40;
+        const pM = fSubM.pitch || 2.40;
+        const pD = fSubD.pitch || 2.40;
+        const yStr = String(submissionDateParsed.y).length === 1 ? ` ${submissionDateParsed.y}` : String(submissionDateParsed.y);
+        const mStr = String(submissionDateParsed.m).length === 1 ? ` ${submissionDateParsed.m}` : String(submissionDateParsed.m);
+        const dStr = String(submissionDateParsed.d).length === 1 ? ` ${submissionDateParsed.d}` : String(submissionDateParsed.d);
+
+        return (
+          <>
+            <div
+              className="absolute font-mono font-bold text-slate-900 flex items-center z-10 pointer-events-none"
+              style={{ top: `${fSubY.y}%`, left: `${fSubY.x}%`, width: 'max-content' }}
+            >
+              {yStr.split('').map((c, idx) => (
+                <span
+                  key={idx}
+                  style={{
+                    display: 'inline-block',
+                    width: `${pY}cqi`,
+                    fontSize: `${(fSubY.fontSize || 11.5) * 0.115}cqi`,
+                    textAlign: 'center',
+                    lineHeight: 1,
+                    flexShrink: 0
+                  }}
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+            <div
+              className="absolute font-mono font-bold text-slate-900 flex items-center z-10 pointer-events-none"
+              style={{ top: `${fSubM.y}%`, left: `${fSubM.x}%`, width: 'max-content' }}
+            >
+              {mStr.split('').map((c, idx) => (
+                <span
+                  key={idx}
+                  style={{
+                    display: 'inline-block',
+                    width: `${pM}cqi`,
+                    fontSize: `${(fSubM.fontSize || 11.5) * 0.115}cqi`,
+                    textAlign: 'center',
+                    lineHeight: 1,
+                    flexShrink: 0
+                  }}
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+            <div
+              className="absolute font-mono font-bold text-slate-900 flex items-center z-10 pointer-events-none"
+              style={{ top: `${fSubD.y}%`, left: `${fSubD.x}%`, width: 'max-content' }}
+            >
+              {dStr.split('').map((c, idx) => (
+                <span
+                  key={idx}
+                  style={{
+                    display: 'inline-block',
+                    width: `${pD}cqi`,
+                    fontSize: `${(fSubD.fontSize || 11.5) * 0.115}cqi`,
+                    textAlign: 'center',
+                    lineHeight: 1,
+                    flexShrink: 0
+                  }}
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+          </>
+        );
+      })()}
 
       {/* 事業所整理記号 (左側4マス: 数字、原本マス目セル配置) */}
       {symbolDigits && (
@@ -371,25 +426,80 @@ const ExactPdfPageRenderer: React.FC<{
         </div>
       )}
 
-      {/* 共通賞与支払年月日 */}
-      <div
-        className="absolute font-mono font-bold text-slate-950 text-center"
-        style={{ top: `${fCommonY.y}%`, left: `${fCommonY.x}%`, width: `${fCommonY.width || 5.5}%`, fontSize: `${(fCommonY.fontSize || 12) * 0.115}cqi` }}
-      >
-        {commonDateParsed.y}
-      </div>
-      <div
-        className="absolute font-mono font-bold text-slate-950 text-center"
-        style={{ top: `${fCommonM.y}%`, left: `${fCommonM.x}%`, width: `${fCommonM.width || 5.5}%`, fontSize: `${(fCommonM.fontSize || 12) * 0.115}cqi` }}
-      >
-        {commonDateParsed.m}
-      </div>
-      <div
-        className="absolute font-mono font-bold text-slate-950 text-center"
-        style={{ top: `${fCommonD.y}%`, left: `${fCommonD.x}%`, width: `${fCommonD.width || 5.5}%`, fontSize: `${(fCommonD.fontSize || 12) * 0.115}cqi` }}
-      >
-        {commonDateParsed.d}
-      </div>
+      {/* 共通賞与支払年月日（年・月・日マス目配置：雇用保険マス目方式） */}
+      {(() => {
+        const pY = fCommonY.pitch || 2.70;
+        const pM = fCommonM.pitch || 2.70;
+        const pD = fCommonD.pitch || 2.70;
+        const yStr = String(commonDateParsed.y).length === 1 ? ` ${commonDateParsed.y}` : String(commonDateParsed.y);
+        const mStr = String(commonDateParsed.m).length === 1 ? ` ${commonDateParsed.m}` : String(commonDateParsed.m);
+        const dStr = String(commonDateParsed.d).length === 1 ? ` ${commonDateParsed.d}` : String(commonDateParsed.d);
+
+        return (
+          <>
+            <div
+              className="absolute font-mono font-bold text-slate-950 flex items-center pointer-events-none z-10"
+              style={{ top: `${fCommonY.y}%`, left: `${fCommonY.x}%`, width: 'max-content' }}
+            >
+              {yStr.split('').map((c, idx) => (
+                <span
+                  key={idx}
+                  style={{
+                    display: 'inline-block',
+                    width: `${pY}cqi`,
+                    fontSize: `${(fCommonY.fontSize || 12) * 0.115}cqi`,
+                    textAlign: 'center',
+                    lineHeight: 1,
+                    flexShrink: 0
+                  }}
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+            <div
+              className="absolute font-mono font-bold text-slate-950 flex items-center pointer-events-none z-10"
+              style={{ top: `${fCommonM.y}%`, left: `${fCommonM.x}%`, width: 'max-content' }}
+            >
+              {mStr.split('').map((c, idx) => (
+                <span
+                  key={idx}
+                  style={{
+                    display: 'inline-block',
+                    width: `${pM}cqi`,
+                    fontSize: `${(fCommonM.fontSize || 12) * 0.115}cqi`,
+                    textAlign: 'center',
+                    lineHeight: 1,
+                    flexShrink: 0
+                  }}
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+            <div
+              className="absolute font-mono font-bold text-slate-950 flex items-center pointer-events-none z-10"
+              style={{ top: `${fCommonD.y}%`, left: `${fCommonD.x}%`, width: 'max-content' }}
+            >
+              {dStr.split('').map((c, idx) => (
+                <span
+                  key={idx}
+                  style={{
+                    display: 'inline-block',
+                    width: `${pD}cqi`,
+                    fontSize: `${(fCommonD.fontSize || 12) * 0.115}cqi`,
+                    textAlign: 'center',
+                    lineHeight: 1,
+                    flexShrink: 0
+                  }}
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+          </>
+        );
+      })()}
 
       {/* 被保険者行 1〜10 */}
       {pageEmployees.map((emp, i) => {
@@ -408,21 +518,36 @@ const ExactPdfPageRenderer: React.FC<{
         return (
           <React.Fragment key={emp.id || `row-${i}`}>
             {/* 上段 ① 被保険者整理番号 */}
-            <div
-              className="absolute font-mono font-bold text-slate-950 flex items-center"
-              style={{
-                top: `${rowTop + fEmpNumber.y}%`,
-                left: `${fEmpNumber.x}%`,
-                width: `${fEmpNumber.width || 18.0}%`,
-                fontSize: `${(fEmpNumber.fontSize || 12) * 0.115}cqi`,
-                gap: fEmpNumber.pitch ? `${fEmpNumber.pitch * 0.35}cqi` : undefined,
-                letterSpacing: fEmpNumber.pitch ? `${fEmpNumber.pitch * 0.08}em` : undefined
-              }}
-            >
-              {(emp.insuranceNumber || String(pageIndex * 10 + i + 1).padStart(4, '0')).split('').map((c, idx) => (
-                <span key={idx} className="inline-block shrink-0">{c}</span>
-              ))}
-            </div>
+            {(() => {
+              const numPitch = fEmpNumber.pitch || 2.50;
+              const numStr = emp.insuranceNumber || String(pageIndex * 10 + i + 1).padStart(4, '0');
+              return (
+                <div
+                  className="absolute font-mono font-bold text-slate-950 flex items-center"
+                  style={{
+                    top: `${rowTop + fEmpNumber.y}%`,
+                    left: `${fEmpNumber.x}%`,
+                    width: 'max-content'
+                  }}
+                >
+                  {numStr.split('').map((c, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        display: 'inline-block',
+                        width: `${numPitch}cqi`,
+                        fontSize: `${(fEmpNumber.fontSize || 12) * 0.115}cqi`,
+                        textAlign: 'center',
+                        lineHeight: 1,
+                        flexShrink: 0
+                      }}
+                    >
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* 上段 ② 被保険者氏名（※賞与支払届にはフリガナ不要のため氏名のみを枠内中央に大きく印字） */}
             <div
@@ -442,19 +567,29 @@ const ExactPdfPageRenderer: React.FC<{
             {/* 上段 ③ 生年月日（年金機構公式書式：元号コード - YYMMDD） */}
             {rawBirth && (
               <div
-                className="absolute flex items-center justify-center font-mono font-black text-slate-950"
+                className="absolute flex items-center font-mono font-black text-slate-950"
                 style={{
                   top: `${rowTop + fEmpBirth.y}%`,
                   left: `${fEmpBirth.x}%`,
-                  width: `${fEmpBirth.width || 14.5}%`,
+                  width: fEmpBirth.pitch ? 'max-content' : `${fEmpBirth.width || 14.5}%`,
                   height: '1.9%',
-                  fontSize: `${(fEmpBirth.fontSize || 12.5) * 0.115}cqi`,
-                  gap: fEmpBirth.pitch ? `${fEmpBirth.pitch * 0.35}cqi` : undefined,
-                  letterSpacing: fEmpBirth.pitch ? `${fEmpBirth.pitch * 0.08}em` : undefined
+                  justifyContent: fEmpBirth.pitch ? 'flex-start' : 'center'
                 }}
               >
                 {rawBirth.replace('-', ' - ').split('').map((char, cIdx) => (
-                  <span key={cIdx} className="inline-block shrink-0">{char}</span>
+                  <span
+                    key={cIdx}
+                    style={{
+                      display: 'inline-block',
+                      width: fEmpBirth.pitch ? `${fEmpBirth.pitch}cqi` : 'auto',
+                      fontSize: `${(fEmpBirth.fontSize || 12.5) * 0.115}cqi`,
+                      textAlign: 'center',
+                      lineHeight: 1,
+                      flexShrink: 0
+                    }}
+                  >
+                    {char}
+                  </span>
                 ))}
               </div>
             )}
@@ -466,12 +601,23 @@ const ExactPdfPageRenderer: React.FC<{
                 style={{
                   top: `${rowTop + fEmpMyNumber.y}%`,
                   left: `${fEmpMyNumber.x}%`,
-                  gap: fEmpMyNumber.pitch ? `${fEmpMyNumber.pitch * 0.35}cqi` : '0.62cqi',
-                  fontSize: `${(fEmpMyNumber.fontSize || 10) * 0.115}cqi`
+                  width: 'max-content'
                 }}
               >
                 {emp.myNumber.replace(/[^0-9]/g, '').slice(0, 12).split('').map((digit, dIdx) => (
-                  <span key={dIdx} className="w-[1.3cqi] text-center">{digit}</span>
+                  <span
+                    key={dIdx}
+                    style={{
+                      display: 'inline-block',
+                      width: `${fEmpMyNumber.pitch || 1.88}cqi`,
+                      fontSize: `${(fEmpMyNumber.fontSize || 10) * 0.115}cqi`,
+                      textAlign: 'center',
+                      lineHeight: 1,
+                      flexShrink: 0
+                    }}
+                  >
+                    {digit}
+                  </span>
                 ))}
               </div>
             )}
@@ -483,13 +629,23 @@ const ExactPdfPageRenderer: React.FC<{
                 style={{
                   top: `${rowTop + fEmpPayDate.y}%`,
                   left: `${fEmpPayDate.x}%`,
-                  fontSize: `${(fEmpPayDate.fontSize || 10) * 0.115}cqi`,
-                  gap: fEmpPayDate.pitch ? `${fEmpPayDate.pitch * 0.35}cqi` : undefined,
-                  letterSpacing: fEmpPayDate.pitch ? `${fEmpPayDate.pitch * 0.08}em` : undefined
+                  width: fEmpPayDate.pitch ? 'max-content' : 'auto'
                 }}
               >
                 {emp.individualPaymentDate.split('').map((char, cIdx) => (
-                  <span key={cIdx} className="inline-block shrink-0">{char}</span>
+                  <span
+                    key={cIdx}
+                    style={{
+                      display: 'inline-block',
+                      width: fEmpPayDate.pitch ? `${fEmpPayDate.pitch}cqi` : 'auto',
+                      fontSize: `${(fEmpPayDate.fontSize || 10) * 0.115}cqi`,
+                      textAlign: 'center',
+                      lineHeight: 1,
+                      flexShrink: 0
+                    }}
+                  >
+                    {char}
+                  </span>
                 ))}
               </div>
             )}

@@ -31,6 +31,7 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     x: 4.3,
     y: 5.3,
     fontSize: 11.5,
+    pitch: 2.40,
     width: 3.2,
     example: '8',
     description: '最上部「令和」と「年」の間の空欄'
@@ -42,6 +43,7 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     x: 9.2,
     y: 5.3,
     fontSize: 11.5,
+    pitch: 2.40,
     width: 3.5,
     example: '12',
     description: '最上部「年」と「月」の間の空欄'
@@ -53,6 +55,7 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     x: 14.8,
     y: 5.3,
     fontSize: 11.5,
+    pitch: 2.40,
     width: 4.5,
     example: '15',
     description: '最上部「月」と「日提出」の間の空欄'
@@ -151,6 +154,7 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     x: 37.5,
     y: 31.3,
     fontSize: 12,
+    pitch: 2.70,
     width: 5.5,
     example: '8',
     description: '共通支払年月日「年」枠内'
@@ -162,6 +166,7 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     x: 46.0,
     y: 31.3,
     fontSize: 12,
+    pitch: 2.70,
     width: 5.5,
     example: '12',
     description: '共通支払年月日「月」枠内'
@@ -173,6 +178,7 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     x: 54.5,
     y: 31.3,
     fontSize: 12,
+    pitch: 2.70,
     width: 5.5,
     example: '10',
     description: '共通支払年月日「日」枠内'
@@ -208,6 +214,7 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     x: 4.8,
     y: 0.92,
     fontSize: 12,
+    pitch: 2.50,
     width: 18.0,
     example: '0001',
     description: '上段左端 ①整理番号（マス内中央）'
@@ -230,6 +237,7 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     x: 55.6,
     y: 0.90,
     fontSize: 12.5,
+    pitch: 1.75,
     width: 14.5,
     example: '7 - 051020',
     description: '上段中央 ③生年月日枠内（中央揃え）'
