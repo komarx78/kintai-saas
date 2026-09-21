@@ -1140,6 +1140,10 @@ export const BonusDocMasterInspector: React.FC = () => {
                         if (rf.id === 'empName') textVal = rowSampleName;
                         if (rf.id === 'empKana') textVal = rowSampleKana;
                         if (rf.id === 'empBirth') textVal = rowSampleBirth;
+                        if (rf.id === 'empIndivPayDate') {
+                          // 原本「共通と同じ場合は記入不要」に従い行0は空欄。行1または選択時のみ年・月・日の数字を表示（「令」は原本印刷済のため印字不要）
+                          textVal = (isSelected || rowIdx === 1) ? ' 8   12   20' : '';
+                        }
 
                         const rfPitch = rf.pitch !== undefined ? rf.pitch : 0;
                         const isRight = rf.id === 'empCurrencyAmount' || rf.id === 'empGoodsAmount' || rf.id === 'empTotalThousands';

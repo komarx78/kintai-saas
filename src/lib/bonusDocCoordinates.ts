@@ -256,14 +256,14 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
   },
   {
     id: 'empIndivPayDate',
-    name: '④ 個別賞与支払日（共通と異なる場合）',
+    name: '④ 個別賞与支払日（共通と異なる場合のみ）',
     section: 'row_template',
-    x: 4.8,
+    x: 7.5,
     y: 3.60,
     fontSize: 10,
-    width: 18.0,
-    example: '令08.12.20',
-    description: '下段左端 ④個別支払日'
+    width: 12.5,
+    example: ' 8  12  20',
+    description: '下段左端 ④個別支払日（共通と同じ場合は印字不要。「9.令和」は原本印刷済のため数字のみ）'
   },
   {
     id: 'empCurrencyAmount',

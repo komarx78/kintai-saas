@@ -622,33 +622,43 @@ const ExactPdfPageRenderer: React.FC<{
               </div>
             )}
 
-            {/* 下段 ④ 個別賞与支払日 */}
-            {emp.individualPaymentDate && (
-              <div
-                className="absolute flex items-center font-mono font-bold text-slate-950"
-                style={{
-                  top: `${rowTop + fEmpPayDate.y}%`,
-                  left: `${fEmpPayDate.x}%`,
-                  width: fEmpPayDate.pitch ? 'max-content' : 'auto'
-                }}
-              >
-                {emp.individualPaymentDate.split('').map((char, cIdx) => (
-                  <span
-                    key={cIdx}
-                    style={{
-                      display: 'inline-block',
-                      width: fEmpPayDate.pitch ? `${fEmpPayDate.pitch}cqi` : 'auto',
-                      fontSize: `${(fEmpPayDate.fontSize || 10) * 0.115}cqi`,
-                      textAlign: 'center',
-                      lineHeight: 1,
-                      flexShrink: 0
-                    }}
-                  >
-                    {char}
+            {/* 下段 ④ 個別賞与支払日（共通と異なる場合のみ印字。「9.令和」は原本印刷済のため年・月・日のみ配置） */}
+            {(() => {
+              if (!emp.individualPaymentDate) return null;
+              // 共通賞与支払日と同じ場合は原本注意書き「記入不要」に従い空欄
+              if (data.commonPaymentDate && emp.individualPaymentDate === data.commonPaymentDate) return null;
+
+              const parsed = parseDateElements(emp.individualPaymentDate);
+              return (
+                <div
+                  className="absolute flex items-center font-mono font-bold text-slate-950 pointer-events-none"
+                  style={{
+                    top: `${rowTop + fEmpPayDate.y}%`,
+                    left: `${fEmpPayDate.x}%`,
+                    fontSize: `${(fEmpPayDate.fontSize || 10) * 0.115}cqi`,
+                    lineHeight: 1,
+                    width: 'max-content'
+                  }}
+                >
+                  {/* 年（原本「9.令和」右側の空欄） */}
+                  <span style={{ display: 'inline-block', width: '2.4cqi', textAlign: 'center' }}>
+                    {parsed.y}
                   </span>
-                ))}
-              </div>
-            )}
+                  {/* 原本文字「年」の回避余白 */}
+                  <span style={{ display: 'inline-block', width: '1.6cqi' }}></span>
+                  {/* 月（原本「月」の左側の空欄） */}
+                  <span style={{ display: 'inline-block', width: '2.4cqi', textAlign: 'center' }}>
+                    {parsed.m}
+                  </span>
+                  {/* 原本文字「月」の回避余白 */}
+                  <span style={{ display: 'inline-block', width: '1.6cqi' }}></span>
+                  {/* 日（原本「日」の左側の空欄） */}
+                  <span style={{ display: 'inline-block', width: '2.4cqi', textAlign: 'center' }}>
+                    {parsed.d}
+                  </span>
+                </div>
+              );
+            })()}
 
             {/* 下段 ⑤ ㋐通貨による賞与額 */}
             <div
