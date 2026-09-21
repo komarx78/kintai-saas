@@ -519,7 +519,21 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
             {/* 各印字項目の配置 */}
             {coords.filter(c => !c.disabled).map(field => {
               let val = formValues[field.id] !== undefined ? formValues[field.id] : field.example;
-              if (field.id === 'officeZipCode' || field.id === 'zipCode_1') {
+
+              // 📮 郵便番号（上3桁・下4桁）の自動分配
+              if (field.id === 'officeZipCode_first') {
+                const raw = String(formValues['officeZipCode'] || '').replace(/[^0-9]/g, '');
+                val = raw ? raw.slice(0, 3) : field.example;
+              } else if (field.id === 'officeZipCode_last') {
+                const raw = String(formValues['officeZipCode'] || '').replace(/[^0-9]/g, '');
+                val = raw ? raw.slice(3, 7) : field.example;
+              } else if (field.id === 'zipCode_first_1') {
+                const raw = String(formValues['zipCode_1'] || '').replace(/[^0-9]/g, '');
+                val = raw ? raw.slice(0, 3) : field.example;
+              } else if (field.id === 'zipCode_last_1') {
+                const raw = String(formValues['zipCode_1'] || '').replace(/[^0-9]/g, '');
+                val = raw ? raw.slice(3, 7) : field.example;
+              } else if (field.id === 'officeZipCode' || field.id === 'zipCode_1') {
                 val = String(val || '').replace(/[^0-9]/g, '');
               }
               const isDragging = draggingFieldId === field.id;
@@ -697,14 +711,26 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
                   />
                 </div>
               </div>
-              <div>
-                <label className="text-[10px] text-slate-500">事業所所在地</label>
-                <input
-                  type="text"
-                  value={formValues['officeAddress'] || ''}
-                  onChange={(e) => handleInputChange('officeAddress', e.target.value)}
-                  className="w-full p-1.5 border border-slate-300 rounded font-bold"
-                />
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1">
+                  <label className="text-[10px] text-slate-500">事業所 郵便番号</label>
+                  <input
+                    type="text"
+                    value={formValues['officeZipCode'] || ''}
+                    onChange={(e) => handleInputChange('officeZipCode', e.target.value)}
+                    placeholder="520-0000"
+                    className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[10px] text-slate-500">事業所所在地</label>
+                  <input
+                    type="text"
+                    value={formValues['officeAddress'] || ''}
+                    onChange={(e) => handleInputChange('officeAddress', e.target.value)}
+                    className="w-full p-1.5 border border-slate-300 rounded font-bold"
+                  />
+                </div>
               </div>
               <div>
                 <label className="text-[10px] text-slate-500">事業所名称</label>

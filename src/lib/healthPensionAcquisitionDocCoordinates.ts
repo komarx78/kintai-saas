@@ -146,15 +146,28 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     description: '年金事務所より付与された事業所番号'
   },
   {
-    id: 'officeZipCode',
-    name: '事業所 郵便番号',
+    id: 'officeZipCode_first',
+    name: '事業所 郵便番号（上3桁）',
     section: 'office',
     x: 13.0,
     y: 12.8,
     fontSize: 9.5,
-    width: 25.0,
-    example: '5200000',
-    description: '事業所の郵便番号（ハイフン不要・数字7桁）'
+    pitch: 2.0,
+    width: 6.5,
+    example: '520',
+    description: '事業所の郵便番号上3桁（マス目印字）'
+  },
+  {
+    id: 'officeZipCode_last',
+    name: '事業所 郵便番号（下4桁）',
+    section: 'office',
+    x: 19.8,
+    y: 12.8,
+    fontSize: 9.5,
+    pitch: 2.0,
+    width: 8.5,
+    example: '0000',
+    description: '事業所の郵便番号下4桁（マス目印字）'
   },
   {
     id: 'officeAddress',
@@ -711,15 +724,28 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     circleActiveValue: '5'
   },
   {
-    id: 'zipCode_1',
-    name: '⑪ 住所 郵便番号',
+    id: 'zipCode_first_1',
+    name: '⑪ 住所 郵便番号（上3桁）',
     section: 'insured_person_1',
     x: 13.5,
     y: 39.5,
     fontSize: 9.0,
-    width: 12.0,
-    example: '5200001',
-    description: '住民票住所の郵便番号（ハイフン不要・数字7桁）'
+    pitch: 2.0,
+    width: 6.5,
+    example: '520',
+    description: '住民票住所の郵便番号上3桁（マス目印字）'
+  },
+  {
+    id: 'zipCode_last_1',
+    name: '⑪ 住所 郵便番号（下4桁）',
+    section: 'insured_person_1',
+    x: 20.3,
+    y: 39.5,
+    fontSize: 9.0,
+    pitch: 2.0,
+    width: 8.5,
+    example: '0001',
+    description: '住民票住所の郵便番号下4桁（マス目印字）'
   },
   {
     id: 'address_1',
@@ -755,12 +781,37 @@ export function loadHealthPensionAcqCoordinates(): HealthPensionAcqFieldConfig[]
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
         return DEFAULT_HEALTH_PENSION_ACQ_FIELDS.map(def => {
-          const custom = parsed.find((p: any) => p.id === def.id);
+          let custom = parsed.find((p: any) => p.id === def.id);
+          // 旧郵便番号ID（officeZipCode, zipCode_1）からの安全マイグレーション
+          if (!custom) {
+            if (def.id === 'officeZipCode_first' || def.id === 'officeZipCode_last') {
+              const old = parsed.find((p: any) => p.id === 'officeZipCode');
+              if (old) {
+                custom = {
+                  ...def,
+                  y: old.y !== undefined ? old.y : def.y,
+                  fontSize: old.fontSize !== undefined ? old.fontSize : def.fontSize
+                };
+              }
+            } else if (def.id === 'zipCode_first_1' || def.id === 'zipCode_last_1') {
+              const old = parsed.find((p: any) => p.id === 'zipCode_1');
+              if (old) {
+                custom = {
+                  ...def,
+                  y: old.y !== undefined ? old.y : def.y,
+                  fontSize: old.fontSize !== undefined ? old.fontSize : def.fontSize
+                };
+              }
+            }
+          }
+
           if (custom) {
             // 異常ピッチ（過去の計算破綻時に入力された5.0%超等）を原本規定値へ安全修復
             const safePitch = (custom.pitch !== undefined && custom.pitch > 0 && custom.pitch <= 5.0) 
               ? custom.pitch 
               : def.pitch;
+
+            const isZipField = def.id === 'officeZipCode_first' || def.id === 'officeZipCode_last' || def.id === 'zipCode_first_1' || def.id === 'zipCode_last_1';
 
             return {
               ...def,
@@ -771,7 +822,7 @@ export function loadHealthPensionAcqCoordinates(): HealthPensionAcqFieldConfig[]
               width: custom.width !== undefined ? custom.width : def.width,
               circleWidth: custom.circleWidth !== undefined ? custom.circleWidth : def.circleWidth,
               circleHeight: custom.circleHeight !== undefined ? custom.circleHeight : def.circleHeight,
-              example: (def.id === 'officeZipCode' || def.id === 'zipCode_1') ? def.example : (custom.example || def.example),
+              example: isZipField ? def.example : (custom.example || def.example),
               disabled: custom.disabled
             };
           }
@@ -810,11 +861,36 @@ export async function fetchHealthPensionAcqCoordinatesFromDb(): Promise<HealthPe
 
     if (data && data.health_pension_acq_doc_coordinates && Array.isArray(data.health_pension_acq_doc_coordinates)) {
       const merged = DEFAULT_HEALTH_PENSION_ACQ_FIELDS.map(def => {
-        const custom = data.health_pension_acq_doc_coordinates.find((p: any) => p.id === def.id);
+        let custom = data.health_pension_acq_doc_coordinates.find((p: any) => p.id === def.id);
+        // 旧郵便番号ID（officeZipCode, zipCode_1）からの安全マイグレーション
+        if (!custom) {
+          if (def.id === 'officeZipCode_first' || def.id === 'officeZipCode_last') {
+            const old = data.health_pension_acq_doc_coordinates.find((p: any) => p.id === 'officeZipCode');
+            if (old) {
+              custom = {
+                ...def,
+                y: old.y !== undefined ? old.y : def.y,
+                fontSize: old.fontSize !== undefined ? old.fontSize : def.fontSize
+              };
+            }
+          } else if (def.id === 'zipCode_first_1' || def.id === 'zipCode_last_1') {
+            const old = data.health_pension_acq_doc_coordinates.find((p: any) => p.id === 'zipCode_1');
+            if (old) {
+              custom = {
+                ...def,
+                y: old.y !== undefined ? old.y : def.y,
+                fontSize: old.fontSize !== undefined ? old.fontSize : def.fontSize
+              };
+            }
+          }
+        }
+
         if (custom) {
           const safePitch = (custom.pitch !== undefined && custom.pitch > 0 && custom.pitch <= 5.0) 
             ? custom.pitch 
             : def.pitch;
+
+          const isZipField = def.id === 'officeZipCode_first' || def.id === 'officeZipCode_last' || def.id === 'zipCode_first_1' || def.id === 'zipCode_last_1';
 
           return {
             ...def,
@@ -825,6 +901,7 @@ export async function fetchHealthPensionAcqCoordinatesFromDb(): Promise<HealthPe
             width: custom.width !== undefined ? custom.width : def.width,
             circleWidth: custom.circleWidth !== undefined ? custom.circleWidth : def.circleWidth,
             circleHeight: custom.circleHeight !== undefined ? custom.circleHeight : def.circleHeight,
+            example: isZipField ? def.example : (custom.example || def.example),
             disabled: custom.disabled
           };
         }
