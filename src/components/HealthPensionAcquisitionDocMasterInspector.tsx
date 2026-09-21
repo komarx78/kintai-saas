@@ -285,24 +285,28 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
 
         <div className="flex items-center gap-2">
           {/* タブ切り替え */}
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+          <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-bold shadow-inner">
             <button
               onClick={() => setActiveTab('inspector')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                activeTab === 'inspector' ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:text-slate-900'
+                activeTab === 'inspector'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md font-black'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span>印字座標インスペクター</span>
+              <span>原本マス目 精密座標インスペクター</span>
             </button>
             <button
               onClick={() => setActiveTab('input_preview')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                activeTab === 'input_preview' ? 'bg-white text-indigo-700 shadow-2xs font-black' : 'text-slate-600 hover:text-slate-900'
+                activeTab === 'input_preview'
+                  ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-md font-black'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>実入力・A4印刷プレビュー</span>
+              <span>全社実動 直接入力 ＆ A4印刷画面</span>
             </button>
           </div>
 

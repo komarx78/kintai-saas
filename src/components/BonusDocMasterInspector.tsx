@@ -5,7 +5,8 @@ import {
   Building2, Calendar, Users, FileText, CheckCircle2, Loader2,
   ZoomIn, ZoomOut, RotateCcw,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
-  ChevronsUp, ChevronsDown, ChevronsLeft, ChevronsRight
+  ChevronsUp, ChevronsDown, ChevronsLeft, ChevronsRight,
+  Sliders, Eye, Sparkles, Printer, Plus, Trash2, HelpCircle
 } from 'lucide-react';
 
 import { 
@@ -15,8 +16,61 @@ import {
   fetchBonusDocCoordinatesFromDb,
   type BonusDocFieldConfig 
 } from '../lib/bonusDocCoordinates';
+import { 
+  OfficialBonusPaymentReportDoc, 
+  type BonusReportEmployee 
+} from './OfficialBonusPaymentReportDoc';
 
 export const BonusDocMasterInspector: React.FC = () => {
+  // 🧭 モード切替: 'inspector' (精密座標インスペクター) | 'input_preview' (全社実動 直接入力 ＆ A4印刷画面)
+  const [activeMode, setActiveMode] = useState<'inspector' | 'input_preview'>('inspector');
+
+  // 📝 直接入力用State
+  const [submissionDate, setSubmissionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [commonPaymentDate, setCommonPaymentDate] = useState(`${new Date().getFullYear()}-06-30`);
+  const [officeCityCode, setOfficeCityCode] = useState('25');
+  const [officeSymbolKana, setOfficeSymbolKana] = useState('カア');
+  const [companyAddress, setCompanyAddress] = useState('滋賀県大津市浜大津1-2-3');
+  const [companyName, setCompanyName] = useState('株式会社cocotte');
+  const [companyOwnerName, setCompanyOwnerName] = useState('代表取締役 駒井 修一郎');
+  const [companyPhone, setCompanyPhone] = useState('077-574-6907');
+  const [sharoushiName, setSharoushiName] = useState('');
+  const officeSymbol = `${officeCityCode}-${officeSymbolKana}`;
+
+  // 従業員行データState
+  const [employees, setEmployees] = useState<BonusReportEmployee[]>([
+    {
+      id: 'bonus-emp-1',
+      insuranceNumber: '001',
+      name: '駒井 修一郎',
+      nameKana: 'コマイ シュウイチロウ',
+      birthDate: '1988-04-15',
+      currencyAmount: 650000,
+      goodsAmount: 0,
+      isOver70: false
+    },
+    {
+      id: 'bonus-emp-2',
+      insuranceNumber: '002',
+      name: '山田 太郎',
+      nameKana: 'ヤマダ タロウ',
+      birthDate: '1979-03-18',
+      currencyAmount: 480000,
+      goodsAmount: 0,
+      isOver70: false
+    },
+    {
+      id: 'bonus-emp-3',
+      insuranceNumber: '003',
+      name: '佐藤 美咲',
+      nameKana: 'サトウ ミサキ',
+      birthDate: '1995-11-25',
+      currencyAmount: 350000,
+      goodsAmount: 0,
+      isOver70: false
+    }
+  ]);
+
   const [selectedSection, setSelectedSection] = useState<'submission' | 'office' | 'common_payment' | 'row_template'>('office');
   const [selectedFieldId, setSelectedFieldId] = useState<string>('symbolDigits');
   const [isSaving, setIsSaving] = useState(false);
@@ -266,72 +320,114 @@ export const BonusDocMasterInspector: React.FC = () => {
 
   return (
     <div className="space-y-4 font-sans select-none">
-      {/* 🧭 ヘッダー ＆ 保存バー */}
-      <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 bg-pink-600 rounded-xl text-white">
-              <FileText className="w-5 h-5" />
-            </span>
-            <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                日本年金機構 被保険者賞与支払届（コード2265用紙）印字座標マスタ
-                <span className="text-xs px-2 py-0.5 bg-pink-500/20 text-pink-300 border border-pink-500/40 rounded-md">
-                  原本PDF完全一致オーバーレイ
-                </span>
-              </h2>
-              <p className="text-xs text-slate-400">
-                十字キーボタン、PCの矢印キー（↑ ↓ ← →）、またはプレビュー上のドラッグでミリ単位・ピクセル単位で位置を調整できます。
-              </p>
-            </div>
-          </div>
+      {/* 🧭 モード切替バー（原本マス目 精密座標インスペクター ⇄ 全社実動 直接入力 ＆ A4印刷画面） */}
+      <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-lg print:hidden">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveMode('inspector')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer ${
+              activeMode === 'inspector'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            原本マス目 精密座標インスペクター
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveMode('input_preview')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer ${
+              activeMode === 'input_preview'
+                ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Eye className="w-3.5 h-3.5" />
+            全社実動 直接入力 ＆ A4印刷画面
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleResetDefaults}
-            className="px-3 py-2 bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-            title="黄金比率の初期配置に戻す"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            初期値リセット
-          </button>
-
-          <button
-            onClick={() => {
-              const code = `export const BONUS_DOC_FIELDS = ${JSON.stringify(fields, null, 2)};`;
-              navigator.clipboard.writeText(code);
-              setCopiedCode(true);
-              setTimeout(() => setCopiedCode(false), 2000);
-            }}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-          >
-            {copiedCode ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-indigo-400" />}
-            {copiedCode ? 'コピー完了！' : 'TypeScriptコード'}
-          </button>
-
-          <button
-            onClick={handleSaveMaster}
-            disabled={isSaving}
-            className={`px-5 py-2 text-white rounded-xl text-xs font-black shadow-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
-              savedSuccess && saveStatus === 'local_only'
-                ? 'bg-amber-600 hover:bg-amber-500'
-                : 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500'
-            }`}
-          >
-            {isSaving ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : savedSuccess ? (
-              <CheckCircle2 className="w-4 h-4 text-white" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            {savedSuccess 
-              ? (saveStatus === 'db_saved' ? '✅ 全社DBへ完全永続化完了！' : '⚠️ 端末ローカルに保存（DB未接続）') 
-              : '賞与支払届マスタとして保存・適用'}
-          </button>
+          <span className="text-[11px] text-pink-400 font-bold bg-pink-950/60 px-2.5 py-1 rounded-lg border border-pink-800/80 flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3 text-pink-400" />
+            日本年金機構 被保険者賞与支払届（コード2265用紙）公式較正済
+          </span>
         </div>
       </div>
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* 1. 原本マス目 精密座標インスペクター モード                           */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {activeMode === 'inspector' && (
+        <div className="space-y-4">
+          {/* 🧭 ヘッダー ＆ 保存バー */}
+          <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-pink-600 rounded-xl text-white">
+                  <FileText className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    日本年金機構 被保険者賞与支払届（コード2265用紙）印字座標マスタ
+                    <span className="text-xs px-2 py-0.5 bg-pink-500/20 text-pink-300 border border-pink-500/40 rounded-md">
+                      原本PDF完全一致オーバーレイ
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    十字キーボタン、PCの矢印キー（↑ ↓ ← →）、またはプレビュー上のドラッグでミリ単位・ピクセル単位で位置を調整できます。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleResetDefaults}
+                className="px-3 py-2 bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                title="黄金比率の初期配置に戻す"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                初期値リセット
+              </button>
+
+              <button
+                onClick={() => {
+                  const code = `export const BONUS_DOC_FIELDS = ${JSON.stringify(fields, null, 2)};`;
+                  navigator.clipboard.writeText(code);
+                  setCopiedCode(true);
+                  setTimeout(() => setCopiedCode(false), 2000);
+                }}
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+              >
+                {copiedCode ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-indigo-400" />}
+                {copiedCode ? 'コピー完了！' : 'TypeScriptコード'}
+              </button>
+
+              <button
+                onClick={handleSaveMaster}
+                disabled={isSaving}
+                className={`px-5 py-2 text-white rounded-xl text-xs font-black shadow-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                  savedSuccess && saveStatus === 'local_only'
+                    ? 'bg-amber-600 hover:bg-amber-500'
+                    : 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500'
+                }`}
+              >
+                {isSaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : savedSuccess ? (
+                  <CheckCircle2 className="w-4 h-4 text-white" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                {savedSuccess 
+                  ? (saveStatus === 'db_saved' ? '✅ 全社DBへ完全永続化完了！' : '⚠️ 端末ローカルに保存（DB未接続）') 
+                  : '賞与支払届マスタとして保存・適用'}
+              </button>
+            </div>
+          </div>
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {/* 左右2分割メインエリア */}
@@ -1000,5 +1096,373 @@ export const BonusDocMasterInspector: React.FC = () => {
 
       </div>
     </div>
-  );
+  )}
+
+  {/* ══════════════════════════════════════════════════════════════════════ */}
+  {/* 2. 全社実動 直接入力 ＆ A4印刷画面 モード                             */}
+  {/* ══════════════════════════════════════════════════════════════════════ */}
+  {activeMode === 'input_preview' && (
+    <div className="space-y-4">
+      {/* 🧭 操作バー（印刷時は非表示） */}
+      <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-xl border border-slate-800 flex flex-wrap items-center justify-between gap-4 print:hidden">
+        <div className="flex items-center gap-3">
+          <span className="p-2 bg-gradient-to-r from-indigo-600 to-blue-600 rounded-xl text-white shadow-md">
+            <Eye className="w-5 h-5" />
+          </span>
+          <div>
+            <h3 className="text-sm font-black text-white flex items-center gap-2">
+              全社実動 直接入力 ＆ A4実寸印刷プレビュー
+              <span className="text-[10px] px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 rounded-md font-mono">
+                様式コード2265原本直結
+              </span>
+            </h3>
+            <p className="text-xs text-slate-400">
+              左側で実動データを直接打ち込むと、右側の原本PDF（コード2265用紙）マス目にリアルタイム反映されます。
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="bg-amber-500/10 text-amber-300 text-[11px] font-bold px-3 py-1.5 rounded-xl border border-amber-500/30 flex items-center gap-1.5">
+            <HelpCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>印刷時のコツ: 余白『なし』・倍率『100%（実際のサイズ）』</span>
+          </span>
+
+          <button
+            type="button"
+            onClick={() => {
+              setOfficeCityCode('25');
+              setOfficeSymbolKana('カア');
+              setCompanyName('株式会社cocotte');
+              setCompanyAddress('滋賀県大津市浜大津1-2-3');
+              setCompanyOwnerName('代表取締役 駒井 修一郎');
+              setCompanyPhone('077-574-6907');
+              setSharoushiName('');
+              setEmployees([
+                {
+                  id: 'bonus-emp-1',
+                  insuranceNumber: '001',
+                  name: '駒井 修一郎',
+                  nameKana: 'コマイ シュウイチロウ',
+                  birthDate: '1988-04-15',
+                  currencyAmount: 650000,
+                  goodsAmount: 0,
+                  isOver70: false
+                },
+                {
+                  id: 'bonus-emp-2',
+                  insuranceNumber: '002',
+                  name: '山田 太郎',
+                  nameKana: 'ヤマダ タロウ',
+                  birthDate: '1979-03-18',
+                  currencyAmount: 480000,
+                  goodsAmount: 0,
+                  isOver70: false
+                },
+                {
+                  id: 'bonus-emp-3',
+                  insuranceNumber: '003',
+                  name: '佐藤 美咲',
+                  nameKana: 'サトウ ミサキ',
+                  birthDate: '1995-11-25',
+                  currencyAmount: 350000,
+                  goodsAmount: 0,
+                  isOver70: false
+                }
+              ]);
+            }}
+            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            サンプルデータ再充填
+          </button>
+
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 via-blue-600 to-teal-600 hover:from-indigo-500 hover:to-teal-500 text-white rounded-xl text-xs font-black shadow-lg transition flex items-center gap-2 cursor-pointer active:scale-95"
+          >
+            <Printer className="w-4 h-4" />
+            🖨️ A4実寸印刷（原本重ね合わせ）
+          </button>
+        </div>
+      </div>
+
+      {/* 左右2分割メインエリア */}
+      <div className="grid grid-cols-12 gap-6">
+        
+        {/* ⬅️ 左カラム：直接入力コントロール（印刷時は非表示） */}
+        <div className="col-span-12 lg:col-span-4 space-y-4 print:hidden">
+          
+          {/* ① 事業所情報 ＆ 整理記号マス目 */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+              <Building2 className="w-4 h-4 text-pink-600" />
+              <span className="text-xs font-black text-slate-800">事業所情報 ＆ 整理記号マス目入力</span>
+            </div>
+
+            {/* 事業所整理記号（マス目ピッチ連動） */}
+            <div className="bg-gradient-to-br from-pink-50/90 to-rose-50/60 p-3 rounded-xl border border-pink-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black text-pink-900 flex items-center gap-1.5">
+                  <span>事業所整理記号（原本マス目）</span>
+                </span>
+                <span className="text-[10px] text-pink-700 font-mono font-bold bg-pink-200/60 px-2 py-0.5 rounded">
+                  ピッチ同期中
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 block mb-0.5">左側数字2マス</label>
+                  <input
+                    type="text"
+                    maxLength={2}
+                    value={officeCityCode}
+                    onChange={e => setOfficeCityCode(e.target.value)}
+                    placeholder="25"
+                    className="w-full bg-white border border-pink-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-black text-slate-900 focus:ring-2 focus:ring-pink-500 focus:outline-hidden text-center"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 block mb-0.5">右側カナ4マス</label>
+                  <input
+                    type="text"
+                    maxLength={4}
+                    value={officeSymbolKana}
+                    onChange={e => setOfficeSymbolKana(e.target.value)}
+                    placeholder="カア"
+                    className="w-full bg-white border border-pink-300 rounded-lg px-2.5 py-1.5 text-xs font-black text-slate-900 focus:ring-2 focus:ring-pink-500 focus:outline-hidden text-center"
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-pink-700 leading-tight">
+                💡 「原本マス目 精密座標インスペクター」タブで調整したピッチ設定（文字間隔）がこのプレビューにも即時反映されます。
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-0.5">提出年月日</label>
+                <input
+                  type="date"
+                  value={submissionDate}
+                  onChange={e => setSubmissionDate(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-0.5">共通賞与支払日</label>
+                <input
+                  type="date"
+                  value={commonPaymentDate}
+                  onChange={e => setCommonPaymentDate(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 block mb-0.5">事業所所在地</label>
+              <input
+                type="text"
+                value={companyAddress}
+                onChange={e => setCompanyAddress(e.target.value)}
+                placeholder="滋賀県大津市浜大津1-2-3"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-0.5">事業所名称</label>
+                <input
+                  type="text"
+                  value={companyName}
+                  onChange={e => setCompanyName(e.target.value)}
+                  placeholder="株式会社cocotte"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 block mb-0.5">事業主氏名</label>
+                <input
+                  type="text"
+                  value={companyOwnerName}
+                  onChange={e => setCompanyOwnerName(e.target.value)}
+                  placeholder="代表取締役 駒井 修一郎"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 block mb-0.5">電話番号</label>
+              <input
+                type="text"
+                value={companyPhone}
+                onChange={e => setCompanyPhone(e.target.value)}
+                placeholder="077-574-6907"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 block mb-0.5">社会保険労務士記載欄（任意）</label>
+              <input
+                type="text"
+                value={sharoushiName}
+                onChange={e => setSharoushiName(e.target.value)}
+                placeholder="社会保険労務士 氏名"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+              />
+            </div>
+          </div>
+
+          {/* ② 被保険者行 入力 */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-indigo-600" />
+                <span className="text-xs font-black text-slate-800">被保険者賞与データ（{employees.length}名）</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const newId = `emp-${Date.now()}`;
+                  const nextNum = String(employees.length + 1).padStart(3, '0');
+                  setEmployees(prev => [
+                    ...prev,
+                    {
+                      id: newId,
+                      insuranceNumber: nextNum,
+                      name: '新規 従業員',
+                      nameKana: 'シンキ ジュウギョウイン',
+                      birthDate: '1990-01-01',
+                      currencyAmount: 300000,
+                      goodsAmount: 0,
+                      isOver70: false
+                    }
+                  ]);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-bold transition cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                行追加
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+              {employees.map((emp, idx) => (
+                <div key={emp.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 relative group">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-indigo-900 flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      <span>{emp.name || '名称未設定'}</span>
+                    </span>
+                    {employees.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setEmployees(prev => prev.filter(e => e.id !== emp.id))}
+                        className="text-slate-400 hover:text-rose-600 p-1 rounded transition cursor-pointer"
+                        title="この行を削除"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">整理番号</label>
+                      <input
+                        type="text"
+                        value={emp.insuranceNumber || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setEmployees(prev => prev.map(item => item.id === emp.id ? { ...item, insuranceNumber: val } : item));
+                        }}
+                        placeholder="001"
+                        className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs font-mono font-bold text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">氏名</label>
+                      <input
+                        type="text"
+                        value={emp.name}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setEmployees(prev => prev.map(item => item.id === emp.id ? { ...item, name: val } : item));
+                        }}
+                        placeholder="氏名"
+                        className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs font-bold text-slate-900"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">生年月日</label>
+                      <input
+                        type="date"
+                        value={emp.birthDate || ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setEmployees(prev => prev.map(item => item.id === emp.id ? { ...item, birthDate: val } : item));
+                        }}
+                        className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs font-bold text-slate-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">賞与額 (通貨・円)</label>
+                      <input
+                        type="number"
+                        step={1000}
+                        value={emp.currencyAmount || ''}
+                        onChange={e => {
+                          const val = parseInt(e.target.value, 10) || 0;
+                          setEmployees(prev => prev.map(item => item.id === emp.id ? { ...item, currencyAmount: val } : item));
+                        }}
+                        placeholder="500000"
+                        className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs font-mono font-bold text-slate-900 text-right"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+
+        {/* ➡️ 右カラム：A4実寸印刷プレビュー */}
+        <div className="col-span-12 lg:col-span-8">
+          <div className="bg-slate-200/80 p-4 sm:p-6 rounded-3xl border border-slate-300 shadow-inner overflow-x-auto">
+            <OfficialBonusPaymentReportDoc
+              data={{
+                submissionDate,
+                officeSymbol,
+                officeCityCode,
+                officeSymbolKana,
+                companyAddress,
+                companyName,
+                companyOwnerName,
+                companyPhone,
+                sharoushiName,
+                commonPaymentDate,
+                employees
+              }}
+              customCoords={fields}
+              canEditCoordinates={false}
+            />
+          </div>
+        </div>
+
+      </div>
+    </div>
+  )}
+</div>
+);
 };

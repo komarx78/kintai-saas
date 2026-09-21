@@ -46,6 +46,7 @@ export interface BonusPaymentReportDocProps {
     employees: BonusReportEmployee[];
   };
   canEditCoordinates?: boolean; // 会社管理者・マスタ設定画面からのみ編集許可（軍律第23条 権限分離）
+  customCoords?: BonusDocFieldConfig[]; // 🎯 座標インスペクターからのリアルタイム最新座標（親から渡された場合は最優先で即時反映）
 }
 
 /**
@@ -567,7 +568,8 @@ const ExactPdfPageRenderer: React.FC<{
 
 export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps> = ({ 
   data, 
-  canEditCoordinates = false 
+  canEditCoordinates = false,
+  customCoords
 }) => {
   const commonDateParsed = parseDateElements(data.commonPaymentDate);
   const submissionDateParsed = parseDateElements(data.submissionDate || new Date().toISOString().split('T')[0]);
@@ -605,19 +607,21 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
   const [showInspectorModal, setShowInspectorModal] = useState(false);
 
   // 🎯 マスタ印字座標State（インスペクターやDBとのリアルタイム同期）
-  const [fieldsList, setFieldsList] = useState<BonusDocFieldConfig[]>(() => loadBonusDocCoordinates());
+  const [fieldsList, setFieldsList] = useState<BonusDocFieldConfig[]>(() => customCoords || loadBonusDocCoordinates());
 
-  // 初回DB（Supabase system_settings）からの読み込み
+  // 初回DB（Supabase system_settings）からの読み込み（親からcustomCoordsが渡されていない場合のみ）
   useEffect(() => {
+    if (customCoords) return;
     fetchBonusDocCoordinatesFromDb().then(latest => {
       if (latest && latest.length > 0) {
         setFieldsList(latest);
       }
     });
-  }, []);
+  }, [customCoords]);
 
   // リアルタイム更新イベント（同一タブ内）および storage イベント（別タブ）を監視
   useEffect(() => {
+    if (customCoords) return;
     const handleCoordsUpdate = (e: Event) => {
       const customEvent = e as CustomEvent<BonusDocFieldConfig[]>;
       if (customEvent.detail && Array.isArray(customEvent.detail)) {
@@ -640,11 +644,13 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
       window.removeEventListener(BONUS_COORDS_UPDATE_EVENT, handleCoordsUpdate);
       window.removeEventListener('storage', handleStorage);
     };
-  }, []);
+  }, [customCoords]);
 
+  // 🎯 customCoords が渡された場合は最優先（インスペクターでの調整をミリ秒即時反映）
+  const activeFields = customCoords || fieldsList;
   const coordsMap = useMemo(() => {
-    return new Map<string, BonusDocFieldConfig>(fieldsList.map(c => [c.id, c]));
-  }, [fieldsList]);
+    return new Map<string, BonusDocFieldConfig>(activeFields.map(c => [c.id, c]));
+  }, [activeFields]);
 
   return (
     <div className="official-bonus-doc-root font-sans text-black select-text">
