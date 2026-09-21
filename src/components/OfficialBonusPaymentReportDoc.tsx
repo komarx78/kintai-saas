@@ -409,15 +409,19 @@ const ExactPdfPageRenderer: React.FC<{
           <React.Fragment key={emp.id || `row-${i}`}>
             {/* 上段 ① 被保険者整理番号 */}
             <div
-              className="absolute font-mono font-bold text-slate-950"
+              className="absolute font-mono font-bold text-slate-950 flex items-center"
               style={{
                 top: `${rowTop + fEmpNumber.y}%`,
                 left: `${fEmpNumber.x}%`,
                 width: `${fEmpNumber.width || 18.0}%`,
-                fontSize: `${(fEmpNumber.fontSize || 12) * 0.115}cqi`
+                fontSize: `${(fEmpNumber.fontSize || 12) * 0.115}cqi`,
+                gap: fEmpNumber.pitch ? `${fEmpNumber.pitch * 0.35}cqi` : undefined,
+                letterSpacing: fEmpNumber.pitch ? `${fEmpNumber.pitch * 0.08}em` : undefined
               }}
             >
-              {emp.insuranceNumber || String(pageIndex * 10 + i + 1).padStart(4, '0')}
+              {(emp.insuranceNumber || String(pageIndex * 10 + i + 1).padStart(4, '0')).split('').map((c, idx) => (
+                <span key={idx} className="inline-block shrink-0">{c}</span>
+              ))}
             </div>
 
             {/* 上段 ② 被保険者氏名（※賞与支払届にはフリガナ不要のため氏名のみを枠内中央に大きく印字） */}
@@ -458,7 +462,7 @@ const ExactPdfPageRenderer: React.FC<{
                 style={{
                   top: `${rowTop + fEmpMyNumber.y}%`,
                   left: `${fEmpMyNumber.x}%`,
-                  gap: '0.62cqi',
+                  gap: fEmpMyNumber.pitch ? `${fEmpMyNumber.pitch * 0.35}cqi` : '0.62cqi',
                   fontSize: `${(fEmpMyNumber.fontSize || 10) * 0.115}cqi`
                 }}
               >
