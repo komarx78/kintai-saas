@@ -237,11 +237,29 @@ export function generateAutoShift(
       return false;
     });
 
-    // モードに応じたソート（均等配分、ベテラン優先、スコア順）
+    // モードに応じたソート（早い時間優先 ＋ 均等配分、ベテラン優先、スコア順）
+    // 開店枠・早い時間帯（店舗の不足が始まる時間）から入れるスタッフを最優先
+    const firstNeededHour = neededSlots.findIndex(s => s > 0);
+
     candidateRequests.sort((a, b) => {
       const empA = empMap.get(a.user_id);
       const empB = empMap.get(b.user_id);
-      
+
+      const [aSh] = (a.available_start_time || '24:00').split(':').map(Number);
+      const [bSh] = (b.available_start_time || '24:00').split(':').map(Number);
+
+      // 1. 開店枠（店舗の最初の不足スロット）をカバーできるスタッフを最優先
+      if (firstNeededHour !== -1) {
+        const aCanCoverFirst = aSh <= firstNeededHour;
+        const bCanCoverFirst = bSh <= firstNeededHour;
+        if (aCanCoverFirst && !bCanCoverFirst) return -1;
+        if (!aCanCoverFirst && bCanCoverFirst) return 1;
+      }
+
+      // 2. 開始時刻が早い順を優先（朝枠を確実に巻き込んで孤立を防止）
+      if (aSh !== bSh) return aSh - bSh;
+
+      // 3. モード別基準
       if (mode === 'veteran') {
         const dateA = empA?.hire_date ? new Date(empA.hire_date).getTime() : 0;
         const dateB = empB?.hire_date ? new Date(empB.hire_date).getTime() : 0;
@@ -259,7 +277,7 @@ export function generateAutoShift(
     });
 
     // =========================================================================
-    // 【第1巡：メインマッチング】
+    // 【第1巡：メインマッチング（朝枠優先＆まとまった時間マッチング）】
     // 最低勤務時間以上のまとまった連続不足ブロックに、希望時間を削ってアサイン
     // =========================================================================
     for (const req of candidateRequests) {
@@ -307,8 +325,7 @@ export function generateAutoShift(
 
     // =========================================================================
     // 【第2巡：隙間バスター（店長思考・端数枠穴埋めトリミング）】
-    // 第1巡で残った端数の不足枠（例: 08:00-10:00 の2時間枠や 19:00-21:00）に対し、
-    // まだ未配置のスタッフの最低勤務時間制限を一時緩和して希望を削って配置！
+    // 最低勤務時間を緩和するが、★絶対に2時間未満（1時間など）は作成しない！★
     // =========================================================================
     const hasRemainingShortage = neededSlots.some(count => count > 0);
     if (hasRemainingShortage) {
@@ -321,16 +338,16 @@ export function generateAutoShift(
         const reqStartHour = availSh;
         const reqEndHour = availEm > 0 ? availEh : availEh - 1;
 
-        // 不足ブロックを再探索（既に他者が埋めた分はスロットから引かれている）
+        // 不足ブロックを再探索
         const blocks = findShortageBlocks(reqStartHour, reqEndHour, neededSlots);
         if (blocks.length === 0) continue;
 
-        // 端数枠（1時間以上）であれば最も長いブロックを採用して希望時間を削る！
-        const bestBlock = blocks[0];
-        if (bestBlock.duration < 1) continue;
+        // ★重要：最低2時間以上のみ許可！1時間だけの極小シフトは絶対に作らない
+        const validBlock = blocks.find(b => b.duration >= 2);
+        if (!validBlock) continue;
 
-        const startH = bestBlock.startHour;
-        const endH = bestBlock.endHour;
+        const startH = validBlock.startHour;
+        const endH = validBlock.endHour;
 
         const finalStartStr = `${startH.toString().padStart(2, '0')}:${(startH === availSh ? availSm : 0).toString().padStart(2, '0')}`;
         const finalEndStr = `${endH.toString().padStart(2, '0')}:${(endH === availEh ? availEm : 0).toString().padStart(2, '0')}`;
@@ -356,6 +373,40 @@ export function generateAutoShift(
         if (!neededSlots.some(count => count > 0)) {
           break;
         }
+      }
+    }
+
+    // =========================================================================
+    // 【第3巡：シフト延長スマートマージ（1時間の孤立枠の吸収・合体）】
+    // 1時間だけの不足が残っている場合、別人を1時間呼ぶのではなく、
+    // 既に配置された隣接シフト（10:00〜等）を前後に延長して1時間枠を吸収！
+    // =========================================================================
+    const reqMap = new Map(dayRequests.map(r => [r.user_id, r]));
+
+    for (let h = 0; h < 24; h++) {
+      while (neededSlots[h] > 0) {
+        // 前倒し延長：h+1 から始まる本日このロールの生成シフトを探す
+        const adjacentShift = generatedShifts.find(s => {
+          if (s.role !== role || s.target_date !== targetDateStr || !s.start_time) return false;
+          const startH = parseInt(s.start_time.split(':')[0], 10);
+          return startH === h + 1;
+        });
+
+        if (!adjacentShift) break;
+
+        const empReq = reqMap.get(adjacentShift.user_id!);
+        if (!empReq || !empReq.available_start_time) break;
+
+        const [reqSh] = empReq.available_start_time.split(':').map(Number);
+        if (reqSh > h) {
+          // このスタッフは h 時から勤務できない
+          break;
+        }
+
+        // 前倒し延長実行！開始時刻を h に更新
+        const newStartStr = `${h.toString().padStart(2, '0')}:00`;
+        adjacentShift.start_time = newStartStr;
+        neededSlots[h]--;
       }
     }
   }
