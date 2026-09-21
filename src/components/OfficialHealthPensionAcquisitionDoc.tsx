@@ -175,7 +175,7 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
       officeSymbolCode: symCode,
       officeSymbolKana: symKana,
       officeNumber: officeNumber || '',
-      officeZipCode: companyInfo.zip_code || '520-0000',
+      officeZipCode: (companyInfo.zip_code || '5200000').replace(/[^0-9]/g, ''),
       officeAddress: companyInfo.address || '',
       officeName: companyInfo.name || '',
       employerName: companyInfo.representative_name || '',
@@ -205,7 +205,7 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
       goodsRemuneration_1: goodsVal ? String(goodsVal) : '',
       totalRemuneration_1: totalVal ? String(totalVal) : '',
       remarks_1: '',
-      zipCode_1: emp.zip_code || '',
+      zipCode_1: (emp.zip_code || '5200001').replace(/[^0-9]/g, ''),
       address_1: emp.address || '',
       certIssue_1: ''
     };
@@ -518,7 +518,10 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
 
             {/* 各印字項目の配置 */}
             {coords.filter(c => !c.disabled).map(field => {
-              const val = formValues[field.id] !== undefined ? formValues[field.id] : field.example;
+              let val = formValues[field.id] !== undefined ? formValues[field.id] : field.example;
+              if (field.id === 'officeZipCode' || field.id === 'zipCode_1') {
+                val = String(val || '').replace(/[^0-9]/g, '');
+              }
               const isDragging = draggingFieldId === field.id;
 
               // ⭕ 丸囲み項目の特別レンダリング（原本の選択肢を〇で囲む）

@@ -151,8 +151,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     y: 12.8,
     fontSize: 9.5,
     width: 25.0,
-    example: '520-0000',
-    description: '事業所の郵便番号'
+    example: '5200000',
+    description: '事業所の郵便番号（ハイフン不要・数字7桁）'
   },
   {
     id: 'officeAddress',
@@ -662,8 +662,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     y: 39.5,
     fontSize: 9.0,
     width: 12.0,
-    example: '520-0001',
-    description: '住民票住所の郵便番号'
+    example: '5200001',
+    description: '住民票住所の郵便番号（ハイフン不要・数字7桁）'
   },
   {
     id: 'address_1',
@@ -713,6 +713,7 @@ export function loadHealthPensionAcqCoordinates(): HealthPensionAcqFieldConfig[]
               fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
               pitch: safePitch,
               width: custom.width !== undefined ? custom.width : def.width,
+              example: (def.id === 'officeZipCode' || def.id === 'zipCode_1') ? def.example : (custom.example || def.example),
               disabled: custom.disabled
             };
           }

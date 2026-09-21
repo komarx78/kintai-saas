@@ -391,30 +391,64 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
                 const isSelected = selectedFieldId === field.id;
                 const isDragging = draggingFieldId === field.id;
 
-                // ⭕ 丸囲み項目プレビュー（現在ドロップダウンで選択されている項目のみを明瞭表示）
+                // ⭕ 丸囲み項目プレビュー（年号・取得区分・男女・被扶養者等の〇）
                 if (field.isCircle) {
-                  if (!isSelected) {
-                    return null; // 選択されていない他の丸囲みは非表示にし、画面の重複・混乱を構造的に防止
+                  // サンプルプレビューで有効な丸囲み選択肢の判定
+                  // 1. 生年月日元号: 昭和 (birthEra_1 === '5') -> birthEra_showa_1
+                  // 2. 性別（種別）: 男 (gender_1 === '1') -> gender_male_1
+                  // 3. 取得区分: 健保・厚年 (acqCategory_1 === '1') -> acqCat_kenpo_1
+                  // 4. 取得元号: 令和 (acqEra_1 === '9') -> acqEra_reiwa_1
+                  // 5. 被扶養者: 無 (dependents_1 === '0') -> dependents_none_1
+                  const sampleActiveMap: Record<string, string> = {
+                    birthEra_1: '5',       // 昭和
+                    gender_1: '1',         // 男
+                    acqCategory_1: '1',    // 健保・厚年
+                    acqEra_1: '9',         // 令和
+                    dependents_1: '0',     // 無
+                    remarks_1: ''
+                  };
+
+                  const isDefaultActive = field.circleValueKey && field.circleActiveValue
+                    ? sampleActiveMap[field.circleValueKey] === field.circleActiveValue
+                    : false;
+
+                  // 選択中でもなく、かつサンプルの有効な選択肢でもない場合は非表示（選択肢同士の重なりを防止）
+                  if (!isSelected && !isDefaultActive) {
+                    return null;
                   }
+
+                  const circleW = 24;
+                  const circleH = 16;
 
                   return (
                     <div
                       key={field.id}
                       onMouseDown={(e) => handleStartDrag(field.id, e)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedFieldId(field.id);
+                        if (field.section !== selectedSection) {
+                          setSelectedSection(field.section as any);
+                        }
+                      }}
                       style={{
                         position: 'absolute',
                         left: `${field.x}%`,
                         top: `${field.y}%`,
                         transform: 'translate(-50%, -50%)',
-                        width: '26px',
-                        height: '18px',
+                        width: `${circleW}px`,
+                        height: `${circleH}px`,
                         cursor: 'move',
-                        zIndex: 50
+                        zIndex: isSelected ? 50 : 25
                       }}
-                      className="flex items-center justify-center select-none ring-2 ring-amber-500 rounded-full bg-amber-300/85 text-slate-950 scale-110 shadow-md transition-transform"
-                      title={`${field.name} (${field.x}%, ${field.y}%) - ドラッグまたは右側パネルで微調整`}
+                      className={`flex items-center justify-center select-none rounded-full transition-all ${
+                        isSelected
+                          ? 'ring-2 ring-amber-500 bg-amber-300/60 scale-110 shadow-md font-black'
+                          : 'hover:ring-2 hover:ring-indigo-400 bg-transparent cursor-pointer'
+                      }`}
+                      title={`${field.name} (${field.x}%, ${field.y}%) - クリックして選択・微調整`}
                     >
-                      <svg viewBox="0 0 32 24" className="w-full h-full overflow-visible">
+                      <svg viewBox="0 0 32 24" className="w-full h-full overflow-visible text-slate-950">
                         <ellipse
                           cx="16"
                           cy="12"
@@ -422,11 +456,17 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
                           ry="9.5"
                           fill="none"
                           stroke="currentColor"
-                          strokeWidth="2.4"
+                          strokeWidth={isSelected ? "2.6" : "2.2"}
                         />
                       </svg>
                     </div>
                   );
+                }
+
+                // 郵便番号項目はハイフンを物理除去して7桁数字のみで描画
+                let displayVal = field.example;
+                if (field.id === 'officeZipCode' || field.id === 'zipCode_1') {
+                  displayVal = String(displayVal || '').replace(/[^0-9]/g, '');
                 }
 
                 return (
@@ -450,9 +490,9 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
                     } ${isDragging ? 'opacity-75 ring-2 ring-indigo-600 scale-105' : ''}`}
                     title={`${field.name} (${field.x}%, ${field.y}%)`}
                   >
-                    {field.pitch && field.pitch > 0 && field.example ? (
+                    {field.pitch && field.pitch > 0 && displayVal ? (
                       <div className="flex items-center pointer-events-none">
-                        {field.example.split('').map((char, charIdx) => (
+                        {displayVal.split('').map((char, charIdx) => (
                           <span 
                             key={charIdx} 
                             style={{ 
@@ -470,7 +510,7 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
                         ))}
                       </div>
                     ) : (
-                      <span>{field.example}</span>
+                      <span>{displayVal}</span>
                     )}
                   </div>
                 );
