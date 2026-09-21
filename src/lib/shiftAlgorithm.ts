@@ -84,6 +84,65 @@ export function calculateLaborCost(advanced_shifts: AdvancedShift[], user_wage_s
   return Math.round(totalCost);
 }
 
+interface ShortageBlock {
+  startHour: number;
+  endHour: number;
+  duration: number;
+  totalShortage: number;
+}
+
+/**
+ * スタッフの希望時間内で、不足しているスロット（neededSlots > 0）の連続区間を抽出
+ */
+function findShortageBlocks(
+  reqStartHour: number,
+  reqEndHour: number,
+  neededSlots: number[]
+): ShortageBlock[] {
+  const blocks: ShortageBlock[] = [];
+  let currentStart: number | null = null;
+  let currentShortage = 0;
+
+  for (let h = reqStartHour; h <= reqEndHour && h < 24; h++) {
+    if (neededSlots[h] > 0) {
+      if (currentStart === null) {
+        currentStart = h;
+        currentShortage = 0;
+      }
+      currentShortage += neededSlots[h];
+    } else {
+      if (currentStart !== null) {
+        blocks.push({
+          startHour: currentStart,
+          endHour: h,
+          duration: h - currentStart,
+          totalShortage: currentShortage
+        });
+        currentStart = null;
+        currentShortage = 0;
+      }
+    }
+  }
+
+  if (currentStart !== null) {
+    const endH = Math.min(reqEndHour + 1, 24);
+    blocks.push({
+      startHour: currentStart,
+      endHour: endH,
+      duration: endH - currentStart,
+      totalShortage: currentShortage
+    });
+  }
+
+  // 長い連続ブロックを最優先、同じ長さなら不足人数が多いブロックを優先
+  blocks.sort((a, b) => {
+    if (b.duration !== a.duration) return b.duration - a.duration;
+    return b.totalShortage - a.totalShortage;
+  });
+
+  return blocks;
+}
+
 export function generateAutoShift(
   requirements: ShiftRequirement[],
   requests: ShiftRequest[],
@@ -123,8 +182,16 @@ export function generateAutoShift(
     }
   });
 
+  // 当日すでに何らかのシフトに割り当て済みか確認する関数
+  const isAssignedToday = (userId: string) => {
+    return (
+      generatedShifts.some(s => s.user_id === userId && s.target_date === targetDateStr) ||
+      allPeriodGeneratedShifts.some(s => s.user_id === userId && s.target_date === targetDateStr) ||
+      existingShifts.some(s => s.user_id === userId && s.target_date === targetDateStr)
+    );
+  };
+
   // ロールごとに必要スロットを展開してマッチング
-  // 優先順位: レジや清掃など特定枠から順に処理
   const uniqueRoles = [...new Set(dayReqs.map(r => r.role))];
 
   for (const role of uniqueRoles) {
@@ -144,8 +211,8 @@ export function generateAutoShift(
     });
 
     // 既に本日このロールに確定/ドラフト配置されているシフト分をスロットから引く
-    existingShifts.forEach(shift => {
-      if (shift.target_date !== targetDateStr || shift.role !== role) return;
+    [...existingShifts, ...allPeriodGeneratedShifts, ...generatedShifts].forEach(shift => {
+      if (shift.target_date !== targetDateStr || shift.role !== role || !shift.start_time || !shift.end_time) return;
       const [sh] = shift.start_time.split(':').map(Number);
       const [eh, em] = shift.end_time.split(':').map(Number);
       const endHour = em > 0 ? eh : eh - 1;
@@ -157,27 +224,20 @@ export function generateAutoShift(
     // このロールを担当可能な候補者を抽出
     const candidateRequests = dayRequests.filter(req => {
       const emp = empMap.get(req.user_id);
-      if (!emp) return true; // 設定がない場合は全ロール可能とみなす
+      if (!emp) return true;
 
-      // preferred_role がある場合はそれを優先チェック
       if (req.preferred_role && req.preferred_role === role) return true;
-
-      // default_role のチェック
       if (emp.default_role && emp.default_role === role) return true;
-
-      // roles 配列のチェック
       if (emp.roles) {
         if (Array.isArray(emp.roles) && emp.roles.includes(role)) return true;
         if (typeof emp.roles === 'string' && emp.roles.includes(role)) return true;
       }
-
-      // default_role が設定されていない場合はどのロールも可能
       if (!emp.default_role) return true;
 
       return false;
     });
 
-    // モードに応じたソート
+    // モードに応じたソート（均等配分、ベテラン優先、スコア順）
     candidateRequests.sort((a, b) => {
       const empA = empMap.get(a.user_id);
       const empB = empMap.get(b.user_id);
@@ -191,7 +251,6 @@ export function generateAutoShift(
         const scoreB = empB?.priority_score ?? 3;
         return scoreB - scoreA;
       } else {
-        // equal: 既にアサインされたシフト回数が少ない人を最優先
         const countA = shiftCountMap.get(a.user_id) || 0;
         const countB = shiftCountMap.get(b.user_id) || 0;
         if (countA !== countB) return countA - countB;
@@ -199,72 +258,103 @@ export function generateAutoShift(
       }
     });
 
-    // 候補者を必要枠に順番にマッチング
+    // =========================================================================
+    // 【第1巡：メインマッチング】
+    // 最低勤務時間以上のまとまった連続不足ブロックに、希望時間を削ってアサイン
+    // =========================================================================
     for (const req of candidateRequests) {
       if (!req.available_start_time || !req.available_end_time) continue;
-
-      // 本日すでに何らかのシフトに割り当て済みか確認（1日1回・重複防止）
-      const isAssignedToday = 
-        generatedShifts.some(s => s.user_id === req.user_id && s.target_date === targetDateStr) ||
-        allPeriodGeneratedShifts.some(s => s.user_id === req.user_id && s.target_date === targetDateStr) ||
-        existingShifts.some(s => s.user_id === req.user_id && s.target_date === targetDateStr);
-      
-      if (isAssignedToday) continue;
+      if (isAssignedToday(req.user_id)) continue;
 
       const [availSh, availSm] = req.available_start_time.split(':').map(Number);
       const [availEh, availEm] = req.available_end_time.split(':').map(Number);
-
       const reqStartHour = availSh;
       const reqEndHour = availEm > 0 ? availEh : availEh - 1;
 
-      // このスタッフの希望時間内で、必要枠（スロット > 0）が存在するか確認
-      let bestStartHour: number | null = null;
-      let bestEndHour: number | null = null;
+      // 希望時間内の連続不足ブロックを探索
+      const blocks = findShortageBlocks(reqStartHour, reqEndHour, neededSlots);
+      if (blocks.length === 0) continue;
 
-      for (let h = reqStartHour; h <= reqEndHour && h < 24; h++) {
-        if (neededSlots[h] > 0) {
-          if (bestStartHour === null) bestStartHour = h;
-          bestEndHour = h;
-        } else if (bestStartHour !== null) {
-          // 連続スロットが途切れたら終了
-          break;
-        }
+      const requiredMinHours = empMap.get(req.user_id)?.min_shift_hours ?? 3;
+      // 最低勤務時間を満たすブロックを探す
+      const validBlock = blocks.find(b => b.duration >= requiredMinHours);
+      if (!validBlock) continue;
+
+      // 店舗の不足枠に合わせて希望時間を削る（トリミング）
+      const startH = validBlock.startHour;
+      const endH = validBlock.endHour;
+
+      const finalStartStr = `${startH.toString().padStart(2, '0')}:${(startH === availSh ? availSm : 0).toString().padStart(2, '0')}`;
+      const finalEndStr = `${endH.toString().padStart(2, '0')}:${(endH === availEh ? availEm : 0).toString().padStart(2, '0')}`;
+
+      const newShift: Partial<AdvancedShift> = {
+        user_id: req.user_id,
+        target_date: targetDateStr,
+        start_time: finalStartStr,
+        end_time: finalEndStr,
+        role: role,
+        status: 'draft'
+      };
+
+      generatedShifts.push(newShift);
+      shiftCountMap.set(req.user_id, (shiftCountMap.get(req.user_id) || 0) + 1);
+
+      // 割り当てたスロットを消費
+      for (let h = startH; h < endH && h < 24; h++) {
+        if (neededSlots[h] > 0) neededSlots[h]--;
       }
+    }
 
-      // 枠不足の時間帯があり、配置可能な場合
-      if (bestStartHour !== null && bestEndHour !== null) {
-        const startH = Math.max(availSh, bestStartHour);
-        const endH = Math.min(availEh, bestEndHour + 1);
-        const shiftDuration = endH - startH;
+    // =========================================================================
+    // 【第2巡：隙間バスター（店長思考・端数枠穴埋めトリミング）】
+    // 第1巡で残った端数の不足枠（例: 08:00-10:00 の2時間枠や 19:00-21:00）に対し、
+    // まだ未配置のスタッフの最低勤務時間制限を一時緩和して希望を削って配置！
+    // =========================================================================
+    const hasRemainingShortage = neededSlots.some(count => count > 0);
+    if (hasRemainingShortage) {
+      for (const req of candidateRequests) {
+        if (!req.available_start_time || !req.available_end_time) continue;
+        if (isAssignedToday(req.user_id)) continue;
 
-        // スタッフの最低勤務時間（指定なし時は3時間）を下回る極小シフト（1時間だけ等）は割り当てない
-        const requiredMinHours = empMap.get(req.user_id)?.min_shift_hours ?? 3;
-        if (shiftDuration < requiredMinHours) {
-          continue;
+        const [availSh, availSm] = req.available_start_time.split(':').map(Number);
+        const [availEh, availEm] = req.available_end_time.split(':').map(Number);
+        const reqStartHour = availSh;
+        const reqEndHour = availEm > 0 ? availEh : availEh - 1;
+
+        // 不足ブロックを再探索（既に他者が埋めた分はスロットから引かれている）
+        const blocks = findShortageBlocks(reqStartHour, reqEndHour, neededSlots);
+        if (blocks.length === 0) continue;
+
+        // 端数枠（1時間以上）であれば最も長いブロックを採用して希望時間を削る！
+        const bestBlock = blocks[0];
+        if (bestBlock.duration < 1) continue;
+
+        const startH = bestBlock.startHour;
+        const endH = bestBlock.endHour;
+
+        const finalStartStr = `${startH.toString().padStart(2, '0')}:${(startH === availSh ? availSm : 0).toString().padStart(2, '0')}`;
+        const finalEndStr = `${endH.toString().padStart(2, '0')}:${(endH === availEh ? availEm : 0).toString().padStart(2, '0')}`;
+
+        const newShift: Partial<AdvancedShift> = {
+          user_id: req.user_id,
+          target_date: targetDateStr,
+          start_time: finalStartStr,
+          end_time: finalEndStr,
+          role: role,
+          status: 'draft'
+        };
+
+        generatedShifts.push(newShift);
+        shiftCountMap.set(req.user_id, (shiftCountMap.get(req.user_id) || 0) + 1);
+
+        // 枠を消費
+        for (let h = startH; h < endH && h < 24; h++) {
+          if (neededSlots[h] > 0) neededSlots[h]--;
         }
 
-        if (endH > startH) {
-          const finalStartStr = `${startH.toString().padStart(2, '0')}:${(startH === availSh ? availSm : 0).toString().padStart(2, '0')}`;
-          const finalEndStr = `${endH.toString().padStart(2, '0')}:${(endH === availEh ? availEm : 0).toString().padStart(2, '0')}`;
-
-          const newShift: Partial<AdvancedShift> = {
-            user_id: req.user_id,
-            target_date: targetDateStr,
-            start_time: finalStartStr,
-            end_time: finalEndStr,
-            role: role,
-            status: 'draft'
-          };
-
-          generatedShifts.push(newShift);
-          shiftCountMap.set(req.user_id, (shiftCountMap.get(req.user_id) || 0) + 1);
-
-          // 割り当てたスロットを消費（過剰配置を完全防止）
-          for (let h = startH; h < endH && h < 24; h++) {
-            if (neededSlots[h] > 0) {
-              neededSlots[h]--;
-            }
-          }
+        // すべての不足枠が埋まったら第2巡終了
+        if (!neededSlots.some(count => count > 0)) {
+          break;
         }
       }
     }
