@@ -237,12 +237,17 @@ const ExactPdfPageRenderer: React.FC<{
       {symbolDigits && (
         <div
           className="absolute flex items-center font-mono font-bold text-slate-950 z-10"
-          style={{ top: `${fDigits.y}%`, height: '2.90%', left: `${fDigits.x}%` }}
+          style={{
+            top: `${fDigits.y}%`,
+            height: '2.90%',
+            left: `${fDigits.x}%`,
+            width: `${(fDigits.pitch || 4.92) * 2}cqi`
+          }}
         >
           {symbolDigits.split('').slice(0, 2).map((char, idx) => (
             <span
               key={idx}
-              className="inline-flex items-center justify-center font-black text-center"
+              className="inline-flex items-center justify-center font-black text-center shrink-0"
               style={{ width: `${fDigits.pitch || 4.92}cqi`, height: '100%', fontSize: `${(fDigits.fontSize || 14) * 0.115}cqi` }}
             >
               {char}
@@ -254,15 +259,20 @@ const ExactPdfPageRenderer: React.FC<{
       {symbolKana && (
         <div
           className="absolute flex items-center font-sans font-bold text-slate-950 z-10"
-          style={{ top: `${fKana.y}%`, height: '2.90%', left: `${fKana.x}%` }}
+          style={{
+            top: `${fKana.y}%`,
+            height: '2.90%',
+            left: `${fKana.x}%`,
+            width: `${(fKana.pitch || 2.39) * 4}cqi`
+          }}
         >
           {symbolKana.split('').slice(0, 4).map((char, idx) => {
-            const w = fKana.pitch ? `${fKana.pitch}cqi` : '2.39cqi';
+            const pitchVal = fKana.pitch || 2.39;
             return (
               <span
                 key={idx}
-                className="inline-flex items-center justify-center font-black text-center"
-                style={{ width: w, height: '100%', fontSize: `${(fKana.fontSize || 13) * 0.115}cqi` }}
+                className="inline-flex items-center justify-center font-black text-center shrink-0"
+                style={{ width: `${pitchVal}cqi`, height: '100%', fontSize: `${(fKana.fontSize || 13) * 0.115}cqi` }}
               >
                 {char}
               </span>
