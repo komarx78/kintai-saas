@@ -282,6 +282,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '生年月日が昭和の場合に原本の「5.昭和」を〇で囲みます',
     isCircle: true,
+    circleWidth: 24,
+    circleHeight: 16,
     circleValueKey: 'birthEra_1',
     circleActiveValue: '5'
   },
@@ -296,6 +298,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '生年月日が平成の場合に原本の「7.平成」を〇で囲みます',
     isCircle: true,
+    circleWidth: 24,
+    circleHeight: 16,
     circleValueKey: 'birthEra_1',
     circleActiveValue: '7'
   },
@@ -310,6 +314,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '生年月日が令和の場合に原本の「9.令和」を〇で囲みます',
     isCircle: true,
+    circleWidth: 24,
+    circleHeight: 16,
     circleValueKey: 'birthEra_1',
     circleActiveValue: '9'
   },
@@ -358,6 +364,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '性別が「男」の場合に原本の「1.男」を〇で囲みます',
     isCircle: true,
+    circleWidth: 22,
+    circleHeight: 16,
     circleValueKey: 'gender_1',
     circleActiveValue: '1'
   },
@@ -372,6 +380,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '性別が「女」の場合に原本の「2.女」を〇で囲みます',
     isCircle: true,
+    circleWidth: 22,
+    circleHeight: 16,
     circleValueKey: 'gender_1',
     circleActiveValue: '2'
   },
@@ -386,6 +396,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '坑内員の場合に原本の「3.坑内員」を〇で囲みます',
     isCircle: true,
+    circleWidth: 26,
+    circleHeight: 16,
     circleValueKey: 'gender_1',
     circleActiveValue: '3'
   },
@@ -400,6 +412,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '男(基金)の場合に原本の「5.男(基金)」を〇で囲みます',
     isCircle: true,
+    circleWidth: 30,
+    circleHeight: 16,
     circleValueKey: 'gender_1',
     circleActiveValue: '5'
   },
@@ -414,8 +428,26 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '女(基金)の場合に原本の「6.女(基金)」を〇で囲みます',
     isCircle: true,
+    circleWidth: 30,
+    circleHeight: 16,
     circleValueKey: 'gender_1',
     circleActiveValue: '6'
+  },
+  {
+    id: 'gender_miner_fund_1',
+    name: '④ 種別 [7.坑内員(基金) 〇]',
+    section: 'insured_person_1',
+    x: 88.8,
+    y: 28.8,
+    fontSize: 10.0,
+    width: 3.5,
+    example: '〇',
+    description: '坑内員(基金)の場合に原本の「7.坑内員(基金)」を〇で囲みます',
+    isCircle: true,
+    circleWidth: 34,
+    circleHeight: 16,
+    circleValueKey: 'gender_1',
+    circleActiveValue: '7'
   },
   // ── ⑤ 取得区分（〇で囲む・選択肢個別） ──
   {
@@ -429,6 +461,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '健保・厚年の場合に原本の「1.健保・厚年」を〇で囲みます',
     isCircle: true,
+    circleWidth: 32,
+    circleHeight: 16,
     circleValueKey: 'acqCategory_1',
     circleActiveValue: '1'
   },
@@ -443,6 +477,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '共済出向の場合に原本の「3.共済出向」を〇で囲みます',
     isCircle: true,
+    circleWidth: 28,
+    circleHeight: 16,
     circleValueKey: 'acqCategory_1',
     circleActiveValue: '3'
   },
@@ -457,6 +493,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '船保任継の場合に原本の「4.船保任継」を〇で囲みます',
     isCircle: true,
+    circleWidth: 28,
+    circleHeight: 16,
     circleValueKey: 'acqCategory_1',
     circleActiveValue: '4'
   },
@@ -484,6 +522,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '取得年号が令和の場合に原本の「9.令和」を〇で囲みます',
     isCircle: true,
+    circleWidth: 24,
+    circleHeight: 16,
     circleValueKey: 'acqEra_1',
     circleActiveValue: '9'
   },
@@ -532,6 +572,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '被扶養者なしの場合に原本の「0.無」を〇で囲みます',
     isCircle: true,
+    circleWidth: 22,
+    circleHeight: 16,
     circleValueKey: 'dependents_1',
     circleActiveValue: '0'
   },
@@ -546,6 +588,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '被扶養者ありの場合に原本の「1.有」を〇で囲みます',
     isCircle: true,
+    circleWidth: 22,
+    circleHeight: 16,
     circleValueKey: 'dependents_1',
     circleActiveValue: '1'
   },
@@ -597,6 +641,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '70歳以上被用者の場合に原本の「1.70歳以上被用者該当」を〇で囲みます',
     isCircle: true,
+    circleWidth: 36,
+    circleHeight: 16,
     circleValueKey: 'remarks_1',
     circleActiveValue: '1'
   },
@@ -611,6 +657,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '二以上事業所勤務の場合に原本の「2.二以上事業所勤務者の取得」を〇で囲みます',
     isCircle: true,
+    circleWidth: 38,
+    circleHeight: 16,
     circleValueKey: 'remarks_1',
     circleActiveValue: '2'
   },
@@ -625,6 +673,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '短時間労働者の場合に原本の「3.短時間労働者の取得」を〇で囲みます',
     isCircle: true,
+    circleWidth: 42,
+    circleHeight: 16,
     circleValueKey: 'remarks_1',
     circleActiveValue: '3'
   },
@@ -639,6 +689,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: '退職後継続再雇用の取得の場合に原本の「4.退職後の継続再雇用者の取得」を〇で囲みます',
     isCircle: true,
+    circleWidth: 40,
+    circleHeight: 16,
     circleValueKey: 'remarks_1',
     circleActiveValue: '4'
   },
@@ -653,6 +705,8 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '〇',
     description: 'その他の場合に原本の「5.その他」を〇で囲みます',
     isCircle: true,
+    circleWidth: 28,
+    circleHeight: 16,
     circleValueKey: 'remarks_1',
     circleActiveValue: '5'
   },
@@ -715,6 +769,8 @@ export function loadHealthPensionAcqCoordinates(): HealthPensionAcqFieldConfig[]
               fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
               pitch: safePitch,
               width: custom.width !== undefined ? custom.width : def.width,
+              circleWidth: custom.circleWidth !== undefined ? custom.circleWidth : def.circleWidth,
+              circleHeight: custom.circleHeight !== undefined ? custom.circleHeight : def.circleHeight,
               example: (def.id === 'officeZipCode' || def.id === 'zipCode_1') ? def.example : (custom.example || def.example),
               disabled: custom.disabled
             };
@@ -767,6 +823,8 @@ export async function fetchHealthPensionAcqCoordinatesFromDb(): Promise<HealthPe
             fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
             pitch: safePitch,
             width: custom.width !== undefined ? custom.width : def.width,
+            circleWidth: custom.circleWidth !== undefined ? custom.circleWidth : def.circleWidth,
+            circleHeight: custom.circleHeight !== undefined ? custom.circleHeight : def.circleHeight,
             disabled: custom.disabled
           };
         }

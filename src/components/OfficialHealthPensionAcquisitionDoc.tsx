@@ -536,8 +536,8 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
                   return null;
                 }
 
-                const circleW = 24;
-                const circleH = 16;
+                const circleW = field.circleWidth || 24;
+                const circleH = field.circleHeight || 16;
 
                 return (
                   <div
@@ -876,6 +876,7 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
                     <option value="3">3. 坑内員 〇</option>
                     <option value="5">5. 男(基金) 〇</option>
                     <option value="6">6. 女(基金) 〇</option>
+                    <option value="7">7. 坑内員(基金) 〇</option>
                   </select>
                 </div>
                 <div>
