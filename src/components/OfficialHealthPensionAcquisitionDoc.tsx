@@ -33,6 +33,7 @@ export interface HealthPensionAcquisitionEmployee {
   dependents_count?: number;
   employment_type?: string;
   address?: string;
+  address_kana?: string;
   zip_code?: string;
 }
 
@@ -206,6 +207,7 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
       totalRemuneration_1: totalVal ? String(totalVal) : '',
       remarks_1: '',
       zipCode_1: (emp.zip_code || '5200001').replace(/[^0-9]/g, ''),
+      addressKana_1: emp.address_kana || '',
       address_1: emp.address || '',
       certIssue_1: ''
     };
@@ -1025,23 +1027,46 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
                 </div>
               </div>
 
-              {/* 住所 */}
-              <div>
-                <label className="text-[10px] text-slate-500">郵便番号 ＆ 住所</label>
+              {/* ⑪ 住所 ＆ フリガナ */}
+              <div className="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <label className="text-[10px] font-bold text-slate-700">⑪ 住所 ＆ フリガナ</label>
+                  {formValues['myNumberOrPension_1'] && formValues['myNumberOrPension_1'].length === 12 && (
+                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                      💡 マイナンバー記入時は原本規定により住所省略可
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-3 gap-2">
-                  <input
-                    type="text"
-                    value={formValues['zipCode_1'] || ''}
-                    onChange={(e) => handleInputChange('zipCode_1', e.target.value)}
-                    className="col-span-1 p-1.5 border border-slate-300 rounded font-mono font-bold"
-                    placeholder="〒郵便番号"
-                  />
+                  <div className="col-span-1">
+                    <label className="text-[9px] text-slate-500 block mb-0.5">郵便番号</label>
+                    <input
+                      type="text"
+                      value={formValues['zipCode_1'] || ''}
+                      onChange={(e) => handleInputChange('zipCode_1', e.target.value)}
+                      className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold bg-white"
+                      placeholder="520-0001"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[9px] text-slate-500 block mb-0.5">住所 フリガナ（カタカナ・上段）</label>
+                    <input
+                      type="text"
+                      value={formValues['addressKana_1'] ?? ''}
+                      onChange={(e) => handleInputChange('addressKana_1', e.target.value)}
+                      className="w-full p-1.5 border border-slate-300 rounded font-bold bg-white text-xs"
+                      placeholder="シガケンオオツシハマオオツ1-1-1"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[9px] text-slate-500 block mb-0.5">住民票 住所（漢字・下段）</label>
                   <input
                     type="text"
                     value={formValues['address_1'] || ''}
                     onChange={(e) => handleInputChange('address_1', e.target.value)}
-                    className="col-span-2 p-1.5 border border-slate-300 rounded font-bold"
-                    placeholder="住民票住所"
+                    className="w-full p-1.5 border border-slate-300 rounded font-bold bg-white"
+                    placeholder="滋賀県大津市浜大津1-1-1"
                   />
                 </div>
               </div>

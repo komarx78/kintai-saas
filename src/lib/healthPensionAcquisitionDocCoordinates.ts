@@ -748,15 +748,26 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     description: '住民票住所の郵便番号下4桁（マス目印字）'
   },
   {
-    id: 'address_1',
-    name: '⑪ 住所',
+    id: 'addressKana_1',
+    name: '⑪ 住所 フリガナ',
     section: 'insured_person_1',
     x: 26.0,
-    y: 39.5,
+    y: 38.8,
+    fontSize: 7.5,
+    width: 50.0,
+    example: 'シガケンオオツシハマオオツ1-1-1',
+    description: '住民票住所のフリガナ（上段枠・カタカナ）'
+  },
+  {
+    id: 'address_1',
+    name: '⑪ 住所（漢字）',
+    section: 'insured_person_1',
+    x: 26.0,
+    y: 40.2,
     fontSize: 9.0,
     width: 50.0,
     example: '滋賀県大津市浜大津1-1-1',
-    description: '住民票上の住所（個人番号記入時は省略可）'
+    description: '住民票上の住所（下段枠・個人番号記入時は省略可）'
   },
   {
     id: 'certIssue_1',
@@ -813,10 +824,16 @@ export function loadHealthPensionAcqCoordinates(): HealthPensionAcqFieldConfig[]
 
             const isZipField = def.id === 'officeZipCode_first' || def.id === 'officeZipCode_last' || def.id === 'zipCode_first_1' || def.id === 'zipCode_last_1';
 
+            // 旧 address_1 の初期値（39.5）だった場合は新下段初期値（40.2）へ自動補正
+            let safeY = custom.y !== undefined ? custom.y : def.y;
+            if (def.id === 'address_1' && safeY === 39.5) {
+              safeY = 40.2;
+            }
+
             return {
               ...def,
               x: custom.x !== undefined ? custom.x : def.x,
-              y: custom.y !== undefined ? custom.y : def.y,
+              y: safeY,
               fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
               pitch: safePitch,
               width: custom.width !== undefined ? custom.width : def.width,
@@ -892,10 +909,16 @@ export async function fetchHealthPensionAcqCoordinatesFromDb(): Promise<HealthPe
 
           const isZipField = def.id === 'officeZipCode_first' || def.id === 'officeZipCode_last' || def.id === 'zipCode_first_1' || def.id === 'zipCode_last_1';
 
+          // 旧 address_1 の初期値（39.5）だった場合は新下段初期値（40.2）へ自動補正
+          let safeY = custom.y !== undefined ? custom.y : def.y;
+          if (def.id === 'address_1' && safeY === 39.5) {
+            safeY = 40.2;
+          }
+
           return {
             ...def,
             x: custom.x !== undefined ? custom.x : def.x,
-            y: custom.y !== undefined ? custom.y : def.y,
+            y: safeY,
             fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
             pitch: safePitch,
             width: custom.width !== undefined ? custom.width : def.width,

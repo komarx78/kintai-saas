@@ -24,6 +24,7 @@ export interface SocialInsuranceEmployee {
   dependents_count?: number;
   employment_type?: string;
   address?: string;
+  address_kana?: string;
   zip_code?: string;
 }
 

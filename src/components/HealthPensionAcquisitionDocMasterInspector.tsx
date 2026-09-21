@@ -227,6 +227,7 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
       dependents_count: 0,
       employment_type: 'full_time',
       address: '滋賀県大津市浜大津1-2-3',
+      address_kana: 'シガケンオオツシハマオオツ1-2-3',
       zip_code: '520-0047'
     },
     {
@@ -249,6 +250,7 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
       dependents_count: 1,
       employment_type: 'full_time',
       address: '滋賀県草津市西渋川1-1-1',
+      address_kana: 'シガケンクサツシニシシブカワ1-1-1',
       zip_code: '525-0026'
     }
   ];
