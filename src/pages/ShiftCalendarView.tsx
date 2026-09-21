@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -30,6 +30,10 @@ const ShiftCalendarView: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<ShiftRole[]>([]);
   const [requirements, setRequirements] = useState<any[]>([]);
+  const [rawRequests, setRawRequests] = useState<any[]>([]);
+  const [userRoleMapState, setUserRoleMapState] = useState<Record<string, string>>({});
+  const [isWorkloadPanelOpen, setIsWorkloadPanelOpen] = useState(false);
+
   const location = useLocation();
   const queryDate = new URLSearchParams(location.search).get('date');
   const [baseDate, setBaseDate] = useState(queryDate ? new Date(queryDate) : new Date());
@@ -134,6 +138,8 @@ const ShiftCalendarView: React.FC = () => {
           user: { name: userMap[r.user_id] || '不明' }
         }));
       
+      setRawRequests(requestsData || []);
+      setUserRoleMapState(userRoleMap);
       setShifts([...formattedShifts, ...formattedRequests]);
 
     } catch (error) {
@@ -359,6 +365,66 @@ const ShiftCalendarView: React.FC = () => {
   }
   const dateRange = eachDayOfInterval({ start: startDate, end: endDate });
 
+  // スタッフ別 稼働バランス集計（公平性・未配置チェック）
+  const staffStats = useMemo(() => {
+    return users.map(user => {
+      // この期間の有効な希望シフト（日付ユニーク）
+      const userRequests = rawRequests.filter(r => r.user_id === user.id && r.available_start_time && r.available_end_time);
+      const requestedDates = new Set(userRequests.map(r => r.target_date));
+      const requestedDays = requestedDates.size;
+
+      // この期間の実働シフト（ドラフト または 確定）
+      const userAssignedShifts = shifts.filter(s => s.user_id === user.id && s.status !== 'request');
+      const assignedDates = new Set(userAssignedShifts.map(s => s.target_date));
+      const assignedDays = assignedDates.size;
+
+      // 合計勤務時間
+      let totalMinutes = 0;
+      userAssignedShifts.forEach(s => {
+        if (!s.start_time || !s.end_time) return;
+        const [sh, sm] = s.start_time.split(':').map(Number);
+        const [eh, em] = s.end_time.split(':').map(Number);
+        let diff = (eh * 60 + em) - (sh * 60 + sm);
+        if (diff < 0) diff += 24 * 60;
+        totalMinutes += diff;
+      });
+      const totalHours = Math.round((totalMinutes / 60) * 10) / 10;
+      const roleName = userRoleMapState[user.id] || (roles[0]?.name || 'ホール');
+
+      let status: 'unassigned' | 'low' | 'balanced' | 'high' | 'no_request' = 'no_request';
+      if (requestedDays > 0 && assignedDays === 0) {
+        status = 'unassigned'; // 🚨 未配置（希望を出したのに出番ゼロ！）
+      } else if (requestedDays === 0 && assignedDays === 0) {
+        status = 'no_request';
+      } else if (assignedDays >= 5) {
+        status = 'high'; // 🟡 多め（過密注意）
+      } else if (assignedDays === 1 || assignedDays === 2) {
+        status = 'low'; // 🔵 少なめ
+      } else {
+        status = 'balanced'; // 🟢 適正
+      }
+
+      return {
+        userId: user.id,
+        name: user.name,
+        roleName,
+        requestedDays,
+        assignedDays,
+        totalHours,
+        status
+      };
+    }).sort((a, b) => {
+      // 未配置を最上部に表示、次に配置日数が少ない順（均等化チェック用）
+      if (a.status === 'unassigned' && b.status !== 'unassigned') return -1;
+      if (a.status !== 'unassigned' && b.status === 'unassigned') return 1;
+      return a.assignedDays - b.assignedDays;
+    });
+  }, [users, rawRequests, shifts, userRoleMapState, roles]);
+
+  const unassignedStaffList = useMemo(() => {
+    return staffStats.filter(s => s.status === 'unassigned');
+  }, [staffStats]);
+
   const movePeriod = (dir: 1 | -1) => {
     if (displayPeriod === '1day') setBaseDate(addDays(baseDate, dir * 1));
     else if (displayPeriod === '1week') setBaseDate(addDays(baseDate, dir * 7));
@@ -511,6 +577,197 @@ const ShiftCalendarView: React.FC = () => {
           </button>
         </div>
 
+        {/* 🚨 未配置スタッフ（出勤ゼロ）警告アラートバナー */}
+        {unassignedStaffList.length > 0 && (
+          <div className="mb-4 bg-rose-50 border-2 border-rose-300 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-start md:items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0 shadow-md">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black bg-rose-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    店長チェック必須
+                  </span>
+                  <h3 className="font-black text-rose-900 text-base">
+                    希望を出したのに【一度も割り当てられていないスタッフ】が {unassignedStaffList.length}名 います！
+                  </h3>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                  {unassignedStaffList.map(st => (
+                    <span key={st.userId} className="inline-flex items-center gap-1.5 bg-white border border-rose-200 text-rose-800 px-2.5 py-1 rounded-lg text-xs font-bold shadow-xs">
+                      <User className="w-3.5 h-3.5 text-rose-500" />
+                      <span>{st.name}</span>
+                      <span className="text-rose-500 font-normal">（希望 {st.requestedDays}日 ➔ 配置 0日）</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <button 
+              onClick={() => setIsWorkloadPanelOpen(true)}
+              className="shrink-0 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm hover:shadow cursor-pointer flex items-center gap-1.5 self-start md:self-center"
+            >
+              <Users className="w-4 h-4" />
+              稼働バランス盤で確認する ≫
+            </button>
+          </div>
+        )}
+
+        {/* 📊 スタッフ別 稼働バランス＆公平性チェッカー盤（開閉式） */}
+        <div className="mb-4 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden transition-all">
+          <div 
+            onClick={() => setIsWorkloadPanelOpen(!isWorkloadPanelOpen)}
+            className="p-3 sm:px-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors select-none"
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-xl text-white shadow-xs ${unassignedStaffList.length > 0 ? 'bg-amber-500' : 'bg-indigo-600'}`}>
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-black text-slate-800 text-sm sm:text-base">
+                    📊 スタッフ稼働バランス・公平性チェッカー盤
+                  </h3>
+                  {unassignedStaffList.length > 0 ? (
+                    <span className="bg-rose-100 text-rose-700 text-xs font-black px-2 py-0.5 rounded-full border border-rose-200 animate-pulse">
+                      ⚠️ 未配置 {unassignedStaffList.length}名
+                    </span>
+                  ) : (
+                    <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      希望者 全員配置済
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  誰が何日・何時間入っているかを一覧確認し、シフトの偏りや未配置を即座にチェックできます
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-indigo-600 hidden sm:inline">
+                {isWorkloadPanelOpen ? '閉じる' : 'クリックして全スタッフの稼働を見る'}
+              </span>
+              <div className={`p-1.5 rounded-lg bg-slate-100 text-slate-600 transition-transform duration-200 ${isWorkloadPanelOpen ? 'rotate-180' : ''}`}>
+                <ChevronDown className="w-4 h-4" />
+              </div>
+            </div>
+          </div>
+
+          {isWorkloadPanelOpen && (
+            <div className="border-t border-slate-100 p-4 bg-slate-50/50">
+              {/* クイック指標サマリー */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+                  <div className="text-[11px] font-bold text-slate-400">対象スタッフ総数</div>
+                  <div className="text-lg font-black text-slate-800 mt-0.5">{users.length}名</div>
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-emerald-200 shadow-xs">
+                  <div className="text-[11px] font-bold text-emerald-600">適正均等（3〜4日）</div>
+                  <div className="text-lg font-black text-emerald-700 mt-0.5">
+                    {staffStats.filter(s => s.status === 'balanced').length}名
+                  </div>
+                </div>
+                <div className="bg-white p-3 rounded-xl border border-amber-200 shadow-xs">
+                  <div className="text-[11px] font-bold text-amber-600">過密注意（5日以上）</div>
+                  <div className="text-lg font-black text-amber-700 mt-0.5">
+                    {staffStats.filter(s => s.status === 'high').length}名
+                  </div>
+                </div>
+                <div className={`p-3 rounded-xl border shadow-xs ${unassignedStaffList.length > 0 ? 'bg-rose-50 border-rose-300' : 'bg-white border-slate-200'}`}>
+                  <div className={`text-[11px] font-bold ${unassignedStaffList.length > 0 ? 'text-rose-600 font-black' : 'text-slate-400'}`}>
+                    未配置（出勤ゼロ）
+                  </div>
+                  <div className={`text-lg font-black mt-0.5 ${unassignedStaffList.length > 0 ? 'text-rose-700' : 'text-slate-800'}`}>
+                    {unassignedStaffList.length}名
+                  </div>
+                </div>
+              </div>
+
+              {/* スタッフ一覧テーブル */}
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-100/80 text-slate-600 font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="py-2.5 px-4">スタッフ名</th>
+                        <th className="py-2.5 px-3">主な役割</th>
+                        <th className="py-2.5 px-3 text-center">希望日数</th>
+                        <th className="py-2.5 px-3 text-center">確定・下書き</th>
+                        <th className="py-2.5 px-3 text-right">週間労働時間</th>
+                        <th className="py-2.5 px-4 text-center">公平性判定</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {staffStats.map(st => (
+                        <tr key={st.userId} className={`hover:bg-slate-50 transition-colors ${st.status === 'unassigned' ? 'bg-rose-50/40 font-bold' : ''}`}>
+                          <td className="py-2.5 px-4 font-bold text-slate-800 flex items-center gap-2">
+                            <User className={`w-3.5 h-3.5 ${st.status === 'unassigned' ? 'text-rose-500' : 'text-slate-400'}`} />
+                            <span>{st.name}</span>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600">
+                            <span className="bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                              {st.roleName}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center text-slate-600 font-medium">
+                            {st.requestedDays > 0 ? `${st.requestedDays}日` : <span className="text-slate-300">-</span>}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={`text-xs font-black px-2 py-0.5 rounded ${
+                              st.status === 'unassigned' 
+                                ? 'bg-rose-600 text-white'
+                                : st.assignedDays >= 5
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : st.assignedDays > 0
+                                    ? 'bg-indigo-50 text-indigo-700'
+                                    : 'text-slate-300'
+                            }`}>
+                              {st.assignedDays}日
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-700">
+                            {st.totalHours > 0 ? `${st.totalHours}h` : <span className="text-slate-300">0.0h</span>}
+                          </td>
+                          <td className="py-2.5 px-4 text-center">
+                            {st.status === 'unassigned' && (
+                              <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-full text-[11px] font-black animate-pulse">
+                                🚨 未配置（要調整）
+                              </span>
+                            )}
+                            {st.status === 'balanced' && (
+                              <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-[11px] font-bold">
+                                🟢 適正均等
+                              </span>
+                            )}
+                            {st.status === 'high' && (
+                              <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-[11px] font-bold">
+                                🟡 多め（過密）
+                              </span>
+                            )}
+                            {st.status === 'low' && (
+                              <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-[11px] font-bold">
+                                🔵 少なめ
+                              </span>
+                            )}
+                            {st.status === 'no_request' && (
+                              <span className="text-slate-400 text-[11px]">
+                                希望なし
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* 凡例 (Legend) */}
         <div className="flex items-center space-x-6 mb-4 px-4">
           <div className="flex items-center space-x-2">
@@ -549,7 +806,7 @@ const ShiftCalendarView: React.FC = () => {
                     <div className="overflow-x-auto">
                       <div className="min-w-[800px]">
                         <div className="flex border-b border-slate-200 bg-slate-50">
-                          <div className="w-48 shrink-0 p-2 font-bold text-slate-500 border-r border-slate-200 text-sm flex items-center justify-center bg-slate-100 sticky left-0 z-20">
+                          <div className="w-56 shrink-0 p-2 font-bold text-slate-500 border-r border-slate-200 text-sm flex items-center justify-center bg-slate-100 sticky left-0 z-20">
                             スタッフ / 役割
                           </div>
                           <div className="flex-1 flex">
@@ -568,14 +825,14 @@ const ShiftCalendarView: React.FC = () => {
 
                             return (
                               <React.Fragment key={role.name}>
-                                <div className="bg-slate-50/50 px-3 py-1.5 font-bold text-xs text-slate-600 flex items-center border-b border-slate-100 sticky left-0 z-10 w-48">
+                                <div className="bg-slate-50/50 px-3 py-1.5 font-bold text-xs text-slate-600 flex items-center border-b border-slate-100 sticky left-0 z-10 w-56">
                                   <div className="w-2 h-2 rounded-full mr-2 shadow-sm" style={{backgroundColor: role.color}}></div>
                                   {role.name}
                                 </div>
 
                                 {staffIds.length === 0 ? (
                                    <div className="flex text-sm group">
-                                     <div className="w-48 shrink-0 p-2 text-slate-400 border-r border-slate-100 flex items-center sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors">
+                                     <div className="w-56 shrink-0 p-2 text-slate-400 border-r border-slate-100 flex items-center sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors">
                                        <span className="ml-6 text-xs">配置なし</span>
                                      </div>
                                      <div className="flex-1 flex relative bg-slate-50/20">
@@ -590,12 +847,34 @@ const ShiftCalendarView: React.FC = () => {
                                   staffIds.map(uid => {
                                     const userObj = users.find(u => u.id === uid);
                                     const userShifts = roleShifts.filter(s => s.user_id === uid);
+                                    const userStats = staffStats.find(st => st.userId === uid);
 
                                     return (
                                       <div key={uid} className="flex group hover:bg-slate-50 transition-colors">
-                                        <div className="w-48 shrink-0 p-2 font-bold text-slate-700 border-r border-slate-100 flex items-center sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors shadow-[1px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                                          <User className="w-4 h-4 mr-2 text-slate-400" />
-                                          <span className="truncate text-sm">{userObj?.name || '不明なユーザー'}</span>
+                                        <div className="w-56 shrink-0 p-2 font-bold text-slate-700 border-r border-slate-100 flex items-center justify-between sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors shadow-[1px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                                          <div className="flex items-center min-w-0 pr-1">
+                                            <User className="w-4 h-4 mr-1.5 text-slate-400 shrink-0" />
+                                            <span className="truncate text-sm" title={userObj?.name || '不明なユーザー'}>
+                                              {userObj?.name || '不明なユーザー'}
+                                            </span>
+                                          </div>
+                                          {userStats && (
+                                            <div 
+                                              className={`shrink-0 flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-xs ${
+                                                userStats.assignedDays === 0 
+                                                  ? 'bg-rose-100 text-rose-700 border border-rose-200 animate-pulse'
+                                                  : userStats.assignedDays >= 5
+                                                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                                    : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                              }`}
+                                              title={`今週: ${userStats.assignedDays}日出勤 / 合計 ${userStats.totalHours}時間`}
+                                            >
+                                              <span className={userStats.assignedDays === 0 ? 'text-rose-600 font-black' : 'text-indigo-600 font-black'}>
+                                                {userStats.assignedDays}日
+                                              </span>
+                                              <span className="text-[9px] text-slate-400">({userStats.totalHours}h)</span>
+                                            </div>
+                                          )}
                                         </div>
                                         
                                         <div 
@@ -655,7 +934,7 @@ const ShiftCalendarView: React.FC = () => {
                                 )}
                                 {/* 役割ごとの不足状況サマリー（ガントチャート時間軸と完全同期） */}
                                 <div className="flex bg-rose-50/20 group border-b border-slate-100 hover:bg-rose-50/30 transition-colors">
-                                  <div className="w-48 shrink-0 p-2 font-bold text-rose-600 border-r border-slate-100 text-[10px] flex items-center justify-between sticky left-0 z-10 bg-white shadow-[1px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                  <div className="w-56 shrink-0 p-2 font-bold text-rose-600 border-r border-slate-100 text-[10px] flex items-center justify-between sticky left-0 z-10 bg-white shadow-[1px_0_5px_-2px_rgba(0,0,0,0.05)]">
                                     <span className="flex items-center gap-1">
                                       <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
                                       {role.name} 不足状況
