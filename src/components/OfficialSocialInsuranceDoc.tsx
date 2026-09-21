@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
-import { Printer, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Printer, ArrowLeft, CheckCircle2, Sparkles, FileText } from 'lucide-react';
 import { formatNenkinBirthDate } from './OfficialBonusPaymentReportDoc';
+import { OfficialHealthPensionAcquisitionDoc } from './OfficialHealthPensionAcquisitionDoc';
 
 export interface SocialInsuranceEmployee {
   id: string;
   name: string;
   name_kana?: string;
+  last_name?: string;
+  first_name?: string;
+  last_name_kana?: string;
+  first_name_kana?: string;
   birth_date?: string;
   gender?: string;
   my_number?: string;
@@ -18,6 +23,8 @@ export interface SocialInsuranceEmployee {
   goods_remuneration?: number; // 報酬月額（現物）
   dependents_count?: number;
   employment_type?: string;
+  address?: string;
+  zip_code?: string;
 }
 
 export interface OfficialSocialInsuranceDocProps {
@@ -29,6 +36,7 @@ export interface OfficialSocialInsuranceDocProps {
     phone_number: string;
     corporate_number?: string;
     company_seal_url?: string;
+    zip_code?: string;
   };
   officeSymbol?: string; // 事業所整理記号 (例: 01-イロハ)
   officeNumber?: string; // 事業所番号 (例: 12345)
@@ -49,6 +57,7 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
   onBack
 }) => {
   const [docType, setDocType] = useState<'acquisition' | 'loss'>(initialType);
+  const [acquisitionMode, setAcquisitionMode] = useState<'official_ocr' | 'simple'>('official_ocr');
   const [submissionDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [lossReason, setLossReason] = useState<'retirement' | 'death' | 'over75' | 'other'>('retirement');
 
@@ -99,7 +108,11 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
               <span className="text-xs px-2 py-0.5 rounded-full font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
                 日本年金機構 / 協会けんぽ公式様式
               </span>
-              <span className="text-xs text-slate-400 font-bold">A4公的届出書</span>
+              <span className="text-xs text-slate-400 font-bold">
+                {docType === 'acquisition' && acquisitionMode === 'official_ocr'
+                  ? '様式コード2200（原本OCR提出様式）'
+                  : 'A4公的届出書'}
+              </span>
             </div>
             <h2 className="text-lg font-black text-slate-800 mt-1">
               健康保険・厚生年金保険 被保険者{docType === 'acquisition' ? '資格取得届' : '資格喪失届'}
@@ -128,33 +141,78 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
             </button>
           </div>
 
-          {/* 従業員選択 */}
-          <select
-            value={currentEmployee.id}
-            onChange={(e) => onSelectEmployee(e.target.value)}
-            className="bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded-xl px-3 py-2 outline-hidden focus:ring-2 focus:ring-indigo-500"
-          >
-            {employees.map(emp => (
-              <option key={emp.id} value={emp.id}>
-                {emp.name} ({emp.join_date}入社{emp.retirement_date ? ` / ${emp.retirement_date}退職` : ''})
-              </option>
-            ))}
-          </select>
+          {/* 資格取得届の場合の様式モード切替 */}
+          {docType === 'acquisition' && (
+            <div className="flex bg-indigo-50/80 p-1 rounded-xl border border-indigo-200">
+              <button
+                type="button"
+                onClick={() => setAcquisitionMode('official_ocr')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
+                  acquisitionMode === 'official_ocr'
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'text-indigo-700 hover:bg-indigo-100/70'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>原本OCR様式（コード2200）</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAcquisitionMode('simple')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
+                  acquisitionMode === 'simple'
+                    ? 'bg-white text-indigo-700 shadow-2xs'
+                    : 'text-indigo-600 hover:bg-indigo-100/70'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>簡易A4様式</span>
+              </button>
+            </div>
+          )}
 
-          {/* 印刷ボタン */}
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-black shadow-xs transition cursor-pointer"
-          >
-            <Printer className="w-4 h-4" />
-            公式A4印刷 / PDF保存
-          </button>
+          {/* 簡易様式または喪失届の時の従業員選択と印刷ボタン */}
+          {(docType === 'loss' || acquisitionMode === 'simple') && (
+            <>
+              <select
+                value={currentEmployee.id}
+                onChange={(e) => onSelectEmployee(e.target.value)}
+                className="bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded-xl px-3 py-2 outline-hidden focus:ring-2 focus:ring-indigo-500"
+              >
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name} ({emp.join_date}入社{emp.retirement_date ? ` / ${emp.retirement_date}退職` : ''})
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={handlePrint}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-black shadow-xs transition cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                公式A4印刷 / PDF保存
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* 印刷・公式A4原本コンテナ */}
-      <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl flex justify-center overflow-x-auto print:p-0 print:m-0 print:bg-white print:overflow-visible">
-        <div className="w-[210mm] min-h-[297mm] bg-white p-[15mm] shadow-lg border border-slate-300 text-slate-900 font-sans print:shadow-none print:border-none print:p-0 print:w-full print:m-0 box-border text-[11px] leading-tight">
+      {/* 原本OCR様式 または 従来のA4簡易テーブル */}
+      {docType === 'acquisition' && acquisitionMode === 'official_ocr' ? (
+        <OfficialHealthPensionAcquisitionDoc
+          companyInfo={companyInfo}
+          officeSymbol={officeSymbol}
+          officeNumber={officeNumber}
+          employees={employees as any}
+          selectedEmployeeId={currentEmployee.id}
+          onSelectEmployee={onSelectEmployee}
+          onBack={onBack}
+          hideHeader={false}
+        />
+      ) : (
+        <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl flex justify-center overflow-x-auto print:p-0 print:m-0 print:bg-white print:overflow-visible">
+          <div className="w-[210mm] min-h-[297mm] bg-white p-[15mm] shadow-lg border border-slate-300 text-slate-900 font-sans print:shadow-none print:border-none print:p-0 print:w-full print:m-0 box-border text-[11px] leading-tight">
 
           {/* 表題部 */}
           <div className="border-b-2 border-slate-900 pb-3 mb-4">
@@ -342,6 +400,7 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
 
         </div>
       </div>
+      )}
     </div>
   );
 };

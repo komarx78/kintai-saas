@@ -680,10 +680,18 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
           )}
         </div>
 
-        <div className="text-[11px] text-slate-500 font-medium">
-          {renderMode === 'exact_pdf'
-            ? '※ 日本年金機構の配布PDF原本（コード2265）の上にピクセルパーフェクトで印字します。そのまま提出可能です。'
-            : '※ 通常のWebテーブル形式で内容を確認・印刷します。'}
+        <div className="text-[11px] text-slate-500 font-medium flex flex-wrap items-center gap-2">
+          {renderMode === 'exact_pdf' ? (
+            <>
+              <span>※ 日本年金機構の配布PDF原本（コード2265）の上にピクセルパーフェクトで印字します。</span>
+              <span className="bg-amber-50 text-amber-900 font-bold px-2.5 py-0.5 rounded-lg border border-amber-300 shadow-2xs flex items-center gap-1">
+                <span>💡 印刷のコツ:</span>
+                <span>印刷画面で「余白：なし」「倍率：100%（実際のサイズ）」を選ぶとマス目にピタリと合致します</span>
+              </span>
+            </>
+          ) : (
+            <span>※ 通常のWebテーブル形式で内容を確認・印刷します。</span>
+          )}
         </div>
       </div>
 

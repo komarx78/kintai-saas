@@ -185,25 +185,60 @@ export const BonusDocMasterInspector: React.FC = () => {
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [selectedFieldId, fields, updateField]);
 
-  // 全社マスター保存
+  // 全社マスター保存（憲法第18条：実永続化証明・サイレントフェイル完全禁止）
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'db_saved' | 'local_only'>('idle');
+
   const handleSaveMaster = async () => {
     setIsSaving(true);
+    // ユーザー調整座標の不可侵保護（憲法第17条）
+    broadcastBonusDocCoordinates(fields);
+
     try {
-      const { data: current } = await supabase.from('system_settings').select('id').limit(1).single();
-      if (current) {
-        await supabase.from('system_settings').update({ bonus_doc_coordinates: fields }).eq('id', current.id);
+      const { data: current, error: fetchErr } = await supabase
+        .from('system_settings')
+        .select('id')
+        .limit(1)
+        .maybeSingle();
+
+      let dbSuccess = false;
+      if (!fetchErr && current && current.id) {
+        const { error: updErr } = await supabase
+          .from('system_settings')
+          .update({ 
+            bonus_doc_coordinates: fields, 
+            updated_at: new Date().toISOString() 
+          })
+          .eq('id', current.id);
+        if (!updErr) dbSuccess = true;
       } else {
-        await supabase.from('system_settings').insert([{ bonus_doc_coordinates: fields }]);
+        const { error: insErr } = await supabase
+          .from('system_settings')
+          .insert([{ 
+            bonus_doc_coordinates: fields, 
+            updated_at: new Date().toISOString() 
+          }]);
+        if (!insErr) dbSuccess = true;
       }
-      broadcastBonusDocCoordinates(fields);
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 2500);
+
+      if (dbSuccess) {
+        setSaveStatus('db_saved');
+        setSavedSuccess(true);
+      } else {
+        setSaveStatus('local_only');
+        setSavedSuccess(true);
+      }
+      setTimeout(() => {
+        setSavedSuccess(false);
+        setSaveStatus('idle');
+      }, 3500);
     } catch (err) {
-      console.error(err);
-      // DBカラム未作成等の場合でもローカル保存＆即時通知は必ず完了
-      broadcastBonusDocCoordinates(fields);
+      console.warn('DB永続化エラー (ローカルに退避済):', err);
+      setSaveStatus('local_only');
       setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 2500);
+      setTimeout(() => {
+        setSavedSuccess(false);
+        setSaveStatus('idle');
+      }, 3500);
     } finally {
       setIsSaving(false);
     }
@@ -278,10 +313,22 @@ export const BonusDocMasterInspector: React.FC = () => {
           <button
             onClick={handleSaveMaster}
             disabled={isSaving}
-            className="px-5 py-2 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white rounded-xl text-xs font-black shadow-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            className={`px-5 py-2 text-white rounded-xl text-xs font-black shadow-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+              savedSuccess && saveStatus === 'local_only'
+                ? 'bg-amber-600 hover:bg-amber-500'
+                : 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500'
+            }`}
           >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : savedSuccess ? <CheckCircle2 className="w-4 h-4 text-white" /> : <Save className="w-4 h-4" />}
-            {savedSuccess ? '全社マスターへ保存完了！' : '賞与支払届マスタとして保存・適用'}
+            {isSaving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : savedSuccess ? (
+              <CheckCircle2 className="w-4 h-4 text-white" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {savedSuccess 
+              ? (saveStatus === 'db_saved' ? '✅ 全社DBへ完全永続化完了！' : '⚠️ 端末ローカルに保存（DB未接続）') 
+              : '賞与支払届マスタとして保存・適用'}
           </button>
         </div>
       </div>

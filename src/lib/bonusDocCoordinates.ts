@@ -315,25 +315,25 @@ export const mergeWithDefaultBonusFields = (customList: any[]): BonusDocFieldCon
   });
 };
 
-// 設定をローカルストレージから読み込むヘルパー（フリガナ除去・公式様式準拠 v5 への自動マイグレーション付き）
+// 設定をローカルストレージから読み込むヘルパー（憲法第17条：ユーザー調整座標の不可侵絶対保証）
 export const BONUS_DOC_COORDINATES_VERSION = 'v5_no_furigana_official';
 
 export const loadBonusDocCoordinates = (): BonusDocFieldConfig[] => {
   try {
-    const savedVersion = localStorage.getItem('bonusDocMasterVersion');
     const local = localStorage.getItem('bonusDocMasterFields');
 
-    // バージョンが古い、または未定義の場合は最新の精密測定デフォルト値へ自動マイグレーション
-    if (savedVersion !== BONUS_DOC_COORDINATES_VERSION || !local) {
-      localStorage.setItem('bonusDocMasterVersion', BONUS_DOC_COORDINATES_VERSION);
-      localStorage.setItem('bonusDocMasterFields', JSON.stringify(DEFAULT_BONUS_FIELDS));
-      return DEFAULT_BONUS_FIELDS;
+    // ユーザー保存データが存在する場合は、絶対にデフォルト値で上書きせず、カスタム値を最優先でマージ保護する
+    if (local) {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return mergeWithDefaultBonusFields(parsed);
+      }
     }
 
-    const parsed = JSON.parse(local);
-    if (Array.isArray(parsed)) {
-      return mergeWithDefaultBonusFields(parsed);
-    }
+    // 完全な初回アクセス時のみデフォルト値を配備
+    localStorage.setItem('bonusDocMasterVersion', BONUS_DOC_COORDINATES_VERSION);
+    localStorage.setItem('bonusDocMasterFields', JSON.stringify(DEFAULT_BONUS_FIELDS));
+    return DEFAULT_BONUS_FIELDS;
   } catch (e) {
     console.error('Failed to load bonus doc coordinates from localStorage:', e);
   }
