@@ -41,7 +41,7 @@ export const BonusDocMasterInspector: React.FC = () => {
   const [employees, setEmployees] = useState<BonusReportEmployee[]>([
     {
       id: 'bonus-emp-1',
-      insuranceNumber: '001',
+      insuranceNumber: '1',
       name: '駒井 修一郎',
       nameKana: 'コマイ シュウイチロウ',
       birthDate: '1988-04-15',
@@ -51,7 +51,7 @@ export const BonusDocMasterInspector: React.FC = () => {
     },
     {
       id: 'bonus-emp-2',
-      insuranceNumber: '002',
+      insuranceNumber: '2',
       name: '山田 太郎',
       nameKana: 'ヤマダ タロウ',
       birthDate: '1979-03-18',
@@ -61,7 +61,7 @@ export const BonusDocMasterInspector: React.FC = () => {
     },
     {
       id: 'bonus-emp-3',
-      insuranceNumber: '003',
+      insuranceNumber: '3',
       name: '佐藤 美咲',
       nameKana: 'サトウ ミサキ',
       birthDate: '1995-11-25',
@@ -1140,6 +1140,11 @@ export const BonusDocMasterInspector: React.FC = () => {
                         if (rf.id === 'empName') textVal = rowSampleName;
                         if (rf.id === 'empKana') textVal = rowSampleKana;
                         if (rf.id === 'empBirth') textVal = rowSampleBirth;
+                        if (rf.id === 'empInsuranceNumber') {
+                          // 公的実務：整理番号は前ゼロ不要、4マス枠の右詰めで配置（例: 1番なら '   1'）
+                          const num = rowIdx === 0 ? '1' : '2';
+                          textVal = num.padStart(4, ' ');
+                        }
                         if (rf.id === 'empIndivPayDate') {
                           // 原本「共通と同じ場合は記入不要」に従い行0は空欄。行1または選択時のみ年・月・日の数字を表示（「令」は原本印刷済のため印字不要）
                           textVal = (isSelected || rowIdx === 1) ? ' 8   12   20' : '';
@@ -1267,7 +1272,7 @@ export const BonusDocMasterInspector: React.FC = () => {
               setEmployees([
                 {
                   id: 'bonus-emp-1',
-                  insuranceNumber: '001',
+                  insuranceNumber: '1',
                   name: '駒井 修一郎',
                   nameKana: 'コマイ シュウイチロウ',
                   birthDate: '1988-04-15',
@@ -1277,7 +1282,7 @@ export const BonusDocMasterInspector: React.FC = () => {
                 },
                 {
                   id: 'bonus-emp-2',
-                  insuranceNumber: '002',
+                  insuranceNumber: '2',
                   name: '山田 太郎',
                   nameKana: 'ヤマダ タロウ',
                   birthDate: '1979-03-18',
@@ -1287,7 +1292,7 @@ export const BonusDocMasterInspector: React.FC = () => {
                 },
                 {
                   id: 'bonus-emp-3',
-                  insuranceNumber: '003',
+                  insuranceNumber: '3',
                   name: '佐藤 美咲',
                   nameKana: 'サトウ ミサキ',
                   birthDate: '1995-11-25',
@@ -1565,7 +1570,7 @@ export const BonusDocMasterInspector: React.FC = () => {
                 type="button"
                 onClick={() => {
                   const newId = `emp-${Date.now()}`;
-                  const nextNum = String(employees.length + 1).padStart(3, '0');
+                  const nextNum = String(employees.length + 1);
                   setEmployees(prev => [
                     ...prev,
                     {
@@ -1619,7 +1624,7 @@ export const BonusDocMasterInspector: React.FC = () => {
                           const val = e.target.value;
                           setEmployees(prev => prev.map(item => item.id === emp.id ? { ...item, insuranceNumber: val } : item));
                         }}
-                        placeholder="001"
+                        placeholder="1"
                         className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs font-mono font-bold text-slate-900"
                       />
                     </div>

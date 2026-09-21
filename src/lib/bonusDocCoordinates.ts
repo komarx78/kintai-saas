@@ -216,8 +216,8 @@ export const DEFAULT_BONUS_FIELDS: BonusDocFieldConfig[] = [
     fontSize: 12,
     pitch: 2.50,
     width: 18.0,
-    example: '0001',
-    description: '上段左端 ①整理番号（マス内中央）'
+    example: '   1',
+    description: '上段左端 ①整理番号（右詰め4マス・前ゼロ不要）'
   },
   {
     id: 'empName',

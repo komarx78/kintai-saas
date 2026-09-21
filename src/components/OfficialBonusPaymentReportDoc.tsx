@@ -517,10 +517,14 @@ const ExactPdfPageRenderer: React.FC<{
 
         return (
           <React.Fragment key={emp.id || `row-${i}`}>
-            {/* 上段 ① 被保険者整理番号 */}
+            {/* 上段 ① 被保険者整理番号（公的実務：前ゼロ不要、右詰め4マス配置） */}
             {(() => {
               const numPitch = fEmpNumber.pitch || 2.50;
-              const numStr = emp.insuranceNumber || String(pageIndex * 10 + i + 1).padStart(4, '0');
+              // 整理番号は「0001」ではなく「1」などの実番号。過去の前ゼロをパージし、4マス枠の右詰めで配置
+              const rawNum = (emp.insuranceNumber !== undefined && emp.insuranceNumber !== '')
+                ? (String(emp.insuranceNumber).replace(/^0+/, '') || '1')
+                : String(pageIndex * 10 + i + 1);
+              const numStr = rawNum.padStart(4, ' ');
               return (
                 <div
                   className="absolute font-mono font-bold text-slate-950 flex items-center"
@@ -1270,7 +1274,7 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
                       <div className="col-span-2 border-r border-slate-200 pr-1">
                         <span className="text-[6.5px] text-slate-400 block -mb-0.5">①</span>
                         <span className="font-mono font-bold text-slate-800">
-                          {hasData ? (emp.insuranceNumber || `00${rowNum}`) : ''}
+                          {hasData ? (emp.insuranceNumber ? (String(emp.insuranceNumber).replace(/^0+/, '') || '1') : String(rowNum)) : ''}
                         </span>
                       </div>
 

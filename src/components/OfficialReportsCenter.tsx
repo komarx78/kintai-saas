@@ -1754,7 +1754,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
 
                     return {
                       id: emp.id,
-                      insuranceNumber: res.insuranceNumber || String(index + 1).padStart(4, '0'),
+                      insuranceNumber: res.insuranceNumber ? String(res.insuranceNumber).replace(/^0+/, '') : String(index + 1),
                       name: emp.name,
                       nameKana: res.nameKana || emp.name_kana || '',
                       birthDate: bDate,

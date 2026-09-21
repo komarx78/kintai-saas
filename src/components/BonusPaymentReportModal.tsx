@@ -156,6 +156,7 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
               (emp.salary_type === 'hourly' || prof.salary_type === 'hourly' ? 'part-time' : 'full-time');
             return {
               ...r,
+              insuranceNumber: r.insuranceNumber ? String(r.insuranceNumber).replace(/^0+/, '') : (r.insuranceNumber ?? ''),
               employment_type: empType,
               salary_type: r.salary_type || emp.salary_type || prof.salary_type || 'monthly',
               base_salary: r.base_salary || prof.base_salary || localMaster.base_salary || emp.base_salary || 0,
@@ -203,7 +204,7 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
         name: emp.name,
         nameKana: emp.name_kana || '',
         birthDate: bDate,
-        insuranceNumber: String(index + 1).padStart(4, '0'),
+        insuranceNumber: String(index + 1),
         myNumber: myNum,
         currencyAmount: defaultAmount,
         goodsAmount: 0,
@@ -717,7 +718,7 @@ export const BonusPaymentReportModal: React.FC<BonusPaymentReportModalProps> = (
                                       setBonusRows(prev => prev.map((r, i) => i === idx ? { ...r, insuranceNumber: val } : r));
                                     }}
                                     className="w-14 border-b border-slate-300 font-bold text-slate-700 px-0.5 text-center"
-                                    placeholder="0001"
+                                    placeholder="1"
                                   />
                                 </div>
                                 <span>基準給: ¥{(row.base_salary || 0).toLocaleString()}</span>
