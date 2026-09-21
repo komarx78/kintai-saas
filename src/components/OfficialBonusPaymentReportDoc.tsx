@@ -442,16 +442,20 @@ const ExactPdfPageRenderer: React.FC<{
             {/* 上段 ③ 生年月日（年金機構公式書式：元号コード - YYMMDD） */}
             {rawBirth && (
               <div
-                className="absolute flex items-center justify-center font-mono font-black text-slate-950 tracking-wider"
+                className="absolute flex items-center justify-center font-mono font-black text-slate-950"
                 style={{
                   top: `${rowTop + fEmpBirth.y}%`,
                   left: `${fEmpBirth.x}%`,
                   width: `${fEmpBirth.width || 14.5}%`,
                   height: '1.9%',
-                  fontSize: `${(fEmpBirth.fontSize || 12.5) * 0.115}cqi`
+                  fontSize: `${(fEmpBirth.fontSize || 12.5) * 0.115}cqi`,
+                  gap: fEmpBirth.pitch ? `${fEmpBirth.pitch * 0.35}cqi` : undefined,
+                  letterSpacing: fEmpBirth.pitch ? `${fEmpBirth.pitch * 0.08}em` : undefined
                 }}
               >
-                <span>{rawBirth.replace('-', ' - ')}</span>
+                {rawBirth.replace('-', ' - ').split('').map((char, cIdx) => (
+                  <span key={cIdx} className="inline-block shrink-0">{char}</span>
+                ))}
               </div>
             )}
 
@@ -475,14 +479,18 @@ const ExactPdfPageRenderer: React.FC<{
             {/* 下段 ④ 個別賞与支払日 */}
             {emp.individualPaymentDate && (
               <div
-                className="absolute font-mono font-bold text-slate-950"
+                className="absolute flex items-center font-mono font-bold text-slate-950"
                 style={{
                   top: `${rowTop + fEmpPayDate.y}%`,
                   left: `${fEmpPayDate.x}%`,
-                  fontSize: `${(fEmpPayDate.fontSize || 10) * 0.115}cqi`
+                  fontSize: `${(fEmpPayDate.fontSize || 10) * 0.115}cqi`,
+                  gap: fEmpPayDate.pitch ? `${fEmpPayDate.pitch * 0.35}cqi` : undefined,
+                  letterSpacing: fEmpPayDate.pitch ? `${fEmpPayDate.pitch * 0.08}em` : undefined
                 }}
               >
-                {emp.individualPaymentDate}
+                {emp.individualPaymentDate.split('').map((char, cIdx) => (
+                  <span key={cIdx} className="inline-block shrink-0">{char}</span>
+                ))}
               </div>
             )}
 

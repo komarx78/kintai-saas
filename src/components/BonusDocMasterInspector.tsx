@@ -1085,6 +1085,8 @@ export const BonusDocMasterInspector: React.FC = () => {
                   }
 
                   const isCentered = f.section === 'submission' || f.section === 'common_payment';
+                  const pitchVal = f.pitch !== undefined ? f.pitch : 0;
+                  const textChars = String(f.example).split('');
 
                   return (
                     <div
@@ -1107,9 +1109,11 @@ export const BonusDocMasterInspector: React.FC = () => {
                         whiteSpace: 'nowrap',
                         pointerEvents: 'auto',
                         lineHeight: 1,
-                        display: isCentered ? 'flex' : 'block',
-                        alignItems: isCentered ? 'center' : undefined,
-                        justifyContent: isCentered ? 'center' : undefined,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: isCentered ? 'center' : 'flex-start',
+                        gap: pitchVal > 0 ? `${pitchVal * 0.35}cqi` : undefined,
+                        letterSpacing: pitchVal > 0 ? `${pitchVal * 0.08}em` : undefined,
                         textAlign: isCentered ? 'center' : 'left'
                       }}
                       className={`px-0.5 py-0.2 rounded transition-all ${
@@ -1119,7 +1123,11 @@ export const BonusDocMasterInspector: React.FC = () => {
                       }`}
                       title={`${f.name} (クリックして選択・十字キーまたはドラッグで移動)`}
                     >
-                      {f.example}
+                      {textChars.map((char, cIdx) => (
+                        <span key={cIdx} className="inline-block shrink-0">
+                          {char}
+                        </span>
+                      ))}
                     </div>
                   );
                 })}
@@ -1144,6 +1152,11 @@ export const BonusDocMasterInspector: React.FC = () => {
                         if (rf.id === 'empKana') textVal = rowSampleKana;
                         if (rf.id === 'empBirth') textVal = rowSampleBirth;
 
+                        const rfPitch = rf.pitch !== undefined ? rf.pitch : 0;
+                        const isRight = rf.id === 'empCurrencyAmount' || rf.id === 'empGoodsAmount' || rf.id === 'empTotalThousands';
+                        const isCenter = rf.id === 'empBirth';
+                        const textChars = String(textVal).split('');
+
                         return (
                           <div
                             key={`${rf.id}-r${rowIdx}`}
@@ -1165,7 +1178,12 @@ export const BonusDocMasterInspector: React.FC = () => {
                               cursor: rowIdx === 0 ? (isDraggingThis ? 'grabbing' : 'grab') : 'pointer',
                               userSelect: 'none',
                               whiteSpace: 'nowrap',
-                              textAlign: (rf.id === 'empCurrencyAmount' || rf.id === 'empGoodsAmount' || rf.id === 'empTotalThousands') ? 'right' : rf.id === 'empBirth' ? 'center' : 'left',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: isRight ? 'flex-end' : isCenter ? 'center' : 'flex-start',
+                              gap: rfPitch > 0 ? `${rfPitch * 0.35}cqi` : undefined,
+                              letterSpacing: rfPitch > 0 ? `${rfPitch * 0.08}em` : undefined,
+                              textAlign: isRight ? 'right' : isCenter ? 'center' : 'left',
                               pointerEvents: 'auto',
                               lineHeight: 1.1,
                               opacity: rowIdx === 1 ? 0.6 : 1
@@ -1177,7 +1195,11 @@ export const BonusDocMasterInspector: React.FC = () => {
                             }`}
                             title={`${rf.name} (クリックして選択・十字キーで移動)`}
                           >
-                            {textVal}
+                            {textChars.map((char, cIdx) => (
+                              <span key={cIdx} className="inline-block shrink-0">
+                                {char}
+                              </span>
+                            ))}
                           </div>
                         );
                       })}
