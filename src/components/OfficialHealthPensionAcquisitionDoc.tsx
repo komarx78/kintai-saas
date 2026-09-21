@@ -579,7 +579,7 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
                     left: `${field.x}%`,
                     top: `${field.y}%`,
                     fontSize: `${field.fontSize}pt`,
-                    width: field.width ? `${field.width}%` : 'auto',
+                    width: field.pitch && field.pitch > 0 ? 'max-content' : (field.width ? `${field.width * 2.1}mm` : 'auto'),
                     cursor: 'move',
                     zIndex: isDragging ? 50 : 10
                   }}
@@ -589,15 +589,18 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
                   title={`${field.name} (クリック＆ドラッグで微調整)`}
                 >
                   {/* マス目ピッチ指定がある場合は1文字ずつ等間隔印字 */}
-                  {field.pitch && val ? (
-                    <div className="flex items-center" style={{ width: '100%' }}>
+                  {field.pitch && field.pitch > 0 && val ? (
+                    <div className="flex items-center pointer-events-none">
                       {val.split('').map((char, charIdx) => (
                         <span 
                           key={charIdx} 
                           style={{ 
                             display: 'inline-block',
-                            width: `${field.pitch}%`,
+                            width: `${(field.pitch || 2.5) * 2.1}mm`,
                             textAlign: 'center',
+                            fontSize: `${field.fontSize}pt`,
+                            fontFamily: 'monospace',
+                            lineHeight: 1,
                             flexShrink: 0
                           }}
                         >

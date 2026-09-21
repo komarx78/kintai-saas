@@ -701,12 +701,17 @@ export function loadHealthPensionAcqCoordinates(): HealthPensionAcqFieldConfig[]
         return DEFAULT_HEALTH_PENSION_ACQ_FIELDS.map(def => {
           const custom = parsed.find((p: any) => p.id === def.id);
           if (custom) {
+            // 異常ピッチ（過去の計算破綻時に入力された5.0%超等）を原本規定値へ安全修復
+            const safePitch = (custom.pitch !== undefined && custom.pitch > 0 && custom.pitch <= 5.0) 
+              ? custom.pitch 
+              : def.pitch;
+
             return {
               ...def,
               x: custom.x !== undefined ? custom.x : def.x,
               y: custom.y !== undefined ? custom.y : def.y,
               fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
-              pitch: custom.pitch !== undefined ? custom.pitch : def.pitch,
+              pitch: safePitch,
               width: custom.width !== undefined ? custom.width : def.width,
               disabled: custom.disabled
             };
@@ -748,12 +753,16 @@ export async function fetchHealthPensionAcqCoordinatesFromDb(): Promise<HealthPe
       const merged = DEFAULT_HEALTH_PENSION_ACQ_FIELDS.map(def => {
         const custom = data.health_pension_acq_doc_coordinates.find((p: any) => p.id === def.id);
         if (custom) {
+          const safePitch = (custom.pitch !== undefined && custom.pitch > 0 && custom.pitch <= 5.0) 
+            ? custom.pitch 
+            : def.pitch;
+
           return {
             ...def,
             x: custom.x !== undefined ? custom.x : def.x,
             y: custom.y !== undefined ? custom.y : def.y,
             fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
-            pitch: custom.pitch !== undefined ? custom.pitch : def.pitch,
+            pitch: safePitch,
             width: custom.width !== undefined ? custom.width : def.width,
             disabled: custom.disabled
           };
