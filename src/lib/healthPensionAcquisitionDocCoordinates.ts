@@ -19,6 +19,8 @@ export interface HealthPensionAcqFieldConfig {
   description: string;
   disabled?: boolean;
   isCircle?: boolean; // ⭕ 番号・項目を〇で囲むタイプ
+  circleWidth?: number; // 〇の横幅 (px) デフォルト: 24
+  circleHeight?: number; // 〇の縦幅 (px) デフォルト: 16
   circleValueKey?: string; // 連動するformValuesキー（例: 'gender_1', 'birthEra_1'）
   circleActiveValue?: string; // 〇を表示する条件値（例: '1', '2', '5', '7', '9'）
 }
