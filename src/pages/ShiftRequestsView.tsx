@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase';
 import { 
   ArrowLeft, ClipboardList, ChevronLeft, ChevronRight, 
   Clock, User, Users, Calendar, Search, 
-  CheckCircle2, XCircle, Sparkles, LayoutGrid, List
+  CheckCircle2, XCircle, Sparkles, LayoutGrid, List,
+  Building2, MapPin, Store
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
@@ -22,13 +23,16 @@ interface ShiftRequest {
     id: string;
     name: string;
     email?: string;
+    department?: string;
   };
 }
 
 export const ShiftRequestsView: React.FC = () => {
   const navigate = useNavigate();
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
-  const [users, setUsers] = useState<{ id: string; name: string; email?: string }[]>([]);
+  const [users, setUsers] = useState<{ id: string; name: string; email?: string; department?: string }[]>([]);
+  const [departmentsList, setDepartmentsList] = useState<string[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -68,10 +72,10 @@ export const ShiftRequestsView: React.FC = () => {
 
       if (reqErr) throw reqErr;
 
-      // 2. スタッフ一覧取得
+      // 2. スタッフ一覧取得（department を含めて二重管理を防止）
       const { data: usersData, error: userErr } = await supabase
         .from('users')
-        .select('id, name, email')
+        .select('id, name, email, department')
         .eq('tenant_id', tenantId);
 
       if (userErr) throw userErr;
@@ -79,9 +83,31 @@ export const ShiftRequestsView: React.FC = () => {
       const userList = usersData || [];
       setUsers(userList);
 
-      const userMap: Record<string, { id: string; name: string; email?: string }> = {};
+      // 店舗リストの取得
+      let depts: string[] = [];
+      try {
+        const { data: deptsData } = await supabase.from('department_masters').select('name').eq('tenant_id', tenantId).order('display_order');
+        if (deptsData && deptsData.length > 0) {
+          depts = deptsData.map((d: any) => d.name).filter(Boolean);
+        }
+      } catch (e) {}
+      try {
+        const rawLocalDepts = localStorage.getItem(`company_departments_${tenantId}`);
+        if (rawLocalDepts) {
+          const parsed = JSON.parse(rawLocalDepts);
+          parsed.forEach((d: any) => { if (d.name && !depts.includes(d.name)) depts.push(d.name); });
+        }
+      } catch (e) {}
       userList.forEach((u: any) => {
-        userMap[u.id] = { id: u.id, name: u.name || '（名称未設定）', email: u.email };
+        if (u.department && typeof u.department === 'string' && u.department.trim() && !depts.includes(u.department.trim())) {
+          depts.push(u.department.trim());
+        }
+      });
+      setDepartmentsList(depts);
+
+      const userMap: Record<string, { id: string; name: string; email?: string; department?: string }> = {};
+      userList.forEach((u: any) => {
+        userMap[u.id] = { id: u.id, name: u.name || '（名称未設定）', email: u.email, department: u.department };
       });
 
       const formatted: ShiftRequest[] = (reqData || []).map((r: any) => ({
@@ -134,6 +160,11 @@ export const ShiftRequestsView: React.FC = () => {
   // フィルタリング
   const filteredRequests = useMemo(() => {
     return requests.filter(r => {
+      // 店舗フィルター
+      if (selectedDepartment !== 'all') {
+        if (r.user?.department !== selectedDepartment) return false;
+      }
+
       // 検索フィルター
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -149,7 +180,7 @@ export const ShiftRequestsView: React.FC = () => {
 
       return true;
     });
-  }, [requests, searchQuery, typeFilter]);
+  }, [requests, selectedDepartment, searchQuery, typeFilter]);
 
   // 🧪 ダミー希望データの一括投入（ShiftAdminDashboard と整合）
   const handleGenerateDummy = async () => {
@@ -317,6 +348,50 @@ export const ShiftRequestsView: React.FC = () => {
               <XCircle className="w-3.5 h-3.5 text-rose-600" />
               <span>休み希望: <strong className="font-mono text-sm">{stats.off}</strong> 件</span>
             </div>
+          </div>
+        </div>
+
+        {/* 🏪 店舗セレクターバー */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center flex-wrap gap-2">
+            <div className="flex items-center text-slate-700 font-bold text-xs mr-1">
+              <Building2 className="w-4 h-4 text-indigo-600 mr-1.5" />
+              <span>店舗絞り込み:</span>
+            </div>
+
+            <button
+              onClick={() => setSelectedDepartment('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                selectedDepartment === 'all'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5" />
+              <span>全社・全店舗</span>
+            </button>
+
+            {departmentsList.map(deptName => {
+              const isSelected = selectedDepartment === deptName;
+              return (
+                <button
+                  key={deptName}
+                  onClick={() => setSelectedDepartment(deptName)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>{deptName}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="text-xs text-slate-500 font-medium">
+            表示中: <strong className="text-slate-800 font-bold">{filteredRequests.length}</strong> 件の希望
           </div>
         </div>
 

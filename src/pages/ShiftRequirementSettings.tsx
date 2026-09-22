@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Save, ArrowLeft, Plus, Trash2, CheckCircle2, Copy } from 'lucide-react';
+import { Users, Save, ArrowLeft, Plus, Trash2, CheckCircle2, Copy, Building2, MapPin, Store } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AppSwitcher from '../components/AppSwitcher';
@@ -23,6 +23,10 @@ const ShiftRequirementSettings: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [roles, setRoles] = useState<string[]>(defaultRoles);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  // 🏪 複数店舗セレクター用State
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   
   const [requirements, setRequirements] = useState<Record<string, Requirement[]>>({
     '平日': [],
@@ -34,14 +38,39 @@ const ShiftRequirementSettings: React.FC = () => {
 
   useEffect(() => {
     fetchRolesAndRequirements();
-  }, []);
+  }, [selectedDepartment]);
 
   const fetchRolesAndRequirements = async () => {
     try {
       const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
       if (!tenantIdData) return;
 
-      // 1. 役割マスタの取得
+      // 1. 店舗リストの取得（department_masters + users.department）
+      let depts: string[] = [];
+      try {
+        const { data: deptsData } = await supabase.from('department_masters').select('name').eq('tenant_id', tenantIdData).order('display_order');
+        if (deptsData && deptsData.length > 0) {
+          depts = deptsData.map((d: any) => d.name).filter(Boolean);
+        }
+      } catch (e) {}
+      try {
+        const rawLocalDepts = localStorage.getItem(`company_departments_${tenantIdData}`);
+        if (rawLocalDepts) {
+          const parsed = JSON.parse(rawLocalDepts);
+          parsed.forEach((d: any) => { if (d.name && !depts.includes(d.name)) depts.push(d.name); });
+        }
+      } catch (e) {}
+      try {
+        const { data: usersData } = await supabase.from('users').select('department').eq('tenant_id', tenantIdData);
+        (usersData || []).forEach((u: any) => {
+          if (u.department && typeof u.department === 'string' && u.department.trim() && !depts.includes(u.department.trim())) {
+            depts.push(u.department.trim());
+          }
+        });
+      } catch (e) {}
+      setDepartmentsList(depts);
+
+      // 2. 役割マスタの取得
       const { data: rolesData } = await supabase
         .from('shift_roles')
         .select('name')
@@ -54,6 +83,17 @@ const ShiftRequirementSettings: React.FC = () => {
         if (!fetchedRoles.includes(newReq.role || '')) {
           setNewReq(prev => ({ ...prev, role: fetchedRoles[0] }));
         }
+      }
+
+      // 3. 店舗別の必要枠設定の読み込み（ローカルキャッシュ優先・DBフォールバック）
+      const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
+      const cachedStoreReqs = localStorage.getItem(storeKey);
+      if (cachedStoreReqs && selectedDepartment !== 'all') {
+        try {
+          const parsed = JSON.parse(cachedStoreReqs);
+          setRequirements(parsed);
+          return;
+        } catch (e) {}
       }
 
       // 2. 必要枠の取得
@@ -336,8 +376,13 @@ const ShiftRequirementSettings: React.FC = () => {
         if (insertError) throw insertError;
       }
 
+      // 店舗別の必要枠キャッシュへの確実な保存
+      const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
+      localStorage.setItem(storeKey, JSON.stringify(requirements));
+
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+      alert(`「${selectedDepartment === 'all' ? '全社共通' : selectedDepartment}」の必要人数枠設定を保存しました！`);
       fetchRolesAndRequirements();
     } catch (err) {
       console.error(err);
@@ -351,7 +396,7 @@ const ShiftRequirementSettings: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-purple-50 to-blue-100 relative overflow-hidden font-sans text-slate-800 select-none">
       <div className="relative z-10 max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-4">
             <button onClick={() => navigate('/shift/admin')} className="p-2 bg-white/40 hover:bg-white/60 backdrop-blur-md rounded-full transition-all shadow-sm cursor-pointer">
               <ArrowLeft className="w-5 h-5 text-indigo-700" />
@@ -380,6 +425,50 @@ const ShiftRequirementSettings: React.FC = () => {
             </button>
 
             <AppSwitcher currentApp="shift" role="admin" />
+          </div>
+        </div>
+
+        {/* 🏪 対象店舗セレクターバー */}
+        <div className="bg-white/80 backdrop-blur-md border border-white/60 rounded-2xl p-3 mb-6 shadow-sm flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center flex-wrap gap-2">
+            <div className="flex items-center text-slate-700 font-bold text-xs mr-2">
+              <Building2 className="w-4 h-4 text-indigo-600 mr-1.5" />
+              <span>設定対象店舗:</span>
+            </div>
+
+            <button
+              onClick={() => setSelectedDepartment('all')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                selectedDepartment === 'all'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'bg-white/70 hover:bg-white text-slate-700 border border-slate-200'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5" />
+              <span>全社共通枠（基本）</span>
+            </button>
+
+            {departmentsList.map(deptName => {
+              const isSelected = selectedDepartment === deptName;
+              return (
+                <button
+                  key={deptName}
+                  onClick={() => setSelectedDepartment(deptName)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-white/70 hover:bg-white text-slate-700 border border-slate-200'
+                  }`}
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>{deptName}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="text-xs text-indigo-800 font-medium bg-indigo-50/80 px-3 py-1 rounded-lg border border-indigo-100">
+            {selectedDepartment === 'all' ? '※ 全店舗に適用される基本枠です' : `※ 【${selectedDepartment}】専用の必要枠を編集・保存できます`}
           </div>
         </div>
 

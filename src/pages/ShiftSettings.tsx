@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Settings, Save, ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { Settings, Save, ArrowLeft, Plus, Trash2, Building2, ArrowRightLeft, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AppSwitcher from '../components/AppSwitcher';
 
@@ -19,6 +19,7 @@ const ShiftSettings: React.FC = () => {
   const [roles, setRoles] = useState<ShiftRole[]>([]);
   const [budget, setBudget] = useState(0);
   const [autoGenMode, setAutoGenMode] = useState('equal');
+  const [enableStoreHelp, setEnableStoreHelp] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -34,7 +35,16 @@ const ShiftSettings: React.FC = () => {
       if (rolesData) setRoles(rolesData);
 
       const { data: settingsData } = await supabase.from('shift_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
-      if (settingsData) { setBudget(settingsData.monthly_labor_budget); setAutoGenMode(settingsData.auto_generation_mode || 'equal'); }
+      if (settingsData) { 
+        setBudget(settingsData.monthly_labor_budget || 0); 
+        setAutoGenMode(settingsData.auto_generation_mode || 'equal');
+        // DB値またはローカルストレージから応援設定を復元
+        const localHelp = localStorage.getItem(`shift_store_help_${tenantId}`);
+        setEnableStoreHelp(settingsData.enable_store_help ?? (localHelp === 'true'));
+      } else {
+        const localHelp = localStorage.getItem(`shift_store_help_${tenantId}`);
+        if (localHelp !== null) setEnableStoreHelp(localHelp === 'true');
+      }
 
     } catch (error) {
       console.error(error);
@@ -47,16 +57,37 @@ const ShiftSettings: React.FC = () => {
     setSaving(true);
     try {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
-      const { error } = await supabase.from('shift_settings').upsert({
-        tenant_id: tenantId,
-        monthly_labor_budget: budget, auto_generation_mode: autoGenMode,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'tenant_id' });
-      if (error) throw error;
-      alert('予算を保存しました');
+      // DBにenable_store_helpカラムがあるか試行し、なければ安全にフォールバック
+      try {
+        const { error } = await supabase.from('shift_settings').upsert({
+          tenant_id: tenantId,
+          monthly_labor_budget: budget, 
+          auto_generation_mode: autoGenMode,
+          enable_store_help: enableStoreHelp,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'tenant_id' });
+        if (error) {
+          // カラムが存在しないエラーの場合はenable_store_helpを除外してupsert
+          await supabase.from('shift_settings').upsert({
+            tenant_id: tenantId,
+            monthly_labor_budget: budget, 
+            auto_generation_mode: autoGenMode,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'tenant_id' });
+        }
+      } catch (e) {
+        console.warn('DB upsert fallback:', e);
+      }
+      
+      // ローカルストレージにも確実に保持
+      if (tenantId) {
+        localStorage.setItem(`shift_store_help_${tenantId}`, String(enableStoreHelp));
+      }
+
+      alert('シフト設定（予算・AIモード・店舗応援機能）を保存しました');
     } catch (err) {
-      console.error(err); alert('エラーが発生しました: ' + (err as any).message);
-      alert('保存エラー');
+      console.error(err); 
+      alert('エラーが発生しました: ' + (err as any).message);
     } finally {
       setSaving(false);
     }
@@ -142,10 +173,81 @@ const ShiftSettings: React.FC = () => {
               <button 
                 onClick={handleSaveBudget} 
                 disabled={saving}
-                className="w-full bg-indigo-600 text-white px-6 py-2.5 rounded-lg hover:bg-indigo-700 transition font-bold flex items-center justify-center"
+                className="w-full bg-indigo-600 text-white px-6 py-2.5 rounded-lg hover:bg-indigo-700 transition font-bold flex items-center justify-center shadow hover:shadow-md"
               >
-                <Save className="w-4 h-4 mr-2" /> 予算とモードを保存
+                <Save className="w-4 h-4 mr-2" /> 設定を保存する
               </button>
+            </div>
+
+            {/* 複数店舗・店舗間応援設定 */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center justify-between mb-3 border-b pb-3">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+                    <Building2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-800 flex items-center">
+                      店舗間応援（ヘルプ勤務）機能
+                      <span className={`ml-3 text-xs px-2.5 py-0.5 rounded-full font-bold ${enableStoreHelp ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
+                        {enableStoreHelp ? '🤝 応援モード有効' : '🔒 店舗固定モード'}
+                      </span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      人手不足時に他店舗のスタッフをシフトに組み込めるようにするかを設定します。
+                    </p>
+                  </div>
+                </div>
+                {/* スイッチ */}
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={enableStoreHelp} 
+                    onChange={e => setEnableStoreHelp(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-14 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+              </div>
+
+              <div className={`p-4 rounded-xl border transition-colors ${enableStoreHelp ? 'bg-indigo-50/60 border-indigo-200 text-indigo-950' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                <div className="flex items-start space-x-3">
+                  {enableStoreHelp ? (
+                    <ArrowRightLeft className="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <CheckCircle2 className="w-5 h-5 text-slate-500 flex-shrink-0 mt-0.5" />
+                  )}
+                  <div className="text-sm space-y-1">
+                    {enableStoreHelp ? (
+                      <>
+                        <div className="font-bold text-indigo-900">【店舗応援モード中】他店舗スタッフのヘルプ配置が可能です</div>
+                        <ul className="list-disc list-inside text-xs text-indigo-800 space-y-0.5 ml-1">
+                          <li>カレンダーで自店舗以外のスタッフも応援としてシフト登録できます。</li>
+                          <li>配置されたシフトには「🤝 〇〇店より応援」バッジが表示されます。</li>
+                          <li>同じ日に別店舗で既にシフトが入っている場合の重複（ダブルブッキング）を自動防止します。</li>
+                        </ul>
+                      </>
+                    ) : (
+                      <>
+                        <div className="font-bold text-slate-800">【店舗固定モード中】自店舗スタッフのみのシンプル運用です</div>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          店舗ごとの独立運用となり、シフト作成画面には自店舗に所属するスタッフのみが表示されます。応援を行わない企業様はOFFのままご利用いただくことで、誤操作のない最もシンプルな操作性を維持できます。
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t flex justify-end">
+                <button 
+                  onClick={handleSaveBudget} 
+                  disabled={saving}
+                  className="bg-indigo-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-indigo-700 transition font-bold flex items-center shadow"
+                >
+                  <Save className="w-4 h-4 mr-1.5" /> 応援設定を保存する
+                </button>
+              </div>
             </div>
 
             {/* 役割設定 */}
