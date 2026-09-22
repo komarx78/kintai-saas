@@ -204,16 +204,7 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
       retireDay_1: retWareki.day2,
 
       // 備考
-      remarks_1: '',
-      remarks_other_text_1: '',
-      card_returned_count_1: '1', // デフォルト1枚添付
-      card_uncollected_count_1: '',
-
-      // 70歳以上被用者不該当
-      over70_not_applicable_1: '',
-      over70_year_1: '',
-      over70_month_1: '',
-      over70_day_1: ''
+      remarks_1: ''
     };
   }, [officeSymbol, officeNumber, companyInfo]);
 
@@ -540,29 +531,6 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
                   );
                 }
 
-                // チェックボックス（70歳以上不該当）
-                if (field.id === 'over70_not_applicable_1') {
-                  const isChecked = formValues['over70_not_applicable_1'] === '1' || formValues['over70_not_applicable_1'] === 'true';
-                  if (!isChecked) return null;
-                  return (
-                    <div
-                      key={field.id}
-                      style={{
-                        position: 'absolute',
-                        left: `${field.x}%`,
-                        top: `${field.y}%`,
-                        fontSize: '13px',
-                        fontWeight: '900',
-                        color: '#0f172a',
-                        fontFamily: 'sans-serif',
-                        lineHeight: 1,
-                        transform: 'translate(-50%, -50%)'
-                      }}
-                    >
-                      ✓
-                    </div>
-                  );
-                }
 
                 // マス目印字（pitch指定あり：原本幅210mm比率 % ➔ (pitch * 2.1)mm 換算）
                 if (field.pitch && field.pitch > 0 && val) {
@@ -870,9 +838,9 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
               </div>
             </div>
 
-            {/* ⑦ 備考 ＆ 資格確認書回収 */}
+            {/* ⑦ 備考 */}
             <div className="space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-              <span className="font-black text-slate-700 block text-xs">【備考・資格確認書回収】</span>
+              <span className="font-black text-slate-700 block text-xs">【⑦ 備考】</span>
 
               <div>
                 <label className="text-[10px] text-slate-600 font-bold block mb-1">⑦ 備考（該当がある場合〇）</label>
@@ -887,84 +855,6 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
                   <option value="3">3. その他 〇</option>
                 </select>
               </div>
-
-              {formValues['remarks_1'] === '3' && (
-                <div>
-                  <label className="text-[10px] text-slate-500 font-bold block mb-1">その他の理由</label>
-                  <input
-                    type="text"
-                    value={formValues['remarks_other_text_1'] || ''}
-                    onChange={(e) => handleInputChange('remarks_other_text_1', e.target.value)}
-                    className="w-full p-1.5 border border-slate-300 rounded text-xs"
-                    placeholder="転勤、加入員同月得喪 など"
-                  />
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-slate-500 font-bold block mb-1">資格確認書 添付枚数</label>
-                  <input
-                    type="text"
-                    value={formValues['card_returned_count_1'] || ''}
-                    onChange={(e) => handleInputChange('card_returned_count_1', e.target.value)}
-                    className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-center"
-                    placeholder="枚"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-500 font-bold block mb-1">返不能枚数</label>
-                  <input
-                    type="text"
-                    value={formValues['card_uncollected_count_1'] || ''}
-                    onChange={(e) => handleInputChange('card_uncollected_count_1', e.target.value)}
-                    className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-center"
-                    placeholder="枚"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* ⑧ 70歳以上被用者不該当 */}
-            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={formValues['over70_not_applicable_1'] === '1'}
-                  onChange={(e) => handleInputChange('over70_not_applicable_1', e.target.checked ? '1' : '')}
-                  className="w-4 h-4 text-rose-600 rounded"
-                />
-                <span>⑧ 70歳以上被用者不該当</span>
-              </label>
-
-              {formValues['over70_not_applicable_1'] === '1' && (
-                <div>
-                  <label className="text-[10px] text-slate-500 font-bold block mb-1">不該当年月日</label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <input
-                      type="text"
-                      value={formValues['over70_year_1'] || ''}
-                      onChange={(e) => handleInputChange('over70_year_1', e.target.value)}
-                      className="p-1 border border-slate-300 rounded font-mono text-center"
-                      placeholder="年"
-                    />
-                    <input
-                      type="text"
-                      value={formValues['over70_month_1'] || ''}
-                      onChange={(e) => handleInputChange('over70_month_1', e.target.value)}
-                      className="p-1 border border-slate-300 rounded font-mono text-center"
-                      placeholder="月"
-                    />
-                    <input
-                      type="text"
-                      value={formValues['over70_day_1'] || ''}
-                      onChange={(e) => handleInputChange('over70_day_1', e.target.value)}
-                      className="p-1 border border-slate-300 rounded font-mono text-center"
-                      placeholder="日"
-                    />
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
