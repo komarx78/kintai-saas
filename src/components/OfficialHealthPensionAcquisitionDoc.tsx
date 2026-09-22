@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Printer, ArrowLeft, User, Shield, Edit3, ZoomIn, ZoomOut, RefreshCw
+  Printer, ArrowLeft, User, Shield, Edit3, ZoomIn, ZoomOut, RefreshCw, Target
 } from 'lucide-react';
 import { 
+  DEFAULT_HEALTH_PENSION_ACQ_FIELDS,
   loadHealthPensionAcqCoordinates, 
   saveHealthPensionAcqCoordinates,
   saveHealthPensionAcqCoordinatesToDb,
@@ -227,6 +228,15 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
     setFormValues(values);
   };
 
+  // 🎯 座標を公式精密初期値にリセット
+  const handleResetToDefaultCoords = async () => {
+    if (!window.confirm('印字座標を公式原本の精密規定値（最新）にリセットしますか？')) return;
+    setCoords(DEFAULT_HEALTH_PENSION_ACQ_FIELDS);
+    saveHealthPensionAcqCoordinates(DEFAULT_HEALTH_PENSION_ACQ_FIELDS);
+    broadcastHealthPensionAcqCoordinates(DEFAULT_HEALTH_PENSION_ACQ_FIELDS);
+    await saveHealthPensionAcqCoordinatesToDb(DEFAULT_HEALTH_PENSION_ACQ_FIELDS);
+  };
+
   // 座標変更イベントリスナー
   useEffect(() => {
     const handleCoordsUpdate = (e: any) => {
@@ -432,6 +442,16 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
               マスタ再同期
             </button>
 
+            {/* 🎯 精密初期値リセットボタン */}
+            <button
+              onClick={handleResetToDefaultCoords}
+              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-black transition cursor-pointer"
+              title="印字座標を原本マス目に100%合致する最新の精密規定値にリセットします"
+            >
+              <Target className="w-3.5 h-3.5 text-indigo-600" />
+              精密座標にリセット
+            </button>
+
             {/* 印刷モード切替 */}
             <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
               <button
@@ -508,7 +528,7 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
               <img 
                 src={bgPdfImg} 
                 alt="資格取得届 原本背景" 
-                className={`absolute inset-0 w-full h-full object-cover pointer-events-none ${
+                className={`absolute inset-0 w-full h-full object-fill pointer-events-none ${
                   printMode === 'text_only' ? 'print:hidden opacity-90' : 'opacity-100'
                 }`}
               />
