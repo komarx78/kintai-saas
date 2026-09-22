@@ -209,6 +209,27 @@ const ShiftMonthlyView: React.FC = () => {
           </button>
         </div>
 
+        {/* 凡例 (Legend) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-2 text-xs">
+          <div className="flex items-center gap-3 text-slate-600 font-bold">
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+              🟢 充足（必要枠達成）
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+              ⚠️ 不足（配置済みあり・残り不足）
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-300 inline-block" />
+              ⚪ 未作成（シフト配置0件）
+            </span>
+          </div>
+          <span className="text-slate-400 text-[11px]">
+            ※日付をクリックすると、その日の詳細カレンダーへ直接移動できます
+          </span>
+        </div>
+
         {/* カレンダー */}
         <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-2 md:p-4 overflow-hidden">
           <div className="grid grid-cols-7 gap-1 md:gap-2 mb-2">
@@ -251,22 +272,29 @@ const ShiftMonthlyView: React.FC = () => {
                         status.assignedCount > 0 ? (
                           <div className="bg-slate-100 text-slate-700 text-[10px] md:text-xs font-bold py-1 px-0.5 rounded-lg w-full text-center flex items-center justify-center border border-slate-200">
                             <Users className="w-3 h-3 mr-1" />
-                            <span>{status.assignedCount}名</span>
+                            <span>{status.assignedCount}名配置</span>
                           </div>
                         ) : (
                           <div className="text-slate-300 text-[10px] md:text-xs font-medium py-1 px-0.5 rounded-lg w-full text-center">
-                            -
+                            枠設定なし
                           </div>
                         )
+                      ) : status.assignedCount === 0 ? (
+                        <div className="bg-slate-100 text-slate-500 text-[10px] md:text-xs font-medium py-1 px-0.5 rounded-lg w-full text-center border border-slate-200">
+                          未作成 (要{status.shortage}名)
+                        </div>
                       ) : status.shortage === 0 ? (
                         <div className="bg-emerald-100 text-emerald-800 text-[10px] md:text-xs font-bold py-1 px-0.5 rounded-lg w-full text-center flex flex-col md:flex-row items-center justify-center border border-emerald-300 shadow-2xs">
                           <CheckCircle2 className="w-3 h-3 md:mr-1 mb-0.5 md:mb-0 text-emerald-600" />
-                          <span>充足</span>
+                          <span>充足 ({status.assignedCount}名)</span>
                         </div>
                       ) : (
-                        <div className="bg-rose-100 text-rose-700 text-[10px] md:text-xs font-bold py-1 px-0.5 rounded-lg w-full text-center flex flex-col md:flex-row items-center justify-center border border-rose-300 shadow-2xs animate-in fade-in">
-                          <AlertTriangle className="w-3 h-3 md:mr-1 mb-0.5 md:mb-0 text-rose-600" />
-                          <span>不足({status.shortage})</span>
+                        <div className="bg-rose-50 text-rose-700 text-[10px] md:text-xs font-bold py-1 px-0.5 rounded-lg w-full text-center flex flex-col items-center justify-center border border-rose-300 shadow-2xs">
+                          <div className="flex items-center gap-0.5 font-black text-rose-600">
+                            <AlertTriangle className="w-3 h-3" />
+                            <span>不足 {status.shortage}名</span>
+                          </div>
+                          <span className="text-[9px] text-slate-500 font-medium">配置: {status.assignedCount}名</span>
                         </div>
                       )}
                     </div>
