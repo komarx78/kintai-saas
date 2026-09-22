@@ -207,27 +207,50 @@ export const DEFAULT_HEALTH_PENSION_LOSS_FIELDS: HealthPensionLossFieldConfig[] 
     example: '001',
     description: '被保険者整理番号（社内番号・健保整理番号）'
   },
+  // ── ② 氏名・フリガナ（氏・名 分割枠印字） ──
   {
-    id: 'nameKana_1',
-    name: '② 氏名フリガナ',
+    id: 'nameKanaSei_1',
+    name: '② 氏名 フリガナ（氏 / セイ）',
     section: 'insured_person_1',
-    x: 26.5,
+    x: 25.0,
     y: 27.6,
     fontSize: 8.5,
-    width: 44.0,
-    example: 'コマイ シュウイチロウ',
-    description: '氏名カタカナ（濁点・半濁点含む）'
+    width: 12.0,
+    example: 'コマイ',
+    description: '氏名フリガナの氏（カタカナ）'
   },
   {
-    id: 'nameKanji_1',
-    name: '② 氏名漢字',
+    id: 'nameKanaMei_1',
+    name: '② 氏名 フリガナ（名 / メイ）',
     section: 'insured_person_1',
-    x: 26.5,
+    x: 38.0,
+    y: 27.6,
+    fontSize: 8.5,
+    width: 14.0,
+    example: 'シュウイチロウ',
+    description: '氏名フリガナの名（カタカナ）'
+  },
+  {
+    id: 'nameKanjiSei_1',
+    name: '② 氏名 漢字（氏 / 姓）',
+    section: 'insured_person_1',
+    x: 25.0,
     y: 30.5,
     fontSize: 11.5,
-    width: 44.0,
-    example: '駒井 秀一朗',
-    description: '氏名漢字（戸籍名・住民票名）'
+    width: 12.0,
+    example: '駒井',
+    description: '氏名漢字の氏（住民票上の姓）'
+  },
+  {
+    id: 'nameKanjiMei_1',
+    name: '② 氏名 漢字（名）',
+    section: 'insured_person_1',
+    x: 38.0,
+    y: 30.5,
+    fontSize: 11.5,
+    width: 14.0,
+    example: '秀一朗',
+    description: '氏名漢字の名（住民票上の名）'
   },
 
   // ── ③ 生年月日 元号（〇で囲む） ──

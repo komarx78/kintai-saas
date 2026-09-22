@@ -180,6 +180,10 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
 
       // 被保険者1
       insuredPersonNumber_1: '001',
+      nameKanaSei_1: seiKana,
+      nameKanaMei_1: meiKana,
+      nameKanjiSei_1: sei,
+      nameKanjiMei_1: mei,
       nameKana_1: [seiKana, meiKana].filter(Boolean).join(' '),
       nameKanji_1: [sei, mei].filter(Boolean).join(' '),
       birthEra_1: birth.eraCode,
@@ -642,24 +646,77 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
             <div className="space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
               <span className="font-black text-slate-700 block text-xs">【被保険者 本人情報】</span>
               
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-slate-500 font-bold block mb-1">氏名フリガナ</label>
-                  <input
-                    type="text"
-                    value={formValues['nameKana_1'] || ''}
-                    onChange={(e) => handleInputChange('nameKana_1', e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded-lg font-bold text-xs bg-white"
-                  />
+              {/* 氏名（漢字）：氏・名 分割 */}
+              <div>
+                <label className="text-[10px] text-slate-700 font-bold block mb-1">② 氏名（漢字）</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[9px] text-slate-500 block mb-0.5">（氏 / 名字）</label>
+                    <input
+                      type="text"
+                      value={formValues['nameKanjiSei_1'] ?? ''}
+                      onChange={(e) => {
+                        const sei = e.target.value;
+                        handleInputChange('nameKanjiSei_1', sei);
+                        const mei = formValues['nameKanjiMei_1'] || '';
+                        handleInputChange('nameKanji_1', [sei, mei].filter(Boolean).join(' '));
+                      }}
+                      placeholder="駒井"
+                      className="w-full p-2 border border-slate-300 rounded-lg font-bold text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-500 block mb-0.5">（名 / お名前）</label>
+                    <input
+                      type="text"
+                      value={formValues['nameKanjiMei_1'] ?? ''}
+                      onChange={(e) => {
+                        const mei = e.target.value;
+                        handleInputChange('nameKanjiMei_1', mei);
+                        const sei = formValues['nameKanjiSei_1'] || '';
+                        handleInputChange('nameKanji_1', [sei, mei].filter(Boolean).join(' '));
+                      }}
+                      placeholder="秀一朗"
+                      className="w-full p-2 border border-slate-300 rounded-lg font-bold text-xs bg-white"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-[10px] text-slate-500 font-bold block mb-1">氏名漢字</label>
-                  <input
-                    type="text"
-                    value={formValues['nameKanji_1'] || ''}
-                    onChange={(e) => handleInputChange('nameKanji_1', e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded-lg font-bold text-xs bg-white"
-                  />
+              </div>
+
+              {/* 氏名（フリガナ）：セイ・メイ 分割 */}
+              <div>
+                <label className="text-[10px] text-slate-700 font-bold block mb-1">② フリガナ（カタカナ）</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[9px] text-slate-500 block mb-0.5">（セイ / カタカナ）</label>
+                    <input
+                      type="text"
+                      value={formValues['nameKanaSei_1'] ?? ''}
+                      onChange={(e) => {
+                        const seiK = e.target.value;
+                        handleInputChange('nameKanaSei_1', seiK);
+                        const meiK = formValues['nameKanaMei_1'] || '';
+                        handleInputChange('nameKana_1', [seiK, meiK].filter(Boolean).join(' '));
+                      }}
+                      placeholder="コマイ"
+                      className="w-full p-2 border border-slate-300 rounded-lg font-bold text-xs bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-500 block mb-0.5">（メイ / カタカナ）</label>
+                    <input
+                      type="text"
+                      value={formValues['nameKanaMei_1'] ?? ''}
+                      onChange={(e) => {
+                        const meiK = e.target.value;
+                        handleInputChange('nameKanaMei_1', meiK);
+                        const seiK = formValues['nameKanaSei_1'] || '';
+                        handleInputChange('nameKana_1', [seiK, meiK].filter(Boolean).join(' '));
+                      }}
+                      placeholder="シュウイチロウ"
+                      className="w-full p-2 border border-slate-300 rounded-lg font-bold text-xs bg-white"
+                    />
+                  </div>
                 </div>
               </div>
 
