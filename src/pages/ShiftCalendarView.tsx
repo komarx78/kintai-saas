@@ -459,7 +459,7 @@ const ShiftCalendarView: React.FC = () => {
       const totalHours = Math.round((totalMinutes / 60) * 10) / 10;
       const roleName = userRoleMapState[user.id] || (roles[0]?.name || 'ホール');
 
-      let status: 'unassigned' | 'critical_overwork' | 'high_warning' | 'high' | 'balanced' | 'low' | 'no_request' = 'no_request';
+      let status: 'unassigned' | 'critical_overwork' | 'high_warning' | 'shortage' | 'high' | 'balanced' | 'low' | 'no_request' = 'no_request';
       if (requestedDays > 0 && assignedDays === 0) {
         status = 'unassigned'; // 🚨 未配置（希望を出したのに出番ゼロ！）
       } else if (requestedDays === 0 && assignedDays === 0) {
@@ -468,6 +468,10 @@ const ShiftCalendarView: React.FC = () => {
         status = 'critical_overwork'; // 🚨 労基法違反注意！週7日全勤（法定休日ゼロ）
       } else if (assignedDays === 6) {
         status = 'high_warning'; // ⚠️ 週6日出勤（休日1日のみ・要過密調整）
+      } else if (requestedDays >= 3 && assignedDays <= 2) {
+        status = 'shortage'; // ⚠️ 最低出勤日数不足！（希望3日以上に対して1〜2日しか入れられていない）
+      } else if (requestedDays - assignedDays >= 2 && assignedDays <= 3) {
+        status = 'shortage'; // ⚠️ 希望より2日以上削られている不足状態
       } else if (assignedDays === 5) {
         status = 'high'; // 🟡 週5日出勤（週休2日）
       } else if (assignedDays === 3 || assignedDays === 4) {
@@ -486,12 +490,13 @@ const ShiftCalendarView: React.FC = () => {
         status
       };
     }).sort((a, b) => {
-      // 🚨 労基法注意（週7日・週6日）や未配置（0日）など、店長が最優先で調整すべき人を最上部に表示！
+      // 🚨 労基法注意（週7日・週6日）や未配置（0日）、最低日数不足など、店長が最優先で調整すべき人を最上部に表示！
       const getPriority = (st: string) => {
         if (st === 'critical_overwork') return 1; // 週7日（最危険・法定休日ゼロ）
         if (st === 'unassigned') return 2; // 未配置0日（要救済）
         if (st === 'high_warning') return 3; // 週6日（休日不足）
-        return 4;
+        if (st === 'shortage') return 4; // ⚠️ 最低出勤日数不足（希望大幅下回り）
+        return 5;
       };
       const pA = getPriority(a.status);
       const pB = getPriority(b.status);
@@ -502,6 +507,11 @@ const ShiftCalendarView: React.FC = () => {
 
   const unassignedStaffList = useMemo(() => {
     return staffStats.filter(s => s.status === 'unassigned');
+  }, [staffStats]);
+
+  // ⚠️ 最低出勤日数不足スタッフ（希望3日以上なのに1〜2日のみ、または希望より2日以上削られている人）
+  const shortageStaffList = useMemo(() => {
+    return staffStats.filter(s => s.status === 'shortage');
   }, [staffStats]);
 
   // 🚨 労基法注意・過密スタッフ（週7日全勤・週6日出勤）の抽出
@@ -928,6 +938,67 @@ const ShiftCalendarView: React.FC = () => {
           </div>
         )}
 
+        {/* ⚠️ 最低出勤日数不足（希望日数を大幅に下回っているスタッフ）警告アラートバナー */}
+        {shortageStaffList.length > 0 && (
+          <div className="mb-4 bg-amber-50/90 border-2 border-amber-300 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-start md:items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black bg-amber-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    シフト削られ注意・不満防止
+                  </span>
+                  <span className="text-xs font-bold text-amber-900 bg-white border border-amber-300 px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-amber-600" />
+                    対象期間: {format(startDate, 'M/d(E)', { locale: ja })}〜{format(endDate, 'M/d(E)', { locale: ja })}
+                  </span>
+                  <h3 className="font-black text-amber-950 text-base">
+                    希望日数に対して【出勤枠が大幅に不足しているスタッフ】が {shortageStaffList.length}名 います！
+                  </h3>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                  {shortageStaffList.map(st => (
+                    <button 
+                      key={st.userId}
+                      onClick={() => setRescueStaffId(st.userId)}
+                      className="inline-flex items-center gap-1.5 bg-white hover:bg-amber-100 border border-amber-300 text-amber-950 px-3 py-1 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer hover:scale-105"
+                      title="クリックしてこのスタッフの救済アシストを開く"
+                    >
+                      <User className="w-3.5 h-3.5 text-amber-600" />
+                      <span>{st.name}</span>
+                      <span className="text-[11px] bg-amber-100 text-amber-800 font-black px-1.5 py-0.2 rounded-md border border-amber-200">
+                        希望{st.requestedDays}日 ➔ 実働{st.assignedDays}日（{st.requestedDays - st.assignedDays}日不足）
+                      </span>
+                      <span className="text-[11px] bg-amber-600 text-white font-black px-1.5 py-0.2 rounded-md">
+                        救済 ≫
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+              <button 
+                onClick={handleRebalanceShifts}
+                disabled={isRebalancing}
+                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl transition-all shadow-sm hover:shadow cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Scale className={`w-4 h-4 ${isRebalancing ? 'animate-spin' : ''}`} />
+                <span>{isRebalancing ? '平準化中...' : '⚡ AIでバランス平準化'}</span>
+              </button>
+              <button 
+                onClick={() => setIsWorkloadPanelOpen(true)}
+                className="bg-white hover:bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold px-3 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1"
+              >
+                <Users className="w-3.5 h-3.5 text-amber-700" />
+                バランス盤
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 📊 スタッフ別 稼働バランス＆公平性チェッカー盤（開閉式） */}
         <div className="mb-4 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden transition-all">
           <div 
@@ -936,7 +1007,7 @@ const ShiftCalendarView: React.FC = () => {
           >
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-xl text-white shadow-xs ${
-                overworkedStaffList.length > 0 ? 'bg-rose-600' : unassignedStaffList.length > 0 ? 'bg-amber-500' : 'bg-indigo-600'
+                overworkedStaffList.length > 0 ? 'bg-rose-600' : unassignedStaffList.length > 0 ? 'bg-rose-500' : shortageStaffList.length > 0 ? 'bg-amber-500' : 'bg-indigo-600'
               }`}>
                 <Users className="w-5 h-5" />
               </div>
@@ -959,15 +1030,20 @@ const ShiftCalendarView: React.FC = () => {
                       ⚠️ 未配置 {unassignedStaffList.length}名
                     </span>
                   )}
-                  {unassignedStaffList.length === 0 && overworkedStaffList.length === 0 && (
+                  {shortageStaffList.length > 0 && (
+                    <span className="bg-amber-100 text-amber-800 text-xs font-black px-2 py-0.5 rounded-full border border-amber-300">
+                      ⚠️ 最低日数不足 {shortageStaffList.length}名
+                    </span>
+                  )}
+                  {unassignedStaffList.length === 0 && overworkedStaffList.length === 0 && shortageStaffList.length === 0 && (
                     <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                      全員適正配置（週休2日以上確保）
+                      全員適正配置（希望通り＆週休2日以上確保）
                     </span>
                   )}
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  誰が何日・何時間入っているかを一覧確認し、週7日全勤（労基法違反）や未配置を即座にチェック・是正できます
+                  誰が何日・何時間入っているかを一覧確認し、週7日全勤（労基法違反）や未配置・シフト不足を即座にチェック・是正できます
                 </p>
               </div>
             </div>
@@ -1003,7 +1079,7 @@ const ShiftCalendarView: React.FC = () => {
           {isWorkloadPanelOpen && (
             <div className="border-t border-slate-100 p-4 bg-slate-50/50">
               {/* クイック指標サマリー */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
                 <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
                   <div className="text-[11px] font-bold text-slate-400">対象スタッフ総数</div>
                   <div className="text-lg font-black text-slate-800 mt-0.5">{users.length}名</div>
@@ -1032,6 +1108,14 @@ const ShiftCalendarView: React.FC = () => {
                     {unassignedStaffList.length}名
                   </div>
                 </div>
+                <div className={`p-3 rounded-xl border shadow-xs ${shortageStaffList.length > 0 ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'}`}>
+                  <div className={`text-[11px] font-bold ${shortageStaffList.length > 0 ? 'text-amber-700 font-black' : 'text-slate-400'}`}>
+                    最低日数不足
+                  </div>
+                  <div className={`text-lg font-black mt-0.5 ${shortageStaffList.length > 0 ? 'text-amber-800' : 'text-slate-800'}`}>
+                    {shortageStaffList.length}名
+                  </div>
+                </div>
               </div>
 
               {/* スタッフ一覧テーブル */}
@@ -1050,15 +1134,20 @@ const ShiftCalendarView: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {staffStats.map(st => (
-                        <tr key={st.userId} className={`hover:bg-slate-50 transition-colors ${st.status === 'unassigned' ? 'bg-rose-50/40 font-bold' : ''}`}>
+                        <tr key={st.userId} className={`hover:bg-slate-50 transition-colors ${
+                          st.status === 'unassigned' ? 'bg-rose-50/40 font-bold' : 
+                          st.status === 'shortage' ? 'bg-amber-50/30' : ''
+                        }`}>
                           <td className="py-2.5 px-4 font-bold text-slate-800">
-                            {st.status === 'unassigned' ? (
+                            {st.status === 'unassigned' || st.status === 'shortage' ? (
                               <button
                                 onClick={() => setRescueStaffId(st.userId)}
-                                className="flex items-center gap-2 hover:underline text-rose-700 cursor-pointer text-left font-black"
+                                className={`flex items-center gap-2 hover:underline cursor-pointer text-left font-black ${
+                                  st.status === 'unassigned' ? 'text-rose-700' : 'text-amber-900'
+                                }`}
                                 title="クリックして救済アシストを開く"
                               >
-                                <User className="w-3.5 h-3.5 text-rose-500" />
+                                <User className={`w-3.5 h-3.5 ${st.status === 'unassigned' ? 'text-rose-500' : 'text-amber-600'}`} />
                                 <span>{st.name}</span>
                               </button>
                             ) : (
@@ -1084,11 +1173,13 @@ const ShiftCalendarView: React.FC = () => {
                                   ? 'bg-amber-600 text-white'
                                   : st.status === 'unassigned' 
                                     ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                                    : st.assignedDays >= 5
-                                      ? 'bg-amber-100 text-amber-800'
-                                      : st.assignedDays > 0
-                                        ? 'bg-indigo-50 text-indigo-700'
-                                        : 'text-slate-300'
+                                    : st.status === 'shortage'
+                                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                      : st.assignedDays >= 5
+                                        ? 'bg-amber-100 text-amber-800'
+                                        : st.assignedDays > 0
+                                          ? 'bg-indigo-50 text-indigo-700'
+                                          : 'text-slate-300'
                             }`}>
                               {st.assignedDays}日
                             </span>
@@ -1117,6 +1208,16 @@ const ShiftCalendarView: React.FC = () => {
                                 <span>🚨 救済アシスト ≫</span>
                               </button>
                             )}
+                            {st.status === 'shortage' && (
+                              <button
+                                onClick={() => setRescueStaffId(st.userId)}
+                                className="inline-flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1 rounded-lg text-[11px] font-black shadow-xs transition cursor-pointer hover:scale-105"
+                                title="クリックして救済アシスト（追加枠）を開く"
+                              >
+                                <Sparkles className="w-3 h-3 text-amber-100" />
+                                <span>⚠️ 最低日数不足(救済) ≫</span>
+                              </button>
+                            )}
                             {st.status === 'balanced' && (
                               <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-[11px] font-bold">
                                 🟢 適正均等(週3〜4日)
@@ -1136,7 +1237,6 @@ const ShiftCalendarView: React.FC = () => {
                               <span className="text-slate-400 text-[11px]">
                                 希望なし
                               </span>
-                            )}
                           </td>
                         </tr>
                       ))}
