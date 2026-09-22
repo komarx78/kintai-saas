@@ -975,15 +975,11 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
 
               {/* 資格取得年月日 ＆ 被扶養者 */}
               <div>
-                <label className="text-[10px] text-slate-700 font-bold block mb-1">⑦ 資格取得年月日（入社日・元号〇）</label>
+                <label className="text-[10px] text-slate-700 font-bold block mb-1">⑦ 資格取得年月日（入社日）</label>
                 <div className="grid grid-cols-4 gap-1.5">
-                  <select
-                    value={formValues['acqEra_1'] || '9'}
-                    onChange={(e) => handleInputChange('acqEra_1', e.target.value)}
-                    className="p-1.5 border border-slate-300 rounded font-bold text-xs bg-white"
-                  >
-                    <option value="9">9.令和 〇</option>
-                  </select>
+                  <div className="p-1.5 bg-slate-100 border border-slate-300 rounded font-bold text-xs text-slate-600 flex items-center justify-center">
+                    令和
+                  </div>
                   <input
                     type="text"
                     value={formValues['acqYear_1'] || ''}

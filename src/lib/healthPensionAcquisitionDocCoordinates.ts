@@ -52,10 +52,7 @@ export const CIRCLE_MARK_COORDINATES: Record<string, CircleOptionMap> = {
     '3': { x: 14.5, y: 33.1, w: 28, h: 16 },
     '4': { x: 14.5, y: 34.3, w: 28, h: 16 }
   },
-  // ⑦ 取得年月日 元号（9:令和）
-  acqEra_1: {
-    '9': { x: 62.4, y: 32.5, w: 24, h: 16 }
-  },
+
   // ⑧ 被扶養者（0:無、1:有）
   dependents_1: {
     '0': { x: 83.2, y: 32.5, w: 22, h: 16 },
@@ -523,23 +520,7 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
     example: '123456789012',
     description: 'マイナンバー12桁または基礎年金番号10桁（左詰めマス目）'
   },
-  // ── ⑦ 取得年月日 元号（〇で囲む） ──
-  {
-    id: 'acqEra_reiwa_1',
-    name: '⑦ 取得年月日 元号 [9.令和 〇]',
-    section: 'insured_person_1',
-    x: 62.4,
-    y: 32.5,
-    fontSize: 9.5,
-    width: 3.0,
-    example: '〇',
-    description: '取得年号が令和の場合に原本の「9.令和」を〇で囲みます',
-    isCircle: true,
-    circleWidth: 24,
-    circleHeight: 16,
-    circleValueKey: 'acqEra_1',
-    circleActiveValue: '9'
-  },
+
   {
     id: 'acqYear_1',
     name: '⑦ 取得年月日 年',

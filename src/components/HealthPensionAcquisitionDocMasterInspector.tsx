@@ -405,13 +405,11 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
                   // 1. 生年月日元号: 昭和 (birthEra_1 === '5') -> birthEra_showa_1
                   // 2. 性別（種別）: 男 (gender_1 === '1') -> gender_male_1
                   // 3. 取得区分: 健保・厚年 (acqCategory_1 === '1') -> acqCat_kenpo_1
-                  // 4. 取得元号: 令和 (acqEra_1 === '9') -> acqEra_reiwa_1
-                  // 5. 被扶養者: 無 (dependents_1 === '0') -> dependents_none_1
+                  // 4. 被扶養者: 無 (dependents_1 === '0') -> dependents_none_1
                   const sampleActiveMap: Record<string, string> = {
                     birthEra_1: '5',       // 昭和
                     gender_1: '1',         // 男
                     acqCategory_1: '1',    // 健保・厚年
-                    acqEra_1: '9',         // 令和
                     dependents_1: '0',     // 無
                     remarks_1: ''
                   };
