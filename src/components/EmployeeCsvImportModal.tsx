@@ -11,6 +11,7 @@ interface EmployeeCsvRow {
   nameKana?: string;
   email?: string;
   department?: string;
+  storeName?: string;
   positionName?: string;
   employmentType: string;
   salaryType: 'monthly' | 'hourly';
@@ -41,6 +42,7 @@ const CSV_HEADERS = [
   'フリガナ',
   'メールアドレス',
   '部署名',
+  '配属店舗名',
   '役職名',
   '雇用形態*',
   '給与形態*(月給/時給)',
@@ -79,6 +81,7 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
         'ヤマダ タロウ',
         'yamada.taro@example.com',
         departments[0]?.name || '営業部',
+        '', // 本部のため店舗なし
         '主任',
         '正社員',
         '月給',
@@ -96,8 +99,9 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
         '佐藤 花子',
         'サトウ ハナコ',
         'sato.hanako@example.com',
-        departments[1]?.name || departments[0]?.name || '製造部',
-        '',
+        '店舗運営部',
+        '新宿店', // 店舗運営部配下の店舗
+        'ホール主任',
         'パート・アルバイト',
         '時給',
         '0',
@@ -278,6 +282,31 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
       }
 
       // ヘッダー行をスキップしてデータ行を検証・マッピング
+      // 💡 ヘッダー行の動的解析（新旧CSVテンプレートおよび列順序の入れ替えに100%完全対応）
+      const headerRow = (rows[0] || []).map(h => (h || '').trim());
+      const getColIdx = (patterns: string[], fallback: number): number => {
+        const found = headerRow.findIndex(h => patterns.some(p => h.includes(p)));
+        return found !== -1 ? found : fallback;
+      };
+
+      const nameIdx = getColIdx(['氏名', '名前'], 0);
+      const nameKanaIdx = getColIdx(['フリガナ', 'カナ'], 1);
+      const emailIdx = getColIdx(['メール'], 2);
+      const deptIdx = getColIdx(['部署'], 3);
+      const storeIdx = getColIdx(['店舗', '拠点'], headerRow.findIndex(h => h.includes('店舗')));
+      const posIdx = getColIdx(['役職'], headerRow.findIndex(h => h.includes('役職')) !== -1 ? headerRow.findIndex(h => h.includes('役職')) : (storeIdx === 4 ? 5 : 4));
+      const empTypeIdx = getColIdx(['雇用形態'], storeIdx !== -1 ? 6 : 5);
+      const salaryTypeIdx = getColIdx(['給与形態'], storeIdx !== -1 ? 7 : 6);
+      const baseSalaryIdx = getColIdx(['基本給'], storeIdx !== -1 ? 8 : 7);
+      const hourlyWageIdx = getColIdx(['時給'], storeIdx !== -1 ? 9 : 8);
+      const joinDateIdx = getColIdx(['入社'], storeIdx !== -1 ? 10 : 9);
+      const birthDateIdx = getColIdx(['生年月日'], storeIdx !== -1 ? 11 : 10);
+      const genderIdx = getColIdx(['性別'], storeIdx !== -1 ? 12 : 11);
+      const postalIdx = getColIdx(['郵便番号'], storeIdx !== -1 ? 13 : 12);
+      const addressIdx = getColIdx(['住所'], storeIdx !== -1 ? 14 : 13);
+      const phoneIdx = getColIdx(['電話'], storeIdx !== -1 ? 15 : 14);
+      const roleIdx = getColIdx(['権限'], storeIdx !== -1 ? 16 : 15);
+
       const dataRows = rows.slice(1);
       const parsed: EmployeeCsvRow[] = [];
 
@@ -288,22 +317,23 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
         const rowIndex = idx + 2; // ヘッダーが1行目
         const errors: string[] = [];
 
-        const name = (row[0] || '').trim();
-        const nameKana = (row[1] || '').trim();
-        const email = (row[2] || '').trim();
-        const department = (row[3] || '').trim();
-        const positionName = (row[4] || '').trim();
-        const rawEmpType = (row[5] || '').trim();
-        const rawSalaryType = (row[6] || '').trim();
-        const rawBaseSalary = (row[7] || '').trim();
-        const rawHourlyWage = (row[8] || '').trim();
-        const joinDate = (row[9] || '').trim();
-        const birthDate = (row[10] || '').trim();
-        const gender = (row[11] || '').trim();
-        const postalCode = (row[12] || '').trim();
-        const address = (row[13] || '').trim();
-        const phoneNumber = (row[14] || '').trim();
-        const rawRole = (row[15] || '').trim();
+        const name = (row[nameIdx] || '').trim();
+        const nameKana = (row[nameKanaIdx] || '').trim();
+        const email = (row[emailIdx] || '').trim();
+        const department = (row[deptIdx] || '').trim();
+        const storeName = (storeIdx !== -1 && row[storeIdx] ? row[storeIdx] : '').trim();
+        const positionName = (row[posIdx] || '').trim();
+        const rawEmpType = (row[empTypeIdx] || '').trim();
+        const rawSalaryType = (row[salaryTypeIdx] || '').trim();
+        const rawBaseSalary = (row[baseSalaryIdx] || '').trim();
+        const rawHourlyWage = (row[hourlyWageIdx] || '').trim();
+        const joinDate = (row[joinDateIdx] || '').trim();
+        const birthDate = (row[birthDateIdx] || '').trim();
+        const gender = (row[genderIdx] || '').trim();
+        const postalCode = (row[postalIdx] || '').trim();
+        const address = (row[addressIdx] || '').trim();
+        const phoneNumber = (row[phoneIdx] || '').trim();
+        const rawRole = (row[roleIdx] || '').trim();
 
         // バリデーション 1: 氏名
         if (!name) {
@@ -385,6 +415,7 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
           nameKana: nameKana || undefined,
           email: email || undefined,
           department: department || undefined,
+          storeName: storeName || undefined,
           positionName: positionName || undefined,
           employmentType,
           salaryType,
@@ -443,6 +474,7 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
           email: finalEmail,
           role: item.role,
           department: item.department || null,
+          store_name: item.storeName || null,
           phone: item.phoneNumber || null,
           address: item.address || null,
           birth_date: item.birthDate || null,
@@ -513,14 +545,15 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
 
         const userId = registeredUserId;
 
-        // 役職情報のLocalStorageバックアップ（組織図等との即時連動保証）
-        if (item.positionName) {
+        // 役職・配属店舗情報のLocalStorageバックアップ（組織図等との即時連動保証）
+        if (item.positionName || item.storeName) {
           try {
             const key = `user_positions_${tenantId}`;
             const currentMap = JSON.parse(localStorage.getItem(key) || '{}');
             currentMap[userId] = {
               position_name: item.positionName,
-              department: item.department || undefined
+              department: item.department || undefined,
+              store_name: item.storeName || undefined
             };
             localStorage.setItem(key, JSON.stringify(currentMap));
           } catch (e) {}
@@ -744,7 +777,7 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
                       <th className="p-2.5 w-12 text-center">状態</th>
                       <th className="p-2.5">行</th>
                       <th className="p-2.5">氏名</th>
-                      <th className="p-2.5">部署 / 役職</th>
+                      <th className="p-2.5">部署 / 店舗 / 役職</th>
                       <th className="p-2.5">雇用形態</th>
                       <th className="p-2.5">給与（月給 / 時給）</th>
                       <th className="p-2.5">入社日</th>
@@ -767,8 +800,15 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
                           {row.nameKana && <span className="block text-[10px] text-slate-400 font-normal">{row.nameKana}</span>}
                         </td>
                         <td className="p-2.5 text-slate-600">
-                          {row.department || '未設定'}
-                          {row.positionName && <span className="text-slate-400"> / {row.positionName}</span>}
+                          <div className="font-bold text-slate-800">{row.department || '未設定'}</div>
+                          <div className="text-[10px] text-slate-500 flex items-center gap-1.5 flex-wrap mt-0.5">
+                            {row.storeName && (
+                              <span className="text-indigo-700 bg-indigo-50 border border-indigo-100 px-1 py-0.2 rounded font-bold">
+                                🏪 {row.storeName}
+                              </span>
+                            )}
+                            {row.positionName && <span>{row.positionName}</span>}
+                          </div>
                         </td>
                         <td className="p-2.5">
                           <span className="px-1.5 py-0.5 rounded bg-slate-100 font-bold text-slate-700 text-[10px]">

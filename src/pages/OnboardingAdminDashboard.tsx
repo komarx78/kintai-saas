@@ -39,10 +39,11 @@ import {
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
   FolderOpen, Settings, Clock, Smartphone, AlertCircle, ArrowRight, CornerDownLeft,
   Copy, DollarSign, Sparkles, Award, ShieldCheck, FileCheck,
-  ExternalLink, Gift, Baby, FileSpreadsheet, Send, KeyRound, MessageSquare, MapPin
+  ExternalLink, Gift, Baby, FileSpreadsheet, Send, KeyRound, MessageSquare, MapPin, Store
 } from 'lucide-react';
 import { StaffInviteModal } from '../components/StaffInviteModal';
 import { StaffAccountIssueModal, type TargetStaffForAccount } from '../components/StaffAccountIssueModal';
+import { fetchStoresUnified, getStoresFromStorage, type StoreMaster } from '../lib/storeMaster';
 import { searchAddressFromZip } from '../lib/zipHelper';
 import { MaternityLeaveModal } from '../components/MaternityLeaveModal';
 import { OfficialMaternityLeaveDoc } from '../components/OfficialMaternityLeaveDoc';
@@ -84,6 +85,7 @@ interface EmployeeOnboardingData {
   retirement_reason?: string;
   employment_type: 'full-time' | 'part-time' | 'contract';
   department?: string;
+  store_name?: string;
   position_name?: string;
   contract_type: 'indefinite' | 'fixed_term';
   trial_period_months?: number;
@@ -285,6 +287,7 @@ export default function OnboardingAdminDashboard() {
   const [employees, setEmployees] = useState<EmployeeOnboardingData[]>([]);
   const [submissions, setSubmissions] = useState<DocumentSubmission[]>([]);
   const [departments, setDepartments] = useState<DepartmentMaster[]>([]);
+  const [availableStores, setAvailableStores] = useState<StoreMaster[]>([]);
   const [calendarPatterns, setCalendarPatterns] = useState<CompanyCalendarPattern[]>(DEFAULT_CALENDAR_PATTERNS);
   const [positions, setPositions] = useState<PositionMaster[]>(DEFAULT_POSITIONS);
   const [schedulePatterns, setSchedulePatterns] = useState<WorkSchedulePattern[]>([]);
@@ -338,6 +341,7 @@ export default function OnboardingAdminDashboard() {
     join_date: new Date().toISOString().split('T')[0],
     employment_type: 'full-time',
     department: '営業部',
+    store_name: '',
     contract_type: 'indefinite',
     trial_period_months: 3,
     start_time: '09:00',
@@ -666,6 +670,15 @@ export default function OnboardingAdminDashboard() {
 
       saveDepartmentsToStorage(tenantIdData, deptsLoaded);
       setDepartments(deptsLoaded);
+
+      // 🏪 店舗マスタ取得（DB & LocalStorageの統一ローダー）
+      try {
+        const loadedStores = await fetchStoresUnified(tenantIdData);
+        setAvailableStores(loadedStores);
+      } catch (stErr) {
+        console.warn('Fetch stores unified error in OnboardingAdmin:', stErr);
+        setAvailableStores(getStoresFromStorage(tenantIdData));
+      }
 
       // 役職マスタ取得
       let posList: PositionMaster[] = getPositionsFromStorage();
@@ -2176,6 +2189,7 @@ export default function OnboardingAdminDashboard() {
           role: 'user',
           join_date: wizardData.join_date,
           department: wizardData.department,
+          store_name: wizardData.store_name || null,
           employment_type: wizardData.employment_type,
           has_kintai_access: true,
           has_shift_access: true
@@ -2185,6 +2199,17 @@ export default function OnboardingAdminDashboard() {
 
       if (uErr) throw uErr;
       const newUserId = newUser.id;
+
+      // 組織図・店舗マスタ連動のための役職キャッシュ更新
+      try {
+        const posKey = `user_positions_${tenantId}`;
+        const currentPosMap = JSON.parse(localStorage.getItem(posKey) || '{}');
+        currentPosMap[newUserId] = {
+          department: wizardData.department,
+          store_name: wizardData.store_name || undefined
+        };
+        localStorage.setItem(posKey, JSON.stringify(currentPosMap));
+      } catch (posErr) {}
 
       await supabase.from('shift_employee_settings').upsert({
         tenant_id: tenantId,
@@ -2270,6 +2295,7 @@ export default function OnboardingAdminDashboard() {
         join_date: new Date().toISOString().split('T')[0],
         employment_type: 'full-time',
         department: '営業部',
+        store_name: '',
         contract_type: 'indefinite',
         trial_period_months: 3,
         start_time: '09:00',
@@ -2480,6 +2506,7 @@ export default function OnboardingAdminDashboard() {
             name_kana: data.name_kana || null,
             email: data.email ? data.email.trim() : null,
             department: data.department,
+            store_name: data.store_name || null,
             employment_type: data.employment_type,
             join_date: data.join_date,
             birth_date: data.birth_date || null,
@@ -2504,6 +2531,18 @@ export default function OnboardingAdminDashboard() {
           })
           .eq('id', data.user_id);
       }
+
+      // 組織図・店舗マスタ連動のための役職・店舗キャッシュ更新
+      try {
+        const posKey = `user_positions_${tenantId}`;
+        const currentPosMap = JSON.parse(localStorage.getItem(posKey) || '{}');
+        currentPosMap[data.user_id] = {
+          ...(currentPosMap[data.user_id] || {}),
+          department: data.department,
+          store_name: data.store_name || undefined
+        };
+        localStorage.setItem(posKey, JSON.stringify(currentPosMap));
+      } catch (posErr) {}
 
       // 住民税月額（特別徴収）の解決（月別設定がある場合はそこからも確実に抽出）
       const resolvedResidentTaxMonthly = Number(data.resident_tax_monthly) || 
@@ -2904,6 +2943,7 @@ export default function OnboardingAdminDashboard() {
       role: matchedEmp.role || 'employee',
       status: matchedEmp.status || 'active',
       department: contractData.department || localMaster.department || matchedEmp.department || '本社',
+      store_name: matchedEmp.store_name || localMaster.store_name || '',
       employment_type: contractData.employment_type || localMaster.employment_type || matchedEmp.employment_type || 'full-time',
       contract_type: contractData.contract_type || localMaster.contract_type || matchedEmp.contract_type || 'indefinite',
       trial_period_months: matchedEmp.trial_period_months ?? 3,
@@ -4985,6 +5025,33 @@ export default function OnboardingAdminDashboard() {
                   </div>
                 </div>
 
+                {/* 🏪 配属店舗（シフト勤務先拠点） */}
+                <div className="bg-slate-50/80 p-2.5 rounded-xl border border-slate-200">
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Store className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>配属先店舗（シフト勤務先拠点）</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400">※ シフト管理・カレンダーの対象拠点</span>
+                  </label>
+                  <select
+                    value={editModal.data.store_name || ''}
+                    onChange={e => setEditModal({
+                      ...editModal,
+                      data: {
+                        ...editModal.data!,
+                        store_name: e.target.value
+                      }
+                    })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800"
+                  >
+                    <option value="">（店舗なし / 本部・全社直属）</option>
+                    {availableStores.map(s => (
+                      <option key={s.id} value={s.name}>{s.name}（{s.code || '店舗'}）</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] font-bold text-slate-600 block mb-1">👑 役職（役職マスタ連携）</label>
@@ -6405,6 +6472,44 @@ export default function OnboardingAdminDashboard() {
                   <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
                     <span>💡 選択した部署の勤務時間帯および営業休日規程がSTEP 2に自動反映されます</span>
                   </div>
+                </div>
+
+                {/* 🏪 配属先店舗（シフト勤務先拠点） */}
+                <div className={`p-3 rounded-2xl border transition ${
+                  wizardData.department === '店舗運営部' 
+                    ? 'bg-amber-50/70 border-amber-200' 
+                    : 'bg-slate-50/80 border-slate-200'
+                }`}>
+                  <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+                    <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                      <Store className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>配属先店舗（シフト勤務先拠点）</span>
+                    </label>
+                    {wizardData.department === '店舗運営部' ? (
+                      <span className="text-[10px] text-amber-800 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-md font-bold">
+                        ★ 店舗運営部スタッフの配属店舗を指定してください
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400">
+                        ※ 本部直属の場合は「店舗なし」
+                      </span>
+                    )}
+                  </div>
+                  <select
+                    value={wizardData.store_name || ''}
+                    onChange={e => setWizardData({ ...wizardData, store_name: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                  >
+                    <option value="">（店舗なし / 本部・全社直属）</option>
+                    {availableStores.map(s => (
+                      <option key={s.id} value={s.name}>
+                        {s.name}（{s.code || '店舗'}）
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    💡 入社手続き完了と同時に、該当店舗のシフト作成・勤怠カレンダーへ即時連動されます
+                  </p>
                 </div>
 
                 {/* 🔑 メールアドレス（連絡先 兼 タイムカード打刻ID） ＆ 電話番号 */}

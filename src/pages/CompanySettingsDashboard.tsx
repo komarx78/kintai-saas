@@ -1074,10 +1074,40 @@ export default function CompanySettingsDashboard() {
   }, [companyUsers, positions]);
 
   // 組織図用: 各部門ごとの所属ノード（マスタ部署 ＋ 社員が所属する実在部署をすべて自動包括）
+  // 🧹 現場職種（清掃、フロント、厨房、ホール等）は部署ではなく店舗現場の役割であるため「店舗運営部」へ完全統合
   const computedOrgDepartments = useMemo<OrgDepartmentNode[]>(() => {
+    const isStoreRoleDept = (name: string): boolean => {
+      const n = (name || '').trim();
+      return /^(環境整備|清掃|フロント|レジ|調理|厨房|ホール)(運営)?部?$/.test(n) ||
+        n === '清掃部' || n === 'レジ部' || n === '厨房部' || n === 'ホール部' || n === 'フロント部' ||
+        n === '環境整備・清掃部' || n === 'フロント・レジ部' || n === '調理厨房部' || n === 'ホール運営部';
+    };
+
+    // 社員の部署を正規化（現場職種名は「店舗運営部」へ集約）
+    const getNormalizedDept = (rawDept?: string | null): string => {
+      if (!rawDept) return '';
+      const clean = sanitizeDepartmentName(rawDept);
+      if (isStoreRoleDept(clean)) return '店舗運営部';
+      return clean;
+    };
+
     // 1. マスタ登録済みの部署
-    const deptList: OrgDepartmentNode[] = departments.map(d => {
-      const members = companyUsers.filter(u => u.department === d.name);
+    const baseDepartments = [...departments];
+    // 店舗運営部がマスタに存在しない場合は標準として追加
+    if (!baseDepartments.some(d => d.name === '店舗運営部')) {
+      baseDepartments.push({
+        id: 'dept-store-ops',
+        name: '店舗運営部',
+        display_order: 2,
+        calendar_pattern_id: 'cal-shift'
+      });
+    }
+
+    const deptList: OrgDepartmentNode[] = baseDepartments.map(d => {
+      const members = companyUsers.filter(u => {
+        const norm = getNormalizedDept(u.department);
+        return norm === d.name;
+      });
       return {
         id: d.id,
         name: d.name,
@@ -1089,25 +1119,29 @@ export default function CompanySettingsDashboard() {
       };
     });
 
-    // 2. 社員が入退社台帳等で所属しているが、部署マスタに未登録の部署（人事部、経理部等）を自動補完（ゴミデータ排除）
+    // 2. 社員が入退社台帳等で所属しているが、部署マスタに未登録の部署（人事部、経理部等）を自動補完（偽部署・ゴミデータ排除）
     const existingNames = new Set(deptList.map(d => d.name));
     companyUsers.forEach(u => {
       const rawDept = (u.department || '').trim();
       if (!rawDept) return;
       const cleanDept = sanitizeDepartmentName(rawDept);
+      const normalizedDept = getNormalizedDept(cleanDept);
 
-      // 🧹 ゴミ部署データの自動修復
-      if (rawDept !== cleanDept && cleanDept && u.id) {
-        supabase.from('users').update({ department: cleanDept }).eq('id', u.id).then(() => {}, () => {});
+      // 🧹 現場職種（フロント・レジ部等）またはゴミ部署データの自動修復
+      if (rawDept !== normalizedDept && normalizedDept && u.id) {
+        supabase.from('users').update({ department: normalizedDept }).eq('id', u.id).then(() => {}, () => {});
       }
 
-      if (cleanDept && isValidDepartmentName(cleanDept) && !existingNames.has(cleanDept)) {
-        existingNames.add(cleanDept);
-        const members = companyUsers.filter(m => sanitizeDepartmentName(m.department || '') === cleanDept);
-        const matchedMasterDept = departments.find(d => sanitizeDepartmentName(d.name) === cleanDept);
+      // 現場職種名は独立部署として追加しない（店舗運営部に集約済み）
+      if (isStoreRoleDept(cleanDept)) return;
+
+      if (normalizedDept && isValidDepartmentName(normalizedDept) && !existingNames.has(normalizedDept)) {
+        existingNames.add(normalizedDept);
+        const members = companyUsers.filter(m => getNormalizedDept(m.department) === normalizedDept);
+        const matchedMasterDept = departments.find(d => sanitizeDepartmentName(d.name) === normalizedDept);
         deptList.push({
-          id: matchedMasterDept ? matchedMasterDept.id : `auto_${cleanDept}`,
-          name: cleanDept,
+          id: matchedMasterDept ? matchedMasterDept.id : `auto_${normalizedDept}`,
+          name: normalizedDept,
           manager_user_id: matchedMasterDept?.manager_user_id,
           manager_user_name: matchedMasterDept?.manager_user_name,
           members,
@@ -2756,42 +2790,148 @@ export default function CompanySettingsDashboard() {
                           </select>
                         </div>
 
-                        {/* 所属メンバーリスト */}
-                        <div className="space-y-1">
-                          <div className="text-[10px] font-bold text-slate-400">所属メンバー一覧:</div>
-                          <div className="space-y-1 max-h-48 overflow-y-auto text-xs pr-1">
-                            {dept.members.length > 0 ? (
-                              dept.members.map(m => (
-                                <div
-                                  key={m.id}
-                                  onClick={() => setEditingUserModal({
-                                    isOpen: true,
-                                    user: {
-                                      ...m,
-                                      department: dept.name,
-                                      is_department_head: dept.manager_user_id === m.id
-                                    }
-                                  })}
-                                  className="flex items-center justify-between py-1.5 px-2.5 bg-white hover:bg-indigo-50/60 rounded-xl border border-slate-200 hover:border-indigo-300 transition cursor-pointer shadow-2xs"
-                                  title="クリックして役職や所属を変更"
-                                >
-                                  <span className="font-bold text-slate-800 text-[11px] flex items-center gap-1">
-                                    {m.name}
-                                    {dept.manager_user_id === m.id && (
-                                      <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1 rounded border border-amber-200">★長</span>
-                                    )}
-                                  </span>
-                                  <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
-                                    {m.position_name || '一般'}
-                                  </span>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="text-[10px] text-slate-400 py-2 text-center bg-white rounded-xl border border-dashed border-slate-200">
-                                所属メンバーなし
+                        {/* 所属メンバーリスト（店舗運営部は配下店舗ツリー構造を展開） */}
+                        <div className="space-y-1.5">
+                          {dept.name === '店舗運営部' ? (
+                            <div>
+                              <div className="flex items-center justify-between text-[10px] font-black text-amber-900 bg-amber-50/80 px-2.5 py-1.5 rounded-xl border border-amber-200 mb-2">
+                                <span className="flex items-center gap-1.5">
+                                  <Store className="w-3.5 h-3.5 text-amber-600" />
+                                  店舗運営部 配下店舗ツリー
+                                </span>
+                                <span className="text-[9px] bg-amber-200/80 text-amber-950 px-1.5 py-0.2 rounded font-bold">
+                                  {stores.length}拠点
+                                </span>
                               </div>
-                            )}
-                          </div>
+                              <div className="space-y-2 max-h-56 overflow-y-auto text-xs pr-1">
+                                {stores.map(store => {
+                                  const storeMembers = dept.members.filter(m => (m.store_name || '').trim() === store.name.trim());
+                                  return (
+                                    <div key={store.id} className="bg-white rounded-xl border border-slate-200 p-2 shadow-2xs space-y-1">
+                                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-700 pb-1 border-b border-slate-100">
+                                        <span className="flex items-center gap-1 text-slate-900 font-black">
+                                          <Store className="w-3 h-3 text-indigo-500" />
+                                          {store.name}
+                                        </span>
+                                        <span className="text-[9px] text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded-full font-bold">
+                                          {storeMembers.length}名
+                                        </span>
+                                      </div>
+                                      {storeMembers.length > 0 ? (
+                                        <div className="space-y-1 pt-0.5">
+                                          {storeMembers.map(m => (
+                                            <div
+                                              key={m.id}
+                                              onClick={() => setEditingUserModal({
+                                                isOpen: true,
+                                                user: {
+                                                  ...m,
+                                                  department: dept.name,
+                                                  store_name: store.name,
+                                                  is_department_head: dept.manager_user_id === m.id
+                                                }
+                                              })}
+                                              className="flex items-center justify-between py-1 px-2 bg-slate-50/80 hover:bg-indigo-50/60 rounded-lg border border-slate-100 hover:border-indigo-200 transition cursor-pointer text-[11px]"
+                                              title="クリックして役職や配属店舗を変更"
+                                            >
+                                              <span className="font-bold text-slate-800 flex items-center gap-1">
+                                                {m.name}
+                                                {dept.manager_user_id === m.id && (
+                                                  <span className="text-[8px] text-amber-600 font-bold bg-amber-50 px-1 rounded border border-amber-200">★統括</span>
+                                                )}
+                                              </span>
+                                              <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1 py-0.2 rounded border border-indigo-100">
+                                                {m.position_name || '現場スタッフ'}
+                                              </span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <div className="text-[9px] text-slate-400 py-1 text-center bg-slate-50/50 rounded-lg border border-dashed border-slate-200">
+                                          配属スタッフなし
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+
+                                {/* 店舗未割当のメンバー */}
+                                {(() => {
+                                  const unassignedStoreMembers = dept.members.filter(m => !m.store_name || !stores.some(st => st.name === m.store_name));
+                                  if (unassignedStoreMembers.length === 0) return null;
+                                  return (
+                                    <div className="bg-amber-50/40 rounded-xl border border-dashed border-amber-300 p-2 space-y-1">
+                                      <div className="flex items-center justify-between text-[10px] font-bold text-amber-800 pb-1 border-b border-amber-100">
+                                        <span>⚠️ 店舗未設定（本部・巡回等）</span>
+                                        <span className="text-[9px] text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded-full font-bold">
+                                          {unassignedStoreMembers.length}名
+                                        </span>
+                                      </div>
+                                      <div className="space-y-1 pt-0.5">
+                                        {unassignedStoreMembers.map(m => (
+                                          <div
+                                            key={m.id}
+                                            onClick={() => setEditingUserModal({
+                                              isOpen: true,
+                                              user: {
+                                                ...m,
+                                                department: dept.name,
+                                                is_department_head: dept.manager_user_id === m.id
+                                              }
+                                            })}
+                                            className="flex items-center justify-between py-1 px-2 bg-white hover:bg-amber-100/50 rounded-lg border border-amber-200 transition cursor-pointer text-[11px]"
+                                            title="クリックして配属店舗を設定"
+                                          >
+                                            <span className="font-bold text-slate-800">{m.name}</span>
+                                            <span className="text-[9px] font-bold text-amber-700 bg-amber-100/60 px-1 py-0.2 rounded">
+                                              店舗未設定 ✎
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="text-[10px] font-bold text-slate-400 mb-1">所属メンバー一覧:</div>
+                              <div className="space-y-1 max-h-48 overflow-y-auto text-xs pr-1">
+                                {dept.members.length > 0 ? (
+                                  dept.members.map(m => (
+                                    <div
+                                      key={m.id}
+                                      onClick={() => setEditingUserModal({
+                                        isOpen: true,
+                                        user: {
+                                          ...m,
+                                          department: dept.name,
+                                          is_department_head: dept.manager_user_id === m.id
+                                        }
+                                      })}
+                                      className="flex items-center justify-between py-1.5 px-2.5 bg-white hover:bg-indigo-50/60 rounded-xl border border-slate-200 hover:border-indigo-300 transition cursor-pointer shadow-2xs"
+                                      title="クリックして役職や所属を変更"
+                                    >
+                                      <span className="font-bold text-slate-800 text-[11px] flex items-center gap-1">
+                                        {m.name}
+                                        {dept.manager_user_id === m.id && (
+                                          <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1 rounded border border-amber-200">★長</span>
+                                        )}
+                                      </span>
+                                      <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                                        {m.position_name || '一般'}
+                                      </span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="text-[10px] text-slate-400 py-2 text-center bg-white rounded-xl border border-dashed border-slate-200">
+                                    所属メンバーなし
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
