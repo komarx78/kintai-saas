@@ -935,6 +935,12 @@ export default function OnboardingAdminDashboard() {
           if (raw) localBackup = JSON.parse(raw);
         } catch (e) {}
 
+        let localPos: any = null;
+        try {
+          const posMap = JSON.parse(localStorage.getItem(`user_positions_${tenantIdData}`) || '{}');
+          localPos = posMap[u.id];
+        } catch (e) {}
+
         // 生年月日（あらゆる提出書類・台帳・バックアップから最優先抽出）
         const bDate = 
           depDoc.birth_date || depDoc.birthDate || 
@@ -1021,11 +1027,12 @@ export default function OnboardingAdminDashboard() {
           status: onb?.status || (u.is_active === false ? 'retired' : 'active'),
           current_step_number: onb?.current_step_number || (onb?.status === 'onboarding' ? 1 : 5),
           step_history: onb?.step_history || [],
-          join_date: conDoc.join_date || onb?.join_date || u.join_date || '2026-04-01',
+          join_date: u.join_date || conDoc.join_date || onb?.join_date || '2026-04-01',
           retirement_date: onb?.retirement_date,
           retirement_reason: onb?.retirement_reason,
-          employment_type: conDoc.employment_type ? (conDoc.employment_type.includes('正社員') ? 'full-time' : 'part-time') : (u.employment_type || 'full-time'),
-          department: conDoc.department || u.department || '営業部',
+          employment_type: u.employment_type || (conDoc.employment_type ? (conDoc.employment_type.includes('正社員') ? 'full-time' : 'part-time') : 'full-time'),
+          department: u.department || localBackup?.department || localPos?.department || conDoc.department || '営業部',
+          store_name: u.store_name || localPos?.store_name || localBackup?.store_name || conDoc.store_name || '',
           contract_type: onb?.contract_type || 'indefinite',
           trial_period_months: onb?.trial_period_months ?? 3,
           start_time: onb?.start_time || defaultStartTime,
@@ -1186,7 +1193,8 @@ export default function OnboardingAdminDashboard() {
               step_history: [],
               join_date: conDoc.join_date || d.join_date || new Date().toISOString().split('T')[0],
               employment_type: conDoc.employment_type ? (conDoc.employment_type.includes('正社員') ? 'full-time' : 'part-time') : (d.employment_type === 'part-time' ? 'part-time' : 'full-time'),
-              department: conDoc.department || d.department || '営業部',
+              department: d.department || conDoc.department || '営業部',
+              store_name: d.store_name || conDoc.store_name || '',
               contract_type: d.contract_type || 'indefinite',
               trial_period_months: 3,
               start_time: defaultStartTime,
@@ -2996,8 +3004,8 @@ export default function OnboardingAdminDashboard() {
       name_kana: matchedEmp.name_kana || residentData.name_kana || taxData.name_kana || contractData.name_kana || localMaster.name_kana || '',
       role: matchedEmp.role || 'employee',
       status: matchedEmp.status || 'active',
-      department: contractData.department || localMaster.department || matchedEmp.department || '本社',
-      store_name: matchedEmp.store_name || localMaster.store_name || '',
+      department: matchedEmp.department || localMaster.department || contractData.department || '営業部',
+      store_name: matchedEmp.store_name || localMaster.store_name || contractData.store_name || '',
       employment_type: contractData.employment_type || localMaster.employment_type || matchedEmp.employment_type || 'full-time',
       contract_type: contractData.contract_type || localMaster.contract_type || matchedEmp.contract_type || 'indefinite',
       trial_period_months: matchedEmp.trial_period_months ?? 3,
@@ -3686,24 +3694,25 @@ export default function OnboardingAdminDashboard() {
                                 onClick={() => {
                                   const isH = emp.salary_type === 'hourly';
                                   const cleanEmail = (!emp.email || emp.email.startsWith('emp_') || emp.email.includes('@sample.local') || emp.email.includes('@company.local')) ? '' : emp.email;
+                                  const resolvedEmp = resolveEmployeeFullData(emp);
                                   setInviteUrlModal({
                                     isOpen: true,
-                                    targetUserId: emp.user_id || '',
-                                    name: emp.name || '',
-                                    nameKana: emp.name_kana || '',
+                                    targetUserId: resolvedEmp.user_id || emp.user_id || '',
+                                    name: resolvedEmp.name || emp.name || '',
+                                    nameKana: resolvedEmp.name_kana || emp.name_kana || '',
                                     email: cleanEmail,
-                                    phone: emp.phone || '',
-                                    employmentType: emp.employment_type === 'part-time' ? 'パート・アルバイト' : '正社員（無期雇用）',
+                                    phone: resolvedEmp.phone || emp.phone || '',
+                                    employmentType: resolvedEmp.employment_type === 'part-time' ? 'パート・アルバイト' : '正社員（無期雇用）',
                                     salaryType: isH ? 'hourly' : 'monthly',
-                                    baseSalary: emp.base_salary || 0,
-                                    hourlyWage: emp.hourly_wage || 0,
-                                    positionName: emp.position_name || '',
-                                    positionAllowance: emp.position_allowance || 0,
-                                    qualificationAllowance: emp.qualification_allowance || 0,
+                                    baseSalary: resolvedEmp.base_salary || emp.base_salary || 0,
+                                    hourlyWage: resolvedEmp.hourly_wage || emp.hourly_wage || 0,
+                                    positionName: resolvedEmp.position_name || emp.position_name || '',
+                                    positionAllowance: resolvedEmp.position_allowance || emp.position_allowance || 0,
+                                    qualificationAllowance: resolvedEmp.qualification_allowance || emp.qualification_allowance || 0,
                                     fixedOvertimeAllowance: 0,
-                                    department: emp.department || departments[0]?.name || '営業部',
-                                    storeName: (emp as any).store_name || '',
-                                    joinDate: emp.join_date || new Date().toISOString().split('T')[0],
+                                    department: resolvedEmp.department || emp.department || departments[0]?.name || '営業部',
+                                    storeName: resolvedEmp.store_name || emp.store_name || '',
+                                    joinDate: resolvedEmp.join_date || emp.join_date || new Date().toISOString().split('T')[0],
                                     startTime: emp.start_time || '09:00',
                                     endTime: emp.end_time || '18:00',
                                     breakMinutes: emp.break_time_minutes || 60,
@@ -7833,6 +7842,14 @@ export default function OnboardingAdminDashboard() {
           setIsSaving(true);
           try {
             let activeUserId = inviteUrlModal.targetUserId;
+            // targetUserIdが空の場合は氏名から既存従業員を自動検出して解決
+            if (!activeUserId) {
+              const matchedByName = employees.find(e => e.name?.trim() === inviteUrlModal.name.trim());
+              if (matchedByName?.user_id) {
+                activeUserId = matchedByName.user_id;
+              }
+            }
+
             const empType = inviteUrlModal.employmentType === 'パート・アルバイト' ? 'part-time' : 'full-time';
             const cleanEmail = inviteUrlModal.email.trim();
             const fallbackEmail = cleanEmail || `emp_${Date.now()}@sample.local`;
@@ -7875,6 +7892,48 @@ export default function OnboardingAdminDashboard() {
               setInviteUrlModal(prev => ({ ...prev, targetUserId: newUser.id }));
             }
 
+            // 提出書類（employee_document_submissions）の契約書データも最新の部署・店舗で完全同期（古い書類による上書きを100%防止）
+            try {
+              const { data: userSubmissions } = await supabase
+                .from('employee_document_submissions')
+                .select('id, data')
+                .eq('tenant_id', tenantId)
+                .eq('user_id', activeUserId)
+                .eq('document_type', 'labor_contract');
+
+              if (userSubmissions && userSubmissions.length > 0) {
+                for (const us of userSubmissions) {
+                  const updatedDocData = {
+                    ...(us.data || {}),
+                    department: inviteUrlModal.department,
+                    store_name: inviteUrlModal.storeName || null,
+                    employment_type: inviteUrlModal.employmentType,
+                    position_name: inviteUrlModal.positionName
+                  };
+                  await supabase
+                    .from('employee_document_submissions')
+                    .update({ data: updatedDocData })
+                    .eq('id', us.id);
+                }
+              }
+            } catch (docSyncErr) {
+              console.warn('Sync document submissions error:', docSyncErr);
+            }
+
+            // LocalStorageバックアップの更新
+            try {
+              const bKey = `employee_master_backup_${activeUserId}`;
+              const prevBackup = JSON.parse(localStorage.getItem(bKey) || '{}');
+              const newBackup = {
+                ...prevBackup,
+                department: inviteUrlModal.department,
+                store_name: inviteUrlModal.storeName || '',
+                position_name: inviteUrlModal.positionName,
+                join_date: inviteUrlModal.joinDate
+              };
+              localStorage.setItem(bKey, JSON.stringify(newBackup));
+            } catch (bErr) {}
+
             // 組織図・店舗マスタ連動のための役職・店舗キャッシュ更新
             try {
               const posKey = `user_positions_${tenantId}`;
@@ -7889,6 +7948,20 @@ export default function OnboardingAdminDashboard() {
             } catch (posErr) {
               console.warn('user_positions cache error:', posErr);
             }
+
+            // 画面の従業員一覧Stateを即時同期更新
+            setEmployees(prev => prev.map(e => {
+              if (e.user_id === activeUserId || e.name === inviteUrlModal.name.trim()) {
+                return {
+                  ...e,
+                  department: inviteUrlModal.department,
+                  store_name: inviteUrlModal.storeName || '',
+                  position_name: inviteUrlModal.positionName,
+                  join_date: inviteUrlModal.joinDate
+                };
+              }
+              return e;
+            }));
 
             // 2. employee_payroll_profiles への給与条件保存
             await supabase.from('employee_payroll_profiles').upsert({
@@ -8191,7 +8264,27 @@ ${finalUrl}
                       <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署</label>
                       <select
                         value={inviteUrlModal.department}
-                        onChange={e => setInviteUrlModal(prev => ({ ...prev, department: e.target.value, copied: false }))}
+                        onChange={e => {
+                          const newDept = e.target.value;
+                          setInviteUrlModal(prev => {
+                            let newStore = prev.storeName;
+                            if (newDept === '店舗運営部') {
+                              // 店舗運営部が選ばれた場合、店舗が未選択なら1店舗目を自動選択
+                              if (!newStore || newStore === '') {
+                                newStore = availableStores[0]?.name || '新宿店';
+                              }
+                            } else {
+                              // 本部（営業部・総務等）が選ばれた場合、店舗をクリア
+                              newStore = '';
+                            }
+                            return {
+                              ...prev,
+                              department: newDept,
+                              storeName: newStore,
+                              copied: false
+                            };
+                          });
+                        }}
                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
                       >
                         {(departments.length > 0 ? departments : DEFAULT_DEPARTMENTS).map(d => (
@@ -8207,8 +8300,8 @@ ${finalUrl}
                           <span>配属先店舗（シフト拠点）</span>
                         </span>
                         {inviteUrlModal.department === '店舗運営部' ? (
-                          <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-                            ★指定推奨
+                          <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                            ★店舗運営部連動
                           </span>
                         ) : (
                           <span className="text-[9px] text-slate-400">
@@ -8218,7 +8311,22 @@ ${finalUrl}
                       </label>
                       <select
                         value={inviteUrlModal.storeName}
-                        onChange={e => setInviteUrlModal(prev => ({ ...prev, storeName: e.target.value, copied: false }))}
+                        onChange={e => {
+                          const newStore = e.target.value;
+                          setInviteUrlModal(prev => {
+                            let newDept = prev.department;
+                            // 店舗を選択した場合は、配属部署を自動的に「店舗運営部」に連動！
+                            if (newStore && newStore !== '') {
+                              newDept = '店舗運営部';
+                            }
+                            return {
+                              ...prev,
+                              department: newDept,
+                              storeName: newStore,
+                              copied: false
+                            };
+                          });
+                        }}
                         className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
                       >
                         <option value="">（店舗なし / 本部・全社直属）</option>
