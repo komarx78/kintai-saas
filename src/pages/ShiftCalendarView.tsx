@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale, Sparkles, ArrowRightLeft, Calendar, Briefcase } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale, Sparkles, ArrowRightLeft, Calendar, Briefcase, RefreshCw } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -56,7 +56,8 @@ const ShiftCalendarView: React.FC = () => {
   const [isStaffPresetModalOpen, setIsStaffPresetModalOpen] = useState(false);
   const [presetStartTime, setPresetStartTime] = useState('09:00');
   const [presetEndTime, setPresetEndTime] = useState('18:00');
-  const [presetOffDays, setPresetOffDays] = useState<number[]>([0, 6]); // デフォルト日(0), 土(6)公休
+  // 社員ごとの個別設定（勤務時間帯＆公休曜日: 0=日, 1=月, ... 6=土）
+  const [staffPresetConfigs, setStaffPresetConfigs] = useState<Record<string, { startTime: string; endTime: string; offDays: number[] }>>({});
   const [isPresetting, setIsPresetting] = useState(false);
 
   useEffect(() => {
@@ -685,7 +686,161 @@ const ShiftCalendarView: React.FC = () => {
     }
   };
 
-  // 🏢 正社員シフト一括先入れの実行
+  // 🏢 正社員シフト先入れ：平日分散ローテーションのパターン定義（月〜金で週休2日）
+  const WEEKDAY_ROTATION_PATTERNS = [
+    [1, 2], // 月・火
+    [3, 4], // 水・木
+    [5, 1], // 金・月
+    [2, 3], // 火・水
+    [4, 5], // 木・金
+    [1, 4], // 月・木
+    [2, 5], // 火・金
+    [3, 5], // 水・金
+    [1, 3], // 月・水
+    [2, 4], // 火・木
+  ];
+
+  // 🏢 正社員シフト先入れ：全曜日均等ローテーションのパターン定義（日〜土で週休2日）
+  const ALL_DAYS_ROTATION_PATTERNS = [
+    [0, 1], // 日・月
+    [2, 3], // 火・水
+    [4, 5], // 木・金
+    [6, 0], // 土・日
+    [1, 2], // 月・火
+    [3, 4], // 水・木
+    [5, 6], // 金・土
+  ];
+
+  // 🏢 正社員モーダルを開く（未設定の社員がいれば平日ローテーションで自動初期化）
+  const handleOpenStaffPresetModal = () => {
+    setStaffPresetConfigs(prev => {
+      const next = { ...prev };
+      fullTimeEmployees.forEach((emp, index) => {
+        if (!next[emp.id]) {
+          next[emp.id] = {
+            startTime: presetStartTime || '09:00',
+            endTime: presetEndTime || '18:00',
+            offDays: WEEKDAY_ROTATION_PATTERNS[index % WEEKDAY_ROTATION_PATTERNS.length],
+          };
+        }
+      });
+      return next;
+    });
+    setIsStaffPresetModalOpen(true);
+  };
+
+  // 🏢 プリセット適用：平日分散ローテーション（土日出勤死守・平日に週休2日を分散）
+  const applyWeekdayRotation = () => {
+    const next: Record<string, { startTime: string; endTime: string; offDays: number[] }> = {};
+    fullTimeEmployees.forEach((emp, index) => {
+      const current = staffPresetConfigs[emp.id];
+      next[emp.id] = {
+        startTime: current?.startTime || presetStartTime || '09:00',
+        endTime: current?.endTime || presetEndTime || '18:00',
+        offDays: WEEKDAY_ROTATION_PATTERNS[index % WEEKDAY_ROTATION_PATTERNS.length],
+      };
+    });
+    setStaffPresetConfigs(next);
+  };
+
+  // 🏢 プリセット適用：全曜日均等ローテーション（7曜日に週休2日を均等分散）
+  const applyAllDaysRotation = () => {
+    const next: Record<string, { startTime: string; endTime: string; offDays: number[] }> = {};
+    fullTimeEmployees.forEach((emp, index) => {
+      const current = staffPresetConfigs[emp.id];
+      next[emp.id] = {
+        startTime: current?.startTime || presetStartTime || '09:00',
+        endTime: current?.endTime || presetEndTime || '18:00',
+        offDays: ALL_DAYS_ROTATION_PATTERNS[index % ALL_DAYS_ROTATION_PATTERNS.length],
+      };
+    });
+    setStaffPresetConfigs(next);
+  };
+
+  // 🏢 プリセット適用：全員土日公休（完全週休2日オフィス型）
+  const applyWeekendOffAll = () => {
+    const next: Record<string, { startTime: string; endTime: string; offDays: number[] }> = {};
+    fullTimeEmployees.forEach((emp) => {
+      const current = staffPresetConfigs[emp.id];
+      next[emp.id] = {
+        startTime: current?.startTime || presetStartTime || '09:00',
+        endTime: current?.endTime || presetEndTime || '18:00',
+        offDays: [0, 6],
+      };
+    });
+    setStaffPresetConfigs(next);
+  };
+
+  // 🏢 プリセット適用：基本時間を全員に一括適用
+  const applyBulkTimes = () => {
+    const next: Record<string, { startTime: string; endTime: string; offDays: number[] }> = {};
+    fullTimeEmployees.forEach((emp) => {
+      const current = staffPresetConfigs[emp.id];
+      next[emp.id] = {
+        startTime: presetStartTime,
+        endTime: presetEndTime,
+        offDays: current?.offDays || [0, 6],
+      };
+    });
+    setStaffPresetConfigs(next);
+  };
+
+  // 🏢 社員ごとの公休曜日トグル
+  const toggleStaffOffDay = (empId: string, dow: number) => {
+    setStaffPresetConfigs(prev => {
+      const current = prev[empId] || {
+        startTime: presetStartTime || '09:00',
+        endTime: presetEndTime || '18:00',
+        offDays: [0, 6],
+      };
+      const exists = current.offDays.includes(dow);
+      const newOffDays = exists 
+        ? current.offDays.filter(d => d !== dow)
+        : [...current.offDays, dow].sort((a, b) => a - b);
+
+      return {
+        ...prev,
+        [empId]: {
+          ...current,
+          offDays: newOffDays,
+        }
+      };
+    });
+  };
+
+  // 🏢 社員ごとの時間設定変更
+  const updateStaffConfigTime = (empId: string, field: 'startTime' | 'endTime', val: string) => {
+    setStaffPresetConfigs(prev => {
+      const current = prev[empId] || {
+        startTime: presetStartTime || '09:00',
+        endTime: presetEndTime || '18:00',
+        offDays: [0, 6],
+      };
+      return {
+        ...prev,
+        [empId]: {
+          ...current,
+          [field]: val,
+        }
+      };
+    });
+  };
+
+  // 🏢 曜日別 正社員出勤人数の集計（0=日 〜 6=土）
+  const dowStaffCounts = useMemo(() => {
+    const counts = [0, 0, 0, 0, 0, 0, 0];
+    fullTimeEmployees.forEach(emp => {
+      const conf = staffPresetConfigs[emp.id] || { offDays: [0, 6] };
+      for (let dow = 0; dow < 7; dow++) {
+        if (!conf.offDays.includes(dow)) {
+          counts[dow]++;
+        }
+      }
+    });
+    return counts;
+  }, [fullTimeEmployees, staffPresetConfigs]);
+
+  // 🏢 正社員シフト一括先入れの実行（社員個別の公休・時間設定を完全反映）
   const handlePresetFullTimeEmployees = async () => {
     if (fullTimeEmployees.length === 0) {
       alert('正社員（フルタイム）として登録されているスタッフがいません。\n「従業員シフト設定」で雇用区分を「正社員」に設定してください。');
@@ -707,11 +862,16 @@ const ShiftCalendarView: React.FC = () => {
 
       for (const emp of fullTimeEmployees) {
         const empRole = userRoleMapState[emp.id] || roles[0]?.name || 'ホール';
+        const conf = staffPresetConfigs[emp.id] || {
+          startTime: presetStartTime || '09:00',
+          endTime: presetEndTime || '18:00',
+          offDays: [0, 6],
+        };
 
         for (const day of datesToProcess) {
           const dow = day.getDay(); // 0: 日 〜 6: 土
-          // 公休曜日（例: 土日）ならスキップ
-          if (presetOffDays.includes(dow)) continue;
+          // 社員ごとの公休曜日ならスキップ
+          if (conf.offDays.includes(dow)) continue;
 
           const dateStr = format(day, 'yyyy-MM-dd');
           const key = `${dateStr}_${emp.id}`;
@@ -723,8 +883,8 @@ const ShiftCalendarView: React.FC = () => {
             tenant_id: tenantIdData,
             user_id: emp.id,
             target_date: dateStr,
-            start_time: presetStartTime,
-            end_time: presetEndTime,
+            start_time: conf.startTime,
+            end_time: conf.endTime,
             role: empRole,
             status: 'confirmed' // 正社員の骨組みは確定枠として配置
           });
@@ -740,7 +900,7 @@ const ShiftCalendarView: React.FC = () => {
       const { error } = await supabase.from('advanced_shifts').insert(toInsert);
       if (error) throw error;
 
-      alert(`🎉 正社員 ${fullTimeEmployees.length}名 の基本シフト（計 ${toInsert.length}件）を一括配置しました！\n\n続いて「⚡ 自動割り当て」を実行すれば、残りの空き枠にバイトが自動配置されます。`);
+      alert(`🎉 正社員 ${fullTimeEmployees.length}名 の基本シフト（計 ${toInsert.length}件）を個別公休・個別時間で一括配置しました！\n\n続いて「⚡ 自動割り当て」を実行すれば、残りの空き枠にバイトが自動配置されます。`);
       setIsStaffPresetModalOpen(false);
       await fetchSettingsAndData();
     } catch (err: any) {
@@ -811,7 +971,7 @@ const ShiftCalendarView: React.FC = () => {
 
             {/* 🏢 正社員シフト一括先入れボタン（黄金フロー第1歩！） */}
             <button 
-              onClick={() => setIsStaffPresetModalOpen(true)}
+              onClick={handleOpenStaffPresetModal}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl flex flex-col items-center justify-center transition shadow-md font-bold cursor-pointer border border-indigo-400"
               title="正社員（フルタイム）スタッフの基本シフト（週休2日・所定時間）をワンクリックで一括先入れします"
             >
@@ -1925,23 +2085,23 @@ const ShiftCalendarView: React.FC = () => {
         </div>
       )}
 
-      {/* 🏢 正社員シフト一括先入れアシストモーダル */}
+      {/* 🏢 正社員シフト一括先入れアシストモーダル（個別公休・個別時間設定対応） */}
       {isStaffPresetModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden border border-slate-200 animate-in fade-in flex flex-col max-h-[90vh]">
             {/* モーダルヘッダー */}
-            <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-blue-600 p-5 text-white flex justify-between items-start">
+            <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-blue-600 p-5 text-white flex justify-between items-start shrink-0">
               <div>
                 <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-xs font-black tracking-wider uppercase mb-1">
                   <Briefcase className="w-3.5 h-3.5 text-indigo-200" />
                   黄金フロー第1歩：骨組み作成
                 </div>
                 <h2 className="text-xl font-black flex items-center gap-2">
-                  <span>🏢 正社員シフト一括先入れ</span>
+                  <span>🏢 正社員シフト先入れ（個別公休・個別時間設定）</span>
                 </h2>
                 <p className="text-xs text-indigo-100 mt-1">
-                  正社員の週休2日と勤務時間帯をワンクリックで確定枠として配置します。<br />
-                  その後「AI自動割り当て」を実行すると、残りの空き枠にバイトが綺麗に埋まります。
+                  正社員1人ひとりの公休曜日（週休2日）や出勤時間を個別に調整できます。<br />
+                  自動分散ボタンを押せば、社員同士の休みが被らないよう一瞬でバランスよくローテーション配置されます。
                 </p>
               </div>
               <button 
@@ -1952,136 +2112,252 @@ const ShiftCalendarView: React.FC = () => {
               </button>
             </div>
 
-            {/* モーダルコンテンツ */}
-            <div className="p-6 space-y-4 bg-slate-50/50">
-              {/* 対象期間バッジ */}
-              <div className="bg-white p-3 rounded-2xl border border-slate-200 flex items-center justify-between shadow-2xs">
-                <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
-                  <Calendar className="w-4 h-4 text-indigo-600" />
-                  対象期間:
-                </span>
-                <span className="text-xs font-black text-indigo-900 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200">
-                  {format(startDate, 'yyyy年M月d日(E)', { locale: ja })} 〜 {format(endDate, 'M月d日(E)', { locale: ja })}
-                </span>
-              </div>
-
-              {/* 対象スタッフ */}
-              <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
-                <label className="block text-xs font-bold text-slate-600 mb-1.5 flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5 text-indigo-600" />
-                    対象の正社員スタッフ（全 {fullTimeEmployees.length} 名）
-                  </span>
-                  {fullTimeEmployees.length === 0 && (
-                    <span className="text-rose-600 text-[11px] font-bold">※正社員が未登録です</span>
-                  )}
-                </label>
-                {fullTimeEmployees.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {fullTimeEmployees.map(emp => (
-                      <span key={emp.id} className="inline-flex items-center gap-1 text-xs font-bold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-                        <User className="w-3 h-3 text-slate-500" />
-                        <span>{emp.name}</span>
-                        <span className="text-[10px] text-indigo-600 bg-white px-1 rounded font-bold">
-                          {userRoleMapState[emp.id] || roles[0]?.name || 'ホール'}
-                        </span>
-                      </span>
-                    ))}
+            {/* モーダルコンテンツ（スクロール可能） */}
+            <div className="p-5 space-y-4 bg-slate-50/50 overflow-y-auto grow">
+              {/* 上部バー：対象期間 ＆ クイック分散ツールバー */}
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
+                      <Calendar className="w-4 h-4 text-indigo-600" />
+                      対象期間:
+                    </span>
+                    <span className="text-xs font-black text-indigo-900 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200">
+                      {format(startDate, 'yyyy年M月d日(E)', { locale: ja })} 〜 {format(endDate, 'M月d日(E)', { locale: ja })}
+                    </span>
                   </div>
-                ) : (
-                  <p className="text-xs text-slate-500 py-1">
-                    「従業員設定」で雇用区分を「正社員」に設定したスタッフが対象になります。
-                  </p>
-                )}
-              </div>
+                  <div className="text-xs text-slate-500 font-bold">
+                    対象正社員: <span className="text-indigo-700 font-black">{fullTimeEmployees.length}</span> 名
+                  </div>
+                </div>
 
-              {/* 勤務時間設定 */}
-              <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
-                <label className="block text-xs font-bold text-slate-600 mb-1.5 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                  基本勤務時間帯
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-[11px] text-slate-500 font-bold block mb-1">始業時刻</span>
+                {/* ワンクリック自動分散＆一括プリセット */}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-bold text-slate-500 mr-1 flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      ワンクリック公休設定:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={applyWeekdayRotation}
+                      className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                      title="土日は社員全員が出勤し、月〜金の平日に週休2日を重ならないよう分散配分します"
+                    >
+                      <span>⚡ 平日分散（土日出勤死守）</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyAllDaysRotation}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                      title="月曜から日曜の全曜日に週休2日をバランスよく均等ローテーション配分します"
+                    >
+                      <RefreshCw className="w-3 h-3 text-slate-500" />
+                      <span>7曜日均等分散</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyWeekendOffAll}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer"
+                      title="全社員を一律で土日休みにします"
+                    >
+                      <span>全員土日公休</span>
+                    </button>
+                  </div>
+
+                  {/* 時間一括適用 */}
+                  <div className="flex items-center gap-1 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
+                    <Clock className="w-3.5 h-3.5 text-slate-500 ml-1" />
                     <input 
                       type="time" 
                       value={presetStartTime} 
                       onChange={e => setPresetStartTime(e.target.value)} 
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-sm font-black text-slate-800 text-center"
+                      className="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs font-bold text-slate-700 w-18 text-center"
                     />
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-500 font-bold block mb-1">終業時刻</span>
+                    <span className="text-slate-400 text-xs">〜</span>
                     <input 
                       type="time" 
                       value={presetEndTime} 
                       onChange={e => setPresetEndTime(e.target.value)} 
-                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-sm font-black text-slate-800 text-center"
+                      className="bg-white border border-slate-300 rounded px-1.5 py-0.5 text-xs font-bold text-slate-700 w-18 text-center"
                     />
+                    <button
+                      type="button"
+                      onClick={applyBulkTimes}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-0.5 rounded text-[11px] font-bold transition cursor-pointer"
+                      title="この時間帯を全員の設定に一括適用します"
+                    >
+                      時間を全員に適用
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* 公休曜日選択 */}
-              <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">
-                  公休曜日（勤務を入れない休日を選択）
-                </label>
-                <div className="grid grid-cols-7 gap-1">
+              {/* 曜日別 正社員出勤バランス盤（店舗の責任者不在チェック） */}
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-indigo-600" />
+                    曜日別 正社員出勤バランス（責任者不在チェック）
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    ※赤色の曜日は正社員が0名（店舗に責任者不在）です
+                  </span>
+                </div>
+                <div className="grid grid-cols-7 gap-1.5 text-center">
                   {['日', '月', '火', '水', '木', '金', '土'].map((dayName, dow) => {
-                    const isOff = presetOffDays.includes(dow);
+                    const count = dowStaffCounts[dow];
+                    const isZero = count === 0;
                     return (
-                      <button
-                        key={dow}
-                        type="button"
-                        onClick={() => {
-                          if (isOff) {
-                            setPresetOffDays(presetOffDays.filter(d => d !== dow));
-                          } else {
-                            setPresetOffDays([...presetOffDays, dow]);
-                          }
-                        }}
-                        className={`py-2 rounded-xl text-xs font-black transition cursor-pointer flex flex-col items-center ${
-                          isOff 
-                            ? 'bg-rose-500 text-white shadow-xs' 
-                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      <div 
+                        key={dow} 
+                        className={`p-2 rounded-xl border transition ${
+                          isZero 
+                            ? 'bg-rose-50 border-rose-300 text-rose-700 font-black ring-2 ring-rose-400/50' 
+                            : count === 1 
+                              ? 'bg-amber-50 border-amber-200 text-amber-800' 
+                              : 'bg-indigo-50/40 border-indigo-100 text-indigo-900'
                         }`}
                       >
-                        <span>{dayName}</span>
-                        <span className="text-[9px] opacity-80 mt-0.5">{isOff ? '公休' : '出勤'}</span>
-                      </button>
+                        <div className={`text-xs font-bold ${dow === 0 ? 'text-rose-600' : dow === 6 ? 'text-blue-600' : ''}`}>
+                          {dayName}曜日
+                        </div>
+                        <div className="text-sm font-black mt-0.5">
+                          {count}名
+                        </div>
+                        <div className="text-[10px] mt-0.5">
+                          {isZero ? (
+                            <span className="text-rose-600 font-black animate-pulse">⚠️ 不在!</span>
+                          ) : (
+                            <span className="text-slate-500 font-medium">出勤</span>
+                          )}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1.5">
-                  ※赤色の曜日が「公休日」となり、それ以外の曜日に出勤シフトが配置されます。
-                </p>
+              </div>
+
+              {/* 社員別 個別公休・勤務時間設定テーブル */}
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center justify-between mb-2.5">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-indigo-600" />
+                    社員ごとの公休曜日・勤務時間（個別調整）
+                  </label>
+                  <span className="text-[11px] text-slate-400">
+                    ※赤色のボタンが「公休（休み）」、灰色のボタンが「出勤」です
+                  </span>
+                </div>
+
+                {fullTimeEmployees.length > 0 ? (
+                  <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                    {fullTimeEmployees.map(emp => {
+                      const conf = staffPresetConfigs[emp.id] || {
+                        startTime: presetStartTime || '09:00',
+                        endTime: presetEndTime || '18:00',
+                        offDays: [0, 6],
+                      };
+                      const offCount = conf.offDays.length;
+                      const workCount = 7 - offCount;
+
+                      return (
+                        <div 
+                          key={emp.id} 
+                          className="bg-slate-50/70 hover:bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition"
+                        >
+                          {/* 社員情報 */}
+                          <div className="flex items-center gap-2.5 min-w-[190px]">
+                            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs shrink-0">
+                              {emp.name.charAt(0)}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm font-black text-slate-800">{emp.name}</span>
+                                <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded font-bold">
+                                  {userRoleMapState[emp.id] || roles[0]?.name || '正社員'}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-medium">
+                                週休 <span className="font-bold text-rose-600">{offCount}日</span> / 出勤 <span className="font-bold text-slate-700">{workCount}日</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 勤務時間入力 */}
+                          <div className="flex items-center gap-1 text-xs">
+                            <Clock className="w-3.5 h-3.5 text-slate-400 mr-0.5" />
+                            <input 
+                              type="time" 
+                              value={conf.startTime} 
+                              onChange={e => updateStaffConfigTime(emp.id, 'startTime', e.target.value)}
+                              className="bg-white border border-slate-300 rounded-lg px-1.5 py-1 text-xs font-bold text-slate-800 text-center w-20"
+                            />
+                            <span className="text-slate-400">〜</span>
+                            <input 
+                              type="time" 
+                              value={conf.endTime} 
+                              onChange={e => updateStaffConfigTime(emp.id, 'endTime', e.target.value)}
+                              className="bg-white border border-slate-300 rounded-lg px-1.5 py-1 text-xs font-bold text-slate-800 text-center w-20"
+                            />
+                          </div>
+
+                          {/* 公休曜日トグル（日〜土） */}
+                          <div className="flex items-center gap-1">
+                            {['日', '月', '火', '水', '木', '金', '土'].map((dayName, dow) => {
+                              const isOff = conf.offDays.includes(dow);
+                              return (
+                                <button
+                                  key={dow}
+                                  type="button"
+                                  onClick={() => toggleStaffOffDay(emp.id, dow)}
+                                  className={`w-8 h-8 rounded-lg text-xs font-black transition cursor-pointer flex flex-col items-center justify-center ${
+                                    isOff 
+                                      ? 'bg-rose-500 text-white shadow-xs scale-105 ring-1 ring-rose-300' 
+                                      : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
+                                  }`}
+                                  title={`${emp.name}: ${dayName}曜日を${isOff ? '出勤' : '公休'}に変更`}
+                                >
+                                  <span className="text-[11px] leading-tight">{dayName}</span>
+                                  <span className="text-[8px] leading-none opacity-80">{isOff ? '休' : '出'}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 py-3 text-center">
+                    正社員スタッフが登録されていません。「従業員設定」で雇用区分を「正社員」に設定してください。
+                  </p>
+                )}
               </div>
             </div>
 
             {/* モーダルフッター */}
-            <div className="bg-slate-100 p-4 border-t border-slate-200 flex justify-between items-center">
+            <div className="bg-slate-100 p-4 border-t border-slate-200 flex justify-between items-center shrink-0">
               <button
                 onClick={() => setIsStaffPresetModalOpen(false)}
-                className="bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer"
+                className="bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs transition cursor-pointer"
               >
                 キャンセル
               </button>
               <button
                 disabled={isPresetting || fullTimeEmployees.length === 0}
                 onClick={handlePresetFullTimeEmployees}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-5 py-2.5 rounded-xl text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-6 py-2.5 rounded-xl text-xs shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {isPresetting ? (
                   <>
-                    <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full"></div>
+                    <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div>
                     <span>一括配置中...</span>
                   </>
                 ) : (
                   <>
                     <Briefcase className="w-4 h-4" />
-                    <span>正社員シフトを一括配置する</span>
+                    <span>正社員 {fullTimeEmployees.length}名 の基本シフトを一括配置する（確定枠）</span>
                   </>
                 )}
               </button>
