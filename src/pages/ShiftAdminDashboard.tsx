@@ -123,18 +123,19 @@ const ShiftAdminDashboard: React.FC = () => {
       if (tData) setTenantName(tData.name);
 
       let userList: any[] = [];
-      try {
-        const { data: uData } = await supabase
-          .from('users')
-          .select('id, name, email, department, store_name')
-          .eq('tenant_id', tenantId);
-        userList = uData || [];
-      } catch {
-        const { data: uData } = await supabase
+      const { data: uDataWithStore, error: uErrWithStore } = await supabase
+        .from('users')
+        .select('id, name, email, department, store_name')
+        .eq('tenant_id', tenantId);
+
+      if (!uErrWithStore && uDataWithStore) {
+        userList = uDataWithStore;
+      } else {
+        const { data: uDataWithoutStore } = await supabase
           .from('users')
           .select('id, name, email, department')
           .eq('tenant_id', tenantId);
-        userList = uData || [];
+        userList = uDataWithoutStore || [];
       }
 
       // LocalStorage user_positions からの store_name フォールバックマージ

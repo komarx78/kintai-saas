@@ -18,43 +18,36 @@ export interface SeedResult {
  */
 export async function seedShiftDemoData(tenantId: string): Promise<SeedResult> {
   const STORES = ['新宿店', '渋谷店', '池袋店'];
-  const HQ_DEPTS = ['総務部', '総務・管理部', '管理部', '人事部', '経理部', '財務部', '営業部', '企画部', '役員'];
 
   // 1. 全ユーザーの取得（store_nameカラム未定義環境でも確実に取得する二段階フォールバック）
   let allUsers: any[] = [];
-  try {
-    const { data, error } = await supabase
+  const { data: uData1, error: err1 } = await supabase
+    .from('users')
+    .select('id, name, email, role, department, store_name, employment_type')
+    .eq('tenant_id', tenantId);
+
+  if (!err1 && uData1) {
+    allUsers = uData1;
+  } else {
+    const { data: uData2, error: err2 } = await supabase
       .from('users')
-      .select('id, name, email, role, department, store_name, employment_type')
+      .select('id, name, email, role, department, employment_type')
       .eq('tenant_id', tenantId);
-    if (error) throw error;
-    allUsers = data || [];
-  } catch (firstErr) {
-    console.warn('First fetch with store_name failed, trying fallback without store_name:', firstErr);
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, name, email, role, department, employment_type')
-        .eq('tenant_id', tenantId);
-      if (error) throw error;
-      allUsers = data || [];
-    } catch (secondErr: any) {
-      console.error('Fetch users fallback error:', secondErr);
-      throw new Error(`ユーザー情報の取得に失敗しました: ${secondErr?.message || secondErr}`);
+    if (err2) {
+      console.error('Fetch users fallback error:', err2);
+      throw new Error(`ユーザー情報の取得に失敗しました: ${err2.message}`);
     }
+    allUsers = uData2 || [];
   }
 
   if (allUsers.length === 0) {
     throw new Error('ユーザーが登録されていません。');
   }
 
-  // 2. 本部専属スタッフ（代表取締役・営業部・総務部など）を分離し、現場シフト対象スタッフを抽出
+  // 2. 本部専属スタッフ（役員等）を分離し、現場シフト対象スタッフを抽出
   const hqStaff = allUsers.filter(u => {
     if (u.role === 'admin' && (!u.department || u.department === '役員')) return true;
-    if (u.department && (HQ_DEPTS.includes(u.department) || u.department.includes('営業') || u.department.includes('総務'))) {
-      // 過去に店舗が明示的に設定されていない場合は本部扱い
-      if (!u.store_name) return true;
-    }
+    if (u.department === '役員') return true;
     return false;
   });
 
@@ -101,12 +94,18 @@ export async function seedShiftDemoData(tenantId: string): Promise<SeedResult> {
       store_name: targetStore
     };
 
-    // DB更新（usersテーブル）
+    // DB更新（usersテーブル: store_name カラムの有無に対応）
     try {
-      await supabase.from('users').update({
+      const { error: upErr1 } = await supabase.from('users').update({
         department: '店舗運営部',
         store_name: targetStore
       }).eq('id', staff.id);
+      if (upErr1) {
+        // store_name が存在しない場合は department のみ更新
+        await supabase.from('users').update({
+          department: '店舗運営部'
+        }).eq('id', staff.id);
+      }
     } catch {
       try {
         await supabase.from('users').update({
@@ -304,7 +303,7 @@ export async function seedShiftDemoData(tenantId: string): Promise<SeedResult> {
           available_start_time: startT,
           available_end_time: endT,
           preferred_role: st.role,
-          note: `${st.store} 出勤希望`
+          status: 'submitted'
         });
         totalRequestsCount++;
       });
@@ -314,23 +313,32 @@ export async function seedShiftDemoData(tenantId: string): Promise<SeedResult> {
   try {
     const startStr = format(startDay, 'yyyy-MM-dd');
     const endStr = format(addDays(startDay, 14), 'yyyy-MM-dd');
-    await supabase.from('advanced_shift_requests').delete()
+    const { error: delErr } = await supabase.from('advanced_shift_requests').delete()
       .eq('tenant_id', tenantId)
       .gte('target_date', startStr)
       .lte('target_date', endStr);
+    if (delErr) {
+      console.warn('advanced_shift_requests delete warning:', delErr);
+    }
 
     if (requestsToInsert.length > 0) {
       for (let i = 0; i < requestsToInsert.length; i += 50) {
-        await supabase.from('advanced_shift_requests').insert(requestsToInsert.slice(i, i + 50));
+        const chunk = requestsToInsert.slice(i, i + 50);
+        const { error: insErr } = await supabase.from('advanced_shift_requests').insert(chunk);
+        if (insErr) {
+          console.error('advanced_shift_requests insert chunk error:', insErr);
+          throw new Error(`希望データの投入に失敗しました: ${insErr.message}`);
+        }
       }
     }
-  } catch (rqErr) {
-    console.warn('advanced_shift_requests insert note:', rqErr);
+  } catch (rqErr: any) {
+    console.error('advanced_shift_requests insert error:', rqErr);
+    throw new Error(`シフト希望データの保存中にエラーが発生しました: ${rqErr.message || rqErr}`);
   }
 
   return {
     success: true,
-    message: `スタッフ${candidateList.length}名を各店舗へ振り分け、必要人数枠およびシフト希望データを一括投入しました！`,
+    message: `スタッフ${candidateList.length}名を各店舗へ振り分け、必要人数枠およびシフト希望データ（計${totalRequestsCount}件）を一括投入しました！`,
     storeCounts,
     totalShiftStaff: candidateList.length,
     requirementsCount: totalRequirementsCount,
