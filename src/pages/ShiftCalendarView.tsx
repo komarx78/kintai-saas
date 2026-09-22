@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale, Sparkles, ArrowRightLeft, Calendar, Briefcase, Building2 } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale, Sparkles, ArrowRightLeft, Calendar, Briefcase } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -70,6 +70,13 @@ const ShiftCalendarView: React.FC = () => {
       if (!tenantIdData) {
         setLoading(false);
         return;
+      }
+
+      const { data: settings } = await supabase.from('shift_settings').select('shift_period').eq('tenant_id', tenantIdData).maybeSingle();
+      const isSingleDayQuery = new URLSearchParams(location.search).has('date');
+      const period = isSingleDayQuery ? '1day' : (settings?.shift_period || '1week');
+      if (period !== displayPeriod) {
+        setDisplayPeriod(period);
       }
 
       let startD: Date;
