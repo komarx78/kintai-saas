@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Printer, Users, CheckCircle2, Clock, AlertTriangle, Calendar, ChevronLeft, ChevronRight, BarChart3, ShieldCheck, Flame } from 'lucide-react';
+import { X, Printer, Users, CheckCircle2, Clock, AlertTriangle, Calendar, ChevronLeft, ChevronRight, BarChart3, ShieldCheck, Flame, Layers, ListFilter } from 'lucide-react';
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
@@ -31,6 +31,64 @@ const timeToMinutes = (t: string): number => {
   return (h || 0) * 60 + (m || 0);
 };
 
+// 役割名に応じたアイコンとテーマ色の取得
+const getRoleTheme = (roleName: string) => {
+  const name = roleName.toLowerCase();
+  if (name.includes('ホール') || name.includes('接客') || name.includes('フロア')) {
+    return {
+      icon: '🍽️',
+      label: 'ホール（フロア・接客）',
+      bgColor: 'bg-emerald-50',
+      borderColor: 'border-emerald-300',
+      textColor: 'text-emerald-900',
+      badgeBg: 'bg-emerald-100 text-emerald-800',
+      barGradient: 'from-emerald-500 via-emerald-600 to-emerald-700 text-white border-emerald-800 shadow-emerald-200',
+    };
+  }
+  if (name.includes('キッチン') || name.includes('厨房') || name.includes('調理') || name.includes('料理')) {
+    return {
+      icon: '🍳',
+      label: 'キッチン（厨房・調理）',
+      bgColor: 'bg-amber-50',
+      borderColor: 'border-amber-300',
+      textColor: 'text-amber-900',
+      badgeBg: 'bg-amber-100 text-amber-800',
+      barGradient: 'from-amber-500 via-amber-600 to-amber-700 text-white border-amber-800 shadow-amber-200',
+    };
+  }
+  if (name.includes('レジ') || name.includes('会計') || name.includes('フロント') || name.includes('受付')) {
+    return {
+      icon: '🛎️',
+      label: 'レジ（会計・フロント）',
+      bgColor: 'bg-purple-50',
+      borderColor: 'border-purple-300',
+      textColor: 'text-purple-900',
+      badgeBg: 'bg-purple-100 text-purple-800',
+      barGradient: 'from-purple-500 via-purple-600 to-purple-700 text-white border-purple-800 shadow-purple-200',
+    };
+  }
+  if (name.includes('店長') || name.includes('責任者') || name.includes('管理') || name.includes('マネージャー')) {
+    return {
+      icon: '🏢',
+      label: '責任者・統括管理',
+      bgColor: 'bg-indigo-50',
+      borderColor: 'border-indigo-300',
+      textColor: 'text-indigo-900',
+      badgeBg: 'bg-indigo-100 text-indigo-800',
+      barGradient: 'from-indigo-600 via-indigo-700 to-indigo-800 text-white border-indigo-900 shadow-indigo-200',
+    };
+  }
+  return {
+    icon: '💼',
+    label: roleName || '一般業務',
+    bgColor: 'bg-slate-50',
+    borderColor: 'border-slate-300',
+    textColor: 'text-slate-900',
+    badgeBg: 'bg-slate-200 text-slate-800',
+    barGradient: 'from-slate-600 via-slate-700 to-slate-800 text-white border-slate-900 shadow-slate-200',
+  };
+};
+
 export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalProps> = ({
   isOpen,
   onClose,
@@ -39,12 +97,12 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
   startDate,
   endDate,
 }) => {
-  // 表示モード：
-  // 'timeline'（★デフォルト：出勤者限定 日別ガントチャート）
-  // 'weekly-timeline'（週間ガントチャート：7日間一括）
-  // 'staff-matrix'（スタッフ別一覧：給与集計用）
+  // 表示モード：'timeline'（日別ガント）、'weekly-timeline'（週間ガント）、'staff-matrix'（スタッフ別一覧）
   const [viewMode, setViewMode] = useState<'timeline' | 'weekly-timeline' | 'staff-matrix'>('timeline');
   
+  // 役割（ポジション）別にグループ分けするかどうか（★デフォルトでON！）
+  const [groupByRole, setGroupByRole] = useState<boolean>(true);
+
   // 選択中の日付
   const [selectedDateStr, setSelectedDateStr] = useState<string>(format(startDate, 'yyyy-MM-dd'));
 
@@ -106,6 +164,44 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
       return 0;
     });
 
+  // 役割（ポジション）ごとにグループ分け
+  const roleGroups: { roleName: string; shifts: Shift[] }[] = [];
+  if (groupByRole) {
+    // 役割のユニーク一覧を取得
+    const roleMap = new Map<string, Shift[]>();
+    currentDayShifts.forEach(s => {
+      const r = s.role?.trim() || 'その他・一般';
+      if (!roleMap.has(r)) {
+        roleMap.set(r, []);
+      }
+      roleMap.get(r)!.push(s);
+    });
+
+    // 業務の自然な順序（責任者・店長 -> ホール -> キッチン -> レジ -> その他）で並び替え
+    const rolePriority = (r: string) => {
+      const low = r.toLowerCase();
+      if (low.includes('店長') || low.includes('責任者') || low.includes('管理')) return 1;
+      if (low.includes('ホール') || low.includes('接客') || low.includes('フロア')) return 2;
+      if (low.includes('キッチン') || low.includes('厨房') || low.includes('調理')) return 3;
+      if (low.includes('レジ') || low.includes('会計') || low.includes('フロント')) return 4;
+      return 5;
+    };
+
+    const sortedRoles = Array.from(roleMap.keys()).sort((a, b) => {
+      const pA = rolePriority(a);
+      const pB = rolePriority(b);
+      if (pA !== pB) return pA - pB;
+      return a.localeCompare(b);
+    });
+
+    sortedRoles.forEach(r => {
+      roleGroups.push({
+        roleName: r,
+        shifts: roleMap.get(r)!,
+      });
+    });
+  }
+
   // 選択日の責任者在店状況
   const currentDayFullTimeCount = currentDayShifts.filter(s => {
     const staff = users.find(u => u.id === s.user_id);
@@ -163,7 +259,7 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
               </span>
             </h2>
             <p className="text-xs text-slate-300 mt-0.5 no-print">
-              休みの人は非表示にし、出勤スタッフの時間帯・引き継ぎ・ピーク戦力を一目で直感把握できます。
+              休みの人は非表示にし、ホール・キッチン・レジ等のポジション別陣形・引き継ぎ・ピーク戦力を一目で直感把握できます。
             </p>
           </div>
 
@@ -179,7 +275,7 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
-                title="出勤者限定の1日詳細ガントチャート（ピーク人数と交代が一目でわかる）"
+                title="出勤者限定の1日詳細ガントチャート（ポジション別・ピーク人数が一目でわかる）"
               >
                 <Clock className="w-3.5 h-3.5" />
                 <span>⏱️ 日別戦力ガント</span>
@@ -238,7 +334,7 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
         <div className="p-3 sm:p-5 overflow-auto grow bg-slate-50/60 print:bg-white print:p-0">
 
           {/* ----------------------------------------------------------------------- */}
-          {/* ビュー1：⏱️ 日別戦力ガント（出勤者限定・早番順階段ガント）★デフォルト   */}
+          {/* ビュー1：⏱️ 日別戦力ガント（出勤者限定・役割別グループ化）★デフォルト     */}
           {/* ----------------------------------------------------------------------- */}
           {viewMode === 'timeline' && (
             <div className="space-y-3">
@@ -298,21 +394,51 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                   })}
                 </div>
 
-                {/* 本日の戦力サマリーバッジ */}
+                {/* 本日の戦力サマリーバッジ ＆ グループ切り替えスイッチ */}
                 <div className="flex items-center gap-2 shrink-0">
+                  {/* 表示並び替え切り替えスイッチ */}
+                  <div className="bg-slate-100 p-1 rounded-xl border border-slate-200 flex items-center gap-1 no-print">
+                    <button
+                      type="button"
+                      onClick={() => setGroupByRole(true)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                        groupByRole
+                          ? 'bg-white text-indigo-900 shadow-xs border border-slate-200 font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title="ホール、キッチン、レジなどの役割ごとにグループ化して表示（推奨）"
+                    >
+                      <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>持ち場・役割別</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGroupByRole(false)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                        !groupByRole
+                          ? 'bg-white text-indigo-900 shadow-xs border border-slate-200 font-black'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      title="全スタッフを出勤時刻の早い順で一括表示"
+                    >
+                      <ListFilter className="w-3.5 h-3.5 text-slate-600" />
+                      <span>時間順（全体）</span>
+                    </button>
+                  </div>
+
                   <div className="bg-indigo-50 border border-indigo-200 text-indigo-950 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-2xs">
                     <Users className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>出勤戦力: {currentDayShifts.length} 名</span>
+                    <span>計 {currentDayShifts.length} 名</span>
                   </div>
                   {currentDayFullTimeCount > 0 ? (
                     <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow-2xs">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>責任者在店 ({currentDayFullTimeCount}名)</span>
+                      <span>責任者在店</span>
                     </div>
                   ) : (
                     <div className="bg-amber-50 border border-amber-300 text-amber-900 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow-2xs animate-pulse">
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                      <span>社員不在（要確認）</span>
+                      <span>社員不在</span>
                     </div>
                   )}
                 </div>
@@ -326,7 +452,7 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5 text-xs font-black text-slate-800">
                       <BarChart3 className="w-4 h-4 text-indigo-600" />
-                      <span>時間帯別 在籍人数メーター（ピーク帯の戦力把握）</span>
+                      <span>時間帯別 全体在籍人数メーター（ピーク帯の戦力把握）</span>
                     </div>
                     <div className="flex items-center gap-3 text-[11px] text-slate-500 font-bold">
                       <span className="flex items-center gap-1">
@@ -343,9 +469,8 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
 
                   {/* 在籍人数バーチャート */}
                   <div className="flex items-center gap-3">
-                    {/* 左側の名前欄と幅を合わせるためのスペース */}
-                    <div className="w-44 shrink-0 text-right pr-2 text-[11px] font-bold text-slate-500">
-                      各時間帯の戦力:
+                    <div className="w-48 shrink-0 text-right pr-2 text-[11px] font-bold text-slate-500">
+                      全スタッフ在籍数:
                     </div>
                     <div className="grow grid" style={{ gridTemplateColumns: `repeat(${timelineTotalHours}, minmax(0, 1fr))` }}>
                       {timelineHours.map(hour => {
@@ -381,31 +506,125 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                   </div>
                 </div>
 
-                {/* 2. 出勤スタッフ限定・階段状ガントバーチャート */}
-                <div className="p-4">
+                {/* 2. 出勤スタッフ限定・ガントバーチャート */}
+                <div className="p-4 space-y-4">
                   {currentDayShifts.length === 0 ? (
                     <div className="text-center py-16 text-slate-400 font-bold space-y-2">
                       <Users className="w-8 h-8 mx-auto text-slate-300" />
                       <div className="text-sm">この日の出勤シフトはありません（全員公休）。</div>
                     </div>
+                  ) : groupByRole ? (
+                    // ============================================================
+                    // ★ 持ち場・役割別グループ表示（店長絶賛の視認性！）
+                    // ============================================================
+                    <div className="space-y-4">
+                      {roleGroups.map(group => {
+                        const theme = getRoleTheme(group.roleName);
+                        return (
+                          <div 
+                            key={group.roleName}
+                            className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs bg-white"
+                          >
+                            {/* グループ見出しバー */}
+                            <div className={`${theme.bgColor} px-3.5 py-2 border-b ${theme.borderColor} flex items-center justify-between`}>
+                              <div className="flex items-center gap-2">
+                                <span className="text-base">{theme.icon}</span>
+                                <span className={`text-xs font-black ${theme.textColor}`}>
+                                  {group.roleName}
+                                </span>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${theme.badgeBg}`}>
+                                  {group.shifts.length} 名出勤
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-medium">
+                                ※開始時間順に整列
+                              </span>
+                            </div>
+
+                            {/* グループ内のスタッフバー一覧 */}
+                            <div className="p-3 space-y-2">
+                              {group.shifts.map(s => {
+                                const staff = users.find(u => u.id === s.user_id);
+                                const isEmpFull = staff ? isFullTime(staff) : false;
+                                
+                                const startMin = timeToMinutes(s.start_time);
+                                const endMin = timeToMinutes(s.end_time);
+
+                                const leftPercent = Math.max(0, Math.min(100, ((startMin - baseStartMin) / baseTotalMin) * 100));
+                                const rightPercent = Math.max(0, Math.min(100, ((endMin - baseStartMin) / baseTotalMin) * 100));
+                                const widthPercent = Math.max(3, rightPercent - leftPercent);
+
+                                return (
+                                  <div key={s.id} className="flex items-center gap-3">
+                                    {/* スタッフ名・区分 */}
+                                    <div className="w-44 shrink-0 flex items-center gap-1.5 p-1.5 rounded-xl bg-slate-50 border border-slate-200">
+                                      {isEmpFull ? (
+                                        <span className="text-[9px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-black shrink-0">社員</span>
+                                      ) : (
+                                        <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold shrink-0">パート</span>
+                                      )}
+                                      <span className="truncate font-black text-xs text-slate-800" title={staff?.name || s.user?.name}>
+                                        {staff?.name || s.user?.name || '未設定'}
+                                      </span>
+                                    </div>
+
+                                    {/* ガントバーエリア */}
+                                    <div className="grow bg-slate-100/70 rounded-xl h-9 relative overflow-hidden border border-slate-200">
+                                      {/* 時間目盛り線 */}
+                                      <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${timelineTotalHours}, minmax(0, 1fr))` }}>
+                                        {timelineHours.map(hour => (
+                                          <div key={hour} className="border-r border-slate-200/90 last:border-r-0 h-full pointer-events-none" />
+                                        ))}
+                                      </div>
+
+                                      {/* ガントバー（部門のテーマ色を適用） */}
+                                      <div
+                                        style={{
+                                          left: `${leftPercent}%`,
+                                          width: `${widthPercent}%`,
+                                        }}
+                                        className={`absolute top-1 bottom-1 rounded-lg px-2.5 flex items-center justify-between text-xs font-black shadow-xs transition-all hover:scale-[1.01] hover:z-10 bg-gradient-to-r ${theme.barGradient}`}
+                                        title={`${staff?.name} (${group.roleName}): ${s.start_time.substring(0, 5)} - ${s.end_time.substring(0, 5)}`}
+                                      >
+                                        <div className="flex items-center gap-1.5 truncate">
+                                          <Clock className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                                          <span className="font-mono tracking-tight">
+                                            {s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)}
+                                          </span>
+                                        </div>
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-white/20 text-white truncate max-w-[80px] hidden sm:inline">
+                                          {group.roleName}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   ) : (
+                    // ============================================================
+                    // 全スタッフ時間順表示（フラットリスト）
+                    // ============================================================
                     <div className="space-y-2.5">
-                      {currentDayShifts.map((s, index) => {
+                      {currentDayShifts.map((s) => {
                         const staff = users.find(u => u.id === s.user_id);
                         const isEmpFull = staff ? isFullTime(staff) : false;
+                        const theme = getRoleTheme(s.role || '');
                         
                         const startMin = timeToMinutes(s.start_time);
                         const endMin = timeToMinutes(s.end_time);
 
-                        // 開始位置と幅（%）
                         const leftPercent = Math.max(0, Math.min(100, ((startMin - baseStartMin) / baseTotalMin) * 100));
                         const rightPercent = Math.max(0, Math.min(100, ((endMin - baseStartMin) / baseTotalMin) * 100));
                         const widthPercent = Math.max(3, rightPercent - leftPercent);
 
                         return (
-                          <div key={s.id} className="flex items-center gap-3 group">
-                            {/* 左側：スタッフ名・区分 */}
-                            <div className="w-44 shrink-0 flex items-center justify-between bg-slate-50 hover:bg-slate-100 p-2 rounded-xl border border-slate-200 transition">
+                          <div key={s.id} className="flex items-center gap-3">
+                            <div className="w-48 shrink-0 flex items-center justify-between bg-slate-50 p-2 rounded-xl border border-slate-200">
                               <div className="flex items-center gap-1.5 min-w-0">
                                 {isEmpFull ? (
                                   <span className="text-[9px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-black shrink-0">社員</span>
@@ -416,46 +635,34 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                                   {staff?.name || s.user?.name || '未設定'}
                                 </span>
                               </div>
-                              <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-1">
-                                #{index + 1}
+                              <span className="text-[10px] text-slate-500 font-bold bg-slate-200/70 px-1.5 py-0.5 rounded shrink-0">
+                                {s.role || '業務'}
                               </span>
                             </div>
 
-                            {/* 右側：タイムライン背景＆ガントバー */}
                             <div className="grow bg-slate-100/80 rounded-xl h-10 relative overflow-hidden border border-slate-200">
-                              {/* 時間目盛りガイドライン */}
                               <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${timelineTotalHours}, minmax(0, 1fr))` }}>
                                 {timelineHours.map(hour => (
                                   <div key={hour} className="border-r border-slate-200/90 last:border-r-0 h-full pointer-events-none" />
                                 ))}
                               </div>
 
-                              {/* 勤務バー（朝から夜へ階段状に流れる） */}
                               <div
                                 style={{
                                   left: `${leftPercent}%`,
                                   width: `${widthPercent}%`,
                                 }}
-                                className={`absolute top-1 bottom-1 rounded-lg px-2.5 flex items-center justify-between text-xs font-black shadow-xs transition-all hover:scale-[1.01] hover:z-10 ${
-                                  isEmpFull
-                                    ? 'bg-gradient-to-r from-indigo-600 via-indigo-700 to-indigo-800 text-white border border-indigo-900 shadow-indigo-200'
-                                    : 'bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-slate-950 border border-amber-600 shadow-amber-200'
-                                }`}
-                                title={`${staff?.name}: ${s.start_time.substring(0, 5)} - ${s.end_time.substring(0, 5)} (${s.role || '業務'})`}
+                                className={`absolute top-1 bottom-1 rounded-lg px-2.5 flex items-center justify-between text-xs font-black shadow-xs bg-gradient-to-r ${theme.barGradient}`}
                               >
                                 <div className="flex items-center gap-1.5 truncate">
-                                  <Clock className={`w-3.5 h-3.5 shrink-0 ${isEmpFull ? 'text-indigo-200' : 'text-slate-800'}`} />
+                                  <Clock className="w-3.5 h-3.5 shrink-0 opacity-80" />
                                   <span className="font-mono tracking-tight">
                                     {s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)}
                                   </span>
                                 </div>
-                                {s.role && (
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold truncate max-w-[90px] hidden sm:inline ${
-                                    isEmpFull ? 'bg-white/20 text-white' : 'bg-black/10 text-slate-900'
-                                  }`}>
-                                    {s.role}
-                                  </span>
-                                )}
+                                <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-white/20 text-white truncate max-w-[90px] hidden sm:inline">
+                                  {s.role || '業務'}
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -480,11 +687,14 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                   <span>1週間（7日間）の全出勤スタッフの陣形を一括ガント表示しています。休みの人は出さず、店舗貼り出し（A4横印刷）にも最適です。</span>
                 </div>
                 <div className="flex items-center gap-3 text-[11px] font-bold">
-                  <span className="flex items-center gap-1 text-indigo-800">
-                    <span className="w-2.5 h-2.5 rounded-sm bg-indigo-600"></span> 正社員
+                  <span className="flex items-center gap-1 text-emerald-800">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-emerald-600"></span> ホール
                   </span>
                   <span className="flex items-center gap-1 text-amber-800">
-                    <span className="w-2.5 h-2.5 rounded-sm bg-amber-500"></span> パート
+                    <span className="w-2.5 h-2.5 rounded-sm bg-amber-600"></span> キッチン
+                  </span>
+                  <span className="flex items-center gap-1 text-purple-800">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-purple-600"></span> レジ
                   </span>
                 </div>
               </div>
@@ -536,7 +746,7 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                           </div>
                         </div>
 
-                        {/* タイムラインエリア（複数スタッフのバーを積み重ねて表示） */}
+                        {/* タイムラインエリア */}
                         <div className="grow bg-slate-50 rounded-xl min-h-[50px] p-1.5 relative border border-slate-200">
                           {/* 時間目盛り縦ライン */}
                           <div className="absolute inset-0 grid pointer-events-none" style={{ gridTemplateColumns: `repeat(${timelineTotalHours}, minmax(0, 1fr))` }}>
@@ -554,7 +764,7 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                             <div className="space-y-1 relative z-10">
                               {dayShifts.map(s => {
                                 const staff = users.find(u => u.id === s.user_id);
-                                const isEmpFull = staff ? isFullTime(staff) : false;
+                                const theme = getRoleTheme(s.role || '');
                                 
                                 const startMin = timeToMinutes(s.start_time);
                                 const endMin = timeToMinutes(s.end_time);
@@ -570,15 +780,11 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                                         left: `${leftPercent}%`,
                                         width: `${widthPercent}%`,
                                       }}
-                                      className={`absolute inset-y-0 rounded-md px-1.5 flex items-center justify-between text-[10px] font-black shadow-2xs ${
-                                        isEmpFull
-                                          ? 'bg-indigo-600 text-white'
-                                          : 'bg-amber-400 text-slate-900 border border-amber-500'
-                                      }`}
-                                      title={`${staff?.name}: ${s.start_time.substring(0, 5)} - ${s.end_time.substring(0, 5)}`}
+                                      className={`absolute inset-y-0 rounded-md px-1.5 flex items-center justify-between text-[10px] font-black shadow-2xs bg-gradient-to-r ${theme.barGradient}`}
+                                      title={`${staff?.name} (${s.role || '業務'}): ${s.start_time.substring(0, 5)} - ${s.end_time.substring(0, 5)}`}
                                     >
                                       <span className="truncate">
-                                        {staff?.name} ({s.start_time.substring(0, 5)}-{s.end_time.substring(0, 5)})
+                                        {staff?.name} 【{s.role || '業務'}】({s.start_time.substring(0, 5)}-{s.end_time.substring(0, 5)})
                                       </span>
                                     </div>
                                   </div>
