@@ -273,7 +273,28 @@ const UserDashboard = () => {
       const startOfMonthStr = `${y}-${m}-01`;
       const endOfMonthStr = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
 
-      // 1. 確定シフトテーブル（shifts）の取得
+      // 1-1. 新シフト管理テーブル（advanced_shifts）から確定シフトを取得
+      const { data: advShifts } = await supabase
+        .from('advanced_shifts')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'confirmed')
+        .gte('target_date', startOfMonthStr)
+        .lte('target_date', endOfMonthStr);
+
+      const formattedAdvShifts = (advShifts || []).map((s: any) => ({
+        id: s.id,
+        tenant_id: s.tenant_id,
+        user_id: s.user_id,
+        work_date: s.target_date,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        role: s.role,
+        is_holiday: false,
+        status: 'confirmed'
+      }));
+
+      // 1-2. 旧確定シフトテーブル（shifts）の取得
       const { data: shiftList } = await supabase
         .from('shifts')
         .select('*')
@@ -281,7 +302,8 @@ const UserDashboard = () => {
         .gte('work_date', startOfMonthStr)
         .lte('work_date', endOfMonthStr);
 
-      let finalShifts = shiftList || [];
+      // 新シフト（advanced_shifts）を最優先にして統合
+      let finalShifts = [...formattedAdvShifts, ...(shiftList || [])];
 
       // 2. 承認済みのシフト希望申請（leave_requests）からも確定シフトを自動復元！
       const { data: approvedReq } = await supabase
@@ -323,7 +345,27 @@ const UserDashboard = () => {
       const tS = finalShifts.find(s => s.work_date === todayStr);
       if (tS) setTodayShift(tS);
 
-      // 3. 提出中（申請中）のシフト希望があれば自動復元！
+      // 3-1. 新シフト管理の希望テーブル（advanced_shift_requests）から復元
+      const { data: advReqData } = await supabase
+        .from('advanced_shift_requests')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('target_date', startOfMonthStr)
+        .lte('target_date', endOfMonthStr);
+
+      const restoredMap: Record<string, { type: 'working' | 'off'; startTime: string; endTime: string }> = {};
+
+      if (advReqData && advReqData.length > 0) {
+        advReqData.forEach((req: any) => {
+          restoredMap[req.target_date] = {
+            type: req.available_start_time ? 'working' : 'off',
+            startTime: req.available_start_time ? req.available_start_time.substring(0, 5) : '09:00',
+            endTime: req.available_end_time ? req.available_end_time.substring(0, 5) : '18:00'
+          };
+        });
+      }
+
+      // 3-2. 提出中（申請中）のシフト希望申請（leave_requests）があれば自動復元
       const { data: reqData } = await supabase
         .from('leave_requests')
         .select('*')
@@ -341,18 +383,20 @@ const UserDashboard = () => {
         if (match) {
           try {
             const arr = JSON.parse(match[1]);
-            const restoredMap: Record<string, { type: 'working' | 'off'; startTime: string; endTime: string }> = {};
             arr.forEach((item: any) => {
-              restoredMap[item.date] = {
-                type: item.isHoliday ? 'off' : 'working',
-                startTime: item.startTime || '09:00',
-                endTime: item.endTime || '18:00'
-              };
+              if (!restoredMap[item.date]) {
+                restoredMap[item.date] = {
+                  type: item.isHoliday ? 'off' : 'working',
+                  startTime: item.startTime || '09:00',
+                  endTime: item.endTime || '18:00'
+                };
+              }
             });
-            setShiftRequestsMap(restoredMap);
           } catch (e) {}
         }
       }
+
+      setShiftRequestsMap(restoredMap);
     } catch (e) {
       console.warn('Fetch my shifts error:', e);
     }
@@ -373,6 +417,33 @@ const UserDashboard = () => {
       const lastDay = new Date(yNum, mNum, 0).getDate();
       const startOfMonthStr = `${y}-${m}-01`;
       const endOfMonthStr = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+
+      // 1. 新シフト管理システム（advanced_shift_requests）へも一括同期登録！
+      const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
+      const activeTenantId = tenantIdData || user.tenant_id;
+
+      if (activeTenantId) {
+        // 当月の既存希望をクリア
+        await supabase
+          .from('advanced_shift_requests')
+          .delete()
+          .eq('user_id', user.id)
+          .gte('target_date', startOfMonthStr)
+          .lte('target_date', endOfMonthStr);
+
+        const advInsertList = entries.map(([date, val]) => ({
+          tenant_id: activeTenantId,
+          user_id: user.id,
+          target_date: date,
+          available_start_time: val.type === 'working' ? `${val.startTime}:00` : null,
+          available_end_time: val.type === 'working' ? `${val.endTime}:00` : null,
+          status: 'submitted'
+        }));
+
+        if (advInsertList.length > 0) {
+          await supabase.from('advanced_shift_requests').insert(advInsertList);
+        }
+      }
 
       const shiftDataArray = entries.map(([date, val]) => ({
         date,
@@ -414,7 +485,7 @@ const UserDashboard = () => {
 
       if (error) throw error;
 
-      alert('✅ シフト希望を提出しました！\n上長（承認者）の承認待ち一覧へ届きました。承認されると確定シフトとしてカレンダーに即時反映されます。');
+      alert('✅ シフト希望を提出しました！\n管理者（店長）のシフトカレンダーおよび承認一覧へ即座に反映されました。');
       fetchMyRequests();
       fetchMyShifts();
       setActiveTab('shifts');
@@ -1896,8 +1967,15 @@ const UserDashboard = () => {
                                   {confirmed.is_holiday ? (
                                     <span className="text-xs font-bold text-slate-500 block">🏖️ 公休日</span>
                                   ) : (
-                                    <div className="text-xs font-mono font-black text-indigo-950 bg-white/90 py-1 px-1 rounded border border-indigo-200 shadow-2xs">
-                                      {confirmed.start_time?.substring(0, 5) || '09:00'} 〜 {confirmed.end_time?.substring(0, 5) || '18:00'}
+                                    <div className="text-xs font-mono font-black text-indigo-950 bg-white/90 py-1 px-1 rounded border border-indigo-200 shadow-2xs flex flex-col items-center gap-0.5">
+                                      {confirmed.role && (
+                                        <span className="text-[9px] font-sans font-bold bg-indigo-100 text-indigo-700 px-1 py-0.2 rounded">
+                                          {confirmed.role}
+                                        </span>
+                                      )}
+                                      <span>
+                                        {confirmed.start_time?.substring(0, 5) || '09:00'} 〜 {confirmed.end_time?.substring(0, 5) || '18:00'}
+                                      </span>
                                     </div>
                                   )}
                                 </div>
