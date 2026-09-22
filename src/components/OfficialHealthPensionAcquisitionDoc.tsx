@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Printer, ArrowLeft, User, Shield, Edit3, ZoomIn, ZoomOut, RefreshCw
+  Printer, ArrowLeft, User, Shield, Edit3, ZoomIn, ZoomOut, RefreshCw, Maximize2
 } from 'lucide-react';
 import { 
   loadHealthPensionAcqCoordinates, 
@@ -113,8 +113,10 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
   // 印刷モード: 'full' (原本PDF枠ごと印刷) | 'text_only' (OCR用紙への文字だけ印字)
   const [printMode, setPrintMode] = useState<'full' | 'text_only'>('full');
 
-  // 表示ズーム率
-  const [zoom, setZoom] = useState<number>(100);
+  // 表示ズーム率（初期値70%でA4用紙全体が画面枠内に美しく収まる）
+  const [zoom, setZoom] = useState<number>(70);
+  // 右側編集パネルの表示/折りたたみState（プレビュー画面最大化対応）
+  const [isSidePanelOpen, setIsSidePanelOpen] = useState<boolean>(true);
 
   // 原本背景画像（PDF.jsレンダリング）
   const [bgPdfImg, setBgPdfImg] = useState<string | null>(null);
@@ -456,24 +458,62 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
               </button>
             </div>
 
-            {/* ズーム */}
-            <div className="flex items-center bg-slate-100 rounded-xl p-0.5 border border-slate-200">
+            {/* ズーム＆全体表示コントロール */}
+            <div className="flex items-center bg-slate-100 rounded-xl p-0.5 border border-slate-200 gap-1">
               <button
-                onClick={() => setZoom(z => Math.max(50, z - 10))}
+                type="button"
+                onClick={() => setZoom(z => Math.max(40, z - 5))}
                 className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600 cursor-pointer"
                 title="縮小"
               >
-                <ZoomOut className="w-4 h-4" />
+                <ZoomOut className="w-3.5 h-3.5" />
               </button>
-              <span className="text-xs font-mono font-bold px-2 text-slate-700">{zoom}%</span>
               <button
-                onClick={() => setZoom(z => Math.min(150, z + 10))}
+                type="button"
+                onClick={() => setZoom(isSidePanelOpen ? 70 : 85)}
+                className={`px-2 py-0.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1 ${
+                  zoom <= 75 ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-700 hover:bg-slate-200'
+                }`}
+                title="画面枠内にA4用紙全体がすっぽり収まる最適倍率"
+              >
+                <Maximize2 className="w-3 h-3" />
+                <span>全体表示</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoom(100)}
+                className={`px-2 py-0.5 rounded-lg text-xs font-black transition cursor-pointer ${
+                  zoom === 100 ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-700 hover:bg-slate-200'
+                }`}
+                title="A4実寸100%で表示"
+              >
+                100%
+              </button>
+              <span className="text-xs font-mono font-black px-1 text-slate-700">{zoom}%</span>
+              <button
+                type="button"
+                onClick={() => setZoom(z => Math.min(150, z + 5))}
                 className="p-1.5 hover:bg-slate-200 rounded-lg text-slate-600 cursor-pointer"
                 title="拡大"
               >
-                <ZoomIn className="w-4 h-4" />
+                <ZoomIn className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            {/* 編集パネル折りたたみトグルボタン */}
+            <button
+              type="button"
+              onClick={() => setIsSidePanelOpen(prev => !prev)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black border transition cursor-pointer ${
+                isSidePanelOpen
+                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-300 shadow-2xs'
+              }`}
+              title={isSidePanelOpen ? '編集パネルを閉じてプレビューを画面最大化します' : '編集パネルを表示します'}
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>{isSidePanelOpen ? 'パネルを閉じる' : '編集パネル表示'}</span>
+            </button>
 
             {/* 印刷・PDF保存ボタン */}
             <button
@@ -491,18 +531,28 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
       <div className="flex flex-col lg:flex-row items-start gap-4 print:block">
         
         {/* 左側：リアルタイム原本プレビューコンテナ */}
-        <div className="flex-1 w-full overflow-x-auto flex justify-center bg-slate-200/80 p-4 sm:p-8 rounded-2xl border border-slate-300 print:bg-white print:p-0 print:border-none print:overflow-visible">
+        <div className="flex-1 w-full overflow-x-auto flex flex-col items-center bg-slate-200/80 p-2 sm:p-5 rounded-2xl border border-slate-300 print:bg-white print:p-0 print:border-none print:overflow-visible">
           
-          {/* A4縦 実寸コンテナ (210mm × 297mm) */}
+          {/* 原本スケーリングサイザー（スケーリング時の余計な空白・はみ出し見切れを完全防止） */}
           <div 
-            ref={previewContainerRef}
-            style={{
-              transform: `scale(${zoom / 100})`,
-              transformOrigin: 'top center',
-              transition: 'transform 0.15s ease-out'
-            }}
-            className="w-[210mm] h-[297mm] bg-white shadow-2xl relative border border-slate-400 print:shadow-none print:border-none print:transform-none print:w-full print:h-[297mm] overflow-hidden select-none box-border"
+            style={{ 
+              width: `${210 * (zoom / 100)}mm`, 
+              height: `${297 * (zoom / 100)}mm`,
+              maxWidth: '100%'
+            }} 
+            className="relative transition-[width,height] duration-150 ease-out print:w-[210mm] print:h-[297mm]"
           >
+            {/* A4縦 実寸コンテナ (210mm × 297mm) */}
+            <div 
+              ref={previewContainerRef}
+              style={{
+                transform: `scale(${zoom / 100})`,
+                transformOrigin: 'top left',
+                width: '210mm',
+                height: '297mm'
+              }}
+              className="bg-white relative shadow-2xl border border-slate-400 overflow-hidden select-none box-border print:shadow-none print:border-none print:transform-none print:w-full print:h-[297mm]"
+            >
             {/* 原本背景画像（PDF.jsレンダリング） */}
             {bgPdfImg ? (
               <img 
@@ -633,11 +683,13 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
 
         {/* 右側：直接値入力・微調整パネル（印刷時非表示） */}
-        <div className="w-full lg:w-96 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4 print:hidden shrink-0">
+        {isSidePanelOpen && (
+          <div className="w-full lg:w-96 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4 print:hidden shrink-0">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2">
               <Edit3 className="w-4 h-4 text-indigo-600" />
@@ -1073,6 +1125,7 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

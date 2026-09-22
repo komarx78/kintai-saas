@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Printer, ArrowLeft, CheckCircle2, Sparkles, FileText } from 'lucide-react';
+import { Printer, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { formatNenkinBirthDate } from './OfficialBonusPaymentReportDoc';
 import { OfficialHealthPensionAcquisitionDoc } from './OfficialHealthPensionAcquisitionDoc';
 
@@ -58,7 +58,6 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
   onBack
 }) => {
   const [docType, setDocType] = useState<'acquisition' | 'loss'>(initialType);
-  const [acquisitionMode, setAcquisitionMode] = useState<'official_ocr' | 'simple'>('official_ocr');
   const [submissionDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [lossReason, setLossReason] = useState<'retirement' | 'death' | 'over75' | 'other'>('retirement');
 
@@ -93,9 +92,9 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
   };
 
   return (
-    <div className="space-y-6">
-      {/* 画面操作ヘッダー（印刷時は非表示） */}
-      <div className="print:hidden bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-4">
+      {/* 画面上部ナビゲーションバー（印刷時は非表示） */}
+      <div className="print:hidden bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
@@ -106,23 +105,21 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs px-2 py-0.5 rounded-full font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
-                日本年金機構 / 協会けんぽ公式様式
+              <span className="text-xs px-2.5 py-0.5 rounded-full font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+                日本年金機構 / 協会けんぽ公式届出
               </span>
               <span className="text-xs text-slate-400 font-bold">
-                {docType === 'acquisition' && acquisitionMode === 'official_ocr'
-                  ? '様式コード2200（原本OCR提出様式）'
-                  : 'A4公的届出書'}
+                {docType === 'acquisition' ? '様式コード2200（原本直接入力＆印字）' : '資格喪失届（公的様式）'}
               </span>
             </div>
-            <h2 className="text-lg font-black text-slate-800 mt-1">
-              健康保険・厚生年金保険 被保険者{docType === 'acquisition' ? '資格取得届' : '資格喪失届'}
+            <h2 className="text-base font-black text-slate-800 mt-0.5">
+              健康保険・厚生年金保険 {docType === 'acquisition' ? '被保険者資格取得届' : '被保険者資格喪失届'}
             </h2>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* 種別切替 */}
+          {/* 書式種別切替タブ */}
           <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button
               onClick={() => setDocType('acquisition')}
@@ -130,7 +127,7 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
                 docType === 'acquisition' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              資格取得届（入社）
+              資格取得届（公式原本）
             </button>
             <button
               onClick={() => setDocType('loss')}
@@ -142,38 +139,8 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
             </button>
           </div>
 
-          {/* 資格取得届の場合の様式モード切替 */}
-          {docType === 'acquisition' && (
-            <div className="flex bg-indigo-50/80 p-1 rounded-xl border border-indigo-200">
-              <button
-                type="button"
-                onClick={() => setAcquisitionMode('official_ocr')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
-                  acquisitionMode === 'official_ocr'
-                    ? 'bg-indigo-600 text-white shadow-2xs'
-                    : 'text-indigo-700 hover:bg-indigo-100/70'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>原本OCR様式（コード2200）</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAcquisitionMode('simple')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
-                  acquisitionMode === 'simple'
-                    ? 'bg-white text-indigo-700 shadow-2xs'
-                    : 'text-indigo-600 hover:bg-indigo-100/70'
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>簡易A4様式</span>
-              </button>
-            </div>
-          )}
-
-          {/* 簡易様式または喪失届の時の従業員選択と印刷ボタン */}
-          {(docType === 'loss' || acquisitionMode === 'simple') && (
+          {/* 喪失届の時の従業員選択と印刷ボタン */}
+          {docType === 'loss' && (
             <>
               <select
                 value={currentEmployee.id}
@@ -189,7 +156,7 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
 
               <button
                 onClick={handlePrint}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-black shadow-xs transition cursor-pointer"
+                className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-xs font-black shadow-xs transition cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 公式A4印刷 / PDF保存
@@ -199,8 +166,8 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
         </div>
       </div>
 
-      {/* 原本OCR様式 または 従来のA4簡易テーブル */}
-      {docType === 'acquisition' && acquisitionMode === 'official_ocr' ? (
+      {/* 資格取得届（日本年金機構 原本直接入力＆印字） または 資格喪失届 */}
+      {docType === 'acquisition' ? (
         <OfficialHealthPensionAcquisitionDoc
           companyInfo={companyInfo}
           officeSymbol={officeSymbol}
@@ -223,12 +190,10 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
                   日本年金機構提出様式準拠
                 </span>
                 <h1 className="text-xl font-black tracking-wider mt-2">
-                  健康保険・厚生年金保険 被保険者{docType === 'acquisition' ? '資格取得届' : '資格喪失届'}
+                  健康保険・厚生年金保険 被保険者資格喪失届
                 </h1>
                 <p className="text-[10px] text-slate-600 mt-0.5">
-                  {docType === 'acquisition'
-                    ? '（兼 厚生年金保険 70歳以上被用者該当届）'
-                    : '（兼 厚生年金保険 70歳以上被用者不該当届）'}
+                  （兼 厚生年金保険 70歳以上被用者不該当届）
                 </p>
               </div>
 
@@ -314,12 +279,12 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
 
                 <tr className="border-b border-slate-300">
                   <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">
-                    {docType === 'acquisition' ? '資格取得年月日' : '資格喪失年月日'}
+                    資格喪失年月日
                   </td>
-                  <td className="p-2 border-r border-slate-300 font-bold text-indigo-900 text-xs">
-                    {docType === 'acquisition' ? currentEmployee.join_date : (getLossDate() || currentEmployee.retirement_date || '未設定')}
+                  <td className="p-2 border-r border-slate-300 font-bold text-rose-900 text-xs">
+                    {getLossDate() || currentEmployee.retirement_date || '未設定'}
                     <span className="text-[9px] text-slate-500 font-normal block">
-                      {docType === 'acquisition' ? '（雇入年月日と同一）' : '（退職日の翌日、または死亡等の日）'}
+                      （退職日の翌日、または死亡等の日）
                     </span>
                   </td>
                   <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">雇用形態 / 種別</td>
@@ -328,52 +293,35 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
                   </td>
                 </tr>
 
-                {docType === 'acquisition' ? (
-                  <>
-                    <tr className="border-b border-slate-300">
-                      <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">報酬月額（通貨）</td>
-                      <td className="p-2 border-r border-slate-300 font-mono font-bold">
-                        ¥{currencyAmount.toLocaleString()}
-                      </td>
-                      <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">報酬月額（現物）</td>
-                      <td className="p-2 font-mono">
-                        ¥{goodsAmount.toLocaleString()}
-                      </td>
-                    </tr>
-                    <tr className="border-b border-slate-300">
-                      <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">報酬月額合計</td>
-                      <td colSpan={3} className="p-2 font-mono font-black text-sm text-slate-900">
-                        ¥{totalRemuneration.toLocaleString()}
-                        <span className="text-[9px] text-slate-500 font-normal ml-3">
-                          （標準報酬月額の決定および健康保険・厚生年金保険料算定の基礎）
-                        </span>
-                      </td>
-                    </tr>
-                  </>
-                ) : (
-                  <tr className="border-b border-slate-300">
-                    <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">喪失原因</td>
-                    <td colSpan={3} className="p-2">
-                      <div className="flex gap-4">
-                        <label className="flex items-center gap-1 font-bold text-slate-800">
-                          <input type="radio" checked={lossReason === 'retirement'} onChange={() => setLossReason('retirement')} />
-                          1. 退職等（契約満了、自己都合、会社都合を含む）
-                        </label>
-                        <label className="flex items-center gap-1 text-slate-600">
-                          <input type="radio" checked={lossReason === 'death'} onChange={() => setLossReason('death')} />
-                          2. 死亡
-                        </label>
-                        <label className="flex items-center gap-1 text-slate-600">
-                          <input type="radio" checked={lossReason === 'over75'} onChange={() => setLossReason('over75')} />
-                          3. 75歳到達等
-                        </label>
-                      </div>
-                      <div className="text-[9px] text-slate-500 mt-1">
-                        ※ 退職に伴い健康保険証（被保険者および被扶養者分）を回収して年金事務所または健康保険組合へ返納してください。
-                      </div>
-                    </td>
-                  </tr>
-                )}
+                <tr className="border-b border-slate-300">
+                  <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">喪失原因</td>
+                  <td colSpan={3} className="p-2">
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-1 font-bold text-slate-800">
+                        <input type="radio" checked={lossReason === 'retirement'} onChange={() => setLossReason('retirement')} />
+                        1. 退職等（契約満了、自己都合、会社都合を含む）
+                      </label>
+                      <label className="flex items-center gap-1 text-slate-600">
+                        <input type="radio" checked={lossReason === 'death'} onChange={() => setLossReason('death')} />
+                        2. 死亡
+                      </label>
+                      <label className="flex items-center gap-1 text-slate-600">
+                        <input type="radio" checked={lossReason === 'over75'} onChange={() => setLossReason('over75')} />
+                        3. 75歳到達等
+                      </label>
+                    </div>
+                    <div className="text-[9px] text-slate-500 mt-1">
+                      ※ 退職に伴い健康保険証（被保険者および被扶養者分）を回収して年金事務所または健康保険組合へ返納してください。
+                    </div>
+                  </td>
+                </tr>
+
+                <tr className="border-b border-slate-300">
+                  <td className="bg-slate-50 p-2 font-bold border-r border-slate-300">参考: 直前報酬月額</td>
+                  <td colSpan={3} className="p-2 font-mono font-bold text-slate-700">
+                    通貨: ¥{currencyAmount.toLocaleString()} / 現物: ¥{goodsAmount.toLocaleString()} (合計: ¥{totalRemuneration.toLocaleString()})
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
