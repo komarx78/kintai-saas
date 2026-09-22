@@ -1237,6 +1237,7 @@ const ShiftCalendarView: React.FC = () => {
                               <span className="text-slate-400 text-[11px]">
                                 希望なし
                               </span>
+                            )}
                           </td>
                         </tr>
                       ))}
