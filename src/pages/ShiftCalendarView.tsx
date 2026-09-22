@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale, Sparkles, ArrowRightLeft, Calendar } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -47,6 +47,10 @@ const ShiftCalendarView: React.FC = () => {
   const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isRebalancing, setIsRebalancing] = useState(false);
+
+  // 策B：未配置スタッフ専用 クイック救済アシスト用State
+  const [rescueStaffId, setRescueStaffId] = useState<string | null>(null);
+  const [isRescuing, setIsRescuing] = useState(false);
 
   useEffect(() => {
     fetchSettingsAndData();
@@ -489,6 +493,156 @@ const ShiftCalendarView: React.FC = () => {
     return staffStats.filter(s => s.status === 'unassigned');
   }, [staffStats]);
 
+  // 策B：救済対象スタッフのユーザー情報
+  const rescueStaffUser = useMemo(() => {
+    if (!rescueStaffId) return null;
+    return users.find(u => u.id === rescueStaffId) || null;
+  }, [rescueStaffId, users]);
+
+  // 策B：救済対象スタッフの専門職種（店舗設定を最優先）
+  const rescueStaffRole = useMemo(() => {
+    if (!rescueStaffId) return roles[0]?.name || 'ホール';
+    return userRoleMapState[rescueStaffId] || (roles[0]?.name || 'ホール');
+  }, [rescueStaffId, userRoleMapState, roles]);
+
+  // 策B：救済対象スタッフの希望日別 救済オプション
+  const rescueOptions = useMemo(() => {
+    if (!rescueStaffId || !rescueStaffUser) return [];
+
+    const targetRole = rescueStaffRole;
+    const startStr = format(startDate, 'yyyy-MM-dd');
+    const endStr = format(endDate, 'yyyy-MM-dd');
+
+    // 表示期間内の本人の有効な希望シフト
+    const userRequests = rawRequests.filter(r => 
+      r.user_id === rescueStaffId &&
+      r.available_start_time &&
+      r.available_end_time &&
+      r.target_date >= startStr &&
+      r.target_date <= endStr
+    );
+
+    return userRequests.map(req => {
+      const dateStr = req.target_date;
+      const reqStart = req.available_start_time.substring(0, 5);
+      const reqEnd = req.available_end_time.substring(0, 5);
+
+      // 希望時間の算出
+      const [sh, sm] = reqStart.split(':').map(Number);
+      const [eh, em] = reqEnd.split(':').map(Number);
+      let diff = (eh * 60 + em) - (sh * 60 + sm);
+      if (diff < 0) diff += 24 * 60;
+      const durationHours = Math.round((diff / 60) * 10) / 10;
+
+      // その日の同職種の実働シフト（下書き・確定）
+      const sameRoleShifts = shifts.filter(s => 
+        s.target_date === dateStr &&
+        s.role === targetRole &&
+        s.status !== 'request'
+      );
+
+      // 本人がすでに入っているか（救済済みなど）
+      const isAlreadyAssigned = sameRoleShifts.some(s => s.user_id === rescueStaffId);
+
+      // 同職種で入っている他スタッフの交代候補リスト
+      const donorCandidates = sameRoleShifts
+        .filter(s => s.user_id !== rescueStaffId)
+        .map(s => {
+          const stats = staffStats.find(st => st.userId === s.user_id);
+          const donorUser = users.find(u => u.id === s.user_id);
+          return {
+            shiftId: s.id,
+            userId: s.user_id,
+            userName: donorUser?.name || s.user?.name || '不明',
+            startTime: s.start_time.substring(0, 5),
+            endTime: s.end_time.substring(0, 5),
+            status: s.status, // 'draft' or 'confirmed'
+            assignedDays: stats?.assignedDays ?? 1,
+            totalHours: stats?.totalHours ?? 0,
+          };
+        })
+        .sort((a, b) => b.assignedDays - a.assignedDays || b.totalHours - a.totalHours);
+
+      return {
+        requestId: req.id,
+        targetDate: dateStr,
+        startTime: reqStart,
+        endTime: reqEnd,
+        durationHours,
+        role: targetRole,
+        isAlreadyAssigned,
+        sameRoleAssignedCount: sameRoleShifts.length,
+        donorCandidates,
+      };
+    }).sort((a, b) => a.targetDate.localeCompare(b.targetDate));
+  }, [rescueStaffId, rescueStaffUser, rescueStaffRole, startDate, endDate, rawRequests, shifts, staffStats, users]);
+
+  // 策B：救済実行ハンドラー（追加 or 交代）
+  const handleExecuteRescue = async (
+    targetDate: string,
+    startTime: string,
+    endTime: string,
+    role: string,
+    donorShiftId?: string,
+    donorName?: string
+  ) => {
+    if (isRescuing || !rescueStaffUser) return;
+
+    const targetDateLabel = format(new Date(targetDate), 'M月d日(E)', { locale: ja });
+    const actionDescription = donorShiftId
+      ? `${donorName} 様と交代して、${rescueStaffUser.name} 様を配置`
+      : `${rescueStaffUser.name} 様を空き枠に追加配置`;
+
+    if (!window.confirm(`【未配置スタッフ救済確認】\n\n対象日: ${targetDateLabel}\n時間帯: ${startTime} 〜 ${endTime}\n専門職種: ${role}\n\n内容: ${actionDescription} しますか？`)) {
+      return;
+    }
+
+    setIsRescuing(true);
+    try {
+      const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
+      if (!tenantIdData) throw new Error('テナント情報の取得に失敗しました');
+
+      if (donorShiftId) {
+        // 交代（バトンタッチ）：既存ドラフトシフトの担当者を救済対象スタッフに更新
+        const { error } = await supabase
+          .from('advanced_shifts')
+          .update({ 
+            user_id: rescueStaffUser.id,
+            start_time: startTime,
+            end_time: endTime
+          })
+          .eq('id', donorShiftId)
+          .eq('tenant_id', tenantIdData);
+
+        if (error) throw error;
+        alert(`🎉 交代が完了しました！\n${donorName} 様から ${rescueStaffUser.name} 様へシフトを交代しました。`);
+      } else {
+        // 新規追加配置：下書き（draft）として配置
+        const { error } = await supabase
+          .from('advanced_shifts')
+          .insert([{
+            tenant_id: tenantIdData,
+            user_id: rescueStaffUser.id,
+            target_date: targetDate,
+            start_time: startTime,
+            end_time: endTime,
+            role: role,
+            status: 'draft'
+          }]);
+
+        if (error) throw error;
+        alert(`🎉 追加配置が完了しました！\n${rescueStaffUser.name} 様を ${targetDateLabel} の下書きシフトに配置しました。`);
+      }
+
+      await fetchSettingsAndData();
+    } catch (err: any) {
+      console.error('救済エラー:', err);
+      alert('救済処理中にエラーが発生しました: ' + (err.message || err));
+    } finally {
+      setIsRescuing(false);
+    }
+  };
+
   const movePeriod = (dir: 1 | -1) => {
     if (displayPeriod === '1day') setBaseDate(addDays(baseDate, dir * 1));
     else if (displayPeriod === '1week') setBaseDate(addDays(baseDate, dir * 7));
@@ -659,11 +813,16 @@ const ShiftCalendarView: React.FC = () => {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-1.5">
                   {unassignedStaffList.map(st => (
-                    <span key={st.userId} className="inline-flex items-center gap-1.5 bg-white border border-rose-200 text-rose-800 px-2.5 py-1 rounded-lg text-xs font-bold shadow-xs">
-                      <User className="w-3.5 h-3.5 text-rose-500" />
+                    <button 
+                      key={st.userId}
+                      onClick={() => setRescueStaffId(st.userId)}
+                      className="inline-flex items-center gap-1.5 bg-white hover:bg-rose-100 border border-rose-300 text-rose-900 px-3 py-1 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer hover:scale-105"
+                      title="クリックしてこのスタッフの救済アシストを開く"
+                    >
+                      <User className="w-3.5 h-3.5 text-rose-600" />
                       <span>{st.name}</span>
-                      <span className="text-rose-500 font-normal">（希望 {st.requestedDays}日 ➔ 配置 0日）</span>
-                    </span>
+                      <span className="text-[11px] bg-rose-600 text-white font-black px-1.5 py-0.2 rounded-md">救済 ≫</span>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -795,9 +954,22 @@ const ShiftCalendarView: React.FC = () => {
                     <tbody className="divide-y divide-slate-100">
                       {staffStats.map(st => (
                         <tr key={st.userId} className={`hover:bg-slate-50 transition-colors ${st.status === 'unassigned' ? 'bg-rose-50/40 font-bold' : ''}`}>
-                          <td className="py-2.5 px-4 font-bold text-slate-800 flex items-center gap-2">
-                            <User className={`w-3.5 h-3.5 ${st.status === 'unassigned' ? 'text-rose-500' : 'text-slate-400'}`} />
-                            <span>{st.name}</span>
+                          <td className="py-2.5 px-4 font-bold text-slate-800">
+                            {st.status === 'unassigned' ? (
+                              <button
+                                onClick={() => setRescueStaffId(st.userId)}
+                                className="flex items-center gap-2 hover:underline text-rose-700 cursor-pointer text-left font-black"
+                                title="クリックして救済アシストを開く"
+                              >
+                                <User className="w-3.5 h-3.5 text-rose-500" />
+                                <span>{st.name}</span>
+                              </button>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <User className="w-3.5 h-3.5 text-slate-400" />
+                                <span>{st.name}</span>
+                              </div>
+                            )}
                           </td>
                           <td className="py-2.5 px-3 text-slate-600">
                             <span className="bg-slate-100 px-2 py-0.5 rounded text-[11px]">
@@ -825,9 +997,14 @@ const ShiftCalendarView: React.FC = () => {
                           </td>
                           <td className="py-2.5 px-4 text-center">
                             {st.status === 'unassigned' && (
-                              <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-full text-[11px] font-black animate-pulse">
-                                🚨 未配置（要調整）
-                              </span>
+                              <button
+                                onClick={() => setRescueStaffId(st.userId)}
+                                className="inline-flex items-center gap-1 bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1 rounded-lg text-[11px] font-black shadow-xs transition cursor-pointer hover:scale-105"
+                                title="クリックして救済アシストを開く"
+                              >
+                                <Sparkles className="w-3 h-3 text-amber-200" />
+                                <span>🚨 救済アシスト ≫</span>
+                              </button>
                             )}
                             {st.status === 'balanced' && (
                               <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-[11px] font-bold">
@@ -1251,6 +1428,169 @@ const ShiftCalendarView: React.FC = () => {
                   {saving ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <><Save className="w-4 h-4 mr-1.5" />{modalData.status === 'request' ? 'この希望で確定する' : '確定する'}</>}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🚨 策B：未配置スタッフ専用 クイック救済アシストモーダル */}
+      {rescueStaffId && rescueStaffUser && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 max-h-[90vh] flex flex-col">
+            {/* モーダルヘッダー */}
+            <div className="bg-gradient-to-r from-rose-600 via-rose-500 to-amber-500 p-5 text-white flex justify-between items-start shrink-0">
+              <div>
+                <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-xs font-black tracking-wider uppercase mb-1">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                  未配置スタッフ クイック救済アシスト（策B）
+                </div>
+                <h2 className="text-xl font-black flex items-center gap-2">
+                  <span>{rescueStaffUser.name} 様</span>
+                  <span className="text-xs bg-white/25 px-2.5 py-0.5 rounded-lg font-bold border border-white/30">
+                    専門職種: {rescueStaffRole}
+                  </span>
+                </h2>
+                <p className="text-xs text-rose-100 mt-1">
+                  専門職種【{rescueStaffRole}】を守ったまま、本人の希望日に合わせて「空き枠への追加」または「同職種スタッフとの交代」を1クリックで実行できます。
+                </p>
+              </div>
+              <button 
+                onClick={() => setRescueStaffId(null)} 
+                className="text-white/80 hover:text-white hover:bg-white/10 p-1.5 rounded-full transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* モーダルコンテンツ（スクロール可能） */}
+            <div className="p-6 overflow-y-auto space-y-4 bg-slate-50/50 flex-1">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-slate-800 text-sm flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-indigo-600" />
+                  本人の出勤希望日（全 {rescueOptions.length} 日）
+                </h3>
+                <span className="text-xs text-slate-500">
+                  ※本人が出勤可能と回答した希望日のみを表示しています
+                </span>
+              </div>
+
+              {rescueOptions.length === 0 ? (
+                <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-500">
+                  <p className="font-bold">この期間に提出された出勤希望シフトがありません</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {rescueOptions.map((opt) => (
+                    <div 
+                      key={opt.requestId}
+                      className={`p-4 rounded-2xl border transition-all ${
+                        opt.isAlreadyAssigned
+                          ? 'bg-emerald-50/60 border-emerald-200'
+                          : 'bg-white border-slate-200 shadow-xs hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3 mb-3">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-base font-black text-slate-800">
+                            {format(new Date(opt.targetDate), 'M月d日(E)', { locale: ja })}
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            希望時間: {opt.startTime} 〜 {opt.endTime}（{opt.durationHours}h）
+                          </span>
+                        </div>
+
+                        {opt.isAlreadyAssigned && (
+                          <span className="inline-flex items-center gap-1 text-xs font-black text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-lg">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            この日に配置済み
+                          </span>
+                        )}
+                      </div>
+
+                      {/* アクション選択肢 */}
+                      {!opt.isAlreadyAssigned && (
+                        <div className="space-y-2.5">
+                          {/* 選択肢1：空き枠に追加配置 */}
+                          <div className="flex items-center justify-between bg-emerald-50/70 p-3 rounded-xl border border-emerald-200/80 gap-3">
+                            <div>
+                              <div className="text-xs font-black text-emerald-900 flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                空き枠に追加配置（下書き）
+                              </div>
+                              <div className="text-[11px] text-emerald-700 mt-0.5">
+                                現在の同職種配置: {opt.sameRoleAssignedCount}名。本人の希望時間（{opt.startTime}〜{opt.endTime}）で枠を追加して配置します。
+                              </div>
+                            </div>
+                            <button
+                              disabled={isRescuing}
+                              onClick={() => handleExecuteRescue(opt.targetDate, opt.startTime, opt.endTime, opt.role)}
+                              className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-3.5 py-2 rounded-xl shadow-xs transition cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>追加配置する</span>
+                            </button>
+                          </div>
+
+                          {/* 選択肢2：同職種スタッフとの交代（バトンタッチ） */}
+                          {opt.donorCandidates.length > 0 && (
+                            <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200/80 space-y-2">
+                              <div className="text-xs font-black text-amber-900 flex items-center gap-1">
+                                <ArrowRightLeft className="w-3.5 h-3.5 text-amber-600" />
+                                同職種スタッフと交代して配置（過密緩和）
+                              </div>
+                              <div className="text-[11px] text-amber-700">
+                                すでに配置されている同職種スタッフから交代します（相手の出勤日は1日減り、休日になります）。
+                              </div>
+
+                              <div className="space-y-1.5 pt-1">
+                                {opt.donorCandidates.map(donor => (
+                                  <div 
+                                    key={donor.shiftId}
+                                    className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-amber-200 shadow-2xs gap-2"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <User className="w-3.5 h-3.5 text-amber-600" />
+                                      <span className="font-black text-xs text-slate-800">{donor.userName} 様</span>
+                                      <span className="text-[11px] text-slate-500 font-medium">（{donor.startTime}〜{donor.endTime}）</span>
+                                      <span className={`text-[10px] font-black px-1.5 py-0.2 rounded ${
+                                        donor.assignedDays >= 5 ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-700'
+                                      }`}>
+                                        週間{donor.assignedDays}日出勤 / {donor.totalHours}h
+                                      </span>
+                                    </div>
+                                    <button
+                                      disabled={isRescuing}
+                                      onClick={() => handleExecuteRescue(opt.targetDate, donor.startTime, donor.endTime, opt.role, donor.shiftId, donor.userName)}
+                                      className="shrink-0 bg-amber-500 hover:bg-amber-600 text-white font-black text-[11px] px-3 py-1.5 rounded-lg shadow-2xs transition cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                                    >
+                                      <ArrowRightLeft className="w-3 h-3" />
+                                      <span>この人と交代</span>
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* モーダルフッター */}
+            <div className="bg-slate-100 p-4 border-t border-slate-200 flex justify-between items-center shrink-0">
+              <span className="text-xs text-slate-500 font-medium">
+                配置したシフトは「下書き」状態となり、後から手動微調整も可能です
+              </span>
+              <button
+                onClick={() => setRescueStaffId(null)}
+                className="bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer"
+              >
+                閉じる
+              </button>
             </div>
           </div>
         </div>
