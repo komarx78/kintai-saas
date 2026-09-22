@@ -72,6 +72,8 @@ interface EmployeeOnboardingData {
   phone?: string;
   birth_date?: string;
   address?: string;
+  address_kana?: string;
+  postal_code?: string;
   signed_at?: string;
   role: string;
   status: 'onboarding' | 'active' | 'offboarding' | 'retired';
