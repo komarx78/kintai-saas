@@ -24,6 +24,11 @@ import {
   Loader2, Home, Lock, Plus, FileText, Sparkles, MapPin, Check,
   Bot, Edit3, Users
 } from 'lucide-react';
+import { searchAddressFromZip } from '../lib/zipHelper';
+
+const toKatakana = (str: string): string => {
+  return (str || '').replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60));
+};
 
 interface DependentItem {
   name: string;
@@ -98,6 +103,7 @@ export default function EmployeeOnboardingWelcome() {
     gender: 'unspecified',
     postalCode: '',
     address: '',
+    addressKana: '',
     phoneNumber: '',
     householderName: '',
     householderRelation: '本人',
@@ -199,14 +205,20 @@ export default function EmployeeOnboardingWelcome() {
       const joinDateParam = searchParams.get('join_date');
       const locParam = searchParams.get('work_location');
       const hoursParam = searchParams.get('work_hours');
+      const postalCodeParam = searchParams.get('postal_code') || searchParams.get('postalCode');
+      const addressParam = searchParams.get('address');
+      const addressKanaParam = searchParams.get('address_kana') || searchParams.get('addressKana');
 
-      if (nameParam || nameKanaParam || emailParam || phoneParam || baseSalaryParam || hourlyWageParam || deptParam || posNameParam) {
+      if (nameParam || nameKanaParam || emailParam || phoneParam || baseSalaryParam || hourlyWageParam || deptParam || posNameParam || postalCodeParam || addressParam || addressKanaParam) {
         setBasicData(prev => ({
           ...prev,
           name: nameParam || prev.name,
           nameKana: nameKanaParam || prev.nameKana,
           email: emailParam || prev.email,
-          phoneNumber: phoneParam || prev.phoneNumber
+          phoneNumber: phoneParam || prev.phoneNumber,
+          postalCode: postalCodeParam || prev.postalCode,
+          address: addressParam || prev.address,
+          addressKana: addressKanaParam || prev.addressKana
         }));
 
         setContractAgreement(prev => ({
@@ -731,6 +743,8 @@ export default function EmployeeOnboardingWelcome() {
           name_kana: basicData.nameKana || null,
           birth_date: basicData.birthDate || null,
           address: basicData.address || null,
+          address_kana: basicData.addressKana || null,
+          postal_code: basicData.postalCode || null,
           phone: basicData.phoneNumber || null,
         };
         if (basicData.email && basicData.email.trim()) {
@@ -749,6 +763,8 @@ export default function EmployeeOnboardingWelcome() {
           name_kana: basicData.nameKana || null,
           birth_date: basicData.birthDate || null,
           address: basicData.address || null,
+          address_kana: basicData.addressKana || null,
+          postal_code: basicData.postalCode || null,
           phone: basicData.phoneNumber || null,
           join_date: contractAgreement.joinDate || '2026-04-01',
           status: 'onboarding',
@@ -1181,15 +1197,82 @@ export default function EmployeeOnboardingWelcome() {
                 </p>
               </div>
 
-              <div>
-                <label className="text-[11px] font-bold text-slate-300 block mb-1">現住所（住民票記載の住所） <span className="text-rose-400">*</span></label>
-                <input
-                  type="text"
-                  placeholder="例: 東京都新宿区西新宿 2-8-1 〇〇マンション 101号室"
-                  value={basicData.address}
-                  onChange={e => setBasicData({ ...basicData, address: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 font-bold text-white focus:border-indigo-500 focus:outline-hidden"
-                />
+              {/* 🏡 郵便番号 ＆ 現住所 ＆ 住所フリガナ */}
+              <div className="bg-slate-900/60 p-3.5 rounded-2xl border border-slate-700/80 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 block mb-1">郵便番号 (7桁)</label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="例: 1000001"
+                        maxLength={8}
+                        value={basicData.postalCode}
+                        onChange={e => setBasicData({ ...basicData, postalCode: e.target.value.replace(/[^0-9-]/g, '') })}
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 font-bold text-white text-xs focus:border-indigo-500 focus:outline-hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const res = await searchAddressFromZip(basicData.postalCode);
+                          if (res) {
+                            setBasicData(prev => ({
+                              ...prev,
+                              address: res.address,
+                              addressKana: res.addressKana
+                            }));
+                          } else {
+                            alert('郵便番号（7桁）から住所が見つかりませんでした。');
+                          }
+                        }}
+                        className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-bold shrink-0 cursor-pointer shadow-xs transition"
+                        title="郵便番号から住所を自動検索"
+                      >
+                        自動検索
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-bold text-indigo-300">住所フリガナ（カタカナ）</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const k = toKatakana(basicData.addressKana || '');
+                          setBasicData(prev => ({ ...prev, addressKana: k }));
+                        }}
+                        className="text-[9px] bg-indigo-950 text-indigo-300 hover:bg-indigo-900 border border-indigo-700 font-bold px-1.5 py-0.5 rounded cursor-pointer"
+                      >
+                        カタカナ変換
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="例: トウキョウトシンジュククニシシンジュク"
+                      value={basicData.addressKana}
+                      onChange={e => setBasicData({ ...basicData, addressKana: e.target.value })}
+                      onBlur={e => {
+                        const k = toKatakana(e.target.value.trim());
+                        setBasicData(prev => ({ ...prev, addressKana: k }));
+                      }}
+                      className="w-full bg-slate-800 border border-indigo-500/50 rounded-xl px-3 py-2 font-bold text-indigo-200 text-xs focus:border-indigo-400 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-300 block mb-1">
+                    現住所（住民票記載の住所・番地・部屋番号） <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="例: 東京都新宿区西新宿 2-8-1 〇〇マンション 101号室"
+                    value={basicData.address}
+                    onChange={e => setBasicData({ ...basicData, address: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 font-bold text-white focus:border-indigo-500 focus:outline-hidden text-xs"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-1">

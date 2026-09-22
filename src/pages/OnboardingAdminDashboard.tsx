@@ -39,10 +39,11 @@ import {
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
   FolderOpen, Settings, Clock, Smartphone, AlertCircle, ArrowRight, CornerDownLeft,
   Copy, DollarSign, Sparkles, Award, ShieldCheck, FileCheck,
-  ExternalLink, Gift, Baby, FileSpreadsheet, Send, KeyRound, MessageSquare
+  ExternalLink, Gift, Baby, FileSpreadsheet, Send, KeyRound, MessageSquare, MapPin
 } from 'lucide-react';
 import { StaffInviteModal } from '../components/StaffInviteModal';
 import { StaffAccountIssueModal, type TargetStaffForAccount } from '../components/StaffAccountIssueModal';
+import { searchAddressFromZip } from '../lib/zipHelper';
 import { MaternityLeaveModal } from '../components/MaternityLeaveModal';
 import { OfficialMaternityLeaveDoc } from '../components/OfficialMaternityLeaveDoc';
 import { 
@@ -2427,6 +2428,8 @@ export default function OnboardingAdminDashboard() {
             join_date: data.join_date,
             birth_date: data.birth_date || null,
             address: data.address || null,
+            address_kana: data.address_kana || null,
+            postal_code: data.postal_code || null,
             phone: data.phone || null
           })
           .eq('id', data.user_id);
@@ -2539,6 +2542,8 @@ export default function OnboardingAdminDashboard() {
             join_date: data.join_date,
             birth_date: data.birth_date || null,
             address: data.address || null,
+            address_kana: data.address_kana || null,
+            postal_code: data.postal_code || null,
             phone: data.phone || null,
             contract_type: data.contract_type,
             trial_period_months: data.trial_period_months,
@@ -4755,24 +4760,91 @@ export default function OnboardingAdminDashboard() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-bold text-indigo-900 block mb-1">🎂 生年月日（西暦・介護保険連動）</label>
-                    <input
-                      type="date"
-                      value={editModal.data.birth_date ? String(editModal.data.birth_date).substring(0, 10) : ''}
-                      onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, birth_date: e.target.value } })}
-                      className="w-full bg-white border border-indigo-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800"
-                    />
+                <div>
+                  <label className="text-[11px] font-bold text-indigo-900 block mb-1">🎂 生年月日（西暦・介護保険連動）</label>
+                  <input
+                    type="date"
+                    value={editModal.data.birth_date ? String(editModal.data.birth_date).substring(0, 10) : ''}
+                    onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, birth_date: e.target.value } })}
+                    className="w-full bg-white border border-indigo-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-800"
+                  />
+                </div>
+
+                {/* 🏡 現住所 ＆ 郵便番号 ＆ 住所フリガナ */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-0.5">郵便番号 (7桁)</label>
+                      <div className="flex gap-1">
+                        <input
+                          type="text"
+                          placeholder="例: 1000001"
+                          maxLength={8}
+                          value={editModal.data.postal_code || ''}
+                          onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, postal_code: e.target.value.replace(/[^0-9-]/g, '') } })}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 font-bold text-slate-800 text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const res = await searchAddressFromZip(editModal.data?.postal_code || '');
+                            if (res) {
+                              setEditModal({
+                                ...editModal,
+                                data: {
+                                  ...editModal.data!,
+                                  address: res.address,
+                                  address_kana: res.addressKana
+                                }
+                              });
+                            } else {
+                              alert('郵便番号（7桁）から住所が見つかりませんでした。');
+                            }
+                          }}
+                          className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[10px] font-bold shrink-0 cursor-pointer"
+                          title="郵便番号から住所とフリガナを自動検索"
+                        >
+                          自動検索
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <label className="text-[10px] font-bold text-indigo-800">住所フリガナ（カタカナ）</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const k = toKatakana(editModal.data?.address_kana || '');
+                            setEditModal({ ...editModal, data: { ...editModal.data!, address_kana: k } });
+                          }}
+                          className="text-[9px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-1 py-0.2 rounded border border-indigo-200 cursor-pointer"
+                        >
+                          カタカナ変換
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="例: トウキョウトシンジュククニシシンジュク"
+                        value={editModal.data.address_kana || ''}
+                        onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, address_kana: e.target.value } })}
+                        onBlur={e => {
+                          const k = toKatakana(e.target.value.trim());
+                          setEditModal({ ...editModal, data: { ...editModal.data!, address_kana: k } });
+                        }}
+                        className="w-full bg-white border border-indigo-200 rounded-lg px-2.5 py-1.5 font-bold text-indigo-950 text-xs focus:border-indigo-500"
+                      />
+                    </div>
                   </div>
+
                   <div>
-                    <label className="text-[11px] font-bold text-slate-600 block mb-1">現住所</label>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-0.5">現住所（番地・マンション名）</label>
                     <input
                       type="text"
                       value={editModal.data.address || ''}
                       onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, address: e.target.value } })}
-                      placeholder="滋賀県大津市..."
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold"
+                      placeholder="例: 東京都新宿区西新宿 2-8-1 〇〇ビル 3F"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-xs"
                     />
                   </div>
                 </div>
