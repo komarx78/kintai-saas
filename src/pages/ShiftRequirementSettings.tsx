@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
+import { fetchStoresUnified, getStoresFromStorage } from '../lib/storeMaster';
 
 const defaultRoles = ['ホール', 'キッチン', 'レジ', '清掃'];
 const patternTypes = ['平日', '土日', '祝日'];
@@ -45,30 +46,18 @@ const ShiftRequirementSettings: React.FC = () => {
       const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
       if (!tenantIdData) return;
 
-      // 1. 店舗リストの取得（department_masters + users.department）
-      let depts: string[] = [];
+      // 1. 店舗マスタ（store_masters）から純粋な店舗リストを取得（総務・人事等の本部部門は除外）
+      let storeNames: string[] = [];
       try {
-        const { data: deptsData } = await supabase.from('department_masters').select('name').eq('tenant_id', tenantIdData).order('display_order');
-        if (deptsData && deptsData.length > 0) {
-          depts = deptsData.map((d: any) => d.name).filter(Boolean);
-        }
-      } catch (e) {}
-      try {
-        const rawLocalDepts = localStorage.getItem(`company_departments_${tenantIdData}`);
-        if (rawLocalDepts) {
-          const parsed = JSON.parse(rawLocalDepts);
-          parsed.forEach((d: any) => { if (d.name && !depts.includes(d.name)) depts.push(d.name); });
-        }
-      } catch (e) {}
-      try {
-        const { data: usersData } = await supabase.from('users').select('department').eq('tenant_id', tenantIdData);
-        (usersData || []).forEach((u: any) => {
-          if (u.department && typeof u.department === 'string' && u.department.trim() && !depts.includes(u.department.trim())) {
-            depts.push(u.department.trim());
-          }
-        });
-      } catch (e) {}
-      setDepartmentsList(depts);
+        const loadedStores = await fetchStoresUnified(tenantIdData);
+        storeNames = loadedStores.map(s => s.name).filter(Boolean);
+      } catch {
+        storeNames = getStoresFromStorage(tenantIdData).map(s => s.name).filter(Boolean);
+      }
+      if (storeNames.length === 0) {
+        storeNames = ['新宿店', '渋谷店', '池袋店'];
+      }
+      setDepartmentsList(storeNames);
 
       // 2. 役割マスタの取得
       const { data: rolesData } = await supabase

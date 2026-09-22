@@ -40,7 +40,7 @@ import {
   UserCheck, ArrowUp, ArrowDown, RotateCcw, Edit3,
   Network, Award, Crown, Shield, FileText, Upload,
   ImageIcon, Wand2, CheckCircle2, Eye, Bell, FileSpreadsheet,
-  ExternalLink
+  ExternalLink, Store, MapPin
 } from 'lucide-react';
 import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress } from '../lib/socialInsurance';
 import { 
@@ -50,6 +50,15 @@ import {
   generateAiAnnouncementDraft 
 } from '../lib/announcements';
 import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
+import {
+  type StoreMaster,
+  DEFAULT_STORES,
+  getStoresFromStorage,
+  saveStoresToStorage,
+  fetchStoresUnified,
+  saveStoresUnified,
+  sanitizeStoreName
+} from '../lib/storeMaster';
 
 export interface DepartmentMaster {
   id: string;
@@ -568,6 +577,13 @@ export default function CompanySettingsDashboard() {
   const [newDeptName, setNewDeptName] = useState('');
   const [newDeptManagerId, setNewDeptManagerId] = useState('');
 
+  // 🏪 2-2. 店舗・拠点マスタState（複数店舗対応・シフトカレンダー連動）
+  const [stores, setStores] = useState<StoreMaster[]>([]);
+  const [newStoreName, setNewStoreName] = useState('');
+  const [newStoreCode, setNewStoreCode] = useState('');
+  const [newStoreDept, setNewStoreDept] = useState('');
+  const [newStoreManagerId, setNewStoreManagerId] = useState('');
+
   // 3. 就業時間パターンマスタState
   const [schedulePatterns, setSchedulePatterns] = useState<WorkSchedulePattern[]>([]);
   const [newPatternName, setNewPatternName] = useState('');
@@ -848,6 +864,21 @@ export default function CompanySettingsDashboard() {
         deptsLoaded = Array.from(mergedMap.values());
       }
       setDepartments(deptsLoaded);
+
+      // 🏪 店舗・拠点マスタ取得（DBとLocalStorageのハイブリッド復元）
+      try {
+        const loadedStores = await fetchStoresUnified(tenantIdData);
+        if (loadedStores && loadedStores.length > 0) {
+          setStores(loadedStores);
+        } else {
+          setStores(DEFAULT_STORES);
+          saveStoresToStorage(tenantIdData, DEFAULT_STORES);
+        }
+      } catch (stErr) {
+        console.warn('Load stores error:', stErr);
+        const localSt = getStoresFromStorage(tenantIdData);
+        setStores(localSt.length > 0 ? localSt : DEFAULT_STORES);
+      }
 
       // 就業時間パターンマスタ取得
       const { data: patData } = await supabase
@@ -1411,6 +1442,12 @@ export default function CompanySettingsDashboard() {
       saveWorkflowStepsToStorage(onboardingSteps);
       savePositionsToStorage(positions);
       saveDepartmentsToStorage(tenantId, departments);
+      saveStoresToStorage(tenantId, stores);
+      try {
+        await saveStoresUnified(tenantId, stores);
+      } catch (stErr) {
+        console.warn('saveStoresUnified error:', stErr);
+      }
       saveAnnouncementsToStorage(announcements, tenantId);
       localStorage.setItem(`mock_company_holidays_${tenantId}`, JSON.stringify(Array.from(computedHolidaysSet)));
       localStorage.setItem(`company_employment_rules_${tenantId}`, employmentRulesText);
@@ -1672,7 +1709,8 @@ export default function CompanySettingsDashboard() {
     userId: string,
     deptName: string,
     posId: string,
-    isDeptHead: boolean
+    isDeptHead: boolean,
+    storeName?: string
   ) => {
     const targetPos = positions.find(p => p.id === posId);
     const posName = targetPos ? targetPos.name : '';
@@ -1683,13 +1721,22 @@ export default function CompanySettingsDashboard() {
         await supabase.from('users').update({
           department: deptName || null,
           position_id: posId || null,
-          position_name: posName || null
+          position_name: posName || null,
+          store_name: storeName || null
         }).eq('id', userId);
       } catch (dbErr) {
-        // 万が一カラム未定義の場合はdepartmentのみ更新
-        await supabase.from('users').update({
-          department: deptName || null
-        }).eq('id', userId);
+        // 万が一カラム未定義の場合はdepartment/positionのみ更新
+        try {
+          await supabase.from('users').update({
+            department: deptName || null,
+            position_id: posId || null,
+            position_name: posName || null
+          }).eq('id', userId);
+        } catch {
+          await supabase.from('users').update({
+            department: deptName || null
+          }).eq('id', userId);
+        }
       }
 
       // 2. localStorageへの安全バックアップ永続化
@@ -1699,7 +1746,8 @@ export default function CompanySettingsDashboard() {
         currentMap[userId] = {
           position_id: posId || undefined,
           position_name: posName || undefined,
-          department: deptName || undefined
+          department: deptName || undefined,
+          store_name: storeName || undefined
         };
         localStorage.setItem(key, JSON.stringify(currentMap));
       } catch (e) {
@@ -1728,6 +1776,7 @@ export default function CompanySettingsDashboard() {
             department: deptName || undefined,
             position_id: posId || undefined,
             position_name: posName || undefined,
+            store_name: storeName || undefined,
             is_department_head: isDeptHead
           };
         }
@@ -1736,10 +1785,103 @@ export default function CompanySettingsDashboard() {
 
       setEditingUserModal({ isOpen: false, user: null });
       await fetchData();
-      alert(`✅ 社員の役職（${posName || '一般'}）および配属（${deptName || '未所属'}）${isDeptHead ? '【★所属長に任命】' : ''}を更新・保存しました！`);
+      alert(`✅ 社員の役職（${posName || '一般'}）、配属（${deptName || '未所属'}）${storeName ? `、所属店舗（${storeName}）` : ''}${isDeptHead ? '【★所属長に任命】' : ''}を更新・保存しました！`);
     } catch (e: any) {
       console.error(e);
       alert('社員情報の更新に失敗しました: ' + e.message);
+    }
+  };
+
+  // 🏪 店舗・拠点マスタ操作ハンドラ群
+  const handleAddStore = async () => {
+    if (!tenantId || !newStoreName.trim()) {
+      alert('店舗名を入力してください（例: 新宿店、渋谷店）');
+      return;
+    }
+    const cleanName = sanitizeStoreName(newStoreName);
+    if (stores.some(s => s.name === cleanName)) {
+      alert(`「${cleanName}」は既に登録されています。`);
+      return;
+    }
+    const manager = companyUsers.find(u => u.id === newStoreManagerId);
+    const newStoreItem: StoreMaster = {
+      id: `store-${Date.now()}`,
+      name: cleanName,
+      code: newStoreCode.trim() || undefined,
+      department_name: newStoreDept || undefined,
+      manager_user_id: newStoreManagerId || undefined,
+      manager_user_name: manager ? manager.name : undefined,
+      display_order: stores.length + 1
+    };
+    const updated = [...stores, newStoreItem];
+    setStores(updated);
+    saveStoresToStorage(tenantId, updated);
+    try {
+      await saveStoresUnified(tenantId, updated);
+    } catch (e) {
+      console.warn('DB save store error:', e);
+    }
+    setNewStoreName('');
+    setNewStoreCode('');
+    setNewStoreDept('');
+    setNewStoreManagerId('');
+    alert(`✅ 店舗「${cleanName}」を追加しました！`);
+  };
+
+  const handleDeleteStore = async (storeId: string) => {
+    if (!tenantId) return;
+    const target = stores.find(s => s.id === storeId);
+    if (!target) return;
+    if (!confirm(`店舗「${target.name}」を削除してもよろしいですか？\n※ シフトカレンダーや所属設定からも解除されます。`)) return;
+    const updated = stores.filter(s => s.id !== storeId);
+    setStores(updated);
+    saveStoresToStorage(tenantId, updated);
+    try {
+      await saveStoresUnified(tenantId, updated);
+    } catch (e) {
+      console.warn('DB delete store error:', e);
+    }
+  };
+
+  const handleUpdateStoreManager = async (storeId: string, managerUserId: string) => {
+    if (!tenantId) return;
+    const manager = companyUsers.find(u => u.id === managerUserId);
+    const updated = stores.map(s => {
+      if (s.id === storeId) {
+        return {
+          ...s,
+          manager_user_id: managerUserId || undefined,
+          manager_user_name: manager ? manager.name : undefined
+        };
+      }
+      return s;
+    });
+    setStores(updated);
+    saveStoresToStorage(tenantId, updated);
+    try {
+      await saveStoresUnified(tenantId, updated);
+    } catch (e) {
+      console.warn('DB update store manager error:', e);
+    }
+  };
+
+  const handleUpdateStoreDepartment = async (storeId: string, deptName: string) => {
+    if (!tenantId) return;
+    const updated = stores.map(s => {
+      if (s.id === storeId) {
+        return {
+          ...s,
+          department_name: deptName || undefined
+        };
+      }
+      return s;
+    });
+    setStores(updated);
+    saveStoresToStorage(tenantId, updated);
+    try {
+      await saveStoresUnified(tenantId, updated);
+    } catch (e) {
+      console.warn('DB update store department error:', e);
     }
   };
 
@@ -2147,7 +2289,7 @@ export default function CompanySettingsDashboard() {
             }`}
           >
             <Network className="w-4 h-4" />
-            2. 会社組織図 ＆ 役職・部署
+            2. 会社組織図 ＆ 役職・部署・店舗
           </button>
 
           <button
@@ -2750,6 +2892,162 @@ export default function CompanySettingsDashboard() {
                     </button>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* 🏪 3. 店舗・拠点マスタ管理（Store Masters） */}
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
+                <div>
+                  <h4 className="font-black text-slate-800 text-sm flex items-center gap-2">
+                    <Store className="w-4 h-4 text-indigo-600" />
+                    店舗・拠点マスタ管理（Store Masters）
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    営業店舗・拠点（新宿店、渋谷店、池袋店など）を登録します。シフトカレンダーは<strong>店舗ごとに独立管理</strong>され、人手不足時のみ他店舗からの応援配置が可能です。
+                  </p>
+                </div>
+                <div className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-xl shrink-0">
+                  ※ 総務・人事・営業などの本部部門は店舗に含まれません
+                </div>
+              </div>
+
+              {/* 新規店舗追加フォーム */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                  新しい店舗・拠点を追加
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">店舗名 <span className="text-rose-500">*</span></label>
+                    <input
+                      type="text"
+                      placeholder="例: 新宿店、渋谷店、本店"
+                      value={newStoreName}
+                      onChange={e => setNewStoreName(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">店舗コード（任意）</label>
+                    <input
+                      type="text"
+                      placeholder="例: S01, SHINJUKU"
+                      value={newStoreCode}
+                      onChange={e => setNewStoreCode(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">管轄部門</label>
+                    <select
+                      value={newStoreDept}
+                      onChange={e => setNewStoreDept(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-800"
+                    >
+                      <option value="">管轄部門: 未選択</option>
+                      {departments.map(d => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">店長・責任者</label>
+                    <select
+                      value={newStoreManagerId}
+                      onChange={e => setNewStoreManagerId(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-800"
+                    >
+                      <option value="">店長: 未指定</option>
+                      {companyUsers.map(u => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.department || '一般'})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={handleAddStore}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Plus className="w-4 h-4" /> 店舗を追加する
+                  </button>
+                </div>
+              </div>
+
+              {/* 店舗一覧カード */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
+                {stores.map((s, idx) => {
+                  const staffCount = companyUsers.filter(u => u.store_name === s.name).length;
+                  return (
+                    <div
+                      key={s.id}
+                      className="bg-slate-50/90 rounded-2xl border-2 border-slate-200 p-4 space-y-3 shadow-xs hover:border-indigo-300 transition"
+                    >
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-[11px] font-black flex items-center justify-center">
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <h5 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-indigo-500" />
+                              {s.name}
+                            </h5>
+                            {s.code && (
+                              <span className="text-[10px] text-slate-400 font-mono block">コード: {s.code}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold bg-white text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
+                            {staffCount}名配属
+                          </span>
+                          <button
+                            onClick={() => handleDeleteStore(s.id)}
+                            className="text-slate-400 hover:text-rose-600 p-1 rounded cursor-pointer transition"
+                            title="この店舗を削除"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 管轄部門 */}
+                      <div className="bg-white p-2 rounded-xl border border-slate-200 space-y-1">
+                        <span className="text-[10px] text-slate-500 font-bold block">統括組織部門:</span>
+                        <select
+                          value={s.department_name || ''}
+                          onChange={e => handleUpdateStoreDepartment(s.id, e.target.value)}
+                          className="w-full text-xs font-bold px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 text-slate-800"
+                        >
+                          <option value="">（未設定）</option>
+                          {departments.map(d => (
+                            <option key={d.id} value={d.name}>{d.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* 店長・責任者 */}
+                      <div className="bg-amber-50/60 p-2 rounded-xl border border-amber-200 space-y-1">
+                        <span className="text-[10px] text-amber-800 font-bold block">店長・店舗責任者:</span>
+                        <select
+                          value={s.manager_user_id || ''}
+                          onChange={e => handleUpdateStoreManager(s.id, e.target.value)}
+                          className="w-full text-xs font-bold px-2 py-1 rounded-lg border border-amber-200 bg-white text-slate-800"
+                        >
+                          <option value="">（店長: 未指定）</option>
+                          {companyUsers.map(u => (
+                            <option key={u.id} value={u.id}>
+                              {u.name} ({u.department || '一般'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -5036,6 +5334,34 @@ export default function CompanySettingsDashboard() {
                 </select>
               </div>
 
+              {/* 🏪 所属店舗（シフト勤務拠点） */}
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                  🏪 所属店舗（シフト勤務先拠点）
+                </label>
+                <select
+                  value={editingUserModal.user.store_name || ''}
+                  onChange={e => {
+                    const newStore = e.target.value;
+                    setEditingUserModal(prev => prev.user ? {
+                      ...prev,
+                      user: { ...prev.user, store_name: newStore }
+                    } : prev);
+                  }}
+                  className="w-full bg-indigo-50/50 border border-indigo-200 rounded-xl px-3 py-2 font-bold text-slate-800"
+                >
+                  <option value="">（店舗なし / 本部所属・シフト対象外）</option>
+                  {stores.map(s => (
+                    <option key={s.id} value={s.name}>
+                      📍 {s.name}{s.code ? ` (${s.code})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  ※ 総務・人事等の本部スタッフは「店舗なし」を選択。店舗が設定されたスタッフのみシフトカレンダーに表示されます。
+                </p>
+              </div>
+
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -5080,7 +5406,8 @@ export default function CompanySettingsDashboard() {
                     editingUserModal.user.id,
                     editingUserModal.user.department || '',
                     editingUserModal.user.position_id || '',
-                    Boolean(editingUserModal.user.is_department_head)
+                    Boolean(editingUserModal.user.is_department_head),
+                    editingUserModal.user.store_name || ''
                   );
                 }}
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"

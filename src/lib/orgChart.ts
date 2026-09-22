@@ -10,6 +10,7 @@ export interface OrgMemberInfo {
   id: string;
   name: string;
   department?: string;
+  store_name?: string;
   position_id?: string;
   position_name?: string;
   role: string; // admin, manager, user

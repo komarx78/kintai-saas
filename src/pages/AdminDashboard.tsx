@@ -9,6 +9,7 @@ import AppSwitcher from '../components/AppSwitcher';
 import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { calculateSubscriptionFee, type BillingMasterConfig } from '../lib/subscriptionBilling';
+import { getStoresFromStorage, fetchStoresUnified, type StoreMaster } from '../lib/storeMaster';
 
 // 2026年の日本の祝日（簡易モック用リスト）
 const NATIONAL_HOLIDAYS_2026 = [
@@ -25,6 +26,7 @@ const AdminDashboard = () => {
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [availableStores, setAvailableStores] = useState<StoreMaster[]>([]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -427,6 +429,19 @@ ${tenantId || '（エラー：コード取得失敗）'}
         }
       } catch {}
 
+      // 🏪 店舗一覧を取得して選択肢を同期
+      try {
+        const loadedStores = await fetchStoresUnified(tenantId);
+        setAvailableStores(loadedStores);
+      } catch {
+        setAvailableStores(getStoresFromStorage(tenantId));
+      }
+
+      let localPosMap: Record<string, any> = {};
+      try {
+        localPosMap = JSON.parse(localStorage.getItem(`user_positions_${tenantId}`) || '{}');
+      } catch {}
+
       const mapped = data.map(u => {
         const userRequests = requestsData ? requestsData.filter(r => r.user_id === u.id) : [];
         const userTakenDates: string[] = [];
@@ -441,12 +456,16 @@ ${tenantId || '（エラー：コード取得失敗）'}
           }
         });
 
+        const userLocalPos = localPosMap[u.id] || {};
+        const resolvedStoreName = u.store_name || userLocalPos.store_name || '';
+
         return {
           id: u.id,
           name: u.name,
           email: u.email,
           role: u.role === 'admin' ? '管理者' : '一般',
           department: u.department || '-',
+          store_name: resolvedStoreName,
           manager: u.approver_id ? data.find((emp: any) => emp.id === u.approver_id)?.name || '-' : '-',
           approver_id: u.approver_id,
           join_date: u.join_date || '-',
@@ -617,6 +636,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
     const roleStr = (form.elements.namedItem('role') as HTMLSelectElement).value;
     const join_date = (form.elements.namedItem('join_date') as HTMLInputElement).value;
     const department = (form.elements.namedItem('department') as HTMLInputElement).value;
+    const store_name = (form.elements.namedItem('store_name') as HTMLSelectElement)?.value;
     const approver_id = (form.elements.namedItem('approver_id') as HTMLSelectElement).value;
     const employment_type_str = (form.elements.namedItem('employment_type') as HTMLSelectElement).value;
     const weekly_days_str = (form.elements.namedItem('weekly_working_days') as HTMLInputElement)?.value;
@@ -626,24 +646,57 @@ ${tenantId || '（エラー：コード取得失敗）'}
     const has_shift_access = (form.elements.namedItem('has_shift_access') as HTMLInputElement)?.checked;
 
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          name: name,
-          role: roleStr === '管理者' ? 'admin' : 'user',
-          join_date: join_date || null,
-          department: department || null,
-          approver_id: approver_id || null,
-          employment_type: employment_type_str === 'パート' ? 'part-time' : 'full-time',
-          weekly_working_days: employment_type_str === 'パート' ? parseInt(weekly_days_str) || 3 : 5,
-          paid_leave_balance: parseFloat(paid_leave_balance_str || '0'),
-          paid_leave_carryover: parseFloat(paid_leave_carryover_str || '0'),
-          has_kintai_access: has_kintai_access,
-          has_shift_access: has_shift_access
-        })
-        .eq('id', editingEmployee.id);
+      try {
+        const { error } = await supabase
+          .from('users')
+          .update({
+            name: name,
+            role: roleStr === '管理者' ? 'admin' : 'user',
+            join_date: join_date || null,
+            department: department || null,
+            store_name: store_name || null,
+            approver_id: approver_id || null,
+            employment_type: employment_type_str === 'パート' ? 'part-time' : 'full-time',
+            weekly_working_days: employment_type_str === 'パート' ? parseInt(weekly_days_str) || 3 : 5,
+            paid_leave_balance: parseFloat(paid_leave_balance_str || '0'),
+            paid_leave_carryover: parseFloat(paid_leave_carryover_str || '0'),
+            has_kintai_access: has_kintai_access,
+            has_shift_access: has_shift_access
+          })
+          .eq('id', editingEmployee.id);
+        if (error) throw error;
+      } catch (dbErr) {
+        // 万が一store_nameカラム未定義の場合は除外してフォールバック更新
+        const { error } = await supabase
+          .from('users')
+          .update({
+            name: name,
+            role: roleStr === '管理者' ? 'admin' : 'user',
+            join_date: join_date || null,
+            department: department || null,
+            approver_id: approver_id || null,
+            employment_type: employment_type_str === 'パート' ? 'part-time' : 'full-time',
+            weekly_working_days: employment_type_str === 'パート' ? parseInt(weekly_days_str) || 3 : 5,
+            paid_leave_balance: parseFloat(paid_leave_balance_str || '0'),
+            paid_leave_carryover: parseFloat(paid_leave_carryover_str || '0'),
+            has_kintai_access: has_kintai_access,
+            has_shift_access: has_shift_access
+          })
+          .eq('id', editingEmployee.id);
+        if (error) throw error;
+      }
 
-      if (error) throw error;
+      // LocalStorageへのバックアップ保存
+      try {
+        const key = `user_positions_${tenantId}`;
+        const currentMap = JSON.parse(localStorage.getItem(key) || '{}');
+        currentMap[editingEmployee.id] = {
+          ...(currentMap[editingEmployee.id] || {}),
+          department: department || undefined,
+          store_name: store_name || undefined
+        };
+        localStorage.setItem(key, JSON.stringify(currentMap));
+      } catch {}
 
       alert('従業員情報を保存しました。');
       
@@ -1058,7 +1111,14 @@ ${tenantId || '（エラー：コード取得失敗）'}
                           {emp.type}
                           {emp.type === 'パート' && <span className="text-xs ml-1 text-gray-400">(週{emp.weeklyDays}日)</span>}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{emp.department}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                          <div>{emp.department}</div>
+                          {emp.store_name && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded mt-0.5">
+                              🏪 {emp.store_name}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{emp.join_date}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{emp.manager}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
@@ -1956,8 +2016,24 @@ ${tenantId || '（エラー：コード取得失敗）'}
                   </div>
                 )}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">部署</label>
-                  <input name="department" type="text" defaultValue={editingEmployee?.department !== '-' ? editingEmployee?.department : ''} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="例: 営業部" />
+                  <label className="block text-sm font-medium text-gray-700">部署（本部・組織）</label>
+                  <input name="department" type="text" defaultValue={editingEmployee?.department !== '-' ? editingEmployee?.department : ''} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="例: 店舗運営部、総務・人事部" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">所属店舗（シフト勤務先拠点）</label>
+                  <select
+                    name="store_name"
+                    defaultValue={editingEmployee?.store_name || ''}
+                    className="mt-1 block w-full border border-indigo-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white font-bold text-slate-800"
+                  >
+                    <option value="">（店舗なし / 本部所属・シフト対象外）</option>
+                    {availableStores.map(s => (
+                      <option key={s.id} value={s.name}>
+                        🏪 {s.name}{s.code ? ` (${s.code})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">※ 総務・人事・経理などの本部スタッフは「店舗なし」を選択してください。店舗を選択したスタッフのみ各店舗シフトカレンダーに表示されます。</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">承認者（上司）</label>

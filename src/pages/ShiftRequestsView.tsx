@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import AppSwitcher from '../components/AppSwitcher';
+import { fetchStoresUnified, getStoresFromStorage } from '../lib/storeMaster';
 
 interface ShiftRequest {
   id: string;
@@ -24,13 +25,14 @@ interface ShiftRequest {
     name: string;
     email?: string;
     department?: string;
+    store_name?: string;
   };
 }
 
 export const ShiftRequestsView: React.FC = () => {
   const navigate = useNavigate();
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
-  const [users, setUsers] = useState<{ id: string; name: string; email?: string; department?: string }[]>([]);
+  const [users, setUsers] = useState<{ id: string; name: string; email?: string; department?: string; store_name?: string }[]>([]);
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const [loading, setLoading] = useState(true);
@@ -72,42 +74,48 @@ export const ShiftRequestsView: React.FC = () => {
 
       if (reqErr) throw reqErr;
 
-      // 2. スタッフ一覧取得（department を含めて二重管理を防止）
-      const { data: usersData, error: userErr } = await supabase
-        .from('users')
-        .select('id, name, email, department')
-        .eq('tenant_id', tenantId);
+      // 2. スタッフ一覧取得（store_name を含めて取得）
+      let userList: any[] = [];
+      try {
+        const { data: uData } = await supabase
+          .from('users')
+          .select('id, name, email, department, store_name')
+          .eq('tenant_id', tenantId);
+        userList = uData || [];
+      } catch {
+        const { data: uData } = await supabase
+          .from('users')
+          .select('id, name, email, department')
+          .eq('tenant_id', tenantId);
+        userList = uData || [];
+      }
 
-      if (userErr) throw userErr;
-
-      const userList = usersData || [];
+      // LocalStorage user_positions からの store_name フォールバックマージ
+      try {
+        const localPosMap = JSON.parse(localStorage.getItem(`user_positions_${tenantId}`) || '{}');
+        userList = userList.map(u => ({
+          ...u,
+          store_name: u.store_name || localPosMap[u.id]?.store_name || ''
+        }));
+      } catch {}
       setUsers(userList);
 
-      // 店舗リストの取得
-      let depts: string[] = [];
+      // 🏪 店舗マスタ（store_masters）から純粋な店舗リストを取得（総務・人事等の本部部門は除外）
+      let storeNames: string[] = [];
       try {
-        const { data: deptsData } = await supabase.from('department_masters').select('name').eq('tenant_id', tenantId).order('display_order');
-        if (deptsData && deptsData.length > 0) {
-          depts = deptsData.map((d: any) => d.name).filter(Boolean);
-        }
-      } catch (e) {}
-      try {
-        const rawLocalDepts = localStorage.getItem(`company_departments_${tenantId}`);
-        if (rawLocalDepts) {
-          const parsed = JSON.parse(rawLocalDepts);
-          parsed.forEach((d: any) => { if (d.name && !depts.includes(d.name)) depts.push(d.name); });
-        }
-      } catch (e) {}
-      userList.forEach((u: any) => {
-        if (u.department && typeof u.department === 'string' && u.department.trim() && !depts.includes(u.department.trim())) {
-          depts.push(u.department.trim());
-        }
-      });
-      setDepartmentsList(depts);
+        const loadedStores = await fetchStoresUnified(tenantId);
+        storeNames = loadedStores.map(s => s.name).filter(Boolean);
+      } catch {
+        storeNames = getStoresFromStorage(tenantId).map(s => s.name).filter(Boolean);
+      }
+      if (storeNames.length === 0) {
+        storeNames = ['新宿店', '渋谷店', '池袋店'];
+      }
+      setDepartmentsList(storeNames);
 
-      const userMap: Record<string, { id: string; name: string; email?: string; department?: string }> = {};
+      const userMap: Record<string, { id: string; name: string; email?: string; department?: string; store_name?: string }> = {};
       userList.forEach((u: any) => {
-        userMap[u.id] = { id: u.id, name: u.name || '（名称未設定）', email: u.email, department: u.department };
+        userMap[u.id] = { id: u.id, name: u.name || '（名称未設定）', email: u.email, department: u.department, store_name: u.store_name };
       });
 
       const formatted: ShiftRequest[] = (reqData || []).map((r: any) => ({
@@ -160,9 +168,10 @@ export const ShiftRequestsView: React.FC = () => {
   // フィルタリング
   const filteredRequests = useMemo(() => {
     return requests.filter(r => {
-      // 店舗フィルター
+      // 店舗フィルター（所属店舗 store_name 優先、未設定時は department）
       if (selectedDepartment !== 'all') {
-        if (r.user?.department !== selectedDepartment) return false;
+        const uStore = r.user?.store_name || r.user?.department;
+        if (uStore !== selectedDepartment) return false;
       }
 
       // 検索フィルター

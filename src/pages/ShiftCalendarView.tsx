@@ -8,6 +8,7 @@ import { generateAutoShift, rebalanceDraftShifts } from '../lib/shiftAlgorithm';
 import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { ConfirmedShiftCalendarModal } from '../components/ConfirmedShiftCalendarModal';
+import { fetchStoresUnified, getStoresFromStorage } from '../lib/storeMaster';
 
 interface Shift {
   id: string;
@@ -17,7 +18,7 @@ interface Shift {
   end_time: string;
   status: string;
   role: string;
-  user?: { name: string; department?: string };
+  user?: { name: string; department?: string; store_name?: string };
   store_name?: string; // 勤務先店舗（応援先店舗）
 }
 
@@ -119,35 +120,39 @@ const ShiftCalendarView: React.FC = () => {
         setRoles([{name: 'ホール', color: '#4F46E5'}, {name: 'キッチン', color: '#EA580C'}]);
       }
 
-      // ユーザー一覧（所属店舗 department を含めて取得し二重管理を完全排除）
-      const { data: usersData } = await supabase.from('users').select('id, name, role, employment_type, department').eq('tenant_id', tenantIdData);
-      setUsers(usersData || []);
-
-      // 🏢 店舗（部門）リストの自動連動：department_masters + users.department から一意な店舗名を抽出
-      let depts: string[] = [];
+      // ユーザー一覧（所属店舗 store_name を含めて取得）
+      let usersList: any[] = [];
       try {
-        const { data: deptsData } = await supabase.from('department_masters').select('name').eq('tenant_id', tenantIdData).order('display_order');
-        if (deptsData && deptsData.length > 0) {
-          depts = deptsData.map((d: any) => d.name).filter(Boolean);
-        }
-      } catch (e) {
-        console.warn('department_masters取得スキップ:', e);
+        const { data: uData } = await supabase.from('users').select('id, name, role, employment_type, department, store_name').eq('tenant_id', tenantIdData);
+        usersList = uData || [];
+      } catch {
+        const { data: uData } = await supabase.from('users').select('id, name, role, employment_type, department').eq('tenant_id', tenantIdData);
+        usersList = uData || [];
       }
-      try {
-        const rawLocalDepts = localStorage.getItem(`company_departments_${tenantIdData}`);
-        if (rawLocalDepts) {
-          const parsed = JSON.parse(rawLocalDepts);
-          parsed.forEach((d: any) => { if (d.name && !depts.includes(d.name)) depts.push(d.name); });
-        }
-      } catch (e) {}
 
-      // 社員マスタ（users）に登録されているdepartmentも完全マージ
-      (usersData || []).forEach((u: any) => {
-        if (u.department && typeof u.department === 'string' && u.department.trim() && !depts.includes(u.department.trim())) {
-          depts.push(u.department.trim());
-        }
-      });
-      setDepartmentsList(depts);
+      // LocalStorage user_positions からの store_name フォールバックマージ
+      try {
+        const localPosMap = JSON.parse(localStorage.getItem(`user_positions_${tenantIdData}`) || '{}');
+        usersList = usersList.map(u => ({
+          ...u,
+          store_name: u.store_name || localPosMap[u.id]?.store_name || ''
+        }));
+      } catch {}
+      setUsers(usersList);
+
+      // 🏪 店舗マスタ（store_masters）から純粋な店舗リストを取得（総務・人事・営業などの本部部門は完全除外）
+      let storeNames: string[] = [];
+      try {
+        const loadedStores = await fetchStoresUnified(tenantIdData);
+        storeNames = loadedStores.map(s => s.name).filter(Boolean);
+      } catch (e) {
+        console.warn('店舗マスタ取得エラー:', e);
+        storeNames = getStoresFromStorage(tenantIdData).map(s => s.name).filter(Boolean);
+      }
+      if (storeNames.length === 0) {
+        storeNames = ['新宿店', '渋谷店', '池袋店'];
+      }
+      setDepartmentsList(storeNames);
 
       const { data: shiftsData } = await supabase
         .from('advanced_shifts')
@@ -173,18 +178,19 @@ const ShiftCalendarView: React.FC = () => {
       const userRoleMap: Record<string, string> = {};
       (empSettingsData || []).forEach((es: any) => { if (es.default_role) userRoleMap[es.user_id] = es.default_role; });
 
-      const userMap: Record<string, { name: string; department?: string }> = {};
-      (usersData || []).forEach((u: any) => { 
-        userMap[u.id] = { name: u.name, department: u.department || '' }; 
+      const userMap: Record<string, { name: string; department?: string; store_name?: string }> = {};
+      (usersList || []).forEach((u: any) => { 
+        userMap[u.id] = { name: u.name, department: u.department || '', store_name: u.store_name || '' }; 
       });
       
       const formattedShifts = (shiftsData || []).map((s: any) => ({ 
         ...s, 
         user: { 
           name: userMap[s.user_id]?.name || '不明',
-          department: userMap[s.user_id]?.department || ''
+          department: userMap[s.user_id]?.department || '',
+          store_name: userMap[s.user_id]?.store_name || ''
         },
-        store_name: s.store_name || userMap[s.user_id]?.department || '',
+        store_name: s.store_name || userMap[s.user_id]?.store_name || userMap[s.user_id]?.department || '',
         status: s.status || 'confirmed' 
       }));
       
@@ -234,7 +240,7 @@ const ShiftCalendarView: React.FC = () => {
 
       // 勤務先店舗の確定
       const assignedUser = users.find(u => u.id === modalData.user_id);
-      const targetStore = modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : (assignedUser?.department || '本店'));
+      const targetStore = modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : (assignedUser?.store_name || assignedUser?.department || departmentsList[0] || '新宿店'));
 
       // 🚨 店舗間応援機能が有効な場合：同一日・他店舗へのダブルブッキング防止チェック
       if (enableStoreHelp && modalData.user_id && modalData.target_date) {
@@ -247,7 +253,7 @@ const ShiftCalendarView: React.FC = () => {
 
         if (otherShiftsOnSameDay.length > 0) {
           const existing = otherShiftsOnSameDay[0];
-          const existingStore = existing.store_name || existing.user?.department || '他店舗';
+          const existingStore = existing.store_name || existing.user?.store_name || existing.user?.department || '他店舗';
           if (existingStore !== targetStore) {
             const staffName = assignedUser?.name || 'スタッフ';
             alert(`⚠️ 【ダブルブッキング防止警告】\n\n${staffName} さんは同日（${modalData.target_date}）に【${existingStore}】で既にシフト（${existing.start_time.substring(0,5)}〜${existing.end_time.substring(0,5)}）が割り当てられています。\n同一日に複数店舗への重複配置はできません。`);
@@ -1184,13 +1190,13 @@ const ShiftCalendarView: React.FC = () => {
             </button>
 
             {/* 各店舗ボタン */}
-            {departmentsList.map(deptName => {
-              const deptStaffCount = users.filter(u => u.department === deptName).length;
-              const isSelected = selectedDepartment === deptName;
+            {departmentsList.map(storeName => {
+              const storeStaffCount = users.filter(u => u.store_name === storeName || (!u.store_name && u.department === storeName)).length;
+              const isSelected = selectedDepartment === storeName;
               return (
                 <button
-                  key={deptName}
-                  onClick={() => setSelectedDepartment(deptName)}
+                  key={storeName}
+                  onClick={() => setSelectedDepartment(storeName)}
                   className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                     isSelected
                       ? 'bg-indigo-600 text-white shadow-sm'
@@ -1198,9 +1204,9 @@ const ShiftCalendarView: React.FC = () => {
                   }`}
                 >
                   <MapPin className="w-3.5 h-3.5" />
-                  <span>{deptName}</span>
+                  <span>{storeName}</span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                    {deptStaffCount}名
+                    {storeStaffCount}名
                   </span>
                 </button>
               );
@@ -1208,7 +1214,7 @@ const ShiftCalendarView: React.FC = () => {
 
             {departmentsList.length === 0 && (
               <span className="text-xs text-slate-400 italic">
-                （※ 社員マスタまたは会社設定の部門が自動反映されます）
+                （※ 会社設定の店舗マスタが自動反映されます）
               </span>
             )}
           </div>
@@ -1761,13 +1767,14 @@ const ShiftCalendarView: React.FC = () => {
                             const roleShifts = dayShifts.filter(s => {
                               if (s.role !== role.name) return false;
                               if (selectedDepartment !== 'all') {
-                                const shiftStore = s.store_name || s.user?.department;
+                                const shiftStore = s.store_name || s.user?.store_name || s.user?.department;
                                 if (enableStoreHelp) {
-                                  // 応援ON：勤務店舗が選択店舗と一致するもの
+                                  // 応援ON：勤務店舗が選択店舗と一致するもの（他店応援スタッフ含む）
                                   return shiftStore === selectedDepartment;
                                 } else {
                                   // 応援OFF：所属店舗が選択店舗と一致するもののみ
-                                  return s.user?.department === selectedDepartment;
+                                  const userStore = s.user?.store_name || s.user?.department;
+                                  return userStore === selectedDepartment;
                                 }
                               }
                               return true;
@@ -1775,7 +1782,10 @@ const ShiftCalendarView: React.FC = () => {
 
                             // 選択中店舗の所属スタッフで、この役割を担当できるスタッフも行として抽出（空枠への配置をスムーズにするため）
                             const deptStaffsWithRole = selectedDepartment !== 'all' 
-                              ? users.filter(u => u.department === selectedDepartment && (userRoleMapState[u.id] || roles[0]?.name) === role.name).map(u => u.id)
+                              ? users.filter(u => {
+                                  const userStore = u.store_name || u.department;
+                                  return userStore === selectedDepartment && (userRoleMapState[u.id] || roles[0]?.name) === role.name;
+                                }).map(u => u.id)
                               : [];
                             const staffIds = [...new Set([...roleShifts.map(s => s.user_id), ...deptStaffsWithRole])];
 
@@ -2111,14 +2121,14 @@ const ShiftCalendarView: React.FC = () => {
                     </span>
                   </label>
                   <select
-                    value={modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : (departmentsList[0] || '本店'))}
+                    value={modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : (departmentsList[0] || '新宿店'))}
                     onChange={e => setModalData({...modalData, store_name: e.target.value})}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-bold text-slate-800"
                   >
                     {departmentsList.map(d => (
-                      <option key={d} value={d}>{d}</option>
+                      <option key={d} value={d}>🏪 {d}</option>
                     ))}
-                    {departmentsList.length === 0 && <option value="本店">本店</option>}
+                    {departmentsList.length === 0 && <option value="新宿店">🏪 新宿店</option>}
                   </select>
                 </div>
               )}
@@ -2130,10 +2140,11 @@ const ShiftCalendarView: React.FC = () => {
                   onChange={e => {
                     const newUserId = e.target.value;
                     const selUser = users.find(u => u.id === newUserId);
+                    const userStore = selUser?.store_name || selUser?.department;
                     setModalData({
                       ...modalData, 
                       user_id: newUserId,
-                      store_name: modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : (selUser?.department || departmentsList[0] || '本店'))
+                      store_name: modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : (userStore || departmentsList[0] || '新宿店'))
                     });
                   }} 
                   className="w-full bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-lg p-2 font-bold"
@@ -2142,27 +2153,32 @@ const ShiftCalendarView: React.FC = () => {
                   {users
                     .filter(u => {
                       if (!enableStoreHelp && selectedDepartment !== 'all') {
-                        return u.department === selectedDepartment;
+                        const uStore = u.store_name || u.department;
+                        return uStore === selectedDepartment;
                       }
                       return true;
                     })
-                    .map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} {u.department ? `(${u.department})` : ''}
-                      </option>
-                    ))}
+                    .map(u => {
+                      const uStore = u.store_name || u.department;
+                      return (
+                        <option key={u.id} value={u.id}>
+                          {u.name} {uStore ? `(${uStore})` : ''}
+                        </option>
+                      );
+                    })}
                 </select>
 
                 {/* 応援勤務に関するガイダンス表示 */}
                 {(() => {
                   const assignedUser = users.find(u => u.id === modalData.user_id);
-                  const targetStore = modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : assignedUser?.department);
-                  const isHelper = enableStoreHelp && assignedUser?.department && targetStore && assignedUser.department !== targetStore;
+                  const userHomeStore = assignedUser?.store_name || assignedUser?.department;
+                  const targetStore = modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : userHomeStore);
+                  const isHelper = enableStoreHelp && userHomeStore && targetStore && userHomeStore !== targetStore;
                   if (isHelper) {
                     return (
                       <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-center gap-1.5 font-bold">
                         <span>🤝</span>
-                        <span>【他店応援】{assignedUser.name} 様（{assignedUser.department}所属）を【{targetStore}】へ応援勤務として配置します。</span>
+                        <span>【他店応援】{assignedUser.name} 様（{userHomeStore}所属）を【{targetStore}】へ応援勤務として配置します。</span>
                       </div>
                     );
                   }
