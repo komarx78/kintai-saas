@@ -560,9 +560,9 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
                   );
                 }
 
-                // マス目印字（pitch指定あり）
-                if (field.pitch && field.pitch > 0 && typeof val === 'string' && val.length > 0) {
-                  const chars = val.split('');
+                // マス目印字（pitch指定あり：原本幅210mm比率 % ➔ (pitch * 2.1)mm 換算）
+                if (field.pitch && field.pitch > 0 && val) {
+                  const chars = String(val).split('');
                   return (
                     <div
                       key={field.id}
@@ -575,16 +575,22 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
                         color: '#0f172a',
                         fontFamily: 'monospace',
                         lineHeight: 1,
+                        width: 'max-content',
                         whiteSpace: 'nowrap'
                       }}
+                      className="flex items-center pointer-events-none"
                     >
                       {chars.map((char, idx) => (
                         <span
                           key={idx}
                           style={{
                             display: 'inline-block',
-                            width: `${field.pitch}mm`,
-                            textAlign: 'center'
+                            width: `${(field.pitch || 2.5) * 2.1}mm`,
+                            textAlign: 'center',
+                            fontSize: `${field.fontSize || 10}px`,
+                            fontFamily: 'monospace',
+                            lineHeight: 1,
+                            flexShrink: 0
                           }}
                         >
                           {char}

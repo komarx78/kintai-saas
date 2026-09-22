@@ -448,6 +448,14 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
                     );
                   }
 
+                  // プレビュー表示値
+                  let displayVal = field.example || field.name;
+                  if (field.id === 'officeZipCode_first') {
+                    displayVal = String(displayVal || '520').replace(/[^0-9]/g, '').slice(0, 3) || '520';
+                  } else if (field.id === 'officeZipCode_last') {
+                    displayVal = String(displayVal || '0000').replace(/[^0-9]/g, '').slice(0, 4) || '0000';
+                  }
+
                   // 通常テキスト項目描画
                   return (
                     <div
@@ -464,13 +472,35 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
                         outline: isSelected ? '1.5px solid #e11d48' : isDragging ? '1px dashed #94a3b8' : 'none',
                         cursor: 'move',
                         padding: '1px 2px',
+                        width: field.pitch && field.pitch > 0 ? 'max-content' : (field.width ? `${field.width * 2.1}mm` : 'auto'),
                         whiteSpace: 'nowrap',
                         zIndex: isSelected ? 40 : 10,
                         lineHeight: 1.1
                       }}
-                      title={`${field.name} (ドラッグで移動)`}
+                      title={`${field.name} (${field.x}%, ${field.y}%) (ドラッグで移動)`}
                     >
-                      {field.example || field.name}
+                      {field.pitch && field.pitch > 0 && displayVal ? (
+                        <div className="flex items-center pointer-events-none">
+                          {displayVal.split('').map((char, charIdx) => (
+                            <span
+                              key={charIdx}
+                              style={{
+                                display: 'inline-block',
+                                width: `${(field.pitch || 2.5) * 2.1}mm`,
+                                textAlign: 'center',
+                                fontSize: `${field.fontSize || 10}px`,
+                                fontFamily: 'monospace',
+                                lineHeight: 1,
+                                flexShrink: 0
+                              }}
+                            >
+                              {char}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span>{displayVal}</span>
+                      )}
                     </div>
                   );
                 })}
@@ -627,54 +657,264 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
                   </div>
                 </div>
 
-                {/* フォントサイズ・文字ピッチ */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 block mb-0.5">文字サイズ (px)</label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      value={selectedField.fontSize || 10}
-                      onChange={(e) => updateField(selectedField.id, 'fontSize', parseFloat(e.target.value) || 10)}
-                      className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono font-bold"
-                    />
-                  </div>
-                  {selectedField.pitch !== undefined && (
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">マス目ピッチ (mm)</label>
-                      <input
-                        type="number"
-                        step="0.05"
-                        value={selectedField.pitch || 2.8}
-                        onChange={(e) => updateField(selectedField.id, 'pitch', parseFloat(e.target.value) || 2.8)}
-                        className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono font-bold"
-                      />
-                    </div>
-                  )}
-                </div>
+                {/* 🎯 〇サイズ微調整（丸囲み項目専用：横幅・縦幅スライダー ＆ 微調整ボタン） */}
+                {selectedField.isCircle ? (() => {
+                  const defaultField = DEFAULT_HEALTH_PENSION_LOSS_FIELDS.find(f => f.id === selectedField.id);
+                  const defW = defaultField?.circleWidth || 24;
+                  const defH = defaultField?.circleHeight || 16;
+                  const curW = selectedField.circleWidth || defW;
+                  const curH = selectedField.circleHeight || defH;
 
-                {/* 〇のサイズ調整 */}
-                {selectedField.isCircle && (
-                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200">
+                  return (
+                    <div className="bg-amber-50/80 p-3.5 rounded-2xl border border-amber-300 space-y-3">
+                      <div className="flex items-center justify-between flex-wrap gap-1 border-b border-amber-200/80 pb-2">
+                        <label className="text-[11px] font-black text-amber-950 flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-amber-300"></span>
+                          〇の大きさ調整（実寸px）:
+                        </label>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateField(selectedField.id, 'circleWidth', defW);
+                              updateField(selectedField.id, 'circleHeight', defH);
+                            }}
+                            className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded text-[10px] font-bold shadow-xs cursor-pointer transition flex items-center gap-0.5"
+                            title={`原本標準サイズ（${defW}×${defH}px）に一発で戻します`}
+                          >
+                            <span>🌟 原本標準({defW}×{defH}px)</span>
+                          </button>
+                          <span className="font-mono text-xs font-black text-amber-900 bg-white px-2 py-0.5 rounded-md border border-amber-300 shadow-2xs">
+                            {curW} × {curH} px
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* ① 横幅（circleWidth）調整 */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-amber-900">
+                          <span>横幅 (circleWidth): <strong className="font-mono text-rose-700">{curW}px</strong></span>
+                          <span className="text-slate-400 font-normal">文字幅に合わせて調整</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="12"
+                          max="48"
+                          step="1"
+                          value={curW}
+                          onChange={(e) => updateField(selectedField.id, 'circleWidth', parseInt(e.target.value) || 24)}
+                          className="w-full accent-amber-600 cursor-pointer h-2 bg-amber-200 rounded-lg"
+                        />
+                        <div className="flex items-center justify-between gap-1 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => updateField(selectedField.id, 'circleWidth', Math.max(10, curW - 2))}
+                            className="px-2 py-1 bg-white hover:bg-amber-100 active:scale-95 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                            title="2px 縮小"
+                          >
+                            -2px
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateField(selectedField.id, 'circleWidth', Math.max(10, curW - 1))}
+                            className="px-2 py-1 bg-white hover:bg-amber-100 active:scale-95 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                            title="1px 縮小"
+                          >
+                            -1px
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateField(selectedField.id, 'circleWidth', curW + 1)}
+                            className="px-2 py-1 bg-white hover:bg-amber-100 active:scale-95 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                            title="1px 拡大"
+                          >
+                            +1px
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateField(selectedField.id, 'circleWidth', curW + 2)}
+                            className="px-2 py-1 bg-white hover:bg-amber-100 active:scale-95 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                            title="2px 拡大"
+                          >
+                            +2px
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* ② 縦幅（circleHeight）調整 */}
+                      <div className="space-y-1 pt-1">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-amber-900">
+                          <span>縦幅 (circleHeight): <strong className="font-mono text-rose-700">{curH}px</strong></span>
+                          <span className="text-slate-400 font-normal">行高に合わせて調整</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="10"
+                          max="36"
+                          step="1"
+                          value={curH}
+                          onChange={(e) => updateField(selectedField.id, 'circleHeight', parseInt(e.target.value) || 16)}
+                          className="w-full accent-amber-600 cursor-pointer h-2 bg-amber-200 rounded-lg"
+                        />
+                        <div className="flex items-center justify-between gap-1 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => updateField(selectedField.id, 'circleHeight', Math.max(8, curH - 2))}
+                            className="px-2 py-1 bg-white hover:bg-amber-100 active:scale-95 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                            title="2px 縮小"
+                          >
+                            -2px
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateField(selectedField.id, 'circleHeight', Math.max(8, curH - 1))}
+                            className="px-2 py-1 bg-white hover:bg-amber-100 active:scale-95 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                            title="1px 縮小"
+                          >
+                            -1px
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateField(selectedField.id, 'circleHeight', curH + 1)}
+                            className="px-2 py-1 bg-white hover:bg-amber-100 active:scale-95 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                            title="1px 拡大"
+                          >
+                            +1px
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateField(selectedField.id, 'circleHeight', curH + 2)}
+                            className="px-2 py-1 bg-white hover:bg-amber-100 active:scale-95 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                            title="2px 拡大"
+                          >
+                            +2px
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <>
+                    {/* 文字サイズ (px) */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">〇の横幅 (px)</label>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">文字サイズ (px)</label>
                       <input
                         type="number"
-                        value={selectedField.circleWidth || 26}
-                        onChange={(e) => updateField(selectedField.id, 'circleWidth', parseInt(e.target.value) || 26)}
+                        step="0.5"
+                        value={selectedField.fontSize || 10}
+                        onChange={(e) => updateField(selectedField.id, 'fontSize', parseFloat(e.target.value) || 10)}
                         className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono font-bold"
                       />
                     </div>
+
+                    {/* 🎯 マス目ピッチ調整（雇用保険・取得届準拠：スライダー ＆ 微調整ボタン） */}
+                    {selectedField.pitch !== undefined ? (() => {
+                      const defaultPitch = DEFAULT_HEALTH_PENSION_LOSS_FIELDS.find(f => f.id === selectedField.id)?.pitch;
+                      return (
+                        <div className="bg-rose-50/70 p-3 rounded-2xl border border-rose-200 space-y-2">
+                          <div className="flex items-center justify-between flex-wrap gap-1">
+                            <label className="text-[11px] font-black text-rose-900 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                              マス目ピッチ（文字間隔）:
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                              {defaultPitch !== undefined && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateField(selectedField.id, 'pitch', defaultPitch)}
+                                  className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded text-[10px] font-bold shadow-xs cursor-pointer transition flex items-center gap-0.5"
+                                  title={`原本規定値（${defaultPitch.toFixed(2)}%）に一発で戻します`}
+                                >
+                                  <span>🌟 原本標準({defaultPitch.toFixed(2)}%)</span>
+                                </button>
+                              )}
+                              <span className="font-mono text-xs font-black text-rose-700 bg-white px-2 py-0.5 rounded-md border border-rose-300">
+                                {selectedField.pitch.toFixed(2)} % ({(selectedField.pitch * 2.1).toFixed(2)}mm)
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* スライダーバー */}
+                          <input
+                            type="range"
+                            min="1.00"
+                            max="5.00"
+                            step="0.01"
+                            value={selectedField.pitch}
+                            onChange={(e) => updateField(selectedField.id, 'pitch', parseFloat(e.target.value) || 2.5)}
+                            className="w-full accent-rose-600 cursor-pointer h-2 bg-rose-200 rounded-lg"
+                          />
+
+                          {/* ワンクリック微調整ボタン */}
+                          <div className="flex items-center justify-between gap-1 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => updateField(selectedField.id, 'pitch', Math.max(0.5, Math.round((selectedField.pitch! - 0.05) * 100) / 100))}
+                              className="px-2 py-1 bg-white hover:bg-rose-100 active:scale-95 text-rose-800 border border-rose-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                              title="0.05% 狭くする"
+                            >
+                              -0.05
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateField(selectedField.id, 'pitch', Math.max(0.5, Math.round((selectedField.pitch! - 0.01) * 100) / 100))}
+                              className="px-2 py-1 bg-white hover:bg-rose-100 active:scale-95 text-rose-800 border border-rose-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                              title="0.01% 狭くする"
+                            >
+                              -0.01
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateField(selectedField.id, 'pitch', Math.round((selectedField.pitch! + 0.01) * 100) / 100)}
+                              className="px-2 py-1 bg-white hover:bg-rose-100 active:scale-95 text-rose-800 border border-rose-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                              title="0.01% 広げる"
+                            >
+                              +0.01
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateField(selectedField.id, 'pitch', Math.round((selectedField.pitch! + 0.05) * 100) / 100)}
+                              className="px-2 py-1 bg-white hover:bg-rose-100 active:scale-95 text-rose-800 border border-rose-300 rounded-lg text-[10px] font-black shadow-2xs cursor-pointer"
+                              title="0.05% 広げる"
+                            >
+                              +0.05
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })() : (
+                      <div>
+                        <label className="text-[10px] text-slate-500 font-bold block mb-1">マス目ピッチ設定（新規追加）</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            step="0.05"
+                            placeholder="単一枠（ピッチなし）"
+                            onChange={(e) => updateField(selectedField.id, 'pitch', e.target.value ? parseFloat(e.target.value) : undefined)}
+                            className="flex-1 p-1.5 bg-white border border-slate-300 rounded font-mono font-bold text-center text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateField(selectedField.id, 'pitch', 2.5)}
+                            className="px-2 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded border border-rose-200 text-[10px] font-bold cursor-pointer"
+                          >
+                            ピッチ有効化
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* サンプル表示値 */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">〇の縦幅 (px)</label>
+                      <label className="text-[10px] text-slate-500 font-bold block mb-0.5">プレビューサンプル文字</label>
                       <input
-                        type="number"
-                        value={selectedField.circleHeight || 16}
-                        onChange={(e) => updateField(selectedField.id, 'circleHeight', parseInt(e.target.value) || 16)}
+                        type="text"
+                        value={selectedField.example || ''}
+                        onChange={(e) => updateField(selectedField.id, 'example', e.target.value)}
                         className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono font-bold"
                       />
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
             )}
