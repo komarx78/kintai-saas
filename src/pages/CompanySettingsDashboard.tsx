@@ -955,7 +955,7 @@ export default function CompanySettingsDashboard() {
         .order('created_at', { ascending: false });
 
       // 社員の役職割り当てマップ（localStorage / テナント設定からの補完）
-      const savedUserPositions: Record<string, { position_id?: string; position_name?: string; department?: string }> = (() => {
+      const savedUserPositions: Record<string, { position_id?: string; position_name?: string; department?: string; store_name?: string }> = (() => {
         try {
           const raw = localStorage.getItem(`user_positions_${tenantIdData}`);
           return raw ? JSON.parse(raw) : {};
@@ -966,11 +966,18 @@ export default function CompanySettingsDashboard() {
 
       const mergedUsers: OrgMemberInfo[] = (uData || []).map((u: any) => {
         const customPos = savedUserPositions[u.id] || {};
+        const rawStore = u.store_name || customPos.store_name || undefined;
+        let rawDept = u.department || customPos.department || undefined;
+        // 店舗が紐付いている場合は組織上「店舗運営部」に確実に集約
+        if (rawStore && rawStore.trim() !== '') {
+          rawDept = '店舗運営部';
+        }
         return {
           id: u.id,
           name: u.name || u.email?.split('@')[0] || '従業員',
           role: u.role || 'user',
-          department: u.department || customPos.department || undefined,
+          department: rawDept,
+          store_name: rawStore,
           position_id: u.position_id || customPos.position_id || undefined,
           position_name: u.position_name || customPos.position_name || (u.role === 'admin' ? '代表取締役' : undefined)
         };
@@ -1155,6 +1162,13 @@ export default function CompanySettingsDashboard() {
 
     const deptList: OrgDepartmentNode[] = baseDepartments.map(d => {
       const members = companyUsers.filter(u => {
+        const hasStore = Boolean(u.store_name && u.store_name.trim() !== '');
+        if (d.name === '店舗運営部') {
+          // 店舗運営部には、店舗が設定された全社員、または部署が「店舗運営部」の社員を集約
+          return hasStore || getNormalizedDept(u.department) === '店舗運営部';
+        }
+        // 店舗が設定されている社員は、本社部署（営業部・総務部等）には含めない
+        if (hasStore) return false;
         const norm = getNormalizedDept(u.department);
         return norm === d.name;
       });
@@ -1173,12 +1187,19 @@ export default function CompanySettingsDashboard() {
     const existingNames = new Set(deptList.map(d => d.name));
     companyUsers.forEach(u => {
       const rawDept = (u.department || '').trim();
+      const hasStore = Boolean(u.store_name && u.store_name.trim() !== '');
+
+      // 🏪 店舗があるのにDB部署が「店舗運営部」以外になっている不整合レコードを自己修復
+      if (hasStore && rawDept !== '店舗運営部' && u.id) {
+        supabase.from('users').update({ department: '店舗運営部' }).eq('id', u.id).then(() => {}, () => {});
+      }
+
       if (!rawDept) return;
       const cleanDept = sanitizeDepartmentName(rawDept);
       const normalizedDept = getNormalizedDept(cleanDept);
 
       // 🧹 現場職種（フロント・レジ部等）またはゴミ部署データの自動修復
-      if (rawDept !== normalizedDept && normalizedDept && u.id) {
+      if (rawDept !== normalizedDept && normalizedDept && u.id && !hasStore) {
         supabase.from('users').update({ department: normalizedDept }).eq('id', u.id).then(() => {}, () => {});
       }
 
@@ -5529,16 +5550,29 @@ export default function CompanySettingsDashboard() {
                   value={editingUserModal.user.department || ''}
                   onChange={e => {
                     const newDept = e.target.value;
-                    setEditingUserModal(prev => prev.user ? {
-                      ...prev,
-                      user: {
-                        ...prev.user,
-                        department: newDept,
-                        is_department_head: newDept
-                          ? departments.find(d => d.name === newDept)?.manager_user_id === prev.user?.id
-                          : false
+                    setEditingUserModal(prev => {
+                      if (!prev.user) return prev;
+                      let newStore = prev.user.store_name || '';
+                      if (newDept === '店舗運営部') {
+                        if (!newStore || newStore === '') {
+                          newStore = stores[0]?.name || '新宿店';
+                        }
+                      } else {
+                        // 本部部署（営業部・総務部など）の場合は店舗をクリア
+                        newStore = '';
                       }
-                    } : prev);
+                      return {
+                        ...prev,
+                        user: {
+                          ...prev.user,
+                          department: newDept,
+                          store_name: newStore,
+                          is_department_head: newDept
+                            ? departments.find(d => d.name === newDept)?.manager_user_id === prev.user?.id
+                            : false
+                        }
+                      };
+                    });
                   }}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
                 >
@@ -5572,17 +5606,33 @@ export default function CompanySettingsDashboard() {
 
               {/* 🏪 所属店舗（シフト勤務拠点） */}
               <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  🏪 所属店舗（シフト勤務先拠点）
+                <label className="text-[11px] font-bold text-slate-700 block mb-1 flex items-center justify-between">
+                  <span>🏪 所属店舗（シフト勤務先拠点）</span>
+                  {editingUserModal.user.store_name && (
+                    <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                      ★店舗運営部連動
+                    </span>
+                  )}
                 </label>
                 <select
                   value={editingUserModal.user.store_name || ''}
                   onChange={e => {
                     const newStore = e.target.value;
-                    setEditingUserModal(prev => prev.user ? {
-                      ...prev,
-                      user: { ...prev.user, store_name: newStore }
-                    } : prev);
+                    setEditingUserModal(prev => {
+                      if (!prev.user) return prev;
+                      let newDept = prev.user.department || '';
+                      if (newStore && newStore !== '') {
+                        newDept = '店舗運営部';
+                      }
+                      return {
+                        ...prev,
+                        user: {
+                          ...prev.user,
+                          department: newDept,
+                          store_name: newStore
+                        }
+                      };
+                    });
                   }}
                   className="w-full bg-indigo-50/50 border border-indigo-200 rounded-xl px-3 py-2 font-bold text-slate-800"
                 >
@@ -5594,7 +5644,7 @@ export default function CompanySettingsDashboard() {
                   ))}
                 </select>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  ※ 総務・人事等の本部スタッフは「店舗なし」を選択。店舗が設定されたスタッフのみシフトカレンダーに表示されます。
+                  ※ 店舗を選択すると自動的に「店舗運営部」に配属されます。総務・人事等の本部スタッフは「店舗なし」を選択してください。
                 </p>
               </div>
 
@@ -5638,12 +5688,19 @@ export default function CompanySettingsDashboard() {
               <button
                 onClick={() => {
                   if (!editingUserModal.user) return;
+                  let finalDept = editingUserModal.user.department || '';
+                  let finalStore = editingUserModal.user.store_name || '';
+                  if (finalStore && finalStore.trim() !== '') {
+                    finalDept = '店舗運営部';
+                  } else if (finalDept !== '店舗運営部') {
+                    finalStore = '';
+                  }
                   handleUpdateMemberPositionAndDept(
                     editingUserModal.user.id,
-                    editingUserModal.user.department || '',
+                    finalDept,
                     editingUserModal.user.position_id || '',
                     Boolean(editingUserModal.user.is_department_head),
-                    editingUserModal.user.store_name || ''
+                    finalStore
                   );
                 }}
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"

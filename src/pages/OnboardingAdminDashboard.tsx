@@ -3710,7 +3710,7 @@ export default function OnboardingAdminDashboard() {
                                     positionAllowance: resolvedEmp.position_allowance || emp.position_allowance || 0,
                                     qualificationAllowance: resolvedEmp.qualification_allowance || emp.qualification_allowance || 0,
                                     fixedOvertimeAllowance: 0,
-                                    department: resolvedEmp.department || emp.department || departments[0]?.name || '営業部',
+                                    department: (resolvedEmp.store_name || emp.store_name) ? '店舗運営部' : (resolvedEmp.department || emp.department || departments[0]?.name || '営業部'),
                                     storeName: resolvedEmp.store_name || emp.store_name || '',
                                     joinDate: resolvedEmp.join_date || emp.join_date || new Date().toISOString().split('T')[0],
                                     startTime: emp.start_time || '09:00',
@@ -7854,13 +7854,23 @@ export default function OnboardingAdminDashboard() {
             const cleanEmail = inviteUrlModal.email.trim();
             const fallbackEmail = cleanEmail || `emp_${Date.now()}@sample.local`;
 
+            // 🏪 ビジネスルール強制: 店舗が指定されている社員は必ず「店舗運営部」、本部部署なら店舗なし
+            const rawStoreName = (inviteUrlModal.storeName || '').trim();
+            let finalDept = inviteUrlModal.department;
+            let finalStore = rawStoreName;
+            if (finalStore && finalStore !== '') {
+              finalDept = '店舗運営部';
+            } else if (finalDept !== '店舗運営部') {
+              finalStore = '';
+            }
+
             // 1. users テーブルの登録 または 更新（SSOT永続化）
             if (activeUserId) {
               const uPayload: any = {
                 name: inviteUrlModal.name.trim(),
                 name_kana: inviteUrlModal.nameKana.trim() || null,
-                department: inviteUrlModal.department,
-                store_name: inviteUrlModal.storeName || null,
+                department: finalDept,
+                store_name: finalStore || null,
                 employment_type: empType,
                 join_date: inviteUrlModal.joinDate
               };
@@ -7878,8 +7888,8 @@ export default function OnboardingAdminDashboard() {
                   email: fallbackEmail,
                   phone: inviteUrlModal.phone.trim() || null,
                   role: 'user',
-                  department: inviteUrlModal.department,
-                  store_name: inviteUrlModal.storeName || null,
+                  department: finalDept,
+                  store_name: finalStore || null,
                   employment_type: empType,
                   join_date: inviteUrlModal.joinDate,
                   has_kintai_access: true,
@@ -7905,8 +7915,8 @@ export default function OnboardingAdminDashboard() {
                 for (const us of userSubmissions) {
                   const updatedDocData = {
                     ...(us.data || {}),
-                    department: inviteUrlModal.department,
-                    store_name: inviteUrlModal.storeName || null,
+                    department: finalDept,
+                    store_name: finalStore || null,
                     employment_type: inviteUrlModal.employmentType,
                     position_name: inviteUrlModal.positionName
                   };
@@ -7926,8 +7936,8 @@ export default function OnboardingAdminDashboard() {
               const prevBackup = JSON.parse(localStorage.getItem(bKey) || '{}');
               const newBackup = {
                 ...prevBackup,
-                department: inviteUrlModal.department,
-                store_name: inviteUrlModal.storeName || '',
+                department: finalDept,
+                store_name: finalStore || '',
                 position_name: inviteUrlModal.positionName,
                 join_date: inviteUrlModal.joinDate
               };
@@ -7941,8 +7951,8 @@ export default function OnboardingAdminDashboard() {
               currentPosMap[activeUserId] = {
                 ...(currentPosMap[activeUserId] || {}),
                 position: inviteUrlModal.positionName || undefined,
-                department: inviteUrlModal.department,
-                store_name: inviteUrlModal.storeName || undefined
+                department: finalDept,
+                store_name: finalStore || undefined
               };
               localStorage.setItem(posKey, JSON.stringify(currentPosMap));
             } catch (posErr) {
@@ -7954,8 +7964,8 @@ export default function OnboardingAdminDashboard() {
               if (e.user_id === activeUserId || e.name === inviteUrlModal.name.trim()) {
                 return {
                   ...e,
-                  department: inviteUrlModal.department,
-                  store_name: inviteUrlModal.storeName || '',
+                  department: finalDept,
+                  store_name: finalStore || '',
                   position_name: inviteUrlModal.positionName,
                   join_date: inviteUrlModal.joinDate
                 };

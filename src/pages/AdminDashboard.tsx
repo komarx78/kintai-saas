@@ -635,8 +635,11 @@ ${tenantId || '（エラー：コード取得失敗）'}
     const name = (form.elements.namedItem('name') as HTMLInputElement).value;
     const roleStr = (form.elements.namedItem('role') as HTMLSelectElement).value;
     const join_date = (form.elements.namedItem('join_date') as HTMLInputElement).value;
-    const department = (form.elements.namedItem('department') as HTMLInputElement).value;
-    const store_name = (form.elements.namedItem('store_name') as HTMLSelectElement)?.value;
+    const rawDept = (form.elements.namedItem('department') as HTMLInputElement).value;
+    const rawStore = (form.elements.namedItem('store_name') as HTMLSelectElement)?.value?.trim() || '';
+    // 店舗所属者は組織上必ず「店舗運営部」に集約、店舗なしの本部部署ならstore_nameをクリア
+    const store_name = rawStore || null;
+    const department = store_name ? '店舗運営部' : (rawDept || null);
     const approver_id = (form.elements.namedItem('approver_id') as HTMLSelectElement).value;
     const employment_type_str = (form.elements.namedItem('employment_type') as HTMLSelectElement).value;
     const weekly_days_str = (form.elements.namedItem('weekly_working_days') as HTMLInputElement)?.value;
@@ -653,8 +656,8 @@ ${tenantId || '（エラー：コード取得失敗）'}
             name: name,
             role: roleStr === '管理者' ? 'admin' : 'user',
             join_date: join_date || null,
-            department: department || null,
-            store_name: store_name || null,
+            department: department,
+            store_name: store_name,
             approver_id: approver_id || null,
             employment_type: employment_type_str === 'パート' ? 'part-time' : 'full-time',
             weekly_working_days: employment_type_str === 'パート' ? parseInt(weekly_days_str) || 3 : 5,
