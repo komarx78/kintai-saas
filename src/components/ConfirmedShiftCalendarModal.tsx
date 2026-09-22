@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Printer, Users, CheckCircle2, User, Clock, AlertTriangle, Calendar, ChevronLeft, ChevronRight, BarChart3, Sun, Moon, Sunrise, Coffee } from 'lucide-react';
+import { X, Printer, Users, CheckCircle2, Clock, AlertTriangle, Calendar, ChevronLeft, ChevronRight, BarChart3, ShieldCheck, Flame } from 'lucide-react';
 import { format, eachDayOfInterval, parseISO } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
@@ -39,10 +39,13 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
   startDate,
   endDate,
 }) => {
-  // 表示モード：'daily-blocks'（日別戦力・週間ブロック）、'timeline'（日別タイムライン・ガント）、'staff-matrix'（スタッフ別一覧）
-  const [viewMode, setViewMode] = useState<'daily-blocks' | 'timeline' | 'staff-matrix'>('daily-blocks');
+  // 表示モード：
+  // 'timeline'（★デフォルト：出勤者限定 日別ガントチャート）
+  // 'weekly-timeline'（週間ガントチャート：7日間一括）
+  // 'staff-matrix'（スタッフ別一覧：給与集計用）
+  const [viewMode, setViewMode] = useState<'timeline' | 'weekly-timeline' | 'staff-matrix'>('timeline');
   
-  // タイムライン表示で選択中の日付
+  // 選択中の日付
   const [selectedDateStr, setSelectedDateStr] = useState<string>(format(startDate, 'yyyy-MM-dd'));
 
   if (!isOpen) return null;
@@ -52,7 +55,7 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
   // 確定シフトのみ、または実働シフト（ドラフト含む）
   const activeShifts = shifts.filter(s => s.status !== 'request');
 
-  // スタッフを正社員とアルバイトに分類
+  // 正社員判定（責任者）
   const isFullTime = (u: any) => u.employment_type === 'full-time' || u.role === 'admin' || u.role === 'superadmin';
   const fullTimeEmployees = users.filter(isFullTime);
   const partTimeEmployees = users.filter(u => !isFullTime(u));
@@ -77,14 +80,37 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
     }
   };
 
-  // タイムライン用の時間軸設定（8:00〜23:00、計15時間）
+  // ガントチャートの時間軸設定（8:00〜23:00、計15時間）
   const timelineStartHour = 8;
   const timelineEndHour = 23;
   const timelineTotalHours = timelineEndHour - timelineStartHour; // 15時間
   const timelineHours = Array.from({ length: timelineTotalHours }, (_, i) => timelineStartHour + i);
+  const baseStartMin = timelineStartHour * 60;
+  const baseTotalMin = timelineTotalHours * 60;
 
-  // 選択日のシフト
-  const currentDayShifts = activeShifts.filter(s => s.target_date === selectedDateStr);
+  // 選択日の出勤シフト（★休みの人は含めず、出勤者のみ抽出！）
+  const currentDayShifts = activeShifts
+    .filter(s => s.target_date === selectedDateStr)
+    .sort((a, b) => {
+      // 1. 開始時間が早い順にソート（朝〜夜への階段状ガント）
+      if (a.start_time !== b.start_time) {
+        return a.start_time.localeCompare(b.start_time);
+      }
+      // 2. 開始時間が同じなら社員を上に
+      const staffA = users.find(u => u.id === a.user_id);
+      const staffB = users.find(u => u.id === b.user_id);
+      const aFull = staffA ? isFullTime(staffA) : false;
+      const bFull = staffB ? isFullTime(staffB) : false;
+      if (aFull && !bFull) return -1;
+      if (!aFull && bFull) return 1;
+      return 0;
+    });
+
+  // 選択日の責任者在店状況
+  const currentDayFullTimeCount = currentDayShifts.filter(s => {
+    const staff = users.find(u => u.id === s.user_id);
+    return staff ? isFullTime(staff) : false;
+  }).length;
 
   return (
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto print:p-0 print:bg-white print:static print:inset-auto">
@@ -119,7 +145,7 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
 
       <div 
         id="confirmed-shift-print-area"
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-[96vw] xl:max-w-[1400px] overflow-hidden border border-slate-200 flex flex-col max-h-[94vh] print:max-h-none print:w-full print:border-none print:shadow-none"
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-[96vw] xl:max-w-[1440px] overflow-hidden border border-slate-200 flex flex-col max-h-[95vh] print:max-h-none print:w-full print:border-none print:shadow-none"
       >
         {/* モーダル上部ヘッダー */}
         <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4 sm:p-5 text-white flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 print:bg-none print:text-slate-900 print:p-0 print:border-b-2 print:border-slate-800 print:pb-3">
@@ -127,37 +153,24 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
             <div className="flex items-center gap-2 mb-1 no-print">
               <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[11px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                確定版シフト表（店舗運営・バックヤード掲示用）
+                店舗運営特化・出勤者限定シフト表（ガントチャート）
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2 text-white print:text-slate-900">
-              <span>📋 確定シフトカレンダー</span>
+              <span>📋 確定シフト ガントチャート</span>
               <span className="text-sm font-bold text-indigo-200 print:text-slate-600">
                 【{format(startDate, 'yyyy年M月d日(E)', { locale: ja })} 〜 {format(endDate, 'M月d日(E)', { locale: ja })}】
               </span>
             </h2>
             <p className="text-xs text-slate-300 mt-0.5 no-print">
-              日ごとの戦力配置や時間帯別の陣形（早番・中番・遅番・公休）を一目で把握できます。
+              休みの人は非表示にし、出勤スタッフの時間帯・引き継ぎ・ピーク戦力を一目で直感把握できます。
             </p>
           </div>
 
           {/* ビュー切り替えタブ ＆ アクションボタン */}
           <div className="flex flex-wrap items-center gap-2 no-print">
             {/* タブ切り替えボタン */}
-            <div className="bg-slate-800/80 p-1 rounded-xl flex items-center border border-slate-700/60 shadow-inner">
-              <button
-                type="button"
-                onClick={() => setViewMode('daily-blocks')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  viewMode === 'daily-blocks'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-                }`}
-                title="日ごとに早番・中番・遅番・公休で戦力を整理表示（店舗貼り出しに最適）"
-              >
-                <Calendar className="w-3.5 h-3.5" />
-                <span>📅 日別戦力配置</span>
-              </button>
+            <div className="bg-slate-800/90 p-1 rounded-xl flex items-center border border-slate-700/60 shadow-inner">
               <button
                 type="button"
                 onClick={() => setViewMode('timeline')}
@@ -166,10 +179,23 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
-                title="時間帯ごとの勤務帯バーとピーク人数の把握に最適"
+                title="出勤者限定の1日詳細ガントチャート（ピーク人数と交代が一目でわかる）"
               >
                 <Clock className="w-3.5 h-3.5" />
-                <span>⏱️ 時間帯タイムライン</span>
+                <span>⏱️ 日別戦力ガント</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('weekly-timeline')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  viewMode === 'weekly-timeline'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                }`}
+                title="7日間分の出勤者タイムラインを一括表示（A4横印刷・店舗貼り出しに最適）"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>📅 週間一括ガント</span>
               </button>
               <button
                 type="button"
@@ -179,7 +205,7 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
                 }`}
-                title="スタッフごとの勤務時間と日数の確認（給与計算用）"
+                title="スタッフごとの勤務時間と日数の確認（給与計算・労務集計用）"
               >
                 <Users className="w-3.5 h-3.5" />
                 <span>👥 スタッフ別一覧</span>
@@ -212,292 +238,14 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
         <div className="p-3 sm:p-5 overflow-auto grow bg-slate-50/60 print:bg-white print:p-0">
 
           {/* ----------------------------------------------------------------------- */}
-          {/* ビュー1：📅 日別戦力配置（週間ブロック・店舗貼り出し用）                     */}
-          {/* ----------------------------------------------------------------------- */}
-          {viewMode === 'daily-blocks' && (
-            <div className="space-y-4">
-              {/* 操作ガイダンス（印刷時は非表示） */}
-              <div className="no-print bg-indigo-50 border border-indigo-200 rounded-2xl p-3 flex items-center justify-between text-xs text-indigo-950 shadow-2xs">
-                <div className="flex items-center gap-2 font-bold">
-                  <span className="bg-indigo-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-[11px]">i</span>
-                  <span>各日の陣形（早番・中番・遅番）と責任者の在店状況が一目でわかる店舗運営ビューです。A4横印刷にも対応しています。</span>
-                </div>
-                <div className="text-[11px] text-indigo-700 font-medium">
-                  早番：〜11:00開始 / 中番：11:00〜16:00開始 / 遅番：16:00以降開始
-                </div>
-              </div>
-
-              {/* 日別カードグリッド（7列レイアウト） */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3 print:grid-cols-7 print:gap-1.5">
-                {dateRange.map(d => {
-                  const dStr = format(d, 'yyyy-MM-dd');
-                  const dow = d.getDay(); // 0:日, 6:土
-                  const isSun = dow === 0;
-                  const isSat = dow === 6;
-
-                  // その日のシフト
-                  const dayShifts = activeShifts.filter(s => s.target_date === dStr);
-                  
-                  // 時間帯別分類
-                  const morningShifts = dayShifts.filter(s => s.start_time < '11:00').sort((a, b) => a.start_time.localeCompare(b.start_time));
-                  const afternoonShifts = dayShifts.filter(s => s.start_time >= '11:00' && s.start_time < '16:00').sort((a, b) => a.start_time.localeCompare(b.start_time));
-                  const eveningShifts = dayShifts.filter(s => s.start_time >= '16:00').sort((a, b) => a.start_time.localeCompare(b.start_time));
-
-                  // 出勤しているスタッフID
-                  const workingUserIds = new Set(dayShifts.map(s => s.user_id));
-
-                  // 正社員の出勤人数・アルバイトの出勤人数
-                  const fullTimeWorking = dayShifts.filter(s => fullTimeEmployees.some(f => f.id === s.user_id));
-                  const partTimeWorking = dayShifts.filter(s => partTimeEmployees.some(p => p.id === s.user_id));
-
-                  // 責任者在店チェック（正社員が1名以上いるか）
-                  const hasLeader = fullTimeWorking.length > 0;
-
-                  // その日の公休スタッフ（シフトに入っていないスタッフ）
-                  const offUsers = users.filter(u => !workingUserIds.has(u.id));
-                  const offFullTime = offUsers.filter(isFullTime);
-                  const offPartTime = offUsers.filter(u => !isFullTime(u));
-
-                  return (
-                    <div 
-                      key={dStr}
-                      className={`bg-white rounded-2xl border flex flex-col shadow-xs overflow-hidden transition hover:shadow-md print:shadow-none print:border-slate-400 print:rounded-lg ${
-                        isSun 
-                          ? 'border-rose-300 bg-rose-50/10' 
-                          : isSat 
-                            ? 'border-blue-300 bg-blue-50/10' 
-                            : 'border-slate-200'
-                      }`}
-                    >
-                      {/* カードヘッダー：日付・曜日 */}
-                      <div className={`p-2.5 border-b text-center shrink-0 ${
-                        isSun 
-                          ? 'bg-rose-500 text-white border-rose-600' 
-                          : isSat 
-                            ? 'bg-blue-600 text-white border-blue-700' 
-                            : 'bg-slate-800 text-white border-slate-900'
-                      }`}>
-                        <div className="text-xs font-bold opacity-90">
-                          {format(d, 'yyyy/M/d')}
-                        </div>
-                        <div className="text-base font-black flex items-center justify-center gap-1">
-                          <span>{format(d, 'M月d日')}</span>
-                          <span className="text-sm">({format(d, 'E', { locale: ja })})</span>
-                        </div>
-
-                        {/* 人数バッジ ＆ 責任者ステータス */}
-                        <div className="mt-1 flex items-center justify-center gap-1.5 flex-wrap">
-                          <span className="bg-white/20 backdrop-blur-xs text-white text-[10px] font-black px-2 py-0.5 rounded-full">
-                            出勤: {dayShifts.length}名
-                          </span>
-                          {hasLeader ? (
-                            <span className="bg-emerald-400/90 text-slate-900 text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5" title={`正社員 ${fullTimeWorking.length}名 在店`}>
-                              <CheckCircle2 className="w-2.5 h-2.5" />
-                              <span>社{fullTimeWorking.length}</span>
-                            </span>
-                          ) : (
-                            <span className="bg-amber-300 text-amber-950 text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center gap-0.5" title="正社員の出勤がありません">
-                              <AlertTriangle className="w-2.5 h-2.5" />
-                              <span>社員不在</span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* カードボディ：時間帯別戦力 */}
-                      <div className="p-2 space-y-2.5 grow flex flex-col justify-between text-xs">
-                        
-                        {/* 🌅 早番セクション */}
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[10px] font-bold text-amber-800 bg-amber-50/80 px-1.5 py-0.5 rounded border border-amber-200">
-                            <span className="flex items-center gap-1">
-                              <Sunrise className="w-3 h-3 text-amber-600" />
-                              <span>早番</span>
-                            </span>
-                            <span className="font-black">{morningShifts.length}名</span>
-                          </div>
-                          {morningShifts.length === 0 ? (
-                            <div className="text-[10px] text-slate-400 italic px-1 py-0.5 text-center">ー なし ー</div>
-                          ) : (
-                            <div className="space-y-1">
-                              {morningShifts.map(s => {
-                                const staff = users.find(u => u.id === s.user_id);
-                                const isEmpFull = staff ? isFullTime(staff) : false;
-                                return (
-                                  <div 
-                                    key={s.id} 
-                                    className={`p-1.5 rounded-lg border text-[11px] shadow-2xs ${
-                                      isEmpFull 
-                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-950 font-bold' 
-                                        : 'bg-white border-slate-200 text-slate-800'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-1 min-w-0">
-                                        {isEmpFull ? (
-                                          <span className="text-[9px] bg-indigo-600 text-white px-1 rounded font-black shrink-0">社</span>
-                                        ) : (
-                                          <span className="text-[9px] bg-amber-100 text-amber-800 px-1 rounded font-bold shrink-0">パ</span>
-                                        )}
-                                        <span className="truncate font-black">{staff?.name || s.user?.name || '未設定'}</span>
-                                      </div>
-                                    </div>
-                                    <div className="text-[10px] text-slate-600 font-mono mt-0.5 flex justify-between items-center">
-                                      <span>{s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)}</span>
-                                      {s.role && (
-                                        <span className="text-[9px] bg-slate-100 text-slate-600 px-1 rounded truncate max-w-[50px]">{s.role}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* ☀️ 中番セクション */}
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[10px] font-bold text-sky-800 bg-sky-50/80 px-1.5 py-0.5 rounded border border-sky-200">
-                            <span className="flex items-center gap-1">
-                              <Sun className="w-3 h-3 text-sky-600" />
-                              <span>中番</span>
-                            </span>
-                            <span className="font-black">{afternoonShifts.length}名</span>
-                          </div>
-                          {afternoonShifts.length === 0 ? (
-                            <div className="text-[10px] text-slate-400 italic px-1 py-0.5 text-center">ー なし ー</div>
-                          ) : (
-                            <div className="space-y-1">
-                              {afternoonShifts.map(s => {
-                                const staff = users.find(u => u.id === s.user_id);
-                                const isEmpFull = staff ? isFullTime(staff) : false;
-                                return (
-                                  <div 
-                                    key={s.id} 
-                                    className={`p-1.5 rounded-lg border text-[11px] shadow-2xs ${
-                                      isEmpFull 
-                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-950 font-bold' 
-                                        : 'bg-white border-slate-200 text-slate-800'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-1 min-w-0">
-                                        {isEmpFull ? (
-                                          <span className="text-[9px] bg-indigo-600 text-white px-1 rounded font-black shrink-0">社</span>
-                                        ) : (
-                                          <span className="text-[9px] bg-amber-100 text-amber-800 px-1 rounded font-bold shrink-0">パ</span>
-                                        )}
-                                        <span className="truncate font-black">{staff?.name || s.user?.name || '未設定'}</span>
-                                      </div>
-                                    </div>
-                                    <div className="text-[10px] text-slate-600 font-mono mt-0.5 flex justify-between items-center">
-                                      <span>{s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)}</span>
-                                      {s.role && (
-                                        <span className="text-[9px] bg-slate-100 text-slate-600 px-1 rounded truncate max-w-[50px]">{s.role}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 🌙 遅番セクション */}
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[10px] font-bold text-indigo-900 bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-200">
-                            <span className="flex items-center gap-1">
-                              <Moon className="w-3 h-3 text-indigo-600" />
-                              <span>遅番</span>
-                            </span>
-                            <span className="font-black">{eveningShifts.length}名</span>
-                          </div>
-                          {eveningShifts.length === 0 ? (
-                            <div className="text-[10px] text-slate-400 italic px-1 py-0.5 text-center">ー なし ー</div>
-                          ) : (
-                            <div className="space-y-1">
-                              {eveningShifts.map(s => {
-                                const staff = users.find(u => u.id === s.user_id);
-                                const isEmpFull = staff ? isFullTime(staff) : false;
-                                return (
-                                  <div 
-                                    key={s.id} 
-                                    className={`p-1.5 rounded-lg border text-[11px] shadow-2xs ${
-                                      isEmpFull 
-                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-950 font-bold' 
-                                        : 'bg-white border-slate-200 text-slate-800'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-1 min-w-0">
-                                        {isEmpFull ? (
-                                          <span className="text-[9px] bg-indigo-600 text-white px-1 rounded font-black shrink-0">社</span>
-                                        ) : (
-                                          <span className="text-[9px] bg-amber-100 text-amber-800 px-1 rounded font-bold shrink-0">パ</span>
-                                        )}
-                                        <span className="truncate font-black">{staff?.name || s.user?.name || '未設定'}</span>
-                                      </div>
-                                    </div>
-                                    <div className="text-[10px] text-slate-600 font-mono mt-0.5 flex justify-between items-center">
-                                      <span>{s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)}</span>
-                                      {s.role && (
-                                        <span className="text-[9px] bg-slate-100 text-slate-600 px-1 rounded truncate max-w-[50px]">{s.role}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 💤 公休セクション */}
-                        <div className="pt-2 border-t border-slate-200 mt-auto">
-                          <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 mb-1">
-                            <span className="flex items-center gap-1">
-                              <Coffee className="w-3 h-3 text-slate-400" />
-                              <span>公休（休み）</span>
-                            </span>
-                            <span>{offUsers.length}名</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {offFullTime.map(u => (
-                              <span key={u.id} className="text-[10px] bg-rose-50 border border-rose-200 text-rose-800 font-bold px-1.5 py-0.5 rounded truncate max-w-[85px]" title={`${u.name} (社員公休)`}>
-                                社: {u.name}
-                              </span>
-                            ))}
-                            {offPartTime.map(u => (
-                              <span key={u.id} className="text-[9px] bg-slate-100 border border-slate-200 text-slate-600 px-1 py-0.5 rounded truncate max-w-[70px]" title={u.name}>
-                                {u.name}
-                              </span>
-                            ))}
-                            {offUsers.length === 0 && (
-                              <span className="text-[10px] text-slate-400 italic">全員出勤</span>
-                            )}
-                          </div>
-                        </div>
-
-                      </div>
-
-                      {/* カードフッター：出勤サマリー */}
-                      <div className="bg-slate-50 p-2 border-t border-slate-200 text-[10px] font-bold text-slate-600 flex justify-between items-center shrink-0">
-                        <span>内訳: 社{fullTimeWorking.length} / パ{partTimeWorking.length}</span>
-                        <span className="text-indigo-900 font-black">計 {dayShifts.length} 名</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ----------------------------------------------------------------------- */}
-          {/* ビュー2：⏱️ 時間帯タイムライン（1日詳細ガントチャート）                      */}
+          {/* ビュー1：⏱️ 日別戦力ガント（出勤者限定・早番順階段ガント）★デフォルト   */}
           {/* ----------------------------------------------------------------------- */}
           {viewMode === 'timeline' && (
-            <div className="space-y-4">
-              {/* 日付切り替えバー */}
-              <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="space-y-3">
+              
+              {/* 日付切り替えバー＆ステータスサマリー */}
+              <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
+                {/* 日付ナビゲーション */}
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -507,8 +255,8 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                   >
                     <ChevronLeft className="w-4 h-4 text-slate-700" />
                   </button>
-                  <div className="text-base font-black text-slate-900 flex items-center gap-2 px-2">
-                    <Calendar className="w-4 h-4 text-indigo-600" />
+                  <div className="text-lg font-black text-slate-900 flex items-center gap-2 px-1">
+                    <Calendar className="w-5 h-5 text-indigo-600" />
                     <span>{format(parseISO(selectedDateStr), 'yyyy年M月d日 (E)', { locale: ja })}</span>
                   </div>
                   <button
@@ -522,34 +270,59 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                 </div>
 
                 {/* 週間日付ピルボタン */}
-                <div className="flex items-center gap-1 overflow-x-auto max-w-full pb-1 sm:pb-0">
+                <div className="flex items-center gap-1 overflow-x-auto max-w-full pb-1 md:pb-0">
                   {dateRange.map(d => {
                     const dStr = format(d, 'yyyy-MM-dd');
                     const isSelected = dStr === selectedDateStr;
                     const dow = d.getDay();
+                    const dayCount = activeShifts.filter(s => s.target_date === dStr).length;
                     return (
                       <button
                         key={dStr}
                         type="button"
                         onClick={() => setSelectedDateStr(dStr)}
-                        className={`px-2.5 py-1 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-black transition shrink-0 cursor-pointer flex items-center gap-1.5 ${
                           isSelected
-                            ? 'bg-indigo-600 text-white shadow-sm'
+                            ? 'bg-indigo-600 text-white shadow-md scale-105'
                             : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                         } ${dow === 0 && !isSelected ? 'text-rose-600' : dow === 6 && !isSelected ? 'text-blue-600' : ''}`}
                       >
-                        {format(d, 'M/d(E)', { locale: ja })}
+                        <span>{format(d, 'M/d(E)', { locale: ja })}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                          isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {dayCount}名
+                        </span>
                       </button>
                     );
                   })}
                 </div>
+
+                {/* 本日の戦力サマリーバッジ */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="bg-indigo-50 border border-indigo-200 text-indigo-950 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-2xs">
+                    <Users className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>出勤戦力: {currentDayShifts.length} 名</span>
+                  </div>
+                  {currentDayFullTimeCount > 0 ? (
+                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow-2xs">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>責任者在店 ({currentDayFullTimeCount}名)</span>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-300 text-amber-900 px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 shadow-2xs animate-pulse">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                      <span>社員不在（要確認）</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* タイムラインチャートコンテナ */}
+              {/* ガントチャートメインカード */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
                 
-                {/* 1. 時間帯別の在籍人数メーター（戦力グラフ） */}
-                <div className="p-4 border-b border-slate-200 bg-slate-50/70">
+                {/* 1. 時間帯別の在籍人数メーター（ピーク戦力グラフ） */}
+                <div className="p-3.5 border-b border-slate-200 bg-slate-50/80">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5 text-xs font-black text-slate-800">
                       <BarChart3 className="w-4 h-4 text-indigo-600" />
@@ -557,117 +330,129 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                     </div>
                     <div className="flex items-center gap-3 text-[11px] text-slate-500 font-bold">
                       <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-sm bg-rose-200 border border-rose-400"></span> 1名以下（要確認）
+                        <span className="w-2.5 h-2.5 rounded-sm bg-rose-100 border border-rose-400"></span> 1名以下（ワンオペ注意）
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-sm bg-indigo-100 border border-indigo-300"></span> 2〜3名（通常）
+                        <span className="w-2.5 h-2.5 rounded-sm bg-indigo-100 border border-indigo-300"></span> 2〜3名（通常業務）
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 text-white"></span> 4名以上（ピーク対応）
+                        <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 text-white"></span> 4名以上（ピーク対応OK）
                       </span>
                     </div>
                   </div>
 
                   {/* 在籍人数バーチャート */}
-                  <div className="grid" style={{ gridTemplateColumns: `repeat(${timelineTotalHours}, minmax(0, 1fr))` }}>
-                    {timelineHours.map(hour => {
-                      // その1時間（hour:00 〜 hour:59）に被っているシフト人数
-                      const hourStartMin = hour * 60;
-                      const hourEndMin = (hour + 1) * 60;
-                      const count = currentDayShifts.filter(s => {
-                        const sMin = timeToMinutes(s.start_time);
-                        const eMin = timeToMinutes(s.end_time);
-                        return sMin < hourEndMin && eMin > hourStartMin;
-                      }).length;
+                  <div className="flex items-center gap-3">
+                    {/* 左側の名前欄と幅を合わせるためのスペース */}
+                    <div className="w-44 shrink-0 text-right pr-2 text-[11px] font-bold text-slate-500">
+                      各時間帯の戦力:
+                    </div>
+                    <div className="grow grid" style={{ gridTemplateColumns: `repeat(${timelineTotalHours}, minmax(0, 1fr))` }}>
+                      {timelineHours.map(hour => {
+                        const hourStartMin = hour * 60;
+                        const hourEndMin = (hour + 1) * 60;
+                        const count = currentDayShifts.filter(s => {
+                          const sMin = timeToMinutes(s.start_time);
+                          const eMin = timeToMinutes(s.end_time);
+                          return sMin < hourEndMin && eMin > hourStartMin;
+                        }).length;
 
-                      const isPeak = count >= 4;
-                      const isLow = count <= 1;
+                        const isPeak = count >= 4;
+                        const isLow = count <= 1;
 
-                      return (
-                        <div key={hour} className="text-center border-r border-slate-200 last:border-r-0 py-1">
-                          <div className={`text-xs font-black rounded-lg py-1 mx-0.5 transition ${
-                            isPeak 
-                              ? 'bg-emerald-500 text-white shadow-xs' 
-                              : isLow 
-                                ? 'bg-rose-100 text-rose-800 border border-rose-300' 
-                                : 'bg-indigo-100 text-indigo-950 border border-indigo-200'
-                          }`}>
-                            {count}名
+                        return (
+                          <div key={hour} className="text-center border-r border-slate-200 last:border-r-0 py-0.5">
+                            <div className={`text-xs font-black rounded-lg py-1 mx-0.5 transition ${
+                              isPeak 
+                                ? 'bg-emerald-500 text-white shadow-xs' 
+                                : isLow 
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-300' 
+                                  : 'bg-indigo-100 text-indigo-950 border border-indigo-200'
+                            }`}>
+                              {count}名
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-mono mt-1 font-bold">
+                              {hour}:00
+                            </div>
                           </div>
-                          <div className="text-[10px] text-slate-500 font-mono mt-1">
-                            {hour}:00
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
-                {/* 2. スタッフ別ガントバーチャート */}
-                <div className="p-4 space-y-3">
-                  <div className="text-xs font-black text-slate-700 mb-2">
-                    出勤スタッフ勤務帯一覧（計 {currentDayShifts.length} 名）
-                  </div>
-
+                {/* 2. 出勤スタッフ限定・階段状ガントバーチャート */}
+                <div className="p-4">
                   {currentDayShifts.length === 0 ? (
-                    <div className="text-center py-12 text-slate-400 text-sm font-bold">
-                      この日の出勤シフトはありません。
+                    <div className="text-center py-16 text-slate-400 font-bold space-y-2">
+                      <Users className="w-8 h-8 mx-auto text-slate-300" />
+                      <div className="text-sm">この日の出勤シフトはありません（全員公休）。</div>
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      {currentDayShifts.map(s => {
+                    <div className="space-y-2.5">
+                      {currentDayShifts.map((s, index) => {
                         const staff = users.find(u => u.id === s.user_id);
                         const isEmpFull = staff ? isFullTime(staff) : false;
                         
                         const startMin = timeToMinutes(s.start_time);
                         const endMin = timeToMinutes(s.end_time);
-                        const baseStartMin = timelineStartHour * 60;
-                        const baseTotalMin = timelineTotalHours * 60;
 
                         // 開始位置と幅（%）
                         const leftPercent = Math.max(0, Math.min(100, ((startMin - baseStartMin) / baseTotalMin) * 100));
                         const rightPercent = Math.max(0, Math.min(100, ((endMin - baseStartMin) / baseTotalMin) * 100));
-                        const widthPercent = Math.max(2, rightPercent - leftPercent);
+                        const widthPercent = Math.max(3, rightPercent - leftPercent);
 
                         return (
-                          <div key={s.id} className="flex items-center gap-3">
-                            {/* スタッフ名ラベル */}
-                            <div className="w-36 shrink-0 flex items-center gap-1.5 text-xs font-bold text-slate-800">
-                              {isEmpFull ? (
-                                <span className="text-[9px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-black shrink-0">社員</span>
-                              ) : (
-                                <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold shrink-0">パート</span>
-                              )}
-                              <span className="truncate">{staff?.name || s.user?.name || '未設定'}</span>
+                          <div key={s.id} className="flex items-center gap-3 group">
+                            {/* 左側：スタッフ名・区分 */}
+                            <div className="w-44 shrink-0 flex items-center justify-between bg-slate-50 hover:bg-slate-100 p-2 rounded-xl border border-slate-200 transition">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {isEmpFull ? (
+                                  <span className="text-[9px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-black shrink-0">社員</span>
+                                ) : (
+                                  <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold shrink-0">パート</span>
+                                )}
+                                <span className="truncate font-black text-xs text-slate-800" title={staff?.name || s.user?.name}>
+                                  {staff?.name || s.user?.name || '未設定'}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-1">
+                                #{index + 1}
+                              </span>
                             </div>
 
-                            {/* ガントタイムライン背景＆バー */}
-                            <div className="grow bg-slate-100 rounded-xl h-8 relative overflow-hidden border border-slate-200">
+                            {/* 右側：タイムライン背景＆ガントバー */}
+                            <div className="grow bg-slate-100/80 rounded-xl h-10 relative overflow-hidden border border-slate-200">
                               {/* 時間目盛りガイドライン */}
                               <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${timelineTotalHours}, minmax(0, 1fr))` }}>
                                 {timelineHours.map(hour => (
-                                  <div key={hour} className="border-r border-slate-200/80 last:border-r-0 h-full pointer-events-none" />
+                                  <div key={hour} className="border-r border-slate-200/90 last:border-r-0 h-full pointer-events-none" />
                                 ))}
                               </div>
 
-                              {/* 勤務バー */}
+                              {/* 勤務バー（朝から夜へ階段状に流れる） */}
                               <div
                                 style={{
                                   left: `${leftPercent}%`,
                                   width: `${widthPercent}%`,
                                 }}
-                                className={`absolute top-1 bottom-1 rounded-lg px-2 flex items-center justify-between text-[10px] font-black shadow-xs transition-all ${
+                                className={`absolute top-1 bottom-1 rounded-lg px-2.5 flex items-center justify-between text-xs font-black shadow-xs transition-all hover:scale-[1.01] hover:z-10 ${
                                   isEmpFull
-                                    ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white border border-indigo-800'
-                                    : 'bg-gradient-to-r from-amber-400 to-amber-500 text-slate-900 border border-amber-600'
+                                    ? 'bg-gradient-to-r from-indigo-600 via-indigo-700 to-indigo-800 text-white border border-indigo-900 shadow-indigo-200'
+                                    : 'bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 text-slate-950 border border-amber-600 shadow-amber-200'
                                 }`}
                                 title={`${staff?.name}: ${s.start_time.substring(0, 5)} - ${s.end_time.substring(0, 5)} (${s.role || '業務'})`}
                               >
-                                <span className="truncate">
-                                  {s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)}
-                                </span>
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <Clock className={`w-3.5 h-3.5 shrink-0 ${isEmpFull ? 'text-indigo-200' : 'text-slate-800'}`} />
+                                  <span className="font-mono tracking-tight">
+                                    {s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)}
+                                  </span>
+                                </div>
                                 {s.role && (
-                                  <span className="text-[9px] opacity-80 truncate hidden sm:inline ml-1">
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold truncate max-w-[90px] hidden sm:inline ${
+                                    isEmpFull ? 'bg-white/20 text-white' : 'bg-black/10 text-slate-900'
+                                  }`}>
                                     {s.role}
                                   </span>
                                 )}
@@ -678,6 +463,133 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                       })}
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ----------------------------------------------------------------------- */}
+          {/* ビュー2：📅 週間一括ガント（7日間の出勤者をまとめて可視化・印刷対応）    */}
+          {/* ----------------------------------------------------------------------- */}
+          {viewMode === 'weekly-timeline' && (
+            <div className="space-y-3">
+              {/* ガイダンス */}
+              <div className="no-print bg-indigo-50 border border-indigo-200 rounded-2xl p-3 flex items-center justify-between text-xs text-indigo-950">
+                <div className="flex items-center gap-2 font-bold">
+                  <Flame className="w-4 h-4 text-indigo-600" />
+                  <span>1週間（7日間）の全出勤スタッフの陣形を一括ガント表示しています。休みの人は出さず、店舗貼り出し（A4横印刷）にも最適です。</span>
+                </div>
+                <div className="flex items-center gap-3 text-[11px] font-bold">
+                  <span className="flex items-center gap-1 text-indigo-800">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-indigo-600"></span> 正社員
+                  </span>
+                  <span className="flex items-center gap-1 text-amber-800">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-amber-500"></span> パート
+                  </span>
+                </div>
+              </div>
+
+              {/* 週間タイムラインカード */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                {/* 共通時間目盛りヘッダー */}
+                <div className="flex items-center gap-3 p-2.5 bg-slate-100 border-b border-slate-200 text-[11px] font-bold text-slate-600">
+                  <div className="w-36 shrink-0 text-center font-black">
+                    日付 / 出勤数
+                  </div>
+                  <div className="grow grid" style={{ gridTemplateColumns: `repeat(${timelineTotalHours}, minmax(0, 1fr))` }}>
+                    {timelineHours.map(hour => (
+                      <div key={hour} className="text-center font-mono border-r border-slate-300 last:border-r-0">
+                        {hour}:00
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 各曜日の行（月〜日） */}
+                <div className="divide-y divide-slate-200">
+                  {dateRange.map(d => {
+                    const dStr = format(d, 'yyyy-MM-dd');
+                    const dow = d.getDay();
+                    const isSun = dow === 0;
+                    const isSat = dow === 6;
+
+                    // その日の出勤シフト（早い順ソート）
+                    const dayShifts = activeShifts
+                      .filter(s => s.target_date === dStr)
+                      .sort((a, b) => a.start_time.localeCompare(b.start_time));
+
+                    return (
+                      <div key={dStr} className="p-2.5 flex items-start gap-3 hover:bg-slate-50/60 transition">
+                        {/* 曜日・日付ヘッダー */}
+                        <div className={`w-36 shrink-0 p-2 rounded-xl text-center border ${
+                          isSun 
+                            ? 'bg-rose-50 border-rose-200 text-rose-800' 
+                            : isSat 
+                              ? 'bg-blue-50 border-blue-200 text-blue-800' 
+                              : 'bg-slate-50 border-slate-200 text-slate-800'
+                        }`}>
+                          <div className="text-xs font-black">
+                            {format(d, 'M/d (E)', { locale: ja })}
+                          </div>
+                          <div className="text-[10px] font-bold mt-0.5 text-slate-500">
+                            出勤: <span className="font-black text-slate-800">{dayShifts.length}名</span>
+                          </div>
+                        </div>
+
+                        {/* タイムラインエリア（複数スタッフのバーを積み重ねて表示） */}
+                        <div className="grow bg-slate-50 rounded-xl min-h-[50px] p-1.5 relative border border-slate-200">
+                          {/* 時間目盛り縦ライン */}
+                          <div className="absolute inset-0 grid pointer-events-none" style={{ gridTemplateColumns: `repeat(${timelineTotalHours}, minmax(0, 1fr))` }}>
+                            {timelineHours.map(hour => (
+                              <div key={hour} className="border-r border-slate-200/80 last:border-r-0 h-full" />
+                            ))}
+                          </div>
+
+                          {/* 出勤者のバー一覧 */}
+                          {dayShifts.length === 0 ? (
+                            <div className="text-center py-2 text-[11px] text-slate-400 italic">
+                              出勤なし
+                            </div>
+                          ) : (
+                            <div className="space-y-1 relative z-10">
+                              {dayShifts.map(s => {
+                                const staff = users.find(u => u.id === s.user_id);
+                                const isEmpFull = staff ? isFullTime(staff) : false;
+                                
+                                const startMin = timeToMinutes(s.start_time);
+                                const endMin = timeToMinutes(s.end_time);
+
+                                const leftPercent = Math.max(0, Math.min(100, ((startMin - baseStartMin) / baseTotalMin) * 100));
+                                const rightPercent = Math.max(0, Math.min(100, ((endMin - baseStartMin) / baseTotalMin) * 100));
+                                const widthPercent = Math.max(3, rightPercent - leftPercent);
+
+                                return (
+                                  <div key={s.id} className="h-6 relative">
+                                    <div
+                                      style={{
+                                        left: `${leftPercent}%`,
+                                        width: `${widthPercent}%`,
+                                      }}
+                                      className={`absolute inset-y-0 rounded-md px-1.5 flex items-center justify-between text-[10px] font-black shadow-2xs ${
+                                        isEmpFull
+                                          ? 'bg-indigo-600 text-white'
+                                          : 'bg-amber-400 text-slate-900 border border-amber-500'
+                                      }`}
+                                      title={`${staff?.name}: ${s.start_time.substring(0, 5)} - ${s.end_time.substring(0, 5)}`}
+                                    >
+                                      <span className="truncate">
+                                        {staff?.name} ({s.start_time.substring(0, 5)}-{s.end_time.substring(0, 5)})
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -744,9 +656,8 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                       <tr key={emp.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="p-2.5 sm:p-3 border-r border-slate-200 sticky left-0 bg-white z-10 font-bold text-slate-800">
                           <div className="flex items-center gap-1.5">
-                            <User className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                            <span className="truncate">{emp.name}</span>
                             <span className="text-[9px] bg-indigo-100 text-indigo-800 px-1 rounded font-bold shrink-0">社員</span>
+                            <span className="truncate">{emp.name}</span>
                           </div>
                         </td>
                         {dateRange.map(d => {
@@ -809,9 +720,8 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
                       <tr key={emp.id} className="hover:bg-slate-50/80 transition-colors">
                         <td className="p-2.5 sm:p-3 border-r border-slate-200 sticky left-0 bg-white z-10 font-bold text-slate-800">
                           <div className="flex items-center gap-1.5">
-                            <User className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            <span className="truncate">{emp.name}</span>
                             <span className="text-[9px] bg-slate-100 text-slate-600 px-1 rounded font-bold shrink-0">パート</span>
+                            <span className="truncate">{emp.name}</span>
                           </div>
                         </td>
                         {dateRange.map(d => {
@@ -888,7 +798,7 @@ export const ConfirmedShiftCalendarModal: React.FC<ConfirmedShiftCalendarModalPr
         {/* モーダル下部フッター */}
         <div className="bg-slate-100 p-3 sm:p-4 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0 no-print">
           <div className="text-xs text-slate-600 font-medium">
-            💡 店舗の貼り出しには「📅 日別戦力配置」画面で「🖨️ A4横で印刷」をご活用ください。
+            💡 店舗の貼り出しには「📅 週間一括ガント」または「⏱️ 日別戦力ガント」で「🖨️ A4横で印刷」をご活用ください。
           </div>
           <div className="flex items-center gap-2">
             <button
