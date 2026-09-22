@@ -9,6 +9,7 @@ import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { ConfirmedShiftCalendarModal } from '../components/ConfirmedShiftCalendarModal';
 import { fetchStoresUnified, getStoresFromStorage } from '../lib/storeMaster';
+import { seedShiftDemoData } from '../lib/seedShiftDemoData';
 
 interface Shift {
   id: string;
@@ -69,6 +70,86 @@ const ShiftCalendarView: React.FC = () => {
 
   // 📋 確定版シフトカレンダー（店舗貼り出し・印刷用）モーダル用State
   const [isConfirmedCalendarOpen, setIsConfirmedCalendarOpen] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  // 🏪 店舗切り替え時に店舗ごとの必要枠（Requirements）をキャッシュから再読み込み
+  useEffect(() => {
+    const loadStoreRequirements = async () => {
+      try {
+        const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
+        if (!tenantIdData) return;
+        const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
+        const cached = localStorage.getItem(storeKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          const formatted: any[] = [];
+          const weekdays = parsed['平日'] || [];
+          const weekends = parsed['土日'] || [];
+          const holidays = parsed['祝日'] || [];
+          weekdays.forEach((r: any) => {
+            [1, 2, 3, 4, 5].forEach(dow => {
+              formatted.push({
+                day_of_week: dow,
+                role: r.role,
+                required_count: r.count,
+                start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
+                end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
+              });
+            });
+          });
+          weekends.forEach((r: any) => {
+            [0, 6].forEach(dow => {
+              formatted.push({
+                day_of_week: dow,
+                role: r.role,
+                required_count: r.count,
+                start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
+                end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
+              });
+            });
+          });
+          holidays.forEach((r: any) => {
+            formatted.push({
+              day_of_week: 7,
+              role: r.role,
+              required_count: r.count,
+              start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
+              end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
+            });
+          });
+          if (formatted.length > 0) {
+            setRequirements(formatted);
+          }
+        }
+      } catch (e) {
+        console.warn('Store req load note:', e);
+      }
+    };
+    loadStoreRequirements();
+  }, [selectedDepartment]);
+
+  // 🎲 検証用ダミーデータ自動投入ハンドラー
+  const handleSeedDemoData = async () => {
+    if (!window.confirm('【検証用ダミーデータ自動投入】\n\n全スタッフを「新宿店・渋谷店・池袋店」に均等配属し、各店舗の必要人数枠（早番・遅番など）とスタッフのシフト希望データを一括投入します。\n実行してよろしいですか？')) {
+      return;
+    }
+    setIsSeeding(true);
+    try {
+      const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
+      if (!tenantIdData) throw new Error('テナント情報の取得に失敗しました');
+      const result = await seedShiftDemoData(tenantIdData);
+      alert(`✨ ${result.message}\n\n【店舗別配属人数】\n・新宿店: ${result.storeCounts['新宿店'] || 0}名\n・渋谷店: ${result.storeCounts['渋谷店'] || 0}名\n・池袋店: ${result.storeCounts['池袋店'] || 0}名\n\n店舗ボタンを切り替えて各店舗のシフト作成やAI自動生成をお試しください！`);
+      await fetchSettingsAndData();
+      if (selectedDepartment === 'all') {
+        setSelectedDepartment('新宿店');
+      }
+    } catch (err: any) {
+      console.error('Seed demo error:', err);
+      alert(`ダミーデータ投入に失敗しました: ${err.message || err}`);
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   useEffect(() => {
     fetchSettingsAndData();
@@ -1232,8 +1313,28 @@ const ShiftCalendarView: React.FC = () => {
             )}
           </div>
 
-          {/* 右側：店舗応援機能ステータスバッジ */}
-          <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+          {/* 右側：検証用ダミーデータ投入 ＆ 店舗応援ステータス */}
+          <div className="flex items-center gap-2 self-start md:self-center shrink-0 flex-wrap">
+            {/* 🎲 検証用ダミーデータ自動投入ボタン */}
+            <button
+              onClick={handleSeedDemoData}
+              disabled={isSeeding}
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+              title="全スタッフを新宿・渋谷・池袋にダミー配属し、各店舗の必要時間枠とシフト希望を一括投入します"
+            >
+              {isSeeding ? (
+                <>
+                  <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full"></div>
+                  <span>ダミー投入中...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>🎲 検証用ダミー投入（店舗配属＆枠）</span>
+                </>
+              )}
+            </button>
+
             <span className={`text-xs px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 ${
               enableStoreHelp
                 ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
@@ -1242,11 +1343,11 @@ const ShiftCalendarView: React.FC = () => {
               {enableStoreHelp ? (
                 <>
                   <ArrowRightLeft className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>店舗間応援：有効（他店ヘルプ可）</span>
+                  <span>店舗間応援：有効</span>
                 </>
               ) : (
                 <>
-                  <span>🔒 店舗固定モード（自店のみ）</span>
+                  <span>🔒 店舗固定</span>
                 </>
               )}
             </span>
@@ -1255,7 +1356,7 @@ const ShiftCalendarView: React.FC = () => {
               className="text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline font-bold"
               title="シフト設定画面で応援機能のON/OFFを切り替えます"
             >
-              設定変更 ≫
+              設定 ≫
             </button>
           </div>
         </div>

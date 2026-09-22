@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Save, ArrowLeft, Plus, Trash2, CheckCircle2, Copy, Building2, MapPin, Store } from 'lucide-react';
+import { Users, Save, ArrowLeft, Plus, Trash2, CheckCircle2, Copy, Building2, MapPin, Store, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { fetchStoresUnified, getStoresFromStorage } from '../lib/storeMaster';
+import { seedShiftDemoData } from '../lib/seedShiftDemoData';
 
 const defaultRoles = ['ホール', 'キッチン', 'レジ', '清掃'];
 const patternTypes = ['平日', '土日', '祝日'];
@@ -24,6 +25,7 @@ const ShiftRequirementSettings: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [roles, setRoles] = useState<string[]>(defaultRoles);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
 
   // 🏪 複数店舗セレクター用State
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
@@ -379,6 +381,26 @@ const ShiftRequirementSettings: React.FC = () => {
     }
   };
 
+  // 🎲 検証用ダミーデータ自動投入ハンドラー
+  const handleSeedDemoData = async () => {
+    if (!window.confirm('【検証用ダミーデータ自動投入】\n\n全スタッフを「新宿店・渋谷店・池袋店」に均等配属し、各店舗の必要人数枠（早番・遅番など）とスタッフのシフト希望データを一括投入します。\n実行してよろしいですか？')) {
+      return;
+    }
+    setIsSeeding(true);
+    try {
+      const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
+      if (!tenantIdData) throw new Error('テナント情報の取得に失敗しました');
+      const result = await seedShiftDemoData(tenantIdData);
+      alert(`✨ ${result.message}\n\n【店舗別配属人数】\n・新宿店: ${result.storeCounts['新宿店'] || 0}名\n・渋谷店: ${result.storeCounts['渋谷店'] || 0}名\n・池袋店: ${result.storeCounts['池袋店'] || 0}名\n\n各店舗のタブを切り替えて設定内容をご確認ください！`);
+      await fetchRolesAndRequirements();
+    } catch (err: any) {
+      console.error('Seed demo error:', err);
+      alert(`ダミーデータ投入に失敗しました: ${err.message || err}`);
+    } finally {
+      setIsSeeding(false);
+    }
+  };
+
   const currentReqs = requirements[activePattern] || [];
 
   return (
@@ -456,8 +478,29 @@ const ShiftRequirementSettings: React.FC = () => {
             })}
           </div>
 
-          <div className="text-xs text-indigo-800 font-medium bg-indigo-50/80 px-3 py-1 rounded-lg border border-indigo-100">
-            {selectedDepartment === 'all' ? '※ 全店舗に適用される基本枠です' : `※ 【${selectedDepartment}】専用の必要枠を編集・保存できます`}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={handleSeedDemoData}
+              disabled={isSeeding}
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+              title="全スタッフを新宿・渋谷・池袋にダミー配属し、各店舗の必要時間枠とシフト希望を一括投入します"
+            >
+              {isSeeding ? (
+                <>
+                  <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full"></div>
+                  <span>ダミー投入中...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>🎲 検証用ダミー投入（店舗配属＆枠）</span>
+                </>
+              )}
+            </button>
+
+            <div className="text-xs text-indigo-800 font-medium bg-indigo-50/80 px-3 py-1 rounded-lg border border-indigo-100">
+              {selectedDepartment === 'all' ? '※ 全店舗に適用される基本枠です' : `※ 【${selectedDepartment}】専用の必要枠を編集・保存できます`}
+            </div>
           </div>
         </div>
 
