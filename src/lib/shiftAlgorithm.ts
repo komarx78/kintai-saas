@@ -37,6 +37,7 @@ export interface ShiftEmployeeSetting {
   user_id: string;
   hire_date?: string;
   max_hours_per_week?: number;
+  max_days_per_week?: number; // 週間最大出勤日数（デフォルト5日、上限6日＝法定休日1日死守）
   min_shift_hours?: number; // 1回の最低勤務時間（例: 3時間）
   priority_score?: number;
   default_role?: string;
@@ -174,11 +175,23 @@ export function generateAutoShift(
 
   const empMap = new Map(employeeSettings.map(e => [e.user_id, e]));
 
-  // 期間全体の割り当て済み回数・時間を集計（均等分配用）
-  const shiftCountMap = new Map<string, number>();
-  [...existingShifts, ...allPeriodGeneratedShifts].forEach(s => {
-    if (s.user_id) {
-      shiftCountMap.set(s.user_id, (shiftCountMap.get(s.user_id) || 0) + 1);
+  // 期間全体の割り当て済み日数（日付ユニーク）と合計労働時間（分）を集計（労基法・法定休日ガード用）
+  const userAssignedDatesMap = new Map<string, Set<string>>();
+  const userTotalMinutesMap = new Map<string, number>();
+
+  [...existingShifts, ...allPeriodGeneratedShifts, ...generatedShifts].forEach(s => {
+    if (!s.user_id || !s.target_date) return;
+    if (!userAssignedDatesMap.has(s.user_id)) {
+      userAssignedDatesMap.set(s.user_id, new Set());
+    }
+    userAssignedDatesMap.get(s.user_id)!.add(s.target_date);
+
+    if (s.start_time && s.end_time) {
+      const [sh, sm] = s.start_time.split(':').map(Number);
+      const [eh, em] = s.end_time.split(':').map(Number);
+      let diff = (eh * 60 + em) - (sh * 60 + sm);
+      if (diff < 0) diff += 24 * 60;
+      userTotalMinutesMap.set(s.user_id, (userTotalMinutesMap.get(s.user_id) || 0) + diff);
     }
   });
 
@@ -221,24 +234,41 @@ export function generateAutoShift(
       }
     });
 
-    // このロールを担当可能な候補者を抽出
+    // このロールを担当可能な候補者を抽出（★週上限日数・週上限時間のガードを適用★）
     const candidateRequests = dayRequests.filter(req => {
-      const emp = empMap.get(req.user_id);
-      if (!emp) return true;
+      if (isAssignedToday(req.user_id)) return false;
 
+      const emp = empMap.get(req.user_id);
+
+      // 【🛡️ 安全装置1：週間上限日数リミッター（法定休日ガード）】
+      // 労働基準法第35条（週1日以上の休日義務）を絶対死守！週7日出勤は絶対に作らない
+      const currentDays = userAssignedDatesMap.get(req.user_id)?.size || 0;
+      const maxDays = emp?.max_days_per_week ?? 5; // デフォルト最大5日（週休2日）
+      const hardLimitDays = Math.min(maxDays, 6); // 最大でも6日（週1日は必ず休日）
+      if (currentDays >= hardLimitDays) {
+        return false; // 上限到達のため除外（休日確保）
+      }
+
+      // 【🛡️ 安全装置2：週間労働時間リミッター（週40時間ガード）】
+      const currentMinutes = userTotalMinutesMap.get(req.user_id) || 0;
+      const maxHours = emp?.max_hours_per_week ?? 40;
+      if (currentMinutes >= maxHours * 60) {
+        return false; // 上限時間到達のため除外
+      }
+
+      // 役割適合性チェック
       if (req.preferred_role && req.preferred_role === role) return true;
-      if (emp.default_role && emp.default_role === role) return true;
-      if (emp.roles) {
+      if (emp?.default_role && emp.default_role === role) return true;
+      if (emp?.roles) {
         if (Array.isArray(emp.roles) && emp.roles.includes(role)) return true;
         if (typeof emp.roles === 'string' && emp.roles.includes(role)) return true;
       }
-      if (!emp.default_role) return true;
+      if (!emp?.default_role) return true;
 
       return false;
     });
 
-    // モードに応じたソート（早い時間優先 ＋ 均等配分、ベテラン優先、スコア順）
-    // 開店枠・早い時間帯（店舗の不足が始まる時間）から入れるスタッフを最優先
+    // モードに応じたソート（早い時間優先 ＋ 出勤日数が少ない未配置優先、均等配分）
     const firstNeededHour = neededSlots.findIndex(s => s > 0);
 
     candidateRequests.sort((a, b) => {
@@ -259,7 +289,12 @@ export function generateAutoShift(
       // 2. 開始時刻が早い順を優先（朝枠を確実に巻き込んで孤立を防止）
       if (aSh !== bSh) return aSh - bSh;
 
-      // 3. モード別基準
+      // 3. 出勤日数が少ないスタッフ（未配置0日・1日）を最優先にして過密を防止！
+      const daysA = userAssignedDatesMap.get(a.user_id)?.size || 0;
+      const daysB = userAssignedDatesMap.get(b.user_id)?.size || 0;
+      if (daysA !== daysB) return daysA - daysB;
+
+      // 4. モード別基準
       if (mode === 'veteran') {
         const dateA = empA?.hire_date ? new Date(empA.hire_date).getTime() : 0;
         const dateB = empB?.hire_date ? new Date(empB.hire_date).getTime() : 0;
@@ -269,9 +304,9 @@ export function generateAutoShift(
         const scoreB = empB?.priority_score ?? 3;
         return scoreB - scoreA;
       } else {
-        const countA = shiftCountMap.get(a.user_id) || 0;
-        const countB = shiftCountMap.get(b.user_id) || 0;
-        if (countA !== countB) return countA - countB;
+        const minutesA = userTotalMinutesMap.get(a.user_id) || 0;
+        const minutesB = userTotalMinutesMap.get(b.user_id) || 0;
+        if (minutesA !== minutesB) return minutesA - minutesB;
         return (empB?.priority_score ?? 3) - (empA?.priority_score ?? 3);
       }
     });
@@ -283,6 +318,10 @@ export function generateAutoShift(
     for (const req of candidateRequests) {
       if (!req.available_start_time || !req.available_end_time) continue;
       if (isAssignedToday(req.user_id)) continue;
+
+      const currentDays = userAssignedDatesMap.get(req.user_id)?.size || 0;
+      const maxDays = Math.min(empMap.get(req.user_id)?.max_days_per_week ?? 5, 6);
+      if (currentDays >= maxDays) continue;
 
       const [availSh, availSm] = req.available_start_time.split(':').map(Number);
       const [availEh, availEm] = req.available_end_time.split(':').map(Number);
@@ -315,7 +354,12 @@ export function generateAutoShift(
       };
 
       generatedShifts.push(newShift);
-      shiftCountMap.set(req.user_id, (shiftCountMap.get(req.user_id) || 0) + 1);
+      if (!userAssignedDatesMap.has(req.user_id)) {
+        userAssignedDatesMap.set(req.user_id, new Set());
+      }
+      userAssignedDatesMap.get(req.user_id)!.add(targetDateStr);
+      const shiftMinutes = (endH - startH) * 60;
+      userTotalMinutesMap.set(req.user_id, (userTotalMinutesMap.get(req.user_id) || 0) + shiftMinutes);
 
       // 割り当てたスロットを消費
       for (let h = startH; h < endH && h < 24; h++) {
@@ -332,6 +376,10 @@ export function generateAutoShift(
       for (const req of candidateRequests) {
         if (!req.available_start_time || !req.available_end_time) continue;
         if (isAssignedToday(req.user_id)) continue;
+
+        const currentDays = userAssignedDatesMap.get(req.user_id)?.size || 0;
+        const maxDays = Math.min(empMap.get(req.user_id)?.max_days_per_week ?? 5, 6);
+        if (currentDays >= maxDays) continue;
 
         const [availSh, availSm] = req.available_start_time.split(':').map(Number);
         const [availEh, availEm] = req.available_end_time.split(':').map(Number);
@@ -362,7 +410,12 @@ export function generateAutoShift(
         };
 
         generatedShifts.push(newShift);
-        shiftCountMap.set(req.user_id, (shiftCountMap.get(req.user_id) || 0) + 1);
+        if (!userAssignedDatesMap.has(req.user_id)) {
+          userAssignedDatesMap.set(req.user_id, new Set());
+        }
+        userAssignedDatesMap.get(req.user_id)!.add(targetDateStr);
+        const shiftMinutes = (endH - startH) * 60;
+        userTotalMinutesMap.set(req.user_id, (userTotalMinutesMap.get(req.user_id) || 0) + shiftMinutes);
 
         // 枠を消費
         for (let h = startH; h < endH && h < 24; h++) {
