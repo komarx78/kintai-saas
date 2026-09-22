@@ -332,6 +332,8 @@ export default function OnboardingAdminDashboard() {
     email: '',
     phone: '',
     birth_date: '1995-01-01',
+    postal_code: '',
+    address_kana: '',
     address: '',
     join_date: new Date().toISOString().split('T')[0],
     employment_type: 'full-time',
@@ -2157,6 +2159,8 @@ export default function OnboardingAdminDashboard() {
     setIsSaving(true);
     try {
       const tempEmail = wizardData.email || `emp_${Date.now()}@sample.local`;
+      const finalAddressKana = toKatakana(wizardData.address_kana?.trim() || '');
+
       const { data: newUser, error: uErr } = await supabase
         .from('users')
         .insert({
@@ -2166,6 +2170,8 @@ export default function OnboardingAdminDashboard() {
           email: tempEmail,
           phone: wizardData.phone || null,
           birth_date: wizardData.birth_date || null,
+          postal_code: wizardData.postal_code || null,
+          address_kana: finalAddressKana || null,
           address: wizardData.address || null,
           role: 'user',
           join_date: wizardData.join_date,
@@ -2220,6 +2226,10 @@ export default function OnboardingAdminDashboard() {
         user_id: newUserId,
         status: 'active',
         name_kana: finalNameKana,
+        birth_date: wizardData.birth_date || null,
+        postal_code: wizardData.postal_code || null,
+        address_kana: finalAddressKana || null,
+        address: wizardData.address || null,
         join_date: wizardData.join_date,
         contract_type: wizardData.contract_type,
         trial_period_months: wizardData.trial_period_months,
@@ -2244,6 +2254,47 @@ export default function OnboardingAdminDashboard() {
 
       setWizardOpen(false);
       setWizardStep(1);
+      setWizardData({
+        last_name: '',
+        first_name: '',
+        last_name_kana: '',
+        first_name_kana: '',
+        name: '',
+        name_kana: '',
+        email: '',
+        phone: '',
+        birth_date: '1995-01-01',
+        postal_code: '',
+        address_kana: '',
+        address: '',
+        join_date: new Date().toISOString().split('T')[0],
+        employment_type: 'full-time',
+        department: '営業部',
+        contract_type: 'indefinite',
+        trial_period_months: 3,
+        start_time: '09:00',
+        end_time: '18:00',
+        break_time_minutes: 60,
+        holidays_text: '完全週休2日制（土日・祝日）',
+        salary_type: 'monthly',
+        base_salary: 0,
+        hourly_wage: 0,
+        position_allowance: 0,
+        qualification_allowance: 0,
+        housing_allowance: 0,
+        family_allowance: 0,
+        commuting_allowance: 15000,
+        health_insurance_joined: true,
+        pension_insurance_joined: true,
+        employment_insurance_joined: true,
+        bank_name: '',
+        branch_name: '',
+        account_type: 'ordinary',
+        account_number: '',
+        account_holder: '',
+        dependents_count: 0,
+        has_spouse: false
+      });
       await fetchData();
 
       if (isFromCompanySettings) {
@@ -6355,6 +6406,124 @@ export default function OnboardingAdminDashboard() {
                     </p>
                   </div>
                 </div>
+
+                {/* 🎂 生年月日（雇用保険・社会保険・名簿・定年管理） */}
+                <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                      <span>🎂 生年月日</span>
+                      <span className="text-slate-400 font-normal">（雇用保険・社会保険資格取得・労働者名簿連動）</span>
+                    </label>
+                    <span className="text-[10px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md font-bold">
+                      💡 年齢・介護保険・定年を自動判定
+                    </span>
+                  </div>
+                  <input
+                    type="date"
+                    value={wizardData.birth_date || '1995-01-01'}
+                    onChange={e => setWizardData({ ...wizardData, birth_date: e.target.value })}
+                    className="w-full sm:w-64 bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                  />
+                </div>
+
+                {/* 🏡 現住所 ＆ 郵便番号 ＆ 住所フリガナ（雇用保険資格取得届・名簿・住民税・通勤連動） */}
+                <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                      <MapPin className="w-4 h-4 text-indigo-600" />
+                      <span>現住所 ＆ 郵便番号 ＆ 住所フリガナ</span>
+                    </label>
+                    <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md font-bold">
+                      🏛️ 雇用保険資格取得届・労働者名簿へ自動反映
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* 郵便番号 */}
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">
+                        郵便番号 (7桁)
+                      </label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          placeholder="例: 1000001"
+                          maxLength={8}
+                          value={wizardData.postal_code || ''}
+                          onChange={e => setWizardData({ ...wizardData, postal_code: e.target.value.replace(/[^0-9-]/g, '') })}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                        />
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const res = await searchAddressFromZip(wizardData.postal_code || '');
+                            if (res) {
+                              setWizardData(prev => ({
+                                ...prev,
+                                address: res.address,
+                                address_kana: res.addressKana
+                              }));
+                            } else {
+                              alert('郵便番号（7桁）から住所が見つかりませんでした。ハイフンなし7桁でご入力ください。');
+                            }
+                          }}
+                          className="px-2.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-bold shrink-0 shadow-2xs cursor-pointer transition flex items-center gap-1"
+                          title="郵便番号から住所とフリガナを自動検索します"
+                        >
+                          住所検索
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 住所フリガナ */}
+                    <div className="sm:col-span-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-bold text-indigo-800">
+                          住所フリガナ（カタカナ）
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const k = toKatakana(wizardData.address_kana || '');
+                            setWizardData(prev => ({ ...prev, address_kana: k }));
+                          }}
+                          className="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-1.5 py-0.5 rounded border border-indigo-200 cursor-pointer transition"
+                          title="カタカナに変換"
+                        >
+                          カタカナ変換
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="例: トウキョウトシンジュククニシシンジュク"
+                        value={wizardData.address_kana || ''}
+                        onChange={e => setWizardData({ ...wizardData, address_kana: e.target.value })}
+                        onBlur={e => {
+                          const k = toKatakana(e.target.value.trim());
+                          setWizardData(prev => ({ ...prev, address_kana: k }));
+                        }}
+                        className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 font-bold text-indigo-950 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 現住所 */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">
+                      現住所（都道府県・市区町村・番地・マンション名・部屋番号）
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="例: 東京都新宿区西新宿 2-8-1 都庁第一本庁舎 101号室"
+                      value={wizardData.address || ''}
+                      onChange={e => setWizardData({ ...wizardData, address: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      ※ 雇用保険資格取得届の住所マス目、住民税特別徴収、労働者名簿に自動転記されます。
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -6548,9 +6717,14 @@ export default function OnboardingAdminDashboard() {
                       ) : ''}
                     </div>
                     <div>部署: <span className="font-bold">{wizardData.department}</span></div>
+                    <div>生年月日: <span className="font-bold text-slate-800">{wizardData.birth_date || '未設定'}</span></div>
                     <div>就業時間: <span className="font-bold text-indigo-700">{wizardData.start_time} 〜 {wizardData.end_time}</span></div>
                     <div>入社日: <span className="font-bold">{wizardData.join_date}</span></div>
                     <div>給与: <span className="font-bold">{wizardData.salary_type === 'hourly' ? `時給 ¥${wizardData.hourly_wage}` : `月給 ¥${wizardData.base_salary.toLocaleString()}`}</span></div>
+                    <div className="col-span-2">
+                      住所: <span className="font-bold">{wizardData.postal_code ? `〒${wizardData.postal_code} ` : ''}{wizardData.address || '未入力'}</span>
+                      {wizardData.address_kana ? <span className="text-slate-500 font-normal ml-1">（{wizardData.address_kana}）</span> : ''}
+                    </div>
                     <div>扶養: <span className="font-bold text-amber-900">{wizardData.dependents_count || 0}名{wizardData.has_spouse ? ' (💍配偶者有)' : ''}</span></div>
                   </div>
                 </div>
