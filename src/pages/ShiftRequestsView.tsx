@@ -11,6 +11,7 @@ import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval } from 'date
 import { ja } from 'date-fns/locale';
 import AppSwitcher from '../components/AppSwitcher';
 import { fetchStoresUnified, getStoresFromStorage } from '../lib/storeMaster';
+import { seedShiftDemoData } from '../lib/seedShiftDemoData';
 
 interface ShiftRequest {
   id: string;
@@ -101,12 +102,17 @@ export const ShiftRequestsView: React.FC = () => {
 
       // 🏢 本部スタッフ（総務・人事・管理部・営業部など、シフト勤務を行わないスタッフ）を完全除外
       const HQ_DEPARTMENTS = ['総務部', '総務・管理部', '管理部', '人事部', '経理部', '財務部', '営業部', '企画部', '開発部', 'IT部', '本部', '役員'];
-      const filteredShiftUsers = userList.filter((u: any) => {
+      let filteredShiftUsers = userList.filter((u: any) => {
         if (u.store_name && u.store_name.trim() !== '') return true;
         if (HQ_DEPARTMENTS.includes(u.department || '')) return false;
         if (u.department === '店舗運営部') return true;
         return false;
       });
+
+      // 🛡️ 救済フォールバック：初期状態などでまだ全員が店舗未設定・店舗運営部以外の場合、役員以外を全スタッフ候補として採用
+      if (filteredShiftUsers.length === 0 && userList.length > 0) {
+        filteredShiftUsers = userList.filter((u: any) => u.department !== '役員');
+      }
 
       setUsers(filteredShiftUsers);
 
@@ -203,63 +209,25 @@ export const ShiftRequestsView: React.FC = () => {
     });
   }, [requests, selectedDepartment, searchQuery, typeFilter]);
 
-  // 🧪 ダミー希望データの一括投入（ShiftAdminDashboard と整合）
+  // 🧪 ダミー希望データの一括投入（店舗配属・必要時間枠・希望シフトを一元生成）
   const handleGenerateDummy = async () => {
-    if (!window.confirm('今週分のダミー希望データを全スタッフ分投入しますか？\n（既存の今週分希望データは一旦上書きされます）')) return;
+    if (!window.confirm('【検証用ダミーデータ一括生成】\n全スタッフを3店舗（新宿・渋谷・池袋）に自動配属し、各店舗の必要枠マスタと今週〜来週のダミー希望シフトを一括投入しますか？\n（既存の希望データは上書きされます）')) return;
     setGenerating(true);
     try {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
-      if (!tenantId) return;
-
-      if (users.length === 0) {
-        alert('スタッフが登録されていません。');
+      if (!tenantId) {
+        alert('テナントIDが取得できませんでした。');
         return;
       }
 
-      const startDateStr = format(weekStart, 'yyyy-MM-dd');
-      const endDateStr = format(weekEnd, 'yyyy-MM-dd');
-
-      // 今週の既存希望を削除
-      await supabase.from('advanced_shift_requests')
-        .delete()
-        .eq('tenant_id', tenantId)
-        .gte('target_date', startDateStr)
-        .lte('target_date', endDateStr);
-
-      const timeSlots = [
-        { start: '08:00', end: '14:00', role: 'ホール' },
-        { start: '10:00', end: '17:00', role: 'ホール' },
-        { start: '17:00', end: '21:00', role: 'ホール' },
-        { start: '09:00', end: '15:00', role: 'キッチン' },
-        { start: '12:00', end: '18:00', role: 'キッチン' },
-        { start: '17:00', end: '21:00', role: 'キッチン' },
-        { start: null, end: null, role: null }, // 休み希望
-      ];
-
-      const dummyList: any[] = [];
-      weekDays.forEach((day, dayIdx) => {
-        const dateStr = format(day, 'yyyy-MM-dd');
-        users.forEach((staff, sIdx) => {
-          const slot = timeSlots[(sIdx + dayIdx) % timeSlots.length];
-          dummyList.push({
-            tenant_id: tenantId,
-            user_id: staff.id,
-            target_date: dateStr,
-            available_start_time: slot.start,
-            available_end_time: slot.end,
-            preferred_role: slot.role,
-            status: 'submitted'
-          });
-        });
-      });
-
-      if (dummyList.length > 0) {
-        const { error: insErr } = await supabase.from('advanced_shift_requests').insert(dummyList);
-        if (insErr) throw insErr;
+      const res = await seedShiftDemoData(tenantId);
+      if (!res.success) {
+        alert('ダミーデータの生成に失敗しました: ' + res.message);
+        return;
       }
 
-      alert(`🎉 スタッフ${users.length}名分のダミー希望データ（今週7日分: 計${dummyList.length}件）を投入しました！`);
-      fetchRequests();
+      alert(`🎉 ${res.message}`);
+      await fetchRequests();
     } catch (err: any) {
       console.error('ダミー生成エラー:', err);
       alert('ダミー生成に失敗しました: ' + (err.message || err));
