@@ -6133,21 +6133,58 @@ export default function OnboardingAdminDashboard() {
             </div>
 
             <div className="flex items-center justify-between mb-6 bg-slate-50 p-2 rounded-2xl border border-slate-200 text-xs font-bold">
-              <span className={`px-3 py-1 rounded-xl transition ${wizardStep === 1 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
+              <button
+                type="button"
+                onClick={() => setWizardStep(1)}
+                className={`px-3 py-1 rounded-xl transition cursor-pointer ${wizardStep === 1 ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'}`}
+              >
                 1. 基本情報
-              </span>
+              </button>
               <ChevronRight className="w-4 h-4 text-slate-300" />
-              <span className={`px-3 py-1 rounded-xl transition ${wizardStep === 2 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  const finalName = [wizardData.last_name, wizardData.first_name].filter(Boolean).join(' ') || wizardData.name?.trim();
+                  if (!finalName) {
+                    alert('先に氏名（姓・名）を入力してください。');
+                    return;
+                  }
+                  setWizardStep(2);
+                }}
+                className={`px-3 py-1 rounded-xl transition cursor-pointer ${wizardStep === 2 ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'}`}
+              >
                 2. 労働時間・休日
-              </span>
+              </button>
               <ChevronRight className="w-4 h-4 text-slate-300" />
-              <span className={`px-3 py-1 rounded-xl transition ${wizardStep === 3 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  const finalName = [wizardData.last_name, wizardData.first_name].filter(Boolean).join(' ') || wizardData.name?.trim();
+                  if (!finalName) {
+                    alert('先に氏名（姓・名）を入力してください。');
+                    return;
+                  }
+                  setWizardStep(3);
+                }}
+                className={`px-3 py-1 rounded-xl transition cursor-pointer ${wizardStep === 3 ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'}`}
+              >
                 3. 給与・社保・口座
-              </span>
+              </button>
               <ChevronRight className="w-4 h-4 text-slate-300" />
-              <span className={`px-3 py-1 rounded-xl transition ${wizardStep === 4 ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  const finalName = [wizardData.last_name, wizardData.first_name].filter(Boolean).join(' ') || wizardData.name?.trim();
+                  if (!finalName) {
+                    alert('先に氏名（姓・名）を入力してください。');
+                    return;
+                  }
+                  setWizardStep(4);
+                }}
+                className={`px-3 py-1 rounded-xl transition cursor-pointer ${wizardStep === 4 ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'}`}
+              >
                 4. 完了・全同期
-              </span>
+              </button>
             </div>
 
             {wizardStep === 1 && (
@@ -6738,15 +6775,40 @@ export default function OnboardingAdminDashboard() {
               </div>
             )}
 
-            <div className="mt-6 flex justify-between gap-2 pt-4 border-t border-slate-100">
-              {wizardStep > 1 ? (
+            <div className="mt-6 flex items-center justify-between gap-2 pt-4 border-t border-slate-100">
+              {wizardStep === 1 ? (
                 <button
-                  onClick={() => setWizardStep((wizardStep - 1) as any)}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                  type="button"
+                  onClick={() => setWizardOpen(false)}
+                  className="px-4 py-2.5 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 rounded-xl transition cursor-pointer flex items-center gap-1.5"
                 >
-                  前へ戻る
+                  <X className="w-4 h-4 text-slate-400" />
+                  キャンセル（閉じる）
                 </button>
-              ) : <div />}
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setWizardStep((wizardStep - 1) as any)}
+                    className="px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <ArrowLeft className="w-4 h-4 text-slate-500" />
+                    前へ戻る
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm('入力を中断してウィザードを閉じますか？（入力中の内容は破棄されます）')) {
+                        setWizardOpen(false);
+                      }
+                    }}
+                    className="px-3 py-2.5 text-xs font-bold text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                    title="ウィザードを中断して閉じます"
+                  >
+                    中断して閉じる
+                  </button>
+                </div>
+              )}
 
               {wizardStep < 4 ? (
                 <button
