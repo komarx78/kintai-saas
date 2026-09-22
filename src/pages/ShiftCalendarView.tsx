@@ -819,9 +819,13 @@ const ShiftCalendarView: React.FC = () => {
                 <AlertTriangle className="w-6 h-6" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-black bg-rose-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
                     店長チェック必須
+                  </span>
+                  <span className="text-xs font-bold text-rose-800 bg-white border border-rose-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-rose-600" />
+                    対象期間: {format(startDate, 'M/d(E)', { locale: ja })}〜{format(endDate, 'M/d(E)', { locale: ja })}
                   </span>
                   <h3 className="font-black text-rose-900 text-base">
                     希望を出したのに【一度も割り当てられていないスタッフ】が {unassignedStaffList.length}名 います！
@@ -871,9 +875,13 @@ const ShiftCalendarView: React.FC = () => {
                 <AlertTriangle className="w-6 h-6" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-black bg-amber-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
                     労基法注意・休日不足
+                  </span>
+                  <span className="text-xs font-bold text-amber-900 bg-white border border-amber-300 px-2 py-0.5 rounded-md flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-amber-600" />
+                    対象期間: {format(startDate, 'M/d(E)', { locale: ja })}〜{format(endDate, 'M/d(E)', { locale: ja })}
                   </span>
                   <h3 className="font-black text-amber-950 text-base">
                     【週6〜7日出勤（週休1日以下）】の過密スタッフが {overworkedStaffList.length}名 います！
@@ -934,9 +942,13 @@ const ShiftCalendarView: React.FC = () => {
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-black text-slate-800 text-sm sm:text-base">
-                    📊 スタッフ稼働バランス・公平性チェッカー盤
+                  <h3 className="font-black text-slate-800 text-sm sm:text-base flex items-center gap-2">
+                    <span>📊 スタッフ稼働バランス・公平性チェッカー盤</span>
                   </h3>
+                  <span className="text-xs bg-indigo-50 text-indigo-700 font-black px-2.5 py-0.5 rounded-lg border border-indigo-200 flex items-center gap-1 shadow-2xs">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>集計期間: {format(startDate, 'yyyy年M月d日(E)', { locale: ja })} 〜 {format(endDate, 'M月d日(E)', { locale: ja })}</span>
+                  </span>
                   {overworkedStaffList.length > 0 && (
                     <span className="bg-rose-600 text-white text-xs font-black px-2 py-0.5 rounded-full shadow-xs animate-pulse">
                       🚨 労基法注意(週6〜7日) {overworkedStaffList.length}名
