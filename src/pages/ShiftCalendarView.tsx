@@ -201,14 +201,21 @@ const ShiftCalendarView: React.FC = () => {
         setRoles([{name: 'ホール', color: '#4F46E5'}, {name: 'キッチン', color: '#EA580C'}]);
       }
 
-      // ユーザー一覧（所属店舗 store_name を含めて取得）
+      // ユーザー一覧（所属店舗 store_name を含めて取得、エラー時は安全に除外して取得）
       let usersList: any[] = [];
-      try {
-        const { data: uData } = await supabase.from('users').select('id, name, role, employment_type, department, store_name').eq('tenant_id', tenantIdData);
-        usersList = uData || [];
-      } catch {
-        const { data: uData } = await supabase.from('users').select('id, name, role, employment_type, department').eq('tenant_id', tenantIdData);
-        usersList = uData || [];
+      const { data: uDataWithStore, error: uErrWithStore } = await supabase
+        .from('users')
+        .select('id, name, role, employment_type, department, store_name')
+        .eq('tenant_id', tenantIdData);
+
+      if (!uErrWithStore && uDataWithStore) {
+        usersList = uDataWithStore;
+      } else {
+        const { data: uDataWithoutStore } = await supabase
+          .from('users')
+          .select('id, name, role, employment_type, department')
+          .eq('tenant_id', tenantIdData);
+        usersList = uDataWithoutStore || [];
       }
 
       // LocalStorage user_positions からの store_name フォールバックマージ
@@ -219,6 +226,7 @@ const ShiftCalendarView: React.FC = () => {
           store_name: u.store_name || localPosMap[u.id]?.store_name || ''
         }));
       } catch {}
+
       // 🏪 店舗マスタ（store_masters）から純粋な店舗リストを取得（総務・人事・営業などの本部部門は完全除外）
       let storeNames: string[] = [];
       try {
@@ -235,7 +243,7 @@ const ShiftCalendarView: React.FC = () => {
 
       // 🏢 本部スタッフ（総務・人事・管理部・営業部など、シフト勤務を行わないスタッフ）をシフトカレンダーから完全除外
       const HQ_DEPARTMENTS = ['総務部', '総務・管理部', '管理部', '人事部', '経理部', '財務部', '営業部', '企画部', '開発部', 'IT部', '本部', '役員'];
-      const filteredShiftUsers = usersList.filter(u => {
+      let filteredShiftUsers = usersList.filter(u => {
         // 店舗が設定されており、店舗マスタに該当するか店舗名がある場合はシフト対象
         if (u.store_name && u.store_name.trim() !== '') return true;
         // 本部部門に所属している場合は完全非表示
@@ -245,6 +253,11 @@ const ShiftCalendarView: React.FC = () => {
         // それ以外の店舗なしスタッフは非表示
         return false;
       });
+
+      // 🛡️ 救済フォールバック：初期状態などでまだ全員が店舗未設定の場合、役員以外を全スタッフ候補として採用
+      if (filteredShiftUsers.length === 0 && usersList.length > 0) {
+        filteredShiftUsers = usersList.filter(u => u.department !== '役員');
+      }
 
       setUsers(filteredShiftUsers);
 
@@ -1941,15 +1954,15 @@ const ShiftCalendarView: React.FC = () => {
                                           <div className="flex flex-col min-w-0 pr-1">
                                             <div className="flex items-center">
                                               <User className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0" />
-                                              <span className="truncate text-sm font-bold" title={userObj?.name || '不明なユーザー'}>
-                                                {userObj?.name || '不明なユーザー'}
+                                              <span className="truncate text-sm font-bold" title={userObj?.name || (userShifts[0]?.user?.name && userShifts[0]?.user?.name !== '不明' ? userShifts[0]?.user?.name : '') || '不明なユーザー'}>
+                                                {userObj?.name || (userShifts[0]?.user?.name && userShifts[0]?.user?.name !== '不明' ? userShifts[0]?.user?.name : '') || '不明なユーザー'}
                                               </span>
                                             </div>
                                             {/* 所属店舗名 ＆ 他店舗からの応援バッジ */}
                                             <div className="flex items-center gap-1 mt-0.5 ml-4 flex-wrap">
-                                              {userObj?.department && (
+                                              {(userObj?.store_name || userObj?.department || userShifts[0]?.store_name || userShifts[0]?.user?.store_name) && (
                                                 <span className="text-[10px] text-slate-400 font-medium truncate">
-                                                  {userObj.department}
+                                                  {userObj?.store_name || userObj?.department || userShifts[0]?.store_name || userShifts[0]?.user?.store_name}
                                                 </span>
                                               )}
                                               {isHelperStaff && (
