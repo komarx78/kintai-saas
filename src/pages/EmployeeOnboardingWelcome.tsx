@@ -68,6 +68,7 @@ export default function EmployeeOnboardingWelcome() {
     qualificationAllowance: 0,
     fixedOvertimeAllowance: 0,
     department: '営業部',
+    storeName: '',
     workLocation: '本社 および 会社が指定する就業場所',
     workHours: '09:00 〜 18:00（休憩60分・実働8時間）',
     overtimePolicy: 'あり（時間外割増 25%、深夜割増 25%、休日割増 35%）',
@@ -201,6 +202,7 @@ export default function EmployeeOnboardingWelcome() {
       const qualAllowanceParam = searchParams.get('qualification_allowance');
       const fixedOtParam = searchParams.get('fixed_overtime_allowance');
       const deptParam = searchParams.get('department');
+      const storeParam = searchParams.get('store_name') || searchParams.get('store');
       const empTypeParam = searchParams.get('employment_type');
       const joinDateParam = searchParams.get('join_date');
       const locParam = searchParams.get('work_location');
@@ -209,7 +211,7 @@ export default function EmployeeOnboardingWelcome() {
       const addressParam = searchParams.get('address');
       const addressKanaParam = searchParams.get('address_kana') || searchParams.get('addressKana');
 
-      if (nameParam || nameKanaParam || emailParam || phoneParam || baseSalaryParam || hourlyWageParam || deptParam || posNameParam || postalCodeParam || addressParam || addressKanaParam) {
+      if (nameParam || nameKanaParam || emailParam || phoneParam || baseSalaryParam || hourlyWageParam || deptParam || storeParam || posNameParam || postalCodeParam || addressParam || addressKanaParam) {
         setBasicData(prev => ({
           ...prev,
           name: nameParam || prev.name,
@@ -232,6 +234,7 @@ export default function EmployeeOnboardingWelcome() {
           qualificationAllowance: qualAllowanceParam ? parseInt(qualAllowanceParam, 10) : prev.qualificationAllowance,
           fixedOvertimeAllowance: fixedOtParam ? parseInt(fixedOtParam, 10) : prev.fixedOvertimeAllowance,
           department: deptParam || prev.department,
+          storeName: storeParam || prev.storeName,
           employmentType: empTypeParam || prev.employmentType,
           joinDate: joinDateParam || prev.joinDate,
           workLocation: locParam || prev.workLocation,
@@ -595,6 +598,7 @@ export default function EmployeeOnboardingWelcome() {
           qualification_allowance: contractAgreement.qualificationAllowance,
           fixed_overtime_allowance: contractAgreement.fixedOvertimeAllowance,
           department: contractAgreement.department,
+          store_name: contractAgreement.storeName || null,
           work_location: contractAgreement.workLocation,
           work_hours: contractAgreement.workHours,
           join_date: contractAgreement.joinDate
@@ -926,7 +930,7 @@ export default function EmployeeOnboardingWelcome() {
                   <span className="font-bold text-indigo-300">
                     {contractAgreement.employmentType}
                     <span className="text-white ml-1">
-                      （{contractAgreement.department}{contractAgreement.positionName ? ` / ${contractAgreement.positionName}` : ''}）
+                      （{contractAgreement.department}{contractAgreement.storeName ? `・${contractAgreement.storeName}` : ''}{contractAgreement.positionName ? ` / ${contractAgreement.positionName}` : ''}）
                     </span>
                   </span>
                 </div>

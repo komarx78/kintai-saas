@@ -575,6 +575,7 @@ export default function OnboardingAdminDashboard() {
     qualificationAllowance: 0,
     fixedOvertimeAllowance: 0,
     department: '営業部',
+    storeName: '',
     joinDate: new Date().toISOString().split('T')[0],
     startTime: '09:00',
     endTime: '18:00',
@@ -1802,6 +1803,7 @@ export default function OnboardingAdminDashboard() {
             if (d.phone) updatePayload.phone = d.phone;
             if (d.birth_date) updatePayload.birth_date = d.birth_date;
             if (d.address) updatePayload.address = d.address;
+            if (d.store_name) updatePayload.store_name = d.store_name;
             if (Object.keys(updatePayload).length > 0) {
               await supabase.from('users').update(updatePayload).eq('id', uId);
             }
@@ -1823,6 +1825,7 @@ export default function OnboardingAdminDashboard() {
                 email: tempEmail,
                 role: 'user',
                 department: d.department || '営業部',
+                store_name: d.store_name || null,
                 employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
                 join_date: d.join_date || new Date().toISOString().split('T')[0],
                 birth_date: d.birth_date || null,
@@ -1846,6 +1849,7 @@ export default function OnboardingAdminDashboard() {
                   email: tempEmail,
                   role: 'user',
                   department: d.department || '営業部',
+                  store_name: d.store_name || null,
                   employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time'
                 })
                 .select()
@@ -1904,6 +1908,7 @@ export default function OnboardingAdminDashboard() {
         localMaster.qualification_allowance = d.qualification_allowance || 0;
         localMaster.fixed_overtime_allowance = d.fixed_overtime_allowance || 0;
         localMaster.department = d.department;
+        if (d.store_name) localMaster.store_name = d.store_name;
         localMaster.join_date = d.join_date;
 
         if (kana) {
@@ -1939,6 +1944,20 @@ export default function OnboardingAdminDashboard() {
             updated_at: new Date().toISOString()
           }, { onConflict: 'tenant_id,user_id' });
         } catch (e) {}
+
+        if (d.position_name || d.department || d.store_name) {
+          try {
+            const posKey = `user_positions_${tenantId}`;
+            const currentPosMap = JSON.parse(localStorage.getItem(posKey) || '{}');
+            currentPosMap[uId] = {
+              ...(currentPosMap[uId] || {}),
+              position: d.position_name || undefined,
+              department: d.department || undefined,
+              store_name: d.store_name || undefined
+            };
+            localStorage.setItem(posKey, JSON.stringify(currentPosMap));
+          } catch (posErr) {}
+        }
 
       } else if (sub.document_type === 'bank_passbook') {
         const bName = d.bank_name || d.bankName || '';
@@ -3345,6 +3364,7 @@ export default function OnboardingAdminDashboard() {
                   qualificationAllowance: 0,
                   fixedOvertimeAllowance: 0,
                   department: departments[0]?.name || '営業部',
+                  storeName: '',
                   joinDate: new Date().toISOString().split('T')[0],
                   startTime: '09:00',
                   endTime: '18:00',
@@ -3682,6 +3702,7 @@ export default function OnboardingAdminDashboard() {
                                     qualificationAllowance: emp.qualification_allowance || 0,
                                     fixedOvertimeAllowance: 0,
                                     department: emp.department || departments[0]?.name || '営業部',
+                                    storeName: (emp as any).store_name || '',
                                     joinDate: emp.join_date || new Date().toISOString().split('T')[0],
                                     startTime: emp.start_time || '09:00',
                                     endTime: emp.end_time || '18:00',
@@ -7743,6 +7764,7 @@ export default function OnboardingAdminDashboard() {
             qualificationAllowance: 0,
             fixedOvertimeAllowance: 0,
             department: departments[0]?.name || '営業部',
+            storeName: '',
             joinDate: new Date().toISOString().split('T')[0],
             startTime: '09:00',
             endTime: '18:00',
@@ -7790,6 +7812,8 @@ export default function OnboardingAdminDashboard() {
           qualification_allowance: String(inviteUrlModal.qualificationAllowance || 0),
           fixed_overtime_allowance: String(inviteUrlModal.fixedOvertimeAllowance || 0),
           department: inviteUrlModal.department,
+          store_name: inviteUrlModal.storeName || '',
+          store: inviteUrlModal.storeName || '',
           join_date: inviteUrlModal.joinDate,
           work_location: inviteUrlModal.workLocation,
           work_hours: `${inviteUrlModal.startTime} 〜 ${inviteUrlModal.endTime}（休憩${inviteUrlModal.breakMinutes}分）`
@@ -7819,6 +7843,7 @@ export default function OnboardingAdminDashboard() {
                 name: inviteUrlModal.name.trim(),
                 name_kana: inviteUrlModal.nameKana.trim() || null,
                 department: inviteUrlModal.department,
+                store_name: inviteUrlModal.storeName || null,
                 employment_type: empType,
                 join_date: inviteUrlModal.joinDate
               };
@@ -7837,6 +7862,7 @@ export default function OnboardingAdminDashboard() {
                   phone: inviteUrlModal.phone.trim() || null,
                   role: 'user',
                   department: inviteUrlModal.department,
+                  store_name: inviteUrlModal.storeName || null,
                   employment_type: empType,
                   join_date: inviteUrlModal.joinDate,
                   has_kintai_access: true,
@@ -7847,6 +7873,21 @@ export default function OnboardingAdminDashboard() {
               if (uErr) throw uErr;
               activeUserId = newUser.id;
               setInviteUrlModal(prev => ({ ...prev, targetUserId: newUser.id }));
+            }
+
+            // 組織図・店舗マスタ連動のための役職・店舗キャッシュ更新
+            try {
+              const posKey = `user_positions_${tenantId}`;
+              const currentPosMap = JSON.parse(localStorage.getItem(posKey) || '{}');
+              currentPosMap[activeUserId] = {
+                ...(currentPosMap[activeUserId] || {}),
+                position: inviteUrlModal.positionName || undefined,
+                department: inviteUrlModal.department,
+                store_name: inviteUrlModal.storeName || undefined
+              };
+              localStorage.setItem(posKey, JSON.stringify(currentPosMap));
+            } catch (posErr) {
+              console.warn('user_positions cache error:', posErr);
             }
 
             // 2. employee_payroll_profiles への給与条件保存
@@ -7893,6 +7934,8 @@ export default function OnboardingAdminDashboard() {
               qualification_allowance: String(inviteUrlModal.qualificationAllowance || 0),
               fixed_overtime_allowance: String(inviteUrlModal.fixedOvertimeAllowance || 0),
               department: inviteUrlModal.department,
+              store_name: inviteUrlModal.storeName || '',
+              store: inviteUrlModal.storeName || '',
               join_date: inviteUrlModal.joinDate,
               work_location: inviteUrlModal.workLocation,
               work_hours: `${inviteUrlModal.startTime} 〜 ${inviteUrlModal.endTime}（休憩${inviteUrlModal.breakMinutes}分）`
@@ -7909,11 +7952,11 @@ export default function OnboardingAdminDashboard() {
               setTimeout(() => setInviteUrlModal(prev => ({ ...prev, copied: false })), 4000);
               alert(`🎉 【台帳に保存完了】\n${inviteUrlModal.name} さんの労働条件を従業員台帳に保存し、専用入社手続きURLをコピーしました！\n\n新入社員へLINEやメールでお送りください。`);
             } else if (actionType === 'copy_line') {
+              const storeDesc = inviteUrlModal.storeName ? `\n【配属店舗】${inviteUrlModal.storeName}` : '';
               const lineMsg = `【${tenantInfo?.name || '会社'} 入社手続きのご案内】
-${inviteUrlModal.name} 様
+${inviteUrlModal.name} 様${storeDesc}
 
 この度はご入社誠におめでとうございます。
-入社に伴う労働条件の確認および各種書類（通勤交通費申請・給与口座・扶養控除等）の提出をお願い申し上げます。
 以下の専用URLより、スマートフォンにてご入力ください。
 
 ▼ 専用入社手続きURL（スマホ対応）
@@ -8142,7 +8185,7 @@ ${finalUrl}
                     </div>
                   </div>
 
-                  {/* 配属部署 ＆ 役職 */}
+                  {/* 配属部署 ＆ 配属先店舗 */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-[11px] font-bold text-slate-600 block mb-1">配属部署</label>
@@ -8156,6 +8199,38 @@ ${finalUrl}
                         ))}
                       </select>
                     </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 block mb-1 flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          <Store className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>配属先店舗（シフト拠点）</span>
+                        </span>
+                        {inviteUrlModal.department === '店舗運営部' ? (
+                          <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                            ★指定推奨
+                          </span>
+                        ) : (
+                          <span className="text-[9px] text-slate-400">
+                            本部直属は店舗なし
+                          </span>
+                        )}
+                      </label>
+                      <select
+                        value={inviteUrlModal.storeName}
+                        onChange={e => setInviteUrlModal(prev => ({ ...prev, storeName: e.target.value, copied: false }))}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                      >
+                        <option value="">（店舗なし / 本部・全社直属）</option>
+                        {availableStores.map(s => (
+                          <option key={s.id} value={s.name}>{s.name}（{s.code || '店舗'}）</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 役職 ＆ 雇用形態 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-[11px] font-bold text-slate-600 block mb-1 flex items-center justify-between">
                         <span>👑 役職（役職マスタ連携）</span>
@@ -8185,10 +8260,7 @@ ${finalUrl}
                         ))}
                       </select>
                     </div>
-                  </div>
 
-                  {/* 雇用形態 ＆ 入社予定日 */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-[11px] font-bold text-slate-600 block mb-1">雇用形態</label>
                       <select
@@ -8202,15 +8274,17 @@ ${finalUrl}
                         <option value="業務委託">業務委託</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-600 block mb-1">入社予定日</label>
-                      <input
-                        type="date"
-                        value={inviteUrlModal.joinDate}
-                        onChange={e => setInviteUrlModal(prev => ({ ...prev, joinDate: e.target.value, copied: false }))}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
-                      />
-                    </div>
+                  </div>
+
+                  {/* 入社予定日 */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">入社予定日</label>
+                    <input
+                      type="date"
+                      value={inviteUrlModal.joinDate}
+                      onChange={e => setInviteUrlModal(prev => ({ ...prev, joinDate: e.target.value, copied: false }))}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
+                    />
                   </div>
                 </div>
 
