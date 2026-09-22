@@ -138,8 +138,6 @@ const ShiftCalendarView: React.FC = () => {
           store_name: u.store_name || localPosMap[u.id]?.store_name || ''
         }));
       } catch {}
-      setUsers(usersList);
-
       // 🏪 店舗マスタ（store_masters）から純粋な店舗リストを取得（総務・人事・営業などの本部部門は完全除外）
       let storeNames: string[] = [];
       try {
@@ -153,6 +151,21 @@ const ShiftCalendarView: React.FC = () => {
         storeNames = ['新宿店', '渋谷店', '池袋店'];
       }
       setDepartmentsList(storeNames);
+
+      // 🏢 本部スタッフ（総務・人事・管理部・営業部など、シフト勤務を行わないスタッフ）をシフトカレンダーから完全除外
+      const HQ_DEPARTMENTS = ['総務部', '総務・管理部', '管理部', '人事部', '経理部', '財務部', '営業部', '企画部', '開発部', 'IT部', '本部', '役員'];
+      const filteredShiftUsers = usersList.filter(u => {
+        // 店舗が設定されており、店舗マスタに該当するか店舗名がある場合はシフト対象
+        if (u.store_name && u.store_name.trim() !== '') return true;
+        // 本部部門に所属している場合は完全非表示
+        if (HQ_DEPARTMENTS.includes(u.department || '')) return false;
+        // 店舗運営部に属している場合は店舗未割当スタッフとして許容
+        if (u.department === '店舗運営部') return true;
+        // それ以外の店舗なしスタッフは非表示
+        return false;
+      });
+
+      setUsers(filteredShiftUsers);
 
       const { data: shiftsData } = await supabase
         .from('advanced_shifts')

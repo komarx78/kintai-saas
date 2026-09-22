@@ -98,7 +98,17 @@ export const ShiftRequestsView: React.FC = () => {
           store_name: u.store_name || localPosMap[u.id]?.store_name || ''
         }));
       } catch {}
-      setUsers(userList);
+
+      // 🏢 本部スタッフ（総務・人事・管理部・営業部など、シフト勤務を行わないスタッフ）を完全除外
+      const HQ_DEPARTMENTS = ['総務部', '総務・管理部', '管理部', '人事部', '経理部', '財務部', '営業部', '企画部', '開発部', 'IT部', '本部', '役員'];
+      const filteredShiftUsers = userList.filter((u: any) => {
+        if (u.store_name && u.store_name.trim() !== '') return true;
+        if (HQ_DEPARTMENTS.includes(u.department || '')) return false;
+        if (u.department === '店舗運営部') return true;
+        return false;
+      });
+
+      setUsers(filteredShiftUsers);
 
       // 🏪 店舗マスタ（store_masters）から純粋な店舗リストを取得（総務・人事等の本部部門は除外）
       let storeNames: string[] = [];
@@ -114,20 +124,22 @@ export const ShiftRequestsView: React.FC = () => {
       setDepartmentsList(storeNames);
 
       const userMap: Record<string, { id: string; name: string; email?: string; department?: string; store_name?: string }> = {};
-      userList.forEach((u: any) => {
+      filteredShiftUsers.forEach((u: any) => {
         userMap[u.id] = { id: u.id, name: u.name || '（名称未設定）', email: u.email, department: u.department, store_name: u.store_name };
       });
 
-      const formatted: ShiftRequest[] = (reqData || []).map((r: any) => ({
-        id: r.id,
-        user_id: r.user_id,
-        target_date: r.target_date,
-        available_start_time: r.available_start_time || null,
-        available_end_time: r.available_end_time || null,
-        preferred_role: r.preferred_role || null,
-        status: r.status,
-        user: userMap[r.user_id] || { id: r.user_id, name: '不明なスタッフ' }
-      }));
+      const formatted: ShiftRequest[] = (reqData || [])
+        .filter((r: any) => !!userMap[r.user_id])
+        .map((r: any) => ({
+          id: r.id,
+          user_id: r.user_id,
+          target_date: r.target_date,
+          available_start_time: r.available_start_time || null,
+          available_end_time: r.available_end_time || null,
+          preferred_role: r.preferred_role || null,
+          status: r.status,
+          user: userMap[r.user_id]!
+        }));
 
       setRequests(formatted);
     } catch (error) {
@@ -702,7 +714,13 @@ export const ShiftRequestsView: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-bold">
                       {users
-                        .filter(u => !searchQuery.trim() || u.name?.toLowerCase().includes(searchQuery.toLowerCase()))
+                        .filter(u => {
+                          if (selectedDepartment !== 'all') {
+                            const uStore = u.store_name || u.department;
+                            if (uStore !== selectedDepartment) return false;
+                          }
+                          return !searchQuery.trim() || u.name?.toLowerCase().includes(searchQuery.toLowerCase());
+                        })
                         .map(staff => {
                           const staffReqs = requests.filter(r => r.user_id === staff.id);
 
