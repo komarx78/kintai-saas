@@ -20,7 +20,7 @@ export async function seedShiftDemoData(tenantId: string): Promise<SeedResult> {
   const STORES = ['新宿店', '渋谷店', '池袋店'];
   const HQ_DEPTS = ['総務部', '総務・管理部', '管理部', '人事部', '経理部', '財務部', '営業部', '企画部', '役員'];
 
-  // 1. 全ユーザーの取得
+  // 1. 全ユーザーの取得（store_nameカラム未定義環境でも確実に取得する二段階フォールバック）
   let allUsers: any[] = [];
   try {
     const { data, error } = await supabase
@@ -29,9 +29,19 @@ export async function seedShiftDemoData(tenantId: string): Promise<SeedResult> {
       .eq('tenant_id', tenantId);
     if (error) throw error;
     allUsers = data || [];
-  } catch (err) {
-    console.error('Fetch users error:', err);
-    throw new Error('ユーザー情報の取得に失敗しました。');
+  } catch (firstErr) {
+    console.warn('First fetch with store_name failed, trying fallback without store_name:', firstErr);
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, name, email, role, department, employment_type')
+        .eq('tenant_id', tenantId);
+      if (error) throw error;
+      allUsers = data || [];
+    } catch (secondErr: any) {
+      console.error('Fetch users fallback error:', secondErr);
+      throw new Error(`ユーザー情報の取得に失敗しました: ${secondErr?.message || secondErr}`);
+    }
   }
 
   if (allUsers.length === 0) {
