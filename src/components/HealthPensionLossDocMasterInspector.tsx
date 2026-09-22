@@ -1,0 +1,686 @@
+// ══════════════════════════════════════════════════════════════════════════
+// 🏛️ 健康保険・厚生年金保険 被保険者資格喪失届（日本年金機構 様式コード2201）
+//    公式原本PDF印字座標マスタ設定・精密インスペクター
+// ══════════════════════════════════════════════════════════════════════════
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { 
+  Save, RotateCcw, CheckCircle2, 
+  ZoomIn, ZoomOut, ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
+  Sliders, Eye, Sparkles
+} from 'lucide-react';
+import { 
+  DEFAULT_HEALTH_PENSION_LOSS_FIELDS,
+  loadHealthPensionLossCoordinates,
+  saveHealthPensionLossCoordinates,
+  saveHealthPensionLossCoordinatesToDb,
+  broadcastHealthPensionLossCoordinates,
+  type HealthPensionLossFieldConfig
+} from '../lib/healthPensionLossDocCoordinates';
+import { OfficialHealthPensionLossDoc, type HealthPensionLossEmployee } from './OfficialHealthPensionLossDoc';
+
+export const HealthPensionLossDocMasterInspector: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'inspector' | 'input_preview'>('inspector');
+
+  // インスペクター用State
+  const [fields, setFields] = useState<HealthPensionLossFieldConfig[]>(() => loadHealthPensionLossCoordinates());
+  const [selectedSection, setSelectedSection] = useState<'header' | 'office' | 'insured_person_1'>('insured_person_1');
+  const [selectedFieldId, setSelectedFieldId] = useState<string>('myNumberOrPension_1');
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedSuccess, setSavedSuccess] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState<number>(100);
+
+  // 原本背景画像
+  const [bgPdfImg, setBgPdfImg] = useState<string | null>(null);
+  const [isLoadingPdf, setIsLoadingPdf] = useState(true);
+
+  // ドラッグ移動用State
+  const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
+  const dragStartRef = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // PDF.jsによる原本描画
+  useEffect(() => {
+    let isCancelled = false;
+    const renderPdf = async () => {
+      setIsLoadingPdf(true);
+      try {
+        // @ts-ignore
+        if (!window.pdfjsLib) {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+          document.head.appendChild(script);
+          await new Promise(resolve => { script.onload = resolve; });
+        }
+        // @ts-ignore
+        const pdfjsLib = window.pdfjsLib;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        const cMapUrl = window.location.origin ? (window.location.origin + '/cmaps/') : '/cmaps/';
+        const standardFontDataUrl = window.location.origin ? (window.location.origin + '/standard_fonts/') : '/standard_fonts/';
+
+        const loadingTask = pdfjsLib.getDocument({
+          url: '/health_pension_loss_template.pdf',
+          cMapUrl: cMapUrl,
+          cMapPacked: true,
+          standardFontDataUrl: standardFontDataUrl,
+          enableXfa: true
+        });
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(1);
+
+        const scale = 2.0;
+        const viewport = page.getViewport({ scale });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        if (isCancelled) return;
+
+        setBgPdfImg(canvas.toDataURL('image/png'));
+        setIsLoadingPdf(false);
+      } catch (err) {
+        console.warn('PDF load warning:', err);
+        setIsLoadingPdf(false);
+      }
+    };
+    renderPdf();
+    return () => { isCancelled = true; };
+  }, []);
+
+  // 選択中項目
+  const selectedField = fields.find(f => f.id === selectedFieldId);
+  const sectionFields = fields.filter(f => f.section === selectedSection);
+
+  // 項目値更新
+  const updateField = useCallback((id: string, key: keyof HealthPensionLossFieldConfig, value: any) => {
+    setFields(prev => {
+      let finalVal = value;
+      if (typeof value === 'number') {
+        const precision = key === 'pitch' ? 100 : (key === 'x' || key === 'y') ? 100 : 1;
+        finalVal = Math.round(value * precision) / precision;
+      }
+      const updated = prev.map(f => f.id === id ? { ...f, [key]: finalVal } : f);
+      saveHealthPensionLossCoordinates(updated);
+      broadcastHealthPensionLossCoordinates(updated);
+      return updated;
+    });
+  }, []);
+
+  // 微調整ハンドラー（矢印ボタン用）
+  const nudge = useCallback((axis: 'x' | 'y', delta: number) => {
+    if (!selectedFieldId) return;
+    setFields(prev => {
+      const updated = prev.map(f => {
+        if (f.id === selectedFieldId) {
+          const current = f[axis];
+          const next = Math.round((current + delta) * 100) / 100;
+          return { ...f, [axis]: next };
+        }
+        return f;
+      });
+      saveHealthPensionLossCoordinates(updated);
+      broadcastHealthPensionLossCoordinates(updated);
+      return updated;
+    });
+  }, [selectedFieldId]);
+
+  // キーボード矢印キーでの微調整
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedFieldId) return;
+      if (['input', 'textarea', 'select'].includes((e.target as HTMLElement).tagName.toLowerCase())) return;
+
+      const step = e.shiftKey ? 0.5 : 0.05;
+      if (e.key === 'ArrowUp') { e.preventDefault(); nudge('y', -step); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); nudge('y', step); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); nudge('x', -step); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); nudge('x', step); }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedFieldId, nudge]);
+
+  // マウスドラッグ開始
+  const handleMouseDownOnField = (e: React.MouseEvent, fieldId: string) => {
+    e.stopPropagation();
+    setSelectedFieldId(fieldId);
+    const target = fields.find(f => f.id === fieldId);
+    if (target) setSelectedSection(target.section);
+
+    setDraggingFieldId(fieldId);
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startX: target ? target.x : 0,
+      startY: target ? target.y : 0
+    };
+  };
+
+  // ドラッグ中・ドラッグ終了
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!draggingFieldId || !dragStartRef.current || !previewContainerRef.current) return;
+
+      const rect = previewContainerRef.current.getBoundingClientRect();
+      const currentScale = previewZoom / 100;
+      const unscaledWidth = rect.width / currentScale;
+      const unscaledHeight = rect.height / currentScale;
+
+      const deltaX = (e.clientX - dragStartRef.current.mouseX) / currentScale;
+      const deltaY = (e.clientY - dragStartRef.current.mouseY) / currentScale;
+
+      const deltaXPercent = (deltaX / unscaledWidth) * 100;
+      const deltaYPercent = (deltaY / unscaledHeight) * 100;
+
+      const nextX = Math.round((dragStartRef.current.startX + deltaXPercent) * 100) / 100;
+      const nextY = Math.round((dragStartRef.current.startY + deltaYPercent) * 100) / 100;
+
+      setFields(prev => {
+        const updated = prev.map(f => f.id === draggingFieldId ? { ...f, x: nextX, y: nextY } : f);
+        saveHealthPensionLossCoordinates(updated);
+        broadcastHealthPensionLossCoordinates(updated);
+        return updated;
+      });
+    };
+
+    const handleMouseUp = () => {
+      setDraggingFieldId(null);
+      dragStartRef.current = null;
+    };
+
+    if (draggingFieldId) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [draggingFieldId, previewZoom]);
+
+  // DB保存
+  const handleSaveToDb = async () => {
+    setIsSaving(true);
+    setSavedSuccess(false);
+    const success = await saveHealthPensionLossCoordinatesToDb(fields);
+    setIsSaving(false);
+    if (success) {
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
+    }
+  };
+
+  // 初期値にリセット
+  const handleResetToDefault = () => {
+    if (window.confirm('健康保険・厚生年金保険 被保険者資格喪失届の座標設定をすべて公式初期値にリセットしますか？')) {
+      setFields(DEFAULT_HEALTH_PENSION_LOSS_FIELDS);
+      saveHealthPensionLossCoordinates(DEFAULT_HEALTH_PENSION_LOSS_FIELDS);
+      broadcastHealthPensionLossCoordinates(DEFAULT_HEALTH_PENSION_LOSS_FIELDS);
+    }
+  };
+
+  // プレビュー用ダミー従業員
+  const sampleEmployees: HealthPensionLossEmployee[] = [
+    {
+      id: 'sample-1',
+      name: '駒井 秀一朗',
+      name_kana: 'コマイ シュウイチロウ',
+      birth_date: '1979-03-18',
+      gender: 'male',
+      my_number: '123456789012',
+      pension_number: '1234567890',
+      join_date: '2023-01-02',
+      retirement_date: '2026-03-31',
+      zip_code: '520-0001',
+      address: '滋賀県大津市坂本3丁目21-16'
+    }
+  ];
+
+  return (
+    <div className="space-y-4 font-sans">
+      {/* 🧭 コントロールバー */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-black bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5" />
+              日本年金機構 様式コード2201
+            </span>
+            <span className="text-xs text-slate-400 font-bold">A4縦・実寸ピクセルインスペクター</span>
+          </div>
+          <h2 className="text-lg font-black text-slate-800 mt-1">
+            健康保険・厚生年金保険 被保険者資格喪失届 印字座標マスタ設定
+          </h2>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* タブ切り替え */}
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+            <button
+              onClick={() => setActiveTab('inspector')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                activeTab === 'inspector' ? 'bg-white text-rose-700 shadow-2xs font-black' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              座標微調整（ドラッグ移動）
+            </button>
+            <button
+              onClick={() => setActiveTab('input_preview')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                activeTab === 'input_preview' ? 'bg-white text-rose-700 shadow-2xs font-black' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              完成形プレビュー
+            </button>
+          </div>
+
+          {activeTab === 'inspector' && (
+            <>
+              {/* 初期値リセット */}
+              <button
+                onClick={handleResetToDefault}
+                className="flex items-center gap-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                title="すべての座標を公式初期値に戻す"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                リセット
+              </button>
+
+              {/* DB一括保存 */}
+              <button
+                onClick={handleSaveToDb}
+                disabled={isSaving}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black shadow-xs transition cursor-pointer ${
+                  savedSuccess
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-rose-600 hover:bg-rose-700 text-white'
+                }`}
+              >
+                {savedSuccess ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    クラウド保存完了！
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    {isSaving ? '保存中...' : 'クラウド全社保存'}
+                  </>
+                )}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {activeTab === 'input_preview' ? (
+        <OfficialHealthPensionLossDoc
+          companyInfo={{
+            postal_code: '5200001',
+            address: '滋賀県大津市坂本3丁目21-16',
+            company_name: '株式会社cocotte',
+            representative_name: '駒井 秀一朗'
+          }}
+          officeSymbol="26カカ1234"
+          officeNumber="12345"
+          employees={sampleEmployees}
+          selectedEmployeeId="sample-1"
+        />
+      ) : (
+        <div className="flex flex-col lg:flex-row items-start gap-4">
+          
+          {/* 左側：リアルタイム原本プレビューコンテナ */}
+          <div className="flex-1 w-full overflow-x-auto flex flex-col items-center bg-slate-200/80 p-3 sm:p-5 rounded-2xl border border-slate-300">
+            {/* ズームバー */}
+            <div className="flex items-center gap-2 mb-3 bg-white px-3 py-1.5 rounded-xl border border-slate-300 shadow-2xs text-xs font-bold">
+              <span className="text-slate-500">プレビュー倍率:</span>
+              <button
+                type="button"
+                onClick={() => setPreviewZoom(z => Math.max(50, z - 10))}
+                className="p-1 hover:bg-slate-100 rounded"
+              >
+                <ZoomOut className="w-3.5 h-3.5 text-slate-600" />
+              </button>
+              <span className="w-12 text-center font-mono font-black">{previewZoom}%</span>
+              <button
+                type="button"
+                onClick={() => setPreviewZoom(z => Math.min(150, z + 10))}
+                className="p-1 hover:bg-slate-100 rounded"
+              >
+                <ZoomIn className="w-3.5 h-3.5 text-slate-600" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewZoom(100)}
+                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-[11px]"
+              >
+                100%
+              </button>
+            </div>
+
+            {/* A4縦 実寸枠 */}
+            <div 
+              style={{ 
+                width: `${210 * (previewZoom / 100)}mm`, 
+                height: `${297 * (previewZoom / 100)}mm` 
+              }} 
+              className="relative transition-[width,height] duration-150 ease-out"
+            >
+              <div
+                ref={previewContainerRef}
+                style={{
+                  transform: `scale(${previewZoom / 100})`,
+                  transformOrigin: 'top left',
+                  width: '210mm',
+                  height: '297mm'
+                }}
+                className="bg-white relative shadow-2xl border border-slate-400 overflow-hidden select-none"
+              >
+                {/* 原本背景画像 */}
+                {bgPdfImg ? (
+                  <img
+                    src={bgPdfImg}
+                    alt="資格喪失届原本"
+                    className="absolute inset-0 w-full h-full object-cover pointer-events-none opacity-85"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-slate-50 text-slate-400 text-xs">
+                    {isLoadingPdf ? '原本PDF読み込み中...' : '原本背景なし'}
+                  </div>
+                )}
+
+                {/* 座標要素描画 */}
+                {fields.filter(f => !f.disabled).map(field => {
+                  const isSelected = selectedFieldId === field.id;
+                  const isDragging = draggingFieldId === field.id;
+
+                  // ⭕ 丸囲み項目プレビュー
+                  if (field.isCircle) {
+                    const sampleActiveMap: Record<string, string> = {
+                      birthEra_1: '5',       // 昭和
+                      lossReason_1: '4',     // 退職等
+                      remarks_1: ''
+                    };
+
+                    const isDefaultActive = field.circleValueKey && field.circleActiveValue
+                      ? sampleActiveMap[field.circleValueKey] === field.circleActiveValue
+                      : false;
+
+                    const circleW = field.circleWidth || 26;
+                    const circleH = field.circleHeight || 16;
+                    const isGuideCircle = !isSelected && !isDefaultActive;
+
+                    return (
+                      <div
+                        key={field.id}
+                        onMouseDown={(e) => handleMouseDownOnField(e, field.id)}
+                        style={{
+                          position: 'absolute',
+                          left: `${field.x}%`,
+                          top: `${field.y}%`,
+                          width: `${circleW}px`,
+                          height: `${circleH}px`,
+                          transform: 'translate(-50%, -50%)',
+                          borderRadius: '9999px',
+                          border: isSelected
+                            ? '2.5px solid #e11d48'
+                            : isGuideCircle
+                              ? '1.2px dashed #94a3b8'
+                              : '2px solid #0f172a',
+                          backgroundColor: isSelected
+                            ? 'rgba(244, 63, 94, 0.25)'
+                            : isGuideCircle
+                              ? 'rgba(241, 245, 249, 0.4)'
+                              : 'transparent',
+                          cursor: 'move',
+                          zIndex: isSelected ? 50 : 20
+                        }}
+                        title={`${field.name} (ドラッグで移動)`}
+                      />
+                    );
+                  }
+
+                  // 通常テキスト項目描画
+                  return (
+                    <div
+                      key={field.id}
+                      onMouseDown={(e) => handleMouseDownOnField(e, field.id)}
+                      style={{
+                        position: 'absolute',
+                        left: `${field.x}%`,
+                        top: `${field.y}%`,
+                        fontSize: `${field.fontSize || 10}px`,
+                        fontWeight: 'bold',
+                        color: isSelected ? '#be123c' : '#0f172a',
+                        backgroundColor: isSelected ? 'rgba(254, 205, 211, 0.7)' : 'transparent',
+                        outline: isSelected ? '1.5px solid #e11d48' : isDragging ? '1px dashed #94a3b8' : 'none',
+                        cursor: 'move',
+                        padding: '1px 2px',
+                        whiteSpace: 'nowrap',
+                        zIndex: isSelected ? 40 : 10,
+                        lineHeight: 1.1
+                      }}
+                      title={`${field.name} (ドラッグで移動)`}
+                    >
+                      {field.example || field.name}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* 右側：座標調整コントロールパネル */}
+          <div className="w-full lg:w-96 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs space-y-4 shrink-0 text-xs">
+            <div>
+              <h3 className="font-black text-slate-800 text-sm flex items-center gap-1.5">
+                <Sliders className="w-4 h-4 text-rose-600" />
+                項目選択 ＆ 座標微調整
+              </h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                画面上の要素を直接ドラッグ、または下で数値指定
+              </p>
+            </div>
+
+            {/* セクション切替タブ */}
+            <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold text-center">
+              <button
+                type="button"
+                onClick={() => setSelectedSection('insured_person_1')}
+                className={`py-1.5 rounded-lg transition cursor-pointer ${
+                  selectedSection === 'insured_person_1' ? 'bg-white text-rose-700 shadow-2xs font-black' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                被保険者情報
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedSection('office')}
+                className={`py-1.5 rounded-lg transition cursor-pointer ${
+                  selectedSection === 'office' ? 'bg-white text-rose-700 shadow-2xs font-black' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                事業所情報
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedSection('header')}
+                className={`py-1.5 rounded-lg transition cursor-pointer ${
+                  selectedSection === 'header' ? 'bg-white text-rose-700 shadow-2xs font-black' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                提出日他
+              </button>
+            </div>
+
+            {/* 項目選択ドロップダウン */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-bold text-slate-500">調整対象項目</label>
+                <span className="text-[10px] text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded">
+                  全{sectionFields.length}項目
+                </span>
+              </div>
+              <select
+                value={selectedFieldId}
+                onChange={(e) => {
+                  setSelectedFieldId(e.target.value);
+                  const target = fields.find(f => f.id === e.target.value);
+                  if (target) setSelectedSection(target.section);
+                }}
+                className="w-full p-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800"
+              >
+                {sectionFields.map(f => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 選択項目の座標コントローラー */}
+            {selectedField && (
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3 text-xs">
+                <div className="font-black text-slate-800 border-b border-slate-200 pb-1.5 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    {selectedField.isCircle && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-black bg-rose-100 text-rose-800 border border-rose-300">
+                        〇囲み
+                      </span>
+                    )}
+                    <span>{selectedField.name}</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-mono font-normal">ID: {selectedField.id}</span>
+                </div>
+
+                {/* 矢印キー微調整パッド */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 block text-center">
+                    矢印微調整（キーボード矢印キーでも可 / Shiftで大移動）
+                  </label>
+                  <div className="flex flex-col items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => nudge('y', -0.1)}
+                      className="p-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg shadow-2xs text-slate-700 cursor-pointer"
+                      title="上へ"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => nudge('x', -0.1)}
+                        className="p-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg shadow-2xs text-slate-700 cursor-pointer"
+                        title="左へ"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="text-[10px] font-mono text-slate-400 font-bold">MOVE</span>
+                      <button
+                        type="button"
+                        onClick={() => nudge('x', 0.1)}
+                        className="p-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg shadow-2xs text-slate-700 cursor-pointer"
+                        title="右へ"
+                      >
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => nudge('y', 0.1)}
+                      className="p-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg shadow-2xs text-slate-700 cursor-pointer"
+                      title="下へ"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 座標数値入力 */}
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-0.5">X座標（%）</label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      value={selectedField.x}
+                      onChange={(e) => updateField(selectedField.id, 'x', parseFloat(e.target.value) || 0)}
+                      className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Y座標（%）</label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      value={selectedField.y}
+                      onChange={(e) => updateField(selectedField.id, 'y', parseFloat(e.target.value) || 0)}
+                      className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono font-bold"
+                    />
+                  </div>
+                </div>
+
+                {/* フォントサイズ・文字ピッチ */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-0.5">文字サイズ (px)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={selectedField.fontSize || 10}
+                      onChange={(e) => updateField(selectedField.id, 'fontSize', parseFloat(e.target.value) || 10)}
+                      className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono font-bold"
+                    />
+                  </div>
+                  {selectedField.pitch !== undefined && (
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">マス目ピッチ (mm)</label>
+                      <input
+                        type="number"
+                        step="0.05"
+                        value={selectedField.pitch || 2.8}
+                        onChange={(e) => updateField(selectedField.id, 'pitch', parseFloat(e.target.value) || 2.8)}
+                        className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono font-bold"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* 〇のサイズ調整 */}
+                {selectedField.isCircle && (
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">〇の横幅 (px)</label>
+                      <input
+                        type="number"
+                        value={selectedField.circleWidth || 26}
+                        onChange={(e) => updateField(selectedField.id, 'circleWidth', parseInt(e.target.value) || 26)}
+                        className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">〇の縦幅 (px)</label>
+                      <input
+                        type="number"
+                        value={selectedField.circleHeight || 16}
+                        onChange={(e) => updateField(selectedField.id, 'circleHeight', parseInt(e.target.value) || 16)}
+                        className="w-full p-1.5 bg-white border border-slate-300 rounded font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
