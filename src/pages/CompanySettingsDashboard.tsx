@@ -226,9 +226,41 @@ export const isValidDepartmentName = (name: string): boolean => {
   return true;
 };
 
+// 🧹 現場職種（店舗の役割）が部署として誤生成・保存された偽部署の判定
+export const isStoreRoleDept = (name?: string | null): boolean => {
+  if (!name) return false;
+  const n = sanitizeDepartmentName(name);
+  return /^(環境整備|清掃|フロント|レジ|調理|厨房|ホール)(運営)?部?$/.test(n) ||
+    n === '清掃部' || n === 'レジ部' || n === '厨房部' || n === 'ホール部' || n === 'フロント部' ||
+    n === '環境整備・清掃部' || n === 'フロント・レジ部' || n === '調理厨房部' || n === 'ホール運営部';
+};
+
+// 🚫 ユーザーが明示的に削除した部署名の記録（LocalStorage永続化・自動復活の永久遮断）
+export const getDeletedDepartmentNamesFromStorage = (tId?: string | null): Set<string> => {
+  if (!tId) return new Set();
+  try {
+    const raw = localStorage.getItem(`deleted_department_names_${tId}`);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return new Set(arr);
+    }
+  } catch (_) {}
+  return new Set();
+};
+
+export const addDeletedDepartmentNameToStorage = (tId: string | null | undefined, name: string) => {
+  if (!tId || !name) return;
+  try {
+    const current = getDeletedDepartmentNamesFromStorage(tId);
+    current.add(name);
+    localStorage.setItem(`deleted_department_names_${tId}`, JSON.stringify(Array.from(current)));
+  } catch (_) {}
+};
+
 const getDepartmentsFromStorage = (tId: string): DepartmentMaster[] => {
   try {
     if (!tId) return [];
+    const deletedNames = getDeletedDepartmentNamesFromStorage(tId);
     const raw = localStorage.getItem(`company_departments_${tId}`);
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -236,7 +268,13 @@ const getDepartmentsFromStorage = (tId: string): DepartmentMaster[] => {
         const validMap = new Map<string, DepartmentMaster>();
         parsed.forEach((d: DepartmentMaster) => {
           const cleanName = sanitizeDepartmentName(d.name);
-          if (isValidDepartmentName(cleanName) && !validMap.has(cleanName)) {
+          // 偽部署および削除済み部署は100%復元しない
+          if (
+            isValidDepartmentName(cleanName) &&
+            !isStoreRoleDept(cleanName) &&
+            !deletedNames.has(cleanName) &&
+            !validMap.has(cleanName)
+          ) {
             validMap.set(cleanName, { ...d, name: cleanName });
           }
         });
@@ -252,10 +290,16 @@ const getDepartmentsFromStorage = (tId: string): DepartmentMaster[] => {
 const saveDepartmentsToStorage = (tId: string, depts: DepartmentMaster[]) => {
   try {
     if (tId) {
+      const deletedNames = getDeletedDepartmentNamesFromStorage(tId);
       const validMap = new Map<string, DepartmentMaster>();
       depts.forEach(d => {
         const cleanName = sanitizeDepartmentName(d.name);
-        if (isValidDepartmentName(cleanName) && !validMap.has(cleanName)) {
+        if (
+          isValidDepartmentName(cleanName) &&
+          !isStoreRoleDept(cleanName) &&
+          !deletedNames.has(cleanName) &&
+          !validMap.has(cleanName)
+        ) {
           validMap.set(cleanName, { ...d, name: cleanName });
         }
       });
@@ -830,6 +874,7 @@ export default function CompanySettingsDashboard() {
       }
 
       // 部署マスタ取得（DBまたはLocalStorageバックアップから確実に復元）
+      const deletedNames = getDeletedDepartmentNamesFromStorage(tenantIdData);
       let deptsLoaded: DepartmentMaster[] = [];
       try {
         const { data: deptData } = await supabase
@@ -838,7 +883,8 @@ export default function CompanySettingsDashboard() {
           .eq('tenant_id', tenantIdData)
           .order('display_order', { ascending: true });
         if (deptData && deptData.length > 0) {
-          deptsLoaded = deptData;
+          // DBデータからも偽部署（職種名）と明示的削除済み部署を徹底排除
+          deptsLoaded = deptData.filter(d => !isStoreRoleDept(d.name) && !deletedNames.has(d.name));
         }
       } catch (e) {
         console.warn('Fetch department masters from DB error:', e);
@@ -850,19 +896,22 @@ export default function CompanySettingsDashboard() {
         const mergedMap = new Map<string, DepartmentMaster>();
         deptsLoaded.forEach(d => mergedMap.set(d.name, d));
         storageDepts.forEach(sd => {
-          if (mergedMap.has(sd.name)) {
-            const current = mergedMap.get(sd.name)!;
-            mergedMap.set(sd.name, {
-              ...current,
-              manager_user_id: sd.manager_user_id || current.manager_user_id,
-              manager_user_name: sd.manager_user_name || current.manager_user_name
-            });
-          } else {
-            mergedMap.set(sd.name, sd);
+          if (!isStoreRoleDept(sd.name) && !deletedNames.has(sd.name)) {
+            if (mergedMap.has(sd.name)) {
+              const current = mergedMap.get(sd.name)!;
+              mergedMap.set(sd.name, {
+                ...current,
+                manager_user_id: sd.manager_user_id || current.manager_user_id,
+                manager_user_name: sd.manager_user_name || current.manager_user_name
+              });
+            } else {
+              mergedMap.set(sd.name, sd);
+            }
           }
         });
         deptsLoaded = Array.from(mergedMap.values());
       }
+      saveDepartmentsToStorage(tenantIdData, deptsLoaded);
       setDepartments(deptsLoaded);
 
       // 🏪 店舗・拠点マスタ取得（DBとLocalStorageのハイブリッド復元）
@@ -1091,10 +1140,11 @@ export default function CompanySettingsDashboard() {
       return clean;
     };
 
-    // 1. マスタ登録済みの部署
-    const baseDepartments = [...departments];
+    // 1. マスタ登録済みの部署（偽部署および削除済み部署を除外）
+    const deletedNames = getDeletedDepartmentNamesFromStorage(tenantId);
+    const baseDepartments = departments.filter(d => !isStoreRoleDept(d.name) && !deletedNames.has(d.name));
     // 店舗運営部がマスタに存在しない場合は標準として追加
-    if (!baseDepartments.some(d => d.name === '店舗運営部')) {
+    if (!baseDepartments.some(d => d.name === '店舗運営部') && !deletedNames.has('店舗運営部')) {
       baseDepartments.push({
         id: 'dept-store-ops',
         name: '店舗運営部',
@@ -1132,8 +1182,8 @@ export default function CompanySettingsDashboard() {
         supabase.from('users').update({ department: normalizedDept }).eq('id', u.id).then(() => {}, () => {});
       }
 
-      // 現場職種名は独立部署として追加しない（店舗運営部に集約済み）
-      if (isStoreRoleDept(cleanDept)) return;
+      // 現場職種名およびユーザーが削除した部署名は独立部署として追加しない（店舗運営部に集約済みまたは抹消）
+      if (isStoreRoleDept(cleanDept) || deletedNames.has(normalizedDept)) return;
 
       if (normalizedDept && isValidDepartmentName(normalizedDept) && !existingNames.has(normalizedDept)) {
         existingNames.add(normalizedDept);
@@ -2017,14 +2067,60 @@ export default function CompanySettingsDashboard() {
     }
   };
 
-  // 部署削除
-  const handleDeleteDepartment = async (id: string) => {
-    if (!confirm('この部署を削除しますか？')) return;
+  // 部署削除（DB・LocalStorage・画面State・社員所属の全層から完全抹消）
+  const handleDeleteDepartment = async (id: string, name?: string) => {
+    const targetDept = departments.find(d => d.id === id);
+    const targetName = name || targetDept?.name || '';
+    if (!targetName && !id) return;
+
+    if (!confirm(`部署「${targetName || '選択した部署'}」を削除しますか？\n※ 削除すると組織図および所属設定から完全に消去されます。`)) return;
+
     try {
-      await supabase.from('department_masters').delete().eq('id', id);
+      // 1. 削除済み部署リスト（ブラックリスト）に即座に登録（復元を永久遮断）
+      if (tenantId && targetName) {
+        addDeletedDepartmentNameToStorage(tenantId, targetName);
+      }
+
+      // 2. ローカルStateから即座に除外（画面の即時反映・Optimistic Update）
+      const nextDepts = departments.filter(d => d.id !== id && (targetName ? d.name !== targetName : true));
+      setDepartments(nextDepts);
+
+      // 3. LocalStorageから確実に保存・パージ
+      if (tenantId) {
+        saveDepartmentsToStorage(tenantId, nextDepts);
+      }
+
+      // 4. Supabase DB から完全削除（ID指定 および テナント+部署名指定の両面）
+      if (tenantId) {
+        try {
+          if (id && !id.startsWith('auto_') && !id.startsWith('dept-default')) {
+            await supabase.from('department_masters').delete().eq('tenant_id', tenantId).eq('id', id);
+          }
+        } catch (dbErr1) {
+          console.warn('Delete department by id error:', dbErr1);
+        }
+
+        if (targetName) {
+          try {
+            await supabase.from('department_masters').delete().eq('tenant_id', tenantId).eq('name', targetName);
+          } catch (dbErr2) {
+            console.warn('Delete department by name error:', dbErr2);
+          }
+
+          // 5. この部署に所属していた社員の所属部署を安全にクリア（未所属に移行）
+          try {
+            await supabase.from('users').update({ department: null }).eq('tenant_id', tenantId).eq('department', targetName);
+          } catch (uErr) {
+            console.warn('Clear user department error:', uErr);
+          }
+        }
+      }
+
+      // 6. 最新データの再取得
       await fetchData();
-    } catch (e) {
-      alert('削除に失敗しました。');
+    } catch (e: any) {
+      console.error('Delete department error:', e);
+      alert('削除処理中にエラーが発生しました: ' + (e?.message || ''));
     }
   };
 
@@ -2723,9 +2819,9 @@ export default function CompanySettingsDashboard() {
                             <span className="text-[10px] font-bold bg-white text-slate-600 border border-slate-200 px-2 py-0.5 rounded-full">
                               {dept.members.length}名
                             </span>
-                            {departments.some(d => d.id === dept.id) && (
+                            {dept.name !== '店舗運営部' && (
                               <button
-                                onClick={() => handleDeleteDepartment(dept.id)}
+                                onClick={() => handleDeleteDepartment(dept.id, dept.name)}
                                 className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
                                 title="この部署を削除"
                               >

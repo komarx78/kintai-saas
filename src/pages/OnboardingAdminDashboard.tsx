@@ -196,9 +196,32 @@ export const isValidDepartmentName = (name: string): boolean => {
   return true;
 };
 
+// 🧹 現場職種（店舗の役割）が部署として誤生成・保存された偽部署の判定
+export const isStoreRoleDept = (name?: string | null): boolean => {
+  if (!name) return false;
+  const n = sanitizeDepartmentName(name);
+  return /^(環境整備|清掃|フロント|レジ|調理|厨房|ホール)(運営)?部?$/.test(n) ||
+    n === '清掃部' || n === 'レジ部' || n === '厨房部' || n === 'ホール部' || n === 'フロント部' ||
+    n === '環境整備・清掃部' || n === 'フロント・レジ部' || n === '調理厨房部' || n === 'ホール運営部';
+};
+
+// 🚫 ユーザーが明示的に削除した部署名の記録取得
+export const getDeletedDepartmentNamesFromStorage = (tId?: string | null): Set<string> => {
+  if (!tId) return new Set();
+  try {
+    const raw = localStorage.getItem(`deleted_department_names_${tId}`);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return new Set(arr);
+    }
+  } catch (_) {}
+  return new Set();
+};
+
 export const getDepartmentsFromStorage = (tId?: string | null): DepartmentMaster[] => {
   try {
     if (tId) {
+      const deletedNames = getDeletedDepartmentNamesFromStorage(tId);
       const raw = localStorage.getItem(`company_departments_${tId}`);
       if (raw) {
         const parsed = JSON.parse(raw);
@@ -206,7 +229,12 @@ export const getDepartmentsFromStorage = (tId?: string | null): DepartmentMaster
           const validMap = new Map<string, DepartmentMaster>();
           parsed.forEach((d: DepartmentMaster) => {
             const cleanName = sanitizeDepartmentName(d.name);
-            if (isValidDepartmentName(cleanName) && !validMap.has(cleanName)) {
+            if (
+              isValidDepartmentName(cleanName) &&
+              !isStoreRoleDept(cleanName) &&
+              !deletedNames.has(cleanName) &&
+              !validMap.has(cleanName)
+            ) {
               validMap.set(cleanName, { ...d, name: cleanName });
             }
           });
@@ -223,10 +251,16 @@ export const getDepartmentsFromStorage = (tId?: string | null): DepartmentMaster
 export const saveDepartmentsToStorage = (tId: string | null | undefined, depts: DepartmentMaster[]) => {
   try {
     if (tId && depts && depts.length > 0) {
+      const deletedNames = getDeletedDepartmentNamesFromStorage(tId);
       const validMap = new Map<string, DepartmentMaster>();
       depts.forEach(d => {
         const cleanName = sanitizeDepartmentName(d.name);
-        if (isValidDepartmentName(cleanName) && !validMap.has(cleanName)) {
+        if (
+          isValidDepartmentName(cleanName) &&
+          !isStoreRoleDept(cleanName) &&
+          !deletedNames.has(cleanName) &&
+          !validMap.has(cleanName)
+        ) {
           validMap.set(cleanName, { ...d, name: cleanName });
         }
       });
@@ -622,6 +656,7 @@ export default function OnboardingAdminDashboard() {
       }
 
       // 部署マスタ取得（DB、会社設定LocalStorage、標準初期部署の多層フォールバック）
+      const deletedNames = getDeletedDepartmentNamesFromStorage(tenantIdData);
       let deptsLoaded: DepartmentMaster[] = [];
       try {
         const { data: deptData } = await supabase
@@ -633,7 +668,7 @@ export default function OnboardingAdminDashboard() {
           const cleanMap = new Map<string, DepartmentMaster>();
           deptData.forEach(d => {
             const clean = sanitizeDepartmentName(d.name);
-            if (isValidDepartmentName(clean) && !cleanMap.has(clean)) {
+            if (isValidDepartmentName(clean) && !isStoreRoleDept(clean) && !deletedNames.has(clean) && !cleanMap.has(clean)) {
               cleanMap.set(clean, { ...d, name: clean });
             }
           });
