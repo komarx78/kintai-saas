@@ -816,6 +816,15 @@ const UserDashboard = () => {
   // 📍 出勤打刻処理（スマートフォン打刻時はGPS位置情報を取得・不正打刻防止）
   const handlePunchIn = async () => {
     if (!user || isPunching) return;
+
+    // 💡 すでに退勤済またはレコードが存在する場合の確認
+    if (status === '退勤済' || currentRecord?.check_out_time) {
+      const confirmReset = window.confirm(
+        `本日はすでに退勤記録（出勤: ${currentRecord?.check_in_time?.substring(0, 5) || '--:--'} / 退勤: ${currentRecord?.check_out_time?.substring(0, 5) || '--:--'}）が存在します。\n\n本日の打刻を更新し、ただいまの時刻で新しく出勤打刻を記録しますか？\n（※「OK」を押すと現在時刻で出勤できます）`
+      );
+      if (!confirmReset) return;
+    }
+
     setIsPunching(true);
 
     let gpsData: { latitude: number; longitude: number; accuracy: number } | null = null;
@@ -847,8 +856,10 @@ const UserDashboard = () => {
       tenant_id: user.tenant_id,
       date: today,
       check_in_time: now,
+      check_out_time: null,
       status: '勤務中',
-      check_in_device: deviceType
+      check_in_device: deviceType,
+      check_out_device: null
     };
 
     if (gpsData) {
@@ -859,38 +870,66 @@ const UserDashboard = () => {
 
     try {
       let insertedData: any = null;
-      const { data, error } = await supabase
-        .from('attendance_records')
-        .insert(fullPayload)
-        .select()
-        .single();
 
-      if (error) {
-        // カラムがDBに未追加の場合の安全フォールバック（通常登録リトライ）
-        console.warn('GPS columns insert fallback:', error.message);
-        const fallbackPayload = {
-          user_id: user.id,
-          tenant_id: user.tenant_id,
-          date: today,
-          check_in_time: now,
-          status: '勤務中'
-        };
-        const { data: fbData, error: fbError } = await supabase
+      // 既存レコードが存在する場合は update、なければ insert
+      if (currentRecord?.id) {
+        const { data: upData, error: upError } = await supabase
           .from('attendance_records')
-          .insert(fallbackPayload)
+          .update(fullPayload)
+          .eq('id', currentRecord.id)
+          .select()
+          .maybeSingle();
+
+        if (upError) {
+          console.warn('Update fallback:', upError.message);
+          const { data: fbUp, error: fbUpErr } = await supabase
+            .from('attendance_records')
+            .update({
+              check_in_time: now,
+              check_out_time: null,
+              status: '勤務中'
+            })
+            .eq('id', currentRecord.id)
+            .select()
+            .single();
+          if (fbUpErr) throw fbUpErr;
+          insertedData = fbUp;
+        } else {
+          insertedData = upData;
+        }
+      } else {
+        const { data, error } = await supabase
+          .from('attendance_records')
+          .insert(fullPayload)
           .select()
           .single();
 
-        if (fbError) throw fbError;
-        insertedData = fbData;
-      } else {
-        insertedData = data;
+        if (error) {
+          console.warn('GPS columns insert fallback:', error.message);
+          const fallbackPayload = {
+            user_id: user.id,
+            tenant_id: user.tenant_id,
+            date: today,
+            check_in_time: now,
+            status: '勤務中'
+          };
+          const { data: fbData, error: fbError } = await supabase
+            .from('attendance_records')
+            .insert(fallbackPayload)
+            .select()
+            .single();
+
+          if (fbError) throw fbError;
+          insertedData = fbData;
+        } else {
+          insertedData = data;
+        }
       }
 
       setCurrentRecord(insertedData);
       setStatus('勤務中');
 
-      let successMsg = '出勤を記録しました！';
+      let successMsg = '出勤を記録しました！本日もお疲れ様です。';
       if (gpsData) {
         successMsg += `\n📍 位置情報（精度: ±${gpsData.accuracy}m）を記録しました。`;
       }
@@ -900,6 +939,102 @@ const UserDashboard = () => {
     } finally {
       setIsPunching(false);
       setGpsStatusText(null);
+    }
+  };
+
+  // ↩️ 退勤を取り消して勤務中に戻す
+  const handleUndoPunchOut = async () => {
+    if (!user || !currentRecord || isPunching) return;
+    if (!window.confirm('退勤打刻を取り消して、再度「勤務中」ステータスに戻しますか？\n※退勤時刻がクリアされ、引き続き勤務中としてカウントされます。')) return;
+
+    setIsPunching(true);
+    try {
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .update({
+          check_out_time: null,
+          status: '勤務中',
+          check_out_lat: null,
+          check_out_lng: null,
+          check_out_device: null
+        })
+        .eq('id', currentRecord.id)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+      if (error) {
+        const { data: fbData, error: fbErr } = await supabase
+          .from('attendance_records')
+          .update({
+            check_out_time: null,
+            status: '勤務中'
+          })
+          .eq('id', currentRecord.id)
+          .select()
+          .single();
+        if (fbErr) throw fbErr;
+        setCurrentRecord(fbData);
+      } else {
+        setCurrentRecord(data);
+      }
+
+      setStatus('勤務中');
+      alert('退勤を取り消しました。ステータスを「勤務中」に戻しました。');
+    } catch (err: any) {
+      alert('退勤取消エラー: ' + (err.message || err));
+    } finally {
+      setIsPunching(false);
+    }
+  };
+
+  // 🔄 本日の打刻データを完全にリセットして未出勤に戻す
+  const handleResetTodayRecord = async () => {
+    if (!user || !currentRecord || isPunching) return;
+    if (!window.confirm('本日の出退勤打刻データをリセットし、「未出勤」状態に戻しますか？\n\n※テスト打刻のやり直しや、誤って記録されたデータを消去して最初から出勤し直すことができます。')) return;
+
+    setIsPunching(true);
+    try {
+      const { error } = await supabase
+        .from('attendance_records')
+        .delete()
+        .eq('id', currentRecord.id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setStatus('未出勤');
+      setCurrentRecord(null);
+      alert('本日の打刻データをリセットしました。「未出勤」に戻りましたので、新たに出勤打刻が可能です！');
+    } catch (err: any) {
+      alert('打刻リセットエラー: ' + (err.message || err));
+    } finally {
+      setIsPunching(false);
+    }
+  };
+
+  // ↩️ 出勤を取り消して未出勤に戻す
+  const handleUndoPunchIn = async () => {
+    if (!user || !currentRecord || isPunching) return;
+    if (!window.confirm('出勤打刻を取り消して、「未出勤」状態に戻しますか？\n※押し間違いの際に直前の出勤を取り消せます。')) return;
+
+    setIsPunching(true);
+    try {
+      const { error } = await supabase
+        .from('attendance_records')
+        .delete()
+        .eq('id', currentRecord.id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setStatus('未出勤');
+      setCurrentRecord(null);
+      alert('出勤を取り消しました。「未出勤」状態に戻りました。');
+    } catch (err: any) {
+      alert('出勤取消エラー: ' + (err.message || err));
+    } finally {
+      setIsPunching(false);
     }
   };
 
@@ -1165,20 +1300,26 @@ const UserDashboard = () => {
                 
                 <div className="flex w-full space-x-4">
                   <button 
-                    onClick={handlePunchIn}
-                    disabled={status !== '未出勤' || isPunching}
-                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-blue-700 disabled:opacity-50 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shadow-sm"
+                    onClick={handlePunchIn} 
+                    disabled={status === '勤務中' || isPunching}
+                    className={`flex-1 py-3.5 rounded-xl font-black text-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md ${
+                      status === '退勤済'
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200 ring-2 ring-emerald-300'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-blue-200'
+                    }`}
                   >
-                    {isPunching && status === '未出勤' ? (
+                    {isPunching && status !== '勤務中' ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : status === '退勤済' ? (
+                      '🔄 再出勤 / やり直し'
                     ) : (
                       '出勤'
                     )}
                   </button>
                   <button 
-                    onClick={handlePunchOut}
+                    onClick={handlePunchOut} 
                     disabled={status !== '勤務中' || isPunching}
-                    className="flex-1 bg-orange-500 text-white py-3 rounded-lg font-bold text-lg hover:bg-orange-600 disabled:opacity-50 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shadow-sm"
+                    className="flex-1 bg-orange-500 text-white py-3.5 rounded-xl font-black text-lg hover:bg-orange-600 disabled:opacity-40 transition flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shadow-md shadow-orange-200"
                   >
                     {isPunching && status === '勤務中' ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -1243,6 +1384,53 @@ const UserDashboard = () => {
                           ) : null}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {/* 誤打刻・テスト打刻レスキューバー */}
+                  {status === '退勤済' && (
+                    <div className="mt-2 p-3 bg-amber-50/90 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-2.5 w-full shadow-2xs">
+                      <span className="text-xs text-amber-900 font-bold flex items-center gap-1">
+                        <span>💡</span>
+                        <span>打刻の取り消し・やり直し：</span>
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleUndoPunchOut}
+                          disabled={isPunching}
+                          className="text-xs text-indigo-700 hover:text-indigo-900 font-bold bg-white hover:bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-200 transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                          title="退勤を取り消して「勤務中」に戻します"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>退勤を取り消す</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleResetTodayRecord}
+                          disabled={isPunching}
+                          className="text-xs text-slate-600 hover:text-slate-900 font-bold bg-white hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-300 transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                          title="本日の打刻データを消去し、最初から出勤し直します"
+                        >
+                          <span>🔄</span>
+                          <span>打刻リセット</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {status === '勤務中' && (
+                    <div className="mt-1 flex items-center justify-center w-full">
+                      <button
+                        type="button"
+                        onClick={handleUndoPunchIn}
+                        disabled={isPunching}
+                        className="text-xs text-slate-400 hover:text-rose-600 font-medium hover:underline transition flex items-center gap-1 cursor-pointer"
+                        title="出勤打刻をキャンセルして「未出勤」に戻します"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>出勤を取り消す（押し間違い時）</span>
+                      </button>
                     </div>
                   )}
                 </div>
