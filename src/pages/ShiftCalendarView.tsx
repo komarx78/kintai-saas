@@ -1869,7 +1869,7 @@ const ShiftCalendarView: React.FC = () => {
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-6 h-4 rounded shadow-sm opacity-80" style={{backgroundColor: '#94a3b8', border: '2px dotted #fff'}}></div>
-            <span className="text-sm font-bold text-slate-600">ドラフト (自動割り当て結果・未確定)</span>
+            <span className="text-sm font-bold text-slate-600">確定予定シフト (AI割り当て結果・下書き)</span>
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-6 h-4 rounded shadow-sm" style={{backgroundColor: '#94a3b8', border: '1px solid rgba(0,0,0,0.15)'}}></div>
@@ -1997,9 +1997,9 @@ const ShiftCalendarView: React.FC = () => {
                                           {userStats && (
                                             <div 
                                               className="flex flex-col items-end shrink-0 cursor-default select-none pl-1"
-                                              title={`【${userObj?.name || 'スタッフ'} の稼働状況サマリ】\n・仮確定（下書き）: ${userStats.draftDays}日\n・確定済み: ${userStats.confirmedDays}日\n・実働合計: ${userStats.assignedDays}日（${userStats.totalHours}時間）\n・本人希望日数: ${userStats.requestedDays}日\n${userStats.omittedDays > 0 ? `・省かれた希望: ${userStats.omittedDays}日（必要人数枠オーバーのため不採用）` : '・希望シフト: すべて採用済み'}\n${userStats.assignedDays >= 7 ? '🚨【労働基準法違反】週7日全勤・法定休日ゼロ！' : userStats.assignedDays === 6 ? '⚠️【休日不足】週6日出勤・休日1日のみ' : ''}`}
+                                               title={`【${userObj?.name || 'スタッフ'} の稼働状況サマリ】\n・確定予定（AI下書き）: ${userStats.draftDays}日\n・本確定済み: ${userStats.confirmedDays}日\n・実働合計: ${userStats.assignedDays}日（${userStats.totalHours}時間）\n・本人希望日数: ${userStats.requestedDays}日\n${userStats.omittedDays > 0 ? `・省かれた希望: ${userStats.omittedDays}日（必要人数枠オーバーのため不採用）` : '・希望シフト: すべて採用済み'}\n${userStats.assignedDays >= 7 ? '🚨【労働基準法違反】週7日全勤・法定休日ゼロ！' : userStats.assignedDays === 6 ? '⚠️【休日不足】週6日出勤・休日1日のみ' : ''}`}
                                             >
-                                              {/* メインインジケーター：仮確定 / 確定の日数と時間 */}
+                                              {/* メインインジケーター：確定予定 / 確定の日数と時間 */}
                                               <div 
                                                 className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-2xs ${
                                                   userStats.assignedDays >= 7
@@ -2024,7 +2024,7 @@ const ShiftCalendarView: React.FC = () => {
                                                         ? '未配置 0日'
                                                         : userStats.confirmedDays > 0 && userStats.draftDays === 0
                                                           ? `確定 ${userStats.assignedDays}日`
-                                                          : `仮確定 ${userStats.assignedDays}日`}
+                                                          : `確定予定 ${userStats.assignedDays}日`}
                                                 </span>
                                                 <span className={`text-[9px] ${userStats.assignedDays >= 6 ? 'text-white/90' : 'text-slate-400 font-normal'}`}>
                                                   ({userStats.totalHours}h)
@@ -2095,7 +2095,7 @@ const ShiftCalendarView: React.FC = () => {
                                                     left: `${leftPercent}%`,
                                                     width: `${widthPercent}%`
                                                   }}
-                                                  title={`${isShiftHelper ? `【🤝 ${userObj?.department}より応援勤務】` : ''}勤務店舗: ${shift.store_name || userObj?.department || '自店'} (${isRequest ? "未確定（希望）" : isDraft ? "ドラフト（未確定）" : "確定済み"})`}
+                                                  title={`${isShiftHelper ? `【🤝 ${userObj?.department}より応援勤務】` : ''}勤務店舗: ${shift.store_name || userObj?.department || '自店'} (${isRequest ? "従業員の希望（未採用）" : isDraft ? "確定予定（下書き）" : "確定済み"})`}
                                                 >
                                                   <div className="flex items-center gap-1 truncate pointer-events-none">
                                                     {isShiftHelper && (
@@ -2105,7 +2105,7 @@ const ShiftCalendarView: React.FC = () => {
                                                     )}
                                                     <span>{shift.start_time.substring(0,5)} - {shift.end_time.substring(0,5)}</span>
                                                     {isRequest && " (希望)"}
-                                                    {isDraft && " (未確定)"}
+                                                    {isDraft && " (確定予定)"}
                                                   </div>
                                                 </div>
                                               );
