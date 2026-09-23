@@ -701,17 +701,17 @@ const ShiftAdminDashboard: React.FC = () => {
             {/* カード①：📥 スタッフの希望提出状況（STEP 1） */}
             <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-200/80 flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm">
+                <div className="flex items-start justify-between gap-2 mb-4">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm shrink-0">
                       1
                     </div>
-                    <div>
-                      <h2 className="text-lg font-black text-slate-800">希望の提出状況</h2>
-                      <p className="text-xs text-slate-400">{periodInfo.unitLabel}のシフト希望提出（{periodInfo.durationLabel}）</p>
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-black text-slate-800 whitespace-nowrap">希望の提出状況</h2>
+                      <p className="text-xs text-slate-400 truncate">{periodInfo.unitLabel}のシフト希望提出（{periodInfo.durationLabel}）</p>
                     </div>
                   </div>
-                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full border shrink-0 whitespace-nowrap inline-flex items-center ${
                     isSubmissionLocked 
                       ? 'bg-rose-50 text-rose-700 border-rose-200' 
                       : 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -844,32 +844,32 @@ const ShiftAdminDashboard: React.FC = () => {
               <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
 
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold text-sm backdrop-blur-md">
+                <div className="flex items-start justify-between gap-2 mb-4">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold text-sm backdrop-blur-md shrink-0">
                       2
                     </div>
-                    <div>
-                      <h2 className="text-lg font-black flex items-center gap-1.5">
-                        <Zap className="w-5 h-5 text-amber-300 fill-amber-300" />
-                        AIシフト作成 ＆ 確定
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-black flex items-center gap-1 whitespace-nowrap">
+                        <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 fill-amber-300 shrink-0" />
+                        <span>AIシフト作成＆確定</span>
                       </h2>
-                      <p className="text-xs text-indigo-200">必要枠に合わせて自動作成・公開</p>
+                      <p className="text-xs text-indigo-200 truncate">必要枠に合わせて自動作成・公開</p>
                     </div>
                   </div>
 
-                  {/* ステータスバッジ */}
-                  <div className="text-right">
+                  {/* ステータスバッジ（絶対に改行しない・枠からはみ出ない） */}
+                  <div className="shrink-0">
                     {draftCount > 0 ? (
-                      <span className="bg-amber-400 text-slate-900 font-black text-xs px-2.5 py-1 rounded-full shadow-xs">
+                      <span className="bg-amber-400 text-slate-900 font-black text-xs px-2.5 py-1 rounded-full shadow-xs whitespace-nowrap inline-flex items-center">
                         下書き {draftCount}件
                       </span>
                     ) : confirmedCount > 0 ? (
-                      <span className="bg-emerald-400 text-slate-900 font-black text-xs px-2.5 py-1 rounded-full shadow-xs">
+                      <span className="bg-emerald-400 text-slate-900 font-black text-xs px-2.5 py-1 rounded-full shadow-xs whitespace-nowrap inline-flex items-center">
                         確定済 {confirmedCount}件
                       </span>
                     ) : (
-                      <span className="bg-white/20 text-indigo-100 font-bold text-xs px-2 py-0.5 rounded-full">
+                      <span className="bg-white/20 text-indigo-100 font-bold text-xs px-2.5 py-1 rounded-full whitespace-nowrap inline-flex items-center">
                         未作成
                       </span>
                     )}
@@ -964,17 +964,17 @@ const ShiftAdminDashboard: React.FC = () => {
             {/* カード③：💰 人件費予算 ＆ 労働時間の予実サマリー */}
             <div className="bg-white rounded-3xl p-6 shadow-xl border border-slate-200/80 flex flex-col justify-between">
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-sm">
+                <div className="flex items-start justify-between gap-2 mb-4">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-sm shrink-0">
                       3
                     </div>
-                    <div>
-                      <h2 className="text-lg font-black text-slate-800">今月の人件費予実</h2>
-                      <p className="text-xs text-slate-400">確定シフトに基づくリアルタイム試算</p>
+                    <div className="min-w-0">
+                      <h2 className="text-base sm:text-lg font-black text-slate-800 whitespace-nowrap">今月の人件費予実</h2>
+                      <p className="text-xs text-slate-400 truncate">確定シフトに基づくリアルタイム試算</p>
                     </div>
                   </div>
-                  <DollarSign className="w-5 h-5 text-indigo-500" />
+                  <DollarSign className="w-5 h-5 text-indigo-500 shrink-0" />
                 </div>
 
                 {loadingStats ? (
