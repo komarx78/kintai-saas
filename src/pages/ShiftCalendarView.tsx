@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale, Sparkles, ArrowRightLeft, Calendar, Briefcase, Printer, Building2, MapPin, Store, MessageSquare, Send, Smartphone } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale, Sparkles, ArrowRightLeft, Calendar, Briefcase, Printer, Building2, MapPin, Store, MessageSquare, Send, Smartphone, HelpCircle } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -1453,7 +1453,7 @@ const ShiftCalendarView: React.FC = () => {
             </h1>
           </div>
           
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2.5">
             <div className="flex items-center bg-slate-100 rounded-xl p-1">
               <button onClick={() => movePeriod(-1)} className="p-2 hover:bg-white rounded-lg transition-colors shadow-sm">
                 <ChevronLeft className="w-5 h-5 text-slate-600" />
@@ -1469,39 +1469,39 @@ const ShiftCalendarView: React.FC = () => {
             {/* 🏢 正社員シフト一括先入れボタン（黄金フロー第1歩！） */}
             <button 
               onClick={handleOpenStaffPresetModal}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl flex flex-col items-center justify-center transition shadow-md font-bold cursor-pointer border border-indigo-400"
+              className="h-[46px] px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-indigo-400 shrink-0"
               title="正社員スタッフのシフトを実際の日付ごとに1人ずつ（早番・遅番・公休など）細かく先入れ調整します"
             >
-              <div className="flex items-center space-x-1.5 text-xs">
+              <div className="flex items-center space-x-1.5 text-xs leading-tight">
                 <Briefcase className="w-3.5 h-3.5 text-indigo-200" />
                 <span>正社員シフト先入れ</span>
               </div>
-              <span className="text-[10px] text-indigo-100 font-medium">（日別個別調整）</span>
+              <span className="text-[10px] text-indigo-100 font-medium leading-tight mt-0.5">（日別個別調整）</span>
             </button>
 
             <button 
               onClick={handleGenerate}
               disabled={isGenerating}
-              className="bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-2 rounded-xl flex flex-col items-center justify-center transition shadow-md font-bold disabled:opacity-50 cursor-pointer"
+              className="h-[46px] px-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold disabled:opacity-50 cursor-pointer border border-amber-400 shrink-0"
               title="社員枠を崩さず、空いている枠にAIがバイトの希望を自動割り当てします"
             >
-              <div className="flex items-center space-x-1.5 text-xs">
+              <div className="flex items-center space-x-1.5 text-xs leading-tight">
                 {isGenerating ? <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full"></div> : <Wand2 className="w-3.5 h-3.5" />}
                 <span>自動割り当て</span>
               </div>
-              <span className="text-[10px] text-amber-100 font-medium">（バイト自動配置）</span>
+              <span className="text-[10px] text-amber-100 font-medium leading-tight mt-0.5">（バイト自動配置）</span>
             </button>
 
             <button 
               onClick={handlePublishAll}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl flex flex-col items-center justify-center transition shadow-md font-bold cursor-pointer"
+              className="h-[46px] px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-emerald-500 shrink-0"
               title="仕上がった下書きシフトを確定し、スタッフのスマホマイページへ本番公開します（確定版カレンダーが自動起動します）"
             >
-              <div className="flex items-center space-x-1.5 text-xs">
+              <div className="flex items-center space-x-1.5 text-xs leading-tight">
                 <Save className="w-3.5 h-3.5" />
                 <span>一括確定</span>
               </div>
-              <span className="text-[10px] text-emerald-100 font-medium">（本番公開・配信）</span>
+              <span className="text-[10px] text-emerald-100 font-medium leading-tight mt-0.5">（本番公開・配信）</span>
             </button>
 
             {/* 📱 確定シフト LINE一括送信ボタン（最重要・周瑜＆陸遜監修） */}
@@ -1512,40 +1512,40 @@ const ShiftCalendarView: React.FC = () => {
                 }
                 setIsLineSendModalOpen(true);
               }}
-              className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-3.5 py-2 rounded-xl flex flex-col items-center justify-center transition shadow-md font-bold cursor-pointer border border-emerald-400"
+              className="h-[46px] px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-emerald-400 shrink-0"
               title="確定したシフトを各スタッフのLINE宛てに個別一括送信します"
             >
-              <div className="flex items-center space-x-1.5 text-xs">
+              <div className="flex items-center space-x-1.5 text-xs leading-tight">
                 <MessageSquare className="w-3.5 h-3.5 text-emerald-200" />
                 <span>LINEで確定送信</span>
               </div>
-              <span className="text-[10px] text-emerald-100 font-medium">（個別通知）</span>
+              <span className="text-[10px] text-emerald-100 font-medium leading-tight mt-0.5">（個別通知）</span>
             </button>
 
             {/* 📋 確定版カレンダー（店舗貼り出し・印刷用）ボタン */}
             <button 
               onClick={() => setIsConfirmedCalendarOpen(true)}
-              className="bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2 rounded-xl flex flex-col items-center justify-center transition shadow-md font-bold cursor-pointer border border-slate-700"
+              className="h-[46px] px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-slate-700 shrink-0"
               title="確定済みの完成シフトを一覧表示し、店舗貼り出し用にA4横で印刷できます"
             >
-              <div className="flex items-center space-x-1.5 text-xs">
+              <div className="flex items-center space-x-1.5 text-xs leading-tight">
                 <Printer className="w-3.5 h-3.5 text-emerald-400" />
                 <span>確定版カレンダー</span>
               </div>
-              <span className="text-[10px] text-slate-300 font-medium">（店舗貼り出し・印刷）</span>
+              <span className="text-[10px] text-slate-300 font-medium leading-tight mt-0.5">（店舗貼り出し・印刷）</span>
             </button>
 
             <button 
               onClick={handleUnpublishAll}
               disabled={isUnpublishing}
-              className="bg-slate-700 hover:bg-slate-800 text-white px-3.5 py-2 rounded-xl flex flex-col items-center justify-center transition shadow-md font-bold cursor-pointer disabled:opacity-50"
+              className="h-[46px] px-3 bg-slate-700 hover:bg-slate-800 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer disabled:opacity-50 border border-slate-600 shrink-0"
               title="確定済みのシフトを未確定の下書き（ドラフト）に戻し、再調整やAI再割り当てを可能にします"
             >
-              <div className="flex items-center space-x-1.5 text-xs">
+              <div className="flex items-center space-x-1.5 text-xs leading-tight">
                 {isUnpublishing ? <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full"></div> : <RotateCcw className="w-3.5 h-3.5 text-amber-300" />}
                 <span>確定解除</span>
               </div>
-              <span className="text-[10px] text-slate-300 font-medium">（下書きに戻す）</span>
+              <span className="text-[10px] text-slate-300 font-medium leading-tight mt-0.5">（下書きに戻す）</span>
             </button>
             
             <button 
@@ -1553,19 +1553,26 @@ const ShiftCalendarView: React.FC = () => {
                 setModalData({ target_date: format(baseDate, 'yyyy-MM-dd'), role: roles[0]?.name || 'ホール', start_time: '10:00', end_time: '15:00', user_id: users[0]?.id });
                 setIsModalOpen(true);
               }}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl flex items-center space-x-1.5 transition shadow-md font-bold text-xs cursor-pointer h-[42px]"
+              className="h-[46px] px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-indigo-400 shrink-0"
+              title="個別のシフトを手動で1件追加登録します"
             >
-              <Plus className="w-4 h-4" />
-              <span>シフト追加</span>
+              <div className="flex items-center space-x-1.5 text-xs leading-tight">
+                <Plus className="w-3.5 h-3.5" />
+                <span>シフト追加</span>
+              </div>
+              <span className="text-[10px] text-indigo-100 font-medium leading-tight mt-0.5">（手動個別登録）</span>
             </button>
 
             <button
               onClick={() => setIsHelpOpen(true)}
-              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-xl flex items-center space-x-1 transition font-bold text-xs shadow-xs cursor-pointer h-[42px]"
+              className="h-[46px] px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer shrink-0"
               title="シフト作成の流れ・機能の違いを見る"
             >
-              <span className="text-sm">❓</span>
-              <span>使い方ガイド</span>
+              <div className="flex items-center space-x-1.5 text-xs leading-tight">
+                <HelpCircle className="w-3.5 h-3.5 text-indigo-500" />
+                <span>使い方ガイド</span>
+              </div>
+              <span className="text-[10px] text-indigo-400 font-medium leading-tight mt-0.5">（操作ヘルプ）</span>
             </button>
 
             <AppSwitcher currentApp="shift" role="admin" />
