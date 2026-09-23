@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { format, addDays, startOfWeek } from 'date-fns';
+import { format, addDays, startOfWeek, startOfMonth } from 'date-fns';
 
 export interface SeedResult {
   success: boolean;
@@ -261,15 +261,17 @@ export async function seedShiftDemoData(tenantId: string): Promise<SeedResult> {
     console.warn('advanced_shift_requirements DB insert note:', reqDbErr);
   }
 
-  // 5. 今週〜来週分のシフト希望データ（advanced_shift_requests）の自動投入
-  // これにより、画面上で「AI自動作成」を押した瞬間にシフトが美しく埋まります
+  // 5. シフト希望データ（advanced_shift_requests）の自動投入
+  // 1週間・2週間・1ヶ月（月間）のどの期間設定でも希望が揃うよう、当月1日または今週月曜から35日間（5週間分）生成
   const today = new Date();
-  const startDay = startOfWeek(today, { weekStartsOn: 1 }); // 今週月曜
+  const monthStartDay = startOfMonth(today);
+  const weekStartDay = startOfWeek(today, { weekStartsOn: 1 });
+  const startDay = monthStartDay < weekStartDay ? monthStartDay : weekStartDay;
+  const GENERATE_DAYS = 35; // 35日間で月間および2週間・1週間を完全網羅
   let totalRequestsCount = 0;
   const requestsToInsert: any[] = [];
 
-  // 今週〜来週（14日間）の希望を生成
-  for (let dayOffset = 0; dayOffset < 14; dayOffset++) {
+  for (let dayOffset = 0; dayOffset < GENERATE_DAYS; dayOffset++) {
     const targetDateObj = addDays(startDay, dayOffset);
     const dateStr = format(targetDateObj, 'yyyy-MM-dd');
     const dayOfWeek = targetDateObj.getDay(); // 0:日, 1:月, ... 6:土
@@ -312,7 +314,7 @@ export async function seedShiftDemoData(tenantId: string): Promise<SeedResult> {
 
   try {
     const startStr = format(startDay, 'yyyy-MM-dd');
-    const endStr = format(addDays(startDay, 14), 'yyyy-MM-dd');
+    const endStr = format(addDays(startDay, GENERATE_DAYS), 'yyyy-MM-dd');
     const { error: delErr } = await supabase.from('advanced_shift_requests').delete()
       .eq('tenant_id', tenantId)
       .gte('target_date', startStr)

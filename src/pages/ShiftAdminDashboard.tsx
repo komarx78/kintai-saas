@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   DollarSign, Zap, Calendar, ArrowLeft, CheckCircle, CheckCircle2, 
   Settings, Send, LogOut, RotateCcw, 
@@ -110,9 +110,52 @@ const ShiftAdminDashboard: React.FC = () => {
     }
   };
 
-  const currentDate = new Date();
-  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-  const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
+  const currentDate = useMemo(() => new Date(), []);
+
+  // 基準日 ＆ 管理期間（1週間 / 2週間 / 1ヶ月）の動的計算（全システムSSOT）
+  const periodInfo = useMemo(() => {
+    let start: Date;
+    let end: Date;
+    let daysCount = 7;
+    let unitLabel = '今週';
+    let durationLabel = '1週間';
+
+    if (shiftPeriod === '2weeks') {
+      start = startOfWeek(currentDate, { weekStartsOn: 1 });
+      end = addDays(start, 13); // 14日間（2週間）
+      daysCount = 14;
+      unitLabel = '今期（2週間）';
+      durationLabel = '2週間';
+    } else if (shiftPeriod === '1month') {
+      start = startOfMonth(currentDate);
+      end = endOfMonth(currentDate);
+      daysCount = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      unitLabel = '今月';
+      durationLabel = '1ヶ月';
+    } else {
+      // 1week（デフォルト）
+      start = startOfWeek(currentDate, { weekStartsOn: 1 });
+      end = endOfWeek(currentDate, { weekStartsOn: 1 });
+      daysCount = 7;
+      unitLabel = '今週';
+      durationLabel = '1週間';
+    }
+
+    const startDateStr = format(start, 'yyyy-MM-dd');
+    const endDateStr = format(end, 'yyyy-MM-dd');
+    const periodLabel = `${format(start, 'yyyy年M月d日', { locale: ja })} 〜 ${format(end, 'M月d日', { locale: ja })}`;
+
+    return {
+      start,
+      end,
+      daysCount,
+      unitLabel,
+      durationLabel,
+      startDateStr,
+      endDateStr,
+      periodLabel
+    };
+  }, [currentDate, shiftPeriod]);
 
   const totalEmployees = allEmployees.length;
   const submittedCount = submittedUserIds.length;
@@ -123,7 +166,7 @@ const ShiftAdminDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [shiftPeriod]);
 
   const fetchStats = async () => {
     setLoadingStats(true);
@@ -176,30 +219,14 @@ const ShiftAdminDashboard: React.FC = () => {
 
       setAllEmployees(filteredShiftUsers);
 
-      const startDate = format(weekStart, 'yyyy-MM-dd');
-      const endDate = format(weekEnd, 'yyyy-MM-dd');
-      
-      const { data: reqData } = await supabase.from('advanced_shift_requests').select('user_id').eq('tenant_id', tenantId).gte('target_date', startDate).lte('target_date', endDate);
-      const uniqueIds = [...new Set((reqData || []).map(r => r.user_id))];
-      setSubmittedUserIds(uniqueIds);
-
-      // 今週分のシフトデータ（ドラフト vs 確定件数の集計）
-      const { data: weekShiftsData } = await supabase.from('advanced_shifts')
-        .select('id, status')
-        .eq('tenant_id', tenantId)
-        .gte('target_date', startDate)
-        .lte('target_date', endDate);
-      
-      const drafts = (weekShiftsData || []).filter(s => s.status === 'draft').length;
-      const confirmed = (weekShiftsData || []).filter(s => s.status === 'confirmed').length;
-      setDraftCount(drafts);
-      setConfirmedCount(confirmed);
-
+      // 1. シフト設定（期間設定 shift_period など）の先行ロード
+      let activePeriod = shiftPeriod;
       const { data: settingsData } = await supabase.from('shift_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
       if (settingsData) {
         setRequiredLaborCost(settingsData.monthly_labor_budget || 0);
         if (settingsData.shift_period) {
           setShiftPeriod(settingsData.shift_period);
+          activePeriod = settingsData.shift_period;
         }
         if (settingsData.submission_deadline_rule) {
           setSubmissionDeadlineRule(settingsData.submission_deadline_rule);
@@ -213,6 +240,38 @@ const ShiftAdminDashboard: React.FC = () => {
           setAutoLockDays(String(settingsData.auto_lock_day));
         }
       }
+
+      // 2. 期間に応じた日付範囲の動的算出（1週間 / 2週間 / 1ヶ月）
+      let queryStart: Date;
+      let queryEnd: Date;
+      if (activePeriod === '2weeks') {
+        queryStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+        queryEnd = addDays(queryStart, 13);
+      } else if (activePeriod === '1month') {
+        queryStart = startOfMonth(currentDate);
+        queryEnd = endOfMonth(currentDate);
+      } else {
+        queryStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+        queryEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
+      }
+      const startDate = format(queryStart, 'yyyy-MM-dd');
+      const endDate = format(queryEnd, 'yyyy-MM-dd');
+      
+      const { data: reqData } = await supabase.from('advanced_shift_requests').select('user_id').eq('tenant_id', tenantId).gte('target_date', startDate).lte('target_date', endDate);
+      const uniqueIds = [...new Set((reqData || []).map(r => r.user_id))];
+      setSubmittedUserIds(uniqueIds);
+
+      // 期間分のシフトデータ（ドラフト vs 確定件数の集計）
+      const { data: periodShiftsData } = await supabase.from('advanced_shifts')
+        .select('id, status')
+        .eq('tenant_id', tenantId)
+        .gte('target_date', startDate)
+        .lte('target_date', endDate);
+      
+      const drafts = (periodShiftsData || []).filter(s => s.status === 'draft').length;
+      const confirmed = (periodShiftsData || []).filter(s => s.status === 'confirmed').length;
+      setDraftCount(drafts);
+      setConfirmedCount(confirmed);
 
       const monthStartStr = format(startOfMonth(currentDate), 'yyyy-MM-dd');
       const monthEndStr = format(endOfMonth(currentDate), 'yyyy-MM-dd');
@@ -238,6 +297,7 @@ const ShiftAdminDashboard: React.FC = () => {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
       const { error } = await supabase.from('shift_settings').update({ shift_period: newPeriod }).eq('tenant_id', tenantId);
       if (error) throw error;
+      await fetchStats();
     } catch (err) {
       console.error('期間設定保存エラー:', err);
       alert('保存に失敗しました');
@@ -294,12 +354,12 @@ const ShiftAdminDashboard: React.FC = () => {
   };
 
   const handlePublishDrafts = async () => {
-    if (!window.confirm('今週の下書きシフトを確定し、スタッフのスマホマイページへ本番公開します。よろしいですか？\n※確定後もいつでも「下書きに戻す」で再調整できます。')) return;
+    if (!window.confirm(`${periodInfo.unitLabel}（${periodInfo.durationLabel}）の下書きシフトを確定し、スタッフのスマホマイページへ本番公開します。よろしいですか？\n※確定後もいつでも「下書きに戻す」で再調整できます。`)) return;
     setIsPublishing(true);
     try {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
-      const startDate = format(weekStart, 'yyyy-MM-dd');
-      const endDate = format(weekEnd, 'yyyy-MM-dd');
+      const startDate = periodInfo.startDateStr;
+      const endDate = periodInfo.endDateStr;
 
       const { error } = await supabase.from('advanced_shifts')
         .update({ status: 'confirmed' })
@@ -309,7 +369,7 @@ const ShiftAdminDashboard: React.FC = () => {
         .lte('target_date', endDate);
       
       if (error) throw error;
-      alert('🎉 シフトを確定し、スタッフへ公開しました！');
+      alert(`🎉 ${periodInfo.unitLabel}（${periodInfo.durationLabel}）のシフトを確定し、スタッフへ公開しました！`);
       fetchStats();
     } catch (err) {
       console.error('確定エラー:', err);
@@ -320,12 +380,12 @@ const ShiftAdminDashboard: React.FC = () => {
   };
 
   const handleUnpublishDrafts = async () => {
-    if (!window.confirm('今週の確定済みシフトを「下書き（作成中）」に戻しますか？\n※スタッフ画面からは未確定状態となり、AI自動生成のやり直しやカレンダーでの手動調整が可能になります。')) return;
+    if (!window.confirm(`${periodInfo.unitLabel}（${periodInfo.durationLabel}）の確定済みシフトを「下書き（作成中）」に戻しますか？\n※スタッフ画面からは未確定状態となり、AI自動生成のやり直しやカレンダーでの手動調整が可能になります。`)) return;
     setIsUnpublishing(true);
     try {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
-      const startDate = format(weekStart, 'yyyy-MM-dd');
-      const endDate = format(weekEnd, 'yyyy-MM-dd');
+      const startDate = periodInfo.startDateStr;
+      const endDate = periodInfo.endDateStr;
 
       const { error } = await supabase.from('advanced_shifts')
         .update({ status: 'draft' })
@@ -356,8 +416,8 @@ const ShiftAdminDashboard: React.FC = () => {
       const mode = settingsData?.auto_generation_mode || 'equal';
       const { data: empSettings } = await supabase.from('shift_employee_settings').select('*').eq('tenant_id', tenantId);
       
-      const startDate = format(weekStart, 'yyyy-MM-dd');
-      const endDate = format(weekEnd, 'yyyy-MM-dd');
+      const startDate = periodInfo.startDateStr;
+      const endDate = periodInfo.endDateStr;
 
       // 既存のドラフトシフトをクリア（再生成時の二重化防止）
       await supabase.from('advanced_shifts')
@@ -373,8 +433,9 @@ const ShiftAdminDashboard: React.FC = () => {
 
       const allPeriodGenerated: any[] = [];
 
-      for (let i = 0; i < 7; i++) {
-        const targetDay = addDays(weekStart, i);
+      // 💡 設定されたシフト期間の日数（1週間=7日、2週間=14日、1ヶ月=月間日数）分ループして自動生成
+      for (let i = 0; i < periodInfo.daysCount; i++) {
+        const targetDay = addDays(periodInfo.start, i);
         const targetDateStr = format(targetDay, 'yyyy-MM-dd');
         const dbDow = targetDay.getDay(); // 0: 日 〜 6: 土
 
@@ -425,13 +486,13 @@ const ShiftAdminDashboard: React.FC = () => {
       return;
     }
 
-    if (!window.confirm(`未提出のLINE連携スタッフ【${linkedUnsubmitted.length}名】に、希望提出リマインドLINEを一括送信しますか？`)) {
+    if (!window.confirm(`未提出のLINE連携スタッフ【${linkedUnsubmitted.length}名】に、希望提出リマインドLINEを一括送信しますか？\n対象期間: ${periodInfo.periodLabel}（${periodInfo.durationLabel}）`)) {
       return;
     }
 
     setIsReminderSending(true);
     try {
-      const periodLabel = `${format(weekStart, 'yyyy年M月d日', { locale: ja })} 〜 ${format(weekEnd, 'M月d日', { locale: ja })}`;
+      const periodLabel = periodInfo.periodLabel;
       const payload = linkedUnsubmitted.map(emp => ({
         userId: emp.id,
         staffName: emp.name || emp.email,
@@ -534,7 +595,7 @@ const ShiftAdminDashboard: React.FC = () => {
               <div>
                 <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-indigo-100 mb-2 border border-white/20">
                   <Clock className="w-3.5 h-3.5" />
-                  今週の対象期間: {format(weekStart, 'yyyy年M月d日', { locale: ja })} 〜 {format(weekEnd, 'M月d日', { locale: ja })}
+                  {periodInfo.unitLabel}の対象期間: {periodInfo.periodLabel}（{periodInfo.durationLabel}）
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2">
                   シフト作成・運用ダッシュボード
@@ -643,7 +704,7 @@ const ShiftAdminDashboard: React.FC = () => {
                     </div>
                     <div>
                       <h2 className="text-lg font-black text-slate-800">希望の提出状況</h2>
-                      <p className="text-xs text-slate-400">今週のシフト希望提出</p>
+                      <p className="text-xs text-slate-400">{periodInfo.unitLabel}のシフト希望提出（{periodInfo.durationLabel}）</p>
                     </div>
                   </div>
                   <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
@@ -749,7 +810,7 @@ const ShiftAdminDashboard: React.FC = () => {
                   onClick={handleSeedDummyRequests}
                   disabled={isSeeding}
                   className="w-full bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold py-2.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-amber-300 shadow-2xs"
-                  title="全スタッフの今週7日分の希望シフトを一発で投入してAI生成をテストできます"
+                  title={`全スタッフの${periodInfo.durationLabel}分（${periodInfo.daysCount}日間）の希望シフトを一発で投入してAI生成をテストできます`}
                 >
                   {isSeeding ? (
                     <div className="animate-spin w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full"></div>
@@ -842,7 +903,7 @@ const ShiftAdminDashboard: React.FC = () => {
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 text-amber-500 fill-amber-500" />
-                      <span className="text-sm">⚡ 今週のシフトをAI自動作成する</span>
+                      <span className="text-sm">⚡ {periodInfo.unitLabel}のシフトをAI自動作成する（{periodInfo.durationLabel}）</span>
                     </>
                   )}
                 </button>
@@ -1152,7 +1213,7 @@ const ShiftAdminDashboard: React.FC = () => {
         }));
         const linkedCount = unsubmittedWithLink.filter(e => e.isLineLinked).length;
         const unlinkedCount = unsubmittedWithLink.filter(e => !e.isLineLinked).length;
-        const periodLabel = `${format(weekStart, 'yyyy年M月d日', { locale: ja })} 〜 ${format(weekEnd, 'M月d日', { locale: ja })}`;
+        const periodLabel = periodInfo.periodLabel;
         const sampleEmpName = unsubmittedWithLink[0]?.name || '佐藤 健太';
 
         const previewMsg = formatShiftReminderLineMessage({
