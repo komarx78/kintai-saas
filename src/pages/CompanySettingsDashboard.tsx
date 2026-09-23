@@ -10,6 +10,12 @@ import { HelpGuideModal } from '../components/HelpGuideModal';
 import { BonusDocMasterInspector } from '../components/BonusDocMasterInspector';
 import { OfficialReminderSettingsModal } from '../components/OfficialReminderSettingsModal';
 import { StartupGuideCard } from '../components/StartupGuideCard';
+import { LineConfigModal } from '../components/LineConfigModal';
+import { 
+  type LineIntegrationConfig, 
+  getTenantLineConfig, 
+  fetchTenantLineConfigFromDb 
+} from '../lib/lineMessaging';
 import { 
   type LaborContractTemplate, 
   DEFAULT_LABOR_CONTRACT_TEMPLATE, 
@@ -584,6 +590,10 @@ export default function CompanySettingsDashboard() {
     square_subscription_id: ''
   });
 
+  // 💬 全社LINE通知・月額課金設定State
+  const [showLineConfigModal, setShowLineConfigModal] = useState(false);
+  const [lineConfig, setLineConfig] = useState<LineIntegrationConfig>(() => getTenantLineConfig(''));
+
   // 📢 全社お知らせ掲示板State
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [newAnnTitle, setNewAnnTitle] = useState('');
@@ -826,6 +836,16 @@ export default function CompanySettingsDashboard() {
       // お知らせ一覧の復元
       const annLoaded = getAnnouncementsFromStorage(tenantIdData);
       setAnnouncements(annLoaded);
+
+      // 💬 全社LINE設定・月額課金設定をDBから同期
+      try {
+        const dbLineCfg = await fetchTenantLineConfigFromDb(tenantIdData);
+        if (dbLineCfg) {
+          setLineConfig(dbLineCfg);
+        }
+      } catch (err) {
+        console.error('Failed to sync LINE config from DB:', err);
+      }
 
       // 🏛️ 社会保険・労働保険マスタの復元（DB + 自社専用LocalStorage）
       let loadedInsurance = {
@@ -5643,6 +5663,124 @@ export default function CompanySettingsDashboard() {
                 </div>
               </div>
 
+              {/* 💬 公式LINE連携 配信オプション設定カード */}
+              <div className="bg-white rounded-3xl p-6 border-2 border-slate-200 shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-2xl shadow-sm">
+                      💬
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-base font-black text-slate-900">公式LINE通知・配信オプション設定</h4>
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          全店舗共通・店長個人LINE不要
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        シフト提出依頼・シフト確定通知・Web給与明細通知をスタッフのLINEへ自動配信するプラン設定です。
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowLineConfigModal(true)}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center gap-2 self-start md:self-auto cursor-pointer"
+                  >
+                    <span>⚙️</span>
+                    <span>LINE配信プラン・設定を変更</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                  {/* 現在の契約モード */}
+                  <div className={`p-4 rounded-2xl border transition-all ${
+                    lineConfig.mode === 'rakumaru_official'
+                      ? 'bg-emerald-50/60 border-emerald-300 ring-2 ring-emerald-200'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-slate-500">選択中プラン</span>
+                      {lineConfig.mode === 'rakumaru_official' && (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded bg-emerald-600 text-white">
+                          現在適用中
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
+                      <span>🟢</span>
+                      <span>公式代行配信</span>
+                    </div>
+                    <div className="text-xs font-bold text-emerald-700 mt-1">
+                      月額 ¥3,000 / 社（税込）
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                      「みんなのらくまる労務」公式アカウントから代行通知。LINEの審査や設定が一切不要で今すぐ使えます。
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-2xl border transition-all ${
+                    lineConfig.mode === 'own_official'
+                      ? 'bg-blue-50/60 border-blue-300 ring-2 ring-blue-200'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-slate-500">自社アカウント運用</span>
+                      {lineConfig.mode === 'own_official' && (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded bg-blue-600 text-white">
+                          現在適用中
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
+                      <span>🔵</span>
+                      <span>自社公式LINE</span>
+                    </div>
+                    <div className="text-xs font-bold text-blue-700 mt-1">
+                      システム月額 ¥0（LINE公式従量のみ）
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                      自社のLINE公式アカウント（Messaging API）のトークンを設定し、貴社ブランド名義で通知します。
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-2xl border transition-all ${
+                    lineConfig.mode === 'none'
+                      ? 'bg-amber-50/60 border-amber-300 ring-2 ring-amber-200'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-slate-500">LINE通知なし</span>
+                      {lineConfig.mode === 'none' && (
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded bg-slate-600 text-white">
+                          現在適用中
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
+                      <span>⚪</span>
+                      <span>利用しない</span>
+                    </div>
+                    <div className="text-xs font-bold text-slate-600 mt-1">
+                      オプション追加料金 ¥0
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                      LINE通知は行わず、メール通知やスタッフのWebマイページでのみシフト・明細を確認します。
+                    </div>
+                  </div>
+                </div>
+
+                {/* データの血流・店長業務への引き継ぎ案内 */}
+                <div className="mt-4 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-3">
+                  <span className="text-base">💡</span>
+                  <div className="text-xs text-slate-600 leading-relaxed">
+                    <span className="font-bold text-slate-800">店長業務・新入社員への自動連動について：</span><br />
+                    ここで設定されたLINE配信プランは、全店舗の店長画面（シフト収集・シフト確定配信・入社手続き）および新入社員のスマホ登録画面へ自動で引き継がれます。店長個人のLINEアカウントを聞く必要は一切なく、安全・確実に通知が届きます。
+                  </div>
+                </div>
+              </div>
+
               {/* 3大プライシングプラン比較カード */}
               <div>
                 <div className="mb-3 flex items-center justify-between">
@@ -6662,6 +6800,20 @@ export default function CompanySettingsDashboard() {
           </div>
         </div>
       )}
+
+      {/* 💬 公式LINE通知・月額課金設定モーダル */}
+      <LineConfigModal
+        isOpen={showLineConfigModal}
+        onClose={() => {
+          setShowLineConfigModal(false);
+          if (tenantId) {
+            fetchTenantLineConfigFromDb(tenantId).then(cfg => {
+              if (cfg) setLineConfig(cfg);
+            });
+          }
+        }}
+        tenantId={tenantId}
+      />
 
       {/* ❓ 使い方ガイドモーダル */}
       <HelpGuideModal 

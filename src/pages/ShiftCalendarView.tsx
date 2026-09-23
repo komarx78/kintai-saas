@@ -15,6 +15,7 @@ import { fetchStoresUnified, getStoresFromStorage } from '../lib/storeMaster';
 import { seedShiftDemoData } from '../lib/seedShiftDemoData';
 import { 
   getAllStaffLineLinkMap, 
+  syncStaffLineLinkFromDb,
   formatStaffShiftLineMessage, 
   sendConfirmedShiftsViaLine, 
   formatEmergencyHelpLineMessage,
@@ -211,6 +212,9 @@ const ShiftCalendarView: React.FC = () => {
         return;
       }
       setTenantId(tenantIdData);
+
+      // 📱 DBからスタッフLINE連携状態を同期（新入社員の追加情報を即時引き継ぎ）
+      await syncStaffLineLinkFromDb(tenantIdData);
 
       // シフト設定（表示期間、店舗応援機能ON/OFF）
       const { data: settings } = await supabase.from('shift_settings').select('shift_period, enable_store_help').eq('tenant_id', tenantIdData).maybeSingle();

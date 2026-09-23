@@ -5,7 +5,8 @@ import {
 import { 
   type LineIntegrationConfig, 
   getTenantLineConfig, 
-  saveTenantLineConfig, 
+  saveTenantLineConfigUnified, 
+  fetchTenantLineConfigFromDb,
   DEFAULT_LINE_CONFIG 
 } from '../lib/lineMessaging';
 
@@ -30,17 +31,20 @@ export const LineConfigModal: React.FC<LineConfigModalProps> = ({
     if (isOpen && tenantId) {
       const current = getTenantLineConfig(tenantId);
       setConfig(current);
+      fetchTenantLineConfigFromDb(tenantId).then(dbCfg => {
+        if (dbCfg) setConfig(dbCfg);
+      });
     }
   }, [isOpen, tenantId]);
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
     try {
-      saveTenantLineConfig(tenantId, config);
+      await saveTenantLineConfigUnified(tenantId, config);
       if (onConfigSaved) onConfigSaved(config);
-      alert('🎉 LINE連携設定を保存いたしました！');
+      alert('🎉 LINE連携設定を保存いたしました！（全店舗・全店長へ即時同期）');
       onClose();
     } catch (e) {
       console.error(e);

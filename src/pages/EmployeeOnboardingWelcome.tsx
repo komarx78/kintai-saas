@@ -25,6 +25,10 @@ import {
   Bot, Edit3, Users
 } from 'lucide-react';
 import { searchAddressFromZip } from '../lib/zipHelper';
+import { 
+  getTenantLineConfig, 
+  toggleStaffLineLinkStatus 
+} from '../lib/lineMessaging';
 
 const toKatakana = (str: string): string => {
   return (str || '').replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60));
@@ -47,6 +51,7 @@ export default function EmployeeOnboardingWelcome() {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [submittedUserId, setSubmittedUserId] = useState<string | null>(null);
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
   const [isAiRouting, setIsAiRouting] = useState(false);
   const [ocrSuccessMsg, setOcrSuccessMsg] = useState<string | null>(null);
@@ -778,6 +783,7 @@ export default function EmployeeOnboardingWelcome() {
         console.warn('employee_onboarding_profiles name_kana sync note:', onbSyncErr);
       }
 
+      if (userId) setSubmittedUserId(userId);
       setIsCompleted(true);
     } catch (err: any) {
       console.error('Submit onboarding error:', err);
@@ -798,9 +804,29 @@ export default function EmployeeOnboardingWelcome() {
   }
 
   if (isCompleted) {
+    const searchParams = new URLSearchParams(window.location.search);
+    const effectiveTenantId = tenantId || searchParams.get('tenant_id') || searchParams.get('tenant');
+    const effectiveUserId = submittedUserId || searchParams.get('user_id');
+    const lineConfig = getTenantLineConfig(effectiveTenantId);
+
+    const handleLineFriendAdd = async () => {
+      if (effectiveTenantId && effectiveUserId) {
+        toggleStaffLineLinkStatus(effectiveTenantId, effectiveUserId, true);
+        try {
+          await supabase.from('users').update({ contact_line_id: 'line_linked' }).eq('id', effectiveUserId);
+        } catch (e) {
+          console.warn('Sync contact_line_id note:', e);
+        }
+      }
+    };
+
+    const friendAddUrl = lineConfig.mode === 'own_official' && lineConfig.ownAddFriendUrl
+      ? lineConfig.ownAddFriendUrl
+      : `https://lin.ee/rakumaru_demo?tenant=${encodeURIComponent(effectiveTenantId || '')}&user=${encodeURIComponent(effectiveUserId || '')}`;
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 text-white flex items-center justify-center p-4">
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8 max-w-md w-full text-center space-y-5 animate-in zoom-in-95 duration-200">
+        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-5 animate-in zoom-in-95 duration-200">
           <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto ring-8 ring-emerald-500/10">
             <CheckCircle2 className="w-10 h-10" />
           </div>
@@ -811,6 +837,40 @@ export default function EmployeeOnboardingWelcome() {
               管理者の審査完了後、確定情報がすべて反映された<strong className="text-indigo-300">正式な『雇用契約書 兼 労働条件通知書（締結済正本PDF）』</strong>が自動発行・交付されます。
             </p>
           </div>
+
+          {/* 📱 公式LINE友だち追加 ＆ 連携セクション（お客様目線・シンプル自然） */}
+          {lineConfig.mode !== 'none' && (
+            <div className="bg-emerald-950/40 border-2 border-emerald-500/60 rounded-2xl p-4 text-left space-y-3 shadow-lg">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-lg shrink-0">
+                  💬
+                </div>
+                <div>
+                  <div className="font-black text-white text-xs sm:text-sm flex items-center gap-1.5">
+                    公式LINEを友だち追加してください
+                    <span className="text-[9px] bg-emerald-500 text-slate-950 px-1.5 py-0.5 rounded-full font-bold">推奨</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-300">
+                    次回から【Web給与明細通知】や【確定シフト連絡】がLINEに届きます
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-slate-300 leading-relaxed bg-slate-900/70 p-2.5 rounded-xl border border-emerald-900/60">
+                ※ 友だち追加いただくことで、毎月のWeb給与明細通知やシフト希望の確認がスムーズに行えます。
+              </p>
+
+              <a
+                href={friendAddUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleLineFriendAdd}
+                className="w-full py-3 px-4 bg-[#06C755] hover:bg-[#05b34c] text-white font-black text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer no-underline block text-center"
+              >
+                <span>💬 公式LINEを友だち追加する</span>
+              </a>
+            </div>
+          )}
 
           <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-left text-xs space-y-2 text-slate-300">
             <div className="font-bold text-white mb-1">📋 提出・申請された書類一覧:</div>
@@ -913,6 +973,17 @@ export default function EmployeeOnboardingWelcome() {
               <p className="text-[11px] text-slate-400 mt-1">
                 会社から提示された労働条件および給与・待遇をご確認の上、最下部にて電子署名・合意を行ってください。
               </p>
+            </div>
+
+            {/* 📱 LINE通知連携のご案内バッジ（新入社員の安心感向上） */}
+            <div className="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-3 text-xs text-emerald-300 flex items-start gap-2.5">
+              <span className="text-lg shrink-0 mt-0.5">📱</span>
+              <div>
+                <span className="font-bold text-white block">公式LINE連携で給与明細・シフトがスマホに届きます</span>
+                <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                  すべてのお手続き完了後、公式LINEを友だち追加いただくことで、Web給与明細や確定シフトがLINEで直接受け取れるようになります。
+                </p>
+              </div>
             </div>
 
             {/* 労働条件プレビューカード */}

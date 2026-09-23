@@ -47,6 +47,8 @@ import {
   sendOnboardingInviteViaLine, 
   getTenantLineConfig, 
   getStaffLineLinkStatus, 
+  fetchTenantLineConfigFromDb,
+  syncStaffLineLinkFromDb,
   type LineIntegrationConfig 
 } from '../lib/lineMessaging';
 import { LineConfigModal } from '../components/LineConfigModal';
@@ -360,7 +362,10 @@ export default function OnboardingAdminDashboard() {
     if (tenantId) {
       setCompanyCalcMode(getCompanyPaidLeaveCalcMode(tenantId));
       setUserCalcModeMap(getUserPaidLeaveCalcModeMap(tenantId));
-      setLineConfig(getTenantLineConfig(tenantId));
+      fetchTenantLineConfigFromDb(tenantId).then(cfg => {
+        if (cfg) setLineConfig(cfg);
+      });
+      syncStaffLineLinkFromDb(tenantId);
     }
   }, [tenantId]);
 

@@ -9,6 +9,7 @@
  * ・【作戦規約 第8条：データ血流完全疎通】（LINE ➔ アルバイトスマホ ➔ 自店シフト直通）
  * =========================================================================================
  */
+import { supabase } from './supabase';
 
 export interface LineStaffSummary {
   userId: string;
@@ -438,6 +439,94 @@ export function saveTenantLineConfig(tenantId: string | null | undefined, config
   } catch (e) {
     console.warn('saveTenantLineConfig error:', e);
   }
+}
+
+/**
+ * 会社のLINE連携設定をDBから同期取得（マルチ端末・店長端末へ完全引き継ぎ）
+ */
+export async function fetchTenantLineConfigFromDb(tenantId: string | null | undefined): Promise<LineIntegrationConfig> {
+  const local = getTenantLineConfig(tenantId);
+  if (!tenantId) return local;
+
+  try {
+    const { data } = await supabase
+      .from('shift_settings')
+      .select('line_integration_config')
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (data && (data as any).line_integration_config) {
+      const dbConfig = (data as any).line_integration_config;
+      const merged = { ...DEFAULT_LINE_CONFIG, ...dbConfig };
+      localStorage.setItem(`tenant_line_config_${tenantId}`, JSON.stringify(merged));
+      return merged;
+    }
+  } catch (e) {
+    console.warn('fetchTenantLineConfigFromDb fallback to local:', e);
+  }
+  return local;
+}
+
+/**
+ * 会社のLINE連携設定をDB＆LocalStorageへ完全永続化
+ */
+export async function saveTenantLineConfigUnified(tenantId: string | null | undefined, config: LineIntegrationConfig): Promise<void> {
+  saveTenantLineConfig(tenantId, config);
+  if (!tenantId) return;
+
+  try {
+    const toSave = { ...config, updatedAt: new Date().toISOString() };
+    await supabase
+      .from('shift_settings')
+      .upsert({
+        tenant_id: tenantId,
+        line_integration_config: toSave,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'tenant_id' });
+  } catch (e) {
+    console.warn('saveTenantLineConfigUnified db note (fallback active):', e);
+  }
+}
+
+/**
+ * スタッフのLINE連携状態をDB（usersテーブルのcontact_line_id等）から完全同期
+ * 💡 新入社員がスマホで連携完了した情報が、店長PCへ瞬時に開通！
+ */
+export async function syncStaffLineLinkFromDb(tenantId: string | null | undefined): Promise<Record<string, boolean>> {
+  if (!tenantId) return {};
+  try {
+    const { data } = await supabase
+      .from('users')
+      .select('id, contact_line_id')
+      .eq('tenant_id', tenantId);
+
+    if (data && data.length > 0) {
+      const linkedSet = new Set<string>();
+      data.forEach(u => {
+        if (u.contact_line_id && u.contact_line_id.trim() !== '') {
+          linkedSet.add(u.id);
+        }
+      });
+
+      // LocalStorage側の手動連携リストもマージ
+      const rawLocal = localStorage.getItem(`line_linked_users_${tenantId}`);
+      if (rawLocal) {
+        try {
+          const list = JSON.parse(rawLocal);
+          if (Array.isArray(list)) list.forEach(id => linkedSet.add(id));
+        } catch {}
+      }
+
+      localStorage.setItem(`line_linked_users_${tenantId}`, JSON.stringify(Array.from(linkedSet)));
+
+      const map: Record<string, boolean> = {};
+      linkedSet.forEach(id => { map[id] = true; });
+      return map;
+    }
+  } catch (e) {
+    console.warn('syncStaffLineLinkFromDb note:', e);
+  }
+  return getAllStaffLineLinkMap(tenantId);
 }
 
 /**

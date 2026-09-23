@@ -16,6 +16,7 @@ import { HelpGuideModal } from '../components/HelpGuideModal';
 import { seedShiftDemoData } from '../lib/seedShiftDemoData';
 import { 
   getAllStaffLineLinkMap, 
+  syncStaffLineLinkFromDb,
   formatShiftReminderLineMessage, 
   sendShiftRemindersViaLine 
 } from '../lib/lineMessaging';
@@ -174,6 +175,9 @@ const ShiftAdminDashboard: React.FC = () => {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
       if (!tenantId) return;
       setTenantId(tenantId);
+
+      // 📱 DBからスタッフLINE連携状態を同期（新入社員の追加情報を即時引き継ぎ）
+      await syncStaffLineLinkFromDb(tenantId);
 
       const { data: tData } = await supabase.from('tenants').select('name').eq('id', tenantId).maybeSingle();
       if (tData) setTenantName(tData.name);
