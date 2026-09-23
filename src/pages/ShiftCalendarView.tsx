@@ -14,6 +14,8 @@ import {
   getAllStaffLineLinkMap, 
   formatStaffShiftLineMessage, 
   sendConfirmedShiftsViaLine, 
+  formatEmergencyHelpLineMessage,
+  sendEmergencyHelpViaLine,
   type LineStaffSummary 
 } from '../lib/lineMessaging';
 
@@ -99,6 +101,20 @@ const ShiftCalendarView: React.FC = () => {
   const [isLineSending, setIsLineSending] = useState(false);
   const [lineSendSuccessMessage, setLineSendSuccessMessage] = useState<string | null>(null);
   const [selectedPreviewStaffId, setSelectedPreviewStaffId] = useState<string | null>(null);
+
+  // 🚨 緊急代打ヘルプ募集モーダル用State（欠員・突発休み救済）
+  const [isEmergencyModalOpen, setIsEmergencyModalOpen] = useState(false);
+  const [emergencyHelpTarget, setEmergencyHelpTarget] = useState<{
+    shiftId: string;
+    userId: string;
+    targetDate: string;
+    startTime: string;
+    endTime: string;
+    role: string;
+    storeName?: string;
+  } | null>(null);
+  const [emergencyRewardNote, setEmergencyRewardNote] = useState<string>('まかない付き / 急募手当支給');
+  const [isEmergencySending, setIsEmergencySending] = useState(false);
 
   // 🏪 店舗切り替え時に店舗ごとの必要枠（Requirements）をキャッシュから再読み込み
   useEffect(() => {
@@ -758,6 +774,79 @@ const ShiftCalendarView: React.FC = () => {
       alert('LINE送信中にエラーが発生しました: ' + (e.message || e));
     } finally {
       setIsLineSending(false);
+    }
+  };
+
+  // 🚨 緊急ヘルプ募集：当該日時に出勤予定のない空きスタッフ一覧（LINE連携済み）
+  const emergencyCandidateStaff = useMemo(() => {
+    if (!emergencyHelpTarget || !tenantId) return [];
+    const linkMap = getAllStaffLineLinkMap(tenantId);
+    const dateStr = emergencyHelpTarget.targetDate;
+
+    // 当日既に出勤シフト（確定またはドラフト）があるスタッフのIDリスト
+    const workingUserIds = new Set(
+      shifts
+        .filter(s => s.target_date === dateStr && s.id !== emergencyHelpTarget.shiftId)
+        .map(s => s.user_id)
+    );
+
+    return users.filter(u => {
+      // 欠員枠の本人を除く
+      if (u.id === emergencyHelpTarget.userId) return false;
+      // 当日既に出勤している人を除く
+      if (workingUserIds.has(u.id)) return false;
+      // 店舗縛り（所属店舗または全社）
+      if (selectedDepartment !== 'all' && u.store_name && u.store_name !== selectedDepartment) return false;
+      return true;
+    }).map(u => ({
+      ...u,
+      isLineLinked: Boolean(linkMap[u.id])
+    }));
+  }, [emergencyHelpTarget, tenantId, shifts, users, selectedDepartment]);
+
+  // 🚨 緊急代打ヘルプ LINE一括送信実行ハンドラー
+  const handleExecuteEmergencySend = async () => {
+    if (!tenantId || !emergencyHelpTarget) return;
+    const linkedCandidates = emergencyCandidateStaff.filter(s => s.isLineLinked);
+    if (linkedCandidates.length === 0) {
+      alert('当日出勤予定のない、LINE連携済みのスタッフがいません。');
+      return;
+    }
+
+    if (!window.confirm(`当日空いているLINE連携スタッフ【${linkedCandidates.length}名】に、緊急代打ヘルプ募集を一斉送信しますか？`)) {
+      return;
+    }
+
+    setIsEmergencySending(true);
+    try {
+      const msg = formatEmergencyHelpLineMessage({
+        storeName: emergencyHelpTarget.storeName === 'all' ? undefined : emergencyHelpTarget.storeName,
+        targetDate: emergencyHelpTarget.targetDate,
+        startTime: emergencyHelpTarget.startTime,
+        endTime: emergencyHelpTarget.endTime,
+        role: emergencyHelpTarget.role,
+        rewardNote: emergencyRewardNote
+      });
+
+      const res = await sendEmergencyHelpViaLine(
+        tenantId,
+        {
+          targetDate: emergencyHelpTarget.targetDate,
+          timeRange: `${emergencyHelpTarget.startTime}〜${emergencyHelpTarget.endTime}`,
+          role: emergencyHelpTarget.role,
+          messageText: msg
+        },
+        linkedCandidates.map(c => c.id)
+      );
+
+      setIsEmergencyModalOpen(false);
+      setIsModalOpen(false);
+      setLineSendSuccessMessage(`🚨 空いているスタッフ ${res.sentCount}名へ緊急代打ヘルプのLINE一斉募集を送信しました！`);
+      setTimeout(() => setLineSendSuccessMessage(null), 8000);
+    } catch (e: any) {
+      alert('緊急送信中にエラーが発生しました: ' + (e.message || e));
+    } finally {
+      setIsEmergencySending(false);
     }
   };
 
@@ -2640,6 +2729,32 @@ const ShiftCalendarView: React.FC = () => {
                   {saving ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <><Save className="w-4 h-4 mr-1.5" />{modalData.status === 'request' ? 'この希望で確定する' : '確定する'}</>}
                 </button>
               </div>
+
+              {/* 🚨 店長の神機能：急な欠員時の緊急代打ヘルプ募集ボタン */}
+              {modalData.id && (
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmergencyHelpTarget({
+                        shiftId: modalData.id!,
+                        userId: modalData.user_id || '',
+                        targetDate: modalData.target_date || '',
+                        startTime: modalData.start_time?.substring(0, 5) || '10:00',
+                        endTime: modalData.end_time?.substring(0, 5) || '18:00',
+                        role: modalData.role || 'ホール',
+                        storeName: modalData.store_name || selectedDepartment
+                      });
+                      setIsEmergencyModalOpen(true);
+                    }}
+                    className="w-full py-2.5 px-3 bg-gradient-to-r from-rose-500 to-amber-500 hover:from-rose-600 hover:to-amber-600 text-white rounded-xl font-bold text-xs shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                    title="急な欠員が発生した際、この日時に出勤予定のない空きスタッフ全員へLINEで緊急代打ヘルプを一斉募集します"
+                  >
+                    <AlertTriangle className="w-4 h-4 text-white animate-pulse" />
+                    <span>🚨 この枠の代打ヘルプをLINEで一斉募集</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -3371,6 +3486,186 @@ const ShiftCalendarView: React.FC = () => {
                       <>
                         <Send className="w-4 h-4 text-emerald-200" />
                         <span>🚀 LINE連携済み全員（{linkedStaff.length}名）に一括送信する</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 🚨 店長の神機能：緊急代打ヘルプ募集モーダル */}
+      {isEmergencyModalOpen && emergencyHelpTarget && (() => {
+        const linkedCandidates = emergencyCandidateStaff.filter(s => s.isLineLinked);
+        const unlinkedCandidates = emergencyCandidateStaff.filter(s => !s.isLineLinked);
+        const previewMsg = formatEmergencyHelpLineMessage({
+          storeName: emergencyHelpTarget.storeName === 'all' ? undefined : emergencyHelpTarget.storeName,
+          targetDate: emergencyHelpTarget.targetDate,
+          startTime: emergencyHelpTarget.startTime,
+          endTime: emergencyHelpTarget.endTime,
+          role: emergencyHelpTarget.role,
+          rewardNote: emergencyRewardNote
+        });
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="bg-white rounded-3xl text-left overflow-hidden shadow-2xl w-full max-w-4xl flex flex-col border border-slate-200 max-h-[92vh]">
+              {/* モーダルヘッダー */}
+              <div className="bg-gradient-to-r from-rose-600 via-rose-500 to-amber-500 p-5 text-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner">
+                    <AlertTriangle className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black tracking-tight">🚨 緊急代打ヘルプ一括募集（LINE）</h3>
+                    <p className="text-xs text-rose-100 mt-0.5">
+                      当日シフトに入っていない空きスタッフ全員へ、ワンクリックでヘルプ募集LINEを一斉送信します
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsEmergencyModalOpen(false)}
+                  className="p-2 hover:bg-white/20 rounded-full transition text-white/80 hover:text-white cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* サマリーカード ＆ 手当入力 */}
+              <div className="p-4 bg-rose-50/50 border-b border-rose-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-bold bg-white px-2.5 py-1 rounded-lg border border-rose-200 text-rose-900">
+                    📅 {emergencyHelpTarget.targetDate}
+                  </span>
+                  <span className="font-bold bg-white px-2.5 py-1 rounded-lg border border-rose-200 text-rose-900">
+                    ⏰ {emergencyHelpTarget.startTime} 〜 {emergencyHelpTarget.endTime}
+                  </span>
+                  <span className="font-bold bg-white px-2.5 py-1 rounded-lg border border-rose-200 text-rose-900">
+                    👤 役割: [{emergencyHelpTarget.role}]
+                  </span>
+                  {emergencyHelpTarget.storeName && emergencyHelpTarget.storeName !== 'all' && (
+                    <span className="font-bold bg-white px-2.5 py-1 rounded-lg border border-rose-200 text-rose-900">
+                      🏪 {emergencyHelpTarget.storeName}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-700 whitespace-nowrap">✨ 特典・手当:</span>
+                  <input
+                    type="text"
+                    value={emergencyRewardNote}
+                    onChange={(e) => setEmergencyRewardNote(e.target.value)}
+                    placeholder="例: 急募手当+500円 / まかない無料"
+                    className="text-xs px-3 py-1.5 rounded-xl border border-rose-200 bg-white font-medium focus:ring-2 focus:ring-rose-400 focus:outline-none w-48 sm:w-60"
+                  />
+                </div>
+              </div>
+
+              {/* メインエリア：対象スタッフ一覧 ＆ スマホLINEプレビュー */}
+              <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-slate-200">
+                {/* 左：空いているスタッフ候補 */}
+                <div className="md:col-span-5 p-4 overflow-y-auto space-y-2 max-h-[45vh] md:max-h-none">
+                  <div className="text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
+                    <span>当日空いているスタッフ候補:</span>
+                    <span className="text-[10px] text-slate-400">計 {emergencyCandidateStaff.length}名</span>
+                  </div>
+
+                  {emergencyCandidateStaff.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border border-slate-200">
+                      当日は全員すでにシフトに入っているか、候補スタッフがいません。
+                    </div>
+                  ) : (
+                    emergencyCandidateStaff.map(u => (
+                      <div
+                        key={u.id}
+                        className={`p-3 rounded-2xl border text-xs flex items-center justify-between gap-2 ${
+                          u.isLineLinked 
+                            ? 'bg-rose-50/50 border-rose-200' 
+                            : 'bg-slate-50 border-slate-200 opacity-60'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-black text-slate-800 flex items-center gap-1.5">
+                            <span>{u.name}</span>
+                            {u.isLineLinked ? (
+                              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-300">
+                                🟢 送信対象
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded">
+                                ⚪ LINE未連携
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            {u.store_name ? `${u.store_name}所属` : '店舗未設定'}
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-bold text-slate-600">当日休み</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* 右：スマホLINEトーク画面風プレビュー */}
+                <div className="md:col-span-7 p-4 bg-slate-100/70 overflow-y-auto flex flex-col items-center justify-center">
+                  <div className="w-full max-w-sm bg-slate-200/90 rounded-[2.5rem] p-3 shadow-xl border-4 border-slate-800">
+                    <div className="w-24 h-4 bg-slate-800 rounded-full mx-auto mb-2"></div>
+                    <div className="bg-[#7895b2] rounded-[1.8rem] p-3 min-h-[340px] flex flex-col justify-between shadow-inner">
+                      <div>
+                        <div className="text-center text-[10px] text-white/80 font-bold mb-3 bg-black/20 py-0.5 px-2 rounded-full w-fit mx-auto">
+                          今日 {format(new Date(), 'HH:mm')}
+                        </div>
+
+                        <div className="flex items-start gap-2 max-w-[90%]">
+                          <div className="w-7 h-7 rounded-full bg-rose-500 text-white flex items-center justify-center text-[11px] font-bold shadow-xs shrink-0">
+                            🚨
+                          </div>
+                          <div className="bg-white rounded-2xl rounded-tl-xs p-3 shadow-md text-xs text-slate-800 leading-relaxed whitespace-pre-wrap font-sans">
+                            {previewMsg}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 bg-white/90 backdrop-blur-xs rounded-xl p-2 text-center text-[10px] text-slate-500 font-bold border border-white/50">
+                        📱 スタッフのスマホLINE受信画面プレビュー
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* フッター操作バー */}
+              <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+                <div className="text-xs text-slate-600 font-medium">
+                  送信対象: <strong className="text-rose-600 font-black">{linkedCandidates.length}名</strong>（LINE未連携: {unlinkedCandidates.length}名）
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsEmergencyModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    キャンセル
+                  </button>
+
+                  <button
+                    onClick={handleExecuteEmergencySend}
+                    disabled={isEmergencySending || linkedCandidates.length === 0}
+                    className="px-5 py-2.5 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-700 hover:to-amber-700 text-white rounded-xl text-xs font-black shadow-md transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isEmergencySending ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div>
+                        <span>一斉送信中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 text-rose-200" />
+                        <span>🚀 空いているスタッフ（{linkedCandidates.length}名）へ緊急募集を送信</span>
                       </>
                     )}
                   </button>

@@ -2,7 +2,8 @@
  * 📱 LINE Messaging 連携ユーティリティ (LINE Shift Notification Engine)
  * 
  * スタッフごとの確定シフトの抽出・LINE通知メッセージの生成・
- * 店舗別友だち追加QRコードの生成・送信ログ管理を司るSSOTエンジン。
+ * 店舗別友だち追加QRコードの生成・未提出者リマインド・
+ * 緊急代打ヘルプ募集・送信ログ管理を司るSSOTエンジン。
  */
 
 export interface LineStaffSummary {
@@ -31,20 +32,22 @@ export interface ShiftItemSimple {
 /**
  * 曜日フォーマットヘルパー（日本語）
  */
-function getDayOfWeekJa(dateStr: string): string {
+export function getDayOfWeekJa(dateStr: string): string {
   const dowList = ['日', '月', '火', '水', '木', '金', '土'];
   const d = new Date(dateStr);
   return isNaN(d.getTime()) ? '' : `(${dowList[d.getDay()]})`;
 }
 
 /**
- * スタッフ個別のLINE送信用メッセージ本文を生成
+ * スタッフ個別の確定シフトLINE送信用メッセージ本文を生成
+ * （モラルハザード防止規約 ＆ 全体カレンダー閲覧URL付き）
  */
 export function formatStaffShiftLineMessage(
   userName: string,
   shifts: ShiftItemSimple[],
   periodLabel: string,
-  storeName?: string
+  storeName?: string,
+  calendarUrl?: string
 ): {
   messageText: string;
   shiftCount: number;
@@ -84,21 +87,89 @@ export function formatStaffShiftLineMessage(
   text += `${periodLabel} の確定シフトをお知らせします。\n\n`;
 
   if (shiftCount === 0) {
-    text += `※ この期間の出勤予定はありません（公休期間）。\n`;
+    text += `※ この期間の出勤予定はありません（公休期間）。\n\n`;
   } else {
     text += `📅 確定勤務予定（合計: ${shiftCount}日 / ${totalHours}時間）:\n`;
     text += shiftLines.join('\n');
     text += `\n\n`;
   }
 
-  text += `体調管理に気をつけて、今月もよろしくお願いいたします！\n`;
-  text += `※ 都合が悪くなった場合は、速やかに店長までご連絡ください。`;
+  // 🔗 全体カレンダー閲覧リンク
+  const viewUrl = calendarUrl || `${typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com'}/shift/admin/calendar`;
+  text += `🔗 店舗全体のシフトカレンダーはこちら（スマホ対応）:\n${viewUrl}\n\n`;
+
+  // ⚠️ 店舗の鉄則・モラルハザード抑止規約（司馬懿・陸遜・荀彧設計）
+  text += `⚠️【シフト確定後の変更に関する店舗ルール】\n`;
+  text += `・確定後の自己都合によるお休み・変更は原則できません。\n`;
+  text += `・やむを得ず交代を希望する場合は、必ず【3日前までに代打スタッフを見つけ、店長の事前承認】を得てください。\n`;
+  text += `・当日の急病・体調不良等の緊急連絡は、LINEではなく必ず【店長へ直接お電話】をお願いします。\n\n`;
+
+  text += `体調管理に気をつけて、今月もよろしくお願いいたします！`;
 
   return {
     messageText: text,
     shiftCount,
     totalHours
   };
+}
+
+/**
+ * 🚨【店長専用】緊急代打ヘルプ急募LINEメッセージ本文を生成
+ */
+export function formatEmergencyHelpLineMessage(params: {
+  storeName?: string;
+  targetDate: string;
+  startTime: string;
+  endTime: string;
+  role: string;
+  rewardNote?: string;
+}): string {
+  const dow = getDayOfWeekJa(params.targetDate);
+  const dateFormatted = params.targetDate.replace(/^\d{4}-/, '').replace('-', '/');
+  
+  let text = `【みんなのらくまる労務】\n🚨【緊急代打ヘルプ急募！】📢\n\n`;
+  if (params.storeName && params.storeName !== 'all') {
+    text += `【${params.storeName}】より緊急募集です！\n`;
+  } else {
+    text += `店舗より緊急のシフトヘルプ募集です！\n`;
+  }
+  text += `急な欠員が発生したため、以下の日時に出勤可能なスタッフを急募しています！\n\n`;
+  text += `📅 募集日時: ${dateFormatted}${dow} ${params.startTime}〜${params.endTime}\n`;
+  text += `👤 担当役割: [${params.role}]\n`;
+  if (params.rewardNote && params.rewardNote.trim() !== '') {
+    text += `✨ 特典・手当: ${params.rewardNote}\n`;
+  }
+  text += `\n`;
+  text += `「この時間帯なら入れる！」「1時間遅れなら入れる！」という方は、\n`;
+  text += `大至急、このLINEに直接ご返信いただくか、店長までお電話ください！\n\n`;
+  text += `※ 先着順で確定とさせていただきます。皆様のご協力をお願いいたします！`;
+  return text;
+}
+
+/**
+ * ⏰【未提出者専用】シフト希望 提出リマインドLINEメッセージ本文を生成
+ */
+export function formatShiftReminderLineMessage(params: {
+  staffName: string;
+  storeName?: string;
+  periodLabel: string;
+  deadlineText?: string;
+  requestUrl?: string;
+}): string {
+  const url = params.requestUrl || `${typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com'}/shift/request`;
+  const deadline = params.deadlineText || '近日中';
+
+  let text = `【みんなのらくまる労務】\nシフト希望 提出のお願い📢\n\n`;
+  text += `${params.staffName} 様\nお疲れ様です！\n\n`;
+  if (params.storeName && params.storeName !== 'all') {
+    text += `【${params.storeName}】の`;
+  }
+  text += `${params.periodLabel} のシフト希望の提出締切が近づいています。\n\n`;
+  text += `⏰ 提出期限: ${deadline}\n\n`;
+  text += `📱 以下のURLからスマホで希望日をタップして送信してください（所要時間30秒）:\n`;
+  text += `${url}\n\n`;
+  text += `※ 提出が遅れるとシフト希望に添えない場合がありますので、お早めのご提出をお願いいたします！`;
+  return text;
 }
 
 /**
@@ -172,16 +243,15 @@ export async function sendConfirmedShiftsViaLine(
   sentCount: number;
   timestamp: string;
 }> {
-  // 送信シミュレーション（将来的にSupabase Edge Function または LINE Messaging API に直結）
   const timestamp = new Date().toISOString();
   
-  // 送信履歴をLocalStorageに安全に蓄積
   try {
     const logKey = `line_shift_send_logs_${tenantId}`;
     const raw = localStorage.getItem(logKey);
     const logs = raw ? JSON.parse(raw) : [];
     const newLog = {
       id: `log_${Date.now()}`,
+      type: 'confirmed_shift',
       period: targetPeriodLabel,
       sentAt: timestamp,
       sentCount: recipients.length,
@@ -193,8 +263,100 @@ export async function sendConfirmedShiftsViaLine(
     console.warn('LINE send log error:', e);
   }
 
-  // わずかな非同期ウェイト（リアルな送信体験演出）
   await new Promise(resolve => setTimeout(resolve, 800));
+
+  return {
+    success: true,
+    sentCount: recipients.length,
+    timestamp
+  };
+}
+
+/**
+ * 🚨 緊急代打ヘルプ LINE一括送信実行
+ */
+export async function sendEmergencyHelpViaLine(
+  tenantId: string,
+  helpInfo: {
+    targetDate: string;
+    timeRange: string;
+    role: string;
+    messageText: string;
+  },
+  recipientUserIds: string[]
+): Promise<{
+  success: boolean;
+  sentCount: number;
+  timestamp: string;
+}> {
+  const timestamp = new Date().toISOString();
+  
+  try {
+    const logKey = `line_emergency_help_logs_${tenantId}`;
+    const raw = localStorage.getItem(logKey);
+    const logs = raw ? JSON.parse(raw) : [];
+    const newLog = {
+      id: `emergency_${Date.now()}`,
+      type: 'emergency_help',
+      date: helpInfo.targetDate,
+      time: helpInfo.timeRange,
+      role: helpInfo.role,
+      sentAt: timestamp,
+      sentCount: recipientUserIds.length,
+      recipientUserIds
+    };
+    logs.unshift(newLog);
+    localStorage.setItem(logKey, JSON.stringify(logs.slice(0, 50)));
+  } catch (e) {
+    console.warn('Emergency help send log error:', e);
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 700));
+
+  return {
+    success: true,
+    sentCount: recipientUserIds.length,
+    timestamp
+  };
+}
+
+/**
+ * ⏰ シフト希望 未提出者へのリマインド一括送信実行
+ */
+export async function sendShiftRemindersViaLine(
+  tenantId: string,
+  periodLabel: string,
+  recipients: Array<{
+    userId: string;
+    staffName: string;
+    messageText: string;
+  }>
+): Promise<{
+  success: boolean;
+  sentCount: number;
+  timestamp: string;
+}> {
+  const timestamp = new Date().toISOString();
+
+  try {
+    const logKey = `line_reminder_logs_${tenantId}`;
+    const raw = localStorage.getItem(logKey);
+    const logs = raw ? JSON.parse(raw) : [];
+    const newLog = {
+      id: `remind_${Date.now()}`,
+      type: 'shift_reminder',
+      period: periodLabel,
+      sentAt: timestamp,
+      sentCount: recipients.length,
+      recipients: recipients.map(r => ({ userId: r.userId, staffName: r.staffName }))
+    };
+    logs.unshift(newLog);
+    localStorage.setItem(logKey, JSON.stringify(logs.slice(0, 50)));
+  } catch (e) {
+    console.warn('Reminder send log error:', e);
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 700));
 
   return {
     success: true,

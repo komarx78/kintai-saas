@@ -3,7 +3,7 @@ import {
   DollarSign, Zap, Calendar, ArrowLeft, CheckCircle, CheckCircle2, 
   Settings, Send, LogOut, RotateCcw, 
   ChevronDown, ChevronUp, Lock, Unlock, Clock, Sparkles, AlertCircle, 
-  FileText, ExternalLink, HelpCircle
+  FileText, ExternalLink, HelpCircle, MessageSquare, X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -14,6 +14,11 @@ import AppSwitcher from '../components/AppSwitcher';
 import { calculateLaborCost, generateAutoShift } from '../lib/shiftAlgorithm';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { seedShiftDemoData } from '../lib/seedShiftDemoData';
+import { 
+  getAllStaffLineLinkMap, 
+  formatShiftReminderLineMessage, 
+  sendShiftRemindersViaLine 
+} from '../lib/lineMessaging';
 
 const ShiftAdminDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -47,6 +52,13 @@ const ShiftAdminDashboard: React.FC = () => {
   // ⚙️ 運用基本設定アコーディオンの開閉状態
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+
+  // 📱 LINE未提出者リマインド用State
+  const [tenantId, setTenantId] = useState<string>('');
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [isReminderSending, setIsReminderSending] = useState(false);
+  const [reminderSuccessMessage, setReminderSuccessMessage] = useState<string | null>(null);
+  const [reminderDeadlineInput, setReminderDeadlineInput] = useState<string>('金曜日 23:59まで');
 
   // 🧪 検証用ダミーデータの一括投入（店舗配属・必要時間枠・希望シフトを一元生成）
   const handleSeedDummyRequests = async () => {
@@ -118,6 +130,7 @@ const ShiftAdminDashboard: React.FC = () => {
     try {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
       if (!tenantId) return;
+      setTenantId(tenantId);
 
       const { data: tData } = await supabase.from('tenants').select('name').eq('id', tenantId).maybeSingle();
       if (tData) setTenantName(tData.name);
@@ -401,6 +414,46 @@ const ShiftAdminDashboard: React.FC = () => {
     }
   };
 
+  // 📱 未提出スタッフへの一括LINEリマインド送信ハンドラー
+  const handleExecuteReminders = async () => {
+    if (!tenantId || unsubmittedEmployees.length === 0) return;
+    const linkMap = getAllStaffLineLinkMap(tenantId);
+    const linkedUnsubmitted = unsubmittedEmployees.filter(emp => Boolean(linkMap[emp.id]));
+
+    if (linkedUnsubmitted.length === 0) {
+      alert('未提出のスタッフの中に、LINE連携済みのスタッフがいません。\n「シフト要員マスタ」からスタッフのLINE連携を行ってください。');
+      return;
+    }
+
+    if (!window.confirm(`未提出のLINE連携スタッフ【${linkedUnsubmitted.length}名】に、希望提出リマインドLINEを一括送信しますか？`)) {
+      return;
+    }
+
+    setIsReminderSending(true);
+    try {
+      const periodLabel = `${format(weekStart, 'yyyy年M月d日', { locale: ja })} 〜 ${format(weekEnd, 'M月d日', { locale: ja })}`;
+      const payload = linkedUnsubmitted.map(emp => ({
+        userId: emp.id,
+        staffName: emp.name || emp.email,
+        messageText: formatShiftReminderLineMessage({
+          staffName: emp.name || emp.email,
+          storeName: emp.store_name,
+          periodLabel,
+          deadlineText: reminderDeadlineInput
+        })
+      }));
+
+      const res = await sendShiftRemindersViaLine(tenantId, periodLabel, payload);
+      setIsReminderModalOpen(false);
+      setReminderSuccessMessage(`📢 未提出のスタッフ ${res.sentCount}名へLINE提出リマインドを一括送信しました！`);
+      setTimeout(() => setReminderSuccessMessage(null), 6000);
+    } catch (e: any) {
+      alert('リマインド送信中にエラーが発生しました: ' + (e.message || e));
+    } finally {
+      setIsReminderSending(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
       {/* 画面最上部：全システム共通ヘッダー（固定トップバー） */}
@@ -461,6 +514,20 @@ const ShiftAdminDashboard: React.FC = () => {
           <div className="absolute right-0 top-0 w-96 h-96 bg-white/5 rounded-full blur-3xl pointer-events-none"></div>
           
           <div className="max-w-6xl mx-auto">
+            {reminderSuccessMessage && (
+              <div className="mb-4 p-4 bg-emerald-500/90 backdrop-blur-md border border-emerald-300 text-white rounded-2xl flex items-center justify-between shadow-lg animate-in fade-in">
+                <div className="flex items-center gap-2.5">
+                  <Sparkles className="w-5 h-5 text-amber-200 shrink-0" />
+                  <span className="font-bold text-sm">{reminderSuccessMessage}</span>
+                </div>
+                <button 
+                  onClick={() => setReminderSuccessMessage(null)} 
+                  className="text-white/80 hover:text-white p-1 hover:bg-white/20 rounded-lg transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             {/* 上段：タイトル ＆ 対象週バッジ */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
               <div>
@@ -627,6 +694,18 @@ const ShiftAdminDashboard: React.FC = () => {
                     </div>
                   ) : (
                     <p className="text-xs text-slate-400">全員の希望が集まりました。AI自動作成へ進めます！</p>
+                  )}
+
+                  {unsubmittedEmployees.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsReminderModalOpen(true)}
+                      className="w-full mt-3 py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-black text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer border border-emerald-400"
+                      title="シフト希望がまだ提出されていないスタッフへLINEで一括リマインドを送信します"
+                    >
+                      <MessageSquare className="w-4 h-4 text-emerald-200" />
+                      <span>📱 未提出者（{unsubmittedEmployees.length}名）へLINE一括催促</span>
+                    </button>
                   )}
                 </div>
 
@@ -1046,6 +1125,176 @@ const ShiftAdminDashboard: React.FC = () => {
 
         </div>
       </main>
+
+      {/* 📱 未提出スタッフへのLINE一括リマインドモーダル */}
+      {isReminderModalOpen && (() => {
+        const linkMap = tenantId ? getAllStaffLineLinkMap(tenantId) : {};
+        const unsubmittedWithLink = unsubmittedEmployees.map(emp => ({
+          ...emp,
+          isLineLinked: Boolean(linkMap[emp.id])
+        }));
+        const linkedCount = unsubmittedWithLink.filter(e => e.isLineLinked).length;
+        const unlinkedCount = unsubmittedWithLink.filter(e => !e.isLineLinked).length;
+        const periodLabel = `${format(weekStart, 'yyyy年M月d日', { locale: ja })} 〜 ${format(weekEnd, 'M月d日', { locale: ja })}`;
+        const sampleEmpName = unsubmittedWithLink[0]?.name || '佐藤 健太';
+
+        const previewMsg = formatShiftReminderLineMessage({
+          staffName: sampleEmpName,
+          storeName: tenantName,
+          periodLabel,
+          deadlineText: reminderDeadlineInput
+        });
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="bg-white rounded-3xl text-left overflow-hidden shadow-2xl w-full max-w-4xl flex flex-col border border-slate-200 max-h-[92vh]">
+              {/* モーダルヘッダー */}
+              <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 p-5 text-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner">
+                    <MessageSquare className="w-5 h-5 text-emerald-200" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black tracking-tight">📱 シフト希望 未提出者へLINE一括催促</h3>
+                    <p className="text-xs text-emerald-100 mt-0.5">
+                      まだシフト希望を出していないスタッフへ、スマホから30秒で出せるリンク付きでLINE通知を送ります
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsReminderModalOpen(false)}
+                  className="p-2 hover:bg-white/20 rounded-full transition text-white/80 hover:text-white cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* 締切設定バー */}
+              <div className="p-4 bg-emerald-50/50 border-b border-emerald-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                  <span>📅 対象期間:</span>
+                  <span className="bg-white px-2.5 py-1 rounded-lg border border-emerald-200 text-emerald-900">
+                    {periodLabel}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-700 whitespace-nowrap">⏰ 提出締切日時の案内:</span>
+                  <input
+                    type="text"
+                    value={reminderDeadlineInput}
+                    onChange={(e) => setReminderDeadlineInput(e.target.value)}
+                    placeholder="例: 今週金曜日 23:59まで"
+                    className="text-xs px-3 py-1.5 rounded-xl border border-emerald-200 bg-white font-medium focus:ring-2 focus:ring-emerald-400 focus:outline-none w-48 sm:w-60"
+                  />
+                </div>
+              </div>
+
+              {/* メインエリア：未提出スタッフ一覧 ＆ スマホLINEプレビュー */}
+              <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-slate-200">
+                {/* 左：未提出スタッフ一覧 */}
+                <div className="md:col-span-5 p-4 overflow-y-auto space-y-2 max-h-[45vh] md:max-h-none">
+                  <div className="text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
+                    <span>未提出スタッフ一覧:</span>
+                    <span className="text-[10px] text-slate-400">計 {unsubmittedWithLink.length}名</span>
+                  </div>
+
+                  {unsubmittedWithLink.map(emp => (
+                    <div
+                      key={emp.id}
+                      className={`p-3 rounded-2xl border text-xs flex items-center justify-between gap-2 ${
+                        emp.isLineLinked 
+                          ? 'bg-emerald-50/50 border-emerald-200' 
+                          : 'bg-slate-50 border-slate-200 opacity-60'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-black text-slate-800 flex items-center gap-1.5">
+                          <span>{emp.name || emp.email}</span>
+                          {emp.isLineLinked ? (
+                            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-300">
+                              🟢 送信対象
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded">
+                              ⚪ LINE未連携
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          {emp.store_name ? `${emp.store_name}所属` : '店舗未設定'}
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-bold text-rose-600">未提出</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 右：スマホLINEトーク画面風プレビュー */}
+                <div className="md:col-span-7 p-4 bg-slate-100/70 overflow-y-auto flex flex-col items-center justify-center">
+                  <div className="w-full max-w-sm bg-slate-200/90 rounded-[2.5rem] p-3 shadow-xl border-4 border-slate-800">
+                    <div className="w-24 h-4 bg-slate-800 rounded-full mx-auto mb-2"></div>
+                    <div className="bg-[#7895b2] rounded-[1.8rem] p-3 min-h-[340px] flex flex-col justify-between shadow-inner">
+                      <div>
+                        <div className="text-center text-[10px] text-white/80 font-bold mb-3 bg-black/20 py-0.5 px-2 rounded-full w-fit mx-auto">
+                          今日 {format(new Date(), 'HH:mm')}
+                        </div>
+
+                        <div className="flex items-start gap-2 max-w-[90%]">
+                          <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[11px] font-bold shadow-xs shrink-0">
+                            📱
+                          </div>
+                          <div className="bg-white rounded-2xl rounded-tl-xs p-3 shadow-md text-xs text-slate-800 leading-relaxed whitespace-pre-wrap font-sans">
+                            {previewMsg}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 bg-white/90 backdrop-blur-xs rounded-xl p-2 text-center text-[10px] text-slate-500 font-bold border border-white/50">
+                        📱 スタッフのスマホLINE受信画面プレビュー
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* フッター操作バー */}
+              <div className="p-4 bg-white border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+                <div className="text-xs text-slate-600 font-medium">
+                  送信対象: <strong className="text-emerald-700 font-black">{linkedCount}名</strong>（LINE未連携: {unlinkedCount}名）
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsReminderModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    キャンセル
+                  </button>
+
+                  <button
+                    onClick={handleExecuteReminders}
+                    disabled={isReminderSending || linkedCount === 0}
+                    className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-black shadow-md transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isReminderSending ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div>
+                        <span>一括送信中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 text-emerald-200" />
+                        <span>🚀 LINE連携済みの未提出者（{linkedCount}名）へ一括送信</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ❓ 使い方ガイドモーダル */}
       <HelpGuideModal 
