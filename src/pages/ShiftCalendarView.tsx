@@ -279,7 +279,58 @@ const ShiftCalendarView: React.FC = () => {
         .from('advanced_shift_requirements')
         .select('*')
         .eq('tenant_id', tenantIdData);
-      setRequirements(reqsData || []);
+
+      let formattedReqs = reqsData || [];
+      if (selectedDepartment !== 'all') {
+        const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
+        const cached = localStorage.getItem(storeKey);
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            const formatted: any[] = [];
+            const weekdays = parsed['平日'] || [];
+            const weekends = parsed['土日'] || [];
+            const holidays = parsed['祝日'] || [];
+            weekdays.forEach((r: any) => {
+              [1, 2, 3, 4, 5].forEach(dow => {
+                formatted.push({
+                  day_of_week: dow,
+                  role: r.role,
+                  required_count: r.count,
+                  start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
+                  end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
+                });
+              });
+            });
+            weekends.forEach((r: any) => {
+              [0, 6].forEach(dow => {
+                formatted.push({
+                  day_of_week: dow,
+                  role: r.role,
+                  required_count: r.count,
+                  start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
+                  end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
+                });
+              });
+            });
+            holidays.forEach((r: any) => {
+              formatted.push({
+                day_of_week: 7,
+                role: r.role,
+                required_count: r.count,
+                start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
+                end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
+              });
+            });
+            if (formatted.length > 0) {
+              formattedReqs = formatted;
+            }
+          } catch (e) {
+            console.warn('Store req parse error in fetch:', e);
+          }
+        }
+      }
+      setRequirements(formattedReqs);
       
       const { data: empSettingsData } = await supabase.from('shift_employee_settings').select('user_id, default_role').eq('tenant_id', tenantIdData);
       const userRoleMap: Record<string, string> = {};
@@ -1973,7 +2024,8 @@ const ShiftCalendarView: React.FC = () => {
                                 {(() => {
                                   const dow = d.getDay();
                                   const dayReqs = requirements.filter(r => r.day_of_week === dow && r.role === role.name);
-                                  const dayAssignedShifts = dayShifts.filter(s => s.role === role.name && s.status !== 'request');
+                                  // 画面に見えている対象店舗・役割のスタッフシフト（確定＋確定予定）のみを実働シフトとして集計
+                                  const dayAssignedShifts = roleShifts.filter(s => s.status !== 'request');
 
                                   // 本日の総不足人数・不足時間帯数を計算
                                   let totalShortageCount = 0;
