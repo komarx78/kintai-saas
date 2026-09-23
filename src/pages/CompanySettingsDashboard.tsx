@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import AppSwitcher from '../components/AppSwitcher';
 import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
@@ -38,10 +38,14 @@ import {
   ArrowLeft, LogOut, Loader2, Save, Plus, Trash2, 
   Sparkles, Bot, Clock, ShieldCheck, Printer, X,
   UserCheck, ArrowUp, ArrowDown, RotateCcw, Edit3,
-  Network, Award, Crown, Shield, FileText, Upload,
+  Network,  Award, Crown, Shield, FileText, Upload,
   ImageIcon, Wand2, CheckCircle2, Eye, Bell, FileSpreadsheet,
-  ExternalLink, Store, MapPin
+  ExternalLink, Store, MapPin, CreditCard, Check, Zap
 } from 'lucide-react';
+import { 
+  SAAS_PLANS, 
+  type SaasPlanType 
+} from '../lib/subscriptionBilling';
 import { PREFECTURES, getPrefectureRate, extractPrefectureCodeFromAddress } from '../lib/socialInsurance';
 import { 
   type AnnouncementItem, 
@@ -532,13 +536,38 @@ export const formatLaborInsuranceNumber = (input: string): string => {
 
 export default function CompanySettingsDashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements' | 'qualifications' | 'reminders'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements' | 'qualifications' | 'reminders' | 'billing'>('basic');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  // 🔗 URLクエリパラメータ（?tab=billing 等）によるタブ自動選択
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab') as any;
+    if (tabParam && ['basic', 'departments', 'calendar', 'payroll', 'contract', 'onboarding', 'rules', 'announcements', 'qualifications', 'reminders', 'billing'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [location.search]);
+
+  // 💳 ご利用プランとお支払い情報State（SaaS課金・Square連携）
+  const [tenantBilling, setTenantBilling] = useState<{
+    plan_type: SaasPlanType;
+    trial_ends_at: string | null;
+    billing_cycle: 'monthly' | 'annual';
+    square_checkout_url: string;
+    square_subscription_id: string;
+  }>({
+    plan_type: 'trial',
+    trial_ends_at: null,
+    billing_cycle: 'monthly',
+    square_checkout_url: '',
+    square_subscription_id: ''
+  });
 
   // 📢 全社お知らせ掲示板State
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
@@ -868,6 +897,21 @@ export default function CompanySettingsDashboard() {
         } else {
           setPositions(getPositionsFromStorage());
         }
+
+        // 💳 テナント課金情報・プラン復元
+        let loadedSquareUrl = tData.square_checkout_url || '';
+        try {
+          const localUrl = localStorage.getItem(`square_checkout_url_${tenantIdData}`);
+          if (localUrl) loadedSquareUrl = localUrl;
+        } catch (_) {}
+
+        setTenantBilling({
+          plan_type: (tData.plan_type as SaasPlanType) || 'trial',
+          trial_ends_at: tData.trial_ends_at || null,
+          billing_cycle: (tData.billing_cycle as any) || 'monthly',
+          square_checkout_url: loadedSquareUrl,
+          square_subscription_id: tData.square_subscription_id || ''
+        });
       } else {
         setOnboardingSteps(getWorkflowStepsFromStorage());
         setPositions(getPositionsFromStorage());
@@ -1711,6 +1755,48 @@ export default function CompanySettingsDashboard() {
     }
   };
 
+  // 💳 ご利用プラン・決済設定の変更保存ハンドラ
+  const handleSaveBillingPlan = async (newPlan: SaasPlanType) => {
+    if (!tenantId) return;
+    const planMeta = SAAS_PLANS[newPlan];
+    if (!confirm(`ご利用プランを「${planMeta.name}」に変更しますか？`)) return;
+
+    try {
+      setIsSaving(true);
+      await supabase.from('tenants').update({
+        plan_type: newPlan
+      }).eq('id', tenantId);
+
+      setTenantBilling(prev => ({ ...prev, plan_type: newPlan }));
+      alert(`✅ ご利用プランを「${planMeta.name}」に更新しました！`);
+      await fetchData();
+    } catch (e: any) {
+      alert('プランの更新に失敗しました: ' + (e.message || e));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveSquareUrl = async (url: string) => {
+    if (!tenantId) return;
+    try {
+      setIsSaving(true);
+      const cleanUrl = url.trim();
+      localStorage.setItem(`square_checkout_url_${tenantId}`, cleanUrl);
+      try {
+        await supabase.from('tenants').update({
+          square_checkout_url: cleanUrl
+        }).eq('id', tenantId);
+      } catch (_) {}
+      setTenantBilling(prev => ({ ...prev, square_checkout_url: cleanUrl }));
+      alert('✅ Square決済リンクURLを保存しました！');
+    } catch (e: any) {
+      alert('Squareリンクの保存に失敗しました: ' + (e.message || e));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // 役職追加
   const handleAddPosition = () => {
     if (!newPositionName.trim()) {
@@ -2521,6 +2607,21 @@ export default function CompanySettingsDashboard() {
           >
             <Bell className="w-4 h-4 text-amber-500" />
             10. 🔔 公的届出・社保改定通知マスタ
+          </button>
+
+          <button
+            onClick={() => setActiveTab('billing')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeTab === 'billing' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md' : 'bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-300'
+            }`}
+          >
+            <CreditCard className="w-4 h-4" />
+            11. 💳 ご利用プラン ＆ お支払い
+            {tenantBilling.plan_type === 'trial' && (
+              <span className="text-[10px] bg-amber-400 text-amber-950 font-black px-1.5 py-0.2 rounded-full">
+                お試し中
+              </span>
+            )}
           </button>
         </div>
 
@@ -5013,6 +5114,386 @@ export default function CompanySettingsDashboard() {
             />
           </div>
         )}
+
+        {/* 11. 💳 ご利用プラン ＆ お支払い設定 タブ */}
+        {activeTab === 'billing' && (() => {
+          const userCount = Math.max(1, companyUsers.length);
+          const trialEnd = tenantBilling.trial_ends_at ? new Date(tenantBilling.trial_ends_at) : null;
+          const now = new Date();
+          const diffDays = trialEnd ? Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 30;
+          const isTrialActive = tenantBilling.plan_type === 'trial';
+          const currentPlanMeta = SAAS_PLANS[tenantBilling.plan_type] || SAAS_PLANS.trial;
+
+          return (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* プラン概要ヘッダーカード */}
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                      <CreditCard className="w-5 h-5 text-indigo-600" />
+                      ご利用プラン ＆ お支払い設定
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      会社の成長やニーズに合わせて自由にプランをお選びいただけます。1ヶ月無料トライアル中も全機能をご利用いただけます。
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-black px-3 py-1.5 rounded-full border shadow-2xs ${currentPlanMeta.badgeColor}`}>
+                      {currentPlanMeta.badge}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4大ステータス指標 */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                    <div className="text-[11px] font-bold text-slate-500">現在のご利用状況</div>
+                    <div className="text-base font-black text-slate-900 mt-1">
+                      {currentPlanMeta.name}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      {isTrialActive ? '全機能フルアクセス中' : '有料プラン稼働中'}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                    <div className="text-[11px] font-bold text-slate-500">無料トライアル残日数</div>
+                    <div className="text-base font-black mt-1 flex items-baseline gap-1">
+                      {isTrialActive ? (
+                        diffDays > 0 ? (
+                          <span className="text-emerald-600">残り {diffDays} 日</span>
+                        ) : (
+                          <span className="text-rose-600">本日終了 / 期限切れ</span>
+                        )
+                      ) : (
+                        <span className="text-indigo-600">本契約移行済み</span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      {isTrialActive && trialEnd ? `期限: ${trialEnd.toLocaleDateString('ja-JP')}` : '安心の月額自動更新'}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                    <div className="text-[11px] font-bold text-slate-500">登録従業員数（在籍）</div>
+                    <div className="text-base font-black text-slate-900 mt-1">
+                      {userCount} <span className="text-xs font-normal text-slate-500">名</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      ※ 退職者は課金対象外
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                    <div className="text-[11px] font-bold text-slate-500">現在の月額利用料（試算）</div>
+                    <div className="text-base font-black text-indigo-600 mt-1">
+                      {isTrialActive ? (
+                        <span>¥0 <span className="text-xs text-emerald-600 font-bold">（無料体験中）</span></span>
+                      ) : (
+                        <span>¥{(userCount * currentPlanMeta.unitPriceMonthly).toLocaleString()} <span className="text-xs font-normal text-slate-500">/月</span></span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">
+                      1名あたり ¥{currentPlanMeta.unitPriceMonthly.toLocaleString()}/月
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3大プライシングプラン比較カード */}
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <h4 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
+                    <Zap className="w-4 h-4 text-amber-500" />
+                    プランをお選びください（用途に合わせていつでも切り替え可能）
+                  </h4>
+                  <span className="text-[11px] text-slate-500 font-bold">
+                    ※ 貴社の在籍人数（{userCount}名）で自動試算
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* ① シフト＆LINE単体プラン */}
+                  {(() => {
+                    const plan = SAAS_PLANS.shift_only;
+                    const isCurrent = tenantBilling.plan_type === 'shift_only';
+                    const monthlyTotal = userCount * plan.unitPriceMonthly;
+
+                    return (
+                      <div className={`bg-white rounded-3xl p-6 border-2 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-md ${
+                        isCurrent ? 'border-teal-500 ring-2 ring-teal-200' : 'border-slate-200 hover:border-slate-300'
+                      }`}>
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 border border-teal-300">
+                              {plan.badge}
+                            </span>
+                            {isCurrent && (
+                              <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-teal-600 text-white">
+                                現在利用中
+                              </span>
+                            )}
+                          </div>
+
+                          <h5 className="text-base font-black text-slate-900 mt-3">{plan.name}</h5>
+                          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{plan.description}</p>
+
+                          <div className="mt-4 pb-4 border-b border-slate-100">
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-2xl font-black text-slate-900">¥{plan.unitPriceMonthly.toLocaleString()}</span>
+                              <span className="text-xs text-slate-500 font-bold">/名・月（税込）</span>
+                            </div>
+                            <div className="text-xs font-bold text-teal-700 bg-teal-50 px-2 py-1 rounded-lg mt-2 inline-block">
+                              貴社（{userCount}名）の場合: ¥{monthlyTotal.toLocaleString()} / 月
+                            </div>
+                          </div>
+
+                          <div className="mt-4 space-y-2">
+                            <div className="text-[11px] font-bold text-slate-700">含まれる主な機能:</div>
+                            {plan.features.map((feat, idx) => (
+                              <div key={idx} className="flex items-start gap-1.5 text-xs text-slate-600">
+                                <Check className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
+                                <span>{feat}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="mt-6 pt-4 border-t border-slate-100">
+                          <button
+                            onClick={() => handleSaveBillingPlan('shift_only')}
+                            disabled={isCurrent || isSaving}
+                            className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                              isCurrent 
+                                ? 'bg-teal-50 text-teal-700 border border-teal-200 cursor-default' 
+                                : 'bg-teal-600 hover:bg-teal-700 text-white shadow-xs'
+                            }`}
+                          >
+                            {isCurrent ? '✅ 現在の選択プラン' : 'このプランに変更する'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ② 勤怠＆労務単体プラン */}
+                  {(() => {
+                    const plan = SAAS_PLANS.kintai_only;
+                    const isCurrent = tenantBilling.plan_type === 'kintai_only';
+                    const monthlyTotal = userCount * plan.unitPriceMonthly;
+
+                    return (
+                      <div className={`bg-white rounded-3xl p-6 border-2 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-md ${
+                        isCurrent ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200 hover:border-slate-300'
+                      }`}>
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300">
+                              {plan.badge}
+                            </span>
+                            {isCurrent && (
+                              <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-blue-600 text-white">
+                                現在利用中
+                              </span>
+                            )}
+                          </div>
+
+                          <h5 className="text-base font-black text-slate-900 mt-3">{plan.name}</h5>
+                          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{plan.description}</p>
+
+                          <div className="mt-4 pb-4 border-b border-slate-100">
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-2xl font-black text-slate-900">¥{plan.unitPriceMonthly.toLocaleString()}</span>
+                              <span className="text-xs text-slate-500 font-bold">/名・月（税込）</span>
+                            </div>
+                            <div className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-lg mt-2 inline-block">
+                              貴社（{userCount}名）の場合: ¥{monthlyTotal.toLocaleString()} / 月
+                            </div>
+                          </div>
+
+                          <div className="mt-4 space-y-2">
+                            <div className="text-[11px] font-bold text-slate-700">含まれる主な機能:</div>
+                            {plan.features.map((feat, idx) => (
+                              <div key={idx} className="flex items-start gap-1.5 text-xs text-slate-600">
+                                <Check className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                                <span>{feat}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="mt-6 pt-4 border-t border-slate-100">
+                          <button
+                            onClick={() => handleSaveBillingPlan('kintai_only')}
+                            disabled={isCurrent || isSaving}
+                            className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                              isCurrent 
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200 cursor-default' 
+                                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
+                            }`}
+                          >
+                            {isCurrent ? '✅ 現在の選択プラン' : 'このプランに変更する'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ③ フルセット（アドバンス）プラン ※一番人気・おすすめ */}
+                  {(() => {
+                    const plan = SAAS_PLANS.full_advance;
+                    const isCurrent = tenantBilling.plan_type === 'full_advance';
+                    const monthlyTotal = userCount * plan.unitPriceMonthly;
+                    const savedMonthly = userCount * 100;
+                    const savedAnnual = savedMonthly * 12;
+
+                    return (
+                      <div className={`bg-gradient-to-b from-amber-50/60 via-white to-indigo-50/40 rounded-3xl p-6 border-2 flex flex-col justify-between transition-all duration-200 shadow-md hover:shadow-lg relative overflow-hidden ${
+                        isCurrent ? 'border-amber-500 ring-2 ring-amber-300' : 'border-indigo-400'
+                      }`}>
+                        {/* おすすめリボン */}
+                        <div className="absolute top-0 right-0 bg-gradient-to-r from-amber-500 to-indigo-600 text-white text-[10px] font-black px-4 py-1 rounded-bl-2xl shadow-xs">
+                          一番人気 ★ セットでお得！
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
+                              <Crown className="w-3 h-3 text-amber-600" />
+                              {plan.badge}
+                            </span>
+                            {isCurrent && (
+                              <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-indigo-600 text-white">
+                                現在利用中
+                              </span>
+                            )}
+                          </div>
+
+                          <h5 className="text-base font-black text-slate-900 mt-3">{plan.name}</h5>
+                          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{plan.description}</p>
+
+                          <div className="mt-4 pb-4 border-b border-amber-100">
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-slate-400 line-through text-sm font-bold">¥600</span>
+                              <span className="text-2xl font-black text-indigo-700">¥{plan.unitPriceMonthly.toLocaleString()}</span>
+                              <span className="text-xs text-slate-500 font-bold">/名・月（税込）</span>
+                            </div>
+                            <div className="text-xs font-bold text-amber-900 bg-amber-100/80 px-2.5 py-1 rounded-lg mt-2 inline-flex items-center gap-1 border border-amber-300">
+                              <span>🎁 単体契約より毎月 ¥{savedMonthly.toLocaleString()}（年間 ¥{savedAnnual.toLocaleString()}）おトク！</span>
+                            </div>
+                            <div className="text-xs font-black text-indigo-900 mt-1.5">
+                              貴社（{userCount}名）の場合: ¥{monthlyTotal.toLocaleString()} / 月
+                            </div>
+                          </div>
+
+                          <div className="mt-4 space-y-2">
+                            <div className="text-[11px] font-bold text-indigo-900">全機能が完全連動:</div>
+                            {plan.features.map((feat, idx) => (
+                              <div key={idx} className="flex items-start gap-1.5 text-xs text-slate-700 font-medium">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-0.5" />
+                                <span>{feat}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="mt-6 pt-4 border-t border-indigo-100">
+                          <button
+                            onClick={() => handleSaveBillingPlan('full_advance')}
+                            disabled={isCurrent || isSaving}
+                            className={`w-full py-3 px-4 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm ${
+                              isCurrent 
+                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-300 cursor-default' 
+                                : 'bg-gradient-to-r from-amber-500 via-indigo-600 to-indigo-700 hover:opacity-90 text-white'
+                            }`}
+                          >
+                            <Crown className="w-4 h-4 text-amber-300" />
+                            {isCurrent ? '👑 現在の選択プラン' : '👑 フルセットプランを選択する（おすすめ）'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Square決済とお支払い手続きエリア */}
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-sm">
+                      Sq
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-sm">
+                        Square クレジットカード決済（定期請求）
+                      </h4>
+                      <p className="text-xs text-slate-400">
+                        VISA、Mastercard、JCB、American Express、Diners Club による安全なオンライン定期決済
+                      </p>
+                    </div>
+                  </div>
+
+                  {tenantBilling.square_checkout_url ? (
+                    <a
+                      href={tenantBilling.square_checkout_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <CreditCard className="w-4 h-4 text-amber-400" />
+                      Squareでお支払い手続きへ進む
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                    </a>
+                  ) : (
+                    <button
+                      onClick={() => alert('お支払いリンクが設定されていません。下記の入力欄にSquare決済リンクURLを入力するか、サポートまでお問い合わせください。')}
+                      className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <CreditCard className="w-4 h-4 text-amber-400" />
+                      お支払い手続き
+                    </button>
+                  )}
+                </div>
+
+                {/* 管理者用 Square決済URL登録フォーム */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-700 block">
+                      🔗 Square決済リンクURL（定期支払いチェックアウトURL）
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-medium">管理者設定項目</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="url"
+                      defaultValue={tenantBilling.square_checkout_url}
+                      id="square_checkout_url_input"
+                      placeholder="https://checkout.square.site/merchant/... または https://square.link/u/..."
+                      className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:outline-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById('square_checkout_url_input') as HTMLInputElement;
+                        if (el) handleSaveSquareUrl(el.value);
+                      }}
+                      disabled={isSaving}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      URLを保存
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    ※ Squareの加盟店管理画面 ➔「オンラインチェックアウト」で作成した決済リンクURLを入力して保存すると、自社管理者用のお支払いボタンに直結されます。
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
       </main>
 

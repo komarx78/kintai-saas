@@ -125,3 +125,133 @@ export function calculateSubscriptionFee(
     activeUsers: count
   };
 }
+
+/**
+ * 🌟 3大 SaaS プラン定義（シフト単体・勤怠単体・フルセット）
+ */
+export type SaasPlanType = 'trial' | 'shift_only' | 'kintai_only' | 'full_advance';
+
+export interface SaasPlanMeta {
+  id: SaasPlanType;
+  name: string;
+  badge: string;
+  badgeColor: string;
+  unitPriceMonthly: number; // 1人あたり月額単価
+  unitPriceAnnual: number;  // 1人あたり年額単価（割引適用）
+  originalPriceMonthly?: number; // 割引前定価（例: 600円）
+  discountText?: string;    // 割引アピール文（例: "セットで100円お得！"）
+  description: string;
+  recommendedFor: string;
+  features: string[];
+  isPopular?: boolean;
+}
+
+export const SAAS_PLANS: Record<SaasPlanType, SaasPlanMeta> = {
+  trial: {
+    id: 'trial',
+    name: '1ヶ月無料トライアル',
+    badge: '🎁 30日間全機能無料',
+    badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+    unitPriceMonthly: 0,
+    unitPriceAnnual: 0,
+    description: '登録から1ヶ月間（30日）、すべての機能を完全無料でお試しいただけます。クレジットカード登録不要。',
+    recommendedFor: '新規導入をご検討中のすべての企業・店舗様',
+    features: [
+      'LINEシフト収集・AI自動配置・カレンダー管理',
+      'LINE確定シフト個別通知・リマインド配信',
+      'Web/GPS打刻・勤怠集計・有給自動管理',
+      '入社手続き・雇用契約書・法定労務帳簿の自動作成',
+      '30日間の全機能フルアクセス'
+    ]
+  },
+  shift_only: {
+    id: 'shift_only',
+    name: 'シフト＆LINE単体プラン',
+    badge: '📱 シフト特化',
+    badgeColor: 'bg-teal-100 text-teal-800 border-teal-300',
+    unitPriceMonthly: 300,
+    unitPriceAnnual: 3000,
+    description: '他社の勤怠ソフトをお使いで、「LINEシフト募集・AI自動割り当て・確定LINE通知」だけを安く使いたい店舗に最適。',
+    recommendedFor: '飲食店・カフェ・美容室・小売店・シフト制店舗',
+    features: [
+      'LINEからのシフト希望収集・自動リマインド',
+      'AIによるシフト自動配置（過不足ゲージ連動）',
+      'シフトカレンダー（日次・週次・月次）',
+      '確定シフトのLINE個別一括送信',
+      'ヘルプ要請・シフト交代調整'
+    ]
+  },
+  kintai_only: {
+    id: 'kintai_only',
+    name: '勤怠＆労務単体プラン',
+    badge: '💼 勤怠・労務特化',
+    badgeColor: 'bg-blue-100 text-blue-800 border-blue-300',
+    unitPriceMonthly: 300,
+    unitPriceAnnual: 3000,
+    description: 'シフト作成が不要な固定勤務企業向け。打刻管理・有給休暇・入社労務手続きをスマートに完結。',
+    recommendedFor: 'オフィスワーク・IT企業・製造業・士業・固定勤務企業',
+    features: [
+      'Web打刻・スマホGPS打刻・打刻不正防止',
+      '有給休暇の法定自動付与・残日数・取得義務管理',
+      '36協定・残業超過アラート・勤怠CSV出力',
+      '入社手続き・雇用契約書・誓約書の自動発行',
+      '労働者名簿・出勤簿・賃金台帳の法定帳簿生成'
+    ]
+  },
+  full_advance: {
+    id: 'full_advance',
+    name: 'フルセット（アドバンス）プラン',
+    badge: '👑 一番人気・100円お得！',
+    badgeColor: 'bg-gradient-to-r from-amber-500 to-indigo-600 text-white border-amber-400',
+    unitPriceMonthly: 500,
+    unitPriceAnnual: 5000,
+    originalPriceMonthly: 600,
+    discountText: '通常600円 ➔ セット割で100円おトク！',
+    description: 'シフトと勤怠・労務が完全連動！シフト確定が出勤予定に直結し、打刻漏れ防止から給与計算まで一気通貫。',
+    recommendedFor: '正社員とアルバイトが混在する飲食店・クリニック・介護福祉施設・サービス業',
+    features: [
+      '✨ シフト＆LINE機能の「すべて」が利用可能',
+      '✨ 勤怠＆労務管理の「すべて」が利用可能',
+      '🔗 シフト確定 ➔ 勤怠予定の完全シームレス連動',
+      '⚡ 予定外打刻・遅刻欠勤の自動検知アラート',
+      '🎁 単体契約より【1名あたり月額100円】もお得！'
+    ],
+    isPopular: true
+  }
+};
+
+/**
+ * 選択プランと在籍人数から、月額・年額およびお得額を計算
+ */
+export function calculateSaasPlanPrice(
+  planId: SaasPlanType,
+  userCount: number,
+  isAnnual: boolean = false
+): {
+  unitPrice: number;
+  totalPrice: number;
+  savedMonthlyAmount: number;
+  originalTotalPrice: number;
+} {
+  const meta = SAAS_PLANS[planId] || SAAS_PLANS.full_advance;
+  const count = Math.max(0, userCount);
+  const unitPrice = isAnnual ? meta.unitPriceAnnual : meta.unitPriceMonthly;
+  const totalPrice = count * unitPrice;
+
+  // フルセットプランの場合のお得額（単体2つ＝600円との差額: 100円/名）
+  let savedMonthlyAmount = 0;
+  let originalTotalPrice = totalPrice;
+  if (planId === 'full_advance') {
+    const originalUnit = isAnnual ? 6000 : 600;
+    originalTotalPrice = count * originalUnit;
+    savedMonthlyAmount = isAnnual ? count * 1000 : count * 100;
+  }
+
+  return {
+    unitPrice,
+    totalPrice,
+    savedMonthlyAmount,
+    originalTotalPrice
+  };
+}
+

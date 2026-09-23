@@ -988,7 +988,19 @@ ${tenantId || '（エラー：コード取得失敗）'}
                   <div className="flex items-center gap-2">
                     {isTrial ? (
                       <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-2.5 py-0.5 rounded-full border border-emerald-300 flex items-center gap-1 shadow-2xs">
-                        🎁 無料トライアル利用中
+                        🎁 1ヶ月無料トライアル利用中
+                      </span>
+                    ) : tenantInfo?.plan_type === 'shift_only' ? (
+                      <span className="bg-teal-100 text-teal-800 text-xs font-black px-2.5 py-0.5 rounded-full border border-teal-300 flex items-center gap-1 shadow-2xs">
+                        📱 シフト＆LINE単体プラン（¥300/名）
+                      </span>
+                    ) : tenantInfo?.plan_type === 'kintai_only' ? (
+                      <span className="bg-blue-100 text-blue-800 text-xs font-black px-2.5 py-0.5 rounded-full border border-blue-300 flex items-center gap-1 shadow-2xs">
+                        💼 勤怠＆労務単体プラン（¥300/名）
+                      </span>
+                    ) : tenantInfo?.plan_type === 'full_advance' ? (
+                      <span className="bg-gradient-to-r from-amber-500 to-indigo-600 text-white text-xs font-black px-2.5 py-0.5 rounded-full border border-amber-400 flex items-center gap-1 shadow-2xs">
+                        👑 フルセットプラン（¥500/名・100円引）
                       </span>
                     ) : isFree ? (
                       <span className="bg-blue-100 text-blue-800 text-xs font-black px-2.5 py-0.5 rounded-full border border-blue-300 flex items-center gap-1 shadow-2xs">
@@ -1020,10 +1032,10 @@ ${tenantId || '（エラー：コード取得失敗）'}
 
                   {isTrial && (
                     <p className="text-xs text-emerald-700 font-bold">
-                      ※現在トライアル期間のため、<strong>料金は一切発生いたしません。</strong>
+                      ※現在1ヶ月無料トライアル期間のため、<strong>料金は一切発生いたしません。</strong>
                       {trialEnd ? (
-                        diffDays && diffDays > 0 ? ` (残り ${diffDays} 日 / ${trialEnd.toLocaleDateString('ja-JP')} まで)` : ' (期限終了)'
-                      ) : ' (無期限無料トライアル適用中)'}
+                        diffDays && diffDays > 0 ? ` (残り ${diffDays} 日 / ${trialEnd.toLocaleDateString('ja-JP')} まで全機能使い放題)` : ' (トライアル終了)'
+                      ) : ' (無料トライアル適用中)'}
                     </p>
                   )}
                   {isFree && (
@@ -1033,27 +1045,36 @@ ${tenantId || '（エラー：コード取得失敗）'}
                   )}
                 </div>
 
-                <div className="sm:text-right bg-slate-50 sm:bg-transparent p-3 sm:p-0 rounded-xl w-full sm:w-auto">
-                  <h3 className="text-xs font-bold text-gray-500">
-                    {isPaid ? (tenantInfo?.billing_cycle === 'annual' ? '今期のご利用料金（年額）' : '今月のご利用料金（月額）') : '今月のお支払い予定額'}
-                  </h3>
-                  <div className="flex sm:justify-end items-baseline gap-1 mt-0.5">
-                    {isPaid ? (
-                      <div className="text-right">
-                        <p className="text-2xl font-black text-blue-600 font-mono">
-                          ¥{calculatedFee.toLocaleString()}
-                        </p>
-                        <p className="text-[11px] text-slate-500 font-bold mt-0.5">
-                          内訳: {subscriptionResult.breakdownText}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-2xl font-black text-emerald-600 font-mono">¥0</span>
-                        <span className="text-xs font-bold text-emerald-700">（無料）</span>
-                      </div>
-                    )}
+                <div className="sm:text-right bg-slate-50 sm:bg-transparent p-3 sm:p-0 rounded-xl w-full sm:w-auto flex flex-col sm:items-end gap-2">
+                  <div>
+                    <h3 className="text-xs font-bold text-gray-500">
+                      {isPaid ? (tenantInfo?.billing_cycle === 'annual' ? '今期のご利用料金（年額）' : '今月のご利用料金（月額）') : '今月のお支払い予定額'}
+                    </h3>
+                    <div className="flex sm:justify-end items-baseline gap-1 mt-0.5">
+                      {isPaid ? (
+                        <div className="text-right">
+                          <p className="text-2xl font-black text-blue-600 font-mono">
+                            ¥{calculatedFee.toLocaleString()}
+                          </p>
+                          <p className="text-[11px] text-slate-500 font-bold mt-0.5">
+                            内訳: {subscriptionResult.breakdownText}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-2xl font-black text-emerald-600 font-mono">¥0</span>
+                          <span className="text-xs font-bold text-emerald-700">（無料体験中）</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
+
+                  <button
+                    onClick={() => navigate('/company/settings?tab=billing')}
+                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer self-start sm:self-auto shadow-2xs"
+                  >
+                    <span>💳 プラン変更・お支払い設定</span>
+                  </button>
                 </div>
               </div>
             );
