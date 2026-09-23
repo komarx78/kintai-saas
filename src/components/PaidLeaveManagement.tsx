@@ -5,158 +5,23 @@ import {
   Plus, Calendar, ShieldCheck, Edit3, Check, Zap, Info, ChevronRight, AlertTriangle
 } from 'lucide-react';
 
-// ==============================================================================
-// 労働基準法に基づく有給休暇の法定自動算定ロジック
-// ==============================================================================
+import {
+  type PaidLeaveCalcMode,
+  calculateStatutoryLeaveWithMode,
+  getCompanyPaidLeaveCalcMode,
+  saveCompanyPaidLeaveCalcMode,
+  getUserPaidLeaveCalcModeMap,
+  saveUserPaidLeaveCalcMode
+} from '../lib/paidLeaveCalculation';
+
+// 後方互換ラッパー
 export function calculateStatutoryLeave(
   joinDateStr: string | null | undefined, 
   employmentType: string = '正社員', 
   weeklyDays: number = 5, 
   targetDate: Date = new Date()
 ) {
-  if (!joinDateStr || joinDateStr === '-') {
-    return {
-      statutoryGrant: 0,
-      prevStatutoryGrant: 0,
-      serviceMonths: 0,
-      serviceText: '入社日未設定',
-      nextGrantDate: null,
-      nextGrantDays: 0,
-      daysUntilNextGrant: null,
-      isTarget: false
-    };
-  }
-
-  const joinDate = new Date(joinDateStr);
-  if (isNaN(joinDate.getTime())) {
-    return {
-      statutoryGrant: 0,
-      prevStatutoryGrant: 0,
-      serviceMonths: 0,
-      serviceText: '入社日無効',
-      nextGrantDate: null,
-      nextGrantDays: 0,
-      daysUntilNextGrant: null,
-      isTarget: false
-    };
-  }
-
-  const now = targetDate;
-  
-  // 経過月数
-  let months = (now.getFullYear() - joinDate.getFullYear()) * 12 + (now.getMonth() - joinDate.getMonth());
-  if (now.getDate() < joinDate.getDate()) {
-    months -= 1;
-  }
-  if (months < 0) months = 0;
-
-  const isFullTime = employmentType === '正社員' || employmentType === 'full-time' || weeklyDays >= 5;
-
-  // 正社員・週5日（フルタイム）
-  const fullTimeGrants = [
-    { months: 6, days: 10 },
-    { months: 18, days: 11 },
-    { months: 30, days: 12 },
-    { months: 42, days: 14 },
-    { months: 54, days: 16 },
-    { months: 66, days: 18 },
-    { months: 78, days: 20 },
-  ];
-
-  // パート週4日
-  const part4Grants = [
-    { months: 6, days: 7 },
-    { months: 18, days: 8 },
-    { months: 30, days: 9 },
-    { months: 42, days: 10 },
-    { months: 54, days: 12 },
-    { months: 66, days: 13 },
-    { months: 78, days: 14 },
-  ];
-
-  // パート週3日
-  const part3Grants = [
-    { months: 6, days: 5 },
-    { months: 18, days: 6 },
-    { months: 30, days: 6 },
-    { months: 42, days: 8 },
-    { months: 54, days: 9 },
-    { months: 66, days: 10 },
-    { months: 78, days: 11 },
-  ];
-
-  // パート週2日
-  const part2Grants = [
-    { months: 6, days: 3 },
-    { months: 18, days: 4 },
-    { months: 30, days: 4 },
-    { months: 42, days: 5 },
-    { months: 54, days: 6 },
-    { months: 66, days: 6 },
-    { months: 78, days: 7 },
-  ];
-
-  // パート週1日
-  const part1Grants = [
-    { months: 6, days: 1 },
-    { months: 18, days: 2 },
-    { months: 30, days: 2 },
-    { months: 42, days: 2 },
-    { months: 54, days: 3 },
-    { months: 66, days: 3 },
-    { months: 78, days: 3 },
-  ];
-
-  let schedule = fullTimeGrants;
-  if (!isFullTime) {
-    if (weeklyDays === 4) schedule = part4Grants;
-    else if (weeklyDays === 3) schedule = part3Grants;
-    else if (weeklyDays === 2) schedule = part2Grants;
-    else if (weeklyDays === 1) schedule = part1Grants;
-    else schedule = fullTimeGrants;
-  }
-
-  let currentGrant = 0;
-  let prevGrant = 0;
-  let nextGrantMonths = schedule[0].months;
-  let nextGrantDays = schedule[0].days;
-
-  for (let i = 0; i < schedule.length; i++) {
-    if (months >= schedule[i].months) {
-      prevGrant = currentGrant;
-      currentGrant = schedule[i].days;
-      if (i + 1 < schedule.length) {
-        nextGrantMonths = schedule[i + 1].months;
-        nextGrantDays = schedule[i + 1].days;
-      } else {
-        const maxMonths = schedule[schedule.length - 1].months;
-        const cycles = Math.floor((months - maxMonths) / 12) + 1;
-        nextGrantMonths = maxMonths + cycles * 12;
-        nextGrantDays = schedule[schedule.length - 1].days;
-      }
-    }
-  }
-
-  // 次回付与予定日
-  const nextGrantDate = new Date(joinDate);
-  nextGrantDate.setMonth(nextGrantDate.getMonth() + nextGrantMonths);
-  const diffTime = nextGrantDate.getTime() - now.getTime();
-  const daysUntilNextGrant = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-
-  const years = Math.floor(months / 12);
-  const remMonths = months % 12;
-  const serviceText = years > 0 ? `${years}年${remMonths}ヶ月` : `${remMonths}ヶ月`;
-
-  return {
-    statutoryGrant: currentGrant,
-    prevStatutoryGrant: prevGrant,
-    serviceMonths: months,
-    serviceText,
-    nextGrantDate: nextGrantDate.toISOString().split('T')[0],
-    nextGrantDays,
-    daysUntilNextGrant,
-    isTarget: true
-  };
+  return calculateStatutoryLeaveWithMode(joinDateStr, employmentType, weeklyDays, 'contract_fixed', [], targetDate);
 }
 
 interface PaidLeaveManagementProps {
@@ -174,6 +39,10 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
   
   const [activeTab, setActiveTab] = useState<'balance' | 'requests'>('balance');
   const [filterType, setFilterType] = useState<'all' | 'alert_only' | 'fulltime' | 'part'>('all');
+
+  // ⚡ パート有給算定方式（全社設定 ＆ 個人個別設定）
+  const [companyCalcMode, setCompanyCalcMode] = useState<PaidLeaveCalcMode>('actual_worked');
+  const [userCalcModeMap, setUserCalcModeMap] = useState<Record<string, PaidLeaveCalcMode | 'default'>>({});
 
   // モーダル用
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
@@ -194,6 +63,18 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  const handleToggleCompanyCalcMode = (newMode: PaidLeaveCalcMode) => {
+    setCompanyCalcMode(newMode);
+    if (tenantId) {
+      saveCompanyPaidLeaveCalcMode(tenantId, newMode);
+    }
+    showToast(
+      newMode === 'actual_worked'
+        ? '⚡ パート有給の算定を「打刻実績からの自動逆算（労基法準拠）」に変更しました'
+        : '🏷️ パート有給の算定を「雇用契約の週日数固定」に変更しました'
+    );
+  };
+
   const fetchData = async () => {
     if (!tenantId) return;
     setIsLoading(true);
@@ -208,6 +89,12 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
       const currentUsers = uData || [];
       setUsers(currentUsers);
       const userIds = currentUsers.map(u => u.id);
+
+      // 4. パート有給算定設定のロード
+      const loadedCompanyMode = getCompanyPaidLeaveCalcMode(tenantId);
+      setCompanyCalcMode(loadedCompanyMode);
+      const loadedUserMap = getUserPaidLeaveCalcModeMap(tenantId);
+      setUserCalcModeMap(loadedUserMap);
 
       if (userIds.length > 0) {
         // 2. 休暇申請履歴の取得（有給休暇・特別休暇・慶弔休暇等の純粋な休暇申請のみを対象とし、シフト希望や打刻修正は除外）
@@ -248,15 +135,28 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
     fetchData();
   }, [tenantId]);
 
-  // 従業員ごとの有給分析・自動算定データを統合
+  // 従業員ごとの有給分析・自動算定データを統合（契約固定 ＆ 実績逆算ハイブリッド対応）
   const analyzedUsers = useMemo(() => {
     return users.map(emp => {
       const isDispatch = emp.role === 'dispatch' || emp.employment_type === '派遣';
       const weeklyDays = Number(emp.weekly_working_days) || 5;
       const empType = emp.employment_type === 'part-time' || emp.employment_type === 'パート' ? 'パート' : '正社員';
 
-      // 法定自動計算
-      const statutory = calculateStatutoryLeave(emp.join_date, empType, weeklyDays);
+      // 個人設定 または 全社設定を適用
+      const userCustomMode = userCalcModeMap[emp.id] || 'default';
+      const effectiveMode: PaidLeaveCalcMode = userCustomMode === 'default' ? companyCalcMode : userCustomMode;
+
+      // 当該従業員の打刻レコード
+      const empAtt = attendanceRecords.filter(r => r.user_id === emp.id);
+
+      // 法定ハイブリッド自動計算（契約固定 vs 実績逆算）
+      const statutory = calculateStatutoryLeaveWithMode(
+        emp.join_date,
+        empType,
+        weeklyDays,
+        effectiveMode,
+        empAtt
+      );
 
       // 有給消化日数の自動集計（承認済み申請 ＋ 打刻ログ）
       let usedDays = 0;
@@ -293,6 +193,8 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
         isDispatch,
         weeklyDays,
         empType,
+        userCustomMode,
+        effectiveMode,
         statutory,
         usedDays,
         carryover,
@@ -304,7 +206,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
         isObligationSatisfied
       };
     });
-  }, [users, leaveRequests, attendanceRecords]);
+  }, [users, leaveRequests, attendanceRecords, companyCalcMode, userCalcModeMap]);
 
   // 全社サマリー集計
   const summary = useMemo(() => {
@@ -465,6 +367,11 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
       }).eq('id', editingUser.id);
       
       if (error) throw error;
+
+      if (tenantId && editingUser.userCustomMode) {
+        saveUserPaidLeaveCalcMode(tenantId, editingUser.id, editingUser.userCustomMode);
+        setUserCalcModeMap(prev => ({ ...prev, [editingUser.id]: editingUser.userCustomMode }));
+      }
       
       setIsEditModalOpen(false);
       showToast(`💾 ${editingUser.name} さんの有給設定を保存しました！`);
@@ -483,7 +390,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
     const filename = `有給休暇管理台帳_${year}年${month}月.csv`;
 
     const headers = [
-      '従業員ID', '従業員名', '雇用形態', '週所定日数', '入社日', '勤続期間',
+      '従業員ID', '従業員名', '雇用形態', '契約週日数', '有給算定方式', '年間実労働換算日数', '入社日', '勤続期間',
       '前年度繰越(日)', '今年度付与(日)', '総付与日数(日)', '当期消化日数(日)', '現在残日数(日)',
       '次回付与予定日', '次回付与予定日数(日)', '年5日取得義務対象', '年5日義務達成状況'
     ];
@@ -493,6 +400,8 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
       w.name,
       w.isDispatch ? '派遣 (対象外)' : w.empType,
       w.isDispatch ? '-' : `${w.weeklyDays}日`,
+      w.isDispatch ? '-' : (w.statutory.calcMode === 'actual_worked' ? '打刻実績逆算' : '契約週日数固定'),
+      w.isDispatch ? '-' : (w.statutory.calcMode === 'actual_worked' ? `${w.statutory.actualWorkedDaysAnnual}日(週${w.statutory.effectiveWeeklyDays}日相当)` : '-'),
       w.join_date || '-',
       w.statutory.serviceText,
       w.isDispatch ? '0' : String(w.carryover),
@@ -597,6 +506,60 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
               <Plus className="w-4 h-4" /> 休暇代理申請
             </button>
           )}
+        </div>
+      </div>
+
+      {/* ⚡ パート・アルバイト有給 算定方式切替バー（労基法第39条第3項・厚労省通達準拠） */}
+      <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 p-4 rounded-2xl border border-amber-200/80 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="p-2 bg-amber-500 text-white rounded-xl shadow-xs shrink-0">
+            <Zap className="w-4 h-4" />
+          </span>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-xs font-black text-amber-950">
+                パート・アルバイト有給算定方式（労基法第39条第3項 比例付与）
+              </h3>
+              <span className="bg-amber-200/70 text-amber-900 text-[10px] font-black px-2 py-0.2 rounded-full border border-amber-300">
+                全社標準
+              </span>
+            </div>
+            <p className="text-[11px] text-amber-800/80 font-medium mt-0.5">
+              シフト変動パートは「打刻実績からの自動逆算」、固定シフトパートは「契約週日数」を選択可能です。
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-amber-300 shadow-2xs shrink-0">
+          <button
+            type="button"
+            onClick={() => handleToggleCompanyCalcMode('actual_worked')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+              companyCalcMode === 'actual_worked'
+                ? 'bg-amber-500 text-white shadow-xs'
+                : 'text-slate-600 hover:text-amber-800 hover:bg-amber-50'
+            }`}
+            title="直近1年（または半年×2）の出勤打刻日数から年間労働日数を割り出し、労基法テーブルに照合して自動逆算します"
+          >
+            <span>⚡ 打刻実績から自動逆算</span>
+            <span className={`text-[10px] px-1 py-0.2 rounded font-black ${
+              companyCalcMode === 'actual_worked' ? 'bg-amber-600 text-white' : 'bg-emerald-100 text-emerald-800'
+            }`}>
+              推奨・労基法通達準拠
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleToggleCompanyCalcMode('contract_fixed')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+              companyCalcMode === 'contract_fixed'
+                ? 'bg-amber-500 text-white shadow-xs'
+                : 'text-slate-600 hover:text-amber-800 hover:bg-amber-50'
+            }`}
+            title="雇用契約書に定められた所定週日数（例: 週3日）に基づいて固定で付与日数を算定します"
+          >
+            <span>🏷️ 雇用契約の週日数固定</span>
+          </button>
         </div>
       </div>
 
@@ -811,19 +774,50 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                               </div>
                               <div>
                                 <span className="font-black text-slate-800 text-sm block">{emp.name}</span>
-                                <div className="flex items-center gap-1.5 mt-0.5">
+                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                   {emp.isDispatch ? (
                                     <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-black">
                                       派遣 (対象外)
                                     </span>
-                                  ) : (
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
-                                      emp.empType === '正社員' 
-                                        ? 'bg-blue-50 text-blue-700 border border-blue-200' 
-                                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                    }`}>
-                                      {emp.empType} (週{emp.weeklyDays}日)
+                                  ) : emp.empType === '正社員' ? (
+                                    <span className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded text-[10px] font-black">
+                                      正社員 (週5日)
                                     </span>
+                                  ) : (
+                                    <>
+                                      {st.calcMode === 'actual_worked' ? (
+                                        <span 
+                                          className="bg-amber-50 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs"
+                                          title={`${st.periodText}（実出勤${st.actualDaysCount}日 ➔ 年換算${st.actualWorkedDaysAnnual}日）`}
+                                        >
+                                          <span>⚡</span>
+                                          <span>実績: 年{st.actualWorkedDaysAnnual}日(週{st.effectiveWeeklyDays}日相当)</span>
+                                        </span>
+                                      ) : (
+                                        <span 
+                                          className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-black shadow-2xs"
+                                          title="雇用契約に基づく固定所定週日数で算定中"
+                                        >
+                                          🏷️ 契約固定: 週{emp.weeklyDays}日
+                                        </span>
+                                      )}
+
+                                      {/* 契約と実績の乖離バッジ */}
+                                      {st.isDiffFromContract && (
+                                        <span 
+                                          className={`px-1.5 py-0.5 rounded text-[9px] font-black border shadow-2xs ${
+                                            st.actualEquivalentWeeklyDays > st.contractWeeklyDays
+                                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                              : 'bg-rose-100 text-rose-800 border-rose-300'
+                                          }`} 
+                                          title={st.diffDaysText}
+                                        >
+                                          {st.actualEquivalentWeeklyDays > st.contractWeeklyDays
+                                            ? `実働上回り (週${st.actualEquivalentWeeklyDays}日扱い)`
+                                            : `実働下回り (契約週${st.contractWeeklyDays}日)`}
+                                        </span>
+                                      )}
+                                    </>
                                   )}
                                 </div>
                               </div>
@@ -1126,39 +1120,146 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
             {(() => {
               const weeklyDays = Number(editingUser.weekly_working_days) || 5;
               const empType = editingUser.empType || '正社員';
-              const st = calculateStatutoryLeave(editingUser.join_date, empType, weeklyDays);
+              const userCustomMode = editingUser.userCustomMode || userCalcModeMap[editingUser.id] || 'default';
+              const effectiveMode: PaidLeaveCalcMode = userCustomMode === 'default' ? companyCalcMode : userCustomMode;
+              const empAtt = attendanceRecords.filter(r => r.user_id === editingUser.id);
+              
+              const st = calculateStatutoryLeaveWithMode(
+                editingUser.join_date,
+                empType,
+                weeklyDays,
+                effectiveMode,
+                empAtt
+              );
+
+              // 比較用の固定値と実績逆算値
+              const fixedSt = calculateStatutoryLeaveWithMode(
+                editingUser.join_date,
+                empType,
+                weeklyDays,
+                'contract_fixed',
+                empAtt
+              );
+              const actualSt = calculateStatutoryLeaveWithMode(
+                editingUser.join_date,
+                empType,
+                weeklyDays,
+                'actual_worked',
+                empAtt
+              );
 
               return (
                 <div className="p-6 space-y-4">
                   {editingUser.join_date && editingUser.join_date !== '-' ? (
-                    <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200 flex items-center justify-between">
-                      <div>
-                        <div className="text-xs font-black text-amber-900">
-                          労働基準法に基づく法定参考値 (勤続: {st.serviceText})
+                    <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-black text-amber-900 flex items-center gap-1.5">
+                            <span>🏛️ 労働基準法に基づく法定参考値</span>
+                            <span className="text-[11px] text-slate-500 font-bold">(勤続: {st.serviceText})</span>
+                          </div>
+                          <div className="text-xs font-bold text-amber-800 mt-1">
+                            今年度付与: <span className="text-base font-black text-amber-900">{st.statutoryGrant}日</span>
+                            <span className="text-slate-500 font-medium ml-2">（前年繰越目安: {st.prevStatutoryGrant}日）</span>
+                          </div>
                         </div>
-                        <div className="text-xs font-bold text-amber-700 mt-1">
-                          今年度付与: <span className="text-sm font-black">{st.statutoryGrant}日</span> | 前年繰越目安: {st.prevStatutoryGrant}日
-                        </div>
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                          effectiveMode === 'actual_worked' 
+                            ? 'bg-amber-100 text-amber-900 border-amber-300' 
+                            : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                        }`}>
+                          {effectiveMode === 'actual_worked' ? '⚡ 実績逆算適用中' : '🏷️ 契約固定適用中'}
+                        </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingUser({
-                            ...editingUser,
-                            paid_leave_balance: st.statutoryGrant,
-                            paid_leave_carryover: st.prevStatutoryGrant
-                          });
-                          showToast('⚡ 法定参考値をフォームに反映しました');
-                        }}
-                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center gap-1 cursor-pointer"
-                      >
-                        <Zap className="w-3.5 h-3.5" /> 法定値をセット
-                      </button>
+
+                      {/* パートの場合: 実績と契約の2大ワンタッチボタン */}
+                      {empType === 'パート' && (
+                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-amber-200/60">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingUser({
+                                ...editingUser,
+                                userCustomMode: 'actual_worked',
+                                paid_leave_balance: actualSt.statutoryGrant,
+                                paid_leave_carryover: actualSt.prevStatutoryGrant
+                              });
+                              showToast(`⚡ 打刻実績逆算値（${actualSt.statutoryGrant}日）をセットしました`);
+                            }}
+                            className="p-2 bg-white hover:bg-amber-100 text-amber-950 border border-amber-300 rounded-xl text-xs font-bold text-left transition shadow-2xs cursor-pointer"
+                          >
+                            <span className="block text-[10px] text-amber-700 font-black">⚡ 打刻実績逆算でセット</span>
+                            <span className="text-sm font-black">{actualSt.statutoryGrant}日</span>
+                            <span className="text-[10px] text-slate-400 block font-normal">(実働年{st.actualWorkedDaysAnnual}日・週{st.actualEquivalentWeeklyDays}日相当)</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingUser({
+                                ...editingUser,
+                                userCustomMode: 'contract_fixed',
+                                paid_leave_balance: fixedSt.statutoryGrant,
+                                paid_leave_carryover: fixedSt.prevStatutoryGrant
+                              });
+                              showToast(`🏷️ 契約所定固定値（${fixedSt.statutoryGrant}日）をセットしました`);
+                            }}
+                            className="p-2 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold text-left transition shadow-2xs cursor-pointer"
+                          >
+                            <span className="block text-[10px] text-slate-500 font-black">🏷️ 契約所定固定でセット</span>
+                            <span className="text-sm font-black">{fixedSt.statutoryGrant}日</span>
+                            <span className="text-[10px] text-slate-400 block font-normal">(契約上の週{weeklyDays}日)</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {empType !== 'パート' && (
+                        <div className="flex justify-end pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingUser({
+                                ...editingUser,
+                                paid_leave_balance: st.statutoryGrant,
+                                paid_leave_carryover: st.prevStatutoryGrant
+                              });
+                              showToast('⚡ 法定参考値をフォームに反映しました');
+                            }}
+                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black shadow-2xs transition flex items-center gap-1 cursor-pointer"
+                          >
+                            <Zap className="w-3.5 h-3.5" /> 法定値をセット
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-500 flex items-center gap-1.5">
                       <AlertCircle className="w-4 h-4 text-slate-400" />
                       入社日を設定すると、法定付与日数が自動計算されます。
+                    </div>
+                  )}
+
+                  {/* パートの場合の実労働実績プレビューカード */}
+                  {empType === 'パート' && (
+                    <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs space-y-1">
+                      <div className="font-black text-slate-700 flex items-center justify-between">
+                        <span>📊 直近の勤務実績データ（出勤打刻ベース）</span>
+                        <span className="text-[10px] text-amber-700 font-bold">{st.periodText}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center pt-1 font-mono">
+                        <div className="bg-white p-2 rounded-xl border border-slate-200">
+                          <span className="text-[10px] text-slate-400 block font-sans">期間内実打刻</span>
+                          <strong className="text-slate-800 text-sm">{st.actualDaysCount}日</strong>
+                        </div>
+                        <div className="bg-white p-2 rounded-xl border border-slate-200">
+                          <span className="text-[10px] text-slate-400 block font-sans">年間換算労働</span>
+                          <strong className="text-amber-600 text-sm">{st.actualWorkedDaysAnnual}日</strong>
+                        </div>
+                        <div className="bg-white p-2 rounded-xl border border-slate-200">
+                          <span className="text-[10px] text-slate-400 block font-sans">労基法週相当</span>
+                          <strong className="text-emerald-600 text-sm">週{st.actualEquivalentWeeklyDays}日相当</strong>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -1176,7 +1277,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-black text-slate-700 mb-1">週所定日数</label>
+                        <label className="block text-xs font-black text-slate-700 mb-1">雇用契約の週所定日数</label>
                         <select 
                           value={editingUser.weekly_working_days || 5} 
                           onChange={e => setEditingUser({...editingUser, weekly_working_days: Number(e.target.value)})} 
@@ -1190,6 +1291,24 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                         </select>
                       </div>
                     </div>
+
+                    {/* パートの場合の個人算定方式オーバーライド */}
+                    {editingUser.empType === 'パート' && (
+                      <div>
+                        <label className="block text-xs font-black text-slate-700 mb-1">
+                          このスタッフの有給算定方式
+                        </label>
+                        <select 
+                          value={editingUser.userCustomMode || userCalcModeMap[editingUser.id] || 'default'} 
+                          onChange={e => setEditingUser({ ...editingUser, userCustomMode: e.target.value })} 
+                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs"
+                        >
+                          <option value="default">会社全体設定に従う（現在: {companyCalcMode === 'actual_worked' ? '⚡打刻実績逆算' : '🏷️契約週日数固定'}）</option>
+                          <option value="actual_worked">⚡ 打刻実績から自動逆算（シフト変動パート向け・推奨）</option>
+                          <option value="contract_fixed">🏷️ 契約週日数で固定（固定シフトパート向け）</option>
+                        </select>
+                      </div>
+                    )}
 
                     <div>
                       <label className="block text-xs font-black text-slate-700 mb-1">入社日</label>
