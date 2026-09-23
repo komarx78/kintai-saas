@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Users, Save, ArrowLeft, Shield, UserPlus, X, Copy, Check } from 'lucide-react';
+import { Users, Save, ArrowLeft, Shield, UserPlus, X, Copy, Check, QrCode, Smartphone, Sparkles, Printer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
+import { 
+  getAllStaffLineLinkMap, 
+  toggleStaffLineLinkStatus, 
+  getStoreLineQrCodeUrl 
+} from '../lib/lineMessaging';
 
 interface EmployeeSetting {
   user_id: string;
@@ -22,14 +27,17 @@ interface EmployeeSetting {
 
 const ShiftEmployeeMaster: React.FC = () => {
   const navigate = useNavigate();
+  const [tenantId, setTenantId] = useState<string>('');
   const [employees, setEmployees] = useState<EmployeeSetting[]>([]);
   const [roles, setRoles] = useState<{name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [isLineQrModalOpen, setIsLineQrModalOpen] = useState(false);
   const [tenantName, setTenantName] = useState('');
   const [copySuccess, setCopySuccess] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [lineLinkedMap, setLineLinkedMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetchData();
@@ -38,15 +46,33 @@ const ShiftEmployeeMaster: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
-      if (tenantId) {
-        const { data: tData } = await supabase.from('tenants').select('name').eq('id', tenantId).single();
+      const { data: tId } = await supabase.rpc('get_user_tenant_id');
+      if (tId) {
+        setTenantId(tId);
+        const { data: tData } = await supabase.from('tenants').select('name').eq('id', tId).single();
         if (tData) setTenantName(tData.name);
       }
 
-      const { data: usersData } = await supabase.from('users').select('id, name, role, department, employment_type, has_shift_access').eq('tenant_id', tenantId);
-      const { data: settingsData } = await supabase.from('shift_employee_settings').select('*').eq('tenant_id', tenantId);
-      const { data: rolesData } = await supabase.from('shift_roles').select('name').eq('tenant_id', tenantId);
+      const { data: usersData } = await supabase.from('users').select('id, name, role, department, employment_type, has_shift_access').eq('tenant_id', tId);
+
+      if (tId) {
+        // 📱 LINE連携マップ復元
+        let map = getAllStaffLineLinkMap(tId);
+        // 初期データがない場合は、テスト用に上位スタッフを連携済みに自動シミュレーション
+        if (Object.keys(map).length === 0) {
+          const raw = localStorage.getItem(`line_linked_users_${tId}`);
+          if (!raw) {
+            // 最初の2名をテスト連携済みに初期登録
+            const initialIds = (usersData || []).slice(0, 2).map((u: any) => u.id);
+            initialIds.forEach((uid: string) => toggleStaffLineLinkStatus(tId, uid, true));
+            map = getAllStaffLineLinkMap(tId);
+          }
+        }
+        setLineLinkedMap(map);
+      }
+
+      const { data: settingsData } = await supabase.from('shift_employee_settings').select('*').eq('tenant_id', tId);
+      const { data: rolesData } = await supabase.from('shift_roles').select('name').eq('tenant_id', tId);
       
       if (rolesData) setRoles(rolesData);
 
@@ -74,6 +100,14 @@ const ShiftEmployeeMaster: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 📱 LINE連携状態のトグル（テスト・検証用ワンクリック切り替え）
+  const handleToggleLine = (userId: string, current: boolean) => {
+    if (!tenantId) return;
+    const nextState = !current;
+    toggleStaffLineLinkStatus(tenantId, userId, nextState);
+    setLineLinkedMap(prev => ({ ...prev, [userId]: nextState }));
   };
 
   const handleUpdate = (userId: string, field: string, value: any) => {
@@ -137,7 +171,16 @@ const ShiftEmployeeMaster: React.FC = () => {
               シフト要員マスタ（AI条件設定）
             </h1>
           </div>
-          <div className="flex space-x-3 items-center">
+          <div className="flex space-x-3 items-center flex-wrap gap-y-2">
+            <button 
+              onClick={() => setIsLineQrModalOpen(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl flex items-center transition shadow-sm font-bold text-sm cursor-pointer border border-emerald-500"
+              title="アルバイト・パート向け店舗貼り出し用LINE友だち追加QRコードを表示します"
+            >
+              <QrCode className="w-4 h-4 mr-2 text-emerald-200" />
+              <span>📱 LINE友だち追加QRコード</span>
+            </button>
+
             <button 
               onClick={() => setIsInviteModalOpen(true)}
               className="bg-white border border-indigo-200 text-indigo-600 px-4 py-2 rounded-xl flex items-center hover:bg-indigo-50 transition shadow-sm font-bold text-sm cursor-pointer"
@@ -170,6 +213,7 @@ const ShiftEmployeeMaster: React.FC = () => {
             <thead>
               <tr className="bg-slate-100 border-b border-slate-200 text-sm text-slate-600">
                 <th className="p-4 font-bold text-center">シフト対象</th>
+                <th className="p-4 font-bold text-center">📱 LINE連携</th>
                 <th className="p-4 font-bold">氏名</th>
                 <th className="p-4 font-bold">所属部署 / 区分</th>
                 <th className="p-4 font-bold">メイン役割</th>
@@ -182,9 +226,9 @@ const ShiftEmployeeMaster: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={9} className="p-8 text-center"><div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full mx-auto"></div></td></tr>
+                <tr><td colSpan={10} className="p-8 text-center"><div className="animate-spin w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full mx-auto"></div></td></tr>
               ) : employees.length === 0 ? (
-                <tr><td colSpan={9} className="p-8 text-center text-slate-500 font-bold">システムに従業員が登録されていません。「従業員を新規招待」から登録してください。</td></tr>
+                <tr><td colSpan={10} className="p-8 text-center text-slate-500 font-bold">システムに従業員が登録されていません。「従業員を新規招待」から登録してください。</td></tr>
               ) : (
                 employees.map(emp => (
                   <tr key={emp.user_id} className={`hover:bg-indigo-50/30 transition-colors ${!emp.has_shift_access ? 'opacity-50 grayscale' : ''}`}>
@@ -195,6 +239,30 @@ const ShiftEmployeeMaster: React.FC = () => {
                         onChange={e => handleUpdate(emp.user_id, 'has_shift_access', e.target.checked)}
                         className="w-5 h-5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
                       />
+                    </td>
+                    <td className="p-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleLine(emp.user_id, Boolean(lineLinkedMap[emp.user_id]))}
+                        className={`px-2.5 py-1 rounded-full text-xs font-bold transition flex items-center gap-1 mx-auto cursor-pointer shadow-2xs border ${
+                          lineLinkedMap[emp.user_id]
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                            : 'bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200'
+                        }`}
+                        title="クリックでLINE連携状態をテスト切り替えできます"
+                      >
+                        {lineLinkedMap[emp.user_id] ? (
+                          <>
+                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span>🟢 連携済</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                            <span>⚪ 未連携</span>
+                          </>
+                        )}
+                      </button>
                     </td>
                     <td className="p-4">
                       <div className="font-bold flex items-center">
@@ -286,6 +354,96 @@ const ShiftEmployeeMaster: React.FC = () => {
             </div>
             <div className="bg-slate-50 px-6 py-4 flex justify-end">
               <button onClick={() => setIsInviteModalOpen(false)} className="bg-white border border-slate-300 text-slate-700 px-6 py-2.5 rounded-xl hover:bg-slate-50 font-bold transition">
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📱 店舗用 LINE友だち追加QRコード モーダル（店舗掲示・スタッフ連携用） */}
+      {isLineQrModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl text-left overflow-hidden shadow-2xl w-full max-w-lg flex flex-col border border-slate-200">
+            <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 p-6 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+                  <Smartphone className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black flex items-center gap-1.5">
+                    📱 店舗用 LINE友だち追加QRコード
+                  </h3>
+                  <p className="text-xs text-emerald-100 mt-0.5">
+                    アルバイト・パート向け 店舗掲示用ポスター
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsLineQrModalOpen(false)} 
+                className="p-1.5 rounded-full hover:bg-white/20 text-white transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+              {/* 店舗名バッジ */}
+              <div className="text-center">
+                <span className="text-xs font-bold text-slate-500">対象店舗 / 企業</span>
+                <h4 className="text-xl font-black text-slate-900 mt-0.5">{tenantName || '自社店舗'}</h4>
+              </div>
+
+              {/* QRコード表示枠 */}
+              <div className="bg-gradient-to-b from-emerald-50 to-teal-50/30 p-6 rounded-3xl border-2 border-emerald-200 text-center flex flex-col items-center shadow-inner">
+                <div className="bg-white p-4 rounded-2xl shadow-md border border-slate-200 inline-block">
+                  <img 
+                    src={getStoreLineQrCodeUrl(tenantId, tenantName)} 
+                    alt="LINE友だち追加QRコード" 
+                    className="w-48 h-48 rounded-xl object-contain mx-auto"
+                  />
+                </div>
+                <div className="mt-3 flex items-center gap-1.5 text-emerald-800 font-black text-sm">
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                  <span>「みんなのらくまる労務」公式LINE</span>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  スマホのカメラでスキャンするだけで即座に連携スタート！
+                </p>
+              </div>
+
+              {/* スタッフ向け 3ステップ登録案内 */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2.5">
+                <div className="text-xs font-bold text-slate-700">📌 スタッフの登録手順（30秒で完了）:</div>
+                <div className="space-y-2 text-xs text-slate-600">
+                  <div className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5">1</span>
+                    <span>上のQRコードをスマホのカメラで読み取ります。</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5">2</span>
+                    <span>「みんなのらくまる労務」を友だち追加します。</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5">3</span>
+                    <span>トーク画面に表示されるリストから「自分の名前」を選ぶだけで連携完了！</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+              <button 
+                onClick={() => window.print()} 
+                className="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-4 h-4 text-emerald-400" />
+                <span>この画面をA4印刷する（店舗掲示用）</span>
+              </button>
+              <button 
+                onClick={() => setIsLineQrModalOpen(false)} 
+                className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold px-5 py-2.5 rounded-xl transition cursor-pointer"
+              >
                 閉じる
               </button>
             </div>

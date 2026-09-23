@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale, Sparkles, ArrowRightLeft, Calendar, Briefcase, Printer, Building2, MapPin, Store } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale, Sparkles, ArrowRightLeft, Calendar, Briefcase, Printer, Building2, MapPin, Store, MessageSquare, Send, Smartphone } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -10,6 +10,12 @@ import { HelpGuideModal } from '../components/HelpGuideModal';
 import { ConfirmedShiftCalendarModal } from '../components/ConfirmedShiftCalendarModal';
 import { fetchStoresUnified, getStoresFromStorage } from '../lib/storeMaster';
 import { seedShiftDemoData } from '../lib/seedShiftDemoData';
+import { 
+  getAllStaffLineLinkMap, 
+  formatStaffShiftLineMessage, 
+  sendConfirmedShiftsViaLine, 
+  type LineStaffSummary 
+} from '../lib/lineMessaging';
 
 interface Shift {
   id: string;
@@ -49,6 +55,21 @@ const ShiftCalendarView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [displayPeriod, setDisplayPeriod] = useState<'1day' | '1week' | '2weeks' | '1month'>('1week');
 
+  let startDate: Date, endDate: Date;
+  if (displayPeriod === '1day') {
+    startDate = baseDate;
+    endDate = baseDate;
+  } else if (displayPeriod === '1week') {
+    startDate = startOfWeek(baseDate, { weekStartsOn: 1 });
+    endDate = endOfWeek(baseDate, { weekStartsOn: 1 });
+  } else if (displayPeriod === '2weeks') {
+    startDate = startOfWeek(baseDate, { weekStartsOn: 1 });
+    endDate = addDays(startDate, 13);
+  } else {
+    startDate = startOfMonth(baseDate);
+    endDate = endOfMonth(baseDate);
+  }
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalData, setModalData] = useState<Partial<Shift>>({});
   const [saving, setSaving] = useState(false);
@@ -71,6 +92,13 @@ const ShiftCalendarView: React.FC = () => {
   // 📋 確定版シフトカレンダー（店舗貼り出し・印刷用）モーダル用State
   const [isConfirmedCalendarOpen, setIsConfirmedCalendarOpen] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+
+  // 📱 LINE確定シフト送信モーダル用State
+  const [tenantId, setTenantId] = useState<string>('');
+  const [isLineSendModalOpen, setIsLineSendModalOpen] = useState(false);
+  const [isLineSending, setIsLineSending] = useState(false);
+  const [lineSendSuccessMessage, setLineSendSuccessMessage] = useState<string | null>(null);
+  const [selectedPreviewStaffId, setSelectedPreviewStaffId] = useState<string | null>(null);
 
   // 🏪 店舗切り替え時に店舗ごとの必要枠（Requirements）をキャッシュから再読み込み
   useEffect(() => {
@@ -163,6 +191,7 @@ const ShiftCalendarView: React.FC = () => {
         setLoading(false);
         return;
       }
+      setTenantId(tenantIdData);
 
       // シフト設定（表示期間、店舗応援機能ON/OFF）
       const { data: settings } = await supabase.from('shift_settings').select('shift_period, enable_store_help').eq('tenant_id', tenantIdData).maybeSingle();
@@ -661,6 +690,77 @@ const ShiftCalendarView: React.FC = () => {
     }
   };
 
+  // 📱 LINE確定シフト送信対象者一覧（確定シフトの抽出・メッセージ生成）
+  const lineStaffList: LineStaffSummary[] = useMemo(() => {
+    if (!tenantId) return [];
+    const linkMap = getAllStaffLineLinkMap(tenantId);
+    const startStr = format(startDate, 'yyyy-MM-dd');
+    const endStr = format(endDate, 'yyyy-MM-dd');
+    const periodLabel = `${format(startDate, 'yyyy年M月d日')} 〜 ${format(endDate, 'M月d日')}`;
+
+    return users.map(u => {
+      // 本人の確定シフト（表示期間内）
+      const userConfirmedShifts = shifts.filter(s => 
+        s.user_id === u.id && 
+        s.status === 'confirmed' &&
+        s.target_date >= startStr &&
+        s.target_date <= endStr
+      );
+
+      const isLineLinked = Boolean(linkMap[u.id]);
+      const { messageText, shiftCount, totalHours } = formatStaffShiftLineMessage(
+        u.name,
+        userConfirmedShifts,
+        periodLabel,
+        selectedDepartment === 'all' ? undefined : selectedDepartment
+      );
+
+      return {
+        userId: u.id,
+        name: u.name,
+        storeName: u.store_name,
+        isLineLinked,
+        shiftCount,
+        totalHours,
+        messageText
+      };
+    });
+  }, [tenantId, users, shifts, startDate, endDate, selectedDepartment]);
+
+  // 📱 確定シフト LINE一括送信実行ハンドラー
+  const handleExecuteLineSend = async () => {
+    if (!tenantId) return;
+    const linkedRecipients = lineStaffList.filter(s => s.isLineLinked);
+    if (linkedRecipients.length === 0) {
+      alert('LINE連携済みのスタッフがいません。「シフト要員マスタ」からスタッフのLINE連携を行ってください。');
+      return;
+    }
+
+    if (!window.confirm(`LINE連携済みのスタッフ【${linkedRecipients.length}名】に、個別の確定シフト通知を一括送信しますか？\n（未連携のスタッフには送信されません）`)) {
+      return;
+    }
+
+    setIsLineSending(true);
+    try {
+      const periodLabel = `${format(startDate, 'yyyy年M月d日')} 〜 ${format(endDate, 'M月d日')}`;
+      const payload = linkedRecipients.map(r => ({
+        userId: r.userId,
+        userName: r.name,
+        messageText: r.messageText
+      }));
+
+      const res = await sendConfirmedShiftsViaLine(tenantId, periodLabel, payload);
+      setIsLineSendModalOpen(false);
+      setLineSendSuccessMessage(`🎉 ${res.sentCount}名のスタッフへ確定シフトのLINE個別送信が完了しました！`);
+      setTimeout(() => setLineSendSuccessMessage(null), 6000);
+    } catch (e: any) {
+      console.error('LINE send error:', e);
+      alert('LINE送信中にエラーが発生しました: ' + (e.message || e));
+    } finally {
+      setIsLineSending(false);
+    }
+  };
+
   const handleRebalanceShifts = async () => {
     if (isRebalancing) return;
     setIsRebalancing(true);
@@ -724,20 +824,6 @@ const ShiftCalendarView: React.FC = () => {
     }
   };
 
-  let startDate: Date, endDate: Date;
-  if (displayPeriod === '1day') {
-    startDate = baseDate;
-    endDate = baseDate;
-  } else if (displayPeriod === '1week') {
-    startDate = startOfWeek(baseDate, { weekStartsOn: 1 });
-    endDate = endOfWeek(baseDate, { weekStartsOn: 1 });
-  } else if (displayPeriod === '2weeks') {
-    startDate = startOfWeek(baseDate, { weekStartsOn: 1 });
-    endDate = addDays(startDate, 13);
-  } else {
-    startDate = startOfMonth(baseDate);
-    endDate = endOfMonth(baseDate);
-  }
   const dateRange = eachDayOfInterval({ start: startDate, end: endDate });
 
   // 期間内に下書き（draft）シフトが存在するかどうか（＝現在シフト作成・編成中フェーズか）
@@ -1245,6 +1331,20 @@ const ShiftCalendarView: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 p-6 font-sans text-slate-800">
       <div className="max-w-[1600px] mx-auto">
+        {lineSendSuccessMessage && (
+          <div className="mb-4 p-4 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-2xl flex items-center justify-between shadow-sm animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <Sparkles className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span className="font-bold text-sm">{lineSendSuccessMessage}</span>
+            </div>
+            <button 
+              onClick={() => setLineSendSuccessMessage(null)} 
+              className="text-emerald-600 hover:text-emerald-800 p-1 hover:bg-emerald-100 rounded-lg transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         <div className="flex items-center justify-between mb-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex items-center space-x-4">
             <button onClick={() => navigate('/shift/admin')} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
@@ -1305,6 +1405,24 @@ const ShiftCalendarView: React.FC = () => {
                 <span>一括確定</span>
               </div>
               <span className="text-[10px] text-emerald-100 font-medium">（本番公開・配信）</span>
+            </button>
+
+            {/* 📱 確定シフト LINE一括送信ボタン（最重要・周瑜＆陸遜監修） */}
+            <button 
+              onClick={() => {
+                if (lineStaffList.length > 0) {
+                  setSelectedPreviewStaffId(lineStaffList[0].userId);
+                }
+                setIsLineSendModalOpen(true);
+              }}
+              className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-3.5 py-2 rounded-xl flex flex-col items-center justify-center transition shadow-md font-bold cursor-pointer border border-emerald-400"
+              title="確定したシフトを各スタッフのLINE宛てに個別一括送信します"
+            >
+              <div className="flex items-center space-x-1.5 text-xs">
+                <MessageSquare className="w-3.5 h-3.5 text-emerald-200" />
+                <span>LINEで確定送信</span>
+              </div>
+              <span className="text-[10px] text-emerald-100 font-medium">（個別通知）</span>
             </button>
 
             {/* 📋 確定版カレンダー（店舗貼り出し・印刷用）ボタン */}
@@ -3075,6 +3193,193 @@ const ShiftCalendarView: React.FC = () => {
         endDate={endDate}
         roles={roles}
       />
+
+      {/* 📢 確定シフト LINE一括送信確認モーダル（周瑜＆陸遜監修・現場最強機能） */}
+      {isLineSendModalOpen && (() => {
+        const linkedStaff = lineStaffList.filter(s => s.isLineLinked);
+        const unlinkedStaff = lineStaffList.filter(s => !s.isLineLinked);
+        const activePreviewStaff = lineStaffList.find(s => s.userId === selectedPreviewStaffId) || lineStaffList[0];
+        const periodLabel = `${format(startDate, 'yyyy年M月d日')} 〜 ${format(endDate, 'M月d日')}`;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="bg-white rounded-3xl text-left overflow-hidden shadow-2xl w-full max-w-4xl flex flex-col border border-slate-200 max-h-[92vh]">
+              {/* モーダルヘッダー */}
+              <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 p-5 text-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+                    <MessageSquare className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black flex items-center gap-2">
+                      📢 確定シフト LINE個別一括送信
+                    </h3>
+                    <p className="text-xs text-emerald-100 mt-0.5">
+                      対象期間: <strong>{periodLabel}</strong> {selectedDepartment !== 'all' && `（${selectedDepartment}）`}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsLineSendModalOpen(false)} 
+                  className="p-1.5 rounded-full hover:bg-white/20 text-white transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* サマリーカード */}
+              <div className="p-4 bg-slate-50 border-b border-slate-200 grid grid-cols-2 sm:grid-cols-3 gap-3 shrink-0">
+                <div className="bg-white p-3 rounded-2xl border border-emerald-200 shadow-2xs">
+                  <div className="text-[11px] font-bold text-slate-500">送信対象（連携済み）</div>
+                  <div className="text-lg font-black text-emerald-700 mt-0.5 flex items-baseline gap-1">
+                    {linkedStaff.length} <span className="text-xs font-normal text-slate-500">名</span>
+                  </div>
+                  <div className="text-[10px] text-emerald-600 font-bold mt-0.5">即座にLINEへ個別送信</div>
+                </div>
+
+                <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
+                  <div className="text-[11px] font-bold text-slate-500">LINE未連携スタッフ</div>
+                  <div className="text-lg font-black text-slate-400 mt-0.5 flex items-baseline gap-1">
+                    {unlinkedStaff.length} <span className="text-xs font-normal text-slate-500">名</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">送信スキップ（要QR登録）</div>
+                </div>
+
+                <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
+                  <div className="text-[11px] font-bold text-slate-500">期間内の確定出勤枠</div>
+                  <div className="text-lg font-black text-indigo-700 mt-0.5 flex items-baseline gap-1">
+                    {lineStaffList.reduce((sum, s) => sum + s.shiftCount, 0)} <span className="text-xs font-normal text-slate-500">枠</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">各人の予定だけを抽出</div>
+                </div>
+              </div>
+
+              {/* メインエリア：スタッフ選択 ＆ スマホLINEプレビュー */}
+              <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-slate-200">
+                {/* 左：スタッフリスト */}
+                <div className="md:col-span-5 p-4 overflow-y-auto space-y-2 max-h-[45vh] md:max-h-none">
+                  <div className="text-xs font-bold text-slate-700 mb-2 flex items-center justify-between">
+                    <span>送信対象スタッフ一覧:</span>
+                    <span className="text-[10px] text-slate-400">クリックでプレビュー</span>
+                  </div>
+
+                  {lineStaffList.map(s => {
+                    const isSelected = activePreviewStaff?.userId === s.userId;
+
+                    return (
+                      <div
+                        key={s.userId}
+                        onClick={() => setSelectedPreviewStaffId(s.userId)}
+                        className={`p-3 rounded-2xl border text-xs cursor-pointer transition flex items-center justify-between gap-2 ${
+                          isSelected
+                            ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-200'
+                            : 'bg-white hover:bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-black text-slate-800 flex items-center gap-1.5">
+                            <span>{s.name}</span>
+                            {s.isLineLinked ? (
+                              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-300">
+                                🟢 連携済
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.2 rounded border border-slate-300">
+                                ⚪ 未連携
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            {s.storeName ? `${s.storeName}所属` : '店舗未設定'}
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="font-black text-slate-800">{s.shiftCount}日</span>
+                          <span className="text-[10px] text-slate-400 ml-1">({s.totalHours}h)</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 右：スマホLINEトーク画面風プレビュー */}
+                <div className="md:col-span-7 p-4 bg-slate-100/60 overflow-y-auto flex flex-col items-center justify-center">
+                  <div className="w-full max-w-sm bg-slate-200/80 rounded-3xl p-4 shadow-inner border border-slate-300 flex flex-col">
+                    {/* スマホ上部バー */}
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 mb-3 px-2">
+                      <div className="flex items-center gap-1">
+                        <Smartphone className="w-3.5 h-3.5" />
+                        <span>LINE 受信プレビュー</span>
+                      </div>
+                      <span className="text-[10px] bg-slate-300 text-slate-700 px-2 py-0.5 rounded-full">
+                        {activePreviewStaff ? activePreviewStaff.name : 'スタッフ'}
+                      </span>
+                    </div>
+
+                    {/* LINEトーク吹き出し */}
+                    <div className="bg-[#78c257] p-3 rounded-2xl flex-1 flex flex-col gap-3 min-h-[300px]">
+                      {/* 公式BOTアイコン */}
+                      <div className="flex items-start gap-2">
+                        <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-black shrink-0 shadow-xs">
+                          労
+                        </div>
+                        <div className="flex flex-col gap-1 max-w-[85%]">
+                          <span className="text-[10px] text-white/90 font-bold">みんなのらくまる労務 公式</span>
+                          
+                          {/* メッセージ本文 */}
+                          <div className="bg-white rounded-2xl rounded-tl-none p-3 shadow-md text-xs text-slate-800 leading-relaxed font-sans whitespace-pre-wrap">
+                            {activePreviewStaff?.messageText || 'プレビュー対象を選択してください'}
+                          </div>
+                          
+                          <span className="text-[9px] text-white/70 self-end">
+                            {format(new Date(), 'HH:mm')} 既読
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* モーダルフッター */}
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <div className="text-xs text-slate-500 font-bold">
+                  ※ LINE連携済みのスタッフ（{linkedStaff.length}名）にのみ、本人の出勤予定が送信されます。
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button 
+                    type="button"
+                    onClick={() => setIsLineSendModalOpen(false)} 
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold text-xs transition cursor-pointer"
+                  >
+                    キャンセル
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={handleExecuteLineSend}
+                    disabled={isLineSending || linkedStaff.length === 0}
+                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:opacity-95 text-white font-black text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isLineSending ? (
+                      <>
+                        <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div>
+                        <span>LINE送信中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 text-emerald-200" />
+                        <span>🚀 LINE連携済み全員（{linkedStaff.length}名）に一括送信する</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ❓ 使い方ガイドモーダル */}
       <HelpGuideModal 
