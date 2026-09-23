@@ -547,11 +547,18 @@ const ShiftCalendarView: React.FC = () => {
   };
 
   const handlePublishAll = async () => {
-    if (!window.confirm('現在の表示期間内にある「未確定（ドラフト）」のシフトをすべて確定し、従業員に公開しますか？')) return;
+    let startD = startDate;
+    let endD = endDate;
+    if (displayPeriod === '1day') {
+      startD = startOfWeek(baseDate, { weekStartsOn: 1 });
+      endD = endOfWeek(baseDate, { weekStartsOn: 1 });
+    }
+    const periodLabel = displayPeriod === '1day' ? `今週（${format(startD, 'M/d')}〜${format(endD, 'M/d')}）` : '現在の表示期間内';
+    if (!window.confirm(`${periodLabel}にある「確定予定（下書き）」のシフトをすべて確定し、従業員に公開しますか？`)) return;
     try {
       const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
-      const startStr = format(startDate, 'yyyy-MM-dd');
-      const endStr = format(endDate, 'yyyy-MM-dd');
+      const startStr = format(startD, 'yyyy-MM-dd');
+      const endStr = format(endD, 'yyyy-MM-dd');
 
       const { error } = await supabase.from('advanced_shifts')
         .update({ status: 'confirmed' })
@@ -571,12 +578,19 @@ const ShiftCalendarView: React.FC = () => {
   };
 
   const handleUnpublishAll = async () => {
-    if (!window.confirm(`現在の表示期間（${format(startDate, 'M/d')}〜${format(endDate, 'M/d')}）の確定シフトをすべて「未確定（下書き）」に戻しますか？\n\n※確定を解除すると、シフトは下書き（ドラフト）状態に戻り、再度の手動微調整やAI自動生成、再確定が可能になります。`)) return;
+    let startD = startDate;
+    let endD = endDate;
+    if (displayPeriod === '1day') {
+      startD = startOfWeek(baseDate, { weekStartsOn: 1 });
+      endD = endOfWeek(baseDate, { weekStartsOn: 1 });
+    }
+    const periodLabel = displayPeriod === '1day' ? `今週（${format(startD, 'M/d')}〜${format(endD, 'M/d')}）` : `現在の表示期間（${format(startDate, 'M/d')}〜${format(endDate, 'M/d')}）`;
+    if (!window.confirm(`${periodLabel}のシフトをすべて「確定予定（下書き）」に戻しますか？\n\n※確定を解除すると、シフトは下書き状態に戻り、再度の手動微調整やAI自動生成、再確定が可能になります。`)) return;
     setIsUnpublishing(true);
     try {
       const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
-      const startStr = format(startDate, 'yyyy-MM-dd');
-      const endStr = format(endDate, 'yyyy-MM-dd');
+      const startStr = format(startD, 'yyyy-MM-dd');
+      const endStr = format(endD, 'yyyy-MM-dd');
 
       const { error } = await supabase.from('advanced_shifts')
         .update({ status: 'draft' })
@@ -674,6 +688,11 @@ const ShiftCalendarView: React.FC = () => {
     endDate = endOfMonth(baseDate);
   }
   const dateRange = eachDayOfInterval({ start: startDate, end: endDate });
+
+  // 期間内に下書き（draft）シフトが存在するかどうか（＝現在シフト作成・編成中フェーズか）
+  const isPeriodDraftMode = useMemo(() => {
+    return shifts.some(s => s.status === 'draft');
+  }, [shifts]);
 
   // スタッフ別 稼働バランス集計（公平性・未配置チェック）
   const staffStats = useMemo(() => {
@@ -1120,7 +1139,7 @@ const ShiftCalendarView: React.FC = () => {
             start_time: dayConf.startTime,
             end_time: dayConf.endTime,
             role: empRole,
-            status: 'confirmed' // 正社員の骨組みは確定枠として配置
+            status: 'draft' // 正社員の骨組みも、シフト公開前は確定予定（下書き）として配置
           });
         }
       }
@@ -1130,7 +1149,7 @@ const ShiftCalendarView: React.FC = () => {
         if (insErr) throw insErr;
       }
 
-      alert(`🎉 正社員 ${fullTimeEmployees.length}名 の日付別シフト（出勤計 ${toInsert.length}件）を確定枠として先入れ配置しました！\n\n続いて「⚡ 自動割り当て」を実行すれば、残りの空き枠にバイトが綺麗に埋まります。`);
+      alert(`🎉 正社員 ${fullTimeEmployees.length}名 の日付別シフト（出勤計 ${toInsert.length}件）を確定予定（下書き）として先入れ配置しました！\n\n続いて「⚡ 自動割り当て」を実行すれば、残りの空き枠にバイトが綺麗に埋まります。\n最終調整後に「一括確定」で全員一斉に確定公開できます。`);
       setIsStaffPresetModalOpen(false);
       await fetchSettingsAndData();
     } catch (err: any) {
@@ -1732,7 +1751,7 @@ const ShiftCalendarView: React.FC = () => {
                         <th className="py-2.5 px-4">スタッフ名</th>
                         <th className="py-2.5 px-3">主な役割</th>
                         <th className="py-2.5 px-3 text-center">希望日数</th>
-                        <th className="py-2.5 px-3 text-center">仮確定・確定</th>
+                        <th className="py-2.5 px-3 text-center">{isPeriodDraftMode ? '確定予定' : '確定'}</th>
                         <th className="py-2.5 px-3 text-right">週間労働時間</th>
                         <th className="py-2.5 px-4 text-center">公平性判定</th>
                       </tr>
@@ -1787,7 +1806,7 @@ const ShiftCalendarView: React.FC = () => {
                                             ? 'bg-indigo-50 text-indigo-700'
                                             : 'text-slate-300'
                               }`}>
-                                {st.assignedDays === 0 ? '0日' : st.draftDays > 0 ? `仮確定 ${st.assignedDays}日` : `確定 ${st.assignedDays}日`}
+                                {st.assignedDays === 0 ? '0日' : isPeriodDraftMode ? `確定予定 ${st.assignedDays}日` : `確定 ${st.assignedDays}日`}
                               </span>
                               {st.omittedDays > 0 && (
                                 <span className="text-[9px] text-amber-700 font-bold mt-0.5">
@@ -1994,10 +2013,12 @@ const ShiftCalendarView: React.FC = () => {
                                               )}
                                             </div>
                                           </div>
-                                          {userStats && (
+                                          {userStats && (() => {
+                                            const isStaffFullyPublished = !isPeriodDraftMode && userStats.confirmedDays > 0;
+                                            return (
                                             <div 
                                               className="flex flex-col items-end shrink-0 cursor-default select-none pl-1"
-                                               title={`【${userObj?.name || 'スタッフ'} の稼働状況サマリ】\n・確定予定（AI下書き）: ${userStats.draftDays}日\n・本確定済み: ${userStats.confirmedDays}日\n・実働合計: ${userStats.assignedDays}日（${userStats.totalHours}時間）\n・本人希望日数: ${userStats.requestedDays}日\n${userStats.omittedDays > 0 ? `・省かれた希望: ${userStats.omittedDays}日（必要人数枠オーバーのため不採用）` : '・希望シフト: すべて採用済み'}\n${userStats.assignedDays >= 7 ? '🚨【労働基準法違反】週7日全勤・法定休日ゼロ！' : userStats.assignedDays === 6 ? '⚠️【休日不足】週6日出勤・休日1日のみ' : ''}`}
+                                               title={`【${userObj?.name || 'スタッフ'} の稼働状況サマリ】\n・${isPeriodDraftMode ? '確定予定（下書き作成中）' : '本確定済み'}: ${userStats.assignedDays}日（${userStats.totalHours}時間）\n・本人希望日数: ${userStats.requestedDays}日\n${userStats.omittedDays > 0 ? `・省かれた希望: ${userStats.omittedDays}日（必要人数枠オーバーのため不採用）` : '・希望シフト: すべて採用済み'}\n${userStats.assignedDays >= 7 ? '🚨【労働基準法違反】週7日全勤・法定休日ゼロ！' : userStats.assignedDays === 6 ? '⚠️【休日不足】週6日出勤・休日1日のみ' : ''}`}
                                             >
                                               {/* メインインジケーター：確定予定 / 確定の日数と時間 */}
                                               <div 
@@ -2008,7 +2029,7 @@ const ShiftCalendarView: React.FC = () => {
                                                       ? 'bg-amber-600 text-white'
                                                       : userStats.assignedDays === 0 
                                                         ? 'bg-rose-100 text-rose-700 border border-rose-200 animate-pulse'
-                                                        : userStats.confirmedDays > 0 && userStats.draftDays === 0
+                                                        : isStaffFullyPublished
                                                           ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                                                           : userStats.assignedDays === 5
                                                             ? 'bg-amber-100 text-amber-800 border border-amber-300'
@@ -2022,7 +2043,7 @@ const ShiftCalendarView: React.FC = () => {
                                                       ? '⚠️ 6日'
                                                       : userStats.assignedDays === 0
                                                         ? '未配置 0日'
-                                                        : userStats.confirmedDays > 0 && userStats.draftDays === 0
+                                                        : isStaffFullyPublished
                                                           ? `確定 ${userStats.assignedDays}日`
                                                           : `確定予定 ${userStats.assignedDays}日`}
                                                 </span>
@@ -2048,7 +2069,8 @@ const ShiftCalendarView: React.FC = () => {
                                                 )}
                                               </div>
                                             </div>
-                                          )}
+                                          );
+                                          })()}
                                         </div>
                                         
                                         <div 
@@ -2075,7 +2097,8 @@ const ShiftCalendarView: React.FC = () => {
                                               const leftPercent = (startMinutes / totalMinutes) * 100;
                                               const widthPercent = ((endMinutes - startMinutes) / totalMinutes) * 100;
                                               const isRequest = shift.status === 'request';
-                                              const isDraft = shift.status === 'draft';
+                                              // 作成中フェーズ（isPeriodDraftMode）なら、正社員先入れで過去にconfirmedで入ったシフトも作成中（確定予定）として統一表示
+                                              const isEffectiveDraft = shift.status === 'draft' || (isPeriodDraftMode && shift.status === 'confirmed');
                                               
                                               // 🤝 応援勤務バッジ判定（シフトの勤務先とスタッフの所属店舗が異なる場合）
                                               const isShiftHelper = enableStoreHelp && shift.store_name && userObj?.department && shift.store_name !== userObj.department;
@@ -2090,12 +2113,12 @@ const ShiftCalendarView: React.FC = () => {
                                                     backgroundImage: isRequest 
                                                       ? `repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.4) 10px, rgba(255,255,255,0.4) 20px)`
                                                       : undefined,
-                                                    opacity: (isRequest || isDraft) ? 0.8 : 1,
-                                                    border: isRequest ? '2px dashed #fff' : isDraft ? '2px dotted #fff' : '1px solid rgba(0,0,0,0.15)',
+                                                    opacity: (isRequest || isEffectiveDraft) ? 0.8 : 1,
+                                                    border: isRequest ? '2px dashed #fff' : isEffectiveDraft ? '2px dotted #fff' : '1px solid rgba(0,0,0,0.15)',
                                                     left: `${leftPercent}%`,
                                                     width: `${widthPercent}%`
                                                   }}
-                                                  title={`${isShiftHelper ? `【🤝 ${userObj?.department}より応援勤務】` : ''}勤務店舗: ${shift.store_name || userObj?.department || '自店'} (${isRequest ? "従業員の希望（未採用）" : isDraft ? "確定予定（下書き）" : "確定済み"})`}
+                                                  title={`${isShiftHelper ? `【🤝 ${userObj?.department}より応援勤務】` : ''}勤務店舗: ${shift.store_name || userObj?.department || '自店'} (${isRequest ? "従業員の希望（未採用）" : isEffectiveDraft ? "確定予定（下書き）" : "確定済み"})`}
                                                 >
                                                   <div className="flex items-center gap-1 truncate pointer-events-none">
                                                     {isShiftHelper && (
@@ -2105,7 +2128,7 @@ const ShiftCalendarView: React.FC = () => {
                                                     )}
                                                     <span>{shift.start_time.substring(0,5)} - {shift.end_time.substring(0,5)}</span>
                                                     {isRequest && " (希望)"}
-                                                    {isDraft && " (確定予定)"}
+                                                    {isEffectiveDraft && " (確定予定)"}
                                                   </div>
                                                 </div>
                                               );
