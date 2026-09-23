@@ -172,10 +172,10 @@ export default function Portal() {
           {(role === 'admin' || role === 'superadmin') && (
             <button
               onClick={() => navigate('/settings/company')}
-              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-3.5 py-2 rounded-xl transition border border-indigo-200 flex items-center gap-1.5 cursor-pointer shadow-xs"
+              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-3.5 py-2 rounded-xl transition border border-indigo-200 flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
             >
-              <Building2 className="w-4 h-4" />
-              会社・全社マスタ設定
+              <Building2 className="w-4 h-4 shrink-0" />
+              <span>会社・全社マスタ設定</span>
             </button>
           )}
 
@@ -226,10 +226,10 @@ export default function Portal() {
             </div>
             <button
               onClick={() => navigate('/payroll/user')}
-              className="px-5 py-2.5 bg-white text-orange-700 hover:bg-orange-50 rounded-2xl font-black text-xs transition shadow-md cursor-pointer shrink-0 flex items-center justify-center gap-2"
+              className="px-5 py-2.5 bg-white text-orange-700 hover:bg-orange-50 rounded-2xl font-black text-xs transition shadow-md cursor-pointer shrink-0 flex items-center justify-center gap-2 whitespace-nowrap"
             >
-              <Sparkles className="w-4 h-4 text-orange-600" />
-              Web給与明細で確認・押印する
+              <Sparkles className="w-4 h-4 text-orange-600 shrink-0" />
+              <span>Web給与明細で確認・押印</span>
             </button>
           </div>
         )}
@@ -303,19 +303,19 @@ export default function Portal() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => navigate('/support')}
-                className="text-xs font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                className="text-xs font-bold text-violet-600 hover:text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
               >
-                <HelpCircle className="w-3.5 h-3.5" />
-                システムQ&A・改善要望
+                <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>システムQ&A・改善要望</span>
               </button>
               {(role === 'admin' || role === 'superadmin') && (
                 <button
                   onClick={() => navigate('/settings/company')}
-                  className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
                   title="会社マスタ設定でお知らせを管理・編集"
                 >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  お知らせを管理
+                  <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                  <span>お知らせを管理</span>
                 </button>
               )}
             </div>

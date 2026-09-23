@@ -867,58 +867,58 @@ ${tenantId || '（エラー：コード取得失敗）'}
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
       {/* Sidebar */}
-      <div className="w-full md:w-64 bg-blue-900 text-white flex flex-col print:hidden">
+      <div className="w-full md:w-72 shrink-0 bg-blue-900 text-white flex flex-col print:hidden">
         <div className="p-4 text-xl font-bold border-b border-blue-800">
           管理ダッシュボード
         </div>
         <nav className="flex-1 p-4 flex md:flex-col space-x-2 md:space-x-0 md:space-y-2 overflow-x-auto">
           <button 
             onClick={() => setActiveTab('employees')}
-            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'employees' ? 'bg-blue-800' : 'hover:bg-blue-800'}`}
+            className={`flex items-center w-full p-2.5 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'employees' ? 'bg-blue-800 font-bold' : 'hover:bg-blue-800/80 text-blue-100'}`}
           >
-            <Users className="mr-3 h-5 w-5" />
-            従業員管理
+            <Users className="mr-3 h-5 w-5 shrink-0" />
+            <span>従業員管理</span>
           </button>
           <button 
             onClick={() => setActiveTab('attendance')}
-            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'attendance' ? 'bg-blue-800 font-bold' : 'hover:bg-blue-800'}`}
+            className={`flex items-center w-full p-2.5 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'attendance' ? 'bg-blue-800 font-bold' : 'hover:bg-blue-800/80 text-blue-100'}`}
           >
-            <Calendar className="mr-3 h-5 w-5 text-cyan-400" />
-            月間勤怠・出勤簿管理
+            <Calendar className="mr-3 h-5 w-5 text-cyan-400 shrink-0" />
+            <span>月間勤怠・出勤簿</span>
             {leaveRequests.length > 0 && (
-              <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold animate-pulse shadow-sm">
+              <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-bold animate-pulse shadow-sm shrink-0">
                 {leaveRequests.length}
               </span>
             )}
           </button>
           <button 
             onClick={() => setActiveTab('ledger')}
-            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'ledger' ? 'bg-amber-600 font-bold' : 'hover:bg-blue-800'}`}
+            className={`flex items-center w-full p-2.5 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'ledger' ? 'bg-amber-600 font-bold text-white shadow-sm' : 'hover:bg-blue-800/80 text-blue-100'}`}
           >
-            <Coffee className="mr-3 h-5 w-5 text-amber-400" />
-            有給・休暇管理システム
+            <Coffee className="mr-3 h-5 w-5 text-amber-400 shrink-0" />
+            <span>有給・休暇管理</span>
           </button>
           <button 
             onClick={() => setActiveTab('payslips')}
-            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'payslips' ? 'bg-emerald-700 font-bold text-white shadow-sm' : 'hover:bg-blue-800 text-emerald-200'}`}
+            className={`flex items-center w-full p-2.5 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'payslips' ? 'bg-emerald-700 font-bold text-white shadow-sm' : 'hover:bg-blue-800/80 text-emerald-200'}`}
           >
-            <DollarSign className="mr-3 h-5 w-5 text-emerald-400" />
-            Web給与明細管理
+            <DollarSign className="mr-3 h-5 w-5 text-emerald-400 shrink-0" />
+            <span>Web給与明細</span>
           </button>
           <button 
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center w-full p-2 rounded transition-colors whitespace-nowrap ${activeTab === 'settings' ? 'bg-blue-800' : 'hover:bg-blue-800'}`}
+            className={`flex items-center w-full p-2.5 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'settings' ? 'bg-blue-800 font-bold' : 'hover:bg-blue-800/80 text-blue-100'}`}
           >
-            <Settings className="mr-3 h-5 w-5" />
-            勤怠・休暇ルール設定
+            <Settings className="mr-3 h-5 w-5 shrink-0" />
+            <span>勤怠・就業ルール設定</span>
           </button>
 
           <button 
             onClick={() => navigate('/settings/company')}
-            className="flex items-center w-full p-2 rounded transition-colors whitespace-nowrap bg-indigo-800/80 hover:bg-indigo-700 text-indigo-100 font-bold mt-1 shadow-xs"
+            className="flex items-center w-full p-2.5 rounded-xl transition-colors whitespace-nowrap shrink-0 bg-indigo-800/80 hover:bg-indigo-700 text-indigo-100 font-bold mt-1 shadow-xs cursor-pointer"
           >
-            <Building2 className="mr-3 h-5 w-5 text-indigo-300" />
-            会社・全社マスタ設定
+            <Building2 className="mr-3 h-5 w-5 text-indigo-300 shrink-0" />
+            <span>会社・全社マスタ設定</span>
           </button>
 
           <button 
@@ -1094,9 +1094,9 @@ ${tenantId || '（エラー：コード取得失敗）'}
 
                   <button
                     onClick={() => navigate('/company/settings?tab=billing')}
-                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer self-start sm:self-auto shadow-2xs"
+                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer self-start sm:self-auto shadow-2xs whitespace-nowrap shrink-0"
                   >
-                    <span>💳 プラン変更・お支払い設定</span>
+                    <span>💳 プラン・決済設定</span>
                   </button>
                 </div>
               </div>
@@ -1109,10 +1109,10 @@ ${tenantId || '（エラー：コード取得失敗）'}
                 <h2 className="text-lg font-medium">従業員一覧</h2>
                 <button 
                   onClick={() => setIsInviteModalOpen(true)}
-                  className="flex items-center bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition"
+                  className="flex items-center bg-blue-600 text-white px-3 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 transition cursor-pointer whitespace-nowrap shrink-0 shadow-xs"
                 >
-                  <Plus className="h-4 w-4 mr-1" />
-                  従業員を招待する
+                  <Plus className="h-4 w-4 mr-1 shrink-0" />
+                  <span>従業員を招待する</span>
                 </button>
               </div>
 
@@ -1231,30 +1231,30 @@ ${tenantId || '（エラー：コード取得失敗）'}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 print:p-0 print:border-none print:shadow-none">
               <h2 className="text-lg font-medium mb-4 print:hidden">会社・システム設定</h2>
               
-              <div className="flex space-x-4 border-b border-gray-200 mb-6 print:hidden">
+              <div className="flex space-x-4 border-b border-gray-200 mb-6 print:hidden overflow-x-auto pb-1">
                 <button
-                  className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${settingsTab === 'basic' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                  className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${settingsTab === 'basic' ? 'border-blue-600 text-blue-600 font-bold' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                   onClick={() => setSettingsTab('basic')}
                 >
                   基本設定
                 </button>
                 <button
-                  className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${settingsTab === 'leave' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                  className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${settingsTab === 'leave' ? 'border-blue-600 text-blue-600 font-bold' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                   onClick={() => setSettingsTab('leave')}
                 >
                   休暇・有給設定
                 </button>
                 <button
-                  className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${settingsTab === 'calendar' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                  className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${settingsTab === 'calendar' ? 'border-blue-600 text-blue-600 font-bold' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                   onClick={() => setSettingsTab('calendar')}
                 >
                   会社カレンダー
                 </button>
                 <button
-                  className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${settingsTab === 'rules' ? 'border-blue-600 text-blue-600 font-bold' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                  className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${settingsTab === 'rules' ? 'border-blue-600 text-blue-600 font-bold' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                   onClick={() => setSettingsTab('rules')}
                 >
-                  📜 就業規則・社内規定（AI連動）
+                  📜 就業規則（AI連動）
                 </button>
               </div>
 
@@ -1674,10 +1674,10 @@ ${tenantId || '（エラー：コード取得失敗）'}
                       </div>
                       <button 
                         onClick={() => window.print()} 
-                        className="mb-1 text-sm bg-gray-600 hover:bg-gray-700 text-white px-4 py-1.5 rounded shadow-sm flex items-center transition"
+                        className="mb-1 text-sm bg-gray-600 hover:bg-gray-700 text-white px-4 py-1.5 rounded-xl shadow-sm flex items-center transition cursor-pointer whitespace-nowrap shrink-0"
                       >
-                        <FileText className="w-4 h-4 mr-1" />
-                        PDF出力 (印刷)
+                        <FileText className="w-4 h-4 mr-1 shrink-0" />
+                        <span>PDF出力 (印刷)</span>
                       </button>
                     </div>
                   </div>
@@ -1945,20 +1945,20 @@ ${tenantId || '（エラー：コード取得失敗）'}
                         <button
                           type="button"
                           onClick={() => setIsRulesPrintModalOpen(true)}
-                          className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white font-bold px-5 py-2.5 rounded-xl shadow-sm transition text-xs flex items-center justify-center gap-2 cursor-pointer"
+                          className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white font-bold px-5 py-2.5 rounded-xl shadow-sm transition text-xs flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap shrink-0"
                         >
-                          <Printer className="w-4 h-4 text-cyan-400" />
-                          🖨️ 労基署提出用 PDF / 印刷プレビュー
+                          <Printer className="w-4 h-4 text-cyan-400 shrink-0" />
+                          <span>🖨️ 労基署提出用 印刷/PDF</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={handleSaveCompanyRules}
                           disabled={isSavingRules}
-                          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-black px-6 py-2.5 rounded-xl shadow-md transition text-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                          className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-black px-6 py-2.5 rounded-xl shadow-md transition text-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0"
                         >
-                          <CheckCircle className="w-4 h-4" />
-                          {isSavingRules ? '保存中...' : '就業規則を保存する'}
+                          <CheckCircle className="w-4 h-4 shrink-0" />
+                          <span>{isSavingRules ? '保存中...' : '就業規則を保存する'}</span>
                         </button>
                       </div>
                     </div>
@@ -2500,10 +2500,10 @@ ${tenantId || '（エラー：コード取得失敗）'}
                 <button 
                   type="button" 
                   onClick={() => window.print()} 
-                  className="flex-1 sm:flex-none px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black shadow-md shadow-blue-600/20 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="flex-1 sm:flex-none px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-black shadow-md shadow-blue-600/20 transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
                 >
-                  <Printer className="w-4 h-4" />
-                  PDF保存 / 印刷する
+                  <Printer className="w-4 h-4 shrink-0" />
+                  <span>印刷 / PDF保存</span>
                 </button>
               </div>
             </div>

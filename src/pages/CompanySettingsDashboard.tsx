@@ -2600,114 +2600,114 @@ export default function CompanySettingsDashboard() {
         <div id="company-settings-tabs-header" className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200 scroll-mt-20">
           <button
             onClick={() => setActiveTab('basic')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'basic' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <Building2 className="w-4 h-4" />
-            1. 会社基本情報
+            <Building2 className="w-4 h-4 shrink-0" />
+            <span>1. 会社基本情報</span>
           </button>
 
           <button
             onClick={() => setActiveTab('departments')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'departments' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <Network className="w-4 h-4" />
-            2. 会社組織図 ＆ 役職・部署・店舗
+            <Network className="w-4 h-4 shrink-0" />
+            <span>2. 組織・役職・店舗</span>
           </button>
 
           <button
             onClick={() => setActiveTab('calendar')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'calendar' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <Calendar className="w-4 h-4" />
-            3. 年間営業カレンダー ＆ 就業時間
+            <Calendar className="w-4 h-4 shrink-0" />
+            <span>3. 営業カレンダー・時間</span>
           </button>
 
           <button
             onClick={() => setActiveTab('payroll')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'payroll' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <DollarSign className="w-4 h-4" />
-            4. 給与締め日 ＆ 割増賃金・社会保険設定
+            <DollarSign className="w-4 h-4 shrink-0" />
+            <span>4. 給与締日・社会保険</span>
           </button>
 
           <button
             onClick={() => setActiveTab('contract')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'contract' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <FileText className="w-4 h-4" />
-            5. 労働条件通知書 ＆ 雇用契約書
+            <FileText className="w-4 h-4 shrink-0" />
+            <span>5. 労働条件・雇用契約</span>
           </button>
 
           <button
             onClick={() => setActiveTab('onboarding')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'onboarding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <UserCheck className="w-4 h-4" />
-            6. 入社手続きステップ ＆ 承認者マスタ
+            <UserCheck className="w-4 h-4 shrink-0" />
+            <span>6. 入社手続き・承認者</span>
           </button>
 
           <button
             onClick={() => setActiveTab('rules')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'rules' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <BookOpen className="w-4 h-4" />
-            7. 就業規則（AI連動）
+            <BookOpen className="w-4 h-4 shrink-0" />
+            <span>7. 就業規則（AI連動）</span>
           </button>
 
           <button
             onClick={() => setActiveTab('announcements')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'announcements' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <Bell className="w-4 h-4" />
-            8. 📢 全社お知らせ管理
+            <Bell className="w-4 h-4 shrink-0" />
+            <span>8. 📢 全社お知らせ</span>
           </button>
 
           <button
             onClick={() => setActiveTab('qualifications')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'qualifications' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <Award className="w-4 h-4" />
-            9. 📜 資格手当マスタ
+            <Award className="w-4 h-4 shrink-0" />
+            <span>9. 📜 資格手当</span>
           </button>
 
           <button
             onClick={() => setActiveTab('reminders')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'reminders' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
             }`}
           >
-            <Bell className="w-4 h-4 text-amber-500" />
-            10. 🔔 公的届出・社保改定通知マスタ
+            <Bell className="w-4 h-4 text-amber-500 shrink-0" />
+            <span>10. 🔔 公的届出・改定通知</span>
           </button>
 
           <button
             onClick={() => setActiveTab('billing')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
               activeTab === 'billing' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md' : 'bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-300'
             }`}
           >
-            <CreditCard className="w-4 h-4" />
-            11. 💳 ご利用プラン ＆ お支払い
+            <CreditCard className="w-4 h-4 shrink-0" />
+            <span>11. 💳 プラン・決済設定</span>
             {tenantBilling.plan_type === 'trial' && (
-              <span className="text-[10px] bg-amber-400 text-amber-950 font-black px-1.5 py-0.2 rounded-full">
+              <span className="text-[10px] bg-amber-400 text-amber-950 font-black px-1.5 py-0.2 rounded-full shrink-0">
                 お試し中
               </span>
             )}
@@ -3519,10 +3519,10 @@ export default function CompanySettingsDashboard() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setCalendarPrintModalOpen(true)}
-                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
                 >
-                  <Printer className="w-4 h-4 text-indigo-600" />
-                  営業カレンダー A4印刷 / PDF出力
+                  <Printer className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>営業カレンダー 印刷/PDF</span>
                 </button>
               </div>
             </div>
@@ -4730,9 +4730,9 @@ export default function CompanySettingsDashboard() {
               <button
                 type="button"
                 onClick={() => setShowBonusInspectorModal(true)}
-                className="shrink-0 px-4 py-2.5 bg-pink-600 hover:bg-pink-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                className="shrink-0 px-4 py-2.5 bg-pink-600 hover:bg-pink-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
-                <span>🛠️ 印字座標インスペクターを開く</span>
+                <span>🛠️ 印字座標インスペクター</span>
               </button>
             </div>
 
@@ -6310,9 +6310,9 @@ export default function CompanySettingsDashboard() {
               <button onClick={() => setCalendarPrintModalOpen(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer">
                 閉じる
               </button>
-              <button onClick={() => window.print()} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer">
-                <Printer className="w-4 h-4" />
-                営業カレンダーをA4印刷 / PDF保存
+              <button onClick={() => window.print()} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0">
+                <Printer className="w-4 h-4 shrink-0" />
+                <span>営業カレンダー 印刷/PDF</span>
               </button>
             </div>
           </div>
@@ -6393,10 +6393,10 @@ export default function CompanySettingsDashboard() {
               </button>
               <button 
                 onClick={() => window.print()} 
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
               >
-                <Printer className="w-4 h-4" />
-                労働条件通知書をA4印刷 / PDF保存
+                <Printer className="w-4 h-4 shrink-0" />
+                <span>労働条件通知書 印刷/PDF</span>
               </button>
             </div>
           </div>

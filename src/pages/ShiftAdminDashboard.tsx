@@ -804,10 +804,10 @@ const ShiftAdminDashboard: React.FC = () => {
               <div className="space-y-2 pt-2 border-t border-slate-100">
                 <button
                   onClick={() => navigate('/shift/admin/requests')}
-                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
                 >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>提出された希望一覧を確認する</span>
+                  <FileText className="w-3.5 h-3.5 shrink-0" />
+                  <span>希望一覧を確認する</span>
                 </button>
                 
                 <button
@@ -921,10 +921,10 @@ const ShiftAdminDashboard: React.FC = () => {
                 {/* カレンダーで微調整ボタン */}
                 <button
                   onClick={() => navigate('/shift/admin/calendar')}
-                  className="w-full bg-white/20 hover:bg-white/30 text-white font-bold py-2.5 px-4 rounded-xl border border-white/30 transition text-xs flex items-center justify-center gap-1.5 cursor-pointer backdrop-blur-md mb-3"
+                  className="w-full bg-white/20 hover:bg-white/30 text-white font-bold py-2.5 px-4 rounded-xl border border-white/30 transition text-xs flex items-center justify-center gap-1.5 cursor-pointer backdrop-blur-md mb-3 whitespace-nowrap shrink-0"
                 >
-                  <Calendar className="w-4 h-4" />
-                  <span>📅 シフトカレンダーで確認・微調整する</span>
+                  <Calendar className="w-4 h-4 shrink-0" />
+                  <span>📅 カレンダーで確認・微調整</span>
                 </button>
               </div>
 
@@ -1029,17 +1029,17 @@ const ShiftAdminDashboard: React.FC = () => {
               <div className="space-y-2 pt-2 border-t border-slate-100">
                 <button
                   onClick={() => navigate('/shift/admin/monthly')}
-                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
                 >
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>月間の充足・不足状況を確認する</span>
+                  <Calendar className="w-3.5 h-3.5 shrink-0" />
+                  <span>月間の充足・不足を確認</span>
                 </button>
                 <button
                   onClick={() => navigate('/shift/admin/settings')}
-                  className="w-full text-slate-500 hover:text-indigo-600 font-bold py-1.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-1 cursor-pointer"
+                  className="w-full text-slate-500 hover:text-indigo-600 font-bold py-1.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
                 >
-                  <Settings className="w-3.5 h-3.5" />
-                  <span>人件費予算・AI生成モードを変更</span>
+                  <Settings className="w-3.5 h-3.5 shrink-0" />
+                  <span>予算・AI生成モードを変更</span>
                 </button>
               </div>
             </div>
@@ -1086,33 +1086,33 @@ const ShiftAdminDashboard: React.FC = () => {
                       onClick={() => navigate('/shift/admin/patterns')}
                       className="bg-white hover:bg-indigo-50 border border-slate-200 p-4 rounded-2xl flex items-center justify-between text-left transition shadow-xs group cursor-pointer"
                     >
-                      <div>
-                        <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-600">👥 必要人数枠の設定</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">時間帯別・曜日別の必要人数</div>
+                      <div className="min-w-0 pr-2">
+                        <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 whitespace-nowrap">👥 必要人数枠の設定</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5 whitespace-nowrap">時間帯・曜日別の必要人数</div>
                       </div>
-                      <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-indigo-600" />
+                      <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 shrink-0" />
                     </button>
 
                     <button
                       onClick={() => navigate('/shift/admin/employees')}
                       className="bg-white hover:bg-indigo-50 border border-slate-200 p-4 rounded-2xl flex items-center justify-between text-left transition shadow-xs group cursor-pointer"
                     >
-                      <div>
-                        <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-600">🧑‍💼 人員マスタ設定</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">時給・標準の役割を設定</div>
+                      <div className="min-w-0 pr-2">
+                        <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 whitespace-nowrap">🧑‍💼 人員マスタ設定</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5 whitespace-nowrap">時給・標準役割の設定</div>
                       </div>
-                      <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-indigo-600" />
+                      <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 shrink-0" />
                     </button>
 
                     <button
                       onClick={() => navigate('/shift/admin/settings')}
                       className="bg-white hover:bg-indigo-50 border border-slate-200 p-4 rounded-2xl flex items-center justify-between text-left transition shadow-xs group cursor-pointer"
                     >
-                      <div>
-                        <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-600">⚡ AI生成・詳細設定</div>
-                        <div className="text-[11px] text-slate-400 mt-0.5">均等割り当て/希望優先の選択</div>
+                      <div className="min-w-0 pr-2">
+                        <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 whitespace-nowrap">⚡ AI生成・詳細設定</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5 whitespace-nowrap">均等配分/希望優先の選択</div>
                       </div>
-                      <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-indigo-600" />
+                      <ExternalLink className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 shrink-0" />
                     </button>
                   </div>
                 </div>

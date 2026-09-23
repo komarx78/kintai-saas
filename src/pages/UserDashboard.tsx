@@ -1772,13 +1772,13 @@ const UserDashboard = () => {
                         </div>
                         <div className="flex flex-col items-end space-y-2 mt-4 md:mt-0 print:hidden">
                           <div className="flex space-x-2">
-                            <button onClick={() => window.print()} className="text-sm bg-gray-600 hover:bg-gray-700 text-white px-4 py-1.5 rounded shadow-sm flex items-center transition">
-                              <FileText className="w-4 h-4 mr-1" />
-                              PDF出力 (印刷)
+                            <button onClick={() => window.print()} className="text-sm bg-gray-600 hover:bg-gray-700 text-white px-4 py-1.5 rounded shadow-sm flex items-center transition cursor-pointer whitespace-nowrap shrink-0">
+                              <FileText className="w-4 h-4 mr-1 shrink-0" />
+                              <span>PDF出力 (印刷)</span>
                             </button>
-                            <button onClick={handleExportCSV} className="text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded shadow-sm flex items-center transition">
-                              <FileText className="w-4 h-4 mr-1" />
-                              CSV出力
+                            <button onClick={handleExportCSV} className="text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded shadow-sm flex items-center transition cursor-pointer whitespace-nowrap shrink-0">
+                              <FileText className="w-4 h-4 mr-1 shrink-0" />
+                              <span>CSV出力</span>
                             </button>
                           </div>
                           <div className="flex space-x-2 text-sm">

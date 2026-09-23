@@ -3364,27 +3364,27 @@ export default function OnboardingAdminDashboard() {
 
         {/* メインビュー切り替え */}
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-2 bg-slate-200/80 p-1 rounded-2xl border border-slate-300/60 text-xs font-bold">
+          <div className="flex items-center gap-2 bg-slate-200/80 p-1 rounded-2xl border border-slate-300/60 text-xs font-bold shrink-0">
             <button
               onClick={() => setCurrentView('employees')}
-              className={`px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+              className={`px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                 currentView === 'employees' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Users className="w-4 h-4" />
-              従業員台帳 ＆ 労務書面証憑
+              <Users className="w-4 h-4 shrink-0" />
+              <span>従業員台帳・労務書類</span>
             </button>
 
             <button
               onClick={() => setCurrentView('submissions')}
-              className={`px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 relative ${
+              className={`px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 relative whitespace-nowrap shrink-0 ${
                 currentView === 'submissions' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <Inbox className="w-4 h-4" />
-              提出書類・各種申請 審査
+              <Inbox className="w-4 h-4 shrink-0" />
+              <span>提出書類・申請審査</span>
               {pendingSubmissionsCount > 0 && (
-                <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.2 rounded-full shrink-0">
                   {pendingSubmissionsCount}
                 </span>
               )}
@@ -3394,11 +3394,11 @@ export default function OnboardingAdminDashboard() {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setIsStaffInviteModalOpen(true)}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-4 py-2.5 rounded-xl shadow-md shadow-indigo-200 transition flex items-center gap-1.5 cursor-pointer"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-4 py-2.5 rounded-xl shadow-md shadow-indigo-200 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
               title="新入社員への入社書類提出URLやスタッフへのタイムカード打刻URL（LINE定型文・QRコード）を案内します"
             >
-              <Send className="w-4 h-4 text-cyan-300" />
-              <span>💌 スタッフ案内 ＆ 招待URL（LINE・QR）</span>
+              <Send className="w-4 h-4 text-cyan-300 shrink-0" />
+              <span>💌 スタッフ案内・招待</span>
             </button>
 
             <button
@@ -3432,37 +3432,37 @@ export default function OnboardingAdminDashboard() {
                   copied: false
                 });
               }}
-              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs px-3.5 py-2.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs px-3.5 py-2.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
               title="新入社員の給与・役職・労働条件を設定して専用入社URLを発行"
             >
-              <Smartphone className="w-4 h-4 text-indigo-600" />
-              <span>個別給与設定付き専用URL</span>
+              <Smartphone className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>個別給与つき専用URL</span>
             </button>
 
             <button
               onClick={() => setIsCsvImportModalOpen(true)}
-              className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs px-3.5 py-2 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs px-3.5 py-2 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
               title="Excel等で作成した社員リストCSVを一括で取り込みます"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              社員一括CSVインポート
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>社員一括CSV取込</span>
             </button>
 
             <button
               onClick={() => setProxyInputModal(prev => ({ ...prev, isOpen: true }))}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
             >
-              <Upload className="w-4 h-4" />
-              紙書類の手動代行登録（PC苦手な方用）
+              <Upload className="w-4 h-4 shrink-0" />
+              <span>紙書類の手動代行登録</span>
             </button>
 
             <button
               onClick={() => setRemunerationCabinetOpen(true)}
-              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold text-xs px-3.5 py-2 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold text-xs px-3.5 py-2 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
               title="年金事務所から届いた標準報酬決定通知書（原本PDF/写メ）や協会けんぽ保険料額表の全社保管庫"
             >
-              <FolderOpen className="w-4 h-4 text-indigo-600" />
-              📁 通知書・保険料額表 保管庫
+              <FolderOpen className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>📁 通知書・保険料保管庫</span>
             </button>
           </div>
         </div>
@@ -3479,22 +3479,22 @@ export default function OnboardingAdminDashboard() {
                 <p className="text-xs text-slate-400 mt-0.5">雇用契約書・通勤届・口座届のエビデンス閲覧、就業時間個別設定、退職処理</p>
               </div>
 
-              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs font-bold shrink-0">
                 <button
                   onClick={() => setActiveFilter('all')}
-                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${activeFilter === 'all' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer whitespace-nowrap shrink-0 ${activeFilter === 'all' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
                 >
                   全員 ({employees.length})
                 </button>
                 <button
                   onClick={() => setActiveFilter('active')}
-                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${activeFilter === 'active' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer whitespace-nowrap shrink-0 ${activeFilter === 'active' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
                 >
                   在職中 ({activeCount})
                 </button>
                 <button
                   onClick={() => setActiveFilter('retired')}
-                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${activeFilter === 'retired' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer whitespace-nowrap shrink-0 ${activeFilter === 'retired' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500'}`}
                 >
                   退職済 ({retiredCount})
                 </button>
@@ -4157,10 +4157,10 @@ export default function OnboardingAdminDashboard() {
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
                 >
-                  <Printer className="w-4 h-4" />
-                  この書面をA4印刷 / PDF保存
+                  <Printer className="w-4 h-4 shrink-0" />
+                  <span>書面を印刷 / PDF保存</span>
                 </button>
                 <button onClick={() => setCabinetModal({ isOpen: false, employee: null, activeDoc: 'contract' })} className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
                   <X className="w-5 h-5" />
