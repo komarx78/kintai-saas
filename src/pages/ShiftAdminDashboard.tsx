@@ -439,7 +439,8 @@ const ShiftAdminDashboard: React.FC = () => {
           staffName: emp.name || emp.email,
           storeName: emp.store_name,
           periodLabel,
-          deadlineText: reminderDeadlineInput
+          deadlineText: reminderDeadlineInput,
+          tenantId: tenantId
         })
       }));
 
@@ -1142,7 +1143,8 @@ const ShiftAdminDashboard: React.FC = () => {
           staffName: sampleEmpName,
           storeName: tenantName,
           periodLabel,
-          deadlineText: reminderDeadlineInput
+          deadlineText: reminderDeadlineInput,
+          tenantId: tenantId
         });
 
         return (

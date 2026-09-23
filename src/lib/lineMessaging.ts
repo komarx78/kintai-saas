@@ -1,9 +1,13 @@
 /**
- * 📱 LINE Messaging 連携ユーティリティ (LINE Shift Notification Engine)
+ * =========================================================================================
+ * 🚨【最高軍律遵守コード】LINE Messaging 連携エンジン (LINE Shift Notification Engine)
  * 
- * スタッフごとの確定シフトの抽出・LINE通知メッセージの生成・
- * 店舗別友だち追加QRコードの生成・未提出者リマインド・
- * 緊急代打ヘルプ募集・送信ログ管理を司るSSOTエンジン。
+ * 遵守軍律：
+ * ・【最高絶対憲法 第9条：URL最優先SSOT】（LINE通知URLに tenant_id / store を100%バインド）
+ * ・【最高絶対憲法 第3条：マルチテナント完全分離】（他社混同・情報漏洩の物理遮断）
+ * ・【最高絶対憲法 第12条：脱開発者目線＆現場適合】（アルバイト用パスワードレス閲覧URL配備）
+ * ・【作戦規約 第8条：データ血流完全疎通】（LINE ➔ アルバイトスマホ ➔ 自店シフト直通）
+ * =========================================================================================
  */
 
 export interface LineStaffSummary {
@@ -40,14 +44,16 @@ export function getDayOfWeekJa(dateStr: string): string {
 
 /**
  * スタッフ個別の確定シフトLINE送信用メッセージ本文を生成
- * （モラルハザード防止規約 ＆ 全体カレンダー閲覧URL付き）
+ * （モラルハザード防止規約 ＆ SaaS完全防壁カレンダー閲覧URL付き）
  */
 export function formatStaffShiftLineMessage(
   userName: string,
   shifts: ShiftItemSimple[],
   periodLabel: string,
   storeName?: string,
-  calendarUrl?: string
+  calendarUrl?: string,
+  tenantId?: string,
+  periodStartDate?: string
 ): {
   messageText: string;
   shiftCount: number;
@@ -94,9 +100,14 @@ export function formatStaffShiftLineMessage(
     text += `\n\n`;
   }
 
-  // 🔗 全体カレンダー閲覧リンク
-  const viewUrl = calendarUrl || `${typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com'}/shift/admin/calendar`;
-  text += `🔗 店舗全体のシフトカレンダーはこちら（スマホ対応）:\n${viewUrl}\n\n`;
+  // 🔗 確定シフトカレンダー閲覧リンク（🚨 軍律第9条：SaaS完全防壁URL）
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com';
+  const storeParam = storeName && storeName !== 'all' ? `&store=${encodeURIComponent(storeName)}` : '';
+  const periodParam = periodStartDate ? `&period=${periodStartDate}` : '';
+  const defaultPublicUrl = `${origin}/shift/view?tid=${tenantId || ''}${storeParam}${periodParam}`;
+  const viewUrl = calendarUrl || defaultPublicUrl;
+
+  text += `🔗 店舗全体の確定シフトはこちら（ログイン不要・スマホ対応）:\n${viewUrl}\n\n`;
 
   // ⚠️ 店舗の鉄則・モラルハザード抑止規約（司馬懿・陸遜・荀彧設計）
   text += `⚠️【シフト確定後の変更に関する店舗ルール】\n`;
@@ -123,6 +134,8 @@ export function formatEmergencyHelpLineMessage(params: {
   endTime: string;
   role: string;
   rewardNote?: string;
+  tenantId?: string;
+  viewUrl?: string;
 }): string {
   const dow = getDayOfWeekJa(params.targetDate);
   const dateFormatted = params.targetDate.replace(/^\d{4}-/, '').replace('-', '/');
@@ -140,6 +153,16 @@ export function formatEmergencyHelpLineMessage(params: {
     text += `✨ 特典・手当: ${params.rewardNote}\n`;
   }
   text += `\n`;
+
+  // 🔗 確定シフト確認URL（軍律第9条：URL最優先SSOT）
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com';
+  const storeParam = params.storeName && params.storeName !== 'all' ? `&store=${encodeURIComponent(params.storeName)}` : '';
+  const dateParam = params.targetDate ? `&period=${params.targetDate}` : '';
+  const defaultPublicUrl = `${origin}/shift/view?tid=${params.tenantId || ''}${storeParam}${dateParam}`;
+  const publicUrl = params.viewUrl || defaultPublicUrl;
+
+  text += `🔗 現在の店舗確定シフトはこちら:\n${publicUrl}\n\n`;
+
   text += `「この時間帯なら入れる！」「1時間遅れなら入れる！」という方は、\n`;
   text += `大至急、このLINEに直接ご返信いただくか、店長までお電話ください！\n\n`;
   text += `※ 先着順で確定とさせていただきます。皆様のご協力をお願いいたします！`;
@@ -155,8 +178,11 @@ export function formatShiftReminderLineMessage(params: {
   periodLabel: string;
   deadlineText?: string;
   requestUrl?: string;
+  tenantId?: string;
 }): string {
-  const url = params.requestUrl || `${typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com'}/shift/request`;
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com';
+  const tenantParam = params.tenantId ? `?tid=${params.tenantId}` : '';
+  const url = params.requestUrl || `${origin}/shift/user${tenantParam}`;
   const deadline = params.deadlineText || '近日中';
 
   let text = `【みんなのらくまる労務】\nシフト希望 提出のお願い📢\n\n`;

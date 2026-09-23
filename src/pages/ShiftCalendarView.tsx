@@ -724,11 +724,18 @@ const ShiftCalendarView: React.FC = () => {
       );
 
       const isLineLinked = Boolean(linkMap[u.id]);
+      const storeNameParam = selectedDepartment === 'all' ? undefined : selectedDepartment;
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com';
+      const calendarPublicUrl = `${origin}/shift/view?tid=${tenantId}${storeNameParam ? `&store=${encodeURIComponent(storeNameParam)}` : ''}&period=${startStr}`;
+
       const { messageText, shiftCount, totalHours } = formatStaffShiftLineMessage(
         u.name,
         userConfirmedShifts,
         periodLabel,
-        selectedDepartment === 'all' ? undefined : selectedDepartment
+        storeNameParam,
+        calendarPublicUrl,
+        tenantId,
+        startStr
       );
 
       return {
@@ -825,7 +832,8 @@ const ShiftCalendarView: React.FC = () => {
         startTime: emergencyHelpTarget.startTime,
         endTime: emergencyHelpTarget.endTime,
         role: emergencyHelpTarget.role,
-        rewardNote: emergencyRewardNote
+        rewardNote: emergencyRewardNote,
+        tenantId: tenantId
       });
 
       const res = await sendEmergencyHelpViaLine(
@@ -3506,7 +3514,8 @@ const ShiftCalendarView: React.FC = () => {
           startTime: emergencyHelpTarget.startTime,
           endTime: emergencyHelpTarget.endTime,
           role: emergencyHelpTarget.role,
-          rewardNote: emergencyRewardNote
+          rewardNote: emergencyRewardNote,
+          tenantId: tenantId
         });
 
         return (

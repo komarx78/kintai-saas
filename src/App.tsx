@@ -12,6 +12,7 @@ import ShiftSettings from './pages/ShiftSettings';
 import ShiftEmployeeRequest from './pages/ShiftEmployeeRequest';
 import ShiftEmployeeMaster from './pages/ShiftEmployeeMaster';
 import ShiftCalendarView from './pages/ShiftCalendarView';
+import ShiftPublicView from './pages/ShiftPublicView';
 import ShiftMonthlyView from './pages/ShiftMonthlyView';
 import ShiftRequestsView from './pages/ShiftRequestsView';
 import UserDashboard from './pages/UserDashboard';
@@ -207,6 +208,8 @@ function App() {
         } />
         <Route path="/onboarding/welcome" element={<EmployeeOnboardingWelcome />} />
         <Route path="/maternity/apply" element={<EmployeeMaternityApplication />} />
+        {/* 🚨【軍律 第9条・第12条 遵守】アルバイト・現場専用 確定シフト公開閲覧ルート（パスワードレス） */}
+        <Route path="/shift/view" element={<ShiftPublicView />} />
         <Route path="/settings/company/*" element={
           <PrivateRoute requiredRole="admin">
             <CompanySettingsDashboard />
