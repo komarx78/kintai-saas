@@ -39,7 +39,7 @@ import {
   RotateCcw, Save, Inbox, Upload, Trash2, Eye, CreditCard, Train,
   FolderOpen, Settings, Clock, Smartphone, AlertCircle, ArrowRight, CornerDownLeft,
   Copy, DollarSign, Sparkles, Award, ShieldCheck, FileCheck,
-  ExternalLink, Gift, Baby, FileSpreadsheet, Send, KeyRound, MessageSquare, MapPin, Store
+  ExternalLink, Gift, Baby, FileSpreadsheet, Send, KeyRound, MessageSquare, MapPin, Store, QrCode
 } from 'lucide-react';
 import { StaffInviteModal } from '../components/StaffInviteModal';
 import { StaffAccountIssueModal, type TargetStaffForAccount } from '../components/StaffAccountIssueModal';
@@ -7987,8 +7987,8 @@ export default function OnboardingAdminDashboard() {
         }
         const currentGeneratedUrl = `${window.location.origin}/onboarding/welcome?${params.toString()}`;
 
-        // 💾 労働条件を台帳・実DBに保存（永続化）し、専用URLまたはLINE文面を発行・コピーする関数
-        const handleSaveAndCopy = async (actionType: 'save_only' | 'copy_url' | 'copy_line') => {
+        // 💾 労働条件を台帳・実DBに保存（永続化）し、専用URLまたはLINE文面を発行・コピー・LINE送信する関数
+        const handleSaveAndCopy = async (actionType: 'save_only' | 'copy_url' | 'copy_line' | 'send_line') => {
           if (!inviteUrlModal.name.trim()) {
             alert('氏名（フルネーム）を入力してください。');
             return;
@@ -8183,15 +8183,8 @@ export default function OnboardingAdminDashboard() {
             }
             const finalUrl = `${window.location.origin}/onboarding/welcome?${updatedParams.toString()}`;
 
-            // 5. アクションに応じたクリップボードコピー
-            if (actionType === 'copy_url') {
-              await navigator.clipboard.writeText(finalUrl);
-              setInviteUrlModal(prev => ({ ...prev, copied: true }));
-              setTimeout(() => setInviteUrlModal(prev => ({ ...prev, copied: false })), 4000);
-              alert(`🎉 【台帳に保存完了】\n${inviteUrlModal.name} さんの労働条件を従業員台帳に保存し、専用入社手続きURLをコピーしました！\n\n新入社員へLINEやメールでお送りください。`);
-            } else if (actionType === 'copy_line') {
-              const storeDesc = inviteUrlModal.storeName ? `\n【配属店舗】${inviteUrlModal.storeName}` : '';
-              const lineMsg = `【${tenantInfo?.name || '会社'} 入社手続きのご案内】
+            const storeDesc = inviteUrlModal.storeName ? `\n【配属店舗】${inviteUrlModal.storeName}` : '';
+            const lineMsg = `【${tenantInfo?.name || '会社'} 入社手続きのご案内】
 ${inviteUrlModal.name} 様${storeDesc}
 
 この度はご入社誠におめでとうございます。
@@ -8207,6 +8200,23 @@ ${finalUrl}
 
 ※ 手続き画面でご入力いただくメールアドレス宛に、入社後のタイムカード打刻用アカウントをご案内いたします。
 よろしくお願いいたします。`;
+
+            // 5. アクションに応じた処理（LINE直接送信 / コピー / 保存）
+            if (actionType === 'send_line') {
+              // 📱 LINEアプリ起動（LINE共有URLスキーム：通数0円・完全無料）
+              await navigator.clipboard.writeText(lineMsg);
+              setInviteUrlModal(prev => ({ ...prev, copied: true }));
+              setTimeout(() => setInviteUrlModal(prev => ({ ...prev, copied: false })), 4000);
+
+              const lineShareUrl = `https://line.me/R/msg/text/?${encodeURIComponent(lineMsg)}`;
+              window.open(lineShareUrl, '_blank');
+              alert(`🎉 【台帳に保存完了】\n${inviteUrlModal.name} さんの労働条件を従業員台帳に保存し、LINEアプリを起動しました！\n送信相手（新入社員）を選んで送信してください。\n\n※案内文はクリップボードにもバックアップコピーされています。`);
+            } else if (actionType === 'copy_url') {
+              await navigator.clipboard.writeText(finalUrl);
+              setInviteUrlModal(prev => ({ ...prev, copied: true }));
+              setTimeout(() => setInviteUrlModal(prev => ({ ...prev, copied: false })), 4000);
+              alert(`🎉 【台帳に保存完了】\n${inviteUrlModal.name} さんの労働条件を従業員台帳に保存し、専用入社手続きURLをコピーしました！\n\n新入社員へLINEやメールでお送りください。`);
+            } else if (actionType === 'copy_line') {
               await navigator.clipboard.writeText(lineMsg);
               setInviteUrlModal(prev => ({ ...prev, copied: true }));
               setTimeout(() => setInviteUrlModal(prev => ({ ...prev, copied: false })), 4000);
@@ -8700,7 +8710,7 @@ ${finalUrl}
                 </div>
 
                 {/* 4. 発行URLプレビュー ＆ コピーエリア */}
-                <div className="bg-indigo-950 text-white p-4 rounded-2xl border border-indigo-800 space-y-2.5">
+                <div className="bg-indigo-950 text-white p-4 rounded-2xl border border-indigo-800 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black text-indigo-300 flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
@@ -8713,44 +8723,81 @@ ${finalUrl}
                     {currentGeneratedUrl}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {/* 🚀 ワンタップアクションボタン群 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {/* 📱 LINEで新入社員へ直接送る（メインCTA） */}
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => handleSaveAndCopy('send_line')}
+                      className="py-2.5 px-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                      title="労働条件を台帳に保存し、LINEアプリを起動して新入社員へ直接案内文＋URLを送信します（完全無料・通数0円）"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>📱 LINEで直接送る</span>
+                    </button>
+
+                    {/* 💬 LINE案内文をコピー */}
                     <button
                       type="button"
                       disabled={isSaving}
                       onClick={() => handleSaveAndCopy('copy_line')}
-                      className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                      className="py-2.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                      title="台帳に保存し、LINE送信用案内文をクリップボードにコピーします"
                     >
-                      <MessageSquare className="w-3.5 h-3.5 text-emerald-100" />
-                      <span>💬 保存＆LINE案内文をコピー</span>
+                      <MessageSquare className="w-3.5 h-3.5 text-emerald-200" />
+                      <span>💬 LINE案内文コピー</span>
                     </button>
 
+                    {/* 🔗 専用URLをコピー */}
                     <button
                       type="button"
                       disabled={isSaving}
                       onClick={() => handleSaveAndCopy('copy_url')}
-                      className={`py-2.5 px-3 rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50 ${
+                      className={`py-2.5 px-3 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50 ${
                         inviteUrlModal.copied
                           ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                          : 'bg-gradient-to-r from-indigo-500 to-cyan-600 hover:from-indigo-600 hover:to-cyan-700 text-white'
+                          : 'bg-indigo-600 hover:bg-indigo-700 text-white'
                       }`}
+                      title="専用入社URLをクリップボードにコピーします"
                     >
-                      {isSaving ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>台帳に保存中...</span>
-                        </>
-                      ) : inviteUrlModal.copied ? (
+                      {inviteUrlModal.copied ? (
                         <>
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
-                          <span>専用URLをコピー済！</span>
+                          <span>URLコピー済！</span>
                         </>
                       ) : (
                         <>
                           <Copy className="w-3.5 h-3.5" />
-                          <span>💾 保存＆専用URLをコピー</span>
+                          <span>🔗 URLをコピー</span>
                         </>
                       )}
                     </button>
+                  </div>
+                </div>
+
+                {/* 📱 店頭・面接時用のQRコード表示枠（目の前でスマホ手続き・完全無料0円） */}
+                <div className="bg-emerald-50/90 p-3.5 rounded-2xl border border-emerald-200 flex flex-col sm:flex-row items-center gap-3.5 shadow-2xs">
+                  <div className="w-20 h-20 bg-white p-1 rounded-xl border border-emerald-300 shadow-2xs shrink-0 flex items-center justify-center">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(currentGeneratedUrl)}`}
+                      alt="入社手続きQRコード"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <div className="space-y-1 text-xs text-left">
+                    <div className="font-black text-emerald-950 flex items-center gap-1.5 text-xs">
+                      <QrCode className="w-4 h-4 text-emerald-600" />
+                      <span>店頭・面接その場でスマホ手続きしてもらう場合</span>
+                    </div>
+                    <p className="text-emerald-800 text-[11px] leading-relaxed">
+                      新入社員のスマホカメラやLINEのQRリーダーでこのコードを読み取ってもらうと、その場で3分で労働条件確認＆入社手続きが完了します。
+                    </p>
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-300">
+                        🟢 メール・LINE送信不要で即日完結（通数0円・完全無料）
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -8782,20 +8829,32 @@ ${finalUrl}
                     type="button"
                     disabled={isSaving}
                     onClick={() => handleSaveAndCopy('copy_line')}
-                    className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    className="px-3.5 py-2.5 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     title="台帳に保存し、LINE送信用案内文をコピーします"
                   >
-                    <MessageSquare className="w-4 h-4 text-emerald-100" />
-                    <span>💬 保存してLINE案内文をコピー</span>
+                    <MessageSquare className="w-4 h-4 text-emerald-600" />
+                    <span>💬 LINE文面コピー</span>
                   </button>
 
-                  {/* 💾 台帳に保存 ＆ 専用URLをコピー（メインCTAボタン） */}
+                  {/* 🔗 専用URLをコピー */}
                   <button
                     type="button"
                     disabled={isSaving}
                     onClick={() => handleSaveAndCopy('copy_url')}
-                    className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    title="入力した労働条件を台帳に保存し、専用入社URLをクリップボードにコピーします"
+                    className="px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="専用入社URLをコピーします"
+                  >
+                    <Copy className="w-4 h-4 text-indigo-600" />
+                    <span>🔗 URLをコピー</span>
+                  </button>
+
+                  {/* 📱 保存 ＆ LINEで新入社員へ送る（最重要メインCTAボタン） */}
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={() => handleSaveAndCopy('send_line')}
+                    className="px-5 py-2.5 bg-[#06C755] hover:bg-[#05b34c] text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    title="労働条件を台帳に保存し、LINEアプリを起動して新入社員へ直接送付します（完全無料・0円）"
                   >
                     {isSaving ? (
                       <>
@@ -8804,8 +8863,8 @@ ${finalUrl}
                       </>
                     ) : (
                       <>
-                        <Save className="w-4 h-4 text-cyan-200" />
-                        <span>💾 台帳に保存 ＆ 専用URLをコピー</span>
+                        <Send className="w-4 h-4" />
+                        <span>📱 保存してLINEで新入社員へ送る</span>
                       </>
                     )}
                   </button>
