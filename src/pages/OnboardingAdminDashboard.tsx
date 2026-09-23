@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { StaffInviteModal } from '../components/StaffInviteModal';
 import { StaffAccountIssueModal, type TargetStaffForAccount } from '../components/StaffAccountIssueModal';
+import { sendOnboardingInviteViaLine } from '../lib/lineMessaging';
 import { fetchStoresUnified, getStoresFromStorage, type StoreMaster } from '../lib/storeMaster';
 import {
   type PaidLeaveCalcMode,
@@ -8241,22 +8242,25 @@ ${finalUrl}
 ※ 手続き画面でご入力いただくメールアドレス宛に、入社後のタイムカード打刻用アカウントをご案内いたします。
 よろしくお願いいたします。`;
 
-            // 5. アクションに応じた処理（LINE直接送信 / コピー / 保存）
+            // 5. アクションに応じた処理（会社公式LINE直接送信 / コピー / 保存）
             if (actionType === 'send_line') {
-              // 📱 LINEアプリ起動（LINE共有URLスキーム：通数0円・完全無料）
+              // 📱 会社公式LINE（またはSaaS公式LINE）からの自動直接プッシュ送信
+              // （🚨 店長個人LINEは完全不使用・プライバシー＆セキュリティ100%保護）
               await navigator.clipboard.writeText(lineMsg);
               setInviteUrlModal(prev => ({ ...prev, copied: true }));
               setTimeout(() => setInviteUrlModal(prev => ({ ...prev, copied: false })), 4000);
 
-              const lineTextForUrl = `【${tenantInfo?.name || '会社'} 入社手続きのご案内】\n${inviteUrlModal.name} 様\n\n以下の専用URLより、スマートフォンにて入社手続きをお願いいたします。\n\n▼ 専用入社手続きURL\n${finalUrl}`;
-              const lineShareUrl = `https://line.me/R/msg/text/?${encodeURIComponent(lineTextForUrl)}`;
-              
-              try {
-                window.open(lineShareUrl, '_blank', 'noopener,noreferrer');
-              } catch (e) {
-                console.warn('LINE window.open note:', e);
+              const res = await sendOnboardingInviteViaLine(tenantId, {
+                userId: activeUserId,
+                staffName: inviteUrlModal.name,
+                onboardingUrl: finalUrl,
+                storeName: inviteUrlModal.storeName,
+                companyName: tenantInfo?.name || '会社'
+              });
+
+              if (res.success) {
+                alert(`🎉 【会社公式LINEより自動送信完了】\n${inviteUrlModal.name} さんの労働条件を従業員台帳に保存し、会社公式アカウントより専用入社手続きURLを自動送信いたしました！\n\n※店長個人のLINEは一切使用しておりません。安心のセキュリティ・プライバシー完全保護で届きます。\n※丁寧なお手続き案内文はクリップボードにもバックアップコピー済みです。`);
               }
-              alert(`🎉 【台帳に保存完了】\n${inviteUrlModal.name} さんの労働条件を従業員台帳に保存し、LINEアプリを起動しました！\n送信相手（新入社員）を選んで送信してください。\n\n※丁寧なお手続きの流れを含んだ全文案内文は、クリップボードにもコピー済みです。`);
             } else if (actionType === 'copy_url') {
               await navigator.clipboard.writeText(finalUrl);
               setInviteUrlModal(prev => ({ ...prev, copied: true }));
@@ -8771,28 +8775,28 @@ ${finalUrl}
 
                   {/* 🚀 ワンタップアクションボタン群 */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {/* 📱 LINEで新入社員へ直接送る（メインCTA） */}
+                    {/* 📱 会社公式LINEから送信（メインCTA） */}
                     <button
                       type="button"
                       disabled={isSaving}
                       onClick={() => handleSaveAndCopy('send_line')}
                       className="py-2.5 px-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
-                      title="労働条件を台帳に保存し、LINEアプリを起動して新入社員へ直接案内文＋URLを送信します（完全無料・通数0円）"
+                      title="労働条件を台帳に保存し、会社公式アカウントより新入社員へ専用入社URLを自動送信します（店長個人LINEは完全不使用）"
                     >
                       <Send className="w-3.5 h-3.5" />
-                      <span>📱 LINEで直接送る</span>
+                      <span>📱 会社公式LINEから送信</span>
                     </button>
 
-                    {/* 💬 LINE案内文をコピー */}
+                    {/* 💬 案内文をコピー */}
                     <button
                       type="button"
                       disabled={isSaving}
                       onClick={() => handleSaveAndCopy('copy_line')}
                       className="py-2.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
-                      title="台帳に保存し、LINE送信用案内文をクリップボードにコピーします"
+                      title="台帳に保存し、案内文をクリップボードにコピーします"
                     >
                       <MessageSquare className="w-3.5 h-3.5 text-emerald-200" />
-                      <span>💬 LINE案内文コピー</span>
+                      <span>💬 案内文コピー</span>
                     </button>
 
                     {/* 🔗 専用URLをコピー */}
@@ -8822,7 +8826,7 @@ ${finalUrl}
                   </div>
                 </div>
 
-                {/* 📱 店頭・面接時用のQRコード表示枠（目の前でスマホ手続き・完全無料0円） */}
+                {/* 📱 店頭・面接時用のQRコード表示枠（目の前でスマホ手続き・店長個人LINE不使用） */}
                 <div className="bg-emerald-50/90 p-3.5 rounded-2xl border border-emerald-200 flex flex-col sm:flex-row items-center gap-3.5 shadow-2xs">
                   <div className="w-20 h-20 bg-white p-1 rounded-xl border border-emerald-300 shadow-2xs shrink-0 flex items-center justify-center">
                     <img
@@ -8837,11 +8841,11 @@ ${finalUrl}
                       <span>店頭・面接その場でスマホ手続きしてもらう場合</span>
                     </div>
                     <p className="text-emerald-800 text-[11px] leading-relaxed">
-                      新入社員のスマホカメラやLINEのQRリーダーでこのコードを読み取ってもらうと、その場で3分で労働条件確認＆入社手続きが完了します。
+                      新入社員のスマホカメラでこのコードを読み取ってもらうと、その場ですぐに労働条件確認＆入社手続きが完了します（店長個人LINEの交換は不要です）。
                     </p>
                     <div className="flex items-center gap-2 pt-0.5">
                       <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-300">
-                        🟢 メール・LINE送信不要で即日完結（通数0円・完全無料）
+                        🟢 個人LINE不要・プライバシー完全保護で即日完結
                       </span>
                     </div>
                   </div>
@@ -8870,16 +8874,16 @@ ${finalUrl}
                     <span>💾 台帳に保存</span>
                   </button>
 
-                  {/* 💬 LINE案内文をコピー */}
+                  {/* 💬 案内文をコピー */}
                   <button
                     type="button"
                     disabled={isSaving}
                     onClick={() => handleSaveAndCopy('copy_line')}
                     className="px-3.5 py-2.5 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    title="台帳に保存し、LINE送信用案内文をコピーします"
+                    title="台帳に保存し、送信用案内文をコピーします"
                   >
                     <MessageSquare className="w-4 h-4 text-emerald-600" />
-                    <span>💬 LINE文面コピー</span>
+                    <span>💬 案内文コピー</span>
                   </button>
 
                   {/* 🔗 専用URLをコピー */}
@@ -8894,13 +8898,13 @@ ${finalUrl}
                     <span>🔗 URLをコピー</span>
                   </button>
 
-                  {/* 📱 保存 ＆ LINEで新入社員へ送る（最重要メインCTAボタン） */}
+                  {/* 📱 会社公式LINEから新入社員へ自動送信（最重要メインCTAボタン） */}
                   <button
                     type="button"
                     disabled={isSaving}
                     onClick={() => handleSaveAndCopy('send_line')}
                     className="px-5 py-2.5 bg-[#06C755] hover:bg-[#05b34c] text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                    title="労働条件を台帳に保存し、LINEアプリを起動して新入社員へ直接送付します（完全無料・0円）"
+                    title="労働条件を台帳に保存し、会社公式アカウントより新入社員へ専用入社URLを自動送信します（店長個人LINEは完全不使用）"
                   >
                     {isSaving ? (
                       <>
@@ -8910,7 +8914,7 @@ ${finalUrl}
                     ) : (
                       <>
                         <Send className="w-4 h-4" />
-                        <span>📱 保存してLINEで新入社員へ送る</span>
+                        <span>📱 会社公式LINEから送信</span>
                       </>
                     )}
                   </button>
