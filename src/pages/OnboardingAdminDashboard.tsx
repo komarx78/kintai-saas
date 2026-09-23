@@ -44,6 +44,12 @@ import {
 import { StaffInviteModal } from '../components/StaffInviteModal';
 import { StaffAccountIssueModal, type TargetStaffForAccount } from '../components/StaffAccountIssueModal';
 import { fetchStoresUnified, getStoresFromStorage, type StoreMaster } from '../lib/storeMaster';
+import {
+  type PaidLeaveCalcMode,
+  getCompanyPaidLeaveCalcMode,
+  getUserPaidLeaveCalcModeMap,
+  saveUserPaidLeaveCalcMode
+} from '../lib/paidLeaveCalculation';
 import { searchAddressFromZip } from '../lib/zipHelper';
 import { MaternityLeaveModal } from '../components/MaternityLeaveModal';
 import { OfficialMaternityLeaveDoc } from '../components/OfficialMaternityLeaveDoc';
@@ -89,6 +95,9 @@ interface EmployeeOnboardingData {
   position_name?: string;
   contract_type: 'indefinite' | 'fixed_term';
   trial_period_months?: number;
+  work_schedule_type?: 'fixed' | 'shift';
+  weekly_working_days?: number;
+  paid_leave_calc_mode?: 'default' | 'actual_worked' | 'contract_fixed';
   start_time?: string;
   end_time?: string;
   break_time_minutes?: number;
@@ -333,6 +342,15 @@ export default function OnboardingAdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [companyCalcMode, setCompanyCalcMode] = useState<PaidLeaveCalcMode>('actual_worked');
+  const [userCalcModeMap, setUserCalcModeMap] = useState<Record<string, PaidLeaveCalcMode | 'default'>>({});
+
+  useEffect(() => {
+    if (tenantId) {
+      setCompanyCalcMode(getCompanyPaidLeaveCalcMode(tenantId));
+      setUserCalcModeMap(getUserPaidLeaveCalcModeMap(tenantId));
+    }
+  }, [tenantId]);
 
   // 提出書類 修正（編集）モーダルState
   const [editSubmissionModal, setEditSubmissionModal] = useState<{
@@ -1035,6 +1053,9 @@ export default function OnboardingAdminDashboard() {
           store_name: u.store_name || localPos?.store_name || localBackup?.store_name || conDoc.store_name || '',
           contract_type: onb?.contract_type || 'indefinite',
           trial_period_months: onb?.trial_period_months ?? 3,
+          work_schedule_type: onb?.work_schedule_type || (u.employment_type === 'part-time' || (u.store_name && u.store_name !== '') ? 'shift' : 'fixed'),
+          weekly_working_days: u.weekly_working_days || (u.employment_type === 'part-time' ? 3 : 5),
+          paid_leave_calc_mode: (userCalcModeMap[u.id] as any) || 'default',
           start_time: onb?.start_time || defaultStartTime,
           end_time: onb?.end_time || defaultEndTime,
           break_time_minutes: onb?.break_time_minutes || defaultBreak,
@@ -2570,6 +2591,7 @@ export default function OnboardingAdminDashboard() {
             department: data.department,
             store_name: data.store_name || null,
             employment_type: data.employment_type,
+            weekly_working_days: data.employment_type === 'part-time' ? (data.weekly_working_days || 3) : 5,
             join_date: data.join_date,
             birth_date: data.birth_date || null,
             address: data.address || null,
@@ -2589,9 +2611,16 @@ export default function OnboardingAdminDashboard() {
             email: data.email ? data.email.trim() : null,
             department: data.department,
             employment_type: data.employment_type,
+            weekly_working_days: data.employment_type === 'part-time' ? (data.weekly_working_days || 3) : 5,
             join_date: data.join_date
           })
           .eq('id', data.user_id);
+      }
+
+      // パート有給算定方式の保存
+      if (data.paid_leave_calc_mode && tenantId) {
+        saveUserPaidLeaveCalcMode(tenantId, data.user_id, data.paid_leave_calc_mode);
+        setUserCalcModeMap(prev => ({ ...prev, [data.user_id]: data.paid_leave_calc_mode! }));
       }
 
       // 組織図・店舗マスタ連動のための役職・店舗キャッシュ更新
@@ -2704,6 +2733,7 @@ export default function OnboardingAdminDashboard() {
             phone: data.phone || null,
             contract_type: data.contract_type,
             trial_period_months: data.trial_period_months,
+            work_schedule_type: data.work_schedule_type || 'fixed',
             start_time: data.start_time,
             end_time: data.end_time,
             break_time_minutes: data.break_time_minutes,
@@ -5161,67 +5191,192 @@ export default function OnboardingAdminDashboard() {
                   </div>
                 </div>
 
-                {/* ⏰ 個人別 就業時間帯の個別上書き設定 */}
-                <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                      個人別 所定就業時間 ＆ 休憩規定
-                    </label>
-                    <select
-                      onChange={e => {
-                        const pat = schedulePatterns.find(p => p.id === e.target.value);
-                        if (pat) {
-                          setEditModal({
+                {/* ⚡ パート有給休暇の算定方式（パート・アルバイト時のみ表示） */}
+                {editModal.data.employment_type === 'part-time' && (
+                  <div className="bg-amber-50/80 p-3.5 rounded-xl border border-amber-200 space-y-2.5">
+                    <div>
+                      <label className="text-[11px] font-black text-amber-950 flex items-center gap-1.5 mb-1">
+                        <span className="p-0.5 bg-amber-500 text-white rounded text-[10px]">⚡</span>
+                        パート有給休暇の算定方式（労基法第39条第3項 比例付与）
+                      </label>
+                      <select
+                        value={editModal.data.paid_leave_calc_mode || 'default'}
+                        onChange={e => setEditModal({
+                          ...editModal,
+                          data: {
+                            ...editModal.data!,
+                            paid_leave_calc_mode: e.target.value as any
+                          }
+                        })}
+                        className="w-full bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 font-bold text-xs text-slate-800"
+                      >
+                        <option value="default">
+                          🏢 全社設定に従う（現在: {companyCalcMode === 'actual_worked' ? '⚡ 打刻実績から自動逆算' : '🏷️ 雇用契約の週日数固定'}）
+                        </option>
+                        <option value="actual_worked">
+                          ⚡ 実際の勤務打刻から自動逆算（シフト変動パート推奨・厚労省通達準拠）
+                        </option>
+                        <option value="contract_fixed">
+                          🏷️ 雇用契約の週所定労働日数で固定（固定シフト推奨）
+                        </option>
+                      </select>
+                      <p className="text-[10px] text-amber-800 font-medium mt-1">
+                        ※シフト変動で勤務日数が固定でない場合、打刻実績（年間出勤日数）から自動算定します。
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-amber-200/70 flex items-center justify-between">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 block">
+                          週の所定労働日数（雇用契約上の目安）
+                        </label>
+                        <span className="text-[10px] text-slate-500">※「契約日数で固定」時や初期付与の基準</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min={1}
+                          max={5}
+                          value={editModal.data.weekly_working_days ?? 3}
+                          onChange={e => setEditModal({
                             ...editModal,
                             data: {
                               ...editModal.data!,
-                              start_time: pat.start_time,
-                              end_time: pat.end_time,
-                              break_time_minutes: pat.break_minutes
+                              weekly_working_days: parseInt(e.target.value, 10) || 3
                             }
-                          });
-                        }
-                      }}
-                      className="bg-slate-50 border border-slate-300 rounded px-2 py-0.5 text-[10px]"
-                    >
-                      <option value="">パターンから読込...</option>
-                      {schedulePatterns.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} ({p.start_time}〜{p.end_time})</option>
-                      ))}
-                    </select>
+                          })}
+                          className="w-16 bg-white border border-slate-300 rounded-lg px-2 py-1 font-black text-xs text-center text-slate-800"
+                        />
+                        <span className="text-xs font-bold text-slate-600">日 / 週</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ⏰ 個人別 就業時間帯の個別設定（シフト制 ⇔ 固定時間制） */}
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                    <label className="text-[11px] font-bold text-slate-800 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                      個人別 就業形態 ＆ 所定労働時間
+                    </label>
+
+                    {/* シフト制 ⇔ 固定時間制 切り替えタブ */}
+                    <div className="bg-slate-100 p-0.5 rounded-lg flex items-center border border-slate-200 shrink-0 self-start sm:self-auto">
+                      <button
+                        type="button"
+                        onClick={() => setEditModal({
+                          ...editModal,
+                          data: {
+                            ...editModal.data!,
+                            work_schedule_type: 'shift'
+                          }
+                        })}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-black transition cursor-pointer flex items-center gap-1 ${
+                          (editModal.data.work_schedule_type ?? (editModal.data.employment_type === 'part-time' ? 'shift' : 'fixed')) === 'shift'
+                            ? 'bg-indigo-600 text-white shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        📅 シフト制（シフト連動）
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditModal({
+                          ...editModal,
+                          data: {
+                            ...editModal.data!,
+                            work_schedule_type: 'fixed'
+                          }
+                        })}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-black transition cursor-pointer flex items-center gap-1 ${
+                          (editModal.data.work_schedule_type ?? (editModal.data.employment_type === 'part-time' ? 'shift' : 'fixed')) === 'fixed'
+                            ? 'bg-indigo-600 text-white shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        ⏰ 固定時間制
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <span className="text-[10px] text-slate-500 block mb-0.5">始業時刻</span>
-                      <input
-                        type="time"
-                        value={editModal.data.start_time || '09:00'}
-                        onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, start_time: e.target.value } })}
-                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 font-bold text-xs"
-                      />
+                  {(editModal.data.work_schedule_type ?? (editModal.data.employment_type === 'part-time' ? 'shift' : 'fixed')) === 'shift' ? (
+                    /* 📅 シフト制モードの場合のUI */
+                    <div className="bg-indigo-50/60 p-3 rounded-xl border border-indigo-100">
+                      <div className="flex items-start gap-2">
+                        <span className="p-1 bg-indigo-500 text-white rounded text-[11px] shrink-0 mt-0.5">📅</span>
+                        <div>
+                          <h5 className="text-xs font-black text-indigo-950">
+                            シフト制連動モード（日々の確定シフトに従って判定）
+                          </h5>
+                          <p className="text-[11px] text-indigo-800 mt-1 leading-relaxed">
+                            日々のシフトカレンダーで登録された開始・終了時刻および休憩時間が、そのまま当日の所定労働時間となります。
+                            日によって勤務時間や曜日が変動するパート・アルバイトに最適です。（個人マスタでの固定時刻入力は不要です）
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 block mb-0.5">終業時刻</span>
-                      <input
-                        type="time"
-                        value={editModal.data.end_time || '18:00'}
-                        onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, end_time: e.target.value } })}
-                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 font-bold text-xs"
-                      />
+                  ) : (
+                    /* ⏰ 固定時間制モードの場合のUI */
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-500">固定勤務パターンから一括読込</span>
+                        <select
+                          onChange={e => {
+                            const pat = schedulePatterns.find(p => p.id === e.target.value);
+                            if (pat) {
+                              setEditModal({
+                                ...editModal,
+                                data: {
+                                  ...editModal.data!,
+                                  start_time: pat.start_time,
+                                  end_time: pat.end_time,
+                                  break_time_minutes: pat.break_minutes
+                                }
+                              });
+                            }
+                          }}
+                          className="bg-slate-50 border border-slate-300 rounded px-2 py-0.5 text-[10px]"
+                        >
+                          <option value="">パターンから読込...</option>
+                          {schedulePatterns.map(p => (
+                            <option key={p.id} value={p.id}>{p.name} ({p.start_time}〜{p.end_time})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <span className="text-[10px] text-slate-500 block mb-0.5">始業時刻</span>
+                          <input
+                            type="time"
+                            value={editModal.data.start_time || '09:00'}
+                            onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, start_time: e.target.value } })}
+                            className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 font-bold text-xs"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-500 block mb-0.5">終業時刻</span>
+                          <input
+                            type="time"
+                            value={editModal.data.end_time || '18:00'}
+                            onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, end_time: e.target.value } })}
+                            className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 font-bold text-xs"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-500 block mb-0.5">休憩時間(分)</span>
+                          <input
+                            type="number"
+                            value={editModal.data.break_time_minutes || 60}
+                            onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, break_time_minutes: parseInt(e.target.value, 10) || 60 } })}
+                            className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 font-bold text-xs"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[9px] text-slate-400">※ 固定時刻勤務や時短契約の場合は、上記に設定した時間を基準に勤怠を計算します。</p>
                     </div>
-                    <div>
-                      <span className="text-[10px] text-slate-500 block mb-0.5">休憩時間(分)</span>
-                      <input
-                        type="number"
-                        value={editModal.data.break_time_minutes || 60}
-                        onChange={e => setEditModal({ ...editModal, data: { ...editModal.data!, break_time_minutes: parseInt(e.target.value, 10) || 60 } })}
-                        className="w-full bg-slate-50 border border-slate-300 rounded px-2 py-1 font-bold text-xs"
-                      />
-                    </div>
-                  </div>
-                  <p className="text-[9px] text-slate-400">※ 時短勤務や個別契約の場合でも、ここで個別に自由に時間を調整・保存できます。</p>
+                  )}
                 </div>
 
                 <div>

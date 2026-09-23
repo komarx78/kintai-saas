@@ -10,6 +10,12 @@ import { DEFAULT_EMPLOYMENT_RULES } from '../lib/defaultRules';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { calculateSubscriptionFee, type BillingMasterConfig } from '../lib/subscriptionBilling';
 import { getStoresFromStorage, fetchStoresUnified, type StoreMaster } from '../lib/storeMaster';
+import {
+  type PaidLeaveCalcMode,
+  getCompanyPaidLeaveCalcMode,
+  getUserPaidLeaveCalcModeMap,
+  saveUserPaidLeaveCalcMode
+} from '../lib/paidLeaveCalculation';
 
 // 2026年の日本の祝日（簡易モック用リスト）
 const NATIONAL_HOLIDAYS_2026 = [
@@ -27,6 +33,15 @@ const AdminDashboard = () => {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [availableStores, setAvailableStores] = useState<StoreMaster[]>([]);
+  const [companyCalcMode, setCompanyCalcMode] = useState<PaidLeaveCalcMode>('actual_worked');
+  const [userCalcModeMap, setUserCalcModeMap] = useState<Record<string, PaidLeaveCalcMode | 'default'>>({});
+
+  useEffect(() => {
+    if (tenantId) {
+      setCompanyCalcMode(getCompanyPaidLeaveCalcMode(tenantId));
+      setUserCalcModeMap(getUserPaidLeaveCalcModeMap(tenantId));
+    }
+  }, [tenantId]);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -702,6 +717,13 @@ ${tenantId || '（エラー：コード取得失敗）'}
         localStorage.setItem(key, JSON.stringify(currentMap));
       } catch {}
 
+      // パート有給算定方式の保存
+      const paid_leave_calc_mode = (form.elements.namedItem('paid_leave_calc_mode') as HTMLSelectElement)?.value as ('default' | 'actual_worked' | 'contract_fixed' | undefined);
+      if (paid_leave_calc_mode && tenantId) {
+        saveUserPaidLeaveCalcMode(tenantId, editingEmployee.id, paid_leave_calc_mode);
+        setUserCalcModeMap(prev => ({ ...prev, [editingEmployee.id]: paid_leave_calc_mode }));
+      }
+
       alert('従業員情報を保存しました。');
       
       // Full re-fetch to ensure all UI components and mock calculations are perfectly in sync
@@ -1133,8 +1155,27 @@ ${tenantId || '（エラー：コード取得失敗）'}
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{emp.name}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{emp.email}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                          {emp.type}
-                          {emp.type === 'パート' && <span className="text-xs ml-1 text-gray-400">(週{emp.weeklyDays}日)</span>}
+                          <div>
+                            <span>{emp.type}</span>
+                            {emp.type === 'パート' && <span className="text-xs ml-1 text-gray-400">(週{emp.weeklyDays}日)</span>}
+                          </div>
+                          {emp.type === 'パート' && (() => {
+                            const userSetting = userCalcModeMap[emp.id];
+                            const effectiveMode = (!userSetting || userSetting === 'default') ? companyCalcMode : userSetting;
+                            return (
+                              <div className="mt-0.5">
+                                {effectiveMode === 'actual_worked' ? (
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                                    ⚡ 打刻実績逆算
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-0.5 text-[10px] font-black text-slate-700 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+                                    🏷️ 契約固定
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                           <div>{emp.department}</div>
@@ -2034,10 +2075,49 @@ ${tenantId || '（エラー：コード取得失敗）'}
                   </select>
                 </div>
                 {(editingEmployee?.type === 'パート') && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">週の所定労働日数（パートのみ）</label>
-                    <input name="weekly_working_days" type="number" defaultValue={editingEmployee?.weeklyDays || 3} min={1} max={5} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
-                    <p className="mt-1 text-xs text-gray-500">※出勤簿（打刻）機能がある場合は自動取得することも可能ですが、基本設定として登録します。</p>
+                  <div className="bg-amber-50/80 p-4 rounded-xl border border-amber-200 space-y-3">
+                    <div>
+                      <label className="block text-xs font-black text-amber-950 flex items-center gap-1.5">
+                        <span className="p-1 bg-amber-500 text-white rounded text-[10px]">⚡</span>
+                        パート有給休暇の算定方式（労基法第39条第3項 比例付与）
+                      </label>
+                      <select
+                        name="paid_leave_calc_mode"
+                        defaultValue={userCalcModeMap[editingEmployee?.id] || 'default'}
+                        className="mt-1.5 block w-full border border-amber-300 rounded-lg shadow-xs py-2 px-3 focus:outline-none focus:ring-amber-500 focus:border-amber-500 text-xs bg-white font-bold text-slate-800"
+                      >
+                        <option value="default">
+                          🏢 全社設定に従う（現在: {companyCalcMode === 'actual_worked' ? '⚡ 打刻実績から自動逆算' : '🏷️ 雇用契約の週日数固定'}）
+                        </option>
+                        <option value="actual_worked">
+                          ⚡ 実際の勤務打刻から自動逆算（シフト変動パート推奨・厚労省通達準拠）
+                        </option>
+                        <option value="contract_fixed">
+                          🏷️ 雇用契約の週所定労働日数で固定（固定シフト推奨）
+                        </option>
+                      </select>
+                      <p className="mt-1 text-[11px] text-amber-800 font-medium">
+                        ※シフト変動等で勤務日数が固定でない場合、過去の打刻実績（年間出勤日数）から自動算定します。
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-amber-200/70">
+                      <label className="block text-xs font-bold text-slate-700">週の所定労働日数（雇用契約上の目安）</label>
+                      <div className="mt-1 flex items-center gap-2">
+                        <input
+                          name="weekly_working_days"
+                          type="number"
+                          defaultValue={editingEmployee?.weeklyDays || 3}
+                          min={1}
+                          max={5}
+                          className="block w-24 border border-slate-300 rounded-lg shadow-xs py-1.5 px-3 focus:outline-none focus:ring-amber-500 focus:border-amber-500 text-xs font-black text-slate-800 bg-white"
+                        />
+                        <span className="text-xs text-slate-600 font-bold">日 / 週</span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        ※「雇用契約で固定」時、または打刻実績がまだない初期付与時の算定基準となります。
+                      </p>
+                    </div>
                   </div>
                 )}
                 <div>
