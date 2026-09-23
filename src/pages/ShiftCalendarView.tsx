@@ -2208,46 +2208,58 @@ const ShiftCalendarView: React.FC = () => {
                                             </div>
                                           </div>
                                           {userStats && (() => {
-                                            const isStaffFullyPublished = !isPeriodDraftMode && userStats.confirmedDays > 0;
+                                            const isTodayWorking = userShifts.length > 0;
+                                            const todayShiftsText = isTodayWorking 
+                                              ? userShifts.map(s => `${s.start_time.substring(0,5)}-${s.end_time.substring(0,5)}`).join(', ')
+                                              : '本日 休み';
+
                                             return (
                                             <div 
                                               className="flex flex-col items-end shrink-0 cursor-default select-none pl-1"
-                                               title={`【${userObj?.name || 'スタッフ'} の稼働状況サマリ】\n・${isPeriodDraftMode ? '確定予定（下書き作成中）' : '本確定済み'}: ${userStats.assignedDays}日（${userStats.totalHours}時間）\n・本人希望日数: ${userStats.requestedDays}日\n${userStats.omittedDays > 0 ? `・省かれた希望: ${userStats.omittedDays}日（必要人数枠オーバーのため不採用）` : '・希望シフト: すべて採用済み'}\n${userStats.assignedDays >= 7 ? '🚨【労働基準法違反】週7日全勤・法定休日ゼロ！' : userStats.assignedDays === 6 ? '⚠️【休日不足】週6日出勤・休日1日のみ' : ''}`}
+                                              title={`【${userObj?.name || 'スタッフ'} の稼働状況】\n・本日の予定: ${isTodayWorking ? `出勤 (${todayShiftsText})` : '本日 休日（シフトなし）'}\n・今週の出勤計: ${userStats.assignedDays}日（${userStats.totalHours}時間）\n・本人希望日数: ${userStats.requestedDays}日\n${userStats.omittedDays > 0 ? `・省かれた希望: ${userStats.omittedDays}日（必要人数枠オーバーのため不採用）` : '・希望シフト: すべて採用済み'}\n${userStats.assignedDays >= 7 ? '🚨【労働基準法違反】週7日全勤・法定休日ゼロ！' : userStats.assignedDays === 6 ? '⚠️【休日不足】週6日出勤・休日1日のみ' : ''}`}
                                             >
-                                              {/* メインインジケーター：確定予定 / 確定の日数と時間 */}
+                                              {/* 1. 本日の出勤ステータス（本日出勤 vs 本日休みが一目で判明） */}
+                                              <div className="flex items-center gap-1 mb-0.5">
+                                                {isTodayWorking ? (
+                                                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded border border-emerald-300 shadow-2xs flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                    本日出勤
+                                                  </span>
+                                                ) : (
+                                                  <span className="text-[10px] bg-slate-100 text-slate-500 font-medium px-1.5 py-0.2 rounded border border-slate-200">
+                                                    本日 休み
+                                                  </span>
+                                                )}
+                                              </div>
+
+                                              {/* 2. 週全体の稼働日数サマリー（週○日と明記） */}
                                               <div 
-                                                className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-2xs ${
+                                                className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.2 rounded shadow-2xs ${
                                                   userStats.assignedDays >= 7
                                                     ? 'bg-rose-600 text-white animate-pulse'
                                                     : userStats.assignedDays === 6
                                                       ? 'bg-amber-600 text-white'
                                                       : userStats.assignedDays === 0 
-                                                        ? 'bg-rose-100 text-rose-700 border border-rose-200 animate-pulse'
-                                                        : isStaffFullyPublished
-                                                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                                          : userStats.assignedDays === 5
-                                                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                                            : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                                        : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                                                 }`}
                                               >
                                                 <span>
                                                   {userStats.assignedDays >= 7
-                                                    ? '🚨 7日(無休)'
+                                                    ? '🚨 週7日(無休)'
                                                     : userStats.assignedDays === 6
-                                                      ? '⚠️ 6日'
+                                                      ? '⚠️ 週6日'
                                                       : userStats.assignedDays === 0
-                                                        ? '未配置 0日'
-                                                        : isStaffFullyPublished
-                                                          ? `確定 ${userStats.assignedDays}日`
-                                                          : `確定予定 ${userStats.assignedDays}日`}
+                                                        ? '週0日(未配置)'
+                                                        : `週${userStats.assignedDays}日`}
                                                 </span>
-                                                <span className={`text-[9px] ${userStats.assignedDays >= 6 ? 'text-white/90' : 'text-slate-400 font-normal'}`}>
+                                                <span className="text-[8px] text-slate-400 font-normal">
                                                   ({userStats.totalHours}h)
                                                 </span>
                                               </div>
 
-                                              {/* サブインジケーター：希望と省きの内訳 */}
-                                              <div className="flex items-center mt-0.5 text-[9px] leading-tight font-medium">
+                                              {/* 3. サブインジケーター：希望と省きの内訳 */}
+                                              <div className="flex items-center mt-0.5 text-[8px] leading-tight font-medium">
                                                 {userStats.requestedDays > 0 ? (
                                                   userStats.omittedDays > 0 ? (
                                                     <span className="text-amber-700 font-bold bg-amber-50 px-1 py-0.2 rounded border border-amber-200" title={`希望${userStats.requestedDays}日中、${userStats.omittedDays}日が枠不足のため省かれています`}>
@@ -2263,7 +2275,7 @@ const ShiftCalendarView: React.FC = () => {
                                                 )}
                                               </div>
                                             </div>
-                                          );
+                                            );
                                           })()}
                                         </div>
                                         
