@@ -210,11 +210,13 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
       const userIds = currentUsers.map(u => u.id);
 
       if (userIds.length > 0) {
-        // 2. 休暇申請履歴の取得
+        // 2. 休暇申請履歴の取得（有給休暇・特別休暇・慶弔休暇等の純粋な休暇申請のみを対象とし、シフト希望や打刻修正は除外）
         const { data: reqData } = await supabase
           .from('leave_requests')
           .select('*')
           .eq('tenant_id', tenantId)
+          .neq('type', 'シフト希望')
+          .neq('type', '打刻修正')
           .order('created_at', { ascending: false });
         
         // ユーザー情報をマッピング
@@ -978,7 +980,9 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                           </span>
                         </td>
                         <td className="p-4 font-bold text-slate-700 text-sm">{req.start_date} 〜 {req.end_date}</td>
-                        <td className="p-4 text-xs text-slate-600 font-medium whitespace-pre-wrap">{req.reason || '-'}</td>
+                        <td className="p-4 text-xs text-slate-600 font-medium whitespace-pre-wrap">
+                          {(req.reason || '-').split('【シフトデータ')[0].trim() || '-'}
+                        </td>
                         <td className="p-4 text-center">
                           <span className={`px-2.5 py-1 rounded-full text-xs font-black ${
                             req.status === '承認' ? 'bg-emerald-100 text-emerald-700' :

@@ -2345,7 +2345,9 @@ const UserDashboard = () => {
                               {req.start_date} {req.start_date !== req.end_date ? `～ ${req.end_date}` : ''}
                             </p>
                             {req.reason && (
-                              <p className="text-gray-400 text-[11px] mt-1 line-clamp-1 truncate">理由: {req.reason}</p>
+                              <p className="text-gray-400 text-[11px] mt-1 line-clamp-1 truncate">
+                                理由: {req.reason.split('【シフトデータ')[0].trim()}
+                              </p>
                             )}
                           </div>
                         );

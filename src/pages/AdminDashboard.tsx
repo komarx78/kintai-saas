@@ -561,6 +561,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
         .select('*')
         .eq('tenant_id', tenantId)
         .eq('status', '申請中')
+        .neq('type', 'シフト希望')
         .order('created_at', { ascending: false });
 
       if (error) {
