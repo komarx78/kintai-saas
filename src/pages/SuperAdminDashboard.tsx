@@ -323,105 +323,105 @@ export default function SuperAdminDashboard() {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col md:flex-row font-sans">
       {/* 🧭 サイドバー */}
-      <div className="w-full md:w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-10">
-        <div className="p-6 border-b border-slate-800">
+      <div className="w-full md:w-72 bg-slate-900 text-white flex flex-col shadow-2xl z-10">
+        <div className="p-5 border-b border-slate-800">
           <div className="flex items-center space-x-3 mb-1">
-            <Database className="w-7 h-7 text-indigo-400" />
-            <h1 className="text-lg font-black tracking-tight text-white">販売者・特権本部</h1>
+            <Database className="w-7 h-7 text-indigo-400 shrink-0" />
+            <h1 className="text-lg font-black tracking-tight text-white whitespace-nowrap">販売者・特権本部</h1>
           </div>
-          <p className="text-xs text-slate-400">SaaS プラットフォーム統合統括ポータル</p>
+          <p className="text-xs text-slate-400 whitespace-nowrap truncate">SaaS プラットフォーム統括ポータル</p>
         </div>
 
         <nav className="flex-1 p-3 space-y-1 flex flex-col text-xs font-bold">
           <button 
             onClick={() => setActiveTab('tenants_monitor')}
-            className={`w-full flex items-center px-3.5 py-3 rounded-xl transition cursor-pointer ${
+            className={`w-full flex items-center px-3.5 py-3 rounded-xl transition cursor-pointer whitespace-nowrap ${
               activeTab === 'tenants_monitor' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
-            <Building2 className="h-4 w-4 mr-2.5 text-indigo-400" />
-            🏢 契約企業・テナントマスタ
+            <Building2 className="h-4 w-4 mr-2.5 text-indigo-400 shrink-0" />
+            <span>🏢 契約企業・テナントマスタ</span>
           </button>
 
           <button 
             onClick={() => setActiveTab('social_rates')}
-            className={`w-full flex items-center px-3.5 py-3 rounded-xl transition cursor-pointer ${
+            className={`w-full flex items-center px-3.5 py-3 rounded-xl transition cursor-pointer whitespace-nowrap ${
               activeTab === 'social_rates' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
-            <Shield className="h-4 w-4 mr-2.5 text-blue-400" />
-            🏥 社会保険料率マスタ（全国）
+            <Shield className="h-4 w-4 mr-2.5 text-blue-400 shrink-0" />
+            <span>🏥 社会保険料率マスタ（全国）</span>
           </button>
 
           <button 
             onClick={() => setActiveTab('tax_docs')}
-            className={`w-full flex items-center px-3.5 py-3 rounded-xl transition cursor-pointer ${
+            className={`w-full flex items-center px-3.5 py-3 rounded-xl transition cursor-pointer whitespace-nowrap ${
               activeTab === 'tax_docs' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
-            <FileText className="h-4 w-4 mr-2.5 text-amber-400" />
-            📄 公的帳票・印字座標マスタ設定
+            <FileText className="h-4 w-4 mr-2.5 text-amber-400 shrink-0" />
+            <span>📄 公的帳票・印字座標マスタ設定</span>
           </button>
 
           <button 
             onClick={() => setActiveTab('system_health')}
-            className={`w-full flex items-center px-3.5 py-3 rounded-xl transition cursor-pointer ${
+            className={`w-full flex items-center px-3.5 py-3 rounded-xl transition cursor-pointer whitespace-nowrap ${
               activeTab === 'system_health' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
-            <Activity className="h-4 w-4 mr-2.5 text-emerald-400" />
-            🚨 システムエラー・ログ監視
+            <Activity className="h-4 w-4 mr-2.5 text-emerald-400 shrink-0" />
+            <span>🚨 システムエラー・ログ監視</span>
           </button>
 
           <button 
             onClick={() => setActiveTab('system_support')}
-            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition cursor-pointer ${
+            className={`w-full flex items-center justify-between px-3.5 py-3 rounded-xl transition cursor-pointer whitespace-nowrap ${
               activeTab === 'system_support' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
-            <div className="flex items-center">
-              <HelpCircle className="h-4 w-4 mr-2.5 text-cyan-400" />
-              <span>💡 システムQ&A ＆ 改善要望統括</span>
+            <div className="flex items-center min-w-0">
+              <HelpCircle className="h-4 w-4 mr-2.5 text-cyan-400 shrink-0" />
+              <span className="truncate">💡 システムQ&A ＆ 改善要望</span>
             </div>
             {pendingSuggestionsCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white animate-pulse">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white animate-pulse shrink-0 ml-1.5">
                 {pendingSuggestionsCount}
               </span>
             )}
           </button>
 
-          <div className="pt-3 pb-1 border-t border-slate-800 my-1 text-[10px] text-slate-500 uppercase tracking-wider px-2">
+          <div className="pt-3 pb-1 border-t border-slate-800 my-1 text-[10px] text-slate-500 uppercase tracking-wider px-2 whitespace-nowrap">
             販売・契約・AI基盤
           </div>
 
           <button 
             onClick={() => setActiveTab('ai_settings')}
-            className={`w-full flex items-center px-3.5 py-2.5 rounded-xl transition cursor-pointer ${
+            className={`w-full flex items-center px-3.5 py-2.5 rounded-xl transition cursor-pointer whitespace-nowrap ${
               activeTab === 'ai_settings' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
-            <Sparkles className="h-4 w-4 mr-2.5 text-purple-400" />
-            ✨ AIプラットフォーム設定
+            <Sparkles className="h-4 w-4 mr-2.5 text-purple-400 shrink-0" />
+            <span>✨ AIプラットフォーム設定</span>
           </button>
 
           <button 
             onClick={() => setActiveTab('billing')}
-            className={`w-full flex items-center px-3.5 py-2.5 rounded-xl transition cursor-pointer ${
+            className={`w-full flex items-center px-3.5 py-2.5 rounded-xl transition cursor-pointer whitespace-nowrap ${
               activeTab === 'billing' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
-            <Settings className="h-4 w-4 mr-2.5 text-blue-400" />
-            プラン＆価格管理
+            <Settings className="h-4 w-4 mr-2.5 text-blue-400 shrink-0" />
+            <span>⚙️ プラン＆価格管理</span>
           </button>
 
           <button 
             onClick={() => setActiveTab('staff')}
-            className={`w-full flex items-center px-3.5 py-2.5 rounded-xl transition cursor-pointer ${
+            className={`w-full flex items-center px-3.5 py-2.5 rounded-xl transition cursor-pointer whitespace-nowrap ${
               activeTab === 'staff' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
             }`}
           >
-            <Users className="h-4 w-4 mr-2.5 text-slate-400" />
-            運営スタッフ管理
+            <Users className="h-4 w-4 mr-2.5 text-slate-400 shrink-0" />
+            <span>👥 運営スタッフ管理</span>
           </button>
         </nav>
 
