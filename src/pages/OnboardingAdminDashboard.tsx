@@ -43,7 +43,13 @@ import {
 } from 'lucide-react';
 import { StaffInviteModal } from '../components/StaffInviteModal';
 import { StaffAccountIssueModal, type TargetStaffForAccount } from '../components/StaffAccountIssueModal';
-import { sendOnboardingInviteViaLine } from '../lib/lineMessaging';
+import { 
+  sendOnboardingInviteViaLine, 
+  getTenantLineConfig, 
+  getStaffLineLinkStatus, 
+  type LineIntegrationConfig 
+} from '../lib/lineMessaging';
+import { LineConfigModal } from '../components/LineConfigModal';
 import { fetchStoresUnified, getStoresFromStorage, type StoreMaster } from '../lib/storeMaster';
 import {
   type PaidLeaveCalcMode,
@@ -346,10 +352,15 @@ export default function OnboardingAdminDashboard() {
   const [companyCalcMode, setCompanyCalcMode] = useState<PaidLeaveCalcMode>('actual_worked');
   const [userCalcModeMap, setUserCalcModeMap] = useState<Record<string, PaidLeaveCalcMode | 'default'>>({});
 
+  // 📱 公式LINE連携設定State（全社SSOT）
+  const [showLineConfigModal, setShowLineConfigModal] = useState(false);
+  const [lineConfig, setLineConfig] = useState<LineIntegrationConfig>(() => getTenantLineConfig(tenantId));
+
   useEffect(() => {
     if (tenantId) {
       setCompanyCalcMode(getCompanyPaidLeaveCalcMode(tenantId));
       setUserCalcModeMap(getUserPaidLeaveCalcModeMap(tenantId));
+      setLineConfig(getTenantLineConfig(tenantId));
     }
   }, [tenantId]);
 
@@ -7988,6 +7999,17 @@ export default function OnboardingAdminDashboard() {
         }
         const currentGeneratedUrl = `${window.location.origin}/onboarding/welcome?${params.toString()}`;
 
+        // 📱 スタッフのLINE連携状態および全社LINE設定の解決（SSOT）
+        let resolvedStaffUserId = inviteUrlModal.targetUserId;
+        if (!resolvedStaffUserId) {
+          const matchedByName = employees.find(e => e.name?.trim() === inviteUrlModal.name.trim());
+          if (matchedByName?.user_id) {
+            resolvedStaffUserId = matchedByName.user_id;
+          }
+        }
+        const isStaffLinked = Boolean(tenantId && resolvedStaffUserId && getStaffLineLinkStatus(tenantId, resolvedStaffUserId));
+        const currentLineConfig = lineConfig || getTenantLineConfig(tenantId);
+
         // 💾 労働条件を台帳・実DBに保存（永続化）し、専用URLまたはLINE文面を発行・コピー・LINE送信する関数
         const handleSaveAndCopy = async (actionType: 'save_only' | 'copy_url' | 'copy_line' | 'send_line') => {
           if (!inviteUrlModal.name.trim()) {
@@ -8244,22 +8266,45 @@ ${finalUrl}
 
             // 5. アクションに応じた処理（会社公式LINE直接送信 / コピー / 保存）
             if (actionType === 'send_line') {
-              // 📱 会社公式LINE（またはSaaS公式LINE）からの自動直接プッシュ送信
-              // （🚨 店長個人LINEは完全不使用・プライバシー＆セキュリティ100%保護）
+              if (currentLineConfig.mode === 'none') {
+                setShowLineConfigModal(true);
+                return;
+              }
+
+              // クリップボードにはバックアップとして常にコピー
               await navigator.clipboard.writeText(lineMsg);
               setInviteUrlModal(prev => ({ ...prev, copied: true }));
               setTimeout(() => setInviteUrlModal(prev => ({ ...prev, copied: false })), 4000);
 
-              const res = await sendOnboardingInviteViaLine(tenantId, {
-                userId: activeUserId,
-                staffName: inviteUrlModal.name,
-                onboardingUrl: finalUrl,
-                storeName: inviteUrlModal.storeName,
-                companyName: tenantInfo?.name || '会社'
-              });
+              if (!isStaffLinked) {
+                // 💡 スタッフがまだLINE未連携（公式LINEを追加していない）場合
+                // 🚨 架空の送信完了は絶対に表示せず、店頭QRコードまたは案内文でお知らせするよう案内
+                alert(
+                  `💡 【${inviteUrlModal.name} 様はまだ公式LINE未連携です】\n\n` +
+                  `新入社員様がまだ公式アカウントを友だち追加されていないため、直接プッシュ送信はできません。\n\n` +
+                  `新入社員様宛ての丁寧なお手続き案内文をクリップボードにコピーいたしました！\n` +
+                  `店頭の「入社手続きQRコード」をスマホで読み取ってもらうか、コピーされた文面をメール・SMS等でお送りください。\n\n` +
+                  `※新入社員様が友だち追加・手続きを完了すると自動的にLINE連携され、次回から給与明細や確定シフトも公式LINEから直接送信できるようになります！`
+                );
+              } else {
+                // 🟢 スタッフがすでに公式LINEを追加済みの場合：実際にプッシュ送信
+                const res = await sendOnboardingInviteViaLine(tenantId, {
+                  userId: activeUserId,
+                  staffName: inviteUrlModal.name,
+                  onboardingUrl: finalUrl,
+                  storeName: inviteUrlModal.storeName,
+                  companyName: tenantInfo?.name || '会社'
+                });
 
-              if (res.success) {
-                alert(`🎉 【会社公式LINEより自動送信完了】\n${inviteUrlModal.name} さんの労働条件を従業員台帳に保存し、会社公式アカウントより専用入社手続きURLを自動送信いたしました！\n\n※店長個人のLINEは一切使用しておりません。安心のセキュリティ・プライバシー完全保護で届きます。\n※丁寧なお手続き案内文はクリップボードにもバックアップコピー済みです。`);
+                if (res.success) {
+                  alert(
+                    `🎉 【公式LINEより自動送信完了】\n\n` +
+                    `${inviteUrlModal.name} さんの労働条件を従業員台帳に保存し、公式LINEより専用入社手続きURLを自動送信いたしました！\n\n` +
+                    `※店長個人のLINEは一切使用しておりません。安心のセキュリティ・プライバシー完全保護で届きます。`
+                  );
+                } else {
+                  alert(`⚠️ ${res.message}`);
+                }
               }
             } else if (actionType === 'copy_url') {
               await navigator.clipboard.writeText(finalUrl);
@@ -8766,7 +8811,16 @@ ${finalUrl}
                       <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
                       発行される専用入社手続きURL
                     </span>
-                    <span className="text-[10px] text-indigo-400">リアルタイム生成</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowLineConfigModal(true)}
+                      className="text-[10px] text-cyan-300 hover:text-cyan-200 underline flex items-center gap-1 cursor-pointer"
+                    >
+                      {currentLineConfig.mode === 'rakumaru_official' && '⚡ らくまる労務公式LINE代行'}
+                      {currentLineConfig.mode === 'own_official' && `🏢 自社公式LINE（${currentLineConfig.ownAccountName || '設定中'}）`}
+                      {currentLineConfig.mode === 'none' && '✉️ LINE通知OFF（メール・QR運用）'}
+                      <span className="text-[9px] opacity-75">（変更）</span>
+                    </button>
                   </div>
 
                   <div className="p-2.5 bg-slate-900/90 rounded-xl border border-indigo-700/50 font-mono text-[10px] text-cyan-200 break-all select-all">
@@ -8775,17 +8829,40 @@ ${finalUrl}
 
                   {/* 🚀 ワンタップアクションボタン群 */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {/* 📱 会社公式LINEから送信（メインCTA） */}
-                    <button
-                      type="button"
-                      disabled={isSaving}
-                      onClick={() => handleSaveAndCopy('send_line')}
-                      className="py-2.5 px-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
-                      title="労働条件を台帳に保存し、会社公式アカウントより新入社員へ専用入社URLを自動送信します（店長個人LINEは完全不使用）"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>📱 会社公式LINEから送信</span>
-                    </button>
+                    {/* 📱 会社公式LINEから送信 / 設定 / 未連携案内 */}
+                    {currentLineConfig.mode === 'none' ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowLineConfigModal(true)}
+                        className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                        title="LINE公式連携を設定すると、入社URLをLINEから直接送信できます"
+                      >
+                        <Settings className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>⚙️ LINE通知設定</span>
+                      </button>
+                    ) : isStaffLinked ? (
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => handleSaveAndCopy('send_line')}
+                        className="py-2.5 px-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                        title="労働条件を台帳に保存し、会社公式アカウントより新入社員へ専用入社URLを自動送信します"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>📱 公式LINEから送信</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => handleSaveAndCopy('send_line')}
+                        className="py-2.5 px-3 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                        title="新入社員がまだ公式LINE未連携のため、案内文をコピーして店頭QRやメール等で案内します"
+                      >
+                        <QrCode className="w-3.5 h-3.5 text-emerald-200" />
+                        <span>📱 LINE案内文コピー</span>
+                      </button>
+                    )}
 
                     {/* 💬 案内文をコピー */}
                     <button
@@ -8842,6 +8919,11 @@ ${finalUrl}
                     </div>
                     <p className="text-emerald-800 text-[11px] leading-relaxed">
                       新入社員のスマホカメラでこのコードを読み取ってもらうと、その場ですぐに労働条件確認＆入社手続きが完了します（店長個人LINEの交換は不要です）。
+                      {currentLineConfig.mode !== 'none' && (
+                        <span className="block mt-0.5 text-[10px] text-emerald-700 font-medium">
+                          ※ 手続き完了後、公式LINEが自動連携され、次回から給与明細や確定シフトがLINEに届きます。
+                        </span>
+                      )}
                     </p>
                     <div className="flex items-center gap-2 pt-0.5">
                       <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-300">
@@ -8898,32 +8980,63 @@ ${finalUrl}
                     <span>🔗 URLをコピー</span>
                   </button>
 
-                  {/* 📱 会社公式LINEから新入社員へ自動送信（最重要メインCTAボタン） */}
-                  <button
-                    type="button"
-                    disabled={isSaving}
-                    onClick={() => handleSaveAndCopy('send_line')}
-                    className="px-5 py-2.5 bg-[#06C755] hover:bg-[#05b34c] text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                    title="労働条件を台帳に保存し、会社公式アカウントより新入社員へ専用入社URLを自動送信します（店長個人LINEは完全不使用）"
-                  >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>保存中...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4" />
-                        <span>📱 会社公式LINEから送信</span>
-                      </>
-                    )}
-                  </button>
+                  {/* 📱 会社公式LINEから新入社員へ自動送信 / 未連携案内 / 設定案内（メインCTAボタン） */}
+                  {currentLineConfig.mode === 'none' ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowLineConfigModal(true)}
+                      className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
+                      title="LINE公式連携を設定すると、入社URLをLINEから直接送信できます"
+                    >
+                      <Settings className="w-4 h-4 text-emerald-400" />
+                      <span>⚙️ LINE通知設定</span>
+                    </button>
+                  ) : isStaffLinked ? (
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => handleSaveAndCopy('send_line')}
+                      className="px-5 py-2.5 bg-[#06C755] hover:bg-[#05b34c] text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      title="労働条件を台帳に保存し、会社公式アカウントより新入社員へ専用入社URLを自動送信します"
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>保存中...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          <span>📱 会社公式LINEから送信</span>
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => handleSaveAndCopy('send_line')}
+                      className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      title="新入社員がまだ公式LINE未連携のため、案内文をコピーして店頭QRやメール等で案内します"
+                    >
+                      <QrCode className="w-4 h-4 text-emerald-200" />
+                      <span>📱 店頭QR・案内文でLINE案内</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         );
       })()}
+
+      {/* 📱 公式LINE通知 連携設定モーダル */}
+      <LineConfigModal
+        isOpen={showLineConfigModal}
+        onClose={() => setShowLineConfigModal(false)}
+        tenantId={tenantId}
+        onConfigSaved={(newCfg) => setLineConfig(newCfg)}
+      />
 
       {/* 👶 産休・育休 社員入力専用URL発行モーダル */}
       {maternityInviteModal.isOpen && maternityInviteModal.employee && (() => {

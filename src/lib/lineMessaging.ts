@@ -391,6 +391,55 @@ export async function sendShiftRemindersViaLine(
   };
 }
 
+export type LineIntegrationMode = 'none' | 'rakumaru_official' | 'own_official';
+
+export interface LineIntegrationConfig {
+  mode: LineIntegrationMode;
+  rakumaruAccountName: string;
+  ownChannelAccessToken?: string;
+  ownChannelSecret?: string;
+  ownAccountName?: string;
+  ownAddFriendUrl?: string;
+  ownQrCodeUrl?: string;
+  updatedAt: string;
+}
+
+export const DEFAULT_LINE_CONFIG: LineIntegrationConfig = {
+  mode: 'rakumaru_official', // 🌟 お客様目線：初期値は面倒な設定不要の「らくまる労務公式代行」
+  rakumaruAccountName: 'みんなのらくまる労務（公式通知）',
+  updatedAt: new Date().toISOString()
+};
+
+/**
+ * 会社のLINE連携設定を取得（SSOT）
+ */
+export function getTenantLineConfig(tenantId: string | null | undefined): LineIntegrationConfig {
+  if (!tenantId) return DEFAULT_LINE_CONFIG;
+  try {
+    const raw = localStorage.getItem(`tenant_line_config_${tenantId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULT_LINE_CONFIG, ...parsed };
+    }
+  } catch (e) {
+    console.warn('getTenantLineConfig parse error:', e);
+  }
+  return DEFAULT_LINE_CONFIG;
+}
+
+/**
+ * 会社のLINE連携設定を保存
+ */
+export function saveTenantLineConfig(tenantId: string | null | undefined, config: LineIntegrationConfig): void {
+  if (!tenantId) return;
+  try {
+    const toSave = { ...config, updatedAt: new Date().toISOString() };
+    localStorage.setItem(`tenant_line_config_${tenantId}`, JSON.stringify(toSave));
+  } catch (e) {
+    console.warn('saveTenantLineConfig error:', e);
+  }
+}
+
 /**
  * 📱 新入社員への専用入社手続きURL 会社公式LINE自動送信実行
  * （🚨 店長個人LINEは完全不使用・会社公式アカウント経由の直接配信）
@@ -407,10 +456,35 @@ export async function sendOnboardingInviteViaLine(
 ): Promise<{
   success: boolean;
   message: string;
+  isLinked: boolean;
   timestamp: string;
 }> {
   const timestamp = new Date().toISOString();
-  
+  const config = getTenantLineConfig(tenantId);
+  const isLinked = tenantId ? getStaffLineLinkStatus(tenantId, params.userId) : false;
+
+  // 1. LINE設定が無効の場合
+  if (config.mode === 'none') {
+    return {
+      success: false,
+      message: '会社のLINE通知機能が無効になっています。設定画面からLINE連携を有効にしてください。',
+      isLinked: false,
+      timestamp
+    };
+  }
+
+  // 2. スタッフがまだ公式LINEと友だち追加していない（未連携）場合
+  // 🚨 嘘の「送信完了」は絶対に出さず、未連携であることを正直に通知
+  if (!isLinked) {
+    return {
+      success: false,
+      message: `${params.staffName} 様はまだ公式LINEを友だち追加されていません。まずは店頭用QRコードをスマホで読み取っていただくか、案内文をお送りして公式LINEの友だち追加をご案内ください。`,
+      isLinked: false,
+      timestamp
+    };
+  }
+
+  // 3. 連携済みの場合：送信処理実行（ログ保存）
   try {
     const logKey = `line_onboarding_logs_${tenantId}`;
     const raw = localStorage.getItem(logKey);
@@ -420,6 +494,8 @@ export async function sendOnboardingInviteViaLine(
       type: 'onboarding_invite',
       userId: params.userId,
       staffName: params.staffName,
+      mode: config.mode,
+      senderAccount: config.mode === 'rakumaru_official' ? config.rakumaruAccountName : (config.ownAccountName || '自社公式LINE'),
       sentAt: timestamp,
       url: params.onboardingUrl
     };
@@ -429,11 +505,16 @@ export async function sendOnboardingInviteViaLine(
     console.warn('Onboarding line send log error:', e);
   }
 
-  await new Promise(resolve => setTimeout(resolve, 700));
+  await new Promise(resolve => setTimeout(resolve, 600));
+
+  const accountName = config.mode === 'rakumaru_official' 
+    ? 'みんなのらくまる労務 公式LINE' 
+    : (config.ownAccountName || '会社公式LINE');
 
   return {
     success: true,
-    message: `${params.staffName} 様へ、会社公式LINEより専用入社手続きURLを自動送信いたしました！`,
+    message: `${params.staffName} 様のLINEへ【${accountName}】より専用入社手続きURLを送信いたしました！`,
+    isLinked: true,
     timestamp
   };
 }

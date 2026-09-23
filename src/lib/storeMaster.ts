@@ -70,20 +70,33 @@ export const saveStoresToStorage = (tenantId: string | null, stores: StoreMaster
   }
 };
 
+// 🛡️ テーブル未作成環境での無駄な404エラー抑制フラグ
+let isStoreMastersTableAvailable: boolean | null = null;
+
 /**
  * データベースおよびLocalStorageから店舗一覧を統合取得
  */
 export const fetchStoresUnified = async (tenantId: string): Promise<StoreMaster[]> => {
   const localStores = getStoresFromStorage(tenantId);
+  if (isStoreMastersTableAvailable === false) {
+    return localStores;
+  }
+
   try {
     // Supabaseテーブル store_masters が存在する場合は取得を試行
-    const { data, error } = await supabase
+    const { data, error, status } = await supabase
       .from('store_masters')
       .select('*')
       .eq('tenant_id', tenantId)
       .order('display_order');
     
-    if (!error && data && data.length > 0) {
+    if (error || status === 404) {
+      isStoreMastersTableAvailable = false;
+      return localStores;
+    }
+
+    isStoreMastersTableAvailable = true;
+    if (data && data.length > 0) {
       const mapped: StoreMaster[] = data.map((d: any) => ({
         id: d.id,
         name: sanitizeStoreName(d.name),
@@ -100,8 +113,7 @@ export const fetchStoresUnified = async (tenantId: string): Promise<StoreMaster[
       return mapped;
     }
   } catch (e) {
-    // テーブルが未作成の環境でもフォールバックで正常動作
-    console.warn('store_masters db fetch fallback to localStorage:', e);
+    isStoreMastersTableAvailable = false;
   }
   return localStores;
 };
@@ -112,6 +124,10 @@ export const fetchStoresUnified = async (tenantId: string): Promise<StoreMaster[
 export const saveStoresUnified = async (tenantId: string, stores: StoreMaster[]): Promise<void> => {
   // まず即座にLocalStorageへ保存（高速レスポンス＆オフライン保証）
   saveStoresToStorage(tenantId, stores);
+
+  if (isStoreMastersTableAvailable === false) {
+    return;
+  }
 
   try {
     // Supabaseテーブル store_masters が存在する場合は同期更新
@@ -132,9 +148,9 @@ export const saveStoresUnified = async (tenantId: string, stores: StoreMaster[])
     // store_mastersテーブルへの書き込み試行
     const { error } = await supabase.from('store_masters').upsert(records, { onConflict: 'id' });
     if (error) {
-      console.warn('store_masters db upsert note (fallback to localStorage active):', error.message);
+      isStoreMastersTableAvailable = false;
     }
   } catch (e) {
-    console.warn('store_masters db save note (fallback to localStorage active):', e);
+    isStoreMastersTableAvailable = false;
   }
 };
