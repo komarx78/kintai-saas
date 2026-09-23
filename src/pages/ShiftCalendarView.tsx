@@ -1969,6 +1969,148 @@ const ShiftCalendarView: React.FC = () => {
                                   )}
                                 </div>
 
+                                {/* 🌟 役割ごとの必要枠＆過不足インテリジェントゲージ（スタッフ一覧の最上部に常時表示） */}
+                                {(() => {
+                                  const dow = d.getDay();
+                                  const dayReqs = requirements.filter(r => r.day_of_week === dow && r.role === role.name);
+                                  const dayAssignedShifts = dayShifts.filter(s => s.role === role.name && s.status !== 'request');
+
+                                  // 本日の総不足人数・不足時間帯数を計算
+                                  let totalShortageCount = 0;
+                                  let totalReqCount = 0;
+                                  let totalActCount = 0;
+
+                                  const hourData = Array.from({length: 24}, (_, h) => {
+                                    let reqCount = 0;
+                                    dayReqs.forEach(req => {
+                                      const [sh] = req.start_time.split(':').map(Number);
+                                      const [eh, em] = req.end_time.split(':').map(Number);
+                                      const endHour = em > 0 ? eh : eh - 1;
+                                      if (h >= sh && h <= endHour) reqCount += req.required_count || 0;
+                                    });
+
+                                    let actCount = 0;
+                                    dayAssignedShifts.forEach(shift => {
+                                      const [sh] = shift.start_time.split(':').map(Number);
+                                      const [eh, em] = shift.end_time.split(':').map(Number);
+                                      const endHour = em > 0 ? eh : eh - 1;
+                                      if (h >= sh && h <= endHour) actCount++;
+                                    });
+
+                                    const diff = reqCount - actCount;
+                                    if (diff > 0) totalShortageCount += diff;
+                                    totalReqCount += reqCount;
+                                    totalActCount += actCount;
+
+                                    return { h, reqCount, actCount, diff };
+                                  });
+
+                                  return (
+                                    <div className="flex bg-slate-50/70 border-b-2 border-slate-200 group hover:bg-slate-100/50 transition-colors">
+                                      {/* 左側固定ヘッダー */}
+                                      <div className="w-56 shrink-0 p-2 font-bold text-slate-700 border-r border-slate-200 flex flex-col justify-between sticky left-0 z-10 bg-slate-100/95 shadow-[1px_0_5px_-2px_rgba(0,0,0,0.08)]">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-1.5 min-w-0">
+                                            <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs" style={{backgroundColor: role.color}}></span>
+                                            <span className="text-xs font-black text-slate-800 truncate">
+                                              {role.name} 必要枠・過不足
+                                            </span>
+                                          </div>
+                                          {totalShortageCount > 0 ? (
+                                            <span className="text-[10px] bg-rose-600 text-white font-black px-1.5 py-0.5 rounded shadow-2xs animate-pulse shrink-0">
+                                              ⚠️ 計{totalShortageCount}人不足
+                                            </span>
+                                          ) : dayReqs.length === 0 ? (
+                                            <button 
+                                              onClick={() => navigate('/shift/requirements')} 
+                                              className="text-[9px] bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold px-1.5 py-0.5 rounded border border-amber-300 transition-colors shrink-0 cursor-pointer"
+                                              title="必要人数枠の設定画面を開く"
+                                            >
+                                              ⚙️ 枠未設定
+                                            </button>
+                                          ) : (
+                                            <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-300 shrink-0">
+                                              ✓ 充足
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center justify-between text-[9px] text-slate-500 font-medium mt-1 pt-1 border-t border-slate-200">
+                                          <span className="text-slate-600 font-bold">上:必要数 / 下:配置数</span>
+                                          <span className="font-bold text-rose-600">赤=不足(タップ追加)</span>
+                                        </div>
+                                      </div>
+
+                                      {/* 右側24時間ゲージ */}
+                                      <div className="flex-1 flex relative min-h-[46px]">
+                                        {hourData.map(({ h, reqCount, actCount, diff }) => {
+                                          const isShortage = diff > 0;
+                                          const isFull = reqCount > 0 && diff === 0;
+                                          const isSurplus = reqCount > 0 && diff < 0;
+
+                                          return (
+                                            <div 
+                                              key={h}
+                                              onClick={() => {
+                                                if (isShortage) {
+                                                  const shStr = h.toString().padStart(2, '0') + ':00';
+                                                  const ehStr = (h + 1).toString().padStart(2, '0') + ':00';
+                                                  setModalData({
+                                                    target_date: dStr,
+                                                    role: role.name,
+                                                    start_time: shStr,
+                                                    end_time: ehStr,
+                                                    user_id: users[0]?.id
+                                                  });
+                                                  setIsModalOpen(true);
+                                                }
+                                              }}
+                                              className={`flex-1 border-r border-slate-200 flex flex-col justify-between py-1 px-0.5 text-center transition-all relative ${
+                                                isShortage 
+                                                  ? 'bg-rose-500 hover:bg-rose-600 text-white cursor-pointer shadow-xs hover:scale-y-105 z-10' 
+                                                  : isFull 
+                                                    ? 'bg-emerald-50/80 text-emerald-800' 
+                                                    : isSurplus
+                                                      ? 'bg-blue-50/80 text-blue-800'
+                                                      : actCount > 0
+                                                        ? 'bg-slate-100/60 text-slate-700'
+                                                        : 'hover:bg-slate-100/50'
+                                              }`}
+                                              title={`${h}:00〜${h+1}:00 の人員状況\n・必要人数: ${reqCount}名\n・現在配置: ${actCount}名\n${isShortage ? `🚨 【${diff}名 不足中】クリックしてこの時間帯にシフトを追加できます` : isFull ? '✅ 必要人数を満たしています（充足）' : isSurplus ? `🔵 【${Math.abs(diff)}名 余剰】` : '※必要枠は設定されていません'}`}
+                                            >
+                                              {/* 上段：必要人数 */}
+                                              <div className={`text-[9px] font-bold leading-none ${isShortage ? 'text-rose-100' : reqCount > 0 ? 'text-slate-600' : 'text-slate-300'}`}>
+                                                {reqCount > 0 ? `${reqCount}人` : '-'}
+                                              </div>
+
+                                              {/* 中段：過不足ステータス */}
+                                              <div className="my-0.5 flex justify-center items-center">
+                                                {isShortage ? (
+                                                  <span className="text-[10px] font-black leading-none bg-rose-700 text-white px-1 py-0.2 rounded shadow-2xs">
+                                                    -{diff}
+                                                  </span>
+                                                ) : isFull ? (
+                                                  <span className="text-[9px] font-black leading-none text-emerald-600">
+                                                    ✓
+                                                  </span>
+                                                ) : isSurplus ? (
+                                                  <span className="text-[9px] font-bold leading-none text-blue-600">
+                                                    +{Math.abs(diff)}
+                                                  </span>
+                                                ) : null}
+                                              </div>
+
+                                              {/* 下段：現在配置人数 */}
+                                              <div className={`text-[10px] font-black leading-none ${isShortage ? 'text-white' : actCount > 0 ? 'text-slate-800' : 'text-slate-300'}`}>
+                                                {actCount > 0 ? `${actCount}人` : '0'}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
                                 {staffIds.length === 0 ? (
                                    <div className="flex text-sm group">
                                      <div className="w-56 shrink-0 p-2 text-slate-400 border-r border-slate-100 flex items-center sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors">
@@ -2139,126 +2281,6 @@ const ShiftCalendarView: React.FC = () => {
                                     );
                                   })
                                 )}
-                                {/* 役割ごとの不足状況サマリー（ガントチャート時間軸と完全同期） */}
-                                <div className="flex bg-rose-50/20 group border-b border-slate-100 hover:bg-rose-50/30 transition-colors">
-                                  <div className="w-56 shrink-0 p-2 font-bold text-rose-600 border-r border-slate-100 text-[10px] flex items-center justify-between sticky left-0 z-10 bg-white shadow-[1px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                                    <span className="flex items-center gap-1">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
-                                      {role.name} 不足状況
-                                    </span>
-                                  </div>
-                                  <div className="flex-1 min-h-[38px] relative flex items-center">
-                                    {/* 24時間グリッド線 */}
-                                    <div className="absolute inset-0 flex pointer-events-none">
-                                      {Array.from({length: 24}, (_, i) => i).map(h => (
-                                        <div key={h} className="flex-1 border-r border-slate-100/50 h-full"></div>
-                                      ))}
-                                    </div>
-                                    
-                                    {(() => {
-                                      const dow = d.getDay();
-                                      const dayReqs = requirements.filter(r => r.day_of_week === dow && r.role === role.name);
-                                      // 確定・ドラフトのみを実働シフトとしてカウント
-                                      const dayAssignedShifts = dayShifts.filter(s => s.role === role.name && s.status !== 'request');
-                                      
-                                      const shortages: { start: number; end: number; count: number }[] = [];
-                                      let currentStart: number | null = null;
-                                      let currentCount = 0;
-
-                                      for (let h = 0; h < 24; h++) {
-                                        let required = 0;
-                                        dayReqs.forEach(req => {
-                                          const [sh] = req.start_time.split(':').map(Number);
-                                          const [eh, em] = req.end_time.split(':').map(Number);
-                                          const endHour = em > 0 ? eh : eh - 1;
-                                          if (h >= sh && h <= endHour) required += req.required_count || 0;
-                                        });
-
-                                        let actual = 0;
-                                        if (required > 0) {
-                                          dayAssignedShifts.forEach(shift => {
-                                            const [sh] = shift.start_time.split(':').map(Number);
-                                            const [eh, em] = shift.end_time.split(':').map(Number);
-                                            const endHour = em > 0 ? eh : eh - 1;
-                                            if (h >= sh && h <= endHour) actual++;
-                                          });
-                                        }
-
-                                        const diff = required - actual;
-                                        if (diff > 0) {
-                                          if (currentStart === null || currentCount !== diff) {
-                                            if (currentStart !== null) {
-                                              shortages.push({ start: currentStart, end: h, count: currentCount });
-                                            }
-                                            currentStart = h;
-                                            currentCount = diff;
-                                          }
-                                        } else {
-                                          if (currentStart !== null) {
-                                            shortages.push({ start: currentStart, end: h, count: currentCount });
-                                            currentStart = null;
-                                          }
-                                        }
-                                      }
-                                      if (currentStart !== null) {
-                                        shortages.push({ start: currentStart, end: 24, count: currentCount });
-                                      }
-
-                                      if (shortages.length === 0) {
-                                        return (
-                                          <div className="text-[10px] font-bold text-slate-400 pl-4 z-10 select-none">
-                                            充足（不足なし）
-                                          </div>
-                                        );
-                                      }
-
-                                      const totalMinutes = 24 * 60;
-
-                                      return shortages.map((shortage, idx) => {
-                                        const startMinutes = shortage.start * 60;
-                                        const endMinutes = shortage.end * 60;
-                                        const leftPercent = (startMinutes / totalMinutes) * 100;
-                                        const widthPercent = ((endMinutes - startMinutes) / totalMinutes) * 100;
-
-                                        return (
-                                          <div 
-                                            key={idx}
-                                            onClick={() => {
-                                              const shStr = shortage.start.toString().padStart(2, '0') + ':00';
-                                              const ehStr = shortage.end.toString().padStart(2, '0') + ':00';
-                                              setModalData({
-                                                target_date: dStr,
-                                                role: role.name,
-                                                start_time: shStr,
-                                                end_time: ehStr,
-                                                user_id: users[0]?.id
-                                              });
-                                              setIsModalOpen(true);
-                                            }}
-                                            className="absolute top-1.5 bottom-1.5 rounded-md shadow-xs bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black flex items-center justify-center px-1 overflow-hidden whitespace-nowrap z-10 border border-rose-600 cursor-pointer transition-all hover:scale-[1.02] hover:z-20"
-                                            style={{
-                                              left: `${leftPercent}%`,
-                                              width: `${widthPercent}%`,
-                                              minWidth: '20px'
-                                            }}
-                                            title={`${shortage.start}:00〜${shortage.end}:00 【${shortage.count}人不足】（クリックしてこの時間帯にシフト追加）`}
-                                          >
-                                            <span className="truncate flex items-center gap-0.5 pointer-events-none">
-                                              <span className="text-[9px]">⚠️</span>
-                                              {widthPercent >= 8 ? (
-                                                <span>{shortage.start}:00-{shortage.end}:00 ({shortage.count}人不足)</span>
-                                              ) : widthPercent >= 4.5 ? (
-                                                <span>{shortage.count}人不足</span>
-                                              ) : (
-                                                <span>{shortage.count}</span>
-                                              )}
-                                            </span>
-                                          </div>
-                                        );
-                                      });
-                                    })()}
-                                  </div>
-                                </div>
                               </React.Fragment>
                             );
                           })}
