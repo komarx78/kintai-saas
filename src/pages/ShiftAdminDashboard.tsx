@@ -844,36 +844,42 @@ const ShiftAdminDashboard: React.FC = () => {
               <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
 
               <div>
-                <div className="flex items-start justify-between gap-2 mb-4">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-8 h-8 rounded-xl bg-white/20 text-white flex items-center justify-center font-bold text-sm backdrop-blur-md shrink-0">
-                      2
+                <div className="mb-4">
+                  {/* 1段目：ステップ番号 ＆ ステータスバッジ */}
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-xl bg-white/20 text-white flex items-center justify-center font-black text-xs backdrop-blur-md">
+                        2
+                      </div>
+                      <span className="text-xs font-bold text-indigo-200 tracking-wide">AIシフト作成</span>
                     </div>
-                    <div className="min-w-0">
-                      <h2 className="text-base sm:text-lg font-black flex items-center gap-1 whitespace-nowrap">
-                        <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 fill-amber-300 shrink-0" />
-                        <span>AIシフト作成＆確定</span>
-                      </h2>
-                      <p className="text-xs text-indigo-200 truncate">必要枠に合わせて自動作成・公開</p>
+
+                    {/* ステータスバッジ（絶対に他と被らない独立配置） */}
+                    <div>
+                      {draftCount > 0 ? (
+                        <span className="bg-amber-400 text-slate-900 font-black text-xs px-2.5 py-1 rounded-full shadow-xs whitespace-nowrap inline-flex items-center">
+                          下書き {draftCount}件
+                        </span>
+                      ) : confirmedCount > 0 ? (
+                        <span className="bg-emerald-400 text-slate-900 font-black text-xs px-2.5 py-1 rounded-full shadow-xs whitespace-nowrap inline-flex items-center">
+                          確定済 {confirmedCount}件
+                        </span>
+                      ) : (
+                        <span className="bg-white/20 text-indigo-100 font-bold text-xs px-2.5 py-1 rounded-full whitespace-nowrap inline-flex items-center">
+                          未作成
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {/* ステータスバッジ（絶対に改行しない・枠からはみ出ない） */}
-                  <div className="shrink-0">
-                    {draftCount > 0 ? (
-                      <span className="bg-amber-400 text-slate-900 font-black text-xs px-2.5 py-1 rounded-full shadow-xs whitespace-nowrap inline-flex items-center">
-                        下書き {draftCount}件
-                      </span>
-                    ) : confirmedCount > 0 ? (
-                      <span className="bg-emerald-400 text-slate-900 font-black text-xs px-2.5 py-1 rounded-full shadow-xs whitespace-nowrap inline-flex items-center">
-                        確定済 {confirmedCount}件
-                      </span>
-                    ) : (
-                      <span className="bg-white/20 text-indigo-100 font-bold text-xs px-2.5 py-1 rounded-full whitespace-nowrap inline-flex items-center">
-                        未作成
-                      </span>
-                    )}
-                  </div>
+                  {/* 2段目：メインタイトル（横幅100%で被りゼロ） */}
+                  <h2 className="text-lg font-black flex items-center gap-1.5 text-white">
+                    <Zap className="w-5 h-5 text-amber-300 fill-amber-300 shrink-0" />
+                    <span>AIシフト作成 ＆ 確定</span>
+                  </h2>
+
+                  {/* 3段目：サブタイトル */}
+                  <p className="text-xs text-indigo-200 mt-1">必要枠に合わせて自動作成・公開</p>
                 </div>
 
                 <p className="text-xs text-indigo-100 mb-4 leading-relaxed">
@@ -907,7 +913,7 @@ const ShiftAdminDashboard: React.FC = () => {
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 text-amber-500 fill-amber-500" />
-                      <span className="text-sm">⚡ {periodInfo.unitLabel}のシフトをAI自動作成する（{periodInfo.durationLabel}）</span>
+                      <span className="text-sm font-black whitespace-nowrap">⚡ {periodInfo.unitLabel}のシフトをAI自動作成する</span>
                     </>
                   )}
                 </button>
