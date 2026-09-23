@@ -694,7 +694,23 @@ const ShiftAdminDashboard: React.FC = () => {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-slate-400">全員の希望が集まりました。AI自動作成へ進めます！</p>
+                    <div>
+                      <p className="text-xs text-slate-400">全員の希望が集まりました。AI自動作成へ進めます！</p>
+                      <div className="mt-2.5 p-2 bg-emerald-50/80 rounded-xl border border-emerald-200 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold text-emerald-800 flex items-center gap-1">
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                          📱 未提出者へのLINE一括催促機能（配備済）
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIsReminderModalOpen(true)}
+                          className="px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-[10px] font-black transition cursor-pointer shadow-2xs"
+                          title="未提出者が発生した際に送信されるLINE催促画面やメッセージのプレビューを確認できます"
+                        >
+                          催促画面を確認・テスト
+                        </button>
+                      </div>
+                    </div>
                   )}
 
                   {unsubmittedEmployees.length > 0 && (
@@ -1201,35 +1217,43 @@ const ShiftAdminDashboard: React.FC = () => {
                     <span className="text-[10px] text-slate-400">計 {unsubmittedWithLink.length}名</span>
                   </div>
 
-                  {unsubmittedWithLink.map(emp => (
-                    <div
-                      key={emp.id}
-                      className={`p-3 rounded-2xl border text-xs flex items-center justify-between gap-2 ${
-                        emp.isLineLinked 
-                          ? 'bg-emerald-50/50 border-emerald-200' 
-                          : 'bg-slate-50 border-slate-200 opacity-60'
-                      }`}
-                    >
-                      <div>
-                        <div className="font-black text-slate-800 flex items-center gap-1.5">
-                          <span>{emp.name || emp.email}</span>
-                          {emp.isLineLinked ? (
-                            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-300">
-                              🟢 送信対象
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded">
-                              ⚪ LINE未連携
-                            </span>
-                          )}
+                  {unsubmittedWithLink.length > 0 ? (
+                    unsubmittedWithLink.map(emp => (
+                      <div
+                        key={emp.id}
+                        className={`p-3 rounded-2xl border text-xs flex items-center justify-between gap-2 ${
+                          emp.isLineLinked 
+                            ? 'bg-emerald-50/50 border-emerald-200' 
+                            : 'bg-slate-50 border-slate-200 opacity-60'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-black text-slate-800 flex items-center gap-1.5">
+                            <span>{emp.name || emp.email}</span>
+                            {emp.isLineLinked ? (
+                              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-300">
+                                🟢 送信対象
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded">
+                                ⚪ LINE未連携
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            {emp.store_name ? `${emp.store_name}所属` : '店舗未設定'}
+                          </div>
                         </div>
-                        <div className="text-[11px] text-slate-500 mt-0.5">
-                          {emp.store_name ? `${emp.store_name}所属` : '店舗未設定'}
-                        </div>
+                        <span className="text-[11px] font-bold text-rose-600">未提出</span>
                       </div>
-                      <span className="text-[11px] font-bold text-rose-600">未提出</span>
+                    ))
+                  ) : (
+                    <div className="p-6 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                      <p className="text-xs font-bold text-slate-700">現在、未提出のスタッフはいません</p>
+                      <p className="text-[11px] text-slate-400 mt-1">（※未提出者が発生すると、ここに自動で対象者がリストアップされます）</p>
                     </div>
-                  ))}
+                  )}
                 </div>
 
                 {/* 右：スマホLINEトーク画面風プレビュー */}
