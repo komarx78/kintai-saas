@@ -78,6 +78,33 @@ export const ATTENDANCE_PRESETS: { [key: string]: { name: string; description: s
 // デフォルト設定（店舗・シフト標準）
 export const DEFAULT_ROUNDING_RULES: AttendanceRoundingRules = ATTENDANCE_PRESETS.store_shift.rules;
 
+// 🎨 自社専用カスタムプリセット定義
+export interface CustomAttendancePreset {
+  id: string;
+  name: string;
+  description?: string;
+  rules: AttendanceRoundingRules;
+  created_at: string;
+}
+
+export const getCustomPresetsFromStorage = (tenantId?: string | null): CustomAttendancePreset[] => {
+  if (!tenantId) return [];
+  try {
+    const raw = localStorage.getItem(`attendance_custom_presets_${tenantId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+};
+
+export const saveCustomPresetsToStorage = (tenantId: string, presets: CustomAttendancePreset[]) => {
+  try {
+    localStorage.setItem(`attendance_custom_presets_${tenantId}`, JSON.stringify(presets));
+  } catch {}
+};
+
 // ストレージからルールを取得
 export const getAttendanceRoundingRules = (tenantId?: string | null): AttendanceRoundingRules => {
   if (!tenantId) return DEFAULT_ROUNDING_RULES;

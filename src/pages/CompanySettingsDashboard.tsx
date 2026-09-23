@@ -65,10 +65,13 @@ import {
 } from '../lib/storeMaster';
 import {
   type AttendanceRoundingRules,
+  type CustomAttendancePreset,
   ATTENDANCE_PRESETS,
   DEFAULT_ROUNDING_RULES,
   getAttendanceRoundingRules,
   saveAttendanceRoundingRules,
+  getCustomPresetsFromStorage,
+  saveCustomPresetsToStorage,
   minutesToTime
 } from '../lib/attendanceRounding';
 
@@ -679,6 +682,10 @@ export default function CompanySettingsDashboard() {
   
   // ⚙️ 現場即応 打刻・時間丸め（マル目）State
   const [attendanceRules, setAttendanceRules] = useState<AttendanceRoundingRules>(DEFAULT_ROUNDING_RULES);
+  const [customPresets, setCustomPresets] = useState<CustomAttendancePreset[]>([]);
+  const [newPresetModalOpen, setNewPresetModalOpen] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [newPresetDesc, setNewPresetDesc] = useState('');
 
   // 4. カレンダー・休日State（複数カレンダーパターン完全対応）
   const [calendarPatterns, setCalendarPatterns] = useState<CompanyCalendarPattern[]>(DEFAULT_CALENDAR_PATTERNS);
@@ -1009,6 +1016,8 @@ export default function CompanySettingsDashboard() {
       // ⚙️ 打刻丸めルールの取得（DB / LocalStorage）
       const loadedRules = getAttendanceRoundingRules(tenantIdData);
       setAttendanceRules(loadedRules);
+      const loadedPresets = getCustomPresetsFromStorage(tenantIdData);
+      setCustomPresets(loadedPresets);
 
       // 自社ユーザー一覧（役職・所属長・組織図用）の一元取得（400エラー対策済み）
       const { data: uData } = await supabase
@@ -1591,7 +1600,8 @@ export default function CompanySettingsDashboard() {
         year: calendarSettings.year || 2026,
         annual_holidays_count: defaultPattern.annual_holidays_count || computedHolidaysSet.size,
         holiday_text_summary: defaultPattern.holiday_text_summary || holSummary,
-        attendance_rounding_rules: attendanceRules
+        attendance_rounding_rules: attendanceRules,
+        attendance_custom_presets: customPresets
       };
 
       // ローカルストレージに即時最優先保存（自社テナントIDで完全隔離）
@@ -1609,6 +1619,7 @@ export default function CompanySettingsDashboard() {
       });
       saveCalendarPatternsToStorage(tenantId, updatedCalendarPatterns);
       saveAttendanceRoundingRules(tenantId, attendanceRules);
+      saveCustomPresetsToStorage(tenantId, customPresets);
       saveWorkflowStepsToStorage(onboardingSteps);
       savePositionsToStorage(positions);
       saveDepartmentsToStorage(tenantId, departments);
@@ -1774,6 +1785,43 @@ export default function CompanySettingsDashboard() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // 🎨 自社打刻丸めカスタムプリセットの新規保存
+  const handleSaveNewPreset = () => {
+    if (!newPresetName.trim()) {
+      alert('プリセット名を入力してください');
+      return;
+    }
+    const newPreset: CustomAttendancePreset = {
+      id: `custom_${Date.now()}`,
+      name: newPresetName.trim(),
+      description: newPresetDesc.trim() || undefined,
+      rules: { ...attendanceRules },
+      created_at: new Date().toISOString()
+    };
+    const updated = [...customPresets, newPreset];
+    setCustomPresets(updated);
+    if (tenantId) {
+      saveCustomPresetsToStorage(tenantId, updated);
+    }
+    setNewPresetName('');
+    setNewPresetDesc('');
+    setNewPresetModalOpen(false);
+    showToast(`✨ 新規プリセット「${newPreset.name}」を保存しました`);
+  };
+
+  // 🗑️ 自社打刻丸めカスタムプリセットの削除
+  const handleDeleteCustomPreset = (presetId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const target = customPresets.find(p => p.id === presetId);
+    if (!window.confirm(`カスタムプリセット「${target?.name || ''}」を削除しますか？`)) return;
+    const updated = customPresets.filter(p => p.id !== presetId);
+    setCustomPresets(updated);
+    if (tenantId) {
+      saveCustomPresetsToStorage(tenantId, updated);
+    }
+    showToast('🗑️ カスタムプリセットを削除しました');
   };
 
   // 💳 ご利用プラン・決済設定の変更保存ハンドラ
@@ -3933,7 +3981,7 @@ export default function CompanySettingsDashboard() {
                   </p>
                 </div>
 
-                {/* ワンタッチ・おすすめプリセット */}
+                {/* ワンタッチ・おすすめプリセット ＆ 自社カスタムプリセット */}
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-1 rounded-lg">
                     ⚡ おすすめ一発適用:
@@ -3970,6 +4018,41 @@ export default function CompanySettingsDashboard() {
                     title={ATTENDANCE_PRESETS.exact_strict.description}
                   >
                     ⏱️ 厳密1分単位
+                  </button>
+
+                  {/* 自社登録のカスタムプリセット一覧 */}
+                  {customPresets.map(preset => (
+                    <div key={preset.id} className="inline-flex items-center rounded-lg border border-purple-300 bg-purple-50 overflow-hidden shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAttendanceRules(preset.rules);
+                          showToast(`✨ 自社プリセット「${preset.name}」を適用しました`);
+                        }}
+                        className="px-2.5 py-1 text-purple-900 hover:bg-purple-100 text-xs font-bold transition cursor-pointer"
+                        title={preset.description || preset.name}
+                      >
+                        🏷️ {preset.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteCustomPreset(preset.id, e)}
+                        className="px-1.5 py-1 text-purple-400 hover:text-red-600 hover:bg-red-50 border-l border-purple-200 text-xs font-bold transition cursor-pointer"
+                        title="このプリセットを削除"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* ＋ 新規プリセット保存ボタン */}
+                  <button
+                    type="button"
+                    onClick={() => setNewPresetModalOpen(true)}
+                    className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer flex items-center gap-1"
+                    title="現在の設定を新しいプリセットとして保存します"
+                  >
+                    <span>＋</span> 現在の設定を新規プリセット保存
                   </button>
                 </div>
               </div>
@@ -4160,6 +4243,95 @@ export default function CompanySettingsDashboard() {
                 </div>
 
               </div>
+
+              {/* 🎨 自社打刻丸め新規プリセット保存モーダル */}
+              {newPresetModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+                  <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-150 space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <span className="p-2 bg-purple-100 text-purple-700 rounded-xl">
+                          <Clock className="w-5 h-5" />
+                        </span>
+                        <div>
+                          <h3 className="text-base font-black text-slate-800">
+                            自社打刻丸めルールのプリセット保存
+                          </h3>
+                          <p className="text-xs text-slate-500">
+                            現在の設定内容に名前を付けて、ワンタッチで呼び出せるように登録します
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setNewPresetModalOpen(false)}
+                        className="text-slate-400 hover:text-slate-600 p-1 rounded-lg text-lg font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 text-xs">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">
+                          プリセット名 <span className="text-rose-500 font-bold">*必須</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={newPresetName}
+                          onChange={e => setNewPresetName(e.target.value)}
+                          placeholder="例: パート・アルバイト用（15分丸め）、夜勤・物流班"
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-bold text-slate-800 focus:bg-white focus:border-indigo-500 focus:outline-none"
+                          autoFocus
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">
+                          説明・用途（任意）
+                        </label>
+                        <input
+                          type="text"
+                          value={newPresetDesc}
+                          onChange={e => setNewPresetDesc(e.target.value)}
+                          placeholder="例: 始業前早出カット・出退勤15分丸め・退勤10分バッファ"
+                          className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-700 focus:bg-white focus:border-indigo-500 focus:outline-none"
+                        />
+                      </div>
+
+                      {/* 保存される現在ルールのプレビュー確認 */}
+                      <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-1.5 text-[11px]">
+                        <p className="font-black text-slate-700">📋 登録される設定内容（現在値）:</p>
+                        <ul className="grid grid-cols-2 gap-x-2 gap-y-1 text-slate-600 font-medium">
+                          <li>・始業前打刻: <strong className="text-slate-900">{attendanceRules.check_in_before_start === 'clip_to_start' ? '始業時刻に補正' : '補正なし(実時間)'}</strong></li>
+                          <li>・出勤丸め: <strong className="text-slate-900">{attendanceRules.check_in_rounding_minutes}分単位(切上)</strong></li>
+                          <li>・退勤丸め: <strong className="text-slate-900">{attendanceRules.check_out_rounding_minutes}分単位(切捨)</strong></li>
+                          <li>・定時退勤バッファ: <strong className="text-slate-900">{attendanceRules.overtime_buffer_minutes}分</strong></li>
+                          <li>・遅刻猶予: <strong className="text-slate-900">{attendanceRules.late_grace_minutes}分</strong></li>
+                          <li>・休憩控除: <strong className="text-slate-900">{attendanceRules.break_deduction_mode === 'statutory' ? '法定基準自動控除' : attendanceRules.break_deduction_mode === 'pattern_fixed' ? 'パターン固定' : '実打刻のみ'}</strong></li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setNewPresetModalOpen(false)}
+                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveNewPreset}
+                        className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>💾</span> この内容でプリセット保存
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {renderSaveFooter()}

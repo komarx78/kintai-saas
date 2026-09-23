@@ -23,6 +23,13 @@ import {
   formatPayrollScheduleToText, 
   parsePayrollScheduleFromText 
 } from '../lib/laborContractTemplate';
+import {
+  type AttendanceRoundingRules,
+  DEFAULT_ROUNDING_RULES,
+  getAttendanceRoundingRules,
+  calculateDailyAttendanceDetails,
+  timeToMinutes
+} from '../lib/attendanceRounding';
 
 interface PayslipManagementProps {
   tenantId: string | null;
@@ -94,6 +101,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     pension_insurance_rate: 0.0915,
     rounding_method: 'floor'
   });
+  const [roundingRules, setRoundingRules] = useState<AttendanceRoundingRules>(DEFAULT_ROUNDING_RULES);
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [isMonthCalculated, setIsMonthCalculated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -506,6 +514,10 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         }));
       }
 
+      // ⚙️ 現場即応 打刻丸めルールの取得（SSOT）
+      const loadedRules = getAttendanceRoundingRules(tenantId);
+      setRoundingRules(loadedRules);
+
       // 3. 従業員一覧取得
       const { data: uData } = await supabase
         .from('users')
@@ -806,42 +818,54 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           realWorkDays = empAtt.filter(r => r.check_in_time).length;
           empAtt.forEach(r => {
             if (r.check_in_time && r.check_out_time) {
-              const [inH, inM] = r.check_in_time.split(':').map(Number);
-              const [outH, outM] = r.check_out_time.split(':').map(Number);
-              let inTotal = inH * 60 + inM;
-              let outTotal = outH * 60 + outM;
-              if (outTotal < inTotal) outTotal += 24 * 60;
-
-              const total = Math.max(0, outTotal - inTotal);
-              const breakM = r.break_minutes ?? (total >= 480 ? 60 : (total >= 360 ? 45 : 0));
-              const work = Math.max(0, total - breakM);
-              realActualMins += work;
-
-              // 遅刻・早退判定（シフト予定時刻、または標準09:00〜18:00と照合）
               const dayShift = shiftsList.find(s => s.user_id === u.id && s.date === r.date);
               const schedStart = dayShift?.start_time || '09:00';
               const schedEnd = dayShift?.end_time || '18:00';
-              const [sInH, sInM] = schedStart.split(':').map(Number);
-              const [sOutH, sOutM] = schedEnd.split(':').map(Number);
-              const sInTotal = sInH * 60 + sInM;
-              const sOutTotal = sOutH * 60 + sOutM;
 
-              if (inTotal > sInTotal) {
-                realLateEarlyMins += (inTotal - sInTotal);
-              }
-              if (outTotal < sOutTotal) {
-                realLateEarlyMins += (sOutTotal - outTotal);
-              }
+              // 現場即応 打刻丸めエンジンによる高精度集計（出勤簿と完全一致）
+              const details = calculateDailyAttendanceDetails(
+                r.check_in_time,
+                r.check_out_time,
+                r.break_minutes,
+                schedStart,
+                schedEnd,
+                60,
+                roundingRules
+              );
+
+              realActualMins += details.actualWorkMinutes;
 
               if (r.overtime_minutes && r.overtime_minutes > 0) {
                 realOvertimeMins += r.overtime_minutes;
               } else {
-                realOvertimeMins += Math.max(0, work - 480);
+                realOvertimeMins += details.overtimeMinutes;
               }
 
-              for (let m = inTotal; m < outTotal; m++) {
-                const h = Math.floor(m / 60) % 24;
-                if (h >= 22 || h < 5) realMidnightMins++;
+              // 遅刻・早退集計（猶予バッファ考慮）
+              if (details.isLate) {
+                const inM = timeToMinutes(r.check_in_time);
+                const sM = timeToMinutes(schedStart);
+                if (inM !== null && sM !== null && inM > sM) {
+                  realLateEarlyMins += (inM - sM);
+                }
+              }
+              if (details.isEarlyLeave) {
+                const outM = timeToMinutes(r.check_out_time);
+                const eM = timeToMinutes(schedEnd);
+                if (outM !== null && eM !== null && outM < eM) {
+                  realLateEarlyMins += (eM - outM);
+                }
+              }
+
+              // 深夜時間（22:00〜翌5:00）: 丸め補正後の出退勤時刻を基準に集計
+              if (details.roundedCheckIn && details.roundedCheckOut) {
+                const rIn = timeToMinutes(details.roundedCheckIn) || 0;
+                let rOut = timeToMinutes(details.roundedCheckOut) || 0;
+                if (rOut < rIn) rOut += 24 * 60;
+                for (let m = rIn; m < rOut; m++) {
+                  const h = Math.floor(m / 60) % 24;
+                  if (h >= 22 || h < 5) realMidnightMins++;
+                }
               }
             }
           });
@@ -985,44 +1009,54 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           workDays = empRecords.filter(r => r.check_in_time).length;
           empRecords.forEach(r => {
             if (r.check_in_time && r.check_out_time) {
-              const [inH, inM] = r.check_in_time.split(':').map(Number);
-              const [outH, outM] = r.check_out_time.split(':').map(Number);
-              let inTotal = inH * 60 + inM;
-              let outTotal = outH * 60 + outM;
-              if (outTotal < inTotal) outTotal += 24 * 60;
-
-              const total = Math.max(0, outTotal - inTotal);
-              const breakM = r.break_minutes ?? (total >= 480 ? 60 : (total >= 360 ? 45 : 0));
-              const work = Math.max(0, total - breakM);
-              actualMins += work;
-              
-              // 遅刻・早退判定
               const dayShift = empShifts.find(s => s.date === r.date);
               const schedStart = dayShift?.start_time || '09:00';
               const schedEnd = dayShift?.end_time || '18:00';
-              const [sInH, sInM] = schedStart.split(':').map(Number);
-              const [sOutH, sOutM] = schedEnd.split(':').map(Number);
-              const sInTotal = sInH * 60 + sInM;
-              const sOutTotal = sOutH * 60 + sOutM;
 
-              if (inTotal > sInTotal) {
-                lateEarlyMins += (inTotal - sInTotal);
-              }
-              if (outTotal < sOutTotal) {
-                lateEarlyMins += (sOutTotal - outTotal);
-              }
+              // 現場即応 打刻丸めエンジンによる高精度集計（出勤簿と完全一致）
+              const details = calculateDailyAttendanceDetails(
+                r.check_in_time,
+                r.check_out_time,
+                r.break_minutes,
+                schedStart,
+                schedEnd,
+                60,
+                roundingRules
+              );
 
-              // 残業時間の計算（明示残業分または8h超過分）
+              actualMins += details.actualWorkMinutes;
+              
               if (r.overtime_minutes && r.overtime_minutes > 0) {
                 overtimeMins += r.overtime_minutes;
               } else {
-                overtimeMins += Math.max(0, work - 480);
+                overtimeMins += details.overtimeMinutes;
               }
 
-              // 深夜時間（22:00〜翌5:00）
-              for (let m = inTotal; m < outTotal; m++) {
-                const h = Math.floor(m / 60) % 24;
-                if (h >= 22 || h < 5) midnightMins++;
+              // 遅刻・早退集計（猶予バッファ考慮）
+              if (details.isLate) {
+                const inM = timeToMinutes(r.check_in_time);
+                const sM = timeToMinutes(schedStart);
+                if (inM !== null && sM !== null && inM > sM) {
+                  lateEarlyMins += (inM - sM);
+                }
+              }
+              if (details.isEarlyLeave) {
+                const outM = timeToMinutes(r.check_out_time);
+                const eM = timeToMinutes(schedEnd);
+                if (outM !== null && eM !== null && outM < eM) {
+                  lateEarlyMins += (eM - outM);
+                }
+              }
+
+              // 深夜時間（22:00〜翌5:00）: 丸め補正後の出退勤時刻を基準に集計
+              if (details.roundedCheckIn && details.roundedCheckOut) {
+                const rIn = timeToMinutes(details.roundedCheckIn) || 0;
+                let rOut = timeToMinutes(details.roundedCheckOut) || 0;
+                if (rOut < rIn) rOut += 24 * 60;
+                for (let m = rIn; m < rOut; m++) {
+                  const h = Math.floor(m / 60) % 24;
+                  if (h >= 22 || h < 5) midnightMins++;
+                }
               }
             }
           });
@@ -1295,42 +1329,54 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         calcWorkDays = userAtt.filter((r: any) => r.check_in_time).length;
         userAtt.forEach((r: any) => {
           if (r.check_in_time && r.check_out_time) {
-            const [inH, inM] = r.check_in_time.split(':').map(Number);
-            const [outH, outM] = r.check_out_time.split(':').map(Number);
-            let inTotal = inH * 60 + inM;
-            let outTotal = outH * 60 + outM;
-            if (outTotal < inTotal) outTotal += 24 * 60;
-
-            const total = Math.max(0, outTotal - inTotal);
-            const breakM = r.break_minutes ?? (total >= 480 ? 60 : (total >= 360 ? 45 : 0));
-            const work = Math.max(0, total - breakM);
-            calcActualMins += work;
-
-            // 遅刻・早退判定（シフト予定時刻または会社標準09:00〜18:00と照合）
             const dayShift = (userShiftData || []).find((s: any) => s.date === r.date);
             const schedStart = dayShift?.start_time || '09:00';
             const schedEnd = dayShift?.end_time || '18:00';
-            const [sInH, sInM] = schedStart.split(':').map(Number);
-            const [sOutH, sOutM] = schedEnd.split(':').map(Number);
-            const sInTotal = sInH * 60 + sInM;
-            const sOutTotal = sOutH * 60 + sOutM;
 
-            if (inTotal > sInTotal) {
-              calcLateEarlyMins += (inTotal - sInTotal);
-            }
-            if (outTotal < sOutTotal) {
-              calcLateEarlyMins += (sOutTotal - outTotal);
-            }
+            // 現場即応 打刻丸めエンジンによる高精度集計（出勤簿と完全一致）
+            const details = calculateDailyAttendanceDetails(
+              r.check_in_time,
+              r.check_out_time,
+              r.break_minutes,
+              schedStart,
+              schedEnd,
+              60,
+              roundingRules
+            );
+
+            calcActualMins += details.actualWorkMinutes;
 
             if (r.overtime_minutes && r.overtime_minutes > 0) {
               calcOvertimeMins += r.overtime_minutes;
             } else {
-              calcOvertimeMins += Math.max(0, work - 480);
+              calcOvertimeMins += details.overtimeMinutes;
             }
 
-            for (let m = inTotal; m < outTotal; m++) {
-              const h = Math.floor(m / 60) % 24;
-              if (h >= 22 || h < 5) calcMidnightMins++;
+            // 遅刻・早退集計（猶予バッファ考慮）
+            if (details.isLate) {
+              const inM = timeToMinutes(r.check_in_time);
+              const sM = timeToMinutes(schedStart);
+              if (inM !== null && sM !== null && inM > sM) {
+                calcLateEarlyMins += (inM - sM);
+              }
+            }
+            if (details.isEarlyLeave) {
+              const outM = timeToMinutes(r.check_out_time);
+              const eM = timeToMinutes(schedEnd);
+              if (outM !== null && eM !== null && outM < eM) {
+                calcLateEarlyMins += (eM - outM);
+              }
+            }
+
+            // 深夜時間（22:00〜翌5:00）: 丸め補正後の出退勤時刻を基準に集計
+            if (details.roundedCheckIn && details.roundedCheckOut) {
+              const rIn = timeToMinutes(details.roundedCheckIn) || 0;
+              let rOut = timeToMinutes(details.roundedCheckOut) || 0;
+              if (rOut < rIn) rOut += 24 * 60;
+              for (let m = rIn; m < rOut; m++) {
+                const h = Math.floor(m / 60) % 24;
+                if (h >= 22 || h < 5) calcMidnightMins++;
+              }
             }
           }
         });
@@ -4001,6 +4047,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 {/* 勤怠サマリーカード（打刻レコードから即時リアルタイム集計） */}
                 {(() => {
                   const mRecords = attendanceSheetModal.records || [];
+                  const mShifts = attendanceSheetModal.shifts || [];
                   let mWorkDays = 0;
                   let mActualMins = 0;
                   let mOvertimeMins = 0;
@@ -4008,16 +4055,26 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                   mRecords.forEach(r => {
                     if (r.check_in_time) mWorkDays++;
                     if (r.check_in_time && r.check_out_time) {
-                      const [inH, inM] = r.check_in_time.split(':').map(Number);
-                      const [outH, outM] = r.check_out_time.split(':').map(Number);
-                      let inTotal = inH * 60 + inM;
-                      let outTotal = outH * 60 + outM;
-                      if (outTotal < inTotal) outTotal += 24 * 60;
-                      const totalM = Math.max(0, outTotal - inTotal);
-                      const breakM = r.break_minutes ?? (totalM >= 480 ? 60 : (totalM >= 360 ? 45 : 0));
-                      const workM = Math.max(0, totalM - breakM);
-                      mActualMins += workM;
-                      if (workM > 480) mOvertimeMins += (workM - 480);
+                      const dayShift = mShifts.find((s: any) => s.date === r.date);
+                      const schedStart = dayShift?.start_time || '09:00';
+                      const schedEnd = dayShift?.end_time || '18:00';
+
+                      const details = calculateDailyAttendanceDetails(
+                        r.check_in_time,
+                        r.check_out_time,
+                        r.break_minutes,
+                        schedStart,
+                        schedEnd,
+                        60,
+                        roundingRules
+                      );
+
+                      mActualMins += details.actualWorkMinutes;
+                      if (r.overtime_minutes && r.overtime_minutes > 0) {
+                        mOvertimeMins += r.overtime_minutes;
+                      } else {
+                        mOvertimeMins += details.overtimeMinutes;
+                      }
                     }
                   });
 
