@@ -1,3 +1,6 @@
+/**
+ * 🎨【周瑜・色彩革命版】全8ボタンの規格統一（h-[46px]）＆重複なしモダンカラーパレット配備
+ */
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale, Sparkles, ArrowRightLeft, Calendar, Briefcase, Printer, Building2, MapPin, Store, MessageSquare, Send, Smartphone, HelpCircle } from 'lucide-react';
