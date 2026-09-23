@@ -688,6 +688,18 @@ const ShiftCalendarView: React.FC = () => {
       const assignedDates = new Set(userAssignedShifts.map(s => s.target_date));
       const assignedDays = assignedDates.size;
 
+      // 仮確定（下書き）と本確定の内訳
+      const draftShifts = userAssignedShifts.filter(s => s.status === 'draft');
+      const draftDates = new Set(draftShifts.map(s => s.target_date));
+      const draftDays = draftDates.size;
+
+      const confirmedShifts = userAssignedShifts.filter(s => s.status === 'confirmed');
+      const confirmedDates = new Set(confirmedShifts.map(s => s.target_date));
+      const confirmedDays = confirmedDates.size;
+
+      // 省かれた希望日数（希望を出したが枠不足等で採用されなかった日数）
+      const omittedDays = Math.max(0, requestedDays - assignedDays);
+
       // 合計勤務時間
       let totalMinutes = 0;
       userAssignedShifts.forEach(s => {
@@ -728,6 +740,9 @@ const ShiftCalendarView: React.FC = () => {
         roleName,
         requestedDays,
         assignedDays,
+        draftDays,
+        confirmedDays,
+        omittedDays,
         totalHours,
         status
       };
@@ -1717,7 +1732,7 @@ const ShiftCalendarView: React.FC = () => {
                         <th className="py-2.5 px-4">スタッフ名</th>
                         <th className="py-2.5 px-3">主な役割</th>
                         <th className="py-2.5 px-3 text-center">希望日数</th>
-                        <th className="py-2.5 px-3 text-center">確定・下書き</th>
+                        <th className="py-2.5 px-3 text-center">仮確定・確定</th>
                         <th className="py-2.5 px-3 text-right">週間労働時間</th>
                         <th className="py-2.5 px-4 text-center">公平性判定</th>
                       </tr>
@@ -1756,23 +1771,30 @@ const ShiftCalendarView: React.FC = () => {
                             {st.requestedDays > 0 ? `${st.requestedDays}日` : <span className="text-slate-300">-</span>}
                           </td>
                           <td className="py-2.5 px-3 text-center">
-                            <span className={`text-xs font-black px-2 py-0.5 rounded ${
-                              st.status === 'critical_overwork'
-                                ? 'bg-rose-600 text-white animate-pulse'
-                                : st.status === 'high_warning'
-                                  ? 'bg-amber-600 text-white'
-                                  : st.status === 'unassigned' 
-                                    ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                                    : st.status === 'shortage'
-                                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                      : st.assignedDays >= 5
-                                        ? 'bg-amber-100 text-amber-800'
-                                        : st.assignedDays > 0
-                                          ? 'bg-indigo-50 text-indigo-700'
-                                          : 'text-slate-300'
-                            }`}>
-                              {st.assignedDays}日
-                            </span>
+                            <div className="flex flex-col items-center">
+                              <span className={`text-xs font-black px-2 py-0.5 rounded ${
+                                st.status === 'critical_overwork'
+                                  ? 'bg-rose-600 text-white animate-pulse'
+                                  : st.status === 'high_warning'
+                                    ? 'bg-amber-600 text-white'
+                                    : st.status === 'unassigned' 
+                                      ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                      : st.status === 'shortage'
+                                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                        : st.assignedDays >= 5
+                                          ? 'bg-amber-100 text-amber-800'
+                                          : st.assignedDays > 0
+                                            ? 'bg-indigo-50 text-indigo-700'
+                                            : 'text-slate-300'
+                              }`}>
+                                {st.assignedDays === 0 ? '0日' : st.draftDays > 0 ? `仮確定 ${st.assignedDays}日` : `確定 ${st.assignedDays}日`}
+                              </span>
+                              {st.omittedDays > 0 && (
+                                <span className="text-[9px] text-amber-700 font-bold mt-0.5">
+                                  ({st.omittedDays}日省き)
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-700">
                             {st.totalHours > 0 ? `${st.totalHours}h` : <span className="text-slate-300">0.0h</span>}
@@ -1974,23 +1996,57 @@ const ShiftCalendarView: React.FC = () => {
                                           </div>
                                           {userStats && (
                                             <div 
-                                              className={`shrink-0 flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-xs ${
-                                                userStats.assignedDays >= 7
-                                                  ? 'bg-rose-600 text-white animate-pulse'
-                                                  : userStats.assignedDays === 6
-                                                    ? 'bg-amber-600 text-white'
-                                                    : userStats.assignedDays === 0 
-                                                      ? 'bg-rose-100 text-rose-700 border border-rose-200 animate-pulse'
-                                                      : userStats.assignedDays === 5
-                                                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                                        : 'bg-slate-100 text-slate-600 border border-slate-200'
-                                              }`}
-                                              title={`今週: ${userStats.assignedDays}日出勤 / 合計 ${userStats.totalHours}時間 ${userStats.assignedDays >= 7 ? '（🚨 労働基準法違反・週7日全勤・休日ゼロ）' : userStats.assignedDays === 6 ? '（⚠️ 休日1日のみ・要調整）' : ''}`}
+                                              className="flex flex-col items-end shrink-0 cursor-default select-none pl-1"
+                                              title={`【${userObj?.name || 'スタッフ'} の稼働状況サマリ】\n・仮確定（下書き）: ${userStats.draftDays}日\n・確定済み: ${userStats.confirmedDays}日\n・実働合計: ${userStats.assignedDays}日（${userStats.totalHours}時間）\n・本人希望日数: ${userStats.requestedDays}日\n${userStats.omittedDays > 0 ? `・省かれた希望: ${userStats.omittedDays}日（必要人数枠オーバーのため不採用）` : '・希望シフト: すべて採用済み'}\n${userStats.assignedDays >= 7 ? '🚨【労働基準法違反】週7日全勤・法定休日ゼロ！' : userStats.assignedDays === 6 ? '⚠️【休日不足】週6日出勤・休日1日のみ' : ''}`}
                                             >
-                                              <span className={userStats.assignedDays >= 7 ? 'font-black' : userStats.assignedDays === 0 ? 'text-rose-600 font-black' : 'text-indigo-600 font-black'}>
-                                                {userStats.assignedDays >= 7 ? '🚨 7日(無休)' : userStats.assignedDays === 6 ? '⚠️ 6日' : `${userStats.assignedDays}日`}
-                                              </span>
-                                              <span className={`text-[9px] ${userStats.assignedDays >= 6 ? 'text-white/80' : 'text-slate-400'}`}>({userStats.totalHours}h)</span>
+                                              {/* メインインジケーター：仮確定 / 確定の日数と時間 */}
+                                              <div 
+                                                className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-2xs ${
+                                                  userStats.assignedDays >= 7
+                                                    ? 'bg-rose-600 text-white animate-pulse'
+                                                    : userStats.assignedDays === 6
+                                                      ? 'bg-amber-600 text-white'
+                                                      : userStats.assignedDays === 0 
+                                                        ? 'bg-rose-100 text-rose-700 border border-rose-200 animate-pulse'
+                                                        : userStats.confirmedDays > 0 && userStats.draftDays === 0
+                                                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                          : userStats.assignedDays === 5
+                                                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                                            : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                                }`}
+                                              >
+                                                <span>
+                                                  {userStats.assignedDays >= 7
+                                                    ? '🚨 7日(無休)'
+                                                    : userStats.assignedDays === 6
+                                                      ? '⚠️ 6日'
+                                                      : userStats.assignedDays === 0
+                                                        ? '未配置 0日'
+                                                        : userStats.confirmedDays > 0 && userStats.draftDays === 0
+                                                          ? `確定 ${userStats.assignedDays}日`
+                                                          : `仮確定 ${userStats.assignedDays}日`}
+                                                </span>
+                                                <span className={`text-[9px] ${userStats.assignedDays >= 6 ? 'text-white/90' : 'text-slate-400 font-normal'}`}>
+                                                  ({userStats.totalHours}h)
+                                                </span>
+                                              </div>
+
+                                              {/* サブインジケーター：希望と省きの内訳 */}
+                                              <div className="flex items-center mt-0.5 text-[9px] leading-tight font-medium">
+                                                {userStats.requestedDays > 0 ? (
+                                                  userStats.omittedDays > 0 ? (
+                                                    <span className="text-amber-700 font-bold bg-amber-50 px-1 py-0.2 rounded border border-amber-200" title={`希望${userStats.requestedDays}日中、${userStats.omittedDays}日が枠不足のため省かれています`}>
+                                                      希望{userStats.requestedDays}日中 (-{userStats.omittedDays}日)
+                                                    </span>
+                                                  ) : (
+                                                    <span className="text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200/60">
+                                                      希望{userStats.requestedDays}日 全採用
+                                                    </span>
+                                                  )
+                                                ) : (
+                                                  <span className="text-slate-400">希望なし</span>
+                                                )}
+                                              </div>
                                             </div>
                                           )}
                                         </div>
