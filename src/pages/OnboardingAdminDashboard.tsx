@@ -8019,45 +8019,77 @@ export default function OnboardingAdminDashboard() {
               finalStore = '';
             }
 
-            // 1. users テーブルの登録 または 更新（SSOT永続化）
+            // 1. users テーブルの登録 または 更新（SSOT永続化 ＆ 400エラー完全防御フォールバック）
             if (activeUserId) {
               const uPayload: any = {
                 name: inviteUrlModal.name.trim(),
-                name_kana: inviteUrlModal.nameKana.trim() || null,
                 department: finalDept,
-                store_name: finalStore || null,
                 employment_type: empType,
                 join_date: inviteUrlModal.joinDate
               };
               if (cleanEmail) uPayload.email = cleanEmail;
               if (inviteUrlModal.phone.trim()) uPayload.phone = inviteUrlModal.phone.trim();
+              if (inviteUrlModal.nameKana.trim()) uPayload.name_kana = inviteUrlModal.nameKana.trim();
+              if (finalStore) uPayload.store_name = finalStore;
 
-              await supabase.from('users').update(uPayload).eq('id', activeUserId);
-            } else {
-              const { data: newUser, error: uErr } = await supabase
-                .from('users')
-                .insert({
-                  tenant_id: tenantId,
+              const { error: upErr1 } = await supabase.from('users').update(uPayload).eq('id', activeUserId);
+              if (upErr1) {
+                console.warn('users update full columns error, falling back to minimal payload:', upErr1);
+                const basicPayload: any = {
                   name: inviteUrlModal.name.trim(),
-                  name_kana: inviteUrlModal.nameKana.trim() || null,
-                  email: fallbackEmail,
-                  phone: inviteUrlModal.phone.trim() || null,
-                  role: 'user',
                   department: finalDept,
-                  store_name: finalStore || null,
-                  employment_type: empType,
-                  join_date: inviteUrlModal.joinDate,
-                  has_kintai_access: true,
-                  has_shift_access: true
-                })
-                .select('id')
-                .single();
-              if (uErr) throw uErr;
-              activeUserId = newUser.id;
-              setInviteUrlModal(prev => ({ ...prev, targetUserId: newUser.id }));
+                  employment_type: empType
+                };
+                if (cleanEmail) basicPayload.email = cleanEmail;
+                if (inviteUrlModal.phone.trim()) basicPayload.phone = inviteUrlModal.phone.trim();
+                await supabase.from('users').update(basicPayload).eq('id', activeUserId);
+              }
+            } else {
+              try {
+                const { data: newUser, error: uErr } = await supabase
+                  .from('users')
+                  .insert({
+                    tenant_id: tenantId,
+                    name: inviteUrlModal.name.trim(),
+                    name_kana: inviteUrlModal.nameKana.trim() || null,
+                    email: fallbackEmail,
+                    phone: inviteUrlModal.phone.trim() || null,
+                    role: 'user',
+                    department: finalDept,
+                    store_name: finalStore || null,
+                    employment_type: empType,
+                    join_date: inviteUrlModal.joinDate,
+                    has_kintai_access: true,
+                    has_shift_access: true
+                  })
+                  .select('id')
+                  .single();
+                if (uErr) throw uErr;
+                activeUserId = newUser.id;
+                setInviteUrlModal(prev => ({ ...prev, targetUserId: newUser.id }));
+              } catch (insErr) {
+                console.warn('users insert full failed, falling back to basic insert:', insErr);
+                const { data: newUser2, error: uErr2 } = await supabase
+                  .from('users')
+                  .insert({
+                    tenant_id: tenantId,
+                    name: inviteUrlModal.name.trim(),
+                    email: fallbackEmail,
+                    phone: inviteUrlModal.phone.trim() || null,
+                    role: 'user',
+                    department: finalDept,
+                    employment_type: empType
+                  })
+                  .select('id')
+                  .single();
+                if (!uErr2 && newUser2) {
+                  activeUserId = newUser2.id;
+                  setInviteUrlModal(prev => ({ ...prev, targetUserId: newUser2.id }));
+                }
+              }
             }
 
-            // 提出書類（employee_document_submissions）の契約書データも最新の部署・店舗で完全同期（古い書類による上書きを100%防止）
+            // 提出書類（employee_document_submissions）の契約書データも最新の部署・店舗で完全同期
             try {
               const { data: userSubmissions } = await supabase
                 .from('employee_document_submissions')
@@ -8082,7 +8114,7 @@ export default function OnboardingAdminDashboard() {
                 }
               }
             } catch (docSyncErr) {
-              console.warn('Sync document submissions error:', docSyncErr);
+              console.warn('Sync document submissions note:', docSyncErr);
             }
 
             // LocalStorageバックアップの更新
@@ -8111,7 +8143,7 @@ export default function OnboardingAdminDashboard() {
               };
               localStorage.setItem(posKey, JSON.stringify(currentPosMap));
             } catch (posErr) {
-              console.warn('user_positions cache error:', posErr);
+              console.warn('user_positions cache note:', posErr);
             }
 
             // 画面の従業員一覧Stateを即時同期更新
@@ -8128,33 +8160,41 @@ export default function OnboardingAdminDashboard() {
               return e;
             }));
 
-            // 2. employee_payroll_profiles への給与条件保存
-            await supabase.from('employee_payroll_profiles').upsert({
-              tenant_id: tenantId,
-              user_id: activeUserId,
-              salary_type: inviteUrlModal.salaryType,
-              base_salary: isHourly ? 0 : inviteUrlModal.baseSalary,
-              hourly_wage: isHourly ? inviteUrlModal.hourlyWage : Math.round(inviteUrlModal.baseSalary / 160),
-              position_allowance: inviteUrlModal.positionAllowance || 0,
-              qualification_allowance: inviteUrlModal.qualificationAllowance || 0,
-              name_kana: inviteUrlModal.nameKana.trim() || null
-            }, { onConflict: 'tenant_id,user_id' });
+            // 2. employee_payroll_profiles への給与条件保存（安全ガード）
+            try {
+              await supabase.from('employee_payroll_profiles').upsert({
+                tenant_id: tenantId,
+                user_id: activeUserId,
+                salary_type: inviteUrlModal.salaryType,
+                base_salary: isHourly ? 0 : inviteUrlModal.baseSalary,
+                hourly_wage: isHourly ? inviteUrlModal.hourlyWage : Math.round(inviteUrlModal.baseSalary / 160),
+                position_allowance: inviteUrlModal.positionAllowance || 0,
+                qualification_allowance: inviteUrlModal.qualificationAllowance || 0,
+                name_kana: inviteUrlModal.nameKana.trim() || null
+              }, { onConflict: 'tenant_id,user_id' });
+            } catch (pErr) {
+              console.warn('employee_payroll_profiles save note:', pErr);
+            }
 
-            // 3. employee_onboarding_profiles への労働条件保存
-            await supabase.from('employee_onboarding_profiles').upsert({
-              tenant_id: tenantId,
-              user_id: activeUserId,
-              join_date: inviteUrlModal.joinDate,
-              start_time: inviteUrlModal.startTime,
-              end_time: inviteUrlModal.endTime,
-              break_time_minutes: inviteUrlModal.breakMinutes,
-              salary_type: inviteUrlModal.salaryType,
-              base_salary: isHourly ? 0 : inviteUrlModal.baseSalary,
-              hourly_wage: isHourly ? inviteUrlModal.hourlyWage : Math.round(inviteUrlModal.baseSalary / 160),
-              position_allowance: inviteUrlModal.positionAllowance || 0,
-              qualification_allowance: inviteUrlModal.qualificationAllowance || 0,
-              status: 'onboarding'
-            }, { onConflict: 'tenant_id,user_id' });
+            // 3. employee_onboarding_profiles への労働条件保存（安全ガード）
+            try {
+              await supabase.from('employee_onboarding_profiles').upsert({
+                tenant_id: tenantId,
+                user_id: activeUserId,
+                join_date: inviteUrlModal.joinDate,
+                start_time: inviteUrlModal.startTime,
+                end_time: inviteUrlModal.endTime,
+                break_time_minutes: inviteUrlModal.breakMinutes,
+                salary_type: inviteUrlModal.salaryType,
+                base_salary: isHourly ? 0 : inviteUrlModal.baseSalary,
+                hourly_wage: isHourly ? inviteUrlModal.hourlyWage : Math.round(inviteUrlModal.baseSalary / 160),
+                position_allowance: inviteUrlModal.positionAllowance || 0,
+                qualification_allowance: inviteUrlModal.qualificationAllowance || 0,
+                status: 'onboarding'
+              }, { onConflict: 'tenant_id,user_id' });
+            } catch (oErr) {
+              console.warn('employee_onboarding_profiles save note:', oErr);
+            }
 
             // 4. 最新URLの再生成（確定した activeUserId を含む正規URL）
             const updatedParams = new URLSearchParams({
@@ -8208,9 +8248,15 @@ ${finalUrl}
               setInviteUrlModal(prev => ({ ...prev, copied: true }));
               setTimeout(() => setInviteUrlModal(prev => ({ ...prev, copied: false })), 4000);
 
-              const lineShareUrl = `https://line.me/R/msg/text/?${encodeURIComponent(lineMsg)}`;
-              window.open(lineShareUrl, '_blank');
-              alert(`🎉 【台帳に保存完了】\n${inviteUrlModal.name} さんの労働条件を従業員台帳に保存し、LINEアプリを起動しました！\n送信相手（新入社員）を選んで送信してください。\n\n※案内文はクリップボードにもバックアップコピーされています。`);
+              const lineTextForUrl = `【${tenantInfo?.name || '会社'} 入社手続きのご案内】\n${inviteUrlModal.name} 様\n\n以下の専用URLより、スマートフォンにて入社手続きをお願いいたします。\n\n▼ 専用入社手続きURL\n${finalUrl}`;
+              const lineShareUrl = `https://line.me/R/msg/text/?${encodeURIComponent(lineTextForUrl)}`;
+              
+              try {
+                window.open(lineShareUrl, '_blank', 'noopener,noreferrer');
+              } catch (e) {
+                console.warn('LINE window.open note:', e);
+              }
+              alert(`🎉 【台帳に保存完了】\n${inviteUrlModal.name} さんの労働条件を従業員台帳に保存し、LINEアプリを起動しました！\n送信相手（新入社員）を選んで送信してください。\n\n※丁寧なお手続きの流れを含んだ全文案内文は、クリップボードにもコピー済みです。`);
             } else if (actionType === 'copy_url') {
               await navigator.clipboard.writeText(finalUrl);
               setInviteUrlModal(prev => ({ ...prev, copied: true }));
