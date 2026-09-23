@@ -5,6 +5,12 @@ import {
   FileText, ArrowLeft, Edit3, X, CheckCircle, AlertCircle,
   Lock, Unlock, CheckCheck, MapPin, ExternalLink
 } from 'lucide-react';
+import {
+  type AttendanceRoundingRules,
+  DEFAULT_ROUNDING_RULES,
+  getAttendanceRoundingRules,
+  calculateDailyAttendanceDetails
+} from '../lib/attendanceRounding';
 
 interface MonthlyAttendanceManagementProps {
   tenantId: string | null;
@@ -18,6 +24,10 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isBulkApproving, setIsBulkApproving] = useState(false);
+  
+  // ⚙️ 打刻丸めルール ＆ 就業パターンState
+  const [roundingRules, setRoundingRules] = useState<AttendanceRoundingRules>(DEFAULT_ROUNDING_RULES);
+  const [workPatterns, setWorkPatterns] = useState<any[]>([]);
   
   // 🔒 月次勤怠締め確定State
   const [closingInfo, setClosingInfo] = useState<{
@@ -112,6 +122,22 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           .lte('start_date', endDate);
 
         setLeaveRequests(reqData || []);
+
+        // 4. 就業時間パターンマスタ取得
+        try {
+          const { data: patData } = await supabase
+            .from('work_schedule_patterns')
+            .select('*')
+            .eq('tenant_id', tenantId)
+            .order('display_order', { ascending: true });
+          setWorkPatterns(patData || []);
+        } catch (patErr) {
+          console.warn('work_schedule_patterns fetch warning:', patErr);
+        }
+
+        // 5. 現場即応 打刻丸めルールの取得
+        const rules = getAttendanceRoundingRules(tenantId);
+        setRoundingRules(rules);
       } else {
         setAttendanceRecords([]);
         setLeaveRequests([]);
@@ -466,42 +492,45 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     setCurrentMonth(new Date());
   };
 
-  // 1人あたりの集計計算ヘルパー
+  // 従業員ごとの就業時間パターン特定ヘルパー
+  const getUserWorkPattern = (user: any) => {
+    if (!user || workPatterns.length === 0) return null;
+    const deptMatch = workPatterns.find(p => p.target_department && p.target_department === user.department);
+    if (deptMatch) return deptMatch;
+    const globalPattern = workPatterns.find(p => !p.target_department);
+    if (globalPattern) return globalPattern;
+    return workPatterns[0] || null;
+  };
+
+  // 1人あたりの集計計算ヘルパー（現場即応 打刻丸めエンジン連動）
   const calculateUserMonthlySummary = (user: any) => {
     const userRecords = attendanceRecords.filter(r => r.user_id === user.id);
     const userLeaves = leaveRequests.filter(r => r.user_id === user.id);
+    const userPattern = getUserWorkPattern(user);
 
     let totalDays = 0;
     let totalActualMins = 0;
     let totalOvertimeMins = 0;
     let missedPunchCount = 0;
+    let lateCount = 0;
 
     userRecords.forEach(r => {
       if (r.check_in_time) {
         totalDays += 1;
         if (r.check_out_time) {
-          const [inH, inM] = r.check_in_time.split(':').map(Number);
-          const [outH, outM] = r.check_out_time.split(':').map(Number);
-          const inTotal = inH * 60 + inM;
-          const outTotal = outH * 60 + outM;
+          const details = calculateDailyAttendanceDetails(
+            r.check_in_time,
+            r.check_out_time,
+            r.break_minutes,
+            userPattern?.start_time || '09:00',
+            userPattern?.end_time || '18:00',
+            userPattern?.break_minutes || 60,
+            roundingRules
+          );
 
-          if (outTotal > inTotal) {
-            const rawDiff = outTotal - inTotal;
-            let breakMins = 0;
-            if (r.break_minutes !== null && r.break_minutes !== undefined) {
-              breakMins = Number(r.break_minutes) || 0;
-            } else {
-              if (rawDiff >= 480) breakMins = 60;
-              else if (rawDiff >= 360) breakMins = 45;
-              else if (rawDiff >= 240) breakMins = 30;
-            }
-            const actual = Math.max(0, rawDiff - breakMins);
-
-            totalActualMins += actual;
-            if (actual > 480) { // 8時間超過で残業
-              totalOvertimeMins += (actual - 480);
-            }
-          }
+          totalActualMins += details.actualWorkMinutes;
+          totalOvertimeMins += details.overtimeMinutes;
+          if (details.isLate) lateCount += 1;
         } else {
           missedPunchCount += 1;
         }
@@ -523,6 +552,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       overtimeHours: (totalOvertimeMins / 60).toFixed(1),
       paidLeaveDays,
       missedPunchCount,
+      lateCount,
       pendingRequestsCount: pendingRequests.length
     };
   };
@@ -587,43 +617,24 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         (l.end_date ? l.end_date >= dateStr : l.start_date >= dateStr)
       );
 
-      let actualStr = '-';
-      let overtimeStr = '-';
-      let breakStr = '-';
-      let actualMins = 0;
-      let overtimeMins = 0;
-      let breakMins = 0;
+      const userPattern = getUserWorkPattern(user);
+      const details = calculateDailyAttendanceDetails(
+        record?.check_in_time,
+        record?.check_out_time,
+        record?.break_minutes,
+        userPattern?.start_time || '09:00',
+        userPattern?.end_time || '18:00',
+        userPattern?.break_minutes || 60,
+        roundingRules
+      );
 
-      if (record?.check_in_time && record?.check_out_time) {
-        const [inH, inM] = record.check_in_time.split(':').map(Number);
-        const [outH, outM] = record.check_out_time.split(':').map(Number);
-        const inTotal = inH * 60 + inM;
-        const outTotal = outH * 60 + outM;
-
-        if (outTotal > inTotal) {
-          const rawDiff = outTotal - inTotal;
-          if (record.break_minutes !== null && record.break_minutes !== undefined) {
-            breakMins = Number(record.break_minutes) || 0;
-          } else {
-            if (rawDiff >= 480) breakMins = 60;
-            else if (rawDiff >= 360) breakMins = 45;
-            else if (rawDiff >= 240) breakMins = 30;
-            else breakMins = 0;
-          }
-          breakStr = `${breakMins}m`;
-
-          actualMins = Math.max(0, rawDiff - breakMins);
-          actualStr = `${Math.floor(actualMins / 60)}h ${(actualMins % 60).toString().padStart(2, '0')}m`;
-
-          if (actualMins > 480) {
-            overtimeMins = actualMins - 480;
-            overtimeStr = `${Math.floor(overtimeMins / 60)}h ${(overtimeMins % 60).toString().padStart(2, '0')}m`;
-          }
-        }
-      } else if (record?.break_minutes !== null && record?.break_minutes !== undefined) {
-        breakMins = Number(record.break_minutes) || 0;
-        breakStr = `${breakMins}m`;
-      }
+      const breakStr = details.breakMinutes > 0 ? `${details.breakMinutes}m` : '-';
+      const actualStr = details.actualWorkMinutes > 0
+        ? `${Math.floor(details.actualWorkMinutes / 60)}h ${(details.actualWorkMinutes % 60).toString().padStart(2, '0')}m`
+        : '-';
+      const overtimeStr = details.overtimeMinutes > 0
+        ? `${Math.floor(details.overtimeMinutes / 60)}h ${(details.overtimeMinutes % 60).toString().padStart(2, '0')}m`
+        : '-';
 
       rows.push({
         day,
@@ -638,18 +649,23 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         monthlyShiftReq,
         checkIn: record?.check_in_time || '-',
         checkOut: record?.check_out_time || '-',
+        roundedCheckIn: details.roundedCheckIn,
+        roundedCheckOut: details.roundedCheckOut,
+        isLate: details.isLate,
+        isEarlyLeave: details.isEarlyLeave,
         breakStr,
-        breakMins,
+        breakMins: details.breakMinutes,
         actualStr,
+        actualMins: details.actualWorkMinutes,
         overtimeStr,
-        overtimeMins,
+        overtimeMins: details.overtimeMinutes,
         status: record?.status || (dayApprovedLeave ? dayApprovedLeave.type : '-'),
         note: record?.note || dayApprovedLeave?.reason || ''
       });
     }
 
     return rows;
-  }, [selectedUserId, users, attendanceRecords, leaveRequests, currentMonth]);
+  }, [selectedUserId, users, attendanceRecords, leaveRequests, currentMonth, workPatterns, roundingRules]);
 
   // 打刻編集モーダルを開く
   const handleOpenEditModal = (row: any) => {
@@ -1135,14 +1151,22 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                           </td>
                           <td className="p-4 text-right font-bold text-slate-700 text-sm">{summary.paidLeaveDays} 日</td>
                           <td className="p-4 text-center">
-                            {summary.missedPunchCount > 0 ? (
-                              <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded text-xs font-black animate-pulse">
-                                <AlertCircle className="w-3.5 h-3.5" />
-                                {summary.missedPunchCount}件
-                              </span>
-                            ) : (
-                              <span className="text-slate-300 text-xs">-</span>
-                            )}
+                            <div className="flex flex-col items-center gap-1">
+                              {summary.missedPunchCount > 0 && (
+                                <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded text-xs font-black animate-pulse">
+                                  <AlertCircle className="w-3.5 h-3.5" />
+                                  未打刻 {summary.missedPunchCount}件
+                                </span>
+                              )}
+                              {summary.lateCount > 0 && (
+                                <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded text-[11px] font-bold">
+                                  遅刻 {summary.lateCount}回
+                                </span>
+                              )}
+                              {summary.missedPunchCount === 0 && summary.lateCount === 0 && (
+                                <span className="text-slate-300 text-xs">-</span>
+                              )}
+                            </div>
                           </td>
                           <td className="p-4 text-center">
                             {summary.pendingRequestsCount > 0 ? (
@@ -1330,7 +1354,19 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                             <td className="p-3.5 font-bold text-slate-800 text-xs">
                               {row.checkIn !== '-' ? (
                                 <div className="flex flex-col items-start gap-1">
-                                  <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono">{row.checkIn}</span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono">{row.checkIn}</span>
+                                    {row.roundedCheckIn && row.roundedCheckIn !== row.checkIn && (
+                                      <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded" title="丸め・始業補正後の計算時刻">
+                                        ➔ {row.roundedCheckIn}
+                                      </span>
+                                    )}
+                                    {row.isLate && (
+                                      <span className="text-[10px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.5 rounded animate-pulse">
+                                        遅刻
+                                      </span>
+                                    )}
+                                  </div>
                                   {row.record?.check_in_lat && row.record?.check_in_lng ? (
                                     <a
                                       href={`https://www.google.com/maps?q=${row.record.check_in_lat},${row.record.check_in_lng}`}
@@ -1354,7 +1390,19 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                             <td className="p-3.5 font-bold text-slate-800 text-xs">
                               {row.checkOut !== '-' ? (
                                 <div className="flex flex-col items-start gap-1">
-                                  <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono">{row.checkOut}</span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono">{row.checkOut}</span>
+                                    {row.roundedCheckOut && row.roundedCheckOut !== row.checkOut && (
+                                      <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded" title="丸め・定時バッファ後の計算時刻">
+                                        ➔ {row.roundedCheckOut}
+                                      </span>
+                                    )}
+                                    {row.isEarlyLeave && (
+                                      <span className="text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded">
+                                        早退
+                                      </span>
+                                    )}
+                                  </div>
                                   {row.record?.check_out_lat && row.record?.check_out_lng ? (
                                     <a
                                       href={`https://www.google.com/maps?q=${row.record.check_out_lat},${row.record.check_out_lng}`}

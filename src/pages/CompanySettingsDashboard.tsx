@@ -63,6 +63,14 @@ import {
   saveStoresUnified,
   sanitizeStoreName
 } from '../lib/storeMaster';
+import {
+  type AttendanceRoundingRules,
+  ATTENDANCE_PRESETS,
+  DEFAULT_ROUNDING_RULES,
+  getAttendanceRoundingRules,
+  saveAttendanceRoundingRules,
+  minutesToTime
+} from '../lib/attendanceRounding';
 
 export interface DepartmentMaster {
   id: string;
@@ -542,6 +550,10 @@ export default function CompanySettingsDashboard() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setSaveSuccessMsg(msg);
+    setTimeout(() => setSaveSuccessMsg(null), 4000);
+  };
   const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements' | 'qualifications' | 'reminders' | 'billing'>('basic');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
 
@@ -664,6 +676,9 @@ export default function CompanySettingsDashboard() {
   const [newPatternEndTime, setNewPatternEndTime] = useState('18:00');
   const [newPatternBreakMinutes, setNewPatternBreakMinutes] = useState(60);
   const [newPatternDept, setNewPatternDept] = useState('');
+  
+  // ⚙️ 現場即応 打刻・時間丸め（マル目）State
+  const [attendanceRules, setAttendanceRules] = useState<AttendanceRoundingRules>(DEFAULT_ROUNDING_RULES);
 
   // 4. カレンダー・休日State（複数カレンダーパターン完全対応）
   const [calendarPatterns, setCalendarPatterns] = useState<CompanyCalendarPattern[]>(DEFAULT_CALENDAR_PATTERNS);
@@ -990,6 +1005,10 @@ export default function CompanySettingsDashboard() {
           { id: '4', name: '育児・時短勤務', start_time: '09:30', end_time: '16:30', break_minutes: 60, target_department: '', display_order: 4 }
         ]);
       }
+
+      // ⚙️ 打刻丸めルールの取得（DB / LocalStorage）
+      const loadedRules = getAttendanceRoundingRules(tenantIdData);
+      setAttendanceRules(loadedRules);
 
       // 自社ユーザー一覧（役職・所属長・組織図用）の一元取得（400エラー対策済み）
       const { data: uData } = await supabase
@@ -1571,7 +1590,8 @@ export default function CompanySettingsDashboard() {
         active_pattern_id: activeCalendarId,
         year: calendarSettings.year || 2026,
         annual_holidays_count: defaultPattern.annual_holidays_count || computedHolidaysSet.size,
-        holiday_text_summary: defaultPattern.holiday_text_summary || holSummary
+        holiday_text_summary: defaultPattern.holiday_text_summary || holSummary,
+        attendance_rounding_rules: attendanceRules
       };
 
       // ローカルストレージに即時最優先保存（自社テナントIDで完全隔離）
@@ -1588,6 +1608,7 @@ export default function CompanySettingsDashboard() {
         company_seal_url: companySealUrl
       });
       saveCalendarPatternsToStorage(tenantId, updatedCalendarPatterns);
+      saveAttendanceRoundingRules(tenantId, attendanceRules);
       saveWorkflowStepsToStorage(onboardingSteps);
       savePositionsToStorage(positions);
       saveDepartmentsToStorage(tenantId, departments);
@@ -3889,6 +3910,255 @@ export default function CompanySettingsDashboard() {
                     </button>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* ⚙️ 現場即応 打刻・時間丸め（マル目）設定 */}
+            <div className="bg-gradient-to-br from-indigo-50/70 via-white to-slate-50 p-5 rounded-2xl border-2 border-indigo-200/90 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-100 pb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-indigo-600 text-white p-1 rounded-lg">
+                      <Clock className="w-4 h-4" />
+                    </span>
+                    <h4 className="font-black text-slate-800 text-sm">
+                      現場即応 打刻・時間丸め（マル目）共通ルール
+                    </h4>
+                    <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-300">
+                      全社自動適用
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    始業前の早出カットや、出退勤の15分単位丸め、定時退勤バッファなど、現場実務に即した計算ルールを設定します。
+                  </p>
+                </div>
+
+                {/* ワンタッチ・おすすめプリセット */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-2 py-1 rounded-lg">
+                    ⚡ おすすめ一発適用:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttendanceRules(ATTENDANCE_PRESETS.store_shift.rules);
+                      showToast('🏪「店舗・シフト現場向け（15分丸め＋始業前カット）」を適用しました');
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-indigo-50 text-indigo-800 border border-indigo-300 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+                    title={ATTENDANCE_PRESETS.store_shift.description}
+                  >
+                    🏪 店舗・シフト標準
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttendanceRules(ATTENDANCE_PRESETS.office_standard.rules);
+                      showToast('🏢「オフィス・本社標準（定時補正＋法定休憩）」を適用しました');
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+                    title={ATTENDANCE_PRESETS.office_standard.description}
+                  >
+                    🏢 オフィス標準
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttendanceRules(ATTENDANCE_PRESETS.exact_strict.rules);
+                      showToast('⏱️「厳密1分単位（補正なし）」を適用しました');
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-xs font-medium transition shadow-2xs cursor-pointer"
+                    title={ATTENDANCE_PRESETS.exact_strict.description}
+                  >
+                    ⏱️ 厳密1分単位
+                  </button>
+                </div>
+              </div>
+
+              {/* 設定グリッド */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-1 text-xs">
+                
+                {/* 1. 始業前の打刻カット */}
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-black text-slate-800 flex items-center gap-1.5 text-xs">
+                      🌅 始業前の出勤打刻
+                    </label>
+                    <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.2 rounded">
+                      早出残業防止
+                    </span>
+                  </div>
+                  <select
+                    value={attendanceRules.check_in_before_start}
+                    onChange={e => setAttendanceRules({
+                      ...attendanceRules,
+                      check_in_before_start: e.target.value as any
+                    })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-bold text-xs"
+                  >
+                    <option value="clip_to_start">始業時刻に自動補正（推奨・実務標準）</option>
+                    <option value="exact">補正なし（打刻通りの実時間で計算）</option>
+                  </select>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    {attendanceRules.check_in_before_start === 'clip_to_start'
+                      ? '💡 例: 9:00始業で8:40に打刻しても「9:00出勤」として実働計算します。'
+                      : '💡 打刻した通りの時間から実働時間として計算します。'}
+                  </p>
+                </div>
+
+                {/* 2. 出勤時間の端数丸め */}
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-black text-slate-800 flex items-center gap-1.5 text-xs">
+                      ⏱️ 出勤打刻の丸め（マル目）
+                    </label>
+                    <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.2 rounded">
+                      切り上げ
+                    </span>
+                  </div>
+                  <select
+                    value={attendanceRules.check_in_rounding_minutes}
+                    onChange={e => setAttendanceRules({
+                      ...attendanceRules,
+                      check_in_rounding_minutes: parseInt(e.target.value, 10) as any
+                    })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-bold text-xs"
+                  >
+                    <option value={1}>1分単位（切り上げなし）</option>
+                    <option value={5}>5分単位（切り上げ）</option>
+                    <option value={10}>10分単位（切り上げ）</option>
+                    <option value={15}>15分単位（切り上げ・現場標準）</option>
+                    <option value={30}>30分単位（切り上げ）</option>
+                  </select>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    {attendanceRules.check_in_rounding_minutes > 1
+                      ? `💡 例: 09:02打刻 ➔ ${minutesToTime(Math.ceil((9*60+2)/attendanceRules.check_in_rounding_minutes)*attendanceRules.check_in_rounding_minutes)}出勤として計算`
+                      : '💡 1分刻みで正確に計算します。'}
+                  </p>
+                </div>
+
+                {/* 3. 退勤時間の端数丸め */}
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-black text-slate-800 flex items-center gap-1.5 text-xs">
+                      🏁 退勤打刻の丸め（マル目）
+                    </label>
+                    <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-1.5 py-0.2 rounded">
+                      切り捨て
+                    </span>
+                  </div>
+                  <select
+                    value={attendanceRules.check_out_rounding_minutes}
+                    onChange={e => setAttendanceRules({
+                      ...attendanceRules,
+                      check_out_rounding_minutes: parseInt(e.target.value, 10) as any
+                    })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-bold text-xs"
+                  >
+                    <option value={1}>1分単位（切り捨てなし）</option>
+                    <option value={5}>5分単位（切り捨て）</option>
+                    <option value={10}>10分単位（切り捨て）</option>
+                    <option value={15}>15分単位（切り捨て・現場標準）</option>
+                    <option value={30}>30分単位（切り捨て）</option>
+                  </select>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    {attendanceRules.check_out_rounding_minutes > 1
+                      ? `💡 例: 18:14打刻 ➔ ${minutesToTime(Math.floor((18*60+14)/attendanceRules.check_out_rounding_minutes)*attendanceRules.check_out_rounding_minutes)}退勤として計算`
+                      : '💡 1分刻みで正確に計算します。'}
+                  </p>
+                </div>
+
+                {/* 4. 定時退勤バッファ */}
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-black text-slate-800 flex items-center gap-1.5 text-xs">
+                      🚪 定時退勤バッファ
+                    </label>
+                    <span className="text-[10px] text-slate-500 font-bold bg-slate-100 px-1.5 py-0.2 rounded">
+                      着替え・混雑考慮
+                    </span>
+                  </div>
+                  <select
+                    value={attendanceRules.overtime_buffer_minutes}
+                    onChange={e => setAttendanceRules({
+                      ...attendanceRules,
+                      overtime_buffer_minutes: parseInt(e.target.value, 10)
+                    })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-bold text-xs"
+                  >
+                    <option value={0}>0分（猶予なし・直ちに計算）</option>
+                    <option value={5}>終業後 5分以内は定時退勤</option>
+                    <option value={10}>終業後 10分以内は定時退勤（推奨）</option>
+                    <option value={15}>終業後 15分以内は定時退勤</option>
+                    <option value={30}>終業後 30分以内は定時退勤</option>
+                  </select>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    {attendanceRules.overtime_buffer_minutes > 0
+                      ? `💡 終業後${attendanceRules.overtime_buffer_minutes}分以内の退勤は定時終業とみなし残業にしません。`
+                      : '💡 終業時刻を過ぎた打刻は直ちに残業対象として計算します。'}
+                  </p>
+                </div>
+
+                {/* 5. 遅刻猶予バッファ */}
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-black text-slate-800 flex items-center gap-1.5 text-xs">
+                      🚶 遅刻判定の猶予バッファ
+                    </label>
+                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.2 rounded">
+                      端末順番待ち対策
+                    </span>
+                  </div>
+                  <select
+                    value={attendanceRules.late_grace_minutes}
+                    onChange={e => setAttendanceRules({
+                      ...attendanceRules,
+                      late_grace_minutes: parseInt(e.target.value, 10)
+                    })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-bold text-xs"
+                  >
+                    <option value={0}>0分（1分でも過ぎたら遅刻）</option>
+                    <option value={3}>始業後 3分以内は遅刻免除</option>
+                    <option value={5}>始業後 5分以内は遅刻免除（現場標準）</option>
+                    <option value={10}>始業後 10分以内は遅刻免除</option>
+                  </select>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    {attendanceRules.late_grace_minutes > 0
+                      ? `💡 始業後${attendanceRules.late_grace_minutes}分以内の打刻は遅刻アラート・ペナルティを出しません。`
+                      : '💡 始業時刻を1分でも過ぎた打刻はすべて遅刻と判定します。'}
+                  </p>
+                </div>
+
+                {/* 6. 休憩時間の控除方式 */}
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-black text-slate-800 flex items-center gap-1.5 text-xs">
+                      ☕ 休憩時間の控除方式
+                    </label>
+                    <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-1.5 py-0.2 rounded">
+                      労基法準拠
+                    </span>
+                  </div>
+                  <select
+                    value={attendanceRules.break_deduction_mode}
+                    onChange={e => setAttendanceRules({
+                      ...attendanceRules,
+                      break_deduction_mode: e.target.value as any
+                    })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-bold text-xs"
+                  >
+                    <option value="statutory">法定基準で自動控除（実働6h超45分/8h超60分）</option>
+                    <option value="pattern_fixed">就業パターンの設定値で固定控除</option>
+                    <option value="actual_punches">実打刻（休憩開始・終了打刻）のみ控除</option>
+                  </select>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    {attendanceRules.break_deduction_mode === 'statutory'
+                      ? '💡 休憩打刻の押し忘れがあっても、法定時間を自動控除して給与過払いを防止します。'
+                      : attendanceRules.break_deduction_mode === 'pattern_fixed'
+                      ? '💡 パターンに登録された休憩時間（60分等）を一律で控除します。'
+                      : '💡 休憩開始・終了の打刻実績のみを厳密に控除します。'}
+                  </p>
+                </div>
+
               </div>
             </div>
 
