@@ -1466,19 +1466,20 @@ const ShiftCalendarView: React.FC = () => {
               </button>
             </div>
 
-            {/* 🏢 正社員シフト一括先入れボタン（黄金フロー第1歩！） */}
+            {/* 🏢 正社員シフト一括先入れボタン（黄金フロー第1歩！ 爽快ロイヤルブルー） */}
             <button 
               onClick={handleOpenStaffPresetModal}
-              className="h-[46px] px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-indigo-400 shrink-0"
+              className="h-[46px] px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-blue-500 shrink-0"
               title="正社員スタッフのシフトを実際の日付ごとに1人ずつ（早番・遅番・公休など）細かく先入れ調整します"
             >
               <div className="flex items-center space-x-1.5 text-xs leading-tight">
-                <Briefcase className="w-3.5 h-3.5 text-indigo-200" />
+                <Briefcase className="w-3.5 h-3.5 text-blue-200" />
                 <span>正社員シフト先入れ</span>
               </div>
-              <span className="text-[10px] text-indigo-100 font-medium leading-tight mt-0.5">（日別個別調整）</span>
+              <span className="text-[10px] text-blue-100 font-medium leading-tight mt-0.5">（日別個別調整）</span>
             </button>
 
+            {/* 🪄 自動割り当てボタン（AI花形機能！ サンセットオレンジ） */}
             <button 
               onClick={handleGenerate}
               disabled={isGenerating}
@@ -1486,25 +1487,26 @@ const ShiftCalendarView: React.FC = () => {
               title="社員枠を崩さず、空いている枠にAIがバイトの希望を自動割り当てします"
             >
               <div className="flex items-center space-x-1.5 text-xs leading-tight">
-                {isGenerating ? <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full"></div> : <Wand2 className="w-3.5 h-3.5" />}
+                {isGenerating ? <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full"></div> : <Wand2 className="w-3.5 h-3.5 text-amber-100" />}
                 <span>自動割り当て</span>
               </div>
               <span className="text-[10px] text-amber-100 font-medium leading-tight mt-0.5">（バイト自動配置）</span>
             </button>
 
+            {/* 💾 一括確定ボタン（本番公開！ ディープティール青緑） */}
             <button 
               onClick={handlePublishAll}
-              className="h-[46px] px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-emerald-500 shrink-0"
+              className="h-[46px] px-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-teal-500 shrink-0"
               title="仕上がった下書きシフトを確定し、スタッフのスマホマイページへ本番公開します（確定版カレンダーが自動起動します）"
             >
               <div className="flex items-center space-x-1.5 text-xs leading-tight">
-                <Save className="w-3.5 h-3.5" />
+                <Save className="w-3.5 h-3.5 text-teal-200" />
                 <span>一括確定</span>
               </div>
-              <span className="text-[10px] text-emerald-100 font-medium leading-tight mt-0.5">（本番公開・配信）</span>
+              <span className="text-[10px] text-teal-100 font-medium leading-tight mt-0.5">（本番公開・配信）</span>
             </button>
 
-            {/* 📱 確定シフト LINE一括送信ボタン（最重要・周瑜＆陸遜監修） */}
+            {/* 📱 確定シフト LINE一括送信ボタン（最重要！ LINEブランドエメラルドグリーン） */}
             <button 
               onClick={() => {
                 if (lineStaffList.length > 0) {
@@ -1512,7 +1514,7 @@ const ShiftCalendarView: React.FC = () => {
                 }
                 setIsLineSendModalOpen(true);
               }}
-              className="h-[46px] px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-emerald-400 shrink-0"
+              className="h-[46px] px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-emerald-500 shrink-0"
               title="確定したシフトを各スタッフのLINE宛てに個別一括送信します"
             >
               <div className="flex items-center space-x-1.5 text-xs leading-tight">
@@ -1522,23 +1524,24 @@ const ShiftCalendarView: React.FC = () => {
               <span className="text-[10px] text-emerald-100 font-medium leading-tight mt-0.5">（個別通知）</span>
             </button>
 
-            {/* 📋 確定版カレンダー（店舗貼り出し・印刷用）ボタン */}
+            {/* 📋 確定版カレンダーボタン（店舗印刷・掲示！ ノーブルインディゴ深藍色） */}
             <button 
               onClick={() => setIsConfirmedCalendarOpen(true)}
-              className="h-[46px] px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-slate-700 shrink-0"
+              className="h-[46px] px-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-indigo-600 shrink-0"
               title="確定済みの完成シフトを一覧表示し、店舗貼り出し用にA4横で印刷できます"
             >
               <div className="flex items-center space-x-1.5 text-xs leading-tight">
-                <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                <Printer className="w-3.5 h-3.5 text-indigo-200" />
                 <span>確定版カレンダー</span>
               </div>
-              <span className="text-[10px] text-slate-300 font-medium leading-tight mt-0.5">（店舗貼り出し・印刷）</span>
+              <span className="text-[10px] text-indigo-200 font-medium leading-tight mt-0.5">（店舗貼り出し・印刷）</span>
             </button>
 
+            {/* 🔄 確定解除ボタン（注意操作！ 落ち着いたクールスレート） */}
             <button 
               onClick={handleUnpublishAll}
               disabled={isUnpublishing}
-              className="h-[46px] px-3 bg-slate-700 hover:bg-slate-800 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer disabled:opacity-50 border border-slate-600 shrink-0"
+              className="h-[46px] px-3 bg-slate-600 hover:bg-slate-700 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer disabled:opacity-50 border border-slate-500 shrink-0"
               title="確定済みのシフトを未確定の下書き（ドラフト）に戻し、再調整やAI再割り当てを可能にします"
             >
               <div className="flex items-center space-x-1.5 text-xs leading-tight">
@@ -1548,31 +1551,33 @@ const ShiftCalendarView: React.FC = () => {
               <span className="text-[10px] text-slate-300 font-medium leading-tight mt-0.5">（下書きに戻す）</span>
             </button>
             
+            {/* ➕ シフト追加ボタン（個別手動登録！ 鮮明バイオレットパープル） */}
             <button 
               onClick={() => {
                 setModalData({ target_date: format(baseDate, 'yyyy-MM-dd'), role: roles[0]?.name || 'ホール', start_time: '10:00', end_time: '15:00', user_id: users[0]?.id });
                 setIsModalOpen(true);
               }}
-              className="h-[46px] px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-indigo-400 shrink-0"
+              className="h-[46px] px-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer border border-violet-500 shrink-0"
               title="個別のシフトを手動で1件追加登録します"
             >
               <div className="flex items-center space-x-1.5 text-xs leading-tight">
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-3.5 h-3.5 text-violet-200" />
                 <span>シフト追加</span>
               </div>
-              <span className="text-[10px] text-indigo-100 font-medium leading-tight mt-0.5">（手動個別登録）</span>
+              <span className="text-[10px] text-violet-100 font-medium leading-tight mt-0.5">（手動個別登録）</span>
             </button>
 
+            {/* ❓ 使い方ガイドボタン（いつでも安心！ クリーンホワイト＆スレート枠） */}
             <button
               onClick={() => setIsHelpOpen(true)}
-              className="h-[46px] px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer shrink-0"
+              className="h-[46px] px-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-xl flex flex-col items-center justify-center transition shadow-sm hover:shadow font-bold cursor-pointer shrink-0"
               title="シフト作成の流れ・機能の違いを見る"
             >
               <div className="flex items-center space-x-1.5 text-xs leading-tight">
-                <HelpCircle className="w-3.5 h-3.5 text-indigo-500" />
+                <HelpCircle className="w-3.5 h-3.5 text-indigo-600" />
                 <span>使い方ガイド</span>
               </div>
-              <span className="text-[10px] text-indigo-400 font-medium leading-tight mt-0.5">（操作ヘルプ）</span>
+              <span className="text-[10px] text-slate-500 font-medium leading-tight mt-0.5">（操作ヘルプ）</span>
             </button>
 
             <AppSwitcher currentApp="shift" role="admin" />
