@@ -14,6 +14,7 @@ import {
   loadHealthPensionLossCoordinates,
   saveHealthPensionLossCoordinates,
   saveHealthPensionLossCoordinatesToDb,
+  fetchHealthPensionLossCoordinatesFromDb,
   broadcastHealthPensionLossCoordinates,
   type HealthPensionLossFieldConfig
 } from '../lib/healthPensionLossDocCoordinates';
@@ -29,6 +30,17 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [previewZoom, setPreviewZoom] = useState<number>(100);
+
+  // マウント時にDBから全社共有座標を取得
+  useEffect(() => {
+    let isCancelled = false;
+    fetchHealthPensionLossCoordinatesFromDb().then(dbCoords => {
+      if (!isCancelled && dbCoords && dbCoords.length > 0) {
+        setFields(dbCoords);
+      }
+    });
+    return () => { isCancelled = true; };
+  }, []);
 
   // 原本背景画像
   const [bgPdfImg, setBgPdfImg] = useState<string | null>(null);

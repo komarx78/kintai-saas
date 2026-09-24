@@ -383,3 +383,46 @@ export const fetchBonusDocCoordinatesFromDb = async (): Promise<BonusDocFieldCon
   return loadBonusDocCoordinates();
 };
 
+// Supabase DB への保存（UUID完全整合・レコード自動判定）
+export async function saveBonusDocCoordinatesToDb(fields: BonusDocFieldConfig[]): Promise<boolean> {
+  try {
+    broadcastBonusDocCoordinates(fields);
+
+    const { data: current } = await supabase
+      .from('system_settings')
+      .select('id')
+      .limit(1)
+      .maybeSingle();
+
+    let saveError = null;
+    if (current && current.id) {
+      const res = await supabase
+        .from('system_settings')
+        .update({ 
+          bonus_doc_coordinates: fields,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', current.id);
+      saveError = res.error;
+    } else {
+      const res = await supabase
+        .from('system_settings')
+        .insert([{ 
+          bonus_doc_coordinates: fields,
+          updated_at: new Date().toISOString()
+        }]);
+      saveError = res.error;
+    }
+
+    if (saveError) {
+      console.warn('Could not update system_settings DB (may need column):', saveError);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Error saving bonus doc coordinates to DB:', err);
+    return false;
+  }
+}
+
+

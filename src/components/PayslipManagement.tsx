@@ -1683,6 +1683,13 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
   const handleSendPayslipLineBatch = async () => {
     if (!tenantId || payslips.length === 0) return;
 
+    // 🛡️ 陸遜・顧客目線＆安全ロック：未確定の明細が1件でもある場合はLINE誤爆を物理遮断
+    const unpublishedCount = payslips.filter(p => p.status !== 'published').length;
+    if (unpublishedCount > 0) {
+      alert(`⚠️ 【LINE誤送信防止ロック】\n\n現在、未確定の給与明細が ${unpublishedCount} 件あります。\n未確定の試算中データをスタッフへ誤爆送信することを防ぐため、必ず「全員の給与を一括確定」してからLINE通知を行ってください。`);
+      return;
+    }
+
     // LINE連携モードの確認
     if (lineConfig.mode === 'none') {
       // 手動モードの場合は手動共有モーダルを開く
@@ -2482,124 +2489,181 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         </div>
       </div>
 
-      {/* アクションツールバー */}
-      <div className="bg-white rounded-2xl p-4 shadow-xs border border-slate-100 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* ⚡ 勤怠から一括自動計算（メインCTAボタン） */}
-          <button
-            onClick={handleAutoGenerateFromAttendance}
-            disabled={isSaving || employees.length === 0}
-            className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-black text-sm px-4.5 py-2.5 rounded-xl transition shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
-          >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-amber-300" />}
-            ⚡ 勤怠から一括自動計算
-          </button>
+      {/* 🧭 業務フロー完全連動型・迷子ゼロ アクションツールバー */}
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200 space-y-4">
+        {/* 上段：現在のステップ状況とメインCTA（今押すべき1つの主役ボタン） */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className={`text-xs px-3 py-1 rounded-full font-black flex items-center gap-1.5 shadow-2xs ${
+                !isMonthCalculated 
+                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                  : (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
+                  ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                  : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+              }`}>
+                {!isMonthCalculated 
+                  ? '👣 ステップ 1 / 3：勤怠計算待ち'
+                  : (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
+                  ? `👣 ステップ 2 / 3：内容確認・確定待ち（確定済: ${publishedCount}/${employees.length}名）`
+                  : '🎉 ステップ 3 / 3：全員確定完了（LINE通知・振込可能）'
+                }
+              </span>
+              <span className="text-xs text-slate-500 font-bold hidden sm:inline">
+                {!isMonthCalculated 
+                  ? '※打刻データから当月の給与を一括試算してください'
+                  : (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
+                  ? '※金額を確認し、「全員の給与を一括確定」を押してください'
+                  : '※全員の給与が確定しました。スタッフへLINE一括通知できます'
+                }
+              </span>
+            </div>
+            <h3 className="text-lg font-black text-slate-800 tracking-tight">
+              {!isMonthCalculated 
+                ? '【STEP 1】タイムカード打刻から当月の給与を一括自動計算'
+                : (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
+                ? '【STEP 2】金額・控除を確認し、全従業員の明細を一括確定（Web公開）'
+                : '【STEP 3】Web給与明細の発行通知（LINE一括送信）＆ 振込CSV'
+              }
+            </h3>
+          </div>
 
-          <button
-            onClick={handleRecalculateAll}
-            disabled={isSaving || payslips.length === 0}
-            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-sm px-3.5 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            title="大元マスタ（標準報酬月額・住民税特別徴収・扶養親族・各種手当）の最新値で当月の全明細を再計算します"
-          >
-            <RotateCcw className="w-4 h-4 text-indigo-600" />
-            🔄 最新マスタから一括再計算
-          </button>
-
-          <button
-            onClick={handlePublishAll}
-            disabled={isSaving || payslips.length === 0}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            title="全員の給与明細を確定し、Web給与明細で従業員へ公開します"
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            一括確定 (Web公開)
-          </button>
-
-          {/* 🟢 LINE通知・手動共有ボタン（孔明・周瑜・陸遜設計：プランに応じた最適CTA） */}
-          {lineConfig.mode !== 'none' ? (
-            <button
-              onClick={handleSendPayslipLineBatch}
-              disabled={isSendingLine || payslips.length === 0}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
-              title="LINE連携済みのスタッフ全員へ、Web給与明細の発行通知を一括自動配信します（プライバシー保護セキュアURL形式）"
-            >
-              {isSendingLine ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4 text-emerald-200" />}
-              <span>🟢 スタッフ全員へLINE一括通知</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => {
-                setManualShareModal({
-                  isOpen: true,
-                  selectedUserId: payslips[0]?.user_id || ''
-                });
-              }}
-              disabled={payslips.length === 0}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold text-sm px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              title="個人LINEやチャットツール送信用テキストを表示・個別コピーします（手動モード）"
-            >
-              <Copy className="w-4 h-4 text-slate-500" />
-              <span>📋 個人LINE送信用テキスト（手動）</span>
-            </button>
-          )}
-
-          <button
-            onClick={handleUnpublishAll}
-            disabled={isSaving || payslips.length === 0}
-            className="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-sm px-3.5 py-2.5 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            title="全員の給与明細を一度下書きに戻し、従業員へのWeb公開を取下げます"
-          >
-            <RotateCcw className="w-4 h-4 text-amber-600" />
-            一括下書きに戻す (公開取下げ)
-          </button>
-
-          <button
-            onClick={handleExportBankTransferCsv}
-            disabled={payslips.length === 0}
-            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm px-3.5 py-2.5 rounded-xl transition border border-slate-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-          >
-            <Download className="w-4 h-4" />
-            振込CSV出力
-          </button>
-
-          {/* 🧪 動作確認用デモ勤怠投入（補助ボタン） */}
-          <button
-            onClick={handleSeedDummyAttendanceAndCalculate}
-            disabled={isSaving || employees.length === 0}
-            className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-700 font-bold text-xs px-3 py-2 rounded-xl transition border border-dashed border-slate-300 flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ml-auto"
-            title="ワンクリックで当月の平日打刻・有給データを生成し、給与を即座に自動試算します（動作確認用）"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-slate-400" />
-            🧪 動作確認用デモ勤怠を投入
-          </button>
+          {/* 今押すべき主役ボタン（1つだけ強調表示・六頭体制周瑜＆陸遜設計） */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {!isMonthCalculated ? (
+              // 🌟 STEP 1 主役ボタン
+              <button
+                onClick={handleAutoGenerateFromAttendance}
+                disabled={isSaving || employees.length === 0}
+                className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-violet-700 hover:from-indigo-700 hover:to-violet-800 text-white font-black text-sm px-6 py-3 rounded-2xl transition shadow-lg shadow-indigo-200 flex items-center gap-2.5 cursor-pointer disabled:opacity-50 animate-pulse hover:animate-none"
+              >
+                {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5 text-amber-300" />}
+                <span className="text-base font-black">⚡ 勤怠から一括自動計算を実行</span>
+              </button>
+            ) : (publishedCount < employees.length || payslips.some(p => p.status !== 'published')) ? (
+              // 🌟 STEP 2 主役ボタン
+              <button
+                onClick={handlePublishAll}
+                disabled={isSaving || payslips.length === 0}
+                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-sm px-6 py-3 rounded-2xl transition shadow-lg shadow-emerald-200 flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5 text-emerald-200" />}
+                <span className="text-base font-black">✅ 全員の給与を一括確定する（Web公開）</span>
+              </button>
+            ) : (
+              // 🌟 STEP 3 主役ボタン（全員確定済）
+              lineConfig.mode !== 'none' ? (
+                <button
+                  onClick={handleSendPayslipLineBatch}
+                  disabled={isSendingLine || payslips.length === 0}
+                  className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-black text-sm px-6 py-3 rounded-2xl transition shadow-lg shadow-emerald-200 flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isSendingLine ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageSquare className="w-5 h-5 text-emerald-100" />}
+                  <span className="text-base font-black">🟢 スタッフ全員へLINE一括通知する</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setManualShareModal({
+                      isOpen: true,
+                      selectedUserId: payslips[0]?.user_id || ''
+                    });
+                  }}
+                  disabled={payslips.length === 0}
+                  className="bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white font-black text-sm px-6 py-3 rounded-2xl transition shadow-lg flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Copy className="w-5 h-5 text-indigo-300" />
+                  <span className="text-base font-black">📋 個人LINE送信用テキスト（個別コピー）</span>
+                </button>
+              )
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* LINE連携プランの現在状況バッジ */}
-          {lineConfig.mode === 'rakumaru_official' ? (
-            <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              公式LINE代行（自動配信）
-            </span>
-          ) : lineConfig.mode === 'own_official' ? (
-            <span className="bg-blue-50 text-blue-800 border border-blue-300 px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-              自社公式LINE（自動配信）
-            </span>
-          ) : (
-            <span className="bg-slate-100 text-slate-600 border border-slate-300 px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5" title="公式LINEプラン契約でボタン1つの一斉自動配信が可能になります">
-              <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-              手動通知モード（無料）
-            </span>
-          )}
+        {/* 下段：サブアクション（再計算・CSV出力・LINEロック安全バッジ・下書き戻し・設定） */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* 再計算ボタン（マスタ変更時のみ利用） */}
+            <button
+              onClick={handleRecalculateAll}
+              disabled={isSaving || payslips.length === 0}
+              className="bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 hover:border-indigo-200 font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="大元マスタ（標準報酬月額・住民税特別徴収・扶養親族・各種手当）の最新値で当月の全明細を再計算します"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-indigo-600" />
+              <span>🔄 最新マスタから再計算</span>
+            </button>
 
-          <button
-            onClick={() => setSettingsModalOpen(true)}
-            className="bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs px-3 py-2 rounded-xl transition border border-slate-200 flex items-center gap-1.5 cursor-pointer"
-          >
-            <SettingsIcon className="w-3.5 h-3.5 text-slate-500" />
-            会社給与設定
-          </button>
+            {/* 振込CSV出力 */}
+            <button
+              onClick={handleExportBankTransferCsv}
+              disabled={payslips.length === 0}
+              className="bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-600" />
+              <span>振込CSV出力</span>
+            </button>
+
+            {/* 未確定時のLINE誤爆防止 安全ロックバッジ（陸遜・顧客目線：誤送信の完全遮断） */}
+            {(publishedCount < employees.length || payslips.some(p => p.status !== 'published')) && (
+              <span className="text-xs bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5" title="未確定の明細がスタッフに誤送信されるのを防止するため、全員確定後にLINE通知が可能になります">
+                <Lock className="w-3.5 h-3.5 text-amber-600" />
+                <span>LINE通知ロック中（未確定あり）</span>
+              </span>
+            )}
+
+            {/* 一括下書きに戻す（確定解除） */}
+            {publishedCount > 0 && (
+              <button
+                onClick={handleUnpublishAll}
+                disabled={isSaving || payslips.length === 0}
+                className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="全員の給与明細を一度下書きに戻し、従業員へのWeb公開を取下げます"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-rose-500" />
+                <span>下書きに戻す（公開取下げ）</span>
+              </button>
+            )}
+
+            {/* 動作確認用デモ勤怠（検証用） */}
+            <button
+              onClick={handleSeedDummyAttendanceAndCalculate}
+              disabled={isSaving || employees.length === 0}
+              className="bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-bold text-xs px-2.5 py-2 rounded-xl transition border border-dashed border-slate-200 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+              title="ワンクリックで当月の平日打刻・有給データを生成し、給与を即座に自動試算します（動作確認用）"
+            >
+              <Sparkles className="w-3 h-3 text-slate-400" />
+              <span>🧪 デモ勤怠投入</span>
+            </button>
+          </div>
+
+          {/* 右端：LINEプラン状況 ＆ 会社給与設定 */}
+          <div className="flex items-center gap-2">
+            {lineConfig.mode === 'rakumaru_official' ? (
+              <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                公式LINE代行（自動配信）
+              </span>
+            ) : lineConfig.mode === 'own_official' ? (
+              <span className="bg-blue-50 text-blue-800 border border-blue-300 px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                自社公式LINE（自動配信）
+              </span>
+            ) : (
+              <span className="bg-slate-100 text-slate-600 border border-slate-300 px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5" title="公式LINEプラン契約でボタン1つの一斉自動配信が可能になります">
+                <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                手動通知モード（無料）
+              </span>
+            )}
+
+            <button
+              onClick={() => setSettingsModalOpen(true)}
+              className="bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs px-3 py-2 rounded-xl transition border border-slate-200 flex items-center gap-1.5 cursor-pointer"
+            >
+              <SettingsIcon className="w-3.5 h-3.5 text-slate-500" />
+              会社給与設定
+            </button>
+          </div>
         </div>
       </div>
 
@@ -2614,16 +2678,6 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               </h3>
               <span className="text-xs text-slate-400 font-bold ml-1">（全{payslips.length}名）</span>
             </div>
-
-            <button
-              onClick={handleRecalculateAll}
-              disabled={isSaving || payslips.length === 0}
-              className="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-black text-xs rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              title="大元マスタ（標準報酬月額・住民税特別徴収・扶養親族等）の最新データで全員分の明細を一括再計算します"
-            >
-              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-              🔄 全員分一括再計算
-            </button>
           </div>
 
           {/* 表示形式切り替えタブ */}
