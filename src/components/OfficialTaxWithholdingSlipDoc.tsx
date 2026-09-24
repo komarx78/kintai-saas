@@ -49,7 +49,15 @@ export interface TaxWithholdingDocProps {
 
 export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = ({ data }) => {
   const year = data.year || new Date().getFullYear();
-  const reiwaYear = year - 2018;
+
+  // 🎌 元号（和暦）算出ヘルパー
+  const getEraInfo = (y: number) => {
+    if (y >= 2019) return { era: '令和', year: y - 2018 === 1 ? '元' : String(y - 2018) };
+    if (y >= 1989) return { era: '平成', year: y - 1988 === 1 ? '元' : String(y - 1988) };
+    if (y >= 1926) return { era: '昭和', year: y - 1925 === 1 ? '元' : String(y - 1925) };
+    return { era: '令和', year: String(y - 2018) };
+  };
+  const eraInfo = getEraInfo(year);
 
   // 生年月日元号分解
   const parseEraDate = (dateStr?: string) => {
@@ -115,13 +123,12 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
           <div className="text-center flex-1 px-2">
             <div className="flex items-baseline justify-center gap-1.5">
               <span className="border-b border-black px-1 font-serif text-[11px]">
-                元号 <strong className="text-xs">{reiwaYear}</strong> 年
+                {eraInfo.era} <strong className="text-xs">{eraInfo.year}</strong> 年分
               </span>
               <span className="font-mono text-[8px] text-slate-400 border border-slate-300 px-0.5">L01</span>
               <h1 className="text-base sm:text-lg font-black tracking-widest text-black inline-block mx-2">
                 給与所得の源泉徴収票
               </h1>
-              <span className="font-serif text-[11px]">年分</span>
             </div>
           </div>
 
@@ -377,7 +384,10 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
           <div className="p-1.5 min-h-[38px] text-[8.5px] text-slate-700 leading-normal">
             {data.summaryNotes || (
               <>
-                {data.isRetired && <div>・中途退職: {data.retirementDate || '2026-08-31'}</div>}
+                {data.isRetired && <div>・中途退職: {data.retirementDate || `${year}-08-31`}（年末調整未済）</div>}
+                {!data.isRetired && year >= new Date().getFullYear() && (
+                  <div className="font-bold text-slate-900">・年末調整未済（年度途中発行・{year}年分確定前試算）</div>
+                )}
                 <div>・社会保険料控除内訳: 健康保険・厚生年金・雇用保険</div>
                 <div>・電磁的方法による交付（国税庁様式ID: NTAOHSZ062010060 準拠）</div>
               </>

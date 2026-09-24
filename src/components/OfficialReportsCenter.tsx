@@ -1919,7 +1919,17 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                 const taxDeducted = Math.round(taxable * 0.05 * 1.021);
 
                 return (
-                  <div className="max-w-4xl mx-auto">
+                  <div className="max-w-4xl mx-auto space-y-4">
+                    {selectedYear >= new Date().getFullYear() && !targetEmp.is_retired && (
+                      <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3.5 rounded-2xl text-xs flex items-start gap-2.5 print:hidden">
+                        <span className="font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded text-[10px] shrink-0">
+                          所得税法第226条
+                        </span>
+                        <div className="leading-relaxed">
+                          <span>令和{selectedYear - 2018}年分は現在進行中のため、年末調整未確定（試算）となります。在職中の従業員への正式交付は12月の年末調整完了後に行ってください（中途退職者の場合は退職後1ヶ月以内に交付）。</span>
+                        </div>
+                      </div>
+                    )}
                     <OfficialTaxWithholdingSlipDoc
                       data={{
                         year: selectedYear,

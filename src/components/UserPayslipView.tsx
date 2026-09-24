@@ -18,7 +18,8 @@ interface UserPayslipViewProps {
 
 export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userName, tenantId }) => {
   const [activeDocTab, setActiveDocTab] = useState<'payslip' | 'bonus' | 'tax_slip' | 'contract' | 'labor_profile'>('payslip');
-  const [selectedTaxYear, setSelectedTaxYear] = useState<number>(new Date().getFullYear());
+  const currentCalYear = new Date().getFullYear();
+  const [selectedTaxYear, setSelectedTaxYear] = useState<number>(currentCalYear - 1);
   const [payslips, setPayslips] = useState<any[]>([]);
   const [selectedPayslip, setSelectedPayslip] = useState<any | null>(null);
   const [selectedKey, setSelectedKey] = useState<string>('');
@@ -761,9 +762,15 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
                   onChange={e => setSelectedTaxYear(Number(e.target.value))}
                   className="text-xs font-black p-2 px-3 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 cursor-pointer shadow-2xs"
                 >
-                  {[2026, 2025, 2024].map(y => (
-                    <option key={y} value={y}>令和{y - 2018}年分（{y}年）</option>
-                  ))}
+                  <option value={currentCalYear - 1}>
+                    令和{currentCalYear - 1 - 2018}年分（{currentCalYear - 1}年・確定済）★推奨
+                  </option>
+                  <option value={currentCalYear}>
+                    令和{currentCalYear - 2018}年分（{currentCalYear}年・年度途中未確定 / 退職時交付）
+                  </option>
+                  <option value={currentCalYear - 2}>
+                    令和{currentCalYear - 2 - 2018}年分（{currentCalYear - 2}年・確定済）
+                  </option>
                 </select>
 
                 <button
@@ -775,6 +782,34 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
                 </button>
               </div>
             </div>
+
+            {/* 実務・税法（所得税法第226条）案内バッジ */}
+            {selectedTaxYear >= currentCalYear && !userProfile.is_retired && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-2xl text-xs flex items-start gap-3 print:hidden shadow-2xs">
+                <span className="font-black text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded text-[10px] shrink-0 mt-0.5">
+                  実務・税法（所得税法第226条）
+                </span>
+                <div className="leading-relaxed">
+                  <span className="font-bold">令和{selectedTaxYear - 2018}年分は現在進行中のため、12月の年末調整完了まで年税額は未確定です。</span>
+                  <span className="text-amber-800 text-[11px] block mt-0.5">
+                    住宅ローン審査・確定申告・賃貸契約等の公的証明には、確定済みの「令和{currentCalYear - 1 - 2018}年分（前年）」をご利用ください。※中途退職される方の場合は、退職日までの確定実績として交付されます。
+                  </span>
+                </div>
+              </div>
+            )}
+            {selectedTaxYear >= currentCalYear && userProfile.is_retired && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-900 p-4 rounded-2xl text-xs flex items-start gap-3 print:hidden shadow-2xs">
+                <span className="font-black text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded text-[10px] shrink-0 mt-0.5">
+                  中途退職時交付用
+                </span>
+                <div className="leading-relaxed">
+                  <span className="font-bold">所得税法第226条に基づく退職時交付用源泉徴収票です。</span>
+                  <span className="text-blue-800 text-[11px] block mt-0.5">
+                    退職日までに支払われた給与および控除された源泉所得税額が反映されています（年末調整未済）。転職先または翌年の確定申告にご提出ください。
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* 国税庁公式NTAOHSZ062010060様式本体 */}
             <div className="max-w-4xl mx-auto">
