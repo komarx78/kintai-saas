@@ -275,27 +275,27 @@ export const ShiftRequestsView: React.FC = () => {
             <span className="hidden sm:inline">シフト管理</span>
           </button>
           <div className="h-4 w-px bg-slate-200" />
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-xs">
+          <div className="flex items-center space-x-2.5 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-xs shrink-0">
               <ClipboardList className="w-5 h-5" />
             </div>
-            <div>
-              <h1 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
+            <div className="shrink-0">
+              <h1 className="text-sm font-black text-slate-800 flex items-center gap-1.5 whitespace-nowrap">
                 提出されたシフト希望一覧
                 <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full border border-indigo-200">
                   全{stats.total}件
                 </span>
               </h1>
-              <p className="text-[10px] text-slate-400 font-bold">スタッフの出勤・休み希望を確認</p>
+              <p className="text-[10px] text-slate-400 font-bold whitespace-nowrap">スタッフの出勤・休み希望を確認</p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 sm:space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
           <button
             onClick={handleGenerateDummy}
             disabled={generating}
-            className="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition font-bold text-xs shadow-2xs cursor-pointer"
+            className="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition font-bold text-xs shadow-2xs cursor-pointer shrink-0"
             title="全スタッフ分のテスト希望データを投入します"
           >
             {generating ? (
@@ -303,13 +303,13 @@ export const ShiftRequestsView: React.FC = () => {
             ) : (
               <Sparkles className="w-3.5 h-3.5 text-amber-600 fill-amber-600" />
             )}
-            <span className="hidden sm:inline">ダミー希望一括投入</span>
+            <span className="hidden sm:inline whitespace-nowrap">ダミー希望一括投入</span>
           </button>
 
           <button
             onClick={handleClearDummy}
             disabled={isClearing}
-            className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition font-bold text-xs shadow-2xs cursor-pointer"
+            className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition font-bold text-xs shadow-2xs cursor-pointer shrink-0"
             title="検証用で投入した希望データ・下書きシフトを一括消去します（社員アカウントや会社情報は安全に保持されます）"
           >
             {isClearing ? (
@@ -317,7 +317,7 @@ export const ShiftRequestsView: React.FC = () => {
             ) : (
               <Trash2 className="w-3.5 h-3.5 text-rose-600" />
             )}
-            <span className="hidden sm:inline">ダミー希望全消去</span>
+            <span className="hidden sm:inline whitespace-nowrap">ダミー希望全消去</span>
           </button>
 
           <AppSwitcher currentApp="shift" role="admin" />
