@@ -826,8 +826,11 @@ export default function CompanySettingsDashboard() {
 
       setBasicInfo(loadedBasic);
 
-      // 労働条件・雇用契約書テンプレートの復元
-      const tplLoaded = getLaborContractTemplateFromStorage(tenantIdData);
+      // 労働条件・雇用契約書テンプレートの復元（DB最優先 ＋ LocalStorageフォールバック）
+      let tplLoaded = getLaborContractTemplateFromStorage(tenantIdData);
+      if (tData?.labor_contract_template_data && typeof tData.labor_contract_template_data === 'object' && Object.keys(tData.labor_contract_template_data).length > 0) {
+        tplLoaded = { ...DEFAULT_LABOR_CONTRACT_TEMPLATE, ...tData.labor_contract_template_data };
+      }
       if (sealLoaded && !tplLoaded.company_seal_url) {
         tplLoaded.company_seal_url = sealLoaded;
       }

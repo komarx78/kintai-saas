@@ -2,12 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   DollarSign, Zap, Calendar, ArrowLeft, CheckCircle, CheckCircle2, 
   Settings, Send, LogOut, RotateCcw, 
-  ChevronDown, ChevronUp, Lock, Unlock, Clock, Sparkles, AlertCircle, 
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Lock, Unlock, Clock, Sparkles, AlertCircle, 
   FileText, ExternalLink, HelpCircle, MessageSquare, X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, addDays } from 'date-fns';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, addDays, addMonths } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import AppSwitcher from '../components/AppSwitcher';
 
@@ -111,9 +111,9 @@ const ShiftAdminDashboard: React.FC = () => {
     }
   };
 
-  const currentDate = useMemo(() => new Date(), []);
+  const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
-  // 基準日 ＆ 管理期間（1週間 / 2週間 / 1ヶ月）の動的計算（全システムSSOT）
+  // 基準日 ＆ 管理期間（半月 / 1ヶ月 / 1週間 / 2週間）の動的計算（全システムSSOT）
   const periodInfo = useMemo(() => {
     let start: Date;
     let end: Date;
@@ -121,7 +121,22 @@ const ShiftAdminDashboard: React.FC = () => {
     let unitLabel = '今週';
     let durationLabel = '1週間';
 
-    if (shiftPeriod === '2weeks') {
+    if (shiftPeriod === 'half_month') {
+      const day = currentDate.getDate();
+      if (day <= 15) {
+        start = startOfMonth(currentDate);
+        end = new Date(currentDate.getFullYear(), currentDate.getMonth(), 15);
+        daysCount = 15;
+        unitLabel = `${format(start, 'M月')}前半`;
+        durationLabel = '半月（1日〜15日）';
+      } else {
+        start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 16);
+        end = endOfMonth(currentDate);
+        daysCount = end.getDate() - 16 + 1;
+        unitLabel = `${format(start, 'M月')}後半`;
+        durationLabel = `半月（16日〜${end.getDate()}日）`;
+      }
+    } else if (shiftPeriod === '2weeks') {
       start = startOfWeek(currentDate, { weekStartsOn: 1 });
       end = addDays(start, 13); // 14日間（2週間）
       daysCount = 14;
@@ -131,8 +146,8 @@ const ShiftAdminDashboard: React.FC = () => {
       start = startOfMonth(currentDate);
       end = endOfMonth(currentDate);
       daysCount = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      unitLabel = '今月';
-      durationLabel = '1ヶ月';
+      unitLabel = `${format(start, 'M月')}度`;
+      durationLabel = '1ヶ月（月単位）';
     } else {
       // 1week（デフォルト）
       start = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -158,6 +173,34 @@ const ShiftAdminDashboard: React.FC = () => {
     };
   }, [currentDate, shiftPeriod]);
 
+  // ◀ 前期 / 次期 ▶ への直感期間送りナビゲーション
+  const handleNavigatePeriod = (dir: 1 | -1) => {
+    setCurrentDate(prev => {
+      if (shiftPeriod === 'half_month') {
+        const day = prev.getDate();
+        if (dir === 1) {
+          if (day <= 15) {
+            return new Date(prev.getFullYear(), prev.getMonth(), 16);
+          } else {
+            return new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
+          }
+        } else {
+          if (day <= 15) {
+            return new Date(prev.getFullYear(), prev.getMonth() - 1, 16);
+          } else {
+            return new Date(prev.getFullYear(), prev.getMonth(), 1);
+          }
+        }
+      } else if (shiftPeriod === '1month') {
+        return addMonths(prev, dir);
+      } else if (shiftPeriod === '2weeks') {
+        return addDays(prev, dir * 14);
+      } else {
+        return addDays(prev, dir * 7);
+      }
+    });
+  };
+
   const totalEmployees = allEmployees.length;
   const submittedCount = submittedUserIds.length;
   const submissionRate = totalEmployees > 0 ? Math.round((submittedCount / totalEmployees) * 100) : 0;
@@ -167,7 +210,7 @@ const ShiftAdminDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchStats();
-  }, [shiftPeriod]);
+  }, [shiftPeriod, currentDate]);
 
   const fetchStats = async () => {
     setLoadingStats(true);
@@ -245,10 +288,19 @@ const ShiftAdminDashboard: React.FC = () => {
         }
       }
 
-      // 2. 期間に応じた日付範囲の動的算出（1週間 / 2週間 / 1ヶ月）
+      // 2. 期間に応じた日付範囲の動的算出（半月 / 1ヶ月 / 1週間 / 2週間）
       let queryStart: Date;
       let queryEnd: Date;
-      if (activePeriod === '2weeks') {
+      if (activePeriod === 'half_month') {
+        const day = currentDate.getDate();
+        if (day <= 15) {
+          queryStart = startOfMonth(currentDate);
+          queryEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 15);
+        } else {
+          queryStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 16);
+          queryEnd = endOfMonth(currentDate);
+        }
+      } else if (activePeriod === '2weeks') {
         queryStart = startOfWeek(currentDate, { weekStartsOn: 1 });
         queryEnd = addDays(queryStart, 13);
       } else if (activePeriod === '1month') {
@@ -597,10 +649,60 @@ const ShiftAdminDashboard: React.FC = () => {
             {/* 上段：タイトル ＆ 対象週バッジ */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
               <div>
-                <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-indigo-100 mb-2 border border-white/20">
-                  <Clock className="w-3.5 h-3.5" />
-                  {periodInfo.unitLabel}の対象期間: {periodInfo.periodLabel}（{periodInfo.durationLabel}）
+                {/* 🧭 直感期間ナビゲーター ＆ 管理単位クイック変更 */}
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <div className="inline-flex items-center bg-white/15 backdrop-blur-md p-1 rounded-2xl border border-white/20 shadow-xs">
+                    <button
+                      onClick={() => handleNavigatePeriod(-1)}
+                      className="p-1.5 hover:bg-white/20 rounded-xl text-white transition cursor-pointer flex items-center gap-0.5 text-xs font-bold px-2.5 whitespace-nowrap shrink-0"
+                      title="前の期間へ移動"
+                    >
+                      <ChevronLeft className="w-4 h-4 shrink-0" />
+                      <span>前期</span>
+                    </button>
+                    
+                    <div className="px-3 py-1 text-xs font-black text-white flex items-center gap-1.5 whitespace-nowrap">
+                      <Clock className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+                      <span>{periodInfo.unitLabel}</span>
+                      <span className="text-[11px] text-indigo-100 font-medium">({periodInfo.periodLabel})</span>
+                    </div>
+
+                    <button
+                      onClick={() => handleNavigatePeriod(1)}
+                      className="p-1.5 hover:bg-white/20 rounded-xl text-white transition cursor-pointer flex items-center gap-0.5 text-xs font-bold px-2.5 whitespace-nowrap shrink-0"
+                      title="次の期間へ移動"
+                    >
+                      <span>次期</span>
+                      <ChevronRight className="w-4 h-4 shrink-0" />
+                    </button>
+                  </div>
+
+                  {/* 今期へジャンプ */}
+                  <button
+                    onClick={() => setCurrentDate(new Date())}
+                    className="px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-bold rounded-xl border border-white/20 transition cursor-pointer shadow-2xs whitespace-nowrap shrink-0"
+                    title="現在の期間に戻る"
+                  >
+                    今期へ
+                  </button>
+
+                  {/* 期間単位のクイック変更 */}
+                  <div className="flex items-center gap-1.5 bg-white/15 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/20 text-xs font-bold text-white shadow-2xs whitespace-nowrap shrink-0">
+                    <span className="text-[11px] text-indigo-200 shrink-0">単位:</span>
+                    <select
+                      value={shiftPeriod}
+                      onChange={handlePeriodChange}
+                      disabled={isSavingPeriod}
+                      className="bg-transparent text-white font-bold text-xs focus:outline-none cursor-pointer [&>option]:text-slate-800"
+                    >
+                      <option value="half_month">半月ごと（1〜15日 / 16〜末日）★推奨</option>
+                      <option value="1month">1ヶ月（月単位・1日〜末日）</option>
+                      <option value="1week">1週間（毎週更新）</option>
+                      <option value="2weeks">2週間（隔週更新・14日）</option>
+                    </select>
+                  </div>
                 </div>
+
                 <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-2">
                   シフト作成・運用ダッシュボード
                 </h1>
@@ -612,10 +714,10 @@ const ShiftAdminDashboard: React.FC = () => {
               {/* クイックリンク */}
               <div className="flex items-center gap-2">
                 <button 
-                  onClick={() => navigate('/shift/admin/calendar')}
-                  className="bg-white text-indigo-700 hover:bg-indigo-50 font-black px-4 py-2.5 rounded-xl shadow-md transition text-xs sm:text-sm flex items-center gap-1.5 cursor-pointer"
+                  onClick={() => navigate(`/shift/admin/calendar?date=${periodInfo.startDateStr}`)}
+                  className="bg-white text-indigo-700 hover:bg-indigo-50 font-black px-4 py-2.5 rounded-xl shadow-md transition text-xs sm:text-sm flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
                 >
-                  <Calendar className="w-4 h-4" />
+                  <Calendar className="w-4 h-4 shrink-0" />
                   <span>カレンダーを開く</span>
                 </button>
                 <button 
@@ -1131,9 +1233,10 @@ const ShiftAdminDashboard: React.FC = () => {
                         disabled={isSavingPeriod}
                         className="px-3.5 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-700 font-bold text-xs flex-1"
                       >
-                        <option value="1week">1週間（推奨・毎週更新）</option>
-                        <option value="2weeks">2週間（半月ごと）</option>
-                        <option value="1month">1ヶ月（月単位）</option>
+                        <option value="half_month">半月ごと（1〜15日 / 16〜末日）★飲食・小売推奨</option>
+                        <option value="1month">1ヶ月（月単位・1日〜末日）★固定シフト推奨</option>
+                        <option value="1week">1週間（毎週更新）</option>
+                        <option value="2weeks">2週間（隔週更新・14日）</option>
                       </select>
                       {isSavingPeriod && <span className="text-xs text-indigo-500 font-bold animate-pulse">保存中...</span>}
                     </div>

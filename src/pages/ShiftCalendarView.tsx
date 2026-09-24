@@ -1,7 +1,7 @@
 /**
  * 🎨【周瑜・色彩革命版】全8ボタンの規格統一（h-[46px]）＆重複なしモダンカラーパレット配備
  */
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale, Sparkles, ArrowRightLeft, Calendar, Briefcase, Printer, Building2, MapPin, Store, MessageSquare, Send, Smartphone, HelpCircle } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -59,7 +59,8 @@ const ShiftCalendarView: React.FC = () => {
   const queryDate = new URLSearchParams(location.search).get('date');
   const [baseDate, setBaseDate] = useState(queryDate ? new Date(queryDate) : new Date());
   const [loading, setLoading] = useState(true);
-  const [displayPeriod, setDisplayPeriod] = useState<'1day' | '1week' | '2weeks' | '1month'>('1week');
+  const [displayPeriod, setDisplayPeriod] = useState<'1day' | '1week' | '2weeks' | '1month' | 'half_month'>('1week');
+  const isPeriodInitializedRef = useRef(false);
 
   let startDate: Date, endDate: Date;
   if (displayPeriod === '1day') {
@@ -71,6 +72,14 @@ const ShiftCalendarView: React.FC = () => {
   } else if (displayPeriod === '2weeks') {
     startDate = startOfWeek(baseDate, { weekStartsOn: 1 });
     endDate = addDays(startDate, 13);
+  } else if (displayPeriod === 'half_month') {
+    if (baseDate.getDate() <= 15) {
+      startDate = startOfMonth(baseDate);
+      endDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), 15);
+    } else {
+      startDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), 16);
+      endDate = endOfMonth(baseDate);
+    }
   } else {
     startDate = startOfMonth(baseDate);
     endDate = endOfMonth(baseDate);
@@ -120,12 +129,50 @@ const ShiftCalendarView: React.FC = () => {
   const [emergencyRewardNote, setEmergencyRewardNote] = useState<string>('まかない付き / 急募手当支給');
   const [isEmergencySending, setIsEmergencySending] = useState(false);
 
-  // 🏪 店舗切り替え時に店舗ごとの必要枠（Requirements）をキャッシュから再読み込み
+  // 🏪 店舗切り替え時に店舗ごとの必要枠（Requirements）をDB優先で再読み込み
   useEffect(() => {
     const loadStoreRequirements = async () => {
       try {
         const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
         if (!tenantIdData) return;
+
+        const targetStore = selectedDepartment === 'all' ? null : selectedDepartment;
+
+        // 1. DBから店舗別の必要枠を取得
+        let reqQuery = supabase
+          .from('advanced_shift_requirements')
+          .select('*')
+          .eq('tenant_id', tenantIdData)
+          .is('target_date', null);
+
+        if (targetStore) {
+          reqQuery = reqQuery.eq('store_name', targetStore);
+        } else {
+          reqQuery = reqQuery.is('store_name', null);
+        }
+
+        const { data: dbReqs } = await reqQuery;
+
+        if (dbReqs && dbReqs.length > 0) {
+          setRequirements(dbReqs);
+          return;
+        }
+
+        // 2. 店舗別枠がDBにない場合、全社共通枠（store_name IS NULL）を取得
+        if (targetStore) {
+          const { data: allReqs } = await supabase
+            .from('advanced_shift_requirements')
+            .select('*')
+            .eq('tenant_id', tenantIdData)
+            .is('target_date', null)
+            .is('store_name', null);
+          if (allReqs && allReqs.length > 0) {
+            setRequirements(allReqs);
+            return;
+          }
+        }
+
+        // 3. ローカルキャッシュフォールバック
         const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
         const cached = localStorage.getItem(storeKey);
         if (cached) {
@@ -201,7 +248,7 @@ const ShiftCalendarView: React.FC = () => {
 
   useEffect(() => {
     fetchSettingsAndData();
-  }, [baseDate]);
+  }, [baseDate, displayPeriod]);
 
   const fetchSettingsAndData = async () => {
     setLoading(true);
@@ -222,22 +269,42 @@ const ShiftCalendarView: React.FC = () => {
       setEnableStoreHelp(settings?.enable_store_help ?? (localHelp === 'true'));
 
       const isSingleDayQuery = new URLSearchParams(location.search).has('date');
-      const period = isSingleDayQuery ? '1day' : (settings?.shift_period || '1week');
-      if (period !== displayPeriod) {
-        setDisplayPeriod(period);
+      let activePeriod = displayPeriod;
+
+      // 初回ロード時のみDBのシフト設定（またはクエリパラメータ）を反映
+      if (!isPeriodInitializedRef.current) {
+        isPeriodInitializedRef.current = true;
+        if (isSingleDayQuery) {
+          activePeriod = '1day';
+        } else if (settings?.shift_period) {
+          activePeriod = settings.shift_period as any;
+        }
+        if (activePeriod !== displayPeriod) {
+          setDisplayPeriod(activePeriod);
+        }
+      } else if (isSingleDayQuery) {
+        activePeriod = '1day';
       }
 
       let startD: Date;
       let endD: Date;
-      if (displayPeriod === '1day') {
+      if (activePeriod === '1day') {
         startD = baseDate;
         endD = baseDate;
-      } else if (displayPeriod === '1week') {
+      } else if (activePeriod === '1week') {
         startD = startOfWeek(baseDate, { weekStartsOn: 1 }); // 月曜始まり
         endD = endOfWeek(baseDate, { weekStartsOn: 1 });
-      } else if (displayPeriod === '2weeks') {
+      } else if (activePeriod === '2weeks') {
         startD = startOfWeek(baseDate, { weekStartsOn: 1 });
         endD = addDays(startD, 13);
+      } else if (activePeriod === 'half_month') {
+        if (baseDate.getDate() <= 15) {
+          startD = startOfMonth(baseDate);
+          endD = new Date(baseDate.getFullYear(), baseDate.getMonth(), 15);
+        } else {
+          startD = new Date(baseDate.getFullYear(), baseDate.getMonth(), 16);
+          endD = endOfMonth(baseDate);
+        }
       } else {
         startD = startOfMonth(baseDate);
         endD = endOfMonth(baseDate);
@@ -327,58 +394,81 @@ const ShiftCalendarView: React.FC = () => {
         .gte('target_date', startStr)
         .lte('target_date', endStr);
 
-      const { data: reqsData } = await supabase
+      const targetStore = selectedDepartment === 'all' ? null : selectedDepartment;
+      let reqQuery = supabase
         .from('advanced_shift_requirements')
         .select('*')
-        .eq('tenant_id', tenantIdData);
+        .eq('tenant_id', tenantIdData)
+        .is('target_date', null);
+
+      if (targetStore) {
+        reqQuery = reqQuery.eq('store_name', targetStore);
+      } else {
+        reqQuery = reqQuery.is('store_name', null);
+      }
+
+      const { data: reqsData } = await reqQuery;
 
       let formattedReqs = reqsData || [];
-      if (selectedDepartment !== 'all') {
-        const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
-        const cached = localStorage.getItem(storeKey);
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            const formatted: any[] = [];
-            const weekdays = parsed['平日'] || [];
-            const weekends = parsed['土日'] || [];
-            const holidays = parsed['祝日'] || [];
-            weekdays.forEach((r: any) => {
-              [1, 2, 3, 4, 5].forEach(dow => {
+
+      // 店舗別レコードがDBにまだない場合、全社共通（store_name IS NULL）を取得試行
+      if ((!formattedReqs || formattedReqs.length === 0) && targetStore) {
+        const { data: allReqs } = await supabase
+          .from('advanced_shift_requirements')
+          .select('*')
+          .eq('tenant_id', tenantIdData)
+          .is('target_date', null)
+          .is('store_name', null);
+        if (allReqs && allReqs.length > 0) {
+          formattedReqs = allReqs;
+        } else {
+          // ローカルキャッシュフォールバック
+          const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
+          const cached = localStorage.getItem(storeKey);
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+              const formatted: any[] = [];
+              const weekdays = parsed['平日'] || [];
+              const weekends = parsed['土日'] || [];
+              const holidays = parsed['祝日'] || [];
+              weekdays.forEach((r: any) => {
+                [1, 2, 3, 4, 5].forEach(dow => {
+                  formatted.push({
+                    day_of_week: dow,
+                    role: r.role,
+                    required_count: r.count,
+                    start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
+                    end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
+                  });
+                });
+              });
+              weekends.forEach((r: any) => {
+                [0, 6].forEach(dow => {
+                  formatted.push({
+                    day_of_week: dow,
+                    role: r.role,
+                    required_count: r.count,
+                    start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
+                    end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
+                  });
+                });
+              });
+              holidays.forEach((r: any) => {
                 formatted.push({
-                  day_of_week: dow,
+                  day_of_week: 7,
                   role: r.role,
                   required_count: r.count,
                   start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
                   end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
                 });
               });
-            });
-            weekends.forEach((r: any) => {
-              [0, 6].forEach(dow => {
-                formatted.push({
-                  day_of_week: dow,
-                  role: r.role,
-                  required_count: r.count,
-                  start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
-                  end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
-                });
-              });
-            });
-            holidays.forEach((r: any) => {
-              formatted.push({
-                day_of_week: 7,
-                role: r.role,
-                required_count: r.count,
-                start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
-                end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
-              });
-            });
-            if (formatted.length > 0) {
-              formattedReqs = formatted;
+              if (formatted.length > 0) {
+                formattedReqs = formatted;
+              }
+            } catch (e) {
+              console.warn('Store req parse error in fetch:', e);
             }
-          } catch (e) {
-            console.warn('Store req parse error in fetch:', e);
           }
         }
       }
@@ -1402,10 +1492,34 @@ const ShiftCalendarView: React.FC = () => {
   };
 
   const movePeriod = (dir: 1 | -1) => {
-    if (displayPeriod === '1day') setBaseDate(addDays(baseDate, dir * 1));
-    else if (displayPeriod === '1week') setBaseDate(addDays(baseDate, dir * 7));
-    else if (displayPeriod === '2weeks') setBaseDate(addDays(baseDate, dir * 14));
-    else setBaseDate(addDays(baseDate, dir * 30));
+    if (displayPeriod === '1day') {
+      setBaseDate(addDays(baseDate, dir * 1));
+    } else if (displayPeriod === '1week') {
+      setBaseDate(addDays(baseDate, dir * 7));
+    } else if (displayPeriod === '2weeks') {
+      setBaseDate(addDays(baseDate, dir * 14));
+    } else if (displayPeriod === 'half_month') {
+      const day = baseDate.getDate();
+      const currentYear = baseDate.getFullYear();
+      const currentMonth = baseDate.getMonth();
+      if (dir === 1) {
+        if (day <= 15) {
+          setBaseDate(new Date(currentYear, currentMonth, 16));
+        } else {
+          setBaseDate(new Date(currentYear, currentMonth + 1, 1));
+        }
+      } else {
+        if (day > 15) {
+          setBaseDate(new Date(currentYear, currentMonth, 1));
+        } else {
+          setBaseDate(new Date(currentYear, currentMonth - 1, 16));
+        }
+      }
+    } else {
+      const currentYear = baseDate.getFullYear();
+      const currentMonth = baseDate.getMonth();
+      setBaseDate(new Date(currentYear, currentMonth + dir, 1));
+    }
   };
 
   const openCellModal = (userId: string, roleName: string, dateStr: string) => {
@@ -1456,21 +1570,44 @@ const ShiftCalendarView: React.FC = () => {
             </button>
             <h1 className="text-2xl font-bold text-slate-800 flex items-center">
               <Clock className="w-6 h-6 mr-3 text-indigo-600" />
-              シフトカレンダー ({displayPeriod === '1day' ? '1日' : displayPeriod === '1week' ? '1週間' : displayPeriod === '2weeks' ? '2週間' : '1ヶ月'})
+              シフトカレンダー ({displayPeriod === '1day' ? '1日' : displayPeriod === '1week' ? '1週間' : displayPeriod === '2weeks' ? '2週間' : displayPeriod === 'half_month' ? '半月' : '1ヶ月'})
             </h1>
           </div>
           
           <div className="flex items-center space-x-2.5">
             <div className="flex items-center bg-slate-100 rounded-xl p-1">
-              <button onClick={() => movePeriod(-1)} className="p-2 hover:bg-white rounded-lg transition-colors shadow-sm">
+              <button onClick={() => movePeriod(-1)} className="p-2 hover:bg-white rounded-lg transition-colors shadow-sm" title="前の期間へ">
                 <ChevronLeft className="w-5 h-5 text-slate-600" />
               </button>
-              <span className="font-bold text-lg px-6 min-w-[220px] text-center">
+              <button 
+                onClick={() => setBaseDate(new Date())}
+                className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-indigo-600 hover:bg-white rounded-lg transition cursor-pointer"
+                title="今日（今期）に戻る"
+              >
+                今日
+              </button>
+              <span className="font-bold text-base sm:text-lg px-3 min-w-[200px] text-center">
                 {format(startDate, 'yyyy年M月d日')} 〜 {format(endDate, 'M月d日')}
               </span>
-              <button onClick={() => movePeriod(1)} className="p-2 hover:bg-white rounded-lg transition-colors shadow-sm">
+              <button onClick={() => movePeriod(1)} className="p-2 hover:bg-white rounded-lg transition-colors shadow-sm" title="次の期間へ">
                 <ChevronRight className="w-5 h-5 text-slate-600" />
               </button>
+            </div>
+
+            {/* 期間単位クイックセレクター */}
+            <div className="h-[46px] px-2.5 bg-slate-100 rounded-xl flex items-center gap-1 border border-slate-200 shrink-0">
+              <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">表示:</span>
+              <select
+                value={displayPeriod}
+                onChange={(e) => setDisplayPeriod(e.target.value as any)}
+                className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+              >
+                <option value="half_month">半月（1〜15日/16〜末日）★推奨</option>
+                <option value="1month">1ヶ月（月単位）</option>
+                <option value="1week">1週間（週単位）</option>
+                <option value="2weeks">2週間（14日間）</option>
+                <option value="1day">1日（日別詳細）</option>
+              </select>
             </div>
 
             {/* 🏢 正社員シフト一括先入れボタン（黄金フロー第1歩！ 爽快ロイヤルブルー） */}
