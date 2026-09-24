@@ -213,6 +213,7 @@ export async function seedShiftDemoData(tenantId: string): Promise<SeedResult> {
       [1, 2, 3, 4, 5].forEach(dow => {
         dbReqInserts.push({
           tenant_id: tenantId,
+          store_name: storeName,
           day_of_week: dow,
           role: r.role,
           required_count: r.count,
@@ -225,6 +226,7 @@ export async function seedShiftDemoData(tenantId: string): Promise<SeedResult> {
       [0, 6].forEach(dow => {
         dbReqInserts.push({
           tenant_id: tenantId,
+          store_name: storeName,
           day_of_week: dow,
           role: r.role,
           required_count: r.count,
@@ -236,6 +238,7 @@ export async function seedShiftDemoData(tenantId: string): Promise<SeedResult> {
     holidays.forEach((r: any) => {
       dbReqInserts.push({
         tenant_id: tenantId,
+        store_name: storeName,
         day_of_week: 7,
         role: r.role,
         required_count: r.count,
@@ -254,7 +257,13 @@ export async function seedShiftDemoData(tenantId: string): Promise<SeedResult> {
     if (dbReqInserts.length > 0) {
       // 50件ずつバッチインサート
       for (let i = 0; i < dbReqInserts.length; i += 50) {
-        await supabase.from('advanced_shift_requirements').insert(dbReqInserts.slice(i, i + 50));
+        const batch = dbReqInserts.slice(i, i + 50);
+        const { error: insErr } = await supabase.from('advanced_shift_requirements').insert(batch);
+        if (insErr) {
+          // store_name カラムが存在しない場合のフォールバック
+          const stripped = batch.map(({ store_name, ...rest }) => rest);
+          await supabase.from('advanced_shift_requirements').insert(stripped);
+        }
       }
     }
   } catch (reqDbErr) {

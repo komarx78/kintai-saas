@@ -857,7 +857,7 @@ export async function fetchHealthPensionAcqCoordinatesFromDb(): Promise<HealthPe
       .limit(1)
       .maybeSingle();
 
-    if (data && data.health_pension_acq_doc_coordinates && Array.isArray(data.health_pension_acq_doc_coordinates)) {
+    if (data && data.health_pension_acq_doc_coordinates && Array.isArray(data.health_pension_acq_doc_coordinates) && data.health_pension_acq_doc_coordinates.length > 0) {
       const merged = DEFAULT_HEALTH_PENSION_ACQ_FIELDS.map(def => {
         let custom = data.health_pension_acq_doc_coordinates.find((p: any) => p.id === def.id);
         // 旧郵便番号ID（officeZipCode, zipCode_1）からの安全マイグレーション

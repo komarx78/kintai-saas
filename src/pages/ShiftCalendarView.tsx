@@ -120,12 +120,50 @@ const ShiftCalendarView: React.FC = () => {
   const [emergencyRewardNote, setEmergencyRewardNote] = useState<string>('まかない付き / 急募手当支給');
   const [isEmergencySending, setIsEmergencySending] = useState(false);
 
-  // 🏪 店舗切り替え時に店舗ごとの必要枠（Requirements）をキャッシュから再読み込み
+  // 🏪 店舗切り替え時に店舗ごとの必要枠（Requirements）をDB優先で再読み込み
   useEffect(() => {
     const loadStoreRequirements = async () => {
       try {
         const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
         if (!tenantIdData) return;
+
+        const targetStore = selectedDepartment === 'all' ? null : selectedDepartment;
+
+        // 1. DBから店舗別の必要枠を取得
+        let reqQuery = supabase
+          .from('advanced_shift_requirements')
+          .select('*')
+          .eq('tenant_id', tenantIdData)
+          .is('target_date', null);
+
+        if (targetStore) {
+          reqQuery = reqQuery.eq('store_name', targetStore);
+        } else {
+          reqQuery = reqQuery.is('store_name', null);
+        }
+
+        const { data: dbReqs } = await reqQuery;
+
+        if (dbReqs && dbReqs.length > 0) {
+          setRequirements(dbReqs);
+          return;
+        }
+
+        // 2. 店舗別枠がDBにない場合、全社共通枠（store_name IS NULL）を取得
+        if (targetStore) {
+          const { data: allReqs } = await supabase
+            .from('advanced_shift_requirements')
+            .select('*')
+            .eq('tenant_id', tenantIdData)
+            .is('target_date', null)
+            .is('store_name', null);
+          if (allReqs && allReqs.length > 0) {
+            setRequirements(allReqs);
+            return;
+          }
+        }
+
+        // 3. ローカルキャッシュフォールバック
         const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
         const cached = localStorage.getItem(storeKey);
         if (cached) {
@@ -327,58 +365,81 @@ const ShiftCalendarView: React.FC = () => {
         .gte('target_date', startStr)
         .lte('target_date', endStr);
 
-      const { data: reqsData } = await supabase
+      const targetStore = selectedDepartment === 'all' ? null : selectedDepartment;
+      let reqQuery = supabase
         .from('advanced_shift_requirements')
         .select('*')
-        .eq('tenant_id', tenantIdData);
+        .eq('tenant_id', tenantIdData)
+        .is('target_date', null);
+
+      if (targetStore) {
+        reqQuery = reqQuery.eq('store_name', targetStore);
+      } else {
+        reqQuery = reqQuery.is('store_name', null);
+      }
+
+      const { data: reqsData } = await reqQuery;
 
       let formattedReqs = reqsData || [];
-      if (selectedDepartment !== 'all') {
-        const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
-        const cached = localStorage.getItem(storeKey);
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            const formatted: any[] = [];
-            const weekdays = parsed['平日'] || [];
-            const weekends = parsed['土日'] || [];
-            const holidays = parsed['祝日'] || [];
-            weekdays.forEach((r: any) => {
-              [1, 2, 3, 4, 5].forEach(dow => {
+
+      // 店舗別レコードがDBにまだない場合、全社共通（store_name IS NULL）を取得試行
+      if ((!formattedReqs || formattedReqs.length === 0) && targetStore) {
+        const { data: allReqs } = await supabase
+          .from('advanced_shift_requirements')
+          .select('*')
+          .eq('tenant_id', tenantIdData)
+          .is('target_date', null)
+          .is('store_name', null);
+        if (allReqs && allReqs.length > 0) {
+          formattedReqs = allReqs;
+        } else {
+          // ローカルキャッシュフォールバック
+          const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
+          const cached = localStorage.getItem(storeKey);
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+              const formatted: any[] = [];
+              const weekdays = parsed['平日'] || [];
+              const weekends = parsed['土日'] || [];
+              const holidays = parsed['祝日'] || [];
+              weekdays.forEach((r: any) => {
+                [1, 2, 3, 4, 5].forEach(dow => {
+                  formatted.push({
+                    day_of_week: dow,
+                    role: r.role,
+                    required_count: r.count,
+                    start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
+                    end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
+                  });
+                });
+              });
+              weekends.forEach((r: any) => {
+                [0, 6].forEach(dow => {
+                  formatted.push({
+                    day_of_week: dow,
+                    role: r.role,
+                    required_count: r.count,
+                    start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
+                    end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
+                  });
+                });
+              });
+              holidays.forEach((r: any) => {
                 formatted.push({
-                  day_of_week: dow,
+                  day_of_week: 7,
                   role: r.role,
                   required_count: r.count,
                   start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
                   end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
                 });
               });
-            });
-            weekends.forEach((r: any) => {
-              [0, 6].forEach(dow => {
-                formatted.push({
-                  day_of_week: dow,
-                  role: r.role,
-                  required_count: r.count,
-                  start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
-                  end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
-                });
-              });
-            });
-            holidays.forEach((r: any) => {
-              formatted.push({
-                day_of_week: 7,
-                role: r.role,
-                required_count: r.count,
-                start_time: `${String(r.startHour).padStart(2, '0')}:00:00`,
-                end_time: `${String(r.endHour).padStart(2, '0')}:00:00`
-              });
-            });
-            if (formatted.length > 0) {
-              formattedReqs = formatted;
+              if (formatted.length > 0) {
+                formattedReqs = formatted;
+              }
+            } catch (e) {
+              console.warn('Store req parse error in fetch:', e);
             }
-          } catch (e) {
-            console.warn('Store req parse error in fetch:', e);
           }
         }
       }

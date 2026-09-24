@@ -7,6 +7,7 @@ import {
 import { 
   DEFAULT_HEALTH_PENSION_ACQ_FIELDS,
   loadHealthPensionAcqCoordinates,
+  fetchHealthPensionAcqCoordinatesFromDb,
   saveHealthPensionAcqCoordinates,
   saveHealthPensionAcqCoordinatesToDb,
   broadcastHealthPensionAcqCoordinates,
@@ -85,6 +86,17 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
       }
     };
     renderPdf();
+    return () => { isCancelled = true; };
+  }, []);
+
+  // ☁️ マウント時にDBから最新の公的印字座標を取得（他PCとの完全同期保証）
+  useEffect(() => {
+    let isCancelled = false;
+    fetchHealthPensionAcqCoordinatesFromDb().then(dbCoords => {
+      if (!isCancelled && dbCoords && dbCoords.length > 0) {
+        setFields(dbCoords);
+      }
+    });
     return () => { isCancelled = true; };
   }, []);
 

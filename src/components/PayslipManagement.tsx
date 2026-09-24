@@ -6,7 +6,7 @@ import {
   Users, Sparkles, Loader2, X, FileSpreadsheet,
   Settings as SettingsIcon, Download, UserCheck, CreditCard, Building2, Save,
   ChevronDown, ChevronUp, Clock, Calendar, TrendingUp, MapPin, LayoutGrid, List, RotateCcw,
-  ShieldCheck, Gift, Edit, Trash2
+  ShieldCheck, Gift, Edit, Trash2, MessageSquare, Copy
 } from 'lucide-react';
 import { OfficialPayslipDoc } from './OfficialPayslipDoc';
 import { BonusPaymentReportModal } from './BonusPaymentReportModal';
@@ -30,6 +30,14 @@ import {
   calculateDailyAttendanceDetails,
   timeToMinutes
 } from '../lib/attendanceRounding';
+import {
+  type LineIntegrationConfig,
+  getTenantLineConfig,
+  fetchTenantLineConfigFromDb,
+  syncStaffLineLinkFromDb,
+  formatSingleStaffPayslipShareText,
+  sendStaffPayslipLineMessages
+} from '../lib/lineMessaging';
 
 interface PayslipManagementProps {
   tenantId: string | null;
@@ -136,6 +144,19 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
   }>({
     isOpen: false,
     payslip: null
+  });
+
+  // 📱 公式LINE通知 & 個別手動配信 State
+  const [lineConfig, setLineConfig] = useState<LineIntegrationConfig>(() => getTenantLineConfig(tenantId));
+  const [lineLinkMap, setLineLinkMap] = useState<Record<string, boolean>>({});
+  const [isSendingLine, setIsSendingLine] = useState(false);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
+  const [manualShareModal, setManualShareModal] = useState<{
+    isOpen: boolean;
+    selectedUserId: string;
+  }>({
+    isOpen: false,
+    selectedUserId: ''
   });
 
   // 📅 勤怠出勤簿・タイムカード詳細モーダルState
@@ -517,6 +538,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       // ⚙️ 現場即応 打刻丸めルールの取得（SSOT）
       const loadedRules = getAttendanceRoundingRules(tenantId);
       setRoundingRules(loadedRules);
+
+      // 📱 LINE通知設定 & スタッフ連携状態を同期取得（SSOT）
+      try {
+        const lineCfg = await fetchTenantLineConfigFromDb(tenantId);
+        if (lineCfg) setLineConfig(lineCfg);
+        const lMap = await syncStaffLineLinkFromDb(tenantId);
+        if (lMap) setLineLinkMap(lMap);
+      } catch (lineErr) {
+        console.warn('LINE config fetch error:', lineErr);
+      }
 
       // 3. 従業員一覧取得
       const { data: uData } = await supabase
@@ -1648,6 +1679,72 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     }
   };
 
+  // 🟢 スタッフへLINE一括自動配信ハンドラー（公式LINE代行・自社公式アカウント）
+  const handleSendPayslipLineBatch = async () => {
+    if (!tenantId || payslips.length === 0) return;
+
+    // LINE連携モードの確認
+    if (lineConfig.mode === 'none') {
+      // 手動モードの場合は手動共有モーダルを開く
+      setManualShareModal({
+        isOpen: true,
+        selectedUserId: payslips[0]?.user_id || ''
+      });
+      return;
+    }
+
+    const linkedStaffCount = payslips.filter(p => lineLinkMap[p.user_id] || p.user?.contact_line_id).length;
+    const accountName = lineConfig.mode === 'rakumaru_official' 
+      ? 'みんなのらくまる労務 公式LINE代行' 
+      : (lineConfig.ownAccountName || '自社公式LINE');
+
+    const confirmMsg = `【${currentYearMonth}度 Web給与明細 LINE一斉配信】\n\n` +
+      `送信アカウント: ${accountName}\n` +
+      `対象スタッフ: 全${payslips.length}名中、LINE連携済みの ${linkedStaffCount}名\n\n` +
+      `※ プライバシー保護（覗き見防止）のため、金額面は直書きせず「セキュアWeb明細URL」が送信されます。\n` +
+      `※ 未連携のスタッフ（${payslips.length - linkedStaffCount}名）には送信されません。\n\n` +
+      `スタッフのLINEへ一斉配信を実行しますか？`;
+
+    if (!confirm(confirmMsg)) return;
+
+    setIsSendingLine(true);
+    try {
+      const payslipItems = payslips.map(p => ({
+        userId: p.user_id,
+        userName: p.user?.name || 'スタッフ',
+        yearMonth: currentYearMonth,
+        paymentDate: p.payment_date,
+        isLineLinked: !!lineLinkMap[p.user_id] || !!p.user?.contact_line_id
+      }));
+
+      const res = await sendStaffPayslipLineMessages(tenantId, payslipItems, tenantInfo?.name || tenantInfo?.company_name);
+
+      alert(res.message);
+    } catch (err: any) {
+      console.error('Line send error:', err);
+      alert('LINE一括送信処理中にエラーが発生しました: ' + err.message);
+    } finally {
+      setIsSendingLine(false);
+    }
+  };
+
+  // 📋 スタッフ個別の給与明細LINE文面コピー
+  const handleCopyIndividualPayslipLineText = (payslip: Payslip) => {
+    const userName = payslip.user?.name || 'スタッフ';
+    const text = formatSingleStaffPayslipShareText({
+      staffName: userName,
+      yearMonth: payslip.year_month || currentYearMonth,
+      paymentDate: payslip.payment_date,
+      companyName: tenantInfo?.name || tenantInfo?.company_name || '会社',
+      tenantId: tenantId || '',
+      userId: payslip.user_id
+    });
+
+    navigator.clipboard.writeText(text);
+    setCopyToast(`📋 ${userName} 様のLINE送信用テキストをコピーしました！`);
+    setTimeout(() => setCopyToast(null), 4000);
+  };
+
   // 個別の確定公開 / 下書きトグル
   const handleTogglePublishSingle = async (slip: Payslip) => {
     if (!tenantId) return;
@@ -2418,6 +2515,34 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             一括確定 (Web公開)
           </button>
 
+          {/* 🟢 LINE通知・手動共有ボタン（孔明・周瑜・陸遜設計：プランに応じた最適CTA） */}
+          {lineConfig.mode !== 'none' ? (
+            <button
+              onClick={handleSendPayslipLineBatch}
+              disabled={isSendingLine || payslips.length === 0}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm px-4 py-2.5 rounded-xl transition shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              title="LINE連携済みのスタッフ全員へ、Web給与明細の発行通知を一括自動配信します（プライバシー保護セキュアURL形式）"
+            >
+              {isSendingLine ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4 text-emerald-200" />}
+              <span>🟢 スタッフ全員へLINE一括通知</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setManualShareModal({
+                  isOpen: true,
+                  selectedUserId: payslips[0]?.user_id || ''
+                });
+              }}
+              disabled={payslips.length === 0}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 font-bold text-sm px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="個人LINEやチャットツール送信用テキストを表示・個別コピーします（手動モード）"
+            >
+              <Copy className="w-4 h-4 text-slate-500" />
+              <span>📋 個人LINE送信用テキスト（手動）</span>
+            </button>
+          )}
+
           <button
             onClick={handleUnpublishAll}
             disabled={isSaving || payslips.length === 0}
@@ -2449,7 +2574,25 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* LINE連携プランの現在状況バッジ */}
+          {lineConfig.mode === 'rakumaru_official' ? (
+            <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              公式LINE代行（自動配信）
+            </span>
+          ) : lineConfig.mode === 'own_official' ? (
+            <span className="bg-blue-50 text-blue-800 border border-blue-300 px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+              自社公式LINE（自動配信）
+            </span>
+          ) : (
+            <span className="bg-slate-100 text-slate-600 border border-slate-300 px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5" title="公式LINEプラン契約でボタン1つの一斉自動配信が可能になります">
+              <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+              手動通知モード（無料）
+            </span>
+          )}
+
           <button
             onClick={() => setSettingsModalOpen(true)}
             className="bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs px-3 py-2 rounded-xl transition border border-slate-200 flex items-center gap-1.5 cursor-pointer"
@@ -2606,6 +2749,18 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                               🎉 当月途中入社（{slip.user.join_date.substring(5)}）
                             </span>
                           )}
+                          {/* 📱 LINE連携状態バッジ */}
+                          {lineLinkMap[slip.user_id] || slip.user?.contact_line_id ? (
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 shadow-2xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              LINE連携済
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-md border bg-slate-50 text-slate-400 border-slate-200 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                              LINE未連携
+                            </span>
+                          )}
                         </div>
                         <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2.5 mt-1.5">
                           <span className="font-bold text-slate-600">{slip.user?.department || '一般社員'}</span>
@@ -2708,6 +2863,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                       >
                         <Printer className="w-3.5 h-3.5" />
                         明細プレビュー / 印刷
+                      </button>
+
+                      {/* 📋 LINE送信用文面コピー（手動・個別通知） */}
+                      <button
+                        onClick={() => handleCopyIndividualPayslipLineText(slip)}
+                        className="text-xs font-bold text-emerald-700 hover:text-white bg-emerald-50 hover:bg-emerald-600 border border-emerald-200 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        title="このスタッフ向けの給与明細LINE案内文面をクリップボードにコピー（個人LINEやチャットツールへ貼り付け可能）"
+                      >
+                        <Copy className="w-3.5 h-3.5 text-emerald-600" />
+                        LINE文面コピー
                       </button>
                     </div>
                   </div>
@@ -2983,6 +3148,15 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                     {slip.user.join_date.substring(5)}入社
                                   </span>
                                 )}
+                                {lineLinkMap[slip.user_id] || slip.user?.contact_line_id ? (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200" title="LINE公式連携済">
+                                    LINE済
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-100 text-slate-400" title="LINE未連携">
+                                    未連携
+                                  </span>
+                                )}
                               </div>
                               <button
                                 onClick={(e) => {
@@ -3115,6 +3289,13 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                               title="金額の微調整・編集"
                             >
                               <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleCopyIndividualPayslipLineText(slip)}
+                              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                              title="LINE送信用テキストをコピー（手動送信用）"
+                            >
+                              <Copy className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
@@ -4775,6 +4956,160 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           }
         }}
       />
+
+      {/* 📋 スタッフ給与明細 LINE手動送信用テキスト案内モーダル */}
+      {manualShareModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* ヘッダー */}
+            <div className="px-6 py-5 bg-gradient-to-r from-emerald-900 via-slate-900 to-indigo-950 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black text-xl">
+                  📋
+                </div>
+                <div>
+                  <h3 className="text-base font-black flex items-center gap-2">
+                    スタッフ給与明細 送信用テキスト（手動用）
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      無料・手動運用
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-300">
+                    対象スタッフの送信用テキストをコピーし、個人LINEやチャットツールへ貼り付けて送信できます
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setManualShareModal(prev => ({ ...prev, isOpen: false }))}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="p-6 overflow-y-auto space-y-4 text-xs">
+              {/* スタッフ選択タブ */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  送信対象スタッフを選択:
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {payslips.map(s => {
+                    const isSelected = (manualShareModal.selectedUserId || payslips[0]?.user_id) === s.user_id;
+                    return (
+                      <button
+                        key={s.user_id}
+                        type="button"
+                        onClick={() => setManualShareModal(prev => ({ ...prev, selectedUserId: s.user_id }))}
+                        className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        <span>{s.user?.name || 'スタッフ'}</span>
+                        {lineLinkMap[s.user_id] || s.user?.contact_line_id ? (
+                          <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-500'}`}></span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 選択中スタッフのテキスト表示 */}
+              {(() => {
+                const targetSlip = payslips.find(s => s.user_id === (manualShareModal.selectedUserId || payslips[0]?.user_id)) || payslips[0];
+                if (!targetSlip) return <p className="text-slate-400">対象スタッフがいません</p>;
+
+                const userName = targetSlip.user?.name || 'スタッフ';
+                const shareText = formatSingleStaffPayslipShareText({
+                  staffName: userName,
+                  yearMonth: targetSlip.year_month || currentYearMonth,
+                  paymentDate: targetSlip.payment_date,
+                  companyName: tenantInfo?.name || tenantInfo?.company_name || '会社',
+                  tenantId: tenantId || '',
+                  userId: targetSlip.user_id
+                });
+
+                return (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800 text-xs">
+                        【{userName} 様向け】LINE送信用メッセージ本文:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(shareText);
+                          setCopyToast(`📋 ${userName} 様のテキストをコピーしました！`);
+                          setTimeout(() => setCopyToast(null), 4000);
+                        }}
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Copy size={13} />
+                        この文章をコピーする
+                      </button>
+                    </div>
+
+                    <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl font-mono text-[11px] leading-relaxed whitespace-pre-wrap border border-slate-800 shadow-inner">
+                      {shareText}
+                    </div>
+
+                    {/* 💡 公式LINEプランへの案内カード */}
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-2.5">
+                        <span className="text-xl">💡</span>
+                        <div>
+                          <h5 className="font-black text-emerald-950 text-xs">
+                            公式LINE通知プラン（月額3,000円〜）なら手動コピー不要！
+                          </h5>
+                          <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
+                            給与確定時に「一括自動配信」ボタンを1回押すだけで、全スタッフのLINEへWeb明細通知が瞬時に届きます。店長の個人LINEも一切不要です。
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setManualShareModal(prev => ({ ...prev, isOpen: false }));
+                          setSettingsModalOpen(true);
+                        }}
+                        className="px-3 py-1.5 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-black rounded-xl transition shadow-2xs text-[11px] shrink-0 cursor-pointer"
+                      >
+                        設定画面を開く ➔
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* フッター */}
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">
+                ※ 金額面は覗き見防止のため記載されていません。スタッフはURLから安全に閲覧できます。
+              </span>
+              <button
+                type="button"
+                onClick={() => setManualShareModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl transition cursor-pointer text-xs"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📋 クリップボードコピー完了トースト */}
+      {copyToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 border border-slate-700 animate-in slide-in-from-bottom-5 duration-200">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="text-xs font-bold">{copyToast}</span>
+        </div>
+      )}
     </div>
   );
 };

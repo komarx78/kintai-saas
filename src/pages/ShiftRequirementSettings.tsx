@@ -76,26 +76,51 @@ const ShiftRequirementSettings: React.FC = () => {
         }
       }
 
-      // 3. 店舗別の必要枠設定の読み込み（ローカルキャッシュ優先・DBフォールバック）
-      const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
-      const cachedStoreReqs = localStorage.getItem(storeKey);
-      if (cachedStoreReqs && selectedDepartment !== 'all') {
-        try {
-          const parsed = JSON.parse(cachedStoreReqs);
-          setRequirements(parsed);
-          return;
-        } catch (e) {}
-      }
-
-      // 2. 必要枠の取得
-      const { data, error } = await supabase
+      // 3. 必要枠の取得（店舗別DB優先、フォールバック付き）
+      const targetStore = selectedDepartment === 'all' ? null : selectedDepartment;
+      
+      let query = supabase
         .from('advanced_shift_requirements')
         .select('*')
         .eq('tenant_id', tenantIdData)
         .is('target_date', null);
 
-      if (error) throw error;
-      
+      if (targetStore) {
+        query = query.eq('store_name', targetStore);
+      } else {
+        query = query.is('store_name', null);
+      }
+
+      const { data: storeDbData, error: queryErr } = await query;
+      if (queryErr) {
+        console.warn('Store requirements DB query note:', queryErr);
+      }
+      let data = storeDbData;
+
+      // 店舗別レコードがDBにまだない場合、全社共通レコードを再取得試行
+      if ((!data || data.length === 0) && targetStore) {
+        const { data: allData } = await supabase
+          .from('advanced_shift_requirements')
+          .select('*')
+          .eq('tenant_id', tenantIdData)
+          .is('target_date', null)
+          .is('store_name', null);
+        if (allData && allData.length > 0) {
+          data = allData;
+        } else {
+          // LocalStorageキャッシュフォールバック
+          const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
+          const cachedStoreReqs = localStorage.getItem(storeKey);
+          if (cachedStoreReqs) {
+            try {
+              const parsed = JSON.parse(cachedStoreReqs);
+              setRequirements(parsed);
+              return;
+            } catch (e) {}
+          }
+        }
+      }
+
       const newReqs: Record<string, Requirement[]> = { '平日': [], '土日': [], '祝日': [] };
       if (data && data.length > 0) {
         // 重複登録されている曜日（例: 平日は1〜5）を1つのパターン枠として重複排除して読み込む
@@ -128,6 +153,10 @@ const ShiftRequirementSettings: React.FC = () => {
             }
           }
         });
+
+        // 取得した最新DBデータをローカルキャッシュにも同期
+        const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
+        localStorage.setItem(storeKey, JSON.stringify(newReqs));
       }
 
       // もしDBに枠がない、または土日・祝日が空の場合は標準枠（ホール/キッチン/レジ/清掃）を自動補完して消去を防止
@@ -326,16 +355,30 @@ const ShiftRequirementSettings: React.FC = () => {
       const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
       if (!tenantIdData) return;
 
-      const { error: deleteError } = await supabase
+      const targetStore = selectedDepartment === 'all' ? null : selectedDepartment;
+
+      // 該当店舗（または全社共通）の既存レコードのみを安全に削除（他店舗の要件を巻き込まない）
+      let delQuery = supabase
         .from('advanced_shift_requirements')
         .delete()
         .eq('tenant_id', tenantIdData)
         .is('target_date', null);
-      if (deleteError) throw deleteError;
+
+      if (targetStore) {
+        delQuery = delQuery.eq('store_name', targetStore);
+      } else {
+        delQuery = delQuery.is('store_name', null);
+      }
+
+      const { error: deleteError } = await delQuery;
+      if (deleteError) {
+        console.warn('Requirement delete note:', deleteError);
+      }
 
       const insertData: any[] = [];
       const createRow = (req: Requirement, dow: number) => ({
         tenant_id: tenantIdData,
+        store_name: targetStore,
         day_of_week: dow,
         role: req.role,
         required_count: req.count,
@@ -364,10 +407,17 @@ const ShiftRequirementSettings: React.FC = () => {
         const { error: insertError } = await supabase
           .from('advanced_shift_requirements')
           .insert(insertData);
-        if (insertError) throw insertError;
+        if (insertError) {
+          // store_name カラムが未配備の場合の安全フォールバック
+          const stripped = insertData.map(({ store_name, ...rest }) => rest);
+          const { error: retryError } = await supabase
+            .from('advanced_shift_requirements')
+            .insert(stripped);
+          if (retryError) throw retryError;
+        }
       }
 
-      // 店舗別の必要枠キャッシュへの確実な保存
+      // 店舗別の必要枠キャッシュへのバックアップ保存
       const storeKey = `shift_reqs_${tenantIdData}_${selectedDepartment}`;
       localStorage.setItem(storeKey, JSON.stringify(requirements));
 
