@@ -4,7 +4,7 @@ import {
   ArrowLeft, ClipboardList, ChevronLeft, ChevronRight, 
   Clock, User, Users, Calendar, Search, 
   CheckCircle2, XCircle, Sparkles, LayoutGrid, List,
-  Building2, MapPin, Store
+  Building2, MapPin, Store, Trash2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
@@ -12,6 +12,7 @@ import { ja } from 'date-fns/locale';
 import AppSwitcher from '../components/AppSwitcher';
 import { fetchStoresUnified, getStoresFromStorage } from '../lib/storeMaster';
 import { seedShiftDemoData } from '../lib/seedShiftDemoData';
+import { clearShiftDemoData } from '../lib/clearShiftDemoData';
 
 interface ShiftRequest {
   id: string;
@@ -38,6 +39,7 @@ export const ShiftRequestsView: React.FC = () => {
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<'day' | 'staff' | 'list'>('day');
   const [searchQuery, setSearchQuery] = useState('');
@@ -237,6 +239,28 @@ export const ShiftRequestsView: React.FC = () => {
     }
   };
 
+  // 🧹 ダミー希望データの安全全消去ハンドラー（本番保護型）
+  const handleClearDummy = async () => {
+    if (!window.confirm('【検証用ダミー希望データ安全消去】\n\n・検証用シフト希望データ\n・下書き/確定シフトデータ\n・ダミー店舗の必要人数枠\nを安全に全消去します。\n\n※ 社員アカウントや会社情報は一切削除されません。\n実行してよろしいですか？')) return;
+    setIsClearing(true);
+    try {
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
+      if (!tenantId) {
+        alert('テナントIDが取得できませんでした。');
+        return;
+      }
+
+      const res = await clearShiftDemoData(tenantId);
+      alert(`🧹 ${res.message}`);
+      await fetchRequests();
+    } catch (err: any) {
+      console.error('ダミー消去エラー:', err);
+      alert('ダミー消去に失敗しました: ' + (err.message || err));
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
       {/* 画面最上部：固定ヘッダーバー */}
@@ -280,6 +304,20 @@ export const ShiftRequestsView: React.FC = () => {
               <Sparkles className="w-3.5 h-3.5 text-amber-600 fill-amber-600" />
             )}
             <span className="hidden sm:inline">ダミー希望一括投入</span>
+          </button>
+
+          <button
+            onClick={handleClearDummy}
+            disabled={isClearing}
+            className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition font-bold text-xs shadow-2xs cursor-pointer"
+            title="検証用で投入した希望データ・下書きシフトを一括消去します（社員アカウントや会社情報は安全に保持されます）"
+          >
+            {isClearing ? (
+              <div className="animate-spin w-3.5 h-3.5 border-2 border-rose-600 border-t-transparent rounded-full" />
+            ) : (
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+            )}
+            <span className="hidden sm:inline">ダミー希望全消去</span>
           </button>
 
           <AppSwitcher currentApp="shift" role="admin" />

@@ -13,6 +13,7 @@ import { HelpGuideModal } from '../components/HelpGuideModal';
 import { ConfirmedShiftCalendarModal } from '../components/ConfirmedShiftCalendarModal';
 import { fetchStoresUnified, getStoresFromStorage } from '../lib/storeMaster';
 import { seedShiftDemoData } from '../lib/seedShiftDemoData';
+import { clearShiftDemoData } from '../lib/clearShiftDemoData';
 import { 
   getAllStaffLineLinkMap, 
   syncStaffLineLinkFromDb,
@@ -107,6 +108,7 @@ const ShiftCalendarView: React.FC = () => {
   // 📋 確定版シフトカレンダー（店舗貼り出し・印刷用）モーダル用State
   const [isConfirmedCalendarOpen, setIsConfirmedCalendarOpen] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   // 📱 LINE確定シフト送信モーダル用State
   const [tenantId, setTenantId] = useState<string>('');
@@ -243,6 +245,27 @@ const ShiftCalendarView: React.FC = () => {
       alert(`ダミーデータ投入に失敗しました: ${err.message || err}`);
     } finally {
       setIsSeeding(false);
+    }
+  };
+
+  // 🧹 検証用ダミーデータ安全消去ハンドラー（本番保護型）
+  const handleClearDemoData = async () => {
+    if (!window.confirm('【検証用ダミーデータ安全消去】\n\n・下書き/確定シフトデータ\n・検証用シフト希望データ\n・ダミー店舗の必要人数枠\n・ローカルキャッシュ\nを安全に全消去します。\n\n※ 社員・管理者アカウントや会社情報、勤怠・給与データ等は一切削除されません。\n実行してよろしいですか？')) {
+      return;
+    }
+    setIsClearing(true);
+    try {
+      const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
+      if (!tenantIdData) throw new Error('テナント情報の取得に失敗しました');
+      const result = await clearShiftDemoData(tenantIdData);
+      alert(`🧹 ${result.message}`);
+      setSelectedDepartment('all');
+      await fetchSettingsAndData();
+    } catch (err: any) {
+      console.error('Clear demo error:', err);
+      alert(`ダミーデータ消去に失敗しました: ${err.message || err}`);
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -1800,6 +1823,26 @@ const ShiftCalendarView: React.FC = () => {
                 <>
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
                   <span>🎲 検証用ダミー投入（店舗配属＆枠）</span>
+                </>
+              )}
+            </button>
+
+            {/* 🧹 検証用ダミーデータ安全消去ボタン */}
+            <button
+              onClick={handleClearDemoData}
+              disabled={isClearing}
+              className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold text-xs px-3 py-1.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+              title="検証用で投入した下書きシフト・希望データ・ダミー店舗枠を一括消去します（社員アカウントや会社情報は完全に保護されます）"
+            >
+              {isClearing ? (
+                <>
+                  <div className="animate-spin w-3.5 h-3.5 border-2 border-rose-600 border-t-transparent rounded-full"></div>
+                  <span>ダミー消去中...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>🧹 ダミー全消去</span>
                 </>
               )}
             </button>

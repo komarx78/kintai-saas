@@ -3,7 +3,7 @@ import {
   DollarSign, Zap, Calendar, ArrowLeft, CheckCircle, CheckCircle2, 
   Settings, Send, LogOut, RotateCcw, 
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Lock, Unlock, Clock, Sparkles, AlertCircle, 
-  FileText, ExternalLink, HelpCircle, MessageSquare, X
+  FileText, ExternalLink, HelpCircle, MessageSquare, X, Trash2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -14,6 +14,7 @@ import AppSwitcher from '../components/AppSwitcher';
 import { calculateLaborCost, generateAutoShift } from '../lib/shiftAlgorithm';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { seedShiftDemoData } from '../lib/seedShiftDemoData';
+import { clearShiftDemoData } from '../lib/clearShiftDemoData';
 import { 
   getAllStaffLineLinkMap, 
   syncStaffLineLinkFromDb,
@@ -89,23 +90,21 @@ const ShiftAdminDashboard: React.FC = () => {
     }
   };
 
-  // 1. シフトデータの完全リセット（初期化）
+  // 1. シフト・ダミーデータの安全完全消去（本番保護型）
   const handleResetAllShiftData = async () => {
-    if (!window.confirm('確定シフト・ドラフトシフト・希望シフトをすべて削除し、完全にリセットします。よろしいですか？')) return;
+    if (!window.confirm('【検証用ダミーデータ安全消去】\n\n・下書き/確定シフトデータ\n・検証用シフト希望データ\n・ダミー店舗の必要人数枠\n・ローカルキャッシュ\nを安全に全消去します。\n\n※ 社員・管理者アカウントや会社情報、勤怠・給与データ等は一切削除されません。\n実行してよろしいですか？')) return;
     setIsResetting(true);
     try {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
-      if (!tenantId) return;
+      if (!tenantId) throw new Error('テナント情報の取得に失敗しました');
 
-      await supabase.from('advanced_shifts').delete().eq('tenant_id', tenantId);
-      await supabase.from('advanced_shift_requests').delete().eq('tenant_id', tenantId);
-
-      alert('🗑️ シフトデータ（確定・ドラフト・希望）を完全にクリアしました！');
+      const res = await clearShiftDemoData(tenantId);
+      alert(`🧹 ${res.message}`);
       setGenerationResult(null);
       await fetchStats();
     } catch (err: any) {
       console.error('Reset error:', err);
-      alert('リセットに失敗しました: ' + err.message);
+      alert('リセットに失敗しました: ' + (err.message || err));
     } finally {
       setIsResetting(false);
     }
@@ -924,6 +923,20 @@ const ShiftAdminDashboard: React.FC = () => {
                     <Sparkles className="w-3.5 h-3.5 text-amber-600 fill-amber-600" />
                   )}
                   <span>{isSeeding ? 'ダミー希望を投入中...' : '🧪 検証用ダミー希望を一括投入する'}</span>
+                </button>
+
+                <button
+                  onClick={handleResetAllShiftData}
+                  disabled={isResetting}
+                  className="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-2 px-4 rounded-xl transition text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-rose-200 shadow-2xs"
+                  title="検証用で投入した下書きシフト・希望データ・ダミー店舗枠を一括消去します（社員アカウントや会社情報は完全に保護されます）"
+                >
+                  {isResetting ? (
+                    <div className="animate-spin w-3.5 h-3.5 border-2 border-rose-600 border-t-transparent rounded-full"></div>
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  )}
+                  <span>{isResetting ? 'ダミー消去中...' : '🧹 検証用ダミーデータを全消去'}</span>
                 </button>
 
                 <button
