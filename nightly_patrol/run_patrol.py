@@ -25,6 +25,10 @@ from nightly_patrol.utils.reporter import PatrolReporter
 from nightly_patrol.scenarios.s01_app_health_and_ui import run_s01_health_check
 from nightly_patrol.scenarios.s02_company_preset_bulk import run_s02_company_preset_bulk
 from nightly_patrol.scenarios.s03_fuzzing_edge_cases import run_s03_fuzzing_edge_cases
+from nightly_patrol.scenarios.s04_attendance_clock import run_s04_attendance_clock
+from nightly_patrol.scenarios.s05_payroll_calculation import run_s05_payroll_calculation
+from nightly_patrol.scenarios.s06_official_docs import run_s06_official_docs
+from nightly_patrol.scenarios.s07_multitenant_isolation import run_s07_multitenant_isolation
 
 def is_server_reachable(url: str) -> bool:
     """サーバーが既に応答可能か確認"""
@@ -67,7 +71,7 @@ def ensure_server_running() -> subprocess.Popen:
 def main():
     run_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     print("================================================================")
-    print("🛡️ 【孔明軍団・夜間自動巡回 要塞防衛パトロール部隊】出撃")
+    print("🛡️ 【孔明軍団・夜間自動巡回 全域要塞防衛パトロール部隊】出撃")
     print(f"⏰ 実行開始時刻: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"🌐 対象URL: {BASE_URL} (ブラウザ: {BROWSER_CHANNEL}, ヘッドレス: {HEADLESS})")
     print("================================================================\n")
@@ -78,30 +82,58 @@ def main():
     browser_mgr = BrowserManager()
 
     try:
-        print("🚀 [STEP 1/4] ブラウザを起動中...")
+        print("🚀 [STEP 1/8] ブラウザを起動中...")
         page = browser_mgr.start()
         print("   ブラウザ起動完了（Microsoft Edge 正常待機）\n")
 
         # ----------------------------------------------------
-        # シナリオ 01: アプリ基本稼働 ＆ コンソールエラー監査
+        # シナリオ 01: アプリ基本稼働 ＆ コンソールエラーゼロ監査
         # ----------------------------------------------------
-        print("🔍 [STEP 2/4] シナリオ01: アプリ基本稼働 ＆ コンソールエラーゼロ監査を実行中...")
+        print("🔍 [STEP 2/8] シナリオ01: アプリ基本稼働 ＆ コンソールエラーゼロ監査を実行中...")
         s01_ok = run_s01_health_check(page, browser_mgr, reporter)
         print(f"   シナリオ01 判定: {'✅ PASSED' if s01_ok else '❌ FAILED'}\n")
 
         # ----------------------------------------------------
         # シナリオ 02: 業種別テンプレート一括作成 ＆ DB永続化
         # ----------------------------------------------------
-        print("🏢 [STEP 3/4] シナリオ02: 業種別テンプレート一括作成 ＆ 実DB永続化監査を実行中...")
+        print("🏢 [STEP 3/8] シナリオ02: 業種別テンプレート一括作成 ＆ 実DB永続化監査を実行中...")
         s02_ok = run_s02_company_preset_bulk(page, browser_mgr, reporter)
         print(f"   シナリオ02 判定: {'✅ PASSED' if s02_ok else '❌ FAILED'}\n")
 
         # ----------------------------------------------------
         # シナリオ 03: イレギュラー・限界値ファジング耐性
         # ----------------------------------------------------
-        print("💥 [STEP 4/4] シナリオ03: イレギュラー・限界値・異常入力ファジング耐性を実行中...")
+        print("💥 [STEP 4/8] シナリオ03: イレギュラー・限界値・異常入力ファジング耐性を実行中...")
         s03_ok = run_s03_fuzzing_edge_cases(page, browser_mgr, reporter)
         print(f"   シナリオ03 判定: {'✅ PASSED' if s03_ok else '❌ FAILED'}\n")
+
+        # ----------------------------------------------------
+        # シナリオ 04: タイムカード打刻 ＆ 勤怠集計
+        # ----------------------------------------------------
+        print("🕒 [STEP 5/8] シナリオ04: タイムカード打刻 ＆ 勤務時間・残業・深夜割増集計監査を実行中...")
+        s04_ok = run_s04_attendance_clock(page, browser_mgr, reporter)
+        print(f"   シナリオ04 判定: {'✅ PASSED' if s04_ok else '❌ FAILED'}\n")
+
+        # ----------------------------------------------------
+        # シナリオ 05: 給与計算エンジン ＆ 支給控除
+        # ----------------------------------------------------
+        print("💰 [STEP 6/8] シナリオ05: 給与計算エンジン（支給・控除・手取り）数式監査を実行中...")
+        s05_ok = run_s05_payroll_calculation(page, browser_mgr, reporter)
+        print(f"   シナリオ05 判定: {'✅ PASSED' if s05_ok else '❌ FAILED'}\n")
+
+        # ----------------------------------------------------
+        # シナリオ 06: 公的届出帳票原本（全6種）
+        # ----------------------------------------------------
+        print("📄 [STEP 7/8] シナリオ06: 公的届出帳票原本（全6種）印字データ ＆ 朱肉角印バインド監査を実行中...")
+        s06_ok = run_s06_official_docs(page, browser_mgr, reporter)
+        print(f"   シナリオ06 判定: {'✅ PASSED' if s06_ok else '❌ FAILED'}\n")
+
+        # ----------------------------------------------------
+        # シナリオ 07: マルチテナント完全分離 ＆ RLS漏れ物理監査
+        # ----------------------------------------------------
+        print("🛡️ [STEP 8/8] シナリオ07: マルチテナント完全分離 ＆ 他社情報漏洩（RLS）物理監査を実行中...")
+        s07_ok = run_s07_multitenant_isolation(reporter)
+        print(f"   シナリオ07 判定: {'✅ PASSED' if s07_ok else '❌ FAILED'}\n")
 
     except Exception as e:
         print(f"🚨 [致命的パトロール例外]: {e}")
@@ -123,7 +155,7 @@ def main():
     # 診断レポート生成
     latest_report_path = reporter.generate_markdown()
     print("================================================================")
-    print("📋 【夜間巡回完了】毎朝の要塞健康診断カルテを生成いたしました！")
+    print("📋 【全域要塞夜間巡回完了】毎朝の健康診断カルテを生成いたしました！")
     print(f"📄 最新カルテ: {latest_report_path}")
     print("================================================================")
 
