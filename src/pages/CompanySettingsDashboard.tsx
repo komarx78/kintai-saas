@@ -2063,7 +2063,7 @@ export default function CompanySettingsDashboard() {
   // 🏪 店舗・拠点マスタ操作ハンドラ群
   const handleAddStore = async () => {
     if (!tenantId || !newStoreName.trim()) {
-      alert('店舗名を入力してください（例: 新宿店、渋谷店）');
+      alert('店舗・拠点名を入力してください（例: 東京本社、大阪支社、銀座店など）');
       return;
     }
     const cleanName = sanitizeStoreName(newStoreName);
@@ -3286,7 +3286,7 @@ export default function CompanySettingsDashboard() {
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row gap-2 max-w-2xl">
                 <input
                   type="text"
-                  placeholder="新しい役職名（例: エリアマネージャー / 課長 / 主任）"
+                  placeholder="新しい役職名（例: 部長 / 課長 / 主任 / リーダー）"
                   value={newPositionName}
                   onChange={e => setNewPositionName(e.target.value)}
                   className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
@@ -3294,13 +3294,13 @@ export default function CompanySettingsDashboard() {
                 <select
                   value={newPositionRank}
                   onChange={e => setNewPositionRank(Number(e.target.value))}
-                  className="w-full sm:w-44 bg-white border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-800"
+                  className="w-full sm:w-56 bg-white border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-800"
                 >
                   <option value={1}>階層: 1. 経営陣(役員)</option>
                   <option value={2}>階層: 2. 部門長(部長等)</option>
-                  <option value={3}>階層: 3. 中間管理職(課長・店長)</option>
+                  <option value={3}>階層: 3. 中間管理職(課長・マネージャー)</option>
                   <option value={4}>階層: 4. 現場リーダー・主任</option>
-                  <option value={5}>階層: 5. 一般・アルバイト</option>
+                  <option value={5}>階層: 5. 一般社員・スタッフ</option>
                 </select>
                 <button
                   onClick={handleAddPosition}
@@ -3346,11 +3346,11 @@ export default function CompanySettingsDashboard() {
                     店舗・拠点マスタ管理（Store Masters）
                   </h4>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    営業店舗・拠点（新宿店、渋谷店、池袋店など）を登録します。シフトカレンダーは<strong>店舗ごとに独立管理</strong>され、人手不足時のみ他店舗からの応援配置が可能です。
+                    営業所・支社・店舗などの複数拠点を登録します。シフトや勤怠は<strong>拠点ごとに管理</strong>でき、拠点間の応援配置にも対応しています。
                   </p>
                 </div>
                 <div className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-xl shrink-0">
-                  ※ 総務・人事・営業などの本部部門は店舗に含まれません
+                  ※ 単一拠点・オフィスの企業様は登録不要です
                 </div>
               </div>
 
@@ -3362,20 +3362,20 @@ export default function CompanySettingsDashboard() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 block mb-1">店舗名 <span className="text-rose-500">*</span></label>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">拠点・店舗名 <span className="text-rose-500">*</span></label>
                     <input
                       type="text"
-                      placeholder="例: 新宿店、渋谷店、本店"
+                      placeholder="例: 東京本社、大阪支社、銀座店"
                       value={newStoreName}
                       onChange={e => setNewStoreName(e.target.value)}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 block mb-1">店舗コード（任意）</label>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">拠点コード（任意）</label>
                     <input
                       type="text"
-                      placeholder="例: S01, SHINJUKU"
+                      placeholder="例: TOKYO-01, OSAKA-02"
                       value={newStoreCode}
                       onChange={e => setNewStoreCode(e.target.value)}
                       className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
@@ -3395,13 +3395,13 @@ export default function CompanySettingsDashboard() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 block mb-1">店長・責任者</label>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">拠点責任者・店長</label>
                     <select
                       value={newStoreManagerId}
                       onChange={e => setNewStoreManagerId(e.target.value)}
                       className="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-800"
                     >
-                      <option value="">店長: 未指定</option>
+                      <option value="">責任者: 未指定</option>
                       {companyUsers.map(u => (
                         <option key={u.id} value={u.id}>{u.name} ({u.department || '一般'})</option>
                       ))}
@@ -6620,7 +6620,7 @@ export default function CompanySettingsDashboard() {
                       let newStore = prev.user.store_name || '';
                       if (newDept === '店舗運営部') {
                         if (!newStore || newStore === '') {
-                          newStore = stores[0]?.name || '新宿店';
+                          newStore = stores[0]?.name || '';
                         }
                       } else {
                         // 本部部署（営業部・総務部など）の場合は店舗をクリア

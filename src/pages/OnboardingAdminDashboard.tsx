@@ -8546,7 +8546,7 @@ ${finalUrl}
                             if (newDept === '店舗運営部') {
                               // 店舗運営部が選ばれた場合、店舗が未選択なら1店舗目を自動選択
                               if (!newStore || newStore === '') {
-                                newStore = availableStores[0]?.name || '新宿店';
+                                newStore = availableStores[0]?.name || '';
                               }
                             } else {
                               // 本部（営業部・総務等）が選ばれた場合、店舗をクリア

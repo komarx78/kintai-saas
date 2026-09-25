@@ -2877,7 +2877,7 @@ const ShiftCalendarView: React.FC = () => {
                     setModalData({
                       ...modalData, 
                       user_id: newUserId,
-                      store_name: modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : (userStore || departmentsList[0] || '新宿店'))
+                      store_name: modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : (userStore || departmentsList[0] || ''))
                     });
                   }} 
                   className="w-full bg-indigo-50 border border-indigo-200 text-indigo-900 rounded-lg p-2 font-bold"

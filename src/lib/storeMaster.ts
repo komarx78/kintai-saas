@@ -2,10 +2,10 @@ import { supabase } from './supabase';
 
 export interface StoreMaster {
   id: string;
-  name: string; // 店舗・拠点名（例: 新宿店、渋谷店、池袋店、本店）
-  code?: string; // 店舗コード（例: S01, SHINJUKU）
-  department_name?: string; // 統括部門（例: 店舗運営部、飲食事業部。総務等の本部は選ばない）
-  manager_user_id?: string; // 店長・責任者ユーザーID
+  name: string; // 拠点・店舗名（例: 東京本社、大阪支社、銀座店）
+  code?: string; // 拠点コード（例: TOKYO-01, S01）
+  department_name?: string; // 統括部門（例: 店舗運営部、営業本部など）
+  manager_user_id?: string; // 拠点長・店長・責任者ユーザーID
   manager_user_name?: string; // 店長名
   address?: string; // 店舗住所・所在地
   phone?: string; // 電話番号
