@@ -444,22 +444,22 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
       {/* ========================================================================= */}
       {activeDocTab === 'payslip' && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm print:hidden">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center shadow-lg shadow-emerald-500/25">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm print:hidden">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center shadow-lg shadow-emerald-500/25 shrink-0">
                 <DollarSign className="w-6 h-6" />
               </div>
-              <div>
-                <h1 className="text-2xl font-black text-slate-800 tracking-tight">Web給与明細</h1>
-                <p className="text-xs font-bold text-slate-500 mt-0.5">
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">Web給与明細</h1>
+                <p className="text-xs font-bold text-slate-500 mt-0.5 truncate sm:overflow-visible sm:whitespace-normal">
                   マネーフォワード給与公式フォーマット準拠・PDFダウンロード・印刷
                 </p>
               </div>
             </div>
 
             {payslips.length > 0 && selectedPayslip && (
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-bold text-slate-600">支給月度:</label>
+              <div className="flex items-center gap-3 shrink-0">
+                <label className="text-xs font-bold text-slate-600 shrink-0">支給月度:</label>
                 <select
                   value={selectedKey}
                   onChange={(e) => {
@@ -482,10 +482,10 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 rounded-xl text-xs font-black shadow-sm transition cursor-pointer"
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs hover:shadow-sm transition shrink-0 whitespace-nowrap cursor-pointer"
                 >
-                  <Printer className="w-4 h-4 text-cyan-400" />
-                  印刷 / PDF保存
+                  <Printer className="w-4 h-4 text-white" />
+                  <span>A4印刷 / PDF保存</span>
                 </button>
               </div>
             )}
@@ -561,25 +561,25 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
 
         return (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm print:hidden">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/20">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm print:hidden">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/20 shrink-0">
                   <Gift className="w-6 h-6" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <h1 className="text-xl font-black text-slate-800 tracking-tight">賞与支払明細書</h1>
-                    <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                    <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
                       確定公開済
                     </span>
                   </div>
-                  <p className="text-xs font-bold text-slate-500 mt-0.5">
+                  <p className="text-xs font-bold text-slate-500 mt-0.5 truncate sm:overflow-visible sm:whitespace-normal">
                     支給賞与額・社会保険料および源泉所得税控除・振込手取り額
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap">
                 {publishedBonusList.length > 1 && (
                   <div className="relative">
                     <select
@@ -598,11 +598,12 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
                 )}
 
                 <button
+                  type="button"
                   onClick={() => window.print()}
-                  className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-black shadow-sm transition cursor-pointer"
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs hover:shadow-sm transition shrink-0 whitespace-nowrap cursor-pointer"
                 >
-                  <Printer className="w-4 h-4 text-amber-300" />
-                  A4印刷 / PDF保存
+                  <Printer className="w-4 h-4 text-white" />
+                  <span>A4印刷 / PDF保存</span>
                 </button>
               </div>
             </div>
@@ -743,30 +744,30 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
 
         return (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm print:hidden">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/25">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm print:hidden">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/25 shrink-0">
                   <FileText className="w-6 h-6" />
                 </div>
-                <div>
-                  <h1 className="text-2xl font-black text-slate-800 tracking-tight">給与所得の源泉徴収票</h1>
-                  <p className="text-xs font-bold text-slate-500 mt-0.5">
+                <div className="min-w-0">
+                  <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">給与所得の源泉徴収票</h1>
+                  <p className="text-xs font-bold text-slate-500 mt-0.5 truncate sm:overflow-visible sm:whitespace-normal">
                     国税庁公式原本様式（様式ID: NTAOHSZ062010060）完全準拠・PDF保存・住宅ローン控除・確定申告対応
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap">
                 <select
                   value={selectedTaxYear}
                   onChange={e => setSelectedTaxYear(Number(e.target.value))}
-                  className="text-xs font-black p-2 px-3 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 cursor-pointer shadow-2xs"
+                  className="text-xs font-bold p-2.5 px-3 border border-slate-300 rounded-xl bg-slate-50 hover:bg-white text-slate-800 cursor-pointer shadow-2xs transition shrink-0"
                 >
                   <option value={currentCalYear - 1}>
-                    令和{currentCalYear - 1 - 2018}年分（{currentCalYear - 1}年・確定済）★推奨
+                    令和{currentCalYear - 1 - 2018}年分（{currentCalYear - 1}年・確定済）
                   </option>
                   <option value={currentCalYear}>
-                    令和{currentCalYear - 2018}年分（{currentCalYear}年・年度途中未確定 / 退職時交付）
+                    令和{currentCalYear - 2018}年分（{currentCalYear}年・退職時交付 / 未確定）
                   </option>
                   <option value={currentCalYear - 2}>
                     令和{currentCalYear - 2 - 2018}年分（{currentCalYear - 2}年・確定済）
@@ -774,11 +775,12 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
                 </select>
 
                 <button
+                  type="button"
                   onClick={() => window.print()}
-                  className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 rounded-xl text-xs font-black shadow-sm transition cursor-pointer"
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs hover:shadow-sm transition shrink-0 whitespace-nowrap cursor-pointer"
                 >
-                  <Printer className="w-4 h-4 text-cyan-400" />
-                  A4印刷 / PDF保存
+                  <Printer className="w-4 h-4 text-white" />
+                  <span>A4印刷 / PDF保存</span>
                 </button>
               </div>
             </div>
