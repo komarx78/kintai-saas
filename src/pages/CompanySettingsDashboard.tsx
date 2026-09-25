@@ -3167,7 +3167,6 @@ export default function CompanySettingsDashboard() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => navigate('/onboarding/admin?action=add&from=company_settings')}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
@@ -3374,6 +3373,7 @@ export default function CompanySettingsDashboard() {
               )}
 
               {/* 🏢 各部門・部署カード（横一列ツリー展開） */}
+              <div className="space-y-2">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 gap-2">
                   <div>
                     <div className="text-xs font-black text-slate-800 flex items-center gap-1.5">
