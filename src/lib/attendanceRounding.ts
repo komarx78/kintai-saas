@@ -129,25 +129,21 @@ export const saveAttendanceRoundingRules = (tenantId: string, rules: AttendanceR
 };
 
 /**
- * 実DB（tenantsテーブル）から打刻丸めルールを取得（SSOT）
+ * 実DB（tenantsテーブルのwork_calendar_settings JSONB）から打刻丸めルールを取得（SSOT）
  */
 export const fetchAttendanceRoundingRulesFromDb = async (tenantId?: string | null): Promise<AttendanceRoundingRules> => {
   if (!tenantId) return DEFAULT_ROUNDING_RULES;
   try {
     const { data, error } = await supabase
       .from('tenants')
-      .select('attendance_rounding_settings, work_calendar_settings')
+      .select('work_calendar_settings')
       .eq('id', tenantId)
       .maybeSingle();
 
-    if (!error && data) {
-      if (data.attendance_rounding_settings) {
-        const rules = { ...DEFAULT_ROUNDING_RULES, ...data.attendance_rounding_settings };
-        saveAttendanceRoundingRules(tenantId, rules);
-        return rules;
-      }
-      if (data.work_calendar_settings?.attendance_rounding_rules) {
-        const rules = { ...DEFAULT_ROUNDING_RULES, ...data.work_calendar_settings.attendance_rounding_rules };
+    if (!error && data?.work_calendar_settings) {
+      const cal = data.work_calendar_settings;
+      if (cal.attendance_rounding_rules) {
+        const rules = { ...DEFAULT_ROUNDING_RULES, ...cal.attendance_rounding_rules };
         saveAttendanceRoundingRules(tenantId, rules);
         return rules;
       }
