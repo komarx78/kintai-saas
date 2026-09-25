@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import { 
   Printer, Download, ArrowLeftRight, Search, 
   ChevronRight, Maximize2, Minimize2, ArrowLeft,
@@ -60,6 +61,31 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
     return employees.length > 0 ? employees[0].id : '';
   });
 
+  // 🛡️ 実DB（payslipsテーブル）からの確定給与データ一括取得（SSOT原則・憲法14条）
+  const [dbPayslips, setDbPayslips] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    const fetchPayslips = async () => {
+      try {
+        const startYM = `${selectedYear}-01`;
+        const endYM = `${selectedYear}-12`;
+        const { data, error } = await supabase
+          .from('payslips')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .gte('year_month', startYM)
+          .lte('year_month', endYM);
+        if (!error && data) {
+          setDbPayslips(data);
+        }
+      } catch (err) {
+        console.warn('WageLedger dbPayslips fetch error:', err);
+      }
+    };
+    fetchPayslips();
+  }, [tenantId, selectedYear]);
+
   // フィルター
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
   const [contractFilter, setContractFilter] = useState<string>('ALL');
@@ -115,9 +141,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
   const monthlyDataList = useMemo<MonthlyWageItem[]>(() => {
     if (!currentEmployee) return [];
 
-    const isPartTime = currentEmployee.employment_type === 'part-time' || currentEmployee.salary_type === 'hourly';
     const isExecutive = currentEmployee.is_executive || currentEmployee.department?.includes('役員');
-    const base = Number(currentEmployee.base_salary) || 0;
 
     return Array.from({ length: 12 }, (_, i) => {
       const m = i + 1;
@@ -125,58 +149,90 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
       const prevM = m === 1 ? 12 : m - 1;
       const period = `${prevM}/21 - ${m}/20`;
 
-      // 対象月度の給与確定データを探索（SSOT連携）
+      // 対象月度の給与確定データを探索（SSOT連携: 実DB優先 ＆ localStorageフォールバック）
       const targetYM = `${selectedYear}-${String(m).padStart(2, '0')}`;
-      let actualPayslip: any = null;
-      try {
-        if (tenantId) {
-          const raw = localStorage.getItem(`saved_payslips_${tenantId}_${targetYM}`);
-          if (raw) {
-            const list = JSON.parse(raw);
-            if (Array.isArray(list)) {
-              actualPayslip = list.find((p: any) => p.user_id === currentEmployee.id);
+      let actualPayslip: any = dbPayslips.find(
+        (p: any) => p.user_id === currentEmployee.id && p.year_month === targetYM
+      ) || null;
+
+      if (!actualPayslip) {
+        try {
+          if (tenantId) {
+            const raw = localStorage.getItem(`saved_payslips_${tenantId}_${targetYM}`);
+            if (raw) {
+              const list = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                actualPayslip = list.find((p: any) => p.user_id === currentEmployee.id);
+              }
             }
           }
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
 
-      // 勤怠シミュレーション・実績
-      const workDays = actualPayslip?.work_days ?? (isPartTime ? 16.0 : (20 + (m % 3 === 0 ? 2 : m % 2 === 0 ? 1 : 0)));
-      const prescribedHours = isPartTime ? workDays * 6 : workDays * 8;
-      const otHours = actualPayslip?.overtime_hours ?? ((!isExecutive && !isPartTime && m % 2 === 0) ? 12 : 0);
-      const totalWorkHours = actualPayslip?.actual_hours ?? (prescribedHours + otHours);
-      const paidLeaveRemaining = actualPayslip?.paid_leave_remaining ?? Math.max(0, 10.0 - Math.floor(m / 4));
+      // 🛡️ 法定帳票SSOT原則（憲法14条）:
+      // 未確定月や未来の月に対して推測・シミュレーションで数字を捏造することは公的帳票として重大な法令違反となるため、
+      // 確定データが存在しない月は厳格に 0（実績なし）として扱う。
+      if (!actualPayslip) {
+        return {
+          month: m,
+          label: `${m}月度`,
+          period,
+          workDays: 0,
+          totalWorkHours: 0,
+          prescribedHours: 0,
+          paidLeaveRemaining: 0,
+          baseSalary: 0,
+          overtimePay: 0,
+          allowanceTotal: 0,
+          taxableEarnings: 0,
+          totalEarnings: 0,
+          socialTargetTotal: 0,
+          fixedWageTotal: 0,
+          executiveRemunerationTotal: 0,
+          healthInsurance: 0,
+          nursingInsurance: 0,
+          pensionInsurance: 0,
+          employmentInsurance: 0,
+          incomeTax: 0,
+          childCareContribution: 0,
+          socialInsuranceTotal: 0,
+          deductionTotal: 0,
+          afterSocialTotal: 0,
+          netPayment: 0,
+          bankTransferRemaining: 0
+        };
+      }
 
-      // 支給項目
-      let basePay = actualPayslip?.base_salary ?? (isPartTime ? Math.round(base * totalWorkHours) : base);
-      const overtimePay = actualPayslip?.overtime_allowance ?? (otHours > 0 ? Math.round((base / 160) * 1.25 * otHours) : 0);
-      const allowanceTotal = actualPayslip 
-        ? ((actualPayslip.commuting_allowance || 0) + (actualPayslip.position_allowance || 0) + (actualPayslip.housing_allowance || 0) + (actualPayslip.qualification_allowance || 0) + (actualPayslip.family_allowance || 0) + (actualPayslip.special_allowance || 0))
-        : ((!isPartTime && !isExecutive) ? 15000 : 0); // 通勤手当等
-      const gross = actualPayslip?.total_earnings ?? (basePay + overtimePay + allowanceTotal);
+      // 確定実績データからの完全マッピング（実DB値の直接展開）
+      const workDays = Number(actualPayslip.work_days || 0);
+      const totalWorkHours = Number(actualPayslip.actual_hours || 0);
+      const prescribedHours = Math.max(0, workDays * 8);
+      const paidLeaveRemaining = Number(actualPayslip.paid_leave_remaining || 0);
+
+      const basePay = Number(actualPayslip.base_salary || 0);
+      const overtimePay = Number(actualPayslip.overtime_allowance || 0);
+      const allowanceTotal = Number(
+        (actualPayslip.commuting_allowance || 0) + 
+        (actualPayslip.position_allowance || 0) + 
+        (actualPayslip.housing_allowance || 0) + 
+        (actualPayslip.qualification_allowance || 0) + 
+        (actualPayslip.family_allowance || 0) + 
+        (actualPayslip.special_allowance || 0)
+      );
+      const gross = Number(actualPayslip.total_earnings || (basePay + overtimePay + allowanceTotal));
       const taxable = gross;
 
-      // 控除項目（社会保険・税金）
-      const healthJoined = currentEmployee.health_insurance_joined !== false;
-      const pensionJoined = currentEmployee.pension_insurance_joined !== false;
-      const empInsJoined = currentEmployee.employment_insurance_joined !== false;
-
-      const health = actualPayslip?.health_insurance ?? (healthJoined ? Math.round(gross * 0.0494) : 0);
-      const nursing = actualPayslip?.nursing_insurance ?? ((healthJoined && currentEmployee.birth_date && new Date().getFullYear() - new Date(currentEmployee.birth_date).getFullYear() >= 40)
-        ? Math.round(gross * 0.008)
-        : 0);
-      const pension = actualPayslip?.pension_insurance ?? (pensionJoined ? Math.round(gross * 0.0915) : 0);
-      const empIns = actualPayslip?.employment_insurance ?? ((empInsJoined && !isExecutive) ? Math.round(gross * 0.006) : 0);
+      const health = Number(actualPayslip.health_insurance || 0);
+      const nursing = Number(actualPayslip.nursing_insurance || 0);
+      const pension = Number(actualPayslip.pension_insurance || 0);
+      const empIns = Number(actualPayslip.employment_insurance || 0);
       const childCare = isExecutive ? 925 : 0;
-
       const socTotal = health + nursing + pension + empIns;
-      const depCount = currentEmployee.dependents_count || 0;
-      const taxableForIncomeTax = Math.max(0, gross - socTotal);
-      const taxRate = Math.max(0.02, 0.05 - (depCount * 0.01));
-      const incomeTax = actualPayslip?.income_tax ?? Math.round(taxableForIncomeTax * taxRate);
-      const dedTotal = actualPayslip?.total_deductions ?? (socTotal + incomeTax + childCare);
+
+      const incomeTax = Number(actualPayslip.income_tax || 0);
+      const dedTotal = Number(actualPayslip.total_deductions || (socTotal + incomeTax + childCare));
       const afterSoc = gross - socTotal;
-      const net = actualPayslip?.net_salary ?? (gross - dedTotal);
+      const net = Number(actualPayslip.net_salary || (gross - dedTotal));
 
       return {
         month: m,
@@ -207,7 +263,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
         bankTransferRemaining: net
       };
     });
-  }, [currentEmployee, selectedYear, tenantId]);
+  }, [currentEmployee, selectedYear, tenantId, dbPayslips]);
 
   // 年間合計の算出
   const annualTotal = useMemo(() => {
@@ -265,30 +321,30 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
   // 表示する項目一覧定義（MFクラウド給与の行順を忠実に再現）
   const tableRows = useMemo(() => {
     return [
-      { id: 'workDays', name: '出勤日数（平日）', format: (v: number) => v.toFixed(1), category: 'attendance' },
-      { id: 'totalWorkHours', name: '総労働時間（平日）', format: (v: number) => v.toFixed(2), category: 'attendance' },
-      { id: 'prescribedHours', name: '所定時間（平日）', format: (v: number) => v.toFixed(2), category: 'attendance' },
-      { id: 'paidLeaveRemaining', name: '有休残日数', format: (v: number) => v.toFixed(1), category: 'attendance' },
+      { id: 'workDays', name: '出勤日数（平日）', format: (v: number) => v > 0 ? v.toFixed(1) : '-', category: 'attendance' },
+      { id: 'totalWorkHours', name: '総労働時間（平日）', format: (v: number) => v > 0 ? v.toFixed(2) : '-', category: 'attendance' },
+      { id: 'prescribedHours', name: '所定時間（平日）', format: (v: number) => v > 0 ? v.toFixed(2) : '-', category: 'attendance' },
+      { id: 'paidLeaveRemaining', name: '有休残日数', format: (v: number) => v > 0 ? v.toFixed(1) : '-', category: 'attendance' },
       
       { id: 'baseSalary', name: '基本給（支給）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'earnings' },
       { id: 'executiveRemunerationTotal', name: '役員報酬（支給）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'earnings' },
-      { id: 'taxableEarnings', name: '課税支給合計', format: (v: number) => v.toLocaleString(), isSubtotal: true, category: 'earnings' },
-      { id: 'totalEarnings', name: '支給合計', format: (v: number) => v.toLocaleString(), isMajor: true, category: 'earnings' },
-      { id: 'socialTargetTotal', name: '社保対象合計（金銭）', format: (v: number) => v.toLocaleString(), category: 'earnings' },
-      { id: 'fixedWageTotal', name: '固定賃金合計', format: (v: number) => v.toLocaleString(), category: 'earnings' },
+      { id: 'taxableEarnings', name: '課税支給合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isSubtotal: true, category: 'earnings' },
+      { id: 'totalEarnings', name: '支給合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isMajor: true, category: 'earnings' },
+      { id: 'socialTargetTotal', name: '社保対象合計（金銭）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'earnings' },
+      { id: 'fixedWageTotal', name: '固定賃金合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'earnings' },
       
-      { id: 'healthInsurance', name: '健康保険料（控除）', format: (v: number) => v.toLocaleString(), category: 'deduction' },
-      { id: 'nursingInsurance', name: '介護保険料（控除）', format: (v: number) => v.toLocaleString(), category: 'deduction' },
-      { id: 'pensionInsurance', name: '厚生年金保険料（控除）', format: (v: number) => v.toLocaleString(), category: 'deduction' },
-      { id: 'employmentInsurance', name: '雇用保険料（控除）', format: (v: number) => v.toLocaleString(), category: 'deduction' },
-      { id: 'incomeTax', name: '所得税（控除）', format: (v: number) => v.toLocaleString(), category: 'deduction' },
+      { id: 'healthInsurance', name: '健康保険料（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
+      { id: 'nursingInsurance', name: '介護保険料（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
+      { id: 'pensionInsurance', name: '厚生年金保険料（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
+      { id: 'employmentInsurance', name: '雇用保険料（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
+      { id: 'incomeTax', name: '所得税（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
       { id: 'childCareContribution', name: '子ども・子育て拠出金（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
-      { id: 'socialInsuranceTotal', name: '社会保険料合計', format: (v: number) => v.toLocaleString(), isSubtotal: true, category: 'deduction' },
-      { id: 'deductionTotal', name: '控除合計', format: (v: number) => v.toLocaleString(), isMajor: true, category: 'deduction' },
+      { id: 'socialInsuranceTotal', name: '社会保険料合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isSubtotal: true, category: 'deduction' },
+      { id: 'deductionTotal', name: '控除合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isMajor: true, category: 'deduction' },
       
-      { id: 'afterSocialTotal', name: '社保控除後合計', format: (v: number) => v.toLocaleString(), isSubtotal: true, category: 'net' },
-      { id: 'netPayment', name: '差引支給合計', format: (v: number) => v.toLocaleString(), isHighlight: true, category: 'net' },
-      { id: 'bankTransferRemaining', name: '振込支給残額', format: (v: number) => v.toLocaleString(), isHighlight: true, category: 'net' }
+      { id: 'afterSocialTotal', name: '社保控除後合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isSubtotal: true, category: 'net' },
+      { id: 'netPayment', name: '差引支給合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isHighlight: true, category: 'net' },
+      { id: 'bankTransferRemaining', name: '振込支給残額', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isHighlight: true, category: 'net' }
     ];
   }, []);
 

@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import {
   FileText,
   Search,
@@ -118,6 +119,31 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
     initialEmployeeId && initialEmployeeId !== 'all' ? initialEmployeeId : (employees[0]?.id || '')
   );
 
+  // 🛡️ 実DB（payslipsテーブル）からの確定給与データ一括取得（SSOT原則・憲法14条）
+  const [dbPayslips, setDbPayslips] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    const fetchPayslips = async () => {
+      try {
+        const startYM = `${selectedYear}-01`;
+        const endYM = `${selectedYear}-12`;
+        const { data, error } = await supabase
+          .from('payslips')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .gte('year_month', startYM)
+          .lte('year_month', endYM);
+        if (!error && data) {
+          setDbPayslips(data);
+        }
+      } catch (err) {
+        console.warn('WithholdingTaxLedger dbPayslips fetch error:', err);
+      }
+    };
+    fetchPayslips();
+  }, [tenantId, selectedYear]);
+
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
   const [contractFilter, setContractFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -182,23 +208,39 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
     return formatToWareki(currentEmployee?.birth_date);
   }, [currentEmployee]);
 
-  // 月別給与データの生成（添付画像に準拠した高精度計算）
+  // 月別給与データの生成（実DB payslips SSOT連携・未確定月の推測捏造完全排除）
   const monthlySalaryRows = useMemo(() => {
     if (!currentEmployee) return [];
 
-    const basePay = currentEmployee.base_salary || 640000;
     const depCount = currentEmployee.dependents_count || 0;
 
     return Array.from({ length: 12 }, (_, i) => {
       const month = i + 1;
+      const targetYM = `${selectedYear}-${String(month).padStart(2, '0')}`;
       const lastDay = new Date(selectedYear, month, 0).getDate();
       const payDate = `${month} ${lastDay}`;
 
-      // 実績がある月（現在のシステムでは1〜8月分が実績、9〜12月分は未確定または年末調整）
-      const hasActual = month <= 8;
+      // 実DBまたはlocalStorageから確定給与明細データを探索
+      let actualPayslip: any = dbPayslips.find(
+        (p: any) => p.user_id === currentEmployee.id && p.year_month === targetYM
+      ) || null;
 
-      let gross = hasActual ? basePay : 0;
-      if (gross === 0 && !hasActual) {
+      if (!actualPayslip) {
+        try {
+          if (tenantId) {
+            const raw = localStorage.getItem(`saved_payslips_${tenantId}_${targetYM}`);
+            if (raw) {
+              const list = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                actualPayslip = list.find((p: any) => p.user_id === currentEmployee.id);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 🛡️ 憲法14条: 確定レコードが存在しない月（未確定月・未来月）は厳格に完全空欄（実績なし）
+      if (!actualPayslip) {
         return {
           month,
           payDate: '',
@@ -213,20 +255,17 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
         };
       }
 
-      // 社会保険料（画像では1〜3月: 83,172円、4月: 83,910円、5〜8月: 84,629円）
-      let social = 0;
-      if (month <= 3) {
-        social = Math.round(gross * 0.129956); // 約 83,172
-      } else if (month === 4) {
-        social = Math.round(gross * 0.131109); // 約 83,910
-      } else {
-        social = Math.round(gross * 0.132233); // 約 84,629
-      }
-
-      const afterSocial = gross - social;
-      const tax = 37120; // 画像準拠
+      const gross = Number(actualPayslip.total_earnings || 0);
+      const social = Number(
+        (actualPayslip.health_insurance || 0) +
+        (actualPayslip.nursing_insurance || 0) +
+        (actualPayslip.pension_insurance || 0) +
+        (actualPayslip.employment_insurance || 0)
+      );
+      const afterSocial = Math.max(0, gross - social);
+      const tax = Number(actualPayslip.income_tax || 0);
       const adjustment = 0;
-      const netTax = tax - adjustment;
+      const netTax = Math.max(0, tax - adjustment);
 
       return {
         month,
@@ -241,7 +280,7 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
         hasActual: true
       };
     });
-  }, [currentEmployee, selectedYear]);
+  }, [currentEmployee, selectedYear, tenantId, dbPayslips]);
 
   // 給与合計 ①〜③
   const salaryTotal = useMemo(() => {
