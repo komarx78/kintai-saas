@@ -6,6 +6,7 @@ import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { fetchStoresUnified, getStoresFromStorage } from '../lib/storeMaster';
 import { seedShiftDemoData } from '../lib/seedShiftDemoData';
+import { clearShiftDemoData } from '../lib/clearShiftDemoData';
 
 const defaultRoles = ['ホール', 'キッチン', 'レジ', '清掃'];
 const patternTypes = ['平日', '土日', '祝日'];
@@ -26,6 +27,7 @@ const ShiftRequirementSettings: React.FC = () => {
   const [roles, setRoles] = useState<string[]>(defaultRoles);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   // 🏪 複数店舗セレクター用State
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
@@ -451,6 +453,27 @@ const ShiftRequirementSettings: React.FC = () => {
     }
   };
 
+  // 🧹 検証用ダミーデータ安全消去ハンドラー（本番保護型）
+  const handleClearDemoData = async () => {
+    if (!window.confirm('【検証用ダミーデータ安全消去】\n\n・下書き/確定シフトデータ\n・検証用シフト希望データ\n・ダミー店舗の必要人数枠\n・ローカルキャッシュ\nを安全に全消去します。\n\n※ 社員アカウントや会社情報は一切削除されません。\n実行してよろしいですか？')) {
+      return;
+    }
+    setIsClearing(true);
+    try {
+      const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
+      if (!tenantIdData) throw new Error('テナント情報の取得に失敗しました');
+      const result = await clearShiftDemoData(tenantIdData);
+      alert(`🧹 ${result.message}`);
+      setSelectedDepartment('all');
+      await fetchRolesAndRequirements();
+    } catch (err: any) {
+      console.error('Clear demo error:', err);
+      alert(`ダミーデータ消去に失敗しました: ${err.message || err}`);
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   const currentReqs = requirements[activePattern] || [];
 
   return (
@@ -532,18 +555,37 @@ const ShiftRequirementSettings: React.FC = () => {
             <button
               onClick={handleSeedDemoData}
               disabled={isSeeding}
-              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
               title="全スタッフを新宿・渋谷・池袋にダミー配属し、各店舗の必要時間枠とシフト希望を一括投入します"
             >
               {isSeeding ? (
                 <>
                   <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full"></div>
-                  <span>ダミー投入中...</span>
+                  <span>投入中...</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                  <span>🎲 検証用ダミー投入（店舗配属＆枠）</span>
+                  <span>🎲 ダミー投入</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleClearDemoData}
+              disabled={isClearing}
+              className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold text-xs px-3 py-1.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+              title="検証用で投入した下書きシフト・希望データ・ダミー店舗枠を一括消去します（社員アカウントや会社情報は完全に保護されます）"
+            >
+              {isClearing ? (
+                <>
+                  <div className="animate-spin w-3.5 h-3.5 border-2 border-rose-600 border-t-transparent rounded-full"></div>
+                  <span>消去中...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>🧹 ダミー消去</span>
                 </>
               )}
             </button>

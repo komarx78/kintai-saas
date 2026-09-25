@@ -8,7 +8,7 @@ import {
 import {
   type AttendanceRoundingRules,
   DEFAULT_ROUNDING_RULES,
-  getAttendanceRoundingRules,
+  fetchAttendanceRoundingRulesFromDb,
   calculateDailyAttendanceDetails
 } from '../lib/attendanceRounding';
 
@@ -135,8 +135,8 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           console.warn('work_schedule_patterns fetch warning:', patErr);
         }
 
-        // 5. 現場即応 打刻丸めルールの取得
-        const rules = getAttendanceRoundingRules(tenantId);
+        // 5. 現場即応 打刻丸めルールの取得（実DB SSOT対応）
+        const rules = await fetchAttendanceRoundingRulesFromDb(tenantId);
         setRoundingRules(rules);
       } else {
         setAttendanceRecords([]);

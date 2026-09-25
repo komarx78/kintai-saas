@@ -18,7 +18,8 @@ interface UserPayslipViewProps {
 
 export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userName, tenantId }) => {
   const [activeDocTab, setActiveDocTab] = useState<'payslip' | 'bonus' | 'tax_slip' | 'contract' | 'labor_profile'>('payslip');
-  const [selectedTaxYear, setSelectedTaxYear] = useState<number>(new Date().getFullYear());
+  const currentCalYear = new Date().getFullYear();
+  const [selectedTaxYear, setSelectedTaxYear] = useState<number>(currentCalYear - 1);
   const [payslips, setPayslips] = useState<any[]>([]);
   const [selectedPayslip, setSelectedPayslip] = useState<any | null>(null);
   const [selectedKey, setSelectedKey] = useState<string>('');
@@ -443,22 +444,22 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
       {/* ========================================================================= */}
       {activeDocTab === 'payslip' && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm print:hidden">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center shadow-lg shadow-emerald-500/25">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm print:hidden">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center shadow-lg shadow-emerald-500/25 shrink-0">
                 <DollarSign className="w-6 h-6" />
               </div>
-              <div>
-                <h1 className="text-2xl font-black text-slate-800 tracking-tight">Web給与明細</h1>
-                <p className="text-xs font-bold text-slate-500 mt-0.5">
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">Web給与明細</h1>
+                <p className="text-xs font-bold text-slate-500 mt-0.5 truncate sm:overflow-visible sm:whitespace-normal">
                   マネーフォワード給与公式フォーマット準拠・PDFダウンロード・印刷
                 </p>
               </div>
             </div>
 
             {payslips.length > 0 && selectedPayslip && (
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-bold text-slate-600">支給月度:</label>
+              <div className="flex items-center gap-3 shrink-0">
+                <label className="text-xs font-bold text-slate-600 shrink-0">支給月度:</label>
                 <select
                   value={selectedKey}
                   onChange={(e) => {
@@ -481,10 +482,10 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 rounded-xl text-xs font-black shadow-sm transition cursor-pointer"
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs hover:shadow-sm transition shrink-0 whitespace-nowrap cursor-pointer"
                 >
-                  <Printer className="w-4 h-4 text-cyan-400" />
-                  印刷 / PDF保存
+                  <Printer className="w-4 h-4 text-white" />
+                  <span>A4印刷 / PDF保存</span>
                 </button>
               </div>
             )}
@@ -560,25 +561,25 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
 
         return (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm print:hidden">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/20">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm print:hidden">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/20 shrink-0">
                   <Gift className="w-6 h-6" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <h1 className="text-xl font-black text-slate-800 tracking-tight">賞与支払明細書</h1>
-                    <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                    <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
                       確定公開済
                     </span>
                   </div>
-                  <p className="text-xs font-bold text-slate-500 mt-0.5">
+                  <p className="text-xs font-bold text-slate-500 mt-0.5 truncate sm:overflow-visible sm:whitespace-normal">
                     支給賞与額・社会保険料および源泉所得税控除・振込手取り額
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap">
                 {publishedBonusList.length > 1 && (
                   <div className="relative">
                     <select
@@ -597,11 +598,12 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
                 )}
 
                 <button
+                  type="button"
                   onClick={() => window.print()}
-                  className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-black shadow-sm transition cursor-pointer"
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs hover:shadow-sm transition shrink-0 whitespace-nowrap cursor-pointer"
                 >
-                  <Printer className="w-4 h-4 text-amber-300" />
-                  A4印刷 / PDF保存
+                  <Printer className="w-4 h-4 text-white" />
+                  <span>A4印刷 / PDF保存</span>
                 </button>
               </div>
             </div>
@@ -742,39 +744,74 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
 
         return (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm print:hidden">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/25">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm print:hidden">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg shadow-orange-500/25 shrink-0">
                   <FileText className="w-6 h-6" />
                 </div>
-                <div>
-                  <h1 className="text-2xl font-black text-slate-800 tracking-tight">給与所得の源泉徴収票</h1>
-                  <p className="text-xs font-bold text-slate-500 mt-0.5">
+                <div className="min-w-0">
+                  <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">給与所得の源泉徴収票</h1>
+                  <p className="text-xs font-bold text-slate-500 mt-0.5 truncate sm:overflow-visible sm:whitespace-normal">
                     国税庁公式原本様式（様式ID: NTAOHSZ062010060）完全準拠・PDF保存・住宅ローン控除・確定申告対応
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap">
                 <select
                   value={selectedTaxYear}
                   onChange={e => setSelectedTaxYear(Number(e.target.value))}
-                  className="text-xs font-black p-2 px-3 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 cursor-pointer shadow-2xs"
+                  className="text-xs font-bold p-2.5 px-3 border border-slate-300 rounded-xl bg-slate-50 hover:bg-white text-slate-800 cursor-pointer shadow-2xs transition shrink-0"
                 >
-                  {[2026, 2025, 2024].map(y => (
-                    <option key={y} value={y}>令和{y - 2018}年分（{y}年）</option>
-                  ))}
+                  <option value={currentCalYear - 1}>
+                    令和{currentCalYear - 1 - 2018}年分（{currentCalYear - 1}年・確定済）
+                  </option>
+                  <option value={currentCalYear}>
+                    令和{currentCalYear - 2018}年分（{currentCalYear}年・退職時交付 / 未確定）
+                  </option>
+                  <option value={currentCalYear - 2}>
+                    令和{currentCalYear - 2 - 2018}年分（{currentCalYear - 2}年・確定済）
+                  </option>
                 </select>
 
                 <button
+                  type="button"
                   onClick={() => window.print()}
-                  className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2 rounded-xl text-xs font-black shadow-sm transition cursor-pointer"
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold shadow-xs hover:shadow-sm transition shrink-0 whitespace-nowrap cursor-pointer"
                 >
-                  <Printer className="w-4 h-4 text-cyan-400" />
-                  A4印刷 / PDF保存
+                  <Printer className="w-4 h-4 text-white" />
+                  <span>A4印刷 / PDF保存</span>
                 </button>
               </div>
             </div>
+
+            {/* 実務・税法（所得税法第226条）案内バッジ */}
+            {selectedTaxYear >= currentCalYear && !userProfile.is_retired && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-2xl text-xs flex items-start gap-3 print:hidden shadow-2xs">
+                <span className="font-black text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded text-[10px] shrink-0 mt-0.5">
+                  実務・税法（所得税法第226条）
+                </span>
+                <div className="leading-relaxed">
+                  <span className="font-bold">令和{selectedTaxYear - 2018}年分は現在進行中のため、12月の年末調整完了まで年税額は未確定です。</span>
+                  <span className="text-amber-800 text-[11px] block mt-0.5">
+                    住宅ローン審査・確定申告・賃貸契約等の公的証明には、確定済みの「令和{currentCalYear - 1 - 2018}年分（前年）」をご利用ください。※中途退職される方の場合は、退職日までの確定実績として交付されます。
+                  </span>
+                </div>
+              </div>
+            )}
+            {selectedTaxYear >= currentCalYear && userProfile.is_retired && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-900 p-4 rounded-2xl text-xs flex items-start gap-3 print:hidden shadow-2xs">
+                <span className="font-black text-blue-700 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded text-[10px] shrink-0 mt-0.5">
+                  中途退職時交付用
+                </span>
+                <div className="leading-relaxed">
+                  <span className="font-bold">所得税法第226条に基づく退職時交付用源泉徴収票です。</span>
+                  <span className="text-blue-800 text-[11px] block mt-0.5">
+                    退職日までに支払われた給与および控除された源泉所得税額が反映されています（年末調整未済）。転職先または翌年の確定申告にご提出ください。
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* 国税庁公式NTAOHSZ062010060様式本体 */}
             <div className="max-w-4xl mx-auto">

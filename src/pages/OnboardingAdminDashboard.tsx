@@ -751,10 +751,34 @@ export default function OnboardingAdminDashboard() {
         setAvailableStores(getStoresFromStorage(tenantIdData));
       }
 
-      // 役職マスタ取得
-      let posList: PositionMaster[] = getPositionsFromStorage();
-      if (tData?.position_masters && Array.isArray(tData.position_masters) && tData.position_masters.length > 0) {
-        posList = tData.position_masters;
+      // 役職マスタ取得（専用テーブル -> tenants JSONB -> LocalStorage多重防護）
+      let posList: PositionMaster[] = [];
+      try {
+        const { data: dbPos } = await supabase
+          .from('company_position_masters')
+          .select('*')
+          .eq('tenant_id', tenantIdData)
+          .order('display_order', { ascending: true });
+        if (dbPos && dbPos.length > 0) {
+          posList = dbPos.map(p => ({
+            id: p.id,
+            name: p.name,
+            rank_level: p.rank_level,
+            display_order: p.display_order,
+            default_allowance: p.default_allowance || 0
+          }));
+        }
+      } catch (_) {}
+
+      if (posList.length === 0) {
+        const pSettings = (tData as any)?.position_settings || (tData as any)?.position_masters;
+        if (Array.isArray(pSettings) && pSettings.length > 0) {
+          posList = pSettings;
+        }
+      }
+
+      if (posList.length === 0) {
+        posList = getPositionsFromStorage(tenantIdData);
       }
       setPositions(posList);
 
@@ -8546,7 +8570,7 @@ ${finalUrl}
                             if (newDept === '店舗運営部') {
                               // 店舗運営部が選ばれた場合、店舗が未選択なら1店舗目を自動選択
                               if (!newStore || newStore === '') {
-                                newStore = availableStores[0]?.name || '新宿店';
+                                newStore = availableStores[0]?.name || '';
                               }
                             } else {
                               // 本部（営業部・総務等）が選ばれた場合、店舗をクリア

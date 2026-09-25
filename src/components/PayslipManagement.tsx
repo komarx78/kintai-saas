@@ -26,7 +26,7 @@ import {
 import {
   type AttendanceRoundingRules,
   DEFAULT_ROUNDING_RULES,
-  getAttendanceRoundingRules,
+  fetchAttendanceRoundingRulesFromDb,
   calculateDailyAttendanceDetails,
   timeToMinutes
 } from '../lib/attendanceRounding';
@@ -535,8 +535,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         }));
       }
 
-      // ⚙️ 現場即応 打刻丸めルールの取得（SSOT）
-      const loadedRules = getAttendanceRoundingRules(tenantId);
+      // ⚙️ 現場即応 打刻丸めルールの取得（実DB SSOT対応）
+      const loadedRules = await fetchAttendanceRoundingRulesFromDb(tenantId);
       setRoundingRules(loadedRules);
 
       // 📱 LINE通知設定 & スタッフ連携状態を同期取得（SSOT）
