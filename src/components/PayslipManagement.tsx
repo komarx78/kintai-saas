@@ -1470,8 +1470,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         await supabase.from('employee_payroll_profiles').upsert({
           tenant_id: tenantId,
           user_id: userId,
-          dependents_count: resolvedProf.dependents_count,
-          has_spouse: resolvedProf.has_spouse
+          dependents_count: resolvedProf.dependents_count
         }, { onConflict: 'tenant_id,user_id' });
       } catch (e) {}
 
@@ -2031,32 +2030,62 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         localStorage.setItem(`employee_master_backup_${prof.user_id}`, JSON.stringify(localMaster));
       } catch (e) {}
 
-      // 2. employee_payroll_profiles への保存
+      // 2. employee_payroll_profiles への保存（実スキーマ検証済みカラムのみを抽出）
       try {
+        const cleanPayrollProfile = {
+          tenant_id: tenantId,
+          user_id: prof.user_id,
+          salary_type: prof.salary_type,
+          base_salary: prof.base_salary,
+          hourly_wage: prof.hourly_wage,
+          position_allowance: prof.position_allowance,
+          qualification_allowance: prof.qualification_allowance,
+          housing_allowance: prof.housing_allowance,
+          family_allowance: prof.family_allowance,
+          commuting_allowance: prof.commuting_allowance,
+          commuting_taxable: prof.commuting_taxable ?? false,
+          fixed_overtime_hours: prof.fixed_overtime_hours || 0,
+          fixed_overtime_allowance: prof.fixed_overtime_allowance || 0,
+          dependents_count: prof.dependents_count || 0,
+          health_insurance_enabled: prof.health_insurance_enabled ?? true,
+          health_standard_monthly_remuneration: prof.health_standard_monthly_remuneration ?? null,
+          nursing_insurance_enabled: prof.nursing_insurance_enabled ?? null,
+          pension_insurance_enabled: prof.pension_insurance_enabled ?? true,
+          pension_standard_monthly_remuneration: prof.pension_standard_monthly_remuneration ?? null,
+          employment_insurance_enabled: prof.employment_insurance_enabled ?? true,
+          resident_tax_monthly: prof.resident_tax_monthly || 0,
+          resident_tax_details: prof.resident_tax_details || null,
+          tax_bracket: prof.tax_bracket || 'kou',
+          bank_name: prof.bank_name || '',
+          branch_name: prof.branch_name || '',
+          account_type: prof.account_type || 'ordinary',
+          account_number: prof.account_number || '',
+          account_holder: prof.account_holder || '',
+          birth_date: prof.birth_date || null,
+          name_kana: (prof as any).name_kana || null,
+          updated_at: new Date().toISOString()
+        };
+
         const { error } = await supabase
           .from('employee_payroll_profiles')
-          .upsert(prof, { onConflict: 'tenant_id,user_id' });
+          .upsert(cleanPayrollProfile, { onConflict: 'tenant_id,user_id' });
 
         if (error) console.warn('Supabase payroll profile upsert error:', error.message);
       } catch (dbErr) {
         console.warn('Supabase payroll profile exception:', dbErr);
       }
 
-      // 3. employee_onboarding_profiles にも口座情報・通勤手当情報を同期
+      // 3. employee_onboarding_profiles にも口座情報・通勤手当情報を同期（実在カラムのみ）
       try {
         await supabase
           .from('employee_onboarding_profiles')
           .update({
-            commuting_type: prof.commuting_type,
-            commuting_daily_amount: prof.commuting_daily_amount,
             commuting_allowance: prof.commuting_allowance,
             bank_name: prof.bank_name,
             branch_name: prof.branch_name,
             account_type: prof.account_type,
             account_number: prof.account_number,
             account_holder: prof.account_holder,
-            dependents_count: prof.dependents_count,
-            has_spouse: prof.has_spouse,
             updated_at: new Date().toISOString()
           })
           .eq('tenant_id', tenantId)

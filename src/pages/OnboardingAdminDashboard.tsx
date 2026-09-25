@@ -1084,8 +1084,8 @@ export default function OnboardingAdminDashboard() {
           address: addr,
           role: u.role,
           status: onb?.status || (u.is_active === false ? 'retired' : 'active'),
-          current_step_number: onb?.current_step_number || (onb?.status === 'onboarding' ? 1 : 5),
-          step_history: onb?.step_history || [],
+          current_step_number: onb?.procedure_todo?.current_step_number || onb?.current_step_number || (onb?.status === 'onboarding' ? 1 : 5),
+          step_history: onb?.procedure_todo?.step_history || onb?.step_history || [],
           join_date: u.join_date || conDoc.join_date || onb?.join_date || '2026-04-01',
           retirement_date: onb?.retirement_date,
           retirement_reason: onb?.retirement_reason,
@@ -1390,14 +1390,19 @@ export default function OnboardingAdminDashboard() {
     const isFinalStep = nextStepNum === maxStepNum;
     const newStatus = isFinalStep ? 'active' : 'onboarding';
 
+    const updatedProcedureTodo = {
+      ...(emp.procedure_todo || {}),
+      current_step_number: nextStepNum,
+      step_history: newHistory
+    };
+
     setIsSaving(true);
     try {
       await supabase.from('employee_onboarding_profiles').upsert({
         tenant_id: tenantId,
         user_id: emp.user_id,
         status: newStatus,
-        current_step_number: nextStepNum,
-        step_history: newHistory,
+        procedure_todo: updatedProcedureTodo,
         updated_at: new Date().toISOString()
       }, { onConflict: 'tenant_id,user_id' });
 
@@ -1426,13 +1431,18 @@ export default function OnboardingAdminDashboard() {
 
     if (!confirm(`${emp.name} さんを前のステップ「${prevStepObj?.name || `Step ${prevStepNum}`}」に戻しますか？`)) return;
 
+    const updatedProcedureTodo = {
+      ...(emp.procedure_todo || {}),
+      current_step_number: prevStepNum
+    };
+
     setIsSaving(true);
     try {
       await supabase.from('employee_onboarding_profiles').upsert({
         tenant_id: tenantId,
         user_id: emp.user_id,
         status: 'onboarding',
-        current_step_number: prevStepNum,
+        procedure_todo: updatedProcedureTodo,
         updated_at: new Date().toISOString()
       }, { onConflict: 'tenant_id,user_id' });
 
@@ -2366,8 +2376,7 @@ export default function OnboardingAdminDashboard() {
         account_type: wizardData.account_type,
         account_number: wizardData.account_number,
         account_holder: wizardData.account_holder || finalNameKana || finalName,
-        dependents_count: wizardData.dependents_count || 0,
-        has_spouse: wizardData.has_spouse || false
+        dependents_count: wizardData.dependents_count || 0
       }, { onConflict: 'tenant_id,user_id' });
 
       await supabase.from('employee_onboarding_profiles').upsert({
@@ -2396,9 +2405,7 @@ export default function OnboardingAdminDashboard() {
         commuting_allowance: wizardData.commuting_allowance,
         health_insurance_joined: wizardData.health_insurance_joined,
         pension_insurance_joined: wizardData.pension_insurance_joined,
-        employment_insurance_joined: wizardData.employment_insurance_joined,
-        dependents_count: wizardData.dependents_count || 0,
-        has_spouse: wizardData.has_spouse || false
+        employment_insurance_joined: wizardData.employment_insurance_joined
       }, { onConflict: 'tenant_id,user_id' });
 
       setWizardOpen(false);

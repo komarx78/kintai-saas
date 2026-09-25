@@ -177,8 +177,40 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
           const parsed = JSON.parse(savedProfiles);
           profilesMap = { ...parsed, ...profilesMap };
 
-          // クラウドに存在しないローカルプロファイルを自動救済UPSERT
-          const localProfList = Object.values(parsed);
+          // クラウドに存在しないローカルプロファイルを自動救済UPSERT（実在カラムのみを抽出）
+          const localProfList = Object.values(parsed).map((p: any) => ({
+            tenant_id: p.tenant_id || tenantId,
+            user_id: p.user_id,
+            salary_type: p.salary_type || 'monthly',
+            base_salary: p.base_salary || 0,
+            hourly_wage: p.hourly_wage || 0,
+            position_allowance: p.position_allowance || 0,
+            qualification_allowance: p.qualification_allowance || 0,
+            housing_allowance: p.housing_allowance || 0,
+            family_allowance: p.family_allowance || 0,
+            commuting_allowance: p.commuting_allowance || 0,
+            commuting_taxable: p.commuting_taxable ?? false,
+            fixed_overtime_hours: p.fixed_overtime_hours || 0,
+            fixed_overtime_allowance: p.fixed_overtime_allowance || 0,
+            dependents_count: p.dependents_count || 0,
+            health_insurance_enabled: p.health_insurance_enabled ?? true,
+            health_standard_monthly_remuneration: p.health_standard_monthly_remuneration ?? null,
+            nursing_insurance_enabled: p.nursing_insurance_enabled ?? null,
+            pension_insurance_enabled: p.pension_insurance_enabled ?? true,
+            pension_standard_monthly_remuneration: p.pension_standard_monthly_remuneration ?? null,
+            employment_insurance_enabled: p.employment_insurance_enabled ?? true,
+            resident_tax_monthly: p.resident_tax_monthly || 0,
+            resident_tax_details: p.resident_tax_details || null,
+            tax_bracket: p.tax_bracket || 'kou',
+            bank_name: p.bank_name || '',
+            branch_name: p.branch_name || '',
+            account_type: p.account_type || 'ordinary',
+            account_number: p.account_number || '',
+            account_holder: p.account_holder || '',
+            birth_date: p.birth_date || null,
+            name_kana: p.name_kana || null,
+            updated_at: p.updated_at || new Date().toISOString()
+          }));
           if (localProfList.length > 0) {
             try {
               await supabase.from('employee_payroll_profiles').upsert(localProfList, { onConflict: 'tenant_id,user_id' });
@@ -630,7 +662,8 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
 
         // DB Upsert (給与プロファイル ＆ 大元労務マスタの完全同期)
         try {
-          await supabase.from('employee_payroll_profiles').upsert(updatedProf, { onConflict: 'tenant_id,user_id' });
+          const { special_allowance, ...cleanDbProf } = updatedProf;
+          await supabase.from('employee_payroll_profiles').upsert(cleanDbProf, { onConflict: 'tenant_id,user_id' });
           await supabase.from('employee_onboarding_profiles').update({
             base_salary: item.newBase,
             position_allowance: item.positionAllowance,
@@ -798,7 +831,8 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
       };
 
       try {
-        await supabase.from('employee_payroll_profiles').upsert(updatedProfile, { onConflict: 'tenant_id,user_id' });
+        const { special_allowance, ...cleanDbProfile } = updatedProfile;
+        await supabase.from('employee_payroll_profiles').upsert(cleanDbProfile, { onConflict: 'tenant_id,user_id' });
         await supabase.from('employee_onboarding_profiles').update({
           base_salary: formNewBaseSalary,
           position_allowance: formPositionAllowance,
