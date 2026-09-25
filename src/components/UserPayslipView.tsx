@@ -762,7 +762,10 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
               (p.qualification_allowance || 0) + (p.family_allowance || 0) +
               (p.commuting_allowance || 0) + (p.special_allowance || 0)
             ));
-            totalPaid += gross;
+            // 🎌 所得税法第9条・所得税法施行令第20条の2準拠：非課税通勤手当（月15万円上限）を支払金額から控除
+            const nonTaxCommuting = p.commuting_taxable ? 0 : Math.min(Number(p.commuting_allowance || 0), 150000);
+            const taxableGross = Math.max(0, gross - nonTaxCommuting);
+            totalPaid += taxableGross;
 
             const soc = Number(
               (p.health_insurance || 0) + (p.nursing_insurance || 0) +

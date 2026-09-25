@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { calculateBonusDeductions } from '../lib/payrollEngine';
+import { extractPrefectureCodeFromAddress } from '../lib/socialInsurance';
 import { 
   Gift, CheckCircle2, Save, Send, RotateCcw, 
   Printer, Plus, Trash2, Eye, Users, Award,
@@ -72,6 +73,7 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
   const [previewEmployee, setPreviewEmployee] = useState<BonusEmployeeRecord | null>(null);
   const [companyName, setCompanyName] = useState<string>('');
   const [companySealUrl, setCompanySealUrl] = useState<string>('');
+  const [companyPrefectureCode, setCompanyPrefectureCode] = useState<string>('13');
 
   // 一括倍率・金額入力用のState
   const [fullTimeMultiplier, setFullTimeMultiplier] = useState<string>('2.0'); // 正社員: 基本給の◯ヶ月分
@@ -103,6 +105,8 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
       if (tData) {
         if (tData.name) setCompanyName(tData.name);
         if (tData.company_seal_url) setCompanySealUrl(tData.company_seal_url);
+        const pref = tData.prefecture_code || (tData.address ? extractPrefectureCodeFromAddress(tData.address) : '13');
+        if (pref) setCompanyPrefectureCode(pref);
       }
 
       // LocalStorageから会社社印フォールバック（自社キー限定）
@@ -130,7 +134,7 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
       // 月給明細（payslips: 実際に計算・支給された基本給）
       const { data: payslipsData } = await supabase
         .from('payslips')
-        .select('user_id, base_salary, salary_type, year_month')
+        .select('*')
         .eq('tenant_id', tenantId)
         .order('year_month', { ascending: false });
 
@@ -210,12 +214,31 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
           // 正社員は2.0ヶ月分、パートは一律50,000円を標準初期値
           const mult = isPartTime ? (baseSalary > 0 ? parseFloat((50000 / baseSalary).toFixed(2)) : 0) : 2.0;
           const gross = isPartTime ? 50000 : Math.round(baseSalary * mult);
-          const health = Math.round(gross * 0.05);
-          const pension = Math.round(gross * 0.0915);
-          const emp = Math.round(gross * 0.006);
-          const soc = health + pension + emp;
-          const tax = Math.round((gross - soc) * 0.05105);
-          const net = gross - (soc + tax);
+          const payProf: any = payMap.get(u.id);
+          const slip: any = slipMap.get(u.id);
+          let lastMonthTaxBase = 0;
+          if (slip) {
+            const earnings = Number(slip.total_earnings || 0);
+            const soc = Number(
+              (slip.health_insurance || 0) +
+              (slip.nursing_insurance || 0) +
+              (slip.pension_insurance || 0) +
+              (slip.employment_insurance || 0)
+            );
+            lastMonthTaxBase = Math.max(0, earnings - soc);
+          }
+          const deductions = calculateBonusDeductions({
+            bonusGross: gross,
+            lastMonthTaxBase,
+            dependentsCount: payProf?.dependents_count || 0,
+            birthDate: payProf?.birth_date || profile.birth_date || localMaster.birth_date,
+            targetDate: `${currentYear}-07-10`,
+            prefectureCode: payProf?.prefecture_code || (tData?.prefecture_code || (tData?.address ? extractPrefectureCodeFromAddress(tData.address) : '13')),
+            isHealthEnabled: payProf?.health_insurance_enabled !== false,
+            isPensionEnabled: payProf?.pension_insurance_enabled !== false,
+            isEmploymentEnabled: payProf?.employment_insurance_enabled !== false,
+            isExecutive: payProf?.salary_type === 'monthly' && (payProf?.role === 'admin' || u.role === 'admin')
+          });
 
           return {
             user_id: u.id,
@@ -226,14 +249,14 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
             multiplier: mult,
             adjustment_amount: 0,
             bonus_gross: gross,
-            health_insurance: health,
-            nursing_insurance: 0,
-            welfare_pension: pension,
-            employment_insurance: emp,
-            social_insurance_total: soc,
-            income_tax: tax,
-            deduction_total: soc + tax,
-            net_pay: net,
+            health_insurance: deductions.healthInsurance,
+            nursing_insurance: deductions.nursingInsurance,
+            welfare_pension: deductions.welfarePension,
+            employment_insurance: deductions.employmentInsurance,
+            social_insurance_total: deductions.socialInsuranceTotal,
+            income_tax: deductions.incomeTax,
+            deduction_total: deductions.deductionTotal,
+            net_pay: deductions.netPay,
             memo: isPartTime ? 'パート一律支給' : '業績査定標準',
             employment_type: empType,
             salary_type: salaryType
@@ -319,12 +342,31 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
 
               const mult = isPartTime ? (baseSalary > 0 ? parseFloat((50000 / baseSalary).toFixed(2)) : 0) : 2.0;
               const gross = isPartTime ? 50000 : Math.round(baseSalary * mult);
-              const health = Math.round(gross * 0.05);
-              const pension = Math.round(gross * 0.0915);
-              const emp = Math.round(gross * 0.006);
-              const soc = health + pension + emp;
-              const tax = Math.round((gross - soc) * 0.05105);
-              const net = gross - (soc + tax);
+              const payProf: any = payMap.get(u.id);
+              const slip: any = slipMap.get(u.id);
+              let lastMonthTaxBase = 0;
+              if (slip) {
+                const earnings = Number(slip.total_earnings || 0);
+                const soc = Number(
+                  (slip.health_insurance || 0) +
+                  (slip.nursing_insurance || 0) +
+                  (slip.pension_insurance || 0) +
+                  (slip.employment_insurance || 0)
+                );
+                lastMonthTaxBase = Math.max(0, earnings - soc);
+              }
+              const deductions = calculateBonusDeductions({
+                bonusGross: gross,
+                lastMonthTaxBase,
+                dependentsCount: payProf?.dependents_count || 0,
+                birthDate: payProf?.birth_date || profile.birth_date || localMaster.birth_date,
+                targetDate: camp.payment_date,
+                prefectureCode: payProf?.prefecture_code || (tData?.prefecture_code || (tData?.address ? extractPrefectureCodeFromAddress(tData.address) : '13')),
+                isHealthEnabled: payProf?.health_insurance_enabled !== false,
+                isPensionEnabled: payProf?.pension_insurance_enabled !== false,
+                isEmploymentEnabled: payProf?.employment_insurance_enabled !== false,
+                isExecutive: payProf?.salary_type === 'monthly' && (payProf?.role === 'admin' || u.role === 'admin')
+              });
 
               return {
                 user_id: u.id,
@@ -335,14 +377,14 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
                 multiplier: mult,
                 adjustment_amount: 0,
                 bonus_gross: gross,
-                health_insurance: health,
-                nursing_insurance: 0,
-                welfare_pension: pension,
-                employment_insurance: emp,
-                social_insurance_total: soc,
-                income_tax: tax,
-                deduction_total: soc + tax,
-                net_pay: net,
+                health_insurance: deductions.healthInsurance,
+                nursing_insurance: deductions.nursingInsurance,
+                welfare_pension: deductions.welfarePension,
+                employment_insurance: deductions.employmentInsurance,
+                social_insurance_total: deductions.socialInsuranceTotal,
+                income_tax: deductions.incomeTax,
+                deduction_total: deductions.deductionTotal,
+                net_pay: deductions.netPay,
                 memo: isPartTime ? 'パート一律支給' : '',
                 employment_type: empType,
                 salary_type: salaryType
@@ -411,12 +453,14 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
       lastMonthTaxBase = Math.max(0, earnings - soc);
     }
 
+    const prefCode = profile?.prefecture_code || companyPrefectureCode || '13';
     const deductions = calculateBonusDeductions({
       bonusGross: gross,
       lastMonthTaxBase,
       dependentsCount: profile?.dependents_count || 0,
       birthDate: profile?.birth_date,
       targetDate: currentCampaign?.payment_date,
+      prefectureCode: prefCode,
       isHealthEnabled: profile?.health_insurance_enabled !== false,
       isPensionEnabled: profile?.pension_insurance_enabled !== false,
       isEmploymentEnabled: profile?.employment_insurance_enabled !== false,
@@ -476,12 +520,14 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
           );
           lastMonthTaxBase = Math.max(0, earnings - soc);
         }
+        const prefCode = profile?.prefecture_code || companyPrefectureCode || '13';
         const deductions = calculateBonusDeductions({
           bonusGross: gross,
           lastMonthTaxBase,
           dependentsCount: profile?.dependents_count || 0,
           birthDate: profile?.birth_date,
           targetDate: currentCampaign?.payment_date,
+          prefectureCode: prefCode,
           isHealthEnabled: profile?.health_insurance_enabled !== false,
           isPensionEnabled: profile?.pension_insurance_enabled !== false,
           isEmploymentEnabled: profile?.employment_insurance_enabled !== false,
@@ -689,24 +735,45 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
       const isPart = rec.employment_type === 'part-time' || rec.salary_type === 'hourly';
       if (!isPart) return rec; // 正社員はスキップ
       const mult = rec.base_salary > 0 ? parseFloat((amt / rec.base_salary).toFixed(2)) : 0;
-      const health = Math.round(amt * 0.05);
-      const pension = Math.round(amt * 0.0915);
-      const emp = Math.round(amt * 0.006);
-      const soc = health + pension + emp;
-      const tax = Math.round(Math.max(0, amt - soc) * 0.05105);
-      const ded = soc + tax;
+      const profile = payrollProfilesMap.get(rec.user_id);
+      const lastPayslip = latestPayslipsMap.get(rec.user_id);
+      let lastMonthTaxBase = 0;
+      if (lastPayslip) {
+        const earnings = Number(lastPayslip.total_earnings || 0);
+        const soc = Number(
+          (lastPayslip.health_insurance || 0) +
+          (lastPayslip.nursing_insurance || 0) +
+          (lastPayslip.pension_insurance || 0) +
+          (lastPayslip.employment_insurance || 0)
+        );
+        lastMonthTaxBase = Math.max(0, earnings - soc);
+      }
+      const prefCode = profile?.prefecture_code || companyPrefectureCode || '13';
+      const deductions = calculateBonusDeductions({
+        bonusGross: amt,
+        lastMonthTaxBase,
+        dependentsCount: profile?.dependents_count || 0,
+        birthDate: profile?.birth_date,
+        targetDate: currentCampaign?.payment_date,
+        prefectureCode: prefCode,
+        isHealthEnabled: profile?.health_insurance_enabled !== false,
+        isPensionEnabled: profile?.pension_insurance_enabled !== false,
+        isEmploymentEnabled: profile?.employment_insurance_enabled !== false,
+        isExecutive: false
+      });
       return {
         ...rec,
         bonus_gross: amt,
         multiplier: mult,
         adjustment_amount: 0,
-        health_insurance: health,
-        welfare_pension: pension,
-        employment_insurance: emp,
-        social_insurance_total: soc,
-        income_tax: tax,
-        deduction_total: ded,
-        net_pay: amt - ded,
+        health_insurance: deductions.healthInsurance,
+        nursing_insurance: deductions.nursingInsurance,
+        welfare_pension: deductions.welfarePension,
+        employment_insurance: deductions.employmentInsurance,
+        social_insurance_total: deductions.socialInsuranceTotal,
+        income_tax: deductions.incomeTax,
+        deduction_total: deductions.deductionTotal,
+        net_pay: deductions.netPay,
         memo: 'パート一律支給'
       };
     });
@@ -741,12 +808,14 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
           );
           lastMonthTaxBase = Math.max(0, earnings - soc);
         }
+        const prefCode = profile?.prefecture_code || companyPrefectureCode || '13';
         const deductions = calculateBonusDeductions({
           bonusGross: amt,
           lastMonthTaxBase,
           dependentsCount: profile?.dependents_count || 0,
           birthDate: profile?.birth_date,
           targetDate: currentCampaign?.payment_date,
+          prefectureCode: prefCode,
           isHealthEnabled: profile?.health_insurance_enabled !== false,
           isPensionEnabled: profile?.pension_insurance_enabled !== false,
           isEmploymentEnabled: profile?.employment_insurance_enabled !== false,

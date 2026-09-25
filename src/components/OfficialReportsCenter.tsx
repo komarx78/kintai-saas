@@ -1972,13 +1972,35 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                 }
 
                 const targetPayslipList = Array.from(mergedPayslipsMap.values());
-                const hasConfirmedData = targetPayslipList.length > 0;
+
+                // 🛡️ 実DBおよび確定賞与キャンペーン（BonusCampaign）からの対象年度確定賞与レコード抽出（SSOT原則・憲法14条）
+                let targetYearBonuses: any[] = [];
+                try {
+                  const mfRaw = localStorage.getItem(`mf_bonus_campaigns_${tenantId}`);
+                  if (mfRaw) {
+                    const camps = JSON.parse(mfRaw);
+                    if (Array.isArray(camps)) {
+                      camps.forEach((camp: any) => {
+                        const payDate = camp.payment_date || camp.created_at || '';
+                        if (payDate.startsWith(`${selectedYear}-`)) {
+                          const r = (camp.records || []).find((rec: any) => rec.user_id === targetEmp?.id);
+                          if (r && Number(r.bonus_gross || 0) > 0) {
+                            targetYearBonuses.push(r);
+                          }
+                        }
+                      });
+                    }
+                  }
+                } catch (_) {}
+
+                const hasConfirmedData = targetPayslipList.length > 0 || targetYearBonuses.length > 0;
 
                 let totalPaid = 0;
                 let socialDeducted = 0;
                 let taxDeducted = 0;
 
                 if (hasConfirmedData) {
+                  // 1. 給与確定データからの集計
                   targetPayslipList.forEach(p => {
                     const gross = Number(p.total_earnings || (
                       (p.base_salary || 0) + (p.overtime_allowance || 0) + 
@@ -1986,7 +2008,10 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                       (p.qualification_allowance || 0) + (p.family_allowance || 0) +
                       (p.commuting_allowance || 0) + (p.special_allowance || 0)
                     ));
-                    totalPaid += gross;
+                    // 🎌 所得税法第9条・所得税法施行令第20条の2準拠：非課税通勤手当（月15万円上限）を支払金額から控除
+                    const nonTaxCommuting = p.commuting_taxable ? 0 : Math.min(Number(p.commuting_allowance || 0), 150000);
+                    const taxableGross = Math.max(0, gross - nonTaxCommuting);
+                    totalPaid += taxableGross;
 
                     const soc = Number(
                       (p.health_insurance || 0) + (p.nursing_insurance || 0) +
@@ -1995,6 +2020,20 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                     socialDeducted += soc;
 
                     taxDeducted += Number(p.income_tax || 0);
+                  });
+
+                  // 2. 賞与確定データからの集計（所得税法第226条完全準拠）
+                  targetYearBonuses.forEach(b => {
+                    const bGross = Number(b.bonus_gross || (b.currency_amount || 0));
+                    totalPaid += bGross;
+
+                    const bSoc = Number(b.social_insurance_total || (
+                      (b.health_insurance || 0) + (b.nursing_insurance || 0) +
+                      (b.welfare_pension || 0) + (b.employment_insurance || 0)
+                    ));
+                    socialDeducted += bSoc;
+
+                    taxDeducted += Number(b.income_tax || 0);
                   });
                 }
 
@@ -2012,7 +2051,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                           確定データ待機中
                         </span>
                         <div className="leading-relaxed">
-                          <span className="font-bold">令和{selectedYear - 2018}年分の給与確定データ（payslips）が未登録です。</span>
+                          <span className="font-bold">令和{selectedYear - 2018}年分の確定済み給与・賞与明細が未登録です。</span>
                           <span className="text-amber-800 text-[11px] block mt-0.5">
                             公的帳票の虚偽記載を防止するため、推測・架空の概算は表示せず0円となっております。給与計算確定（または過去分登録）を行うと自動的に確定実績が反映されます。
                           </span>
