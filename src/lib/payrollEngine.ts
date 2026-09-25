@@ -219,11 +219,22 @@ export function calculatePayroll(
   let lateEarlyDeduction = 0;
   let finalAbsenceDays = attendance.absence_days || 0;
 
+  // 🛡️ 労働基準法第37条第1項ただし書（2023年4月1日中小企業完全義務化）:
+  // 月60時間超の時間外労働に対する50%以上の割増賃金率対応
+  const otNormalHours = Math.min(60, Math.max(0, attendance.overtime_hours));
+  const otOver60Hours = Math.max(0, attendance.overtime_hours - 60);
+
   if (profile.salary_type === 'hourly') {
     // 【時給制】
-    baseSalary = round(attendance.actual_hours * hourlyRate);
-    // 残業割増 (1.25倍)
-    overtimeAllowance = round(attendance.overtime_hours * hourlyRate * 1.25);
+    // 🛡️ 実働時間全体から時間外・休日労働を除いた「所定内労働時間」を基本給の算定基礎とし、
+    // 残業割増手当（1.25倍 / 60h超1.50倍）との二重過大払い（2.25倍）を完全防止
+    const regularHours = Math.max(0, attendance.actual_hours - attendance.overtime_hours - attendance.holiday_hours);
+    // actual_hoursが既に所定内のみ（overtimeを含まない）の場合の安全フォールバック
+    const effectiveBaseHours = attendance.actual_hours >= attendance.overtime_hours ? regularHours : attendance.actual_hours;
+    baseSalary = round(effectiveBaseHours * hourlyRate);
+
+    // 残業割増（60h以内 1.25倍、60h超 1.50倍）
+    overtimeAllowance = round((otNormalHours * 1.25 + otOver60Hours * 1.50) * hourlyRate);
     // 深夜割増 (0.25倍)
     midnightAllowance = round(attendance.midnight_hours * hourlyRate * 0.25);
     // 休日割増 (1.35倍)
@@ -232,7 +243,8 @@ export function calculatePayroll(
     // 【日給制】
     baseSalary = round(attendance.work_days * profile.base_salary);
     const hourlyFromDaily = profile.base_salary / 8;
-    overtimeAllowance = round(attendance.overtime_hours * hourlyFromDaily * 1.25);
+    // 残業割増（60h以内 1.25倍、60h超 1.50倍）
+    overtimeAllowance = round((otNormalHours * 1.25 + otOver60Hours * 1.50) * hourlyFromDaily);
     midnightAllowance = round(attendance.midnight_hours * hourlyFromDaily * 0.25);
     holidayAllowance = round(attendance.holiday_hours * hourlyFromDaily * 1.35);
   } else {
@@ -243,12 +255,22 @@ export function calculatePayroll(
     const baseForOvertime = baseSalary + (profile.position_allowance || 0) + (profile.qualification_allowance || 0);
     const hourlyFromMonthly = baseForOvertime / monthlyStandardHours;
 
-    // 法定残業手当
-    const rawOvertime = attendance.overtime_hours * hourlyFromMonthly * 1.25;
-    // 固定残業代（みなし残業）がある場合は超過分のみ追加
+    // 法定残業手当（60h以内 1.25倍、60h超 1.50倍）
+    const rawOvertime = (otNormalHours * 1.25 + otOver60Hours * 1.50) * hourlyFromMonthly;
+
+    // 固定残業代（みなし残業）がある場合は超過分のみ追加（60h超考慮）
     if (profile.fixed_overtime_hours > 0 && profile.fixed_overtime_allowance > 0) {
-      const actualOvertimeCost = Math.max(0, attendance.overtime_hours - profile.fixed_overtime_hours) * hourlyFromMonthly * 1.25;
-      overtimeAllowance = profile.fixed_overtime_allowance + round(actualOvertimeCost);
+      const fixedOt = profile.fixed_overtime_hours;
+      const totalOt = attendance.overtime_hours;
+      if (totalOt > fixedOt) {
+        // 固定残業枠を超過した時間のうち、60h以下部分と60h超部分の按分
+        const normalExcess = Math.max(0, Math.min(60, totalOt) - Math.min(60, fixedOt));
+        const over60Excess = Math.max(0, totalOt - Math.max(60, fixedOt));
+        const actualOvertimeCost = (normalExcess * 1.25 + over60Excess * 1.50) * hourlyFromMonthly;
+        overtimeAllowance = profile.fixed_overtime_allowance + round(actualOvertimeCost);
+      } else {
+        overtimeAllowance = profile.fixed_overtime_allowance;
+      }
     } else {
       overtimeAllowance = round(rawOvertime);
     }
@@ -257,6 +279,7 @@ export function calculatePayroll(
     midnightAllowance = round(attendance.midnight_hours * hourlyFromMonthly * 0.25);
     // 休日割増手当 (1.35倍)
     holidayAllowance = round(attendance.holiday_hours * hourlyFromMonthly * 1.35);
+
 
     const standardWorkDays = 20;
     const totalWorkedDays = (attendance.work_days || 0) + (attendance.paid_leave_days || 0);

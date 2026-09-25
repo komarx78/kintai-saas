@@ -511,6 +511,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     let totalDays = 0;
     let totalActualMins = 0;
     let totalOvertimeMins = 0;
+    let totalMidnightMins = 0;
     let missedPunchCount = 0;
     let lateCount = 0;
 
@@ -530,6 +531,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
 
           totalActualMins += details.actualWorkMinutes;
           totalOvertimeMins += details.overtimeMinutes;
+          totalMidnightMins += details.midnightMinutes;
           if (details.isLate) lateCount += 1;
         } else {
           missedPunchCount += 1;
@@ -550,12 +552,14 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       totalDays,
       totalHours: (totalActualMins / 60).toFixed(1),
       overtimeHours: (totalOvertimeMins / 60).toFixed(1),
+      midnightHours: (totalMidnightMins / 60).toFixed(1),
       paidLeaveDays,
       missedPunchCount,
       lateCount,
       pendingRequestsCount: pendingRequests.length
     };
   };
+
 
   // 選択中従業員の当月カレンダー行データ生成
   const selectedUserRows = useMemo(() => {
@@ -635,6 +639,9 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       const overtimeStr = details.overtimeMinutes > 0
         ? `${Math.floor(details.overtimeMinutes / 60)}h ${(details.overtimeMinutes % 60).toString().padStart(2, '0')}m`
         : '-';
+      const midnightStr = details.midnightMinutes > 0
+        ? `${Math.floor(details.midnightMinutes / 60)}h ${(details.midnightMinutes % 60).toString().padStart(2, '0')}m`
+        : '-';
 
       rows.push({
         day,
@@ -659,9 +666,12 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         actualMins: details.actualWorkMinutes,
         overtimeStr,
         overtimeMins: details.overtimeMinutes,
+        midnightStr,
+        midnightMins: details.midnightMinutes,
         status: record?.status || (dayApprovedLeave ? dayApprovedLeave.type : '-'),
         note: record?.note || dayApprovedLeave?.reason || ''
       });
+
     }
 
     return rows;

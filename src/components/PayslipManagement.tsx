@@ -1120,13 +1120,27 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               if (outTotal < inTotal) outTotal += 24 * 60;
 
               const total = Math.max(0, outTotal - inTotal);
-              const breakM = total >= 480 ? 60 : (total >= 360 ? 45 : 0);
+              // 労基法第34条準拠（6時間超で45分、8時間超で60分）
+              const breakM = total > 480 ? 60 : (total > 360 ? 45 : 0);
               const work = Math.max(0, total - breakM);
               actualMins += work;
               overtimeMins += Math.max(0, work - 480);
+
+              // 🌙 シフト予定からの深夜時間集計（22:00〜翌05:00・労基法第37条4項）
+              let shiftNightMins = 0;
+              for (let m = inTotal; m < outTotal; m++) {
+                const h = Math.floor(m / 60) % 24;
+                if (h >= 22 || h < 5) shiftNightMins++;
+              }
+              if (breakM > 0 && total > 0 && shiftNightMins > 0) {
+                const nightRatio = shiftNightMins / total;
+                shiftNightMins = Math.max(0, Math.round(shiftNightMins - breakM * nightRatio));
+              }
+              midnightMins += shiftNightMins;
             }
           });
         }
+
 
         // 有給休暇日数集計
         const empRequests = requests.filter(r => 

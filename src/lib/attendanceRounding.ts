@@ -276,6 +276,8 @@ export interface CalculatedDailyAttendance {
   actualWorkHoursText: string;
   overtimeMinutes: number;
   overtimeHoursText: string;
+  midnightMinutes: number;
+  midnightHoursText: string;
   breakMinutes: number;
   isLate: boolean;
   isEarlyLeave: boolean;
@@ -297,6 +299,8 @@ export const calculateDailyAttendanceDetails = (
     actualWorkHoursText: '-',
     overtimeMinutes: 0,
     overtimeHoursText: '-',
+    midnightMinutes: 0,
+    midnightHoursText: '-',
     breakMinutes: 0,
     isLate: false,
     isEarlyLeave: false
@@ -347,19 +351,21 @@ export const calculateDailyAttendanceDetails = (
   }
   if (totalStayMinutes <= 0) return result;
 
-  // 休憩時間の決定
+  // 休憩時間の決定（労働基準法第34条厳格準拠）
   let breakMins = 0;
   if (recordedBreakMinutes !== null && recordedBreakMinutes !== undefined && !isNaN(recordedBreakMinutes)) {
     // 手動入力または実打刻休憩
     breakMins = Number(recordedBreakMinutes);
   } else if (rules.break_deduction_mode === 'statutory') {
-    // 法定自動控除: 6h(360分)超で45分、8h(480分)超で60分
-    if (totalStayMinutes >= 480) {
+    // 🛡️ 労働基準法第34条第1項厳格準拠:
+    // 労働時間が6時間を超える場合は45分以上、8時間を超える場合は1時間以上の休憩を労働時間の途中に与える義務
+    // ※6時間以下の短時間勤務（パート・アルバイト等）に対する勝手な休憩控除を完全排除（労基法第24条全額払いの原則）
+    if (totalStayMinutes > 480) {
       breakMins = 60;
-    } else if (totalStayMinutes >= 360) {
+    } else if (totalStayMinutes > 360) {
       breakMins = 45;
-    } else if (totalStayMinutes >= 240) {
-      breakMins = 30;
+    } else {
+      breakMins = 0;
     }
   } else if (rules.break_deduction_mode === 'pattern_fixed') {
     // 就業パターン固定
@@ -384,5 +390,26 @@ export const calculateDailyAttendanceDetails = (
     result.overtimeHoursText = '0.0';
   }
 
+  // 🌙 深夜労働時間（22:00〜翌05:00・労働基準法第37条第4項）の自動集計
+  let midnightMins = 0;
+  let normalizedOutM = outM;
+  if (normalizedOutM < inM) {
+    normalizedOutM += 24 * 60;
+  }
+  for (let m = inM; m < normalizedOutM; m++) {
+    const h = Math.floor(m / 60) % 24;
+    if (h >= 22 || h < 5) {
+      midnightMins++;
+    }
+  }
+  // 休憩時間が深夜帯に重なる場合の簡易按分（深夜滞在比率に基づく控除）
+  if (breakMins > 0 && totalStayMinutes > 0 && midnightMins > 0) {
+    const nightRatio = midnightMins / totalStayMinutes;
+    midnightMins = Math.max(0, Math.round(midnightMins - breakMins * nightRatio));
+  }
+  result.midnightMinutes = midnightMins;
+  result.midnightHoursText = (midnightMins / 60).toFixed(1);
+
   return result;
 };
+
