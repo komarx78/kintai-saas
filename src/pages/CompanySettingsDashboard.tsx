@@ -2383,7 +2383,7 @@ export default function CompanySettingsDashboard() {
     const targetName = name || targetDept?.name || '';
     if (!targetName && !id) return;
 
-    if (!confirm(`部署「${targetName || '選択した部署'}」を削除しますか？\n※ 削除すると組織図および所属設定から完全に消去されます。`)) return;
+    if (!confirm(`部署「${targetName || '選択した部署'}」を削除してもよろしいですか？\n\n【安心のデータ保護】\n・所属していた社員データは削除されず、安全に「未配属」トレイへ保護されます。\n・部署はいつでも新しく追加・再設定できます。`)) return;
 
     try {
       // 1. 削除済み部署リスト（ブラックリスト）に即座に登録（復元を永久遮断）
@@ -3243,8 +3243,8 @@ export default function CompanySettingsDashboard() {
                         右上の「業種別テンプレート」から選ぶか、入力欄から自社の部署（例: 営業部、管理部等）を追加します。
                       </p>
                     </div>
-                    <div className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg font-bold border border-emerald-100">
-                      🔰 名前変更（✎）や並び替え（← →）も後から自由！
+                    <div className="text-[10px] text-emerald-800 bg-emerald-50/90 px-2.5 py-1.5 rounded-lg font-bold border border-emerald-200 leading-snug">
+                      🔰 名前変更（✎）・並び替え（← →）・削除（🗑️）もワンクリック！何度でも自由に変更・やり直せます
                     </div>
                   </div>
 
@@ -3261,8 +3261,8 @@ export default function CompanySettingsDashboard() {
                         各部署カード内で「部門責任者（承認者）」と「適用営業カレンダー（土日祝休み／シフト制等）」を選びます。
                       </p>
                     </div>
-                    <div className="text-[10px] text-amber-800 bg-amber-50 px-2 py-1 rounded-lg font-bold border border-amber-100">
-                      ⚡ 有給・残業の承認通知が自動で届くようになります
+                    <div className="text-[10px] text-amber-900 bg-amber-50/90 px-2.5 py-1.5 rounded-lg font-bold border border-amber-200 leading-snug">
+                      ⚡ 有給・残業の承認通知が自動連動！（未指定のままでも全社標準ルールで動作します）
                     </div>
                   </div>
 
@@ -3279,8 +3279,8 @@ export default function CompanySettingsDashboard() {
                         部署カード内の「＋社員を配属」や社員名クリックで、各スタッフの配属先と役職（部長、主任等）を決定します。
                       </p>
                     </div>
-                    <div className="text-[10px] text-purple-800 bg-purple-50 px-2 py-1 rounded-lg font-bold border border-purple-100">
-                      📊 労務台帳・勤怠・給与計算へ全自動連動完了！
+                    <div className="text-[10px] text-purple-900 bg-purple-50/90 px-2.5 py-1.5 rounded-lg font-bold border border-purple-200 leading-snug">
+                      📊 労務・勤怠・給与へ全自動連動！（配属や役職はいつでもクリックで変更・解除可能）
                     </div>
                   </div>
                 </div>
@@ -3381,7 +3381,7 @@ export default function CompanySettingsDashboard() {
                       <span>各部門・配属一覧（全{computedOrgDepartments.length}部署 / 総員{companyUsers.length}名）</span>
                     </div>
                     <p className="text-[11px] text-slate-400">
-                      ※ 部署カードごとに「部門長」や「休日規定」を設定し、社員を配属できます（名前変更や並び替えも可能）
+                      ※ 部署カードごとに「部門長」や「休日規定」を設定し、社員を配属できます（名前変更・並び替え・不要な部署の削除も自由自在）
                     </p>
                   </div>
 
@@ -3414,8 +3414,9 @@ export default function CompanySettingsDashboard() {
                       </div>
                       <div className="space-y-1">
                         <h4 className="text-sm font-black text-slate-800">登録されている部署がありません</h4>
-                        <p className="text-xs text-slate-500 max-w-md mx-auto">
-                          自社の組織構成に合わせて部署を手入力するか、業界別テンプレートからワンクリックで一括生成できます。
+                        <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                          自社の組織構成に合わせて部署を手入力するか、業界別テンプレートからワンクリックで一括生成できます。<br />
+                          <span className="text-emerald-700 font-bold">※ 不要な部署の削除（🗑️）や名前変更・並び替えも後からワンクリックで自由に行えます。</span>
                         </p>
                       </div>
                       <div className="flex items-center justify-center gap-3 pt-1">
@@ -3549,7 +3550,7 @@ export default function CompanySettingsDashboard() {
                                   <button
                                     onClick={() => handleDeleteDepartment(dept.id, dept.name)}
                                     className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
-                                    title="この部署を削除"
+                                    title="この部署を削除（所属社員は消去されず未配属トレイへ安全に保護されます）"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -7701,11 +7702,14 @@ export default function CompanySettingsDashboard() {
             </div>
 
             {/* モーダルフッター */}
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-              <span>※ 適用後も、各部署の名前変更・並び替え・所属長アサインはいつでも自由に行えます。</span>
+            <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <span className="flex items-center gap-1.5 text-emerald-700 font-bold">
+                <span>🛡️</span>
+                <span>適用後も、不要な部署の削除（🗑️）・名前変更（✎）・並び替えはワンクリックで自由自在！社員データも安全に保護されます。</span>
+              </span>
               <button
                 onClick={() => setIsDeptPresetModalOpen(false)}
-                className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer self-end sm:self-auto shrink-0"
               >
                 閉じる
               </button>
