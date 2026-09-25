@@ -6,6 +6,7 @@ import { RulesAiAssistant } from '../components/RulesAiAssistant';
 import { UserPayslipView } from '../components/UserPayslipView';
 import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
+import { calculateStatutoryLeaveWithMode, calculateUsedPaidLeaveDaysInPeriod } from '../lib/paidLeaveCalculation';
 
 const UserDashboard = () => {
   const navigate = useNavigate();
@@ -210,23 +211,23 @@ const UserDashboard = () => {
       };
       
       const fetchLeaveUsage = async () => {
-        const currentYear = new Date().getFullYear();
-        const startOfYear = `${currentYear}-01-01`;
+        // 🛡️ 労働基準法第39条第7項 基準日（直近付与日）に基づく年5日取得義務の進捗を正確に算出
+        const empType = user.employment_type === 'part-time' || user.employment_type === 'パート' ? 'パート' : '正社員';
+        const weeklyDays = Number(user.weekly_working_days) || 5;
+        const statutory = calculateStatutoryLeaveWithMode(user.join_date, empType, weeklyDays);
+
+        const periodStart = statutory.obligationPeriodStart || `${new Date().getFullYear()}-01-01`;
+        const periodEnd = statutory.obligationPeriodEnd;
+
+        // 当該ユーザーの全承認済み有休申請を取得（全休・半休・単日・期間申請を完全網羅）
         const { data } = await supabase
           .from('leave_requests')
           .select('*')
           .eq('user_id', user.id)
-          .eq('status', '承認')
-          .eq('type', '有給休暇')
-          .gte('start_date', startOfYear);
+          .eq('status', '承認');
         
         if (data) {
-          let days = 0;
-          data.forEach(req => {
-            const start = new Date(req.start_date);
-            const end = new Date(req.end_date);
-            days += (end.getTime() - start.getTime()) / (1000 * 3600 * 24) + 1;
-          });
+          const days = calculateUsedPaidLeaveDaysInPeriod(data, periodStart, periodEnd);
           setUserTakenLeaveDays(days);
         }
       };

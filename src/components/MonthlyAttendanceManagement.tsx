@@ -1152,9 +1152,37 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                           <td className="p-4 text-right font-black text-slate-800 text-sm">{summary.totalHours} 時間</td>
                           <td className="p-4 text-right font-black text-sm">
                             {overtimeNum > 0 ? (
-                              <span className={overtimeNum >= 45 ? 'text-red-600 font-black' : 'text-amber-600 font-black'}>
-                                {summary.overtimeHours} 時間
-                              </span>
+                              <div className="flex flex-col items-end">
+                                <span className={
+                                  overtimeNum >= 100 ? 'text-red-700 font-black bg-red-100 px-1.5 py-0.5 rounded' :
+                                  overtimeNum >= 80 ? 'text-rose-600 font-black animate-pulse' :
+                                  overtimeNum >= 60 ? 'text-orange-600 font-black' :
+                                  overtimeNum >= 45 ? 'text-amber-600 font-black' :
+                                  'text-slate-800 font-black'
+                                }>
+                                  {summary.overtimeHours} 時間
+                                </span>
+                                {overtimeNum >= 100 && (
+                                  <span className="text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 px-1 py-0.5 rounded mt-0.5">
+                                    🛑 法令違反(100h超)
+                                  </span>
+                                )}
+                                {overtimeNum >= 80 && overtimeNum < 100 && (
+                                  <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.5 rounded mt-0.5">
+                                    🚨 過労死ライン(80h超)
+                                  </span>
+                                )}
+                                {overtimeNum >= 60 && overtimeNum < 80 && (
+                                  <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200 px-1 py-0.5 rounded mt-0.5">
+                                    ⚡ 割増50%適用(60h超)
+                                  </span>
+                                )}
+                                {overtimeNum >= 45 && overtimeNum < 60 && (
+                                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded mt-0.5">
+                                    ⚠️ 36協定限度(45h)超
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-slate-400 font-normal">0.0 時間</span>
                             )}
@@ -1249,9 +1277,23 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                       <div className="text-[11px] font-bold text-indigo-600">総実働時間</div>
                       <div className="text-lg font-black text-indigo-900">{selectedUserSummary.totalHours}<span className="text-xs font-normal ml-0.5">h</span></div>
                     </div>
-                    <div className="bg-rose-50/70 border border-rose-100 px-3.5 py-2 rounded-xl text-center">
+                    <div className={`px-3.5 py-2 rounded-xl text-center border ${
+                      parseFloat(selectedUserSummary.overtimeHours) >= 80 ? 'bg-red-50 border-red-300' :
+                      parseFloat(selectedUserSummary.overtimeHours) >= 60 ? 'bg-orange-50 border-orange-300' :
+                      parseFloat(selectedUserSummary.overtimeHours) >= 45 ? 'bg-amber-50 border-amber-300' :
+                      'bg-rose-50/70 border-rose-100'
+                    }`}>
                       <div className="text-[11px] font-bold text-rose-600">総残業時間</div>
                       <div className="text-lg font-black text-rose-900">{selectedUserSummary.overtimeHours}<span className="text-xs font-normal ml-0.5">h</span></div>
+                      {parseFloat(selectedUserSummary.overtimeHours) >= 80 && (
+                        <div className="text-[9px] font-black text-rose-700 bg-rose-100 px-1 rounded mt-0.5 animate-pulse">🚨 過労死ライン</div>
+                      )}
+                      {parseFloat(selectedUserSummary.overtimeHours) >= 60 && parseFloat(selectedUserSummary.overtimeHours) < 80 && (
+                        <div className="text-[9px] font-black text-orange-700 bg-orange-100 px-1 rounded mt-0.5">⚡ 割増50%適用</div>
+                      )}
+                      {parseFloat(selectedUserSummary.overtimeHours) >= 45 && parseFloat(selectedUserSummary.overtimeHours) < 60 && (
+                        <div className="text-[9px] font-black text-amber-700 bg-amber-100 px-1 rounded mt-0.5">⚠️ 36協定限度超</div>
+                      )}
                     </div>
                     <div className="bg-amber-50/70 border border-amber-100 px-3.5 py-2 rounded-xl text-center">
                       <div className="text-[11px] font-bold text-amber-600">有給取得</div>

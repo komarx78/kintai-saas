@@ -101,6 +101,28 @@ export const BonusDocMasterInspector: React.FC = () => {
       try {
         const latest = await fetchBonusDocCoordinatesFromDb();
         setFields(latest);
+
+        // 🏢 テナント情報から動的会社情報をロード（他社テナントへの配慮・憲法3/4）
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
+          if (userData?.tenant_id) {
+            const { data: tData } = await supabase.from('tenants').select('*').eq('id', userData.tenant_id).maybeSingle();
+            if (tData) {
+              if (tData.name) setCompanyName(tData.name);
+              if (tData.address) setCompanyAddress(tData.address);
+              if (tData.representative_name) setCompanyOwnerName(tData.representative_name);
+              if (tData.phone_number) setCompanyPhone(tData.phone_number);
+
+              const sym = tData.shakai_hoken_settings?.office_symbol || '';
+              if (sym && sym.includes('-')) {
+                const parts = sym.split('-');
+                if (parts[0]) setOfficeCityCode(parts[0]);
+                if (parts[1]) setOfficeSymbolKana(parts[1]);
+              }
+            }
+          }
+        }
       } catch (err) {
         console.error('Error fetching bonus doc coordinates:', err);
       }

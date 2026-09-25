@@ -175,10 +175,14 @@ export interface DetailedStatutoryLeave {
   prevStatutoryGrant: number;
   serviceMonths: number;
   serviceText: string;
+  lastGrantDate: string | null;
   nextGrantDate: string | null;
   nextGrantDays: number;
   daysUntilNextGrant: number | null;
   isTarget: boolean;
+  isObligated: boolean; // 労基法第39条第7項 年5日取得義務対象（付与日数10日以上）
+  obligationPeriodStart: string | null;
+  obligationPeriodEnd: string | null;
 
   // 逆算・ハイブリッド詳細
   calcMode: PaidLeaveCalcMode;
@@ -190,6 +194,49 @@ export interface DetailedStatutoryLeave {
   periodText: string;
   isDiffFromContract: boolean;
   diffDaysText: string;
+}
+
+/**
+ * 指定期間内の有給休暇取得（消化）日数を集計
+ * （単日申請・期間申請・全休・半休を完全網羅、NaN・集計漏れを防止）
+ */
+export function calculateUsedPaidLeaveDaysInPeriod(
+  leaveRequests: any[],
+  periodStart?: string | null,
+  periodEnd?: string | null
+): number {
+  let used = 0;
+  if (!Array.isArray(leaveRequests)) return 0;
+
+  leaveRequests.forEach(req => {
+    // 承認済みの有休のみ対象
+    if (req.status !== '承認') return;
+    const typeStr = String(req.type || '');
+    if (!typeStr.includes('有給') && !typeStr.includes('年休')) return;
+
+    const startStr = req.start_date;
+    if (!startStr) return;
+    const endStr = req.end_date || startStr; // 単日申請の場合の安全フォールバック
+
+    // 期間指定がある場合のフィルタ
+    if (periodStart && endStr < periodStart) return;
+    if (periodEnd && startStr > periodEnd) return;
+
+    if (typeStr.includes('半休')) {
+      used += 0.5;
+    } else {
+      const s = new Date(startStr);
+      const e = new Date(endStr);
+      if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+        const diffTime = e.getTime() - s.getTime();
+        const days = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1);
+        used += days;
+      } else {
+        used += 1.0;
+      }
+    }
+  });
+  return used;
 }
 
 /**
@@ -208,10 +255,14 @@ export function calculateStatutoryLeaveWithMode(
     prevStatutoryGrant: 0,
     serviceMonths: 0,
     serviceText: '入社日未設定',
+    lastGrantDate: null,
     nextGrantDate: null,
     nextGrantDays: 0,
     daysUntilNextGrant: null,
     isTarget: false,
+    isObligated: false,
+    obligationPeriodStart: null,
+    obligationPeriodEnd: null,
     calcMode,
     contractWeeklyDays,
     actualWorkedDaysAnnual: 0,
@@ -271,6 +322,7 @@ export function calculateStatutoryLeaveWithMode(
 
   let currentGrant = 0;
   let prevGrant = 0;
+  let currentGrantMonths = 0;
   let nextGrantMonths = schedule[0].months;
   let nextGrantDays = schedule[0].days;
 
@@ -278,23 +330,39 @@ export function calculateStatutoryLeaveWithMode(
     if (months >= schedule[i].months) {
       prevGrant = currentGrant;
       currentGrant = schedule[i].days;
+      currentGrantMonths = schedule[i].months;
       if (i + 1 < schedule.length) {
         nextGrantMonths = schedule[i + 1].months;
         nextGrantDays = schedule[i + 1].days;
       } else {
         const maxMonths = schedule[schedule.length - 1].months;
         const cycles = Math.floor((months - maxMonths) / 12) + 1;
+        currentGrantMonths = maxMonths + (cycles - 1) * 12;
         nextGrantMonths = maxMonths + cycles * 12;
         nextGrantDays = schedule[schedule.length - 1].days;
       }
     }
   }
 
-  // 次回付与予定日
+  // 直近付与日（基準日）および次回付与予定日
+  let lastGrantDateStr: string | null = null;
+  let obligationPeriodStart: string | null = null;
+  let obligationPeriodEnd: string | null = null;
+  const isObligated = currentGrant >= 10;
+
   const nextGrantDate = new Date(joinDate);
   nextGrantDate.setMonth(nextGrantDate.getMonth() + nextGrantMonths);
+  const nextGrantDateStr = nextGrantDate.toISOString().split('T')[0];
   const diffTime = nextGrantDate.getTime() - now.getTime();
   const daysUntilNextGrant = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+
+  if (months >= schedule[0].months) {
+    const lastGrantDate = new Date(joinDate);
+    lastGrantDate.setMonth(lastGrantDate.getMonth() + currentGrantMonths);
+    lastGrantDateStr = lastGrantDate.toISOString().split('T')[0];
+    obligationPeriodStart = lastGrantDateStr;
+    obligationPeriodEnd = nextGrantDateStr;
+  }
 
   // 契約と実績の差分判定
   let isDiffFromContract = false;
@@ -315,10 +383,14 @@ export function calculateStatutoryLeaveWithMode(
     prevStatutoryGrant: prevGrant,
     serviceMonths: months,
     serviceText,
-    nextGrantDate: nextGrantDate.toISOString().split('T')[0],
+    lastGrantDate: lastGrantDateStr,
+    nextGrantDate: nextGrantDateStr,
     nextGrantDays,
     daysUntilNextGrant,
     isTarget: true,
+    isObligated,
+    obligationPeriodStart,
+    obligationPeriodEnd,
     calcMode,
     contractWeeklyDays,
     actualWorkedDaysAnnual: actualStats.annualConvertedDays,

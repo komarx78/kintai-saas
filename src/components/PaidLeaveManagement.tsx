@@ -8,6 +8,7 @@ import {
 import {
   type PaidLeaveCalcMode,
   calculateStatutoryLeaveWithMode,
+  calculateUsedPaidLeaveDaysInPeriod,
   getCompanyPaidLeaveCalcMode,
   saveCompanyPaidLeaveCalcMode,
   getUserPaidLeaveCalcModeMap,
@@ -158,35 +159,27 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
         empAtt
       );
 
-      // 有給消化日数の自動集計（承認済み申請 ＋ 打刻ログ）
-      let usedDays = 0;
+      // 🛡️ 有給消化日数の自動集計（労働基準法第39条第7項 基準日・法定期間厳格準拠）
+      // 1. 当該従業員の申請一覧
+      const empLeaveReqs = leaveRequests.filter(r => r.user_id === emp.id);
 
-      // 1. 承認済み申請からの集計
-      const empApprovedReqs = leaveRequests.filter(
-        r => r.user_id === emp.id && r.status === '承認' && (r.type === '有給休暇' || r.type?.includes('有給'))
-      );
-      empApprovedReqs.forEach(r => {
-        if (r.start_date && r.end_date) {
-          const s = new Date(r.start_date);
-          const e = new Date(r.end_date);
-          const diffDays = Math.max(1, Math.round((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-          if (r.type?.includes('半休')) {
-            usedDays += 0.5;
-          } else {
-            usedDays += diffDays;
-          }
-        }
-      });
+      // 2. 直近付与サイクル（基準日〜次回付与日）における有休消化日数（年5日取得義務判定用 SSOT）
+      const usedDaysInObligationPeriod = statutory.obligationPeriodStart
+        ? calculateUsedPaidLeaveDaysInPeriod(empLeaveReqs, statutory.obligationPeriodStart, statutory.obligationPeriodEnd)
+        : calculateUsedPaidLeaveDaysInPeriod(empLeaveReqs);
+
+      // 3. 全期間累計消化日数（単日申請 end_date 未指定フォールバック完全対応）
+      const usedDaysTotal = calculateUsedPaidLeaveDaysInPeriod(empLeaveReqs);
 
       const carryover = Number(emp.paid_leave_carryover || 0);
       const balance = Number(emp.paid_leave_balance || 0);
       const totalGranted = carryover + balance;
-      const remainingBalance = Math.max(0, totalGranted - usedDays);
+      const remainingBalance = Math.max(0, totalGranted - usedDaysTotal);
 
-      // 年5日取得義務判定（今年度付与が10日以上の場合）
-      const isObligated = balance >= 10;
-      const daysNeededForObligation = Math.max(0, 5 - usedDays);
-      const isObligationSatisfied = usedDays >= 5.0;
+      // 年5日取得義務判定（労基法第39条第7項：法定付与10日以上、かつ基準日から1年以内の消化数で判定）
+      const isObligated = statutory.isObligated || balance >= 10;
+      const daysNeededForObligation = Math.max(0, 5 - usedDaysInObligationPeriod);
+      const isObligationSatisfied = !isObligated || usedDaysInObligationPeriod >= 5.0;
 
       return {
         ...emp,
@@ -196,7 +189,8 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
         userCustomMode,
         effectiveMode,
         statutory,
-        usedDays,
+        usedDays: usedDaysInObligationPeriod, // 5日義務進捗に直結
+        usedDaysTotal,
         carryover,
         balance,
         totalGranted,

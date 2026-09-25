@@ -13,6 +13,7 @@ import {
   broadcastHealthPensionAcqCoordinates,
   type HealthPensionAcqFieldConfig
 } from '../lib/healthPensionAcquisitionDocCoordinates';
+import { supabase } from '../lib/supabase';
 import { OfficialHealthPensionAcquisitionDoc, type HealthPensionAcquisitionEmployee } from './OfficialHealthPensionAcquisitionDoc';
 
 export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
@@ -267,14 +268,42 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
     }
   ];
 
-  const mockCompany = {
-    name: '株式会社cocotte',
-    address: '滋賀県大津市浜大津1-2-3',
-    representative_name: '代表取締役 駒井 修一郎',
-    phone_number: '077-574-6907',
-    corporate_number: '1234567890123',
-    zip_code: '520-0047'
-  };
+  const [companyInfo, setCompanyInfo] = useState({
+    name: '自社事業所',
+    address: '',
+    representative_name: '',
+    phone_number: '',
+    corporate_number: '',
+    zip_code: ''
+  });
+
+  // 🏢 テナント情報から動的会社情報をロード（他社テナントへの配慮・憲法3/4）
+  useEffect(() => {
+    const fetchCompany = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
+          if (userData?.tenant_id) {
+            const { data: tData } = await supabase.from('tenants').select('*').eq('id', userData.tenant_id).maybeSingle();
+            if (tData) {
+              setCompanyInfo({
+                name: tData.name || '自社事業所',
+                address: tData.address || '',
+                representative_name: tData.representative_name || '',
+                phone_number: tData.phone_number || '',
+                corporate_number: tData.corporate_number || '',
+                zip_code: tData.zip_code || ''
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('fetchCompany warning:', e);
+      }
+    };
+    fetchCompany();
+  }, []);
 
   return (
     <div className="space-y-4 font-sans">
@@ -977,7 +1006,7 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'input_preview' && (
         <OfficialHealthPensionAcquisitionDoc
-          companyInfo={mockCompany}
+          companyInfo={companyInfo}
           employees={mockEmployees}
           customCoords={fields}
           hideHeader={false}
