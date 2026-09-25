@@ -162,11 +162,13 @@ export const saveCustomDocTemplateToStorage = (template: CustomDocTemplate, tena
         } catch (_) {}
 
         try {
-          await supabase.from('system_settings').upsert({
-            tenant_id: tenantId,
-            custom_doc_templates: updated,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'tenant_id' });
+          const { data: sysRow } = await supabase.from('system_settings').select('id').limit(1).maybeSingle();
+          if (sysRow?.id) {
+            await supabase.from('system_settings').update({
+              custom_doc_templates: updated,
+              updated_at: new Date().toISOString()
+            }).eq('id', sysRow.id);
+          }
         } catch (err) {
           console.warn('Supabase custom_doc_templates backup error:', err);
         }
@@ -190,11 +192,13 @@ export const deleteCustomDocTemplateFromStorage = (templateId: string, tenantId?
           await supabase.from('tenants').update({ custom_doc_templates: updated }).eq('id', tenantId);
         } catch (_) {}
         try {
-          await supabase.from('system_settings').upsert({
-            tenant_id: tenantId,
-            custom_doc_templates: updated,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'tenant_id' });
+          const { data: sysRow } = await supabase.from('system_settings').select('id').limit(1).maybeSingle();
+          if (sysRow?.id) {
+            await supabase.from('system_settings').update({
+              custom_doc_templates: updated,
+              updated_at: new Date().toISOString()
+            }).eq('id', sysRow.id);
+          }
         } catch (_) {}
       })();
     }

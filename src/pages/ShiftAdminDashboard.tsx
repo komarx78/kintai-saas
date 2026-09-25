@@ -221,8 +221,13 @@ const ShiftAdminDashboard: React.FC = () => {
       // 📱 DBからスタッフLINE連携状態を同期（新入社員の追加情報を即時引き継ぎ）
       await syncStaffLineLinkFromDb(tenantId);
 
-      const { data: tData } = await supabase.from('tenants').select('name').eq('id', tenantId).maybeSingle();
-      if (tData) setTenantName(tData.name);
+      const { data: tData } = await supabase.from('tenants').select('name, work_calendar_settings').eq('id', tenantId).maybeSingle();
+      if (tData) {
+        setTenantName(tData.name);
+        if (tData.work_calendar_settings?.shift_deadline_rule) {
+          setSubmissionDeadlineRule(tData.work_calendar_settings.shift_deadline_rule);
+        }
+      }
 
       let userList: any[] = [];
       const { data: uDataWithStore, error: uErrWithStore } = await supabase
@@ -373,12 +378,17 @@ const ShiftAdminDashboard: React.FC = () => {
       if (tenantId) {
         localStorage.setItem(`shift_deadline_rule_${tenantId}`, submissionDeadlineRule);
         try {
-          const { error } = await supabase.from('shift_settings').update({ submission_deadline_rule: submissionDeadlineRule } as any).eq('tenant_id', tenantId);
-          if (error) {
-            console.warn('shift_settings.submission_deadline_rule update skipped (saved in localStorage):', error.message);
-          }
+          const { data: curTenant } = await supabase.from('tenants').select('work_calendar_settings').eq('id', tenantId).maybeSingle();
+          const curSettings = curTenant?.work_calendar_settings || {};
+          await supabase.from('tenants').update({
+            work_calendar_settings: {
+              ...curSettings,
+              shift_deadline_rule: submissionDeadlineRule
+            },
+            updated_at: new Date().toISOString()
+          }).eq('id', tenantId);
         } catch (dbErr) {
-          console.warn('shift_settings DB sync warning:', dbErr);
+          console.warn('shift deadline rule DB sync note:', dbErr);
         }
       }
       alert('提出ルールを保存しました。');

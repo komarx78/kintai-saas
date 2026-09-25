@@ -778,7 +778,7 @@ export default function EmployeeOnboardingWelcome() {
           join_date: contractAgreement.joinDate || '2026-04-01',
           status: 'onboarding',
           updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id' });
+        }, { onConflict: 'tenant_id,user_id' });
       } catch (onbSyncErr) {
         console.warn('employee_onboarding_profiles name_kana sync note:', onbSyncErr);
       }

@@ -1595,15 +1595,27 @@ export default function OnboardingAdminDashboard() {
 
       if (rpcError) {
         console.warn('RPC delete_user_completely fallback to direct tables:', rpcError);
-        // フォールバック: テーブル個別削除（DBトリガーがあればauth.usersも連動削除される）
-        await supabase.from('employee_document_submissions').delete().eq('user_id', emp.user_id);
-        await supabase.from('employee_payroll_profiles').delete().eq('user_id', emp.user_id);
-        await supabase.from('employee_onboarding_profiles').delete().eq('user_id', emp.user_id);
-        await supabase.from('shift_employee_settings').delete().eq('user_id', emp.user_id);
-        await supabase.from('attendance_records').delete().eq('user_id', emp.user_id);
-        await supabase.from('leave_requests').delete().eq('user_id', emp.user_id);
-        await supabase.from('users').delete().eq('id', emp.user_id);
       }
+
+      // 2. 外部キー参照テーブルの関連データを完全連鎖削除（カスケード保護）
+      try { await supabase.from('payslips').delete().eq('user_id', emp.user_id); } catch (_) {}
+      try { await supabase.from('salary_revision_history').delete().eq('user_id', emp.user_id); } catch (_) {}
+      try { await supabase.from('employee_document_submissions').delete().eq('user_id', emp.user_id); } catch (_) {}
+      try { await supabase.from('employee_maternity_leaves').delete().eq('user_id', emp.user_id); } catch (_) {}
+      try { await supabase.from('employee_payroll_profiles').delete().eq('user_id', emp.user_id); } catch (_) {}
+      try { await supabase.from('employee_onboarding_profiles').delete().eq('user_id', emp.user_id); } catch (_) {}
+      try { await supabase.from('advanced_shifts').delete().eq('user_id', emp.user_id); } catch (_) {}
+      try { await supabase.from('advanced_shift_requests').delete().eq('user_id', emp.user_id); } catch (_) {}
+      try { await supabase.from('shifts').delete().eq('user_id', emp.user_id); } catch (_) {}
+      try { await supabase.from('shift_employee_settings').delete().eq('user_id', emp.user_id); } catch (_) {}
+      try { await supabase.from('attendance_records').delete().eq('user_id', emp.user_id); } catch (_) {}
+      try { await supabase.from('leave_requests').delete().eq('user_id', emp.user_id); } catch (_) {}
+      try { await supabase.from('paid_leave_grants').delete().eq('user_id', emp.user_id); } catch (_) {}
+      try { await supabase.from('system_improvement_suggestions').delete().eq('user_id', emp.user_id); } catch (_) {}
+
+      // 3. 親テーブル users の削除
+      const { error: uDelErr } = await supabase.from('users').delete().eq('id', emp.user_id);
+      if (uDelErr) throw uDelErr;
 
       // LocalStorage のバックアップキャッシュも完全削除
       try {

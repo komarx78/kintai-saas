@@ -256,11 +256,32 @@ export default function SuperAdminDashboard() {
 
     setIsDeletingTenant(true);
     try {
-      // 1. 外部キー参照テーブルの関連データを先行クリーンアップ
-      try { await supabase.from('attendance_records').delete().eq('tenant_id', tenant.id); } catch (_) {}
-      try { await supabase.from('leave_requests').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      // 1. 外部キー参照テーブルの関連データを完全連鎖先行クリーンアップ（カスケード保護）
+      try { await supabase.from('payslips').delete().eq('tenant_id', tenant.id); } catch (_) {}
       try { await supabase.from('salary_revision_history').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('employee_document_submissions').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('employee_maternity_leaves').delete().eq('tenant_id', tenant.id); } catch (_) {}
       try { await supabase.from('employee_payroll_profiles').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('employee_onboarding_profiles').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('advanced_shifts').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('advanced_shift_requests').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('advanced_shift_requirements').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('shifts').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('shift_employee_settings').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('shift_settings').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('shift_roles').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('attendance_records').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('attendance_monthly_closings').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('leave_requests').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('leave_types').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('paid_leave_grants').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('payroll_settings').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('department_masters').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('company_qualification_masters').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('work_schedule_patterns').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('store_masters').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('system_improvement_suggestions').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('system_settings').delete().eq('tenant_id', tenant.id); } catch (_) {}
       try { await supabase.from('users').delete().eq('tenant_id', tenant.id); } catch (_) {}
 
       // 2. テナント本体の削除
