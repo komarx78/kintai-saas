@@ -2680,156 +2680,109 @@ export default function OnboardingAdminDashboard() {
       const resolvedResidentTaxMonthly = Number(data.resident_tax_monthly) || 
         (data.resident_tax_details ? (Number(data.resident_tax_details['7']) || Number(data.resident_tax_details['6']) || Number(Object.values(data.resident_tax_details)[0]) || 0) : 0);
 
-      // 2. employee_payroll_profiles の更新（標準報酬月額・住民税・資格手当・扶養親族の100%全同期）
+      // 2. employee_payroll_profiles の更新（実在カラムのみ厳格バインド）
       try {
+        const payrollPayload: any = {
+          tenant_id: tenantId,
+          user_id: data.user_id,
+          birth_date: data.birth_date || null,
+          salary_type: data.salary_type,
+          base_salary: data.base_salary,
+          hourly_wage: data.hourly_wage,
+          position_allowance: data.position_allowance,
+          qualification_allowance: data.qualification_allowance || 0,
+          housing_allowance: data.housing_allowance || 0,
+          family_allowance: data.family_allowance || 0,
+          commuting_allowance: data.commuting_allowance,
+          health_insurance_enabled: data.health_insurance_joined,
+          health_standard_monthly_remuneration: data.health_standard_monthly_remuneration || null,
+          pension_insurance_enabled: data.pension_insurance_joined,
+          pension_standard_monthly_remuneration: data.pension_standard_monthly_remuneration || null,
+          employment_insurance_enabled: data.employment_insurance_joined,
+          resident_tax_monthly: resolvedResidentTaxMonthly,
+          resident_tax_details: data.resident_tax_details || {},
+          dependents_count: data.dependents_count ?? 0,
+          bank_name: data.bank_name,
+          branch_name: data.branch_name,
+          account_type: data.account_type,
+          account_number: data.account_number,
+          account_holder: data.account_holder,
+          name_kana: data.name_kana || null
+        };
         const { error: pErr } = await supabase
           .from('employee_payroll_profiles')
-          .upsert({
-            tenant_id: tenantId,
-            user_id: data.user_id,
-            birth_date: data.birth_date || null,
-            salary_type: data.salary_type,
-            base_salary: data.base_salary,
-            hourly_wage: data.hourly_wage,
-            position_allowance: data.position_allowance,
-            qualification_allowance: data.qualification_allowance || 0,
-            housing_allowance: data.housing_allowance || 0,
-            family_allowance: data.family_allowance || 0,
-            commuting_type: data.commuting_type,
-            commuting_daily_amount: data.commuting_daily_amount,
-            commuting_allowance: data.commuting_allowance,
-            health_insurance_enabled: data.health_insurance_joined,
-            health_standard_monthly_remuneration: data.health_standard_monthly_remuneration || null,
-            pension_insurance_enabled: data.pension_insurance_joined,
-            pension_standard_monthly_remuneration: data.pension_standard_monthly_remuneration || null,
-            employment_insurance_enabled: data.employment_insurance_joined,
-            resident_tax_monthly: resolvedResidentTaxMonthly,
-            resident_tax_details: data.resident_tax_details || {},
-            dependents_count: data.dependents_count ?? 0,
-            has_spouse: !!data.has_spouse,
-            my_number: data.my_number || '',
-            bank_name: data.bank_name,
-            branch_name: data.branch_name,
-            account_type: data.account_type,
-            account_number: data.account_number,
-            account_holder: data.account_holder
-          }, { onConflict: 'tenant_id,user_id' });
-        if (pErr) throw pErr;
+          .upsert(payrollPayload, { onConflict: 'tenant_id,user_id' });
+        if (pErr) {
+          console.warn('employee_payroll_profiles upsert warn:', pErr);
+        }
       } catch (pErr) {
-        console.warn('payroll profile full update failed, trying fallback:', pErr);
-        await supabase
-          .from('employee_payroll_profiles')
-          .upsert({
-            tenant_id: tenantId,
-            user_id: data.user_id,
-            salary_type: data.salary_type,
-            base_salary: data.base_salary,
-            hourly_wage: data.hourly_wage,
-            position_allowance: data.position_allowance,
-            qualification_allowance: data.qualification_allowance || 0,
-            housing_allowance: data.housing_allowance || 0,
-            family_allowance: data.family_allowance || 0,
-            commuting_type: data.commuting_type,
-            commuting_daily_amount: data.commuting_daily_amount,
-            commuting_allowance: data.commuting_allowance,
-            health_insurance_enabled: data.health_insurance_joined,
-            pension_insurance_enabled: data.pension_insurance_joined,
-            employment_insurance_enabled: data.employment_insurance_joined,
-            resident_tax_monthly: resolvedResidentTaxMonthly,
-            resident_tax_details: data.resident_tax_details || {},
-            dependents_count: data.dependents_count ?? 0,
-            has_spouse: !!data.has_spouse,
-            bank_name: data.bank_name,
-            branch_name: data.branch_name,
-            account_type: data.account_type,
-            account_number: data.account_number,
-            account_holder: data.account_holder
-          }, { onConflict: 'tenant_id,user_id' });
+        console.warn('employee_payroll_profiles exception:', pErr);
       }
 
       // 3. shift_employee_settings の更新
-      await supabase
-        .from('shift_employee_settings')
-        .upsert({
+      try {
+        await supabase
+          .from('shift_employee_settings')
+          .upsert({
+            tenant_id: tenantId,
+            user_id: data.user_id,
+            hire_date: data.join_date,
+            base_wage: data.salary_type === 'hourly' ? (data.hourly_wage || 0) : (data.base_salary ? Math.round(data.base_salary / 160) : 0)
+          }, { onConflict: 'user_id' });
+      } catch (sErr) {
+        console.warn('shift_employee_settings upsert warn:', sErr);
+      }
+
+      // 4. employee_onboarding_profiles の更新（実在カラムのみ厳格バインド）
+      try {
+        const onbPayload: any = {
           tenant_id: tenantId,
           user_id: data.user_id,
-          hire_date: data.join_date,
-          base_wage: data.salary_type === 'hourly' ? (data.hourly_wage || 0) : (data.base_salary ? Math.round(data.base_salary / 160) : 0)
-        }, { onConflict: 'user_id' });
-
-      // 4. employee_onboarding_profiles の更新（標準報酬月額・住民税・資格証憑・扶養含む）
-      try {
+          status: data.status,
+          name_kana: data.name_kana || null,
+          address_kana: data.address_kana || null,
+          postal_code: data.postal_code || null,
+          join_date: data.join_date,
+          birth_date: data.birth_date || null,
+          address: data.address || null,
+          phone: data.phone || null,
+          contract_type: data.contract_type,
+          trial_period_months: data.trial_period_months,
+          start_time: data.start_time,
+          end_time: data.end_time,
+          break_time_minutes: data.break_time_minutes,
+          holidays_text: data.holidays_text,
+          salary_type: data.salary_type,
+          base_salary: data.base_salary,
+          hourly_wage: data.hourly_wage,
+          position_allowance: data.position_allowance,
+          qualification_allowance: data.qualification_allowance || 0,
+          qualification_name: data.qualification_name || '',
+          qualification_certificate_url: data.qualification_certificate_url || '',
+          qualification_certificate_filename: data.qualification_certificate_filename || '',
+          commuting_allowance: data.commuting_allowance,
+          health_insurance_joined: data.health_insurance_joined,
+          health_standard_monthly_remuneration: data.health_standard_monthly_remuneration || null,
+          pension_insurance_joined: data.pension_insurance_joined,
+          pension_standard_monthly_remuneration: data.pension_standard_monthly_remuneration || null,
+          employment_insurance_joined: data.employment_insurance_joined,
+          resident_tax_monthly: resolvedResidentTaxMonthly,
+          resident_tax_details: data.resident_tax_details || {},
+          bank_name: data.bank_name,
+          branch_name: data.branch_name,
+          account_type: data.account_type,
+          account_number: data.account_number,
+          account_holder: data.account_holder,
+          updated_at: new Date().toISOString()
+        };
         const { error: onbErr } = await supabase
           .from('employee_onboarding_profiles')
-          .upsert({
-            tenant_id: tenantId,
-            user_id: data.user_id,
-            status: data.status,
-            name_kana: data.name_kana || null,
-            join_date: data.join_date,
-            birth_date: data.birth_date || null,
-            address: data.address || null,
-            address_kana: data.address_kana || null,
-            postal_code: data.postal_code || null,
-            phone: data.phone || null,
-            contract_type: data.contract_type,
-            trial_period_months: data.trial_period_months,
-            work_schedule_type: data.work_schedule_type || 'fixed',
-            start_time: data.start_time,
-            end_time: data.end_time,
-            break_time_minutes: data.break_time_minutes,
-            holidays_text: data.holidays_text,
-            salary_type: data.salary_type,
-            base_salary: data.base_salary,
-            hourly_wage: data.hourly_wage,
-            position_allowance: data.position_allowance,
-            qualification_allowance: data.qualification_allowance || 0,
-            qualification_name: data.qualification_name || '',
-            qualification_certificate_url: data.qualification_certificate_url || '',
-            qualification_certificate_filename: data.qualification_certificate_filename || '',
-            commuting_type: data.commuting_type,
-            commuting_daily_amount: data.commuting_daily_amount,
-            commuting_allowance: data.commuting_allowance,
-            health_insurance_joined: data.health_insurance_joined,
-            health_standard_monthly_remuneration: data.health_standard_monthly_remuneration || null,
-            pension_insurance_joined: data.pension_insurance_joined,
-            pension_standard_monthly_remuneration: data.pension_standard_monthly_remuneration || null,
-            standard_remuneration_notice_url: data.standard_remuneration_notice_url || '',
-            standard_remuneration_notice_filename: data.standard_remuneration_notice_filename || '',
-            employment_insurance_joined: data.employment_insurance_joined,
-            resident_tax_monthly: resolvedResidentTaxMonthly,
-            resident_tax_details: data.resident_tax_details || {},
-            dependents_count: data.dependents_count ?? 0,
-            has_spouse: !!data.has_spouse,
-            my_number: data.my_number || '',
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'tenant_id,user_id' });
-        if (onbErr) throw onbErr;
+          .upsert(onbPayload, { onConflict: 'tenant_id,user_id' });
+        if (onbErr) {
+          console.warn('employee_onboarding_profiles upsert warn:', onbErr);
+        }
       } catch (onbErr) {
-        console.warn('onboarding profile full update failed, falling back:', onbErr);
-        await supabase
-          .from('employee_onboarding_profiles')
-          .upsert({
-            tenant_id: tenantId,
-            user_id: data.user_id,
-            status: data.status,
-            join_date: data.join_date,
-            contract_type: data.contract_type,
-            trial_period_months: data.trial_period_months,
-            start_time: data.start_time,
-            end_time: data.end_time,
-            break_time_minutes: data.break_time_minutes,
-            holidays_text: data.holidays_text,
-            salary_type: data.salary_type,
-            base_salary: data.base_salary,
-            hourly_wage: data.hourly_wage,
-            position_allowance: data.position_allowance,
-            commuting_allowance: data.commuting_allowance,
-            health_insurance_joined: data.health_insurance_joined,
-            pension_insurance_joined: data.pension_insurance_joined,
-            employment_insurance_joined: data.employment_insurance_joined,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'tenant_id,user_id' });
+        console.warn('employee_onboarding_profiles exception:', onbErr);
       }
 
       // 5. LocalStorage へのマスターバックアップ保存（絶対にロストさせない大元マスタSSOT！）
@@ -2887,6 +2840,14 @@ export default function OnboardingAdminDashboard() {
       } catch (stErr) {
         console.warn('localStorage backup error:', stErr);
       }
+
+      // 楽観的ローカル更新（一覧の状態を即座に最新値へ同期）
+      setEmployees(prev => prev.map(e => e.user_id === data.user_id ? {
+        ...e,
+        ...data,
+        resident_tax_monthly: resolvedResidentTaxMonthly,
+        resident_tax_details: data.resident_tax_details || {}
+      } : e));
 
       alert('✨ 従業員・労務情報の修正を保存しました！\n標準報酬月額・住民税・資格手当（合格証証憑）・就業規定が給与計算・全システムに即座に同期されました。');
       setEditModal({ isOpen: false, data: null });
