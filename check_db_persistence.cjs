@@ -69,6 +69,14 @@ allFiles.forEach(file => {
         });
       }
     }
+
+    // 🚨 役職・マスタ保存関数の tenantId 引数欠落検知
+    if (line.includes('savePositionsToStorage(') && !line.includes('tenantId') && !line.includes('tenantIdData') && !line.includes('tid') && !line.includes('activeTenantId')) {
+      // 関数の定義行自体は除外
+      if (!line.includes('export const savePositionsToStorage')) {
+        console.warn(`⚠️ [引数欠落警告] ${path.relative(__dirname, file)}:${idx + 1} -> savePositionsToStorage に tenantId が渡されていません: ${line.trim()}`);
+      }
+    }
   });
 });
 
