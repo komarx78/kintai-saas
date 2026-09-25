@@ -464,3 +464,160 @@ export function calculatePayroll(
     net_salary: netSalary
   };
 }
+
+
+/**
+ * 国税庁告示および社会保険法に完全準拠した賞与控除額（社保・源泉所得税）自動計算
+ * 1. 標準賞与額（健康保険法第45条・厚生年金保険法第24条の4: 千円未満切捨て）
+ * 2. 健康保険上限（年度累計573万円）、厚生年金上限（1ヶ月150万円）
+ * 3. 40〜64歳介護保険自動判定
+ * 4. 国税庁「賞与に対する源泉徴収税額の算出率の表（甲欄）」準拠の所得税率
+ */
+export function calculateBonusDeductions(params: {
+  bonusGross: number; // 賞与総支給額（額面）
+  lastMonthTaxBase?: number; // 前月の社会保険料控除後の給与等（税額基礎）
+  dependentsCount?: number; // 扶養親族等の数
+  birthDate?: string | Date | null; // 生年月日（40〜64歳介護保険判定）
+  isHealthEnabled?: boolean; // 健康保険加入
+  isPensionEnabled?: boolean; // 厚生年金加入
+  isEmploymentEnabled?: boolean; // 雇用保険加入
+  isExecutive?: boolean; // 役員（雇用保険対象外）
+  healthRate?: number; // 健康保険料率（本人負担・折半後、デフォルト約0.04985）
+  nursingRate?: number; // 介護保険料率（本人負担、デフォルト約0.008）
+  pensionRate?: number; // 厚生年金保険料率（本人負担、9.15%）
+  employmentRate?: number; // 雇用保険料率（本人負担、一般 0.006 = 6/1000）
+}): {
+  standardBonus: number;
+  healthInsurance: number;
+  nursingInsurance: number;
+  welfarePension: number;
+  employmentInsurance: number;
+  socialInsuranceTotal: number;
+  incomeTax: number;
+  deductionTotal: number;
+  netPay: number;
+} {
+  const {
+    bonusGross,
+    lastMonthTaxBase = 0,
+    dependentsCount = 0,
+    birthDate,
+    isHealthEnabled = true,
+    isPensionEnabled = true,
+    isEmploymentEnabled = true,
+    isExecutive = false,
+    healthRate = 0.04985,
+    nursingRate = 0.008,
+    pensionRate = 0.0915,
+    employmentRate = 0.006
+  } = params;
+
+  if (bonusGross <= 0) {
+    return {
+      standardBonus: 0,
+      healthInsurance: 0,
+      nursingInsurance: 0,
+      welfarePension: 0,
+      employmentInsurance: 0,
+      socialInsuranceTotal: 0,
+      incomeTax: 0,
+      deductionTotal: 0,
+      netPay: 0
+    };
+  }
+
+  // 1. 標準賞与額の算定（健康保険法第45条・厚生年金保険法第24条の4: 千円未満切捨て）
+  const standardBonus = Math.floor(bonusGross / 1000) * 1000;
+
+  // 2. 健康保険・介護保険の標準賞与額（年度累計上限 573万円）
+  const healthBonusBase = Math.min(5730000, standardBonus);
+
+  // 介護保険該当判定（40歳以上65歳未満）
+  let isNursing = false;
+  if (birthDate) {
+    const b = new Date(birthDate);
+    const now = new Date();
+    let age = now.getFullYear() - b.getFullYear();
+    const mDiff = now.getMonth() - b.getMonth();
+    if (mDiff < 0 || (mDiff === 0 && now.getDate() < b.getDate())) {
+      age--;
+    }
+    isNursing = age >= 40 && age < 65;
+  }
+
+  const healthInsurance = isHealthEnabled ? Math.round(healthBonusBase * healthRate) : 0;
+  const nursingInsurance = (isHealthEnabled && isNursing) ? Math.round(healthBonusBase * nursingRate) : 0;
+
+  // 3. 厚生年金保険の標準賞与額（1ヶ月あたり上限 150万円）
+  const pensionBonusBase = Math.min(1500000, standardBonus);
+  const welfarePension = isPensionEnabled ? Math.round(pensionBonusBase * pensionRate) : 0;
+
+  // 4. 雇用保険料（標準賞与額ではなく、賞与総支給額そのものに乗じる・役員は除外）
+  const employmentInsurance = (isEmploymentEnabled && !isExecutive) ? Math.round(bonusGross * employmentRate) : 0;
+
+  const socialInsuranceTotal = healthInsurance + nursingInsurance + welfarePension + employmentInsurance;
+
+  // 5. 賞与に対する源泉所得税の計算（国税庁「賞与に対する源泉徴収税額の算出率の表」準拠）
+  const taxableBonus = Math.max(0, bonusGross - socialInsuranceTotal);
+
+  // 前月給与基準（前月給与がない場合は賞与割戻月額）
+  const baseMonthly = lastMonthTaxBase > 0 ? lastMonthTaxBase : Math.round(taxableBonus / 6);
+  const effectiveBase = Math.max(0, baseMonthly - (Math.max(0, dependentsCount) * 31667));
+
+  let taxRate = 0;
+  if (effectiveBase < 68000) {
+    taxRate = 0;
+  } else if (effectiveBase < 110000) {
+    taxRate = 0.02042;
+  } else if (effectiveBase < 170000) {
+    taxRate = 0.04084;
+  } else if (effectiveBase < 260000) {
+    taxRate = 0.06126;
+  } else if (effectiveBase < 350000) {
+    taxRate = 0.08168;
+  } else if (effectiveBase < 460000) {
+    taxRate = 0.10210;
+  } else if (effectiveBase < 580000) {
+    taxRate = 0.12252;
+  } else if (effectiveBase < 710000) {
+    taxRate = 0.14294;
+  } else if (effectiveBase < 840000) {
+    taxRate = 0.16336;
+  } else if (effectiveBase < 1000000) {
+    taxRate = 0.18378;
+  } else if (effectiveBase < 1180000) {
+    taxRate = 0.20420;
+  } else if (effectiveBase < 1400000) {
+    taxRate = 0.22462;
+  } else if (effectiveBase < 1730000) {
+    taxRate = 0.24504;
+  } else if (effectiveBase < 2160000) {
+    taxRate = 0.26546;
+  } else if (effectiveBase < 2820000) {
+    taxRate = 0.28588;
+  } else if (effectiveBase < 3740000) {
+    taxRate = 0.30630;
+  } else if (effectiveBase < 4960000) {
+    taxRate = 0.32672;
+  } else if (effectiveBase < 7120000) {
+    taxRate = 0.34714;
+  } else {
+    taxRate = 0.35735;
+  }
+
+  const incomeTax = Math.floor(taxableBonus * taxRate); // 1円未満切捨て
+  const deductionTotal = socialInsuranceTotal + incomeTax;
+  const netPay = Math.max(0, bonusGross - deductionTotal);
+
+  return {
+    standardBonus,
+    healthInsurance,
+    nursingInsurance,
+    welfarePension,
+    employmentInsurance,
+    socialInsuranceTotal,
+    incomeTax,
+    deductionTotal,
+    netPay
+  };
+}
