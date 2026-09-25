@@ -390,9 +390,27 @@ export function calculatePayroll(
     lateEarlyDeduction
   );
 
+  // 🛡️ 固定的賃金（基本給＋役職＋資格＋住宅＋家族＋固定残業＋固定通勤手当）
+  // 法定労務SSOT原則: 標準報酬月額は「固定的給与」に基づき定時決定・資格取得決定され1年間固定される。
+  // 万が一マスタで標準報酬月額が未設定の場合でも、当月の残業手当（非固定的手当）の波で社保料が毎月変動するのを物理遮断する！
+  const standardContractBaseSalary = profile.salary_type === 'hourly'
+    ? (profile.base_salary > 0 ? profile.base_salary : (profile.hourly_wage || 1100) * 160)
+    : (profile.base_salary || 0);
+
+  const fixedMonthlyRemuneration = Math.max(0,
+    standardContractBaseSalary +
+    positionAllowance +
+    qualificationAllowance +
+    housingAllowance +
+    familyAllowance +
+    (profile.fixed_overtime_allowance || 0) +
+    (profile.commuting_allowance || 0)
+  );
+
   // 2. 社会保険料の計算（都道府県料率 ＆ 会社雇用保険設定 ＆ 生年月日による40〜64歳介護保険自動判定）
   const socialResult = calculateSocialInsuranceDeduction({
-    monthlySalary: totalEarnings,
+    monthlySalary: totalEarnings, // 雇用保険料は当月の実総支給額ベース
+    standardRemunerationBase: fixedMonthlyRemuneration, // 健保・厚年の等級判定は固定的賃金ベース（毎月変動を完全遮断）
     healthStandardRemuneration: profile.health_standard_monthly_remuneration,
     pensionStandardRemuneration: profile.pension_standard_monthly_remuneration,
     prefectureCode: settings?.prefecture_code || '13',

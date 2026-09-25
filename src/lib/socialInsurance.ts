@@ -263,7 +263,8 @@ export function lookupStandardMonthlyRemuneration(
  * 社会保険料の本人負担額（折半額）を計算
  */
 export function calculateSocialInsuranceDeduction(params: {
-  monthlySalary: number;
+  monthlySalary: number; // 雇用保険料算出用の当月実総支給額
+  standardRemunerationBase?: number | null; // 健康保険・厚生年金の未設定時判定用・固定的賃金（指定があれば優先、なければmonthlySalary）
   healthStandardRemuneration?: number | null;
   pensionStandardRemuneration?: number | null;
   prefectureCode?: string;
@@ -277,6 +278,7 @@ export function calculateSocialInsuranceDeduction(params: {
 }) {
   const {
     monthlySalary,
+    standardRemunerationBase,
     healthStandardRemuneration,
     pensionStandardRemuneration,
     prefectureCode,
@@ -291,14 +293,19 @@ export function calculateSocialInsuranceDeduction(params: {
 
   const pref = getPrefectureRate(prefectureCode);
 
-  // 標準報酬月額の引当（指定があればそれを使用、なければ報酬月額から判定）
+  // 🛡️ 標準報酬月額の判定基礎額（固定的賃金がある場合は残業等の変動支給に惑わされず固定判定）
+  const fallbackRemuneration = (standardRemunerationBase !== undefined && standardRemunerationBase !== null && standardRemunerationBase > 0)
+    ? standardRemunerationBase
+    : monthlySalary;
+
+  // 標準報酬月額の引当（指定があればそれを使用、なければ固定的報酬月額から判定）
   const healthBase = (healthStandardRemuneration && healthStandardRemuneration > 0)
     ? healthStandardRemuneration
-    : lookupStandardMonthlyRemuneration(monthlySalary, 'health');
+    : lookupStandardMonthlyRemuneration(fallbackRemuneration, 'health');
 
   const pensionBase = (pensionStandardRemuneration && pensionStandardRemuneration > 0)
     ? pensionStandardRemuneration
-    : lookupStandardMonthlyRemuneration(monthlySalary, 'pension');
+    : lookupStandardMonthlyRemuneration(fallbackRemuneration, 'pension');
 
   // 介護保険該当フラグ（生年月日の実年齢を最優先判定、生年月日未指定時は手動指定を参照）
   let isNursing = false;

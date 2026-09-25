@@ -1140,17 +1140,23 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           qualification_allowance: existingProf?.qualification_allowance ?? 0,
           housing_allowance: existingProf?.housing_allowance ?? 0,
           family_allowance: existingProf?.family_allowance ?? 0,
+          commuting_type: existingProf?.commuting_type || 'monthly',
+          commuting_daily_amount: existingProf?.commuting_daily_amount ?? 800,
           commuting_allowance: existingProf?.commuting_allowance ?? 15000,
           commuting_taxable: existingProf?.commuting_taxable ?? false,
           fixed_overtime_hours: existingProf?.fixed_overtime_hours ?? 0,
           fixed_overtime_allowance: existingProf?.fixed_overtime_allowance ?? 0,
           dependents_count: existingProf?.dependents_count ?? 0,
+          has_spouse: existingProf?.has_spouse ?? false,
           birth_date: empBirthDate,
           health_insurance_enabled: existingProf?.health_insurance_enabled ?? true,
+          health_standard_monthly_remuneration: existingProf?.health_standard_monthly_remuneration ?? null,
           nursing_insurance_enabled: existingProf?.nursing_insurance_enabled,
           pension_insurance_enabled: existingProf?.pension_insurance_enabled ?? true,
+          pension_standard_monthly_remuneration: existingProf?.pension_standard_monthly_remuneration ?? null,
           employment_insurance_enabled: existingProf?.employment_insurance_enabled ?? true,
           resident_tax_monthly: existingProf?.resident_tax_monthly ?? 0,
+          resident_tax_details: existingProf?.resident_tax_details ?? {},
           tax_bracket: existingProf?.tax_bracket || 'kou'
         };
 
@@ -1171,10 +1177,11 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           late_early_hours: lateEarlyMins > 0 ? Number((lateEarlyMins / 60).toFixed(1)) : 0
         };
 
-        // 給与計算エンジンの実行（都道府県・生年月日・社保料率・税金完全自動連動）
+        // 給与計算エンジンの実行（都道府県・生年月日・社保料率・税金・住民税月別完全自動連動）
         const calculated = calculatePayroll(profile, attSummary, {
           ...payrollSettings,
-          prefecture_code: activePrefecture
+          prefecture_code: activePrefecture,
+          target_month: currentMonth.getMonth() + 1
         });
 
         const paymentDayStr = payrollSettings.payment_day === 'end_of_month' ? '28' : String(payrollSettings.payment_day);
@@ -3879,7 +3886,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-200/80 mb-3 space-y-2">
                   <div className="text-[11px] font-black text-indigo-950 flex items-center justify-between">
                     <span>標準報酬月額（算定基礎届・決定通知書による固定設定）</span>
-                    <span className="text-[10px] text-indigo-600 font-bold">※空欄時は支給総額から自動等級判定</span>
+                    <span className="text-[10px] text-indigo-600 font-bold">※空欄時は基本給・手当・通勤費から自動等級判定（毎月固定）</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>

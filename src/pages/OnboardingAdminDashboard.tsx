@@ -6140,7 +6140,16 @@ export default function OnboardingAdminDashboard() {
                         const startIndex = monthsOrder.indexOf(residentTaxBulkMonth);
                         if (startIndex === -1) return;
 
-                        const newDetails = { ...(editModal.data?.resident_tax_details || {}) };
+                        const existingDetails = editModal.data?.resident_tax_details || {};
+                        const newDetails: Record<string, number> = {};
+
+                        // 🛡️ 開始月より前の月（例: 8月開始時の6月・7月）は既存値があれば保持し、なければ0円（未発生）とする
+                        for (let i = 0; i < startIndex; i++) {
+                          const mKey = String(monthsOrder[i]);
+                          newDetails[mKey] = existingDetails[mKey] !== undefined ? existingDetails[mKey] : 0;
+                        }
+
+                        // 開始月以降は指定金額を一括反映
                         for (let i = startIndex; i < monthsOrder.length; i++) {
                           newDetails[String(monthsOrder[i])] = amt;
                         }
@@ -6164,7 +6173,11 @@ export default function OnboardingAdminDashboard() {
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                     {[6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5].map((monthNum) => {
                       const isFirstMonth = monthNum === 6; // 6月は端数調整月
-                      const currentVal = editModal.data?.resident_tax_details?.[String(monthNum)] ?? (editModal.data?.resident_tax_monthly ?? 0);
+                      const details = editModal.data?.resident_tax_details;
+                      // 🛡️ 月別詳細データが存在する場合は指定月の値を厳格参照（未設定月がフォールバックで勝手に埋まるのを物理遮断）
+                      const currentVal = (details && typeof details === 'object' && Object.keys(details).length > 0)
+                        ? (details[String(monthNum)] ?? 0)
+                        : (editModal.data?.resident_tax_monthly ?? 0);
 
                       return (
                         <div 
@@ -6198,7 +6211,7 @@ export default function OnboardingAdminDashboard() {
                                 data: {
                                   ...editModal.data!,
                                   resident_tax_details: updatedDetails,
-                                  resident_tax_monthly: monthNum === 6 ? val : (editModal.data?.resident_tax_monthly || val)
+                                  resident_tax_monthly: monthNum !== 6 && val > 0 ? val : (editModal.data?.resident_tax_monthly || val)
                                 }
                               });
                             }}
