@@ -31,6 +31,8 @@ import {
   type OrgMemberInfo,
   DEFAULT_POSITIONS,
   POSITION_PRESETS,
+  DEPARTMENT_PRESETS,
+  getDepartmentTheme,
   getPositionsFromStorage,
   savePositionsToStorage
 } from '../lib/orgChart';
@@ -44,10 +46,11 @@ import {
   Building2, Users, Calendar, DollarSign, BookOpen, 
   ArrowLeft, ArrowRight, LogOut, Loader2, Save, Plus, Trash2, 
   Sparkles, Bot, Clock, ShieldCheck, Printer, X,
-  UserCheck, ArrowUp, ArrowDown, RotateCcw, Edit3,
+  UserCheck, ArrowUp, ArrowDown, RotateCcw, Edit3, Edit2,
   Network,  Award, Crown, Shield, FileText, Upload,
   ImageIcon, Wand2, CheckCircle2, Eye, Bell, FileSpreadsheet,
-  ExternalLink, Store, MapPin, CreditCard, Check, Zap
+  ExternalLink, Store, MapPin, CreditCard, Check, Zap,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { 
   SAAS_PLANS, 
@@ -685,6 +688,9 @@ export default function CompanySettingsDashboard() {
   const [departments, setDepartments] = useState<DepartmentMaster[]>([]);
   const [newDeptName, setNewDeptName] = useState('');
   const [newDeptManagerId, setNewDeptManagerId] = useState('');
+  const [editingDepartmentId, setEditingDepartmentId] = useState<string | null>(null);
+  const [editingDepartmentNameText, setEditingDepartmentNameText] = useState('');
+  const [isDeptPresetModalOpen, setIsDeptPresetModalOpen] = useState(false);
 
   // 🏪 2-2. 店舗・拠点マスタState（複数店舗対応・シフトカレンダー連動）
   const [stores, setStores] = useState<StoreMaster[]>([]);
@@ -2428,6 +2434,173 @@ export default function CompanySettingsDashboard() {
     }
   };
 
+  // ↔️ 部署の並び順（左右）移動ハンドラー
+  const handleMoveDepartmentOrder = async (deptIdOrName: string, direction: 'left' | 'right') => {
+    const cleanName = deptIdOrName.startsWith('auto_') ? deptIdOrName.replace('auto_', '') : deptIdOrName;
+    const idx = departments.findIndex(d => d.id === deptIdOrName || d.name === cleanName || d.name === deptIdOrName);
+    if (idx === -1) return;
+    const targetIdx = direction === 'left' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= departments.length) return;
+
+    const newDepts = [...departments];
+    const temp = newDepts[idx];
+    newDepts[idx] = newDepts[targetIdx];
+    newDepts[targetIdx] = temp;
+
+    // display_order 再割り当て (1-indexed)
+    const updated = newDepts.map((d, i) => ({
+      ...d,
+      display_order: i + 1
+    }));
+
+    setDepartments(updated);
+    if (tenantId) {
+      saveDepartmentsToStorage(tenantId, updated);
+      // Supabase DB の display_order 更新
+      try {
+        for (const d of updated) {
+          if (!d.id.startsWith('auto_')) {
+            await supabase
+              .from('department_masters')
+              .update({ display_order: d.display_order })
+              .eq('tenant_id', tenantId)
+              .eq('name', d.name);
+          }
+        }
+      } catch (err) {
+        console.warn('Update department display_order error:', err);
+      }
+    }
+  };
+
+  // ✏️ 部署名のインライン編集開始
+  const handleStartEditDepartment = (dept: { id: string; name: string }) => {
+    setEditingDepartmentId(dept.id);
+    setEditingDepartmentNameText(dept.name);
+  };
+
+  // ❌ 部署名のインライン編集キャンセル
+  const handleCancelEditDepartment = () => {
+    setEditingDepartmentId(null);
+    setEditingDepartmentNameText('');
+  };
+
+  // 💾 部署名のインライン編集保存（所属社員のdepartmentも一括自動追従）
+  const handleSaveRenameDepartment = async (deptId: string, oldName: string) => {
+    const trimmedNew = editingDepartmentNameText.trim();
+    if (!trimmedNew) {
+      alert('部署名を入力してください。');
+      return;
+    }
+    if (trimmedNew === oldName) {
+      setEditingDepartmentId(null);
+      setEditingDepartmentNameText('');
+      return;
+    }
+    // 重複チェック
+    if (departments.some(d => d.name === trimmedNew && d.id !== deptId)) {
+      alert(`「${trimmedNew}」は既に存在する部署名です。別の名称を指定してください。`);
+      return;
+    }
+
+    try {
+      // 1. ローカルState更新
+      const updatedDepts = departments.map(d => {
+        if (d.id === deptId || d.name === oldName) {
+          return { ...d, name: trimmedNew };
+        }
+        return d;
+      });
+      setDepartments(updatedDepts);
+
+      // 2. 所属社員のcompanyUsers state即時更新
+      setCompanyUsers(prev => prev.map(u => {
+        if (u.department === oldName) {
+          return { ...u, department: trimmedNew };
+        }
+        return u;
+      }));
+
+      // 3. LocalStorage保存
+      if (tenantId) {
+        saveDepartmentsToStorage(tenantId, updatedDepts);
+      }
+
+      // 4. Supabase DB更新（department_masters）
+      if (tenantId) {
+        await supabase
+          .from('department_masters')
+          .update({ name: trimmedNew })
+          .eq('tenant_id', tenantId)
+          .eq('name', oldName);
+
+        // 5. 所属社員の users.department も一括追従
+        await supabase
+          .from('users')
+          .update({ department: trimmedNew })
+          .eq('tenant_id', tenantId)
+          .eq('department', oldName);
+      }
+
+      setEditingDepartmentId(null);
+      setEditingDepartmentNameText('');
+      await fetchData();
+    } catch (e: any) {
+      console.error('Rename department error:', e);
+      alert('部署名の変更に失敗しました: ' + (e?.message || ''));
+    }
+  };
+
+  // ✨ 業種別・部門プリセット（テンプレート）一括適用
+  const handleApplyDepartmentPreset = async (presetId: string) => {
+    const preset = DEPARTMENT_PRESETS.find(p => p.id === presetId);
+    if (!preset || !tenantId) return;
+
+    if (departments.length > 0) {
+      if (!confirm(`組織図・部門マスタに「${preset.name}」（${preset.targetScale}）の標準部署セットを適用しますか？\n\n【追加・展開される部署】\n${preset.departments.map(d => `・${d.name}（${d.description || ''}）`).join('\n')}\n\n※ 既に登録されている部署と統合されます。`)) {
+        return;
+      }
+    }
+
+    try {
+      const existingNames = new Set(departments.map(d => d.name));
+      const newDeptsToAdd = preset.departments.filter(d => !existingNames.has(d.name));
+
+      if (newDeptsToAdd.length === 0) {
+        alert('選択されたテンプレートの部署はすべて既に登録されています。');
+        setIsDeptPresetModalOpen(false);
+        return;
+      }
+
+      const startIndex = departments.length;
+      const createdDepts: DepartmentMaster[] = newDeptsToAdd.map((d, idx) => ({
+        id: `dept_${preset.id}_${idx + 1}_${Date.now()}`,
+        name: d.name,
+        display_order: startIndex + idx + 1
+      }));
+
+      // DBに一括挿入
+      const recordsToInsert = createdDepts.map(d => ({
+        id: d.id,
+        tenant_id: tenantId,
+        name: d.name,
+        display_order: d.display_order
+      }));
+      await supabase.from('department_masters').insert(recordsToInsert);
+
+      const combined = [...departments, ...createdDepts];
+      setDepartments(combined);
+      saveDepartmentsToStorage(tenantId, combined);
+
+      alert(`✨ 「${preset.name}」の部門セット（${newDeptsToAdd.length}部署）を適用しました！\n組織図上で所属長や休日カレンダーを自由に割り当ててください。`);
+      setIsDeptPresetModalOpen(false);
+      await fetchData();
+    } catch (e: any) {
+      console.error('Apply department preset error:', e);
+      alert('部門テンプレートの適用に失敗しました: ' + (e?.message || ''));
+    }
+  };
+
   // 就業時間パターン追加
   const handleAddSchedulePattern = async () => {
     if (!tenantId || !newPatternName.trim()) {
@@ -3011,6 +3184,16 @@ export default function CompanySettingsDashboard() {
                     </button>
                   </div>
 
+                  {/* ✨ 業種別部門テンプレートボタン */}
+                  <button
+                    onClick={() => setIsDeptPresetModalOpen(true)}
+                    className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
+                    title="業種・業界に合わせた標準的な部署セットをワンクリックで一括生成します"
+                  >
+                    <Wand2 className="w-3.5 h-3.5 text-amber-200" />
+                    <span>業種別テンプレート</span>
+                  </button>
+
                   <button
                     onClick={() => navigate('/onboarding/admin?action=add&from=company_settings')}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
@@ -3113,185 +3296,343 @@ export default function CompanySettingsDashboard() {
                 </div>
               )}
 
+              {/* 🌳 組織図ツリー視覚コネクタ（経営陣から各部門への結合ライン） */}
+              {computedOrgDepartments.length > 0 && (
+                <div className="relative py-2 flex flex-col items-center justify-center">
+                  <div className="w-0.5 h-3 bg-indigo-200" />
+                  <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-full text-[10px] font-bold text-indigo-700 shadow-2xs">
+                    <Network className="w-3 h-3 text-indigo-500" />
+                    <span>組織統括ライン（経営陣 ── 各事業部門）</span>
+                  </div>
+                  <div className="w-0.5 h-3 bg-indigo-200" />
+                </div>
+              )}
+
               {/* 🏢 各部門・部署カード（横一列ツリー展開） */}
               <div className="space-y-2">
                 <div className="text-xs font-bold text-slate-500 flex items-center justify-between">
-                  <span>🏢 各部門・配属一覧（全{computedOrgDepartments.length}部署 / 総員{companyUsers.length}名）:</span>
+                  <span className="flex items-center gap-1.5">
+                    <Building2 className="w-4 h-4 text-indigo-600" />
+                    <span>各部門・配属一覧（全{computedOrgDepartments.length}部署 / 総員{companyUsers.length}名）:</span>
+                  </span>
                   <span className="text-[11px] text-slate-400">※ 社員名クリックで役職変更、所属長枠で責任者アサイン</span>
                 </div>
 
                 <div className="flex items-stretch justify-start gap-4 overflow-x-auto pb-4 pt-2">
                   {computedOrgDepartments.length === 0 ? (
-                    <div className="w-full py-10 px-6 text-center bg-slate-50/80 rounded-2xl border-2 border-dashed border-slate-200 space-y-2">
-                      <Building2 className="w-8 h-8 text-slate-300 mx-auto" />
-                      <div className="text-xs font-bold text-slate-600">登録されている部署はありません</div>
-                      <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                        上部の「新しい部署名」入力欄から、自社の組織構成に合わせて部署（例: 企画部、開発部、総務部など）を自由に追加してください。
-                      </p>
+                    <div className="w-full py-12 px-6 text-center bg-gradient-to-b from-slate-50 to-indigo-50/30 rounded-3xl border-2 border-dashed border-indigo-200 space-y-4">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto shadow-xs">
+                        <Building2 className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-black text-slate-800">登録されている部署がありません</h4>
+                        <p className="text-xs text-slate-500 max-w-md mx-auto">
+                          自社の組織構成に合わせて部署を手入力するか、業界別テンプレートからワンクリックで一括生成できます。
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-center gap-3 pt-1">
+                        <button
+                          onClick={() => setIsDeptPresetModalOpen(true)}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition flex items-center gap-2 shadow-sm cursor-pointer"
+                        >
+                          <Wand2 className="w-4 h-4 text-amber-300" />
+                          <span>業種別テンプレートから選ぶ</span>
+                        </button>
+                      </div>
+                      {/* クイック選択カード一覧 */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto pt-2 text-left">
+                        {DEPARTMENT_PRESETS.slice(0, 3).map(preset => (
+                          <div
+                            key={preset.id}
+                            onClick={() => handleApplyDepartmentPreset(preset.id)}
+                            className="bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-indigo-400 hover:shadow-md transition cursor-pointer space-y-2 group"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-base">{preset.icon}</span>
+                              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                                {preset.badge}
+                              </span>
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-800 group-hover:text-indigo-600 transition">{preset.name}</div>
+                              <div className="text-[10px] text-slate-400 line-clamp-1">{preset.description}</div>
+                            </div>
+                            <div className="flex flex-wrap gap-1 pt-1">
+                              {preset.departments.map(d => (
+                                <span key={d.name} className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">
+                                  {d.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ) : (
-                    computedOrgDepartments.map((dept, idx) => (
-                    <div
-                      key={dept.id}
-                      className="min-w-[270px] max-w-[320px] flex-1 bg-slate-50/80 hover:bg-slate-50 rounded-2xl border-2 border-slate-200 p-4 space-y-3.5 shadow-xs transition flex flex-col justify-between"
-                    >
-                      <div className="space-y-3">
-                        {/* 部署ヘッダー ＆ 部署削除 */}
-                        <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-                          <div className="flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-slate-800 text-white text-[10px] font-black flex items-center justify-center">
-                              {idx + 1}
-                            </span>
-                            <h5 className="text-xs font-black text-slate-900">{dept.name}</h5>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] font-bold bg-white text-slate-600 border border-slate-200 px-2 py-0.5 rounded-full">
-                              {dept.members.length}名
-                            </span>
-                            <button
-                              onClick={() => handleDeleteDepartment(dept.id, dept.name)}
-                              className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
-                              title="この部署を削除"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
+                    computedOrgDepartments.map((dept, idx) => {
+                      const theme = getDepartmentTheme(dept.name);
+                      const isEditingThisDept = editingDepartmentId === dept.id;
+                      return (
+                        <div
+                          key={dept.id}
+                          className="min-w-[280px] max-w-[330px] flex-1 bg-white hover:bg-slate-50/50 rounded-2xl border-2 border-slate-200 hover:border-indigo-300 shadow-xs transition flex flex-col justify-between overflow-hidden relative group"
+                        >
+                          {/* 最上部アクセントバー */}
+                          <div className={`h-1.5 w-full ${theme.accentBar}`} />
 
-                        {/* 部門長・所属長アサイン枠 */}
-                        <div className="bg-amber-50/80 border border-amber-200 p-2.5 rounded-xl space-y-1">
-                          <div className="text-[9px] font-black text-amber-800 flex items-center justify-between">
-                            <span className="flex items-center gap-1">
-                              <UserCheck className="w-3 h-3 text-amber-600" />
-                              部門責任者（所属長）
-                            </span>
-                            {dept.manager_user_name && (
-                              <span className="text-[9px] bg-amber-200/80 text-amber-900 px-1.5 py-0.2 rounded font-bold">
-                                任命済
-                              </span>
-                            )}
-                          </div>
-                          <select
-                            value={dept.manager_user_id || ''}
-                            onChange={e => handleUpdateDepartmentManager(dept.name, e.target.value)}
-                            className={`w-full text-xs font-bold px-2 py-1.5 rounded-lg border transition ${
-                              dept.manager_user_id
-                                ? 'bg-white text-slate-900 border-amber-300 font-black shadow-2xs'
-                                : 'bg-white/80 text-slate-500 border-amber-200'
-                            }`}
-                          >
-                            <option value="">（所属長: 未指定）</option>
-                            {companyUsers.map(u => (
-                              <option key={u.id} value={u.id}>
-                                {u.name} ({u.department || '未所属'}{u.role === 'admin' ? ' / 管理者' : ''})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                          <div className="p-4 space-y-3.5 flex-1 flex flex-col justify-between">
+                            <div className="space-y-3">
+                              {/* 部署ヘッダー ＆ 編集 ＆ 左右並び替え ＆ 削除 */}
+                              <div className="flex items-center justify-between pb-2 border-b border-slate-200 gap-1.5">
+                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                  <span className="w-5 h-5 rounded-full bg-slate-800 text-white text-[10px] font-black flex items-center justify-center shrink-0">
+                                    {idx + 1}
+                                  </span>
+                                  <span className="text-sm shrink-0" title={dept.name}>{theme.icon}</span>
 
-                        {/* 📅 適用営業カレンダー（休日規程）アサイン枠 */}
-                        <div className="bg-indigo-50/70 border border-indigo-200 p-2.5 rounded-xl space-y-1">
-                          <div className="text-[9px] font-black text-indigo-900 flex items-center justify-between">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-indigo-600" />
-                              適用営業カレンダー（休日規程）
-                            </span>
-                            <span className="text-[9px] text-indigo-600 font-bold">
-                              連動設定
-                            </span>
-                          </div>
-                          <select
-                            value={departments.find(d => sanitizeDepartmentName(d.name) === sanitizeDepartmentName(dept.name))?.calendar_pattern_id || (calendarPatterns.find(p => p.is_default)?.id || calendarPatterns[0]?.id || '')}
-                            onChange={e => handleUpdateDepartmentCalendar(dept.name, e.target.value)}
-                            className="w-full text-xs font-bold px-2 py-1.5 rounded-lg border bg-white text-slate-900 border-indigo-300 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-200 transition"
-                          >
-                            {calendarPatterns.map(pat => (
-                              <option key={pat.id} value={pat.id}>
-                                {pat.name} ({pat.annual_holidays_count}日{pat.is_default ? ' / 全社標準' : ''})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                                  {isEditingThisDept ? (
+                                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                                      <input
+                                        type="text"
+                                        value={editingDepartmentNameText}
+                                        onChange={e => setEditingDepartmentNameText(e.target.value)}
+                                        onKeyDown={e => {
+                                          if (e.key === 'Enter') handleSaveRenameDepartment(dept.id, dept.name);
+                                          if (e.key === 'Escape') handleCancelEditDepartment();
+                                        }}
+                                        autoFocus
+                                        className="bg-white border border-indigo-400 rounded-lg px-2 py-0.5 text-xs font-black text-slate-900 w-full focus:ring-2 focus:ring-indigo-200 outline-none"
+                                      />
+                                      <button
+                                        onClick={() => handleSaveRenameDepartment(dept.id, dept.name)}
+                                        className="p-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition cursor-pointer shrink-0"
+                                        title="名前を保存（所属社員も自動追従）"
+                                      >
+                                        <Check className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        onClick={handleCancelEditDepartment}
+                                        className="p-1 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-md transition cursor-pointer shrink-0"
+                                        title="キャンセル"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1 min-w-0 flex-1">
+                                      <h5 className="text-xs font-black text-slate-900 truncate" title={dept.name}>{dept.name}</h5>
+                                      <button
+                                        onClick={() => handleStartEditDepartment(dept)}
+                                        className="p-0.5 text-slate-400 hover:text-indigo-600 rounded transition cursor-pointer opacity-70 group-hover:opacity-100 shrink-0"
+                                        title="部署名を変更"
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
 
-                        {/* 所属メンバーリスト（店舗運営部は登録店舗が存在する場合のみ配下店舗ツリー構造を展開） */}
-                        <div className="space-y-1.5">
-                          {dept.name === '店舗運営部' && stores.length > 0 ? (
-                            <div>
-                              <div className="flex items-center justify-between text-[10px] font-black text-amber-900 bg-amber-50/80 px-2.5 py-1.5 rounded-xl border border-amber-200 mb-2">
-                                <span className="flex items-center gap-1.5">
-                                  <Store className="w-3.5 h-3.5 text-amber-600" />
-                                  店舗運営部 配下店舗ツリー
-                                </span>
-                                <span className="text-[9px] bg-amber-200/80 text-amber-950 px-1.5 py-0.2 rounded font-bold">
-                                  {stores.length}拠点
-                                </span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <span className={`text-[10px] font-bold border px-1.5 py-0.5 rounded-full ${theme.badgeBg} ${theme.badgeText}`}>
+                                    {dept.members.length}名
+                                  </span>
+
+                                  {/* 左右並び替えボタン */}
+                                  <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200">
+                                    <button
+                                      onClick={() => handleMoveDepartmentOrder(dept.id, 'left')}
+                                      disabled={idx === 0}
+                                      className="p-0.5 text-slate-500 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed rounded transition cursor-pointer"
+                                      title="左へ移動"
+                                    >
+                                      <ChevronLeft className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleMoveDepartmentOrder(dept.id, 'right')}
+                                      disabled={idx === computedOrgDepartments.length - 1}
+                                      className="p-0.5 text-slate-500 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed rounded transition cursor-pointer"
+                                      title="右へ移動"
+                                    >
+                                      <ChevronRight className="w-3 h-3" />
+                                    </button>
+                                  </div>
+
+                                  {/* 削除ボタン */}
+                                  <button
+                                    onClick={() => handleDeleteDepartment(dept.id, dept.name)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                                    title="この部署を削除"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
-                              <div className="space-y-2 max-h-56 overflow-y-auto text-xs pr-1">
-                                {stores.map(store => {
-                                  const storeMembers = dept.members.filter(m => (m.store_name || '').trim() === store.name.trim());
-                                  return (
-                                    <div key={store.id} className="bg-white rounded-xl border border-slate-200 p-2 shadow-2xs space-y-1">
-                                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-700 pb-1 border-b border-slate-100">
-                                        <span className="flex items-center gap-1 text-slate-900 font-black">
-                                          <Store className="w-3 h-3 text-indigo-500" />
-                                          {store.name}
-                                        </span>
-                                        <span className="text-[9px] text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded-full font-bold">
-                                          {storeMembers.length}名
-                                        </span>
-                                      </div>
-                                      {storeMembers.length > 0 ? (
-                                        <div className="space-y-1 pt-0.5">
-                                          {storeMembers.map(m => (
-                                            <div
-                                              key={m.id}
-                                              onClick={() => setEditingUserModal({
-                                                isOpen: true,
-                                                user: {
-                                                  ...m,
-                                                  department: dept.name,
-                                                  store_name: store.name,
-                                                  is_department_head: dept.manager_user_id === m.id
-                                                }
-                                              })}
-                                              className="flex items-center justify-between py-1 px-2 bg-slate-50/80 hover:bg-indigo-50/60 rounded-lg border border-slate-100 hover:border-indigo-200 transition cursor-pointer text-[11px]"
-                                              title="クリックして役職や配属店舗を変更"
-                                            >
-                                              <span className="font-bold text-slate-800 flex items-center gap-1">
-                                                {m.name}
-                                                {dept.manager_user_id === m.id && (
-                                                  <span className="text-[8px] text-amber-600 font-bold bg-amber-50 px-1 rounded border border-amber-200">★統括</span>
-                                                )}
+
+                              {/* 部門長・所属長アサイン枠 */}
+                              <div className="bg-amber-50/80 border border-amber-200 p-2.5 rounded-xl space-y-1">
+                                <div className="text-[9px] font-black text-amber-800 flex items-center justify-between">
+                                  <span className="flex items-center gap-1">
+                                    <UserCheck className="w-3 h-3 text-amber-600" />
+                                    部門責任者（所属長）
+                                  </span>
+                                  {dept.manager_user_name && (
+                                    <span className="text-[9px] bg-amber-200/80 text-amber-900 px-1.5 py-0.2 rounded font-bold">
+                                      任命済
+                                    </span>
+                                  )}
+                                </div>
+                                <select
+                                  value={dept.manager_user_id || ''}
+                                  onChange={e => handleUpdateDepartmentManager(dept.name, e.target.value)}
+                                  className={`w-full text-xs font-bold px-2 py-1.5 rounded-lg border transition ${
+                                    dept.manager_user_id
+                                      ? 'bg-white text-slate-900 border-amber-300 font-black shadow-2xs'
+                                      : 'bg-white/80 text-slate-500 border-amber-200'
+                                  }`}
+                                >
+                                  <option value="">（所属長: 未指定）</option>
+                                  {companyUsers.map(u => (
+                                    <option key={u.id} value={u.id}>
+                                      {u.name} ({u.department || '未所属'}{u.role === 'admin' ? ' / 管理者' : ''})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* 📅 適用営業カレンダー（休日規程）アサイン枠 */}
+                              <div className="bg-indigo-50/70 border border-indigo-200 p-2.5 rounded-xl space-y-1">
+                                <div className="text-[9px] font-black text-indigo-900 flex items-center justify-between">
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="w-3 h-3 text-indigo-600" />
+                                    適用営業カレンダー（休日規程）
+                                  </span>
+                                  <span className="text-[9px] text-indigo-600 font-bold">
+                                    連動設定
+                                  </span>
+                                </div>
+                                <select
+                                  value={departments.find(d => sanitizeDepartmentName(d.name) === sanitizeDepartmentName(dept.name))?.calendar_pattern_id || (calendarPatterns.find(p => p.is_default)?.id || calendarPatterns[0]?.id || '')}
+                                  onChange={e => handleUpdateDepartmentCalendar(dept.name, e.target.value)}
+                                  className="w-full text-xs font-bold px-2 py-1.5 rounded-lg border bg-white text-slate-900 border-indigo-300 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-200 transition"
+                                >
+                                  {calendarPatterns.map(pat => (
+                                    <option key={pat.id} value={pat.id}>
+                                      {pat.name} ({pat.annual_holidays_count}日{pat.is_default ? ' / 全社標準' : ''})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* 所属メンバーリスト（店舗運営部は登録店舗が存在する場合のみ配下店舗ツリー構造を展開） */}
+                              <div className="space-y-1.5">
+                                {dept.name === '店舗運営部' && stores.length > 0 ? (
+                                  <div>
+                                    <div className="flex items-center justify-between text-[10px] font-black text-amber-900 bg-amber-50/80 px-2.5 py-1.5 rounded-xl border border-amber-200 mb-2">
+                                      <span className="flex items-center gap-1.5">
+                                        <Store className="w-3.5 h-3.5 text-amber-600" />
+                                        店舗運営部 配下店舗ツリー
+                                      </span>
+                                      <span className="text-[9px] bg-amber-200/80 text-amber-950 px-1.5 py-0.2 rounded font-bold">
+                                        {stores.length}拠点
+                                      </span>
+                                    </div>
+                                    <div className="space-y-2 max-h-56 overflow-y-auto text-xs pr-1">
+                                      {stores.map(store => {
+                                        const storeMembers = dept.members.filter(m => (m.store_name || '').trim() === store.name.trim());
+                                        return (
+                                          <div key={store.id} className="bg-white rounded-xl border border-slate-200 p-2 shadow-2xs space-y-1">
+                                            <div className="flex items-center justify-between text-[10px] font-bold text-slate-700 pb-1 border-b border-slate-100">
+                                              <span className="flex items-center gap-1 text-slate-900 font-black">
+                                                <Store className="w-3 h-3 text-indigo-500" />
+                                                {store.name}
                                               </span>
-                                              <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1 py-0.2 rounded border border-indigo-100">
-                                                {m.position_name || '現場スタッフ'}
+                                              <span className="text-[9px] text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded-full font-bold">
+                                                {storeMembers.length}名
                                               </span>
                                             </div>
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        <div className="text-[9px] text-slate-400 py-1 text-center bg-slate-50/50 rounded-lg border border-dashed border-slate-200">
-                                          配属スタッフなし
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
+                                            {storeMembers.length > 0 ? (
+                                              <div className="space-y-1 pt-0.5">
+                                                {storeMembers.map(m => (
+                                                  <div
+                                                    key={m.id}
+                                                    onClick={() => setEditingUserModal({
+                                                      isOpen: true,
+                                                      user: {
+                                                        ...m,
+                                                        department: dept.name,
+                                                        store_name: store.name,
+                                                        is_department_head: dept.manager_user_id === m.id
+                                                      }
+                                                    })}
+                                                    className="flex items-center justify-between py-1 px-2 bg-slate-50/80 hover:bg-indigo-50/60 rounded-lg border border-slate-100 hover:border-indigo-200 transition cursor-pointer text-[11px]"
+                                                    title="クリックして役職や配属店舗を変更"
+                                                  >
+                                                    <span className="font-bold text-slate-800 flex items-center gap-1">
+                                                      {m.name}
+                                                      {dept.manager_user_id === m.id && (
+                                                        <span className="text-[8px] text-amber-600 font-bold bg-amber-50 px-1 rounded border border-amber-200">★統括</span>
+                                                      )}
+                                                    </span>
+                                                    <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1 py-0.2 rounded border border-indigo-100">
+                                                      {m.position_name || '現場スタッフ'}
+                                                    </span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            ) : (
+                                              <div className="text-[9px] text-slate-400 py-1 text-center bg-slate-50/50 rounded-lg border border-dashed border-slate-200">
+                                                配属スタッフなし
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
 
-                                {/* 店舗未割当のメンバー */}
-                                {(() => {
-                                  const unassignedStoreMembers = dept.members.filter(m => !m.store_name || !stores.some(st => st.name === m.store_name));
-                                  if (unassignedStoreMembers.length === 0) return null;
-                                  return (
-                                    <div className="bg-amber-50/40 rounded-xl border border-dashed border-amber-300 p-2 space-y-1">
-                                      <div className="flex items-center justify-between text-[10px] font-bold text-amber-800 pb-1 border-b border-amber-100">
-                                        <span>⚠️ 店舗未設定（本部・巡回等）</span>
-                                        <span className="text-[9px] text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded-full font-bold">
-                                          {unassignedStoreMembers.length}名
-                                        </span>
-                                      </div>
-                                      <div className="space-y-1 pt-0.5">
-                                        {unassignedStoreMembers.map(m => (
+                                      {/* 店舗未割当のメンバー */}
+                                      {(() => {
+                                        const unassignedStoreMembers = dept.members.filter(m => !m.store_name || !stores.some(st => st.name === m.store_name));
+                                        if (unassignedStoreMembers.length === 0) return null;
+                                        return (
+                                          <div className="bg-amber-50/40 rounded-xl border border-dashed border-amber-300 p-2 space-y-1">
+                                            <div className="flex items-center justify-between text-[10px] font-bold text-amber-800 pb-1 border-b border-amber-100">
+                                              <span>⚠️ 店舗未設定（本部・巡回等）</span>
+                                              <span className="text-[9px] text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded-full font-bold">
+                                                {unassignedStoreMembers.length}名
+                                              </span>
+                                            </div>
+                                            <div className="space-y-1 pt-0.5">
+                                              {unassignedStoreMembers.map(m => (
+                                                <div
+                                                  key={m.id}
+                                                  onClick={() => setEditingUserModal({
+                                                    isOpen: true,
+                                                    user: {
+                                                      ...m,
+                                                      department: dept.name,
+                                                      is_department_head: dept.manager_user_id === m.id
+                                                    }
+                                                  })}
+                                                  className="flex items-center justify-between py-1 px-2 bg-white hover:bg-amber-100/50 rounded-lg border border-amber-200 transition cursor-pointer text-[11px]"
+                                                  title="クリックして配属店舗を設定"
+                                                >
+                                                  <span className="font-bold text-slate-800">{m.name}</span>
+                                                  <span className="text-[9px] font-bold text-amber-700 bg-amber-100/60 px-1 py-0.2 rounded">
+                                                    店舗未設定 ✎
+                                                  </span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <div className="text-[10px] font-bold text-slate-400 mb-1">所属メンバー一覧:</div>
+                                    <div className="space-y-1 max-h-48 overflow-y-auto text-xs pr-1">
+                                      {dept.members.length > 0 ? (
+                                        dept.members.map(m => (
                                           <div
                                             key={m.id}
                                             onClick={() => setEditingUserModal({
@@ -3302,89 +3643,61 @@ export default function CompanySettingsDashboard() {
                                                 is_department_head: dept.manager_user_id === m.id
                                               }
                                             })}
-                                            className="flex items-center justify-between py-1 px-2 bg-white hover:bg-amber-100/50 rounded-lg border border-amber-200 transition cursor-pointer text-[11px]"
-                                            title="クリックして配属店舗を設定"
+                                            className="flex items-center justify-between py-1.5 px-2.5 bg-slate-50/80 hover:bg-indigo-50/60 rounded-xl border border-slate-200 hover:border-indigo-300 transition cursor-pointer shadow-2xs"
+                                            title="クリックして役職や所属を変更"
                                           >
-                                            <span className="font-bold text-slate-800">{m.name}</span>
-                                            <span className="text-[9px] font-bold text-amber-700 bg-amber-100/60 px-1 py-0.2 rounded">
-                                              店舗未設定 ✎
+                                            <span className="font-bold text-slate-800 text-[11px] flex items-center gap-1">
+                                              {m.name}
+                                              {dept.manager_user_id === m.id && (
+                                                <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1 rounded border border-amber-200">★長</span>
+                                              )}
+                                            </span>
+                                            <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                                              {m.position_name || '一般'}
                                             </span>
                                           </div>
-                                        ))}
-                                      </div>
+                                        ))
+                                      ) : (
+                                        <div className="text-[10px] text-slate-400 py-2 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                                          所属メンバーなし
+                                        </div>
+                                      )}
                                     </div>
-                                  );
-                                })()}
-                              </div>
-                            </div>
-                          ) : (
-                            <div>
-                              <div className="text-[10px] font-bold text-slate-400 mb-1">所属メンバー一覧:</div>
-                              <div className="space-y-1 max-h-48 overflow-y-auto text-xs pr-1">
-                                {dept.members.length > 0 ? (
-                                  dept.members.map(m => (
-                                    <div
-                                      key={m.id}
-                                      onClick={() => setEditingUserModal({
-                                        isOpen: true,
-                                        user: {
-                                          ...m,
-                                          department: dept.name,
-                                          is_department_head: dept.manager_user_id === m.id
-                                        }
-                                      })}
-                                      className="flex items-center justify-between py-1.5 px-2.5 bg-white hover:bg-indigo-50/60 rounded-xl border border-slate-200 hover:border-indigo-300 transition cursor-pointer shadow-2xs"
-                                      title="クリックして役職や所属を変更"
-                                    >
-                                      <span className="font-bold text-slate-800 text-[11px] flex items-center gap-1">
-                                        {m.name}
-                                        {dept.manager_user_id === m.id && (
-                                          <span className="text-[9px] text-amber-600 font-bold bg-amber-50 px-1 rounded border border-amber-200">★長</span>
-                                        )}
-                                      </span>
-                                      <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
-                                        {m.position_name || '一般'}
-                                      </span>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <div className="text-[10px] text-slate-400 py-2 text-center bg-white rounded-xl border border-dashed border-slate-200">
-                                    所属メンバーなし
                                   </div>
                                 )}
                               </div>
                             </div>
-                          )}
-                        </div>
-                      </div>
 
-                      {/* この部署に社員を配属するボタン */}
-                      <div className="pt-2 border-t border-slate-200 text-right">
-                        <button
-                          onClick={() => {
-                            if (companyUsers.length === 0) {
-                              alert('現在登録されている社員・ユーザーがいません。先に従業員を登録してください。');
-                              return;
-                            }
-                            const unassigned = companyUsers.find(u => !u.department);
-                            const targetUser = unassigned || companyUsers[0];
-                            setEditingUserModal({
-                              isOpen: true,
-                              user: {
-                                ...targetUser,
-                                department: dept.name,
-                                is_department_head: dept.manager_user_id === targetUser.id
-                              }
-                            });
-                          }}
-                          className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer flex items-center justify-end gap-1 ml-auto"
-                        >
-                          <Plus className="w-3 h-3" />
-                          この部署に社員を配属・役職設定
-                        </button>
-                      </div>
-                    </div>
-                  )))}
+                            {/* この部署に社員を配属するボタン */}
+                            <div className="pt-2 border-t border-slate-200 text-right mt-3">
+                              <button
+                                onClick={() => {
+                                  if (companyUsers.length === 0) {
+                                    alert('現在登録されている社員・ユーザーがいません。先に従業員を登録してください。');
+                                    return;
+                                  }
+                                  const unassigned = companyUsers.find(u => !u.department);
+                                  const targetUser = unassigned || companyUsers[0];
+                                  setEditingUserModal({
+                                    isOpen: true,
+                                    user: {
+                                      ...targetUser,
+                                      department: dept.name,
+                                      is_department_head: dept.manager_user_id === targetUser.id
+                                    }
+                                  });
+                                }}
+                                className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer flex items-center justify-end gap-1 ml-auto"
+                              >
+                                <Plus className="w-3 h-3" />
+                                この部署に社員を配属・役職設定
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>
@@ -7195,6 +7508,112 @@ export default function CompanySettingsDashboard() {
         isOpen={isHelpOpen} 
         onClose={() => setIsHelpOpen(false)} 
       />
+
+      {/* 🏢 業種別・部門テンプレート選択モーダル */}
+      {isDeptPresetModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            {/* モーダルヘッダー */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center text-lg shadow-2xs">
+                  ✨
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+                    業種別・標準部門テンプレート
+                    <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
+                      ワンクリック一括展開
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    自社の業種や事業モデルを選ぶだけで、バランスの良い標準的な部門構成が一瞬で生成されます。
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDeptPresetModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* テンプレートカード一覧 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[60vh] overflow-y-auto pr-1">
+              {DEPARTMENT_PRESETS.map(preset => (
+                <div
+                  key={preset.id}
+                  className="bg-slate-50/70 hover:bg-indigo-50/40 rounded-2xl border-2 border-slate-200 hover:border-indigo-400 p-4 transition space-y-3 flex flex-col justify-between group"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">{preset.icon}</span>
+                        <div>
+                          <h4 className="text-xs font-black text-slate-900 group-hover:text-indigo-600 transition">
+                            {preset.name}
+                          </h4>
+                          <span className="text-[10px] font-bold text-slate-400">
+                            {preset.targetScale}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold bg-white text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full shadow-2xs">
+                        {preset.badge}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      {preset.description}
+                    </p>
+
+                    {/* 展開される部署リストプレビュー */}
+                    <div className="space-y-1.5 pt-1 border-t border-slate-200/60">
+                      <div className="text-[9px] font-bold text-slate-400">【含まれる部門（全{preset.departments.length}部署）】</div>
+                      <div className="grid grid-cols-1 gap-1">
+                        {preset.departments.map(d => {
+                          const dTheme = getDepartmentTheme(d.name);
+                          return (
+                            <div key={d.name} className="flex items-center justify-between text-[11px] bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                              <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                                <span>{dTheme.icon}</span>
+                                <span>{d.name}</span>
+                              </span>
+                              <span className="text-[10px] text-slate-400 truncate max-w-[150px]">
+                                {d.description}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleApplyDepartmentPreset(preset.id)}
+                    className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 rounded-xl transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Wand2 className="w-3.5 h-3.5 text-amber-300" />
+                    <span>このテンプレートを適用する</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* モーダルフッター */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+              <span>※ 適用後も、各部署の名前変更・並び替え・所属長アサインはいつでも自由に行えます。</span>
+              <button
+                onClick={() => setIsDeptPresetModalOpen(false)}
+                className="px-4 py-2 font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 🚀 画面右下常設：かんたん初期設定スタートガイド帰還フロートボタン */}
       <div className="fixed bottom-6 right-6 z-40">
