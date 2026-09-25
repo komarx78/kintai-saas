@@ -355,3 +355,245 @@ export function calculateSocialInsuranceDeduction(params: {
     totalSocialInsurance: healthInsurance + nursingInsurance + pensionInsurance + employmentInsurance,
   };
 }
+
+/**
+ * 🛡️ 退職月における社会保険料（健康保険・厚生年金）の控除月数判定
+ * （健康保険法第156条・厚生年金保険法第19条 厳格準拠）
+ */
+export interface RetirementSocialInsuranceResult {
+  retirementDate: string;
+  lossDate: string;
+  lossMonth: string;
+  isEndOfMonth: boolean;
+  isSameMonthGainLoss: boolean;
+  deductionMonthsCount: number;
+  explanation: string;
+}
+
+export function determineRetirementSocialInsuranceMonths(
+  joinDateStr?: string | null,
+  retirementDateStr?: string | null,
+  isLastPayrollInRetirementMonth: boolean = true
+): RetirementSocialInsuranceResult | null {
+  if (!retirementDateStr) return null;
+  const retDate = new Date(retirementDateStr);
+  if (isNaN(retDate.getTime())) return null;
+
+  // 資格喪失日 = 退職日の翌日
+  const lossDate = new Date(retDate);
+  lossDate.setDate(lossDate.getDate() + 1);
+
+  const lossYear = lossDate.getFullYear();
+  const lossMonthNum = lossDate.getMonth() + 1;
+  const lossMonth = `${lossYear}-${String(lossMonthNum).padStart(2, '0')}`;
+
+  const lastDayOfMonth = new Date(retDate.getFullYear(), retDate.getMonth() + 1, 0).getDate();
+  const isEndOfMonth = retDate.getDate() === lastDayOfMonth;
+
+  let isSameMonthGainLoss = false;
+  if (joinDateStr) {
+    const jDate = new Date(joinDateStr);
+    if (!isNaN(jDate.getTime())) {
+      isSameMonthGainLoss = jDate.getFullYear() === retDate.getFullYear() && jDate.getMonth() === retDate.getMonth();
+    }
+  }
+
+  let deductionMonthsCount = 1;
+  let explanation = '';
+
+  if (isSameMonthGainLoss) {
+    deductionMonthsCount = 1;
+    explanation = '同月得喪（同月内の入社・退職）のため、健康保険法第156条により当月分（1ヶ月分）の保険料を徴収します。';
+  } else if (isEndOfMonth) {
+    if (isLastPayrollInRetirementMonth) {
+      deductionMonthsCount = 2;
+      explanation = '月末退職のため資格喪失日は翌月1日となります。退職月分の保険料納入義務が生じるため、当月給与において「前月分」と「当月分」の【2ヶ月分】を一括控除します（健保法第156条・厚年法第19条）。';
+    } else {
+      deductionMonthsCount = 1;
+      explanation = '月末退職のため資格喪失日は翌月1日となります。翌月支給の最終給与にて退職月分を控除するため、当月は1ヶ月分を控除します。';
+    }
+  } else {
+    deductionMonthsCount = 1;
+    explanation = '月途中（月末の前日以前）の退職のため、資格喪失月は当月となり、当月分の社会保険料は法律上免除されます。当月給与では前月分（1ヶ月分）のみを徴収し、退職月分の徴収は行いません。';
+  }
+
+  return {
+    retirementDate: retirementDateStr,
+    lossDate: lossDate.toISOString().split('T')[0],
+    lossMonth,
+    isEndOfMonth,
+    isSameMonthGainLoss,
+    deductionMonthsCount,
+    explanation
+  };
+}
+
+/**
+ * 🛡️ 算定基礎届（定時決定）における対象月抽出と新標準報酬月額の決定
+ * （健康保険法第41条・厚生年金保険法第21条 厳格準拠）
+ */
+export interface SanteiMonthRecord {
+  month: 4 | 5 | 6;
+  baseDays: number;
+  totalWage: number;
+  isShortTime?: boolean;
+}
+
+export interface SanteiResult {
+  validMonths: number[];
+  excludedMonths: number[];
+  averageWage: number;
+  newHealthRemuneration: number;
+  newPensionRemuneration: number;
+  notes: string;
+}
+
+export function calculateSanteiKisoRemuneration(
+  records: SanteiMonthRecord[],
+  isShortTimeWorker: boolean = false
+): SanteiResult {
+  const thresholdDays = isShortTimeWorker ? 11 : 17;
+  const validMonths: number[] = [];
+  const excludedMonths: number[] = [];
+  let totalWageSum = 0;
+
+  records.forEach(r => {
+    if (r.baseDays >= thresholdDays) {
+      validMonths.push(r.month);
+      totalWageSum += r.totalWage;
+    } else {
+      excludedMonths.push(r.month);
+    }
+  });
+
+  let averageWage = 0;
+  let notes = '';
+
+  if (validMonths.length > 0) {
+    averageWage = Math.round(totalWageSum / validMonths.length);
+    notes = `${validMonths.join('月・')}月の${validMonths.length}ヶ月平均（基準日数${thresholdDays}日以上）で算定。`;
+    if (excludedMonths.length > 0) {
+      notes += `（${excludedMonths.join('月・')}月は支払基礎日数不足のため除外）`;
+    }
+  } else {
+    const validPart = records.filter(r => r.baseDays >= 11);
+    if (validPart.length > 0) {
+      const sum = validPart.reduce((acc, c) => acc + c.totalWage, 0);
+      averageWage = Math.round(sum / validPart.length);
+      validMonths.push(...validPart.map(r => r.month));
+      notes = `短時間労働者特例（11日以上）を適用し、${validMonths.join('月・')}月の平均で算定。`;
+    } else {
+      const sum = records.reduce((acc, c) => acc + c.totalWage, 0);
+      averageWage = records.length > 0 ? Math.round(sum / records.length) : 0;
+      notes = '全月の支払基礎日数が基準未満のため、全実績の平均で算定（年金事務所確認要）。';
+    }
+  }
+
+  const newHealthRemuneration = lookupStandardMonthlyRemuneration(averageWage, 'health');
+  const newPensionRemuneration = lookupStandardMonthlyRemuneration(averageWage, 'pension');
+
+  return {
+    validMonths,
+    excludedMonths,
+    averageWage,
+    newHealthRemuneration,
+    newPensionRemuneration,
+    notes
+  };
+}
+
+/**
+ * 🛡️ 随時改定（月額変更届）該当判定
+ * （健康保険法第43条・厚生年金保険法第23条 厳格準拠）
+ */
+export interface MonthlyRevisionCheckParams {
+  currentHealthStandard: number;
+  currentPensionStandard: number;
+  consecutiveMonths: {
+    baseDays: number;
+    totalWage: number;
+  }[];
+  fixedWageChangeType: 'increase' | 'decrease';
+  isShortTimeWorker?: boolean;
+}
+
+export interface MonthlyRevisionResult {
+  isEligible: boolean;
+  averageWage: number;
+  newHealthStandard: number;
+  newPensionStandard: number;
+  healthGradeDiff: number;
+  pensionGradeDiff: number;
+  reason: string;
+}
+
+export function checkMonthlyRevisionEligibility(params: MonthlyRevisionCheckParams): MonthlyRevisionResult {
+  const { currentHealthStandard, currentPensionStandard, consecutiveMonths, fixedWageChangeType, isShortTimeWorker } = params;
+  const thresholdDays = isShortTimeWorker ? 11 : 17;
+
+  if (consecutiveMonths.length < 3) {
+    return {
+      isEligible: false,
+      averageWage: 0,
+      newHealthStandard: currentHealthStandard,
+      newPensionStandard: currentPensionStandard,
+      healthGradeDiff: 0,
+      pensionGradeDiff: 0,
+      reason: '3ヶ月分の実績データが不足しています。'
+    };
+  }
+
+  const allDaysValid = consecutiveMonths.every(m => m.baseDays >= thresholdDays);
+  if (!allDaysValid) {
+    return {
+      isEligible: false,
+      averageWage: 0,
+      newHealthStandard: currentHealthStandard,
+      newPensionStandard: currentPensionStandard,
+      healthGradeDiff: 0,
+      pensionGradeDiff: 0,
+      reason: `変動後3ヶ月の中に支払基礎日数不足（${thresholdDays}日未満）の月があるため、随時改定の対象外です。`
+    };
+  }
+
+  const sum = consecutiveMonths.reduce((acc, m) => acc + m.totalWage, 0);
+  const averageWage = Math.round(sum / 3);
+
+  const newHealthStandard = lookupStandardMonthlyRemuneration(averageWage, 'health');
+  const newPensionStandard = lookupStandardMonthlyRemuneration(averageWage, 'pension');
+
+  const curHealthRowIndex = HEALTH_REMUNERATION_TABLE.findIndex(r => r.standard === currentHealthStandard);
+  const newHealthRowIndex = HEALTH_REMUNERATION_TABLE.findIndex(r => r.standard === newHealthStandard);
+  const healthGradeDiff = (curHealthRowIndex !== -1 && newHealthRowIndex !== -1)
+    ? Math.abs(newHealthRowIndex - curHealthRowIndex)
+    : 0;
+
+  const isHealthGradeEligible = healthGradeDiff >= 2;
+
+  let isDirectionMatching = true;
+  if (fixedWageChangeType === 'increase' && newHealthStandard < currentHealthStandard) {
+    isDirectionMatching = false;
+  } else if (fixedWageChangeType === 'decrease' && newHealthStandard > currentHealthStandard) {
+    isDirectionMatching = false;
+  }
+
+  const isEligible = isHealthGradeEligible && isDirectionMatching;
+  let reason = '';
+  if (isEligible) {
+    reason = `固定的賃金の${fixedWageChangeType === 'increase' ? '昇給' : '降給'}に伴い、標準報酬月額が${healthGradeDiff}等級変動（${currentHealthStandard.toLocaleString()}円 -> ${newHealthStandard.toLocaleString()}円）したため、随時改定（月額変更届）の届出が必要です。`;
+  } else if (!isDirectionMatching) {
+    reason = `固定的賃金は${fixedWageChangeType === 'increase' ? '昇給' : '降給'}していますが、残業等の減少により総支給額が逆方向に変動しているため、随時改定の対象外です。`;
+  } else {
+    reason = `変動後の標準報酬月額の差が${healthGradeDiff}等級であり、法定要件である「2等級以上の差」に達していないため、随時改定の対象外です。`;
+  }
+
+  return {
+    isEligible,
+    averageWage,
+    newHealthStandard,
+    newPensionStandard,
+    healthGradeDiff,
+    pensionGradeDiff: healthGradeDiff,
+    reason
+  };
+}

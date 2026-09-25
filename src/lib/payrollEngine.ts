@@ -3,7 +3,7 @@
  * 労働基準法および日本の税務・社会保険制度に準拠した給与自動計算ロジック
  */
 
-import { calculateSocialInsuranceDeduction } from './socialInsurance';
+import { calculateSocialInsuranceDeduction, determineRetirementSocialInsuranceMonths } from './socialInsurance';
 
 export interface EmployeePayrollProfile {
   id?: string;
@@ -26,6 +26,8 @@ export interface EmployeePayrollProfile {
   dependents_count: number; // 扶養親族等の数
   has_spouse?: boolean; // 源泉控除対象配偶者の有無
   birth_date?: string | Date | null; // 生年月日（40〜64歳の介護保険完全自動判定用）
+  join_date?: string | null; // 入社日（同月得喪判定用）
+  resignation_date?: string | null; // 退職日（退職月社保2ヶ月徴収・住民税一括徴収判定用）
   health_insurance_enabled: boolean; // 健康保険加入
   health_standard_monthly_remuneration?: number | null; // 健康保険 標準報酬月額
   nursing_insurance_enabled?: boolean | null; // 介護保険（未指定時は生年月日から完全自動判定）
@@ -379,19 +381,39 @@ export function calculatePayroll(
     isNursingManualOverride: profile.nursing_insurance_enabled,
   });
 
-  // 設定でカスタム料率が指定されている場合はカスタム料率優先（法定端数処理: 四捨五入を厳格適用）
+  // 🛡️ 退職月（月末退職・月途中退職・同月得喪）における社会保険料月数判定（健保法第156条・厚年法第19条）
+  let socialMonthsMultiplier = 1;
+  if (profile.resignation_date) {
+    const retCheck = determineRetirementSocialInsuranceMonths(
+      profile.join_date,
+      profile.resignation_date,
+      true
+    );
+    if (retCheck) {
+      const payMonth = settings?.target_month ?? (new Date().getMonth() + 1);
+      const retD = new Date(profile.resignation_date);
+      if (!isNaN(retD.getTime()) && (retD.getMonth() + 1) === payMonth) {
+        socialMonthsMultiplier = retCheck.deductionMonthsCount;
+      }
+    }
+  }
+
+  // 設定でカスタム料率が指定されている場合はカスタム料率優先（法定端数処理: 四捨五入を厳格適用、退職月社保月数連動）
   const roundSocial = (val: number) => Math.round(val);
-  const healthInsurance = settings?.health_insurance_rate !== undefined
+  const baseHealth = settings?.health_insurance_rate !== undefined
     ? (profile.health_insurance_enabled ? roundSocial((socialResult.healthBase * settings.health_insurance_rate)) : 0)
     : socialResult.healthInsurance;
+  const healthInsurance = baseHealth * socialMonthsMultiplier;
 
-  const nursingInsurance = settings?.nursing_insurance_rate !== undefined
+  const baseNursing = settings?.nursing_insurance_rate !== undefined
     ? ((profile.health_insurance_enabled && socialResult.isNursing) ? roundSocial((socialResult.healthBase * settings.nursing_insurance_rate)) : 0)
     : socialResult.nursingInsurance;
+  const nursingInsurance = baseNursing * socialMonthsMultiplier;
 
-  const pensionInsurance = settings?.pension_insurance_rate !== undefined
+  const basePension = settings?.pension_insurance_rate !== undefined
     ? (profile.pension_insurance_enabled ? roundSocial((socialResult.pensionBase * settings.pension_insurance_rate)) : 0)
     : socialResult.pensionInsurance;
+  const pensionInsurance = basePension * socialMonthsMultiplier;
 
   const employmentInsurance = settings?.employment_insurance_rate !== undefined
     ? (profile.employment_insurance_enabled ? roundSocial(totalEarnings * settings.employment_insurance_rate) : 0)
@@ -422,6 +444,23 @@ export function calculatePayroll(
       const validVals = Object.values(profile.resident_tax_details).filter(v => typeof v === 'number' && v > 0);
       if (validVals.length > 0) {
         residentTax = Number(validVals[0]);
+      }
+    }
+  }
+
+  // 🛡️ 退職時住民税一括徴収（地方税法第321条の5第2項）
+  if (profile.resignation_date) {
+    const payMonth = settings?.target_month ?? (new Date().getMonth() + 1);
+    const retD = new Date(profile.resignation_date);
+    if (!isNaN(retD.getTime()) && (retD.getMonth() + 1) === payMonth) {
+      const lumpSum = calculateResidentTaxLumpSum(
+        profile.resignation_date,
+        profile.resident_tax_details,
+        residentTax,
+        false
+      );
+      if (lumpSum && lumpSum.isLumpSumRequired) {
+        residentTax = lumpSum.lumpSumAmount;
       }
     }
   }
@@ -694,5 +733,222 @@ export function calculateNetEmploymentIncome(grossPay: number): number {
   } else {
     return grossPay - 1950000;
   }
+}
+
+/**
+ * 🛡️ 退職時住民税一括徴収判定・未徴収税額算出
+ * （地方税法第321条の5第2項 厳格準拠）
+ */
+export interface ResidentTaxLumpSumResult {
+  isLumpSumRequired: boolean;
+  isLumpSumOptional: boolean;
+  retirementMonth: number;
+  targetMonths: number[];
+  lumpSumAmount: number;
+  regularMonthlyAmount: number;
+  notes: string;
+}
+
+export function calculateResidentTaxLumpSum(
+  retirementDateStr?: string | null,
+  monthlyTaxDetails?: Record<string, number> | null,
+  defaultMonthlyTax: number = 0,
+  userWantsLumpSumInLateYear: boolean = false
+): ResidentTaxLumpSumResult | null {
+  if (!retirementDateStr) return null;
+  const d = new Date(retirementDateStr);
+  if (isNaN(d.getTime())) return null;
+
+  const month = d.getMonth() + 1;
+  let targetMonths: number[] = [];
+  let isLumpSumRequired = false;
+  let isLumpSumOptional = false;
+
+  if (month >= 1 && month <= 4) {
+    // 1月〜4月退職: 5月分までの一括徴収が法律上必須
+    isLumpSumRequired = true;
+    for (let m = month; m <= 5; m++) {
+      targetMonths.push(m);
+    }
+  } else if (month === 5) {
+    // 5月退職: 5月分のみ
+    targetMonths = [5];
+  } else {
+    // 6月〜12月退職: 本人希望があれば翌年5月分まで一括徴収可能
+    isLumpSumOptional = true;
+    if (userWantsLumpSumInLateYear) {
+      for (let m = month; m <= 12; m++) {
+        targetMonths.push(m);
+      }
+      for (let m = 1; m <= 5; m++) {
+        targetMonths.push(m);
+      }
+    } else {
+      targetMonths = [month];
+    }
+  }
+
+  let lumpSumAmount = 0;
+  targetMonths.forEach(m => {
+    const key = String(m);
+    if (monthlyTaxDetails && monthlyTaxDetails[key] !== undefined && monthlyTaxDetails[key] !== null) {
+      lumpSumAmount += Number(monthlyTaxDetails[key]) || 0;
+    } else {
+      lumpSumAmount += defaultMonthlyTax;
+    }
+  });
+
+  const curKey = String(month);
+  const regularMonthlyAmount = (monthlyTaxDetails && monthlyTaxDetails[curKey] !== undefined)
+    ? Number(monthlyTaxDetails[curKey]) || 0
+    : defaultMonthlyTax;
+
+  let notes = '';
+  if (isLumpSumRequired) {
+    notes = `地方税法第321条の5第2項に基づき、1〜4月退職のため${month}月〜5月分（${targetMonths.length}ヶ月分）の住民税を一括徴収します。`;
+  } else if (isLumpSumOptional && userWantsLumpSumInLateYear) {
+    notes = `従業員の希望申出に基づき、翌年5月分まで（${targetMonths.length}ヶ月分）の住民税を一括徴収します。`;
+  } else if (isLumpSumOptional) {
+    notes = '6〜12月退職のため、翌月以降の未徴収税額は普通徴収（本人納付）へ切り替わります（異動届の提出が必要です）。';
+  } else {
+    notes = '5月退職のため、最終月（5月分）のみを徴収します。';
+  }
+
+  return {
+    isLumpSumRequired,
+    isLumpSumOptional,
+    retirementMonth: month,
+    targetMonths,
+    lumpSumAmount,
+    regularMonthlyAmount,
+    notes
+  };
+}
+
+/**
+ * 🛡️ 退職所得控除および退職手当等の源泉徴収税額計算
+ * （所得税法第30条・第201条、地方税法 厳格準拠・令和4年分以降の改正完全対応）
+ */
+export interface RetirementTaxResult {
+  serviceYears: number;
+  severancePay: number;
+  deductionAmount: number;
+  taxableRetirementIncome: number;
+  incomeTax: number;
+  residentTax: number;
+  totalTax: number;
+  netSeverancePay: number;
+  calculationNotes: string;
+}
+
+export function calculateRetirementIncomeTax(params: {
+  severancePay: number;
+  joinDate: string | Date;
+  retirementDate: string | Date;
+  isOfficer?: boolean;
+  isDisabilityRetirement?: boolean;
+}): RetirementTaxResult {
+  const { severancePay, joinDate, retirementDate, isOfficer = false, isDisabilityRetirement = false } = params;
+
+  if (severancePay <= 0) {
+    return {
+      serviceYears: 0,
+      severancePay: 0,
+      deductionAmount: 0,
+      taxableRetirementIncome: 0,
+      incomeTax: 0,
+      residentTax: 0,
+      totalTax: 0,
+      netSeverancePay: 0,
+      calculationNotes: '退職手当支給額が0円です。'
+    };
+  }
+
+  const jD = new Date(joinDate);
+  const rD = new Date(retirementDate);
+
+  let totalMonths = (rD.getFullYear() - jD.getFullYear()) * 12 + (rD.getMonth() - jD.getMonth());
+  if (rD.getDate() >= jD.getDate()) {
+    totalMonths += 1;
+  }
+  if (totalMonths <= 0) totalMonths = 1;
+
+  const serviceYears = Math.max(1, Math.ceil(totalMonths / 12));
+
+  let deduction = 0;
+  if (serviceYears <= 20) {
+    deduction = 400000 * serviceYears;
+    if (deduction < 800000) deduction = 800000;
+  } else {
+    deduction = 8000000 + 700000 * (serviceYears - 20);
+  }
+
+  if (isDisabilityRetirement) {
+    deduction += 1000000;
+  }
+
+  const excess = Math.max(0, severancePay - deduction);
+
+  let taxableRetirementIncome = 0;
+  if (excess > 0) {
+    if (isOfficer && serviceYears <= 5) {
+      taxableRetirementIncome = Math.floor(excess / 1000) * 1000;
+    } else if (!isOfficer && serviceYears <= 5) {
+      if (excess <= 3000000) {
+        taxableRetirementIncome = Math.floor((excess * 0.5) / 1000) * 1000;
+      } else {
+        const basePart = 3000000 * 0.5;
+        const overPart = excess - 3000000;
+        taxableRetirementIncome = Math.floor((basePart + overPart) / 1000) * 1000;
+      }
+    } else {
+      taxableRetirementIncome = Math.floor((excess * 0.5) / 1000) * 1000;
+    }
+  }
+
+  let baseTax = 0;
+  const T = taxableRetirementIncome;
+  if (T <= 0) {
+    baseTax = 0;
+  } else if (T <= 1949000) {
+    baseTax = T * 0.05;
+  } else if (T <= 3299000) {
+    baseTax = T * 0.10 - 97500;
+  } else if (T <= 6949000) {
+    baseTax = T * 0.20 - 427500;
+  } else if (T <= 8999000) {
+    baseTax = T * 0.23 - 636000;
+  } else if (T <= 17999000) {
+    baseTax = T * 0.33 - 1536000;
+  } else if (T <= 39999000) {
+    baseTax = T * 0.40 - 2796000;
+  } else {
+    baseTax = T * 0.45 - 4796000;
+  }
+
+  const standardIncomeTax = Math.floor(baseTax);
+  const reconstructionTax = Math.floor(standardIncomeTax * 0.021);
+  const incomeTax = standardIncomeTax + reconstructionTax;
+
+  const prefResidentTax = Math.floor(taxableRetirementIncome * 0.04);
+  const cityResidentTax = Math.floor(taxableRetirementIncome * 0.06);
+  const residentTax = prefResidentTax + cityResidentTax;
+
+  const totalTax = incomeTax + residentTax;
+  const netSeverancePay = Math.max(0, severancePay - totalTax);
+
+  const calculationNotes = `勤続${serviceYears}年（控除額:${deduction.toLocaleString()}円）、課税退職所得:${taxableRetirementIncome.toLocaleString()}円、所得税(復興含):${incomeTax.toLocaleString()}円、住民税:${residentTax.toLocaleString()}円。`;
+
+  return {
+    serviceYears,
+    severancePay,
+    deductionAmount: deduction,
+    taxableRetirementIncome,
+    incomeTax,
+    residentTax,
+    totalTax,
+    netSeverancePay,
+    calculationNotes
+  };
 }
 

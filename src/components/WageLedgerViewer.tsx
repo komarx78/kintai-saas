@@ -24,9 +24,14 @@ interface MonthlyWageItem {
   workDays: number;
   totalWorkHours: number;
   prescribedHours: number;
+  overtimeHours: number; // 労基則第54条: 時間外労働時間数
+  midnightHours: number; // 労基則第54条: 深夜労働時間数
+  holidayHours: number;  // 労基則第54条: 休日労働時間数
   paidLeaveRemaining: number;
   baseSalary: number;
   overtimePay: number;
+  midnightPay: number;
+  holidayPay: number;
   allowanceTotal: number;
   taxableEarnings: number;
   totalEarnings: number;
@@ -38,6 +43,7 @@ interface MonthlyWageItem {
   pensionInsurance: number;
   employmentInsurance: number;
   incomeTax: number;
+  residentTax: number;
   childCareContribution: number;
   socialInsuranceTotal: number;
   deductionTotal: number;
@@ -180,9 +186,14 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
           workDays: 0,
           totalWorkHours: 0,
           prescribedHours: 0,
+          overtimeHours: 0,
+          midnightHours: 0,
+          holidayHours: 0,
           paidLeaveRemaining: 0,
           baseSalary: 0,
           overtimePay: 0,
+          midnightPay: 0,
+          holidayPay: 0,
           allowanceTotal: 0,
           taxableEarnings: 0,
           totalEarnings: 0,
@@ -194,6 +205,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
           pensionInsurance: 0,
           employmentInsurance: 0,
           incomeTax: 0,
+          residentTax: 0,
           childCareContribution: 0,
           socialInsuranceTotal: 0,
           deductionTotal: 0,
@@ -207,10 +219,15 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
       const workDays = Number(actualPayslip.work_days || 0);
       const totalWorkHours = Number(actualPayslip.actual_hours || 0);
       const prescribedHours = Math.max(0, workDays * 8);
+      const overtimeHours = Number(actualPayslip.overtime_hours || 0);
+      const midnightHours = Number(actualPayslip.midnight_hours || 0);
+      const holidayHours = Number(actualPayslip.holiday_hours || 0);
       const paidLeaveRemaining = Number(actualPayslip.paid_leave_remaining || 0);
 
       const basePay = Number(actualPayslip.base_salary || 0);
       const overtimePay = Number(actualPayslip.overtime_allowance || 0);
+      const midnightPay = Number(actualPayslip.midnight_allowance || 0);
+      const holidayPay = Number(actualPayslip.holiday_allowance || 0);
       const allowanceTotal = Number(
         (actualPayslip.commuting_allowance || 0) + 
         (actualPayslip.position_allowance || 0) + 
@@ -219,7 +236,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
         (actualPayslip.family_allowance || 0) + 
         (actualPayslip.special_allowance || 0)
       );
-      const gross = Number(actualPayslip.total_earnings || (basePay + overtimePay + allowanceTotal));
+      const gross = Number(actualPayslip.total_earnings || (basePay + overtimePay + midnightPay + holidayPay + allowanceTotal));
       const taxable = gross;
 
       const health = Number(actualPayslip.health_insurance || 0);
@@ -230,7 +247,8 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
       const socTotal = health + nursing + pension + empIns;
 
       const incomeTax = Number(actualPayslip.income_tax || 0);
-      const dedTotal = Number(actualPayslip.total_deductions || (socTotal + incomeTax + childCare));
+      const residentTax = Number(actualPayslip.resident_tax || 0);
+      const dedTotal = Number(actualPayslip.total_deductions || (socTotal + incomeTax + residentTax + childCare));
       const afterSoc = gross - socTotal;
       const net = Number(actualPayslip.net_salary || (gross - dedTotal));
 
@@ -241,9 +259,14 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
         workDays,
         totalWorkHours,
         prescribedHours,
+        overtimeHours,
+        midnightHours,
+        holidayHours,
         paidLeaveRemaining,
         baseSalary: isExecutive ? 0 : basePay,
         overtimePay,
+        midnightPay,
+        holidayPay,
         allowanceTotal,
         taxableEarnings: taxable,
         totalEarnings: gross,
@@ -255,6 +278,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
         pensionInsurance: pension,
         employmentInsurance: empIns,
         incomeTax,
+        residentTax,
         childCareContribution: childCare,
         socialInsuranceTotal: socTotal,
         deductionTotal: dedTotal,
@@ -271,8 +295,13 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
       acc.workDays += cur.workDays;
       acc.totalWorkHours += cur.totalWorkHours;
       acc.prescribedHours += cur.prescribedHours;
+      acc.overtimeHours += cur.overtimeHours;
+      acc.midnightHours += cur.midnightHours;
+      acc.holidayHours += cur.holidayHours;
       acc.baseSalary += cur.baseSalary;
       acc.overtimePay += cur.overtimePay;
+      acc.midnightPay += cur.midnightPay;
+      acc.holidayPay += cur.holidayPay;
       acc.allowanceTotal += cur.allowanceTotal;
       acc.taxableEarnings += cur.taxableEarnings;
       acc.totalEarnings += cur.totalEarnings;
@@ -284,6 +313,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
       acc.pensionInsurance += cur.pensionInsurance;
       acc.employmentInsurance += cur.employmentInsurance;
       acc.incomeTax += cur.incomeTax;
+      acc.residentTax += cur.residentTax;
       acc.childCareContribution += cur.childCareContribution;
       acc.socialInsuranceTotal += cur.socialInsuranceTotal;
       acc.deductionTotal += cur.deductionTotal;
@@ -295,9 +325,14 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
       workDays: 0,
       totalWorkHours: 0,
       prescribedHours: 0,
+      overtimeHours: 0,
+      midnightHours: 0,
+      holidayHours: 0,
       paidLeaveRemaining: monthlyDataList.length > 0 ? monthlyDataList[monthlyDataList.length - 1].paidLeaveRemaining : 0,
       baseSalary: 0,
       overtimePay: 0,
+      midnightPay: 0,
+      holidayPay: 0,
       allowanceTotal: 0,
       taxableEarnings: 0,
       totalEarnings: 0,
@@ -309,6 +344,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
       pensionInsurance: 0,
       employmentInsurance: 0,
       incomeTax: 0,
+      residentTax: 0,
       childCareContribution: 0,
       socialInsuranceTotal: 0,
       deductionTotal: 0,
@@ -318,32 +354,44 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
     });
   }, [monthlyDataList]);
 
-  // 表示する項目一覧定義（MFクラウド給与の行順を忠実に再現）
+  // 表示する項目一覧定義（労基則第54条法定項目完全準拠 ＆ MFクラウド給与スタイル）
   const tableRows = useMemo(() => {
     return [
-      { id: 'workDays', name: '出勤日数（平日）', format: (v: number) => v > 0 ? v.toFixed(1) : '-', category: 'attendance' },
-      { id: 'totalWorkHours', name: '総労働時間（平日）', format: (v: number) => v > 0 ? v.toFixed(2) : '-', category: 'attendance' },
-      { id: 'prescribedHours', name: '所定時間（平日）', format: (v: number) => v > 0 ? v.toFixed(2) : '-', category: 'attendance' },
+      // 勤怠の部（労基則第54条 必須項目）
+      { id: 'workDays', name: '出勤日数', format: (v: number) => v > 0 ? v.toFixed(1) : '-', category: 'attendance' },
+      { id: 'totalWorkHours', name: '総労働時間', format: (v: number) => v > 0 ? v.toFixed(2) : '-', category: 'attendance' },
+      { id: 'prescribedHours', name: '所定労働時間', format: (v: number) => v > 0 ? v.toFixed(2) : '-', category: 'attendance' },
+      { id: 'overtimeHours', name: '時間外労働時間（残業）', format: (v: number) => v > 0 ? v.toFixed(2) : '-', category: 'attendance' },
+      { id: 'midnightHours', name: '深夜労働時間', format: (v: number) => v > 0 ? v.toFixed(2) : '-', category: 'attendance' },
+      { id: 'holidayHours', name: '休日労働時間', format: (v: number) => v > 0 ? v.toFixed(2) : '-', category: 'attendance' },
       { id: 'paidLeaveRemaining', name: '有休残日数', format: (v: number) => v > 0 ? v.toFixed(1) : '-', category: 'attendance' },
       
+      // 支給の部（労基法第37条・第108条）
       { id: 'baseSalary', name: '基本給（支給）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'earnings' },
       { id: 'executiveRemunerationTotal', name: '役員報酬（支給）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'earnings' },
+      { id: 'overtimePay', name: '残業手当（時間外割増）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'earnings' },
+      { id: 'midnightPay', name: '深夜手当（深夜割増）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'earnings' },
+      { id: 'holidayPay', name: '休日手当（休日割増）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'earnings' },
+      { id: 'allowanceTotal', name: '諸手当合計（通勤・役職等）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'earnings' },
       { id: 'taxableEarnings', name: '課税支給合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isSubtotal: true, category: 'earnings' },
-      { id: 'totalEarnings', name: '支給合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isMajor: true, category: 'earnings' },
+      { id: 'totalEarnings', name: '支給合計（総支給額）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isMajor: true, category: 'earnings' },
       { id: 'socialTargetTotal', name: '社保対象合計（金銭）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'earnings' },
       { id: 'fixedWageTotal', name: '固定賃金合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'earnings' },
       
+      // 控除の部（労基法第24条但書・社会保険各法・地方税法）
       { id: 'healthInsurance', name: '健康保険料（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
       { id: 'nursingInsurance', name: '介護保険料（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
       { id: 'pensionInsurance', name: '厚生年金保険料（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
       { id: 'employmentInsurance', name: '雇用保険料（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
-      { id: 'incomeTax', name: '所得税（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
-      { id: 'childCareContribution', name: '子ども・子育て拠出金（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
       { id: 'socialInsuranceTotal', name: '社会保険料合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isSubtotal: true, category: 'deduction' },
-      { id: 'deductionTotal', name: '控除合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isMajor: true, category: 'deduction' },
+      { id: 'incomeTax', name: '所得税（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
+      { id: 'residentTax', name: '住民税（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
+      { id: 'childCareContribution', name: '子ども・子育て拠出金（控除）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', category: 'deduction' },
+      { id: 'deductionTotal', name: '控除合計（総控除額）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isMajor: true, category: 'deduction' },
       
+      // 差引支給の部
       { id: 'afterSocialTotal', name: '社保控除後合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isSubtotal: true, category: 'net' },
-      { id: 'netPayment', name: '差引支給合計', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isHighlight: true, category: 'net' },
+      { id: 'netPayment', name: '差引支給額（手取り）', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isHighlight: true, category: 'net' },
       { id: 'bankTransferRemaining', name: '振込支給残額', format: (v: number) => v > 0 ? v.toLocaleString() : '-', isHighlight: true, category: 'net' }
     ];
   }, []);
@@ -695,6 +743,7 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
                 <div className="bg-slate-100 border border-slate-400 px-3 py-1.5 flex items-center justify-between text-[8pt] font-sans">
                   <div className="flex items-center gap-4">
                     <span><strong className="text-slate-600 font-bold">氏名:</strong> <strong className="text-slate-950 font-black text-[9pt]">{currentEmployee.name}</strong> {currentEmployee.name_kana && <span className="text-slate-500 font-normal">（{currentEmployee.name_kana}）</span>}</span>
+                    <span><strong className="text-slate-600 font-bold">性別:</strong> <span>{currentEmployee.gender ? (currentEmployee.gender === 'male' || currentEmployee.gender === '男' ? '男' : '女') : '-'}</span></span>
                     <span><strong className="text-slate-600 font-bold">社員番号:</strong> <span className="font-mono font-bold">{currentEmployee.employee_number || '0001'}</span></span>
                     <span><strong className="text-slate-600 font-bold">所属:</strong> <span className="font-bold">{currentEmployee.department || '本社'}</span></span>
                     <span><strong className="text-slate-600 font-bold">役職:</strong> <span>{currentEmployee.position_name || (currentEmployee.is_executive ? '役員' : '一般社員')}</span></span>

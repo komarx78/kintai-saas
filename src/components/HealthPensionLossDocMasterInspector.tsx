@@ -9,6 +9,7 @@ import {
   ZoomIn, ZoomOut, ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
   Sliders, Eye, Sparkles
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { 
   DEFAULT_HEALTH_PENSION_LOSS_FIELDS,
   loadHealthPensionLossCoordinates,
@@ -23,6 +24,16 @@ import { OfficialHealthPensionLossDoc, type HealthPensionLossEmployee } from './
 export const HealthPensionLossDocMasterInspector: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'inspector' | 'input_preview'>('inspector');
 
+  // 🏢 テナント動的会社情報State（他社テナントへの配慮・憲法3/4）
+  const [companyInfo, setCompanyInfo] = useState({
+    postal_code: '5200001',
+    address: '',
+    company_name: '',
+    representative_name: ''
+  });
+  const [officeSymbol, setOfficeSymbol] = useState('26カカ1234');
+  const [officeNumber, setOfficeNumber] = useState('12345');
+
   // インスペクター用State
   const [fields, setFields] = useState<HealthPensionLossFieldConfig[]>(() => loadHealthPensionLossCoordinates());
   const [selectedSection, setSelectedSection] = useState<'header' | 'office' | 'insured_person_1'>('insured_person_1');
@@ -31,7 +42,7 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [previewZoom, setPreviewZoom] = useState<number>(100);
 
-  // マウント時にDBから全社共有座標を取得
+  // マウント時にDBから全社共有座標およびテナント会社情報を取得
   useEffect(() => {
     let isCancelled = false;
     fetchHealthPensionLossCoordinatesFromDb().then(dbCoords => {
@@ -39,6 +50,36 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
         setFields(dbCoords);
       }
     });
+
+    const fetchCompanyData = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
+          if (userData?.tenant_id) {
+            const { data: tData } = await supabase.from('tenants').select('*').eq('id', userData.tenant_id).maybeSingle();
+            if (tData && !isCancelled) {
+              setCompanyInfo({
+                postal_code: tData.postal_code || '5200001',
+                address: tData.address || '',
+                company_name: tData.name || '',
+                representative_name: tData.representative_name || ''
+              });
+              if (tData.shakai_hoken_settings?.office_symbol) {
+                setOfficeSymbol(tData.shakai_hoken_settings.office_symbol);
+              }
+              if (tData.shakai_hoken_settings?.office_number) {
+                setOfficeNumber(tData.shakai_hoken_settings.office_number);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('HealthPensionLoss company fetch error:', err);
+      }
+    };
+    fetchCompanyData();
+
     return () => { isCancelled = true; };
   }, []);
 
@@ -335,14 +376,9 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
 
       {activeTab === 'input_preview' ? (
         <OfficialHealthPensionLossDoc
-          companyInfo={{
-            postal_code: '5200001',
-            address: '滋賀県大津市坂本3丁目21-16',
-            company_name: '株式会社cocotte',
-            representative_name: '駒井 秀一朗'
-          }}
-          officeSymbol="26カカ1234"
-          officeNumber="12345"
+          companyInfo={companyInfo}
+          officeSymbol={officeSymbol}
+          officeNumber={officeNumber}
           employees={sampleEmployees}
           selectedEmployeeId="sample-1"
         />

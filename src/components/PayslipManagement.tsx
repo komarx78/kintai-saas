@@ -622,6 +622,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         } catch (e) {}
 
         const bDate = onb?.birth_date || u.birth_date || pay?.birth_date || localBackup?.birth_date || '';
+        const jDate = onb?.join_date || u.join_date || localBackup?.join_date || pay?.join_date || '';
+        const rDate = onb?.resignation_date || u.resignation_date || localBackup?.resignation_date || pay?.resignation_date || '';
         
         // 提出書類からの扶養親族数の自動抽出（大元SSOT: ユーザーID ＋ 氏名完全照合）
         const cleanUName = (u.name || '').replace(/\s+/g, '');
@@ -700,6 +702,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           dependents_count: resolvedDepCount,
           has_spouse: resolvedHasSpouse,
           birth_date: bDate,
+          join_date: jDate || null,
+          resignation_date: rDate || null,
           health_insurance_enabled: onb?.health_insurance_joined ?? pay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? true,
           health_standard_monthly_remuneration: pay?.health_standard_monthly_remuneration ?? onb?.health_standard_monthly_remuneration ?? localPayProfile?.health_standard_monthly_remuneration ?? localBackup?.health_standard_monthly_remuneration ?? null,
           nursing_insurance_enabled: pay?.nursing_insurance_enabled ?? null,
@@ -1160,6 +1164,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         } catch (e) {}
 
         const empBirthDate = existingProf?.birth_date || emp.birth_date || localBackup?.birth_date || null;
+        const empJoinDate = existingProf?.join_date || emp.join_date || localBackup?.join_date || null;
+        const empResignationDate = existingProf?.resignation_date || emp.resignation_date || localBackup?.resignation_date || null;
 
         const profile: EmployeePayrollProfile = {
           tenant_id: tenantId,
@@ -1180,6 +1186,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           dependents_count: existingProf?.dependents_count ?? 0,
           has_spouse: existingProf?.has_spouse ?? false,
           birth_date: empBirthDate,
+          join_date: empJoinDate,
+          resignation_date: empResignationDate,
           health_insurance_enabled: existingProf?.health_insurance_enabled ?? true,
           health_standard_monthly_remuneration: existingProf?.health_standard_monthly_remuneration ?? null,
           nursing_insurance_enabled: existingProf?.nursing_insurance_enabled,
@@ -1325,6 +1333,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         dependents_count: resolvedDepCount,
         has_spouse: resolvedHasSpouse,
         birth_date: dbPay?.birth_date || dbOnb?.birth_date || localBackup?.birth_date || emp.birth_date || cachedProf?.birth_date || null,
+        join_date: dbPay?.join_date || dbOnb?.join_date || localBackup?.join_date || emp.join_date || cachedProf?.join_date || null,
+        resignation_date: dbPay?.resignation_date || dbOnb?.resignation_date || localBackup?.resignation_date || emp.resignation_date || cachedProf?.resignation_date || null,
         health_insurance_enabled: dbOnb?.health_insurance_joined ?? dbPay?.health_insurance_enabled ?? localBackup?.health_insurance_joined ?? cachedProf?.health_insurance_enabled ?? true,
         health_standard_monthly_remuneration: dbPay?.health_standard_monthly_remuneration ?? dbOnb?.health_standard_monthly_remuneration ?? localBackup?.health_standard_monthly_remuneration ?? cachedProf?.health_standard_monthly_remuneration ?? null,
         nursing_insurance_enabled: dbPay?.nursing_insurance_enabled ?? cachedProf?.nursing_insurance_enabled ?? null,

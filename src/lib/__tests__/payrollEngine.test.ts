@@ -1,5 +1,12 @@
-import { calculatePayroll, type EmployeePayrollProfile, type AttendanceSummary } from '../payrollEngine';
-import { isNursingInsuranceApplicable, lookupStandardMonthlyRemuneration, calculateSocialInsuranceDeduction } from '../socialInsurance';
+import { calculatePayroll, calculateResidentTaxLumpSum, calculateRetirementIncomeTax, type EmployeePayrollProfile, type AttendanceSummary } from '../payrollEngine';
+import { 
+  isNursingInsuranceApplicable, 
+  lookupStandardMonthlyRemuneration, 
+  calculateSocialInsuranceDeduction,
+  determineRetirementSocialInsuranceMonths,
+  calculateSanteiKisoRemuneration,
+  checkMonthlyRevisionEligibility
+} from '../socialInsurance';
 
 /**
  * 給与計算エンジン ＆ 社会保険計算エンジンの単体テストスイート
@@ -142,6 +149,150 @@ export function runPayrollEngineTests(): { success: boolean; results: string[] }
       results.push('✅ テスト6 パス: 差引手取り額が総支給 - 総控除と完全一致');
     } else {
       results.push(`❌ テスト6 失敗: 手取り額計算不整合`);
+    }
+  }
+
+  // ==========================================
+  // テスト7: 退職月の社会保険料控除（健保法156条・厚年法19条）
+  // ==========================================
+  {
+    // 3月31日退職（月末退職）: 資格喪失日は4月1日 → 3月分給与で前月分＋当月分の2ヶ月分一括徴収
+    const endOfMonthResign = determineRetirementSocialInsuranceMonths('2023-04-01', '2024-03-31', true);
+    // 3月15日退職（月途中退職）: 資格喪失日は3月16日 → 当月分保険料免除、前月分のみ（1ヶ月）
+    const midMonthResign = determineRetirementSocialInsuranceMonths('2023-04-01', '2024-03-15', true);
+    // 在籍継続中（退職なし）
+    const activeEmp = determineRetirementSocialInsuranceMonths('2023-04-01', null, true);
+
+    if (
+      endOfMonthResign?.deductionMonthsCount === 2 &&
+      endOfMonthResign?.isEndOfMonth === true &&
+      midMonthResign?.deductionMonthsCount === 1 &&
+      midMonthResign?.isEndOfMonth === false &&
+      activeEmp === null
+    ) {
+      results.push('✅ テスト7 パス: 退職月の社会保険料（月末退職の翌月控除2ヶ月徴収＆月中退職の当月免除）判定が完全正確');
+    } else {
+      results.push(`❌ テスト7 失敗: 退職社保判定不整合 (月末:${endOfMonthResign?.deductionMonthsCount}, 月中:${midMonthResign?.deductionMonthsCount}, active:${activeEmp})`);
+    }
+  }
+
+  // ==========================================
+  // テスト8: 退職時の住民税一括徴収（地方税法第321条の5第2項）
+  // ==========================================
+  {
+    // 3月15日退職、月額住民税10,000円 → 1〜4月退職は5月までの一括徴収必須（3月・4月・5月の計3ヶ月分 = 30,000円）
+    const marchLumpSum = calculateResidentTaxLumpSum('2024-03-15', null, 10000, false);
+    // 8月15日退職、一括徴収申出なし → 当月分 10,000円のみ
+    const augustNoLump = calculateResidentTaxLumpSum('2024-08-15', null, 10000, false);
+    // 8月15日退職、一括徴収申出あり → 8月〜翌5月の計10ヶ月分 = 100,000円
+    const augustWithLump = calculateResidentTaxLumpSum('2024-08-15', null, 10000, true);
+
+    if (
+      marchLumpSum?.isLumpSumRequired === true &&
+      marchLumpSum?.lumpSumAmount === 30000 &&
+      augustNoLump?.isLumpSumOptional === true &&
+      augustNoLump?.lumpSumAmount === 10000 &&
+      augustWithLump?.lumpSumAmount === 100000
+    ) {
+      results.push('✅ テスト8 パス: 退職時住民税一括徴収（1〜4月退職の5月分まで義務的徴収＆申出連動）が完全正確');
+    } else {
+      results.push(`❌ テスト8 失敗: 住民税一括徴収不整合 (Mar:${marchLumpSum?.lumpSumAmount}, AugNo:${augustNoLump?.lumpSumAmount}, AugWith:${augustWithLump?.lumpSumAmount})`);
+    }
+  }
+
+  // ==========================================
+  // テスト9: 算定基礎届（定時決定）支払基礎日数判定（健保法41条・厚年法21条）
+  // ==========================================
+  {
+    // 4月: 20日 300,000円、5月: 15日 300,000円（一般社員17日未満のため除外）、6月: 20日 320,000円
+    // 有効月: 4月と6月の2ヶ月平均 = (300,000 + 320,000) / 2 = 310,000円 → 23等級（320,000円）
+    const records = [
+      { month: 4 as const, baseDays: 20, totalWage: 300000 },
+      { month: 5 as const, baseDays: 15, totalWage: 300000 },
+      { month: 6 as const, baseDays: 20, totalWage: 320000 }
+    ];
+    const santeiResult = calculateSanteiKisoRemuneration(records, false);
+
+    if (
+      santeiResult.validMonths.length === 2 &&
+      santeiResult.validMonths.includes(4) &&
+      santeiResult.validMonths.includes(6) &&
+      santeiResult.excludedMonths.includes(5) &&
+      santeiResult.averageWage === 310000 &&
+      santeiResult.newHealthRemuneration === 320000
+    ) {
+      results.push('✅ テスト9 パス: 算定基礎届（4〜6月支払基礎日数17日未満除外＆有効月平均・新等級算出）が完全正確');
+    } else {
+      results.push(`❌ テスト9 失敗: 算定基礎届計算不整合 (valid:${santeiResult.validMonths}, avg:${santeiResult.averageWage}, new:${santeiResult.newHealthRemuneration})`);
+    }
+  }
+
+  // ==========================================
+  // テスト10: 随時改定（月額変更届）2等級以上の差判定（健保法43条・厚年法23条）
+  // ==========================================
+  {
+    // 従前等級: 300,000円（健康保険22等級）
+    // 変動後3ヶ月平均: 360,000円（健康保険25等級 → 3等級上昇 ≧ 2等級）
+    const geppenEligible = checkMonthlyRevisionEligibility({
+      currentHealthStandard: 300000,
+      currentPensionStandard: 300000,
+      fixedWageChangeType: 'increase',
+      isShortTimeWorker: false,
+      consecutiveMonths: [
+        { baseDays: 20, totalWage: 360000 },
+        { baseDays: 20, totalWage: 360000 },
+        { baseDays: 20, totalWage: 360000 }
+      ]
+    });
+
+    // 従前等級: 300,000円、変動後3ヶ月平均: 310,000円（新等級300,000円 → 0等級差、非該当）
+    const geppenNotEligible = checkMonthlyRevisionEligibility({
+      currentHealthStandard: 300000,
+      currentPensionStandard: 300000,
+      fixedWageChangeType: 'increase',
+      isShortTimeWorker: false,
+      consecutiveMonths: [
+        { baseDays: 20, totalWage: 310000 },
+        { baseDays: 20, totalWage: 310000 },
+        { baseDays: 20, totalWage: 310000 }
+      ]
+    });
+
+    if (geppenEligible.isEligible === true && geppenEligible.healthGradeDiff >= 2 && geppenNotEligible.isEligible === false) {
+      results.push('✅ テスト10 パス: 随時改定（月変・3ヶ月連続基準日数クリア＆2等級差判定）が完全正確');
+    } else {
+      results.push(`❌ テスト10 失敗: 随時改定判定不整合 (elig:${geppenEligible.isEligible}, diff:${geppenEligible.healthGradeDiff}, notElig:${geppenNotEligible.isEligible})`);
+    }
+  }
+
+  // ==========================================
+  // テスト11: 退職所得控除および税額計算（所得税法第30条・令和4年改正対応）
+  // ==========================================
+  {
+    // 勤続10年（控除額: 40万円 * 10年 = 400万円）、退職金 6,000,000円、一般社員
+    // 課税退職所得金額 = (6,000,000 - 4,000,000) * 1/2 = 1,000,000円
+    // 所得税 = 1,000,000 * 5% = 50,000円、復興特別所得税 = 50,000 * 2.1% = 1,050円 → 合計 51,050円
+    // 住民税 = 1,000,000 * 10% = 100,000円
+    // 差引手取り額 = 6,000,000 - (51,050 + 100,000) = 5,848,950円
+    const retResult = calculateRetirementIncomeTax({
+      severancePay: 6000000,
+      joinDate: '2014-04-01',
+      retirementDate: '2024-03-31',
+      isOfficer: false,
+      isDisabilityRetirement: false
+    });
+
+    if (
+      retResult.deductionAmount === 4000000 &&
+      retResult.taxableRetirementIncome === 1000000 &&
+      retResult.incomeTax === 51050 &&
+      retResult.residentTax === 100000 &&
+      retResult.totalTax === 151050 &&
+      retResult.netSeverancePay === 5848950
+    ) {
+      results.push('✅ テスト11 パス: 退職所得控除・所得税（復興含）・住民税・差引手取り計算が完全正確');
+    } else {
+      results.push(`❌ テスト11 失敗: 退職所得計算不整合 (ded:${retResult.deductionAmount}, taxable:${retResult.taxableRetirementIncome}, tax:${retResult.incomeTax}, res:${retResult.residentTax}, net:${retResult.netSeverancePay})`);
     }
   }
 
