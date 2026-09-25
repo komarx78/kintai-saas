@@ -62,7 +62,6 @@ import {
 import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
 import {
   type StoreMaster,
-  DEFAULT_STORES,
   getStoresFromStorage,
   saveStoresToStorage,
   fetchStoresUnified,
@@ -1003,19 +1002,14 @@ export default function CompanySettingsDashboard() {
       saveDepartmentsToStorage(tenantIdData, deptsLoaded);
       setDepartments(deptsLoaded);
 
-      // 🏪 店舗・拠点マスタ取得（DBとLocalStorageのハイブリッド復元）
+      // 🏪 店舗・拠点マスタ取得（DBとLocalStorageのハイブリッド復元・勝手なダミー注入を撤廃）
       try {
         const loadedStores = await fetchStoresUnified(tenantIdData);
-        if (loadedStores && loadedStores.length > 0) {
-          setStores(loadedStores);
-        } else {
-          setStores(DEFAULT_STORES);
-          saveStoresToStorage(tenantIdData, DEFAULT_STORES);
-        }
+        setStores(loadedStores || []);
       } catch (stErr) {
         console.warn('Load stores error:', stErr);
         const localSt = getStoresFromStorage(tenantIdData);
-        setStores(localSt.length > 0 ? localSt : DEFAULT_STORES);
+        setStores(localSt || []);
       }
 
       // 就業時間パターンマスタ取得
@@ -3100,9 +3094,9 @@ export default function CompanySettingsDashboard() {
                           </select>
                         </div>
 
-                        {/* 所属メンバーリスト（店舗運営部は配下店舗ツリー構造を展開） */}
+                        {/* 所属メンバーリスト（店舗運営部は登録店舗が存在する場合のみ配下店舗ツリー構造を展開） */}
                         <div className="space-y-1.5">
-                          {dept.name === '店舗運営部' ? (
+                          {dept.name === '店舗運営部' && stores.length > 0 ? (
                             <div>
                               <div className="flex items-center justify-between text-[10px] font-black text-amber-900 bg-amber-50/80 px-2.5 py-1.5 rounded-xl border border-amber-200 mb-2">
                                 <span className="flex items-center gap-1.5">
@@ -3428,7 +3422,16 @@ export default function CompanySettingsDashboard() {
 
               {/* 店舗一覧カード */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
-                {stores.map((s, idx) => {
+                {stores.length === 0 ? (
+                  <div className="col-span-full py-10 px-4 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-2">
+                    <Store className="w-8 h-8 text-slate-300 mx-auto" />
+                    <div className="text-xs font-bold text-slate-600">登録されている店舗・拠点はありません</div>
+                    <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                      店舗展開・複数拠点運営を行っている企業様は、上部の「新しい店舗・拠点を追加」から自社の店舗を登録してください。
+                    </p>
+                  </div>
+                ) : (
+                  stores.map((s, idx) => {
                   const staffCount = companyUsers.filter(u => u.store_name === s.name).length;
                   return (
                     <div
@@ -3497,7 +3500,7 @@ export default function CompanySettingsDashboard() {
                       </div>
                     </div>
                   );
-                })}
+                }))}
               </div>
             </div>
 

@@ -32,7 +32,21 @@ export const sanitizeStoreName = (name: string): string => {
 };
 
 /**
- * LocalStorageから店舗一覧を取得（フォールバック対応）
+ * 🧹 初期ダミー店舗（新宿店・渋谷店・池袋店）かどうか判定するヘルパー
+ */
+export const isDefaultDummyStoreList = (stores: StoreMaster[]): boolean => {
+  if (!Array.isArray(stores) || stores.length === 0) return false;
+  if (stores.length === 3 &&
+      stores.some(s => s.id === 'store-1' && s.name === '新宿店') &&
+      stores.some(s => s.id === 'store-2' && s.name === '渋谷店') &&
+      stores.some(s => s.id === 'store-3' && s.name === '池袋店')) {
+    return true;
+  }
+  return false;
+};
+
+/**
+ * LocalStorageから店舗一覧を取得（未登録時は空配列を返す）
  */
 export const getStoresFromStorage = (tenantId?: string | null): StoreMaster[] => {
   try {
@@ -40,7 +54,12 @@ export const getStoresFromStorage = (tenantId?: string | null): StoreMaster[] =>
       const raw = localStorage.getItem(`company_stores_${tenantId}`);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
+          // 初期ダミー（新宿店・渋谷店・池袋店）が自動保存されてしまっていた場合は空配列へクレンジング
+          if (isDefaultDummyStoreList(parsed)) {
+            localStorage.setItem(`company_stores_${tenantId}`, JSON.stringify([]));
+            return [];
+          }
           return parsed.map((s: StoreMaster) => ({
             ...s,
             name: sanitizeStoreName(s.name)
@@ -51,7 +70,7 @@ export const getStoresFromStorage = (tenantId?: string | null): StoreMaster[] =>
   } catch (e) {
     console.warn('LocalStorage stores parse error:', e);
   }
-  return DEFAULT_STORES;
+  return []; // 未設定時は空配列（勝手にダミー店舗を生成しない）
 };
 
 /**
@@ -74,7 +93,7 @@ export const saveStoresToStorage = (tenantId: string | null, stores: StoreMaster
 let isStoreMastersTableAvailable: boolean | null = null;
 
 /**
- * データベースおよびLocalStorageから店舗一覧を統合取得
+ * データベースおよびLocalStorageから店舗一覧を統合取得（未設定時は0件を厳格保持）
  */
 export const fetchStoresUnified = async (tenantId: string): Promise<StoreMaster[]> => {
   const localStores = getStoresFromStorage(tenantId);
@@ -96,7 +115,7 @@ export const fetchStoresUnified = async (tenantId: string): Promise<StoreMaster[
     }
 
     isStoreMastersTableAvailable = true;
-    if (data && data.length > 0) {
+    if (data) {
       const mapped: StoreMaster[] = data.map((d: any) => ({
         id: d.id,
         name: sanitizeStoreName(d.name),
