@@ -1,6 +1,6 @@
 // =========================================================================
 // 現場即応 打刻丸め（マル目）＆勤務時間計算 共通エンジン (SSOT)
-// =========================================================================
+import { supabase } from './supabase';
 
 export interface AttendanceRoundingRules {
   // 1. 始業前打刻の扱い
@@ -126,6 +126,36 @@ export const saveAttendanceRoundingRules = (tenantId: string, rules: AttendanceR
   } catch (e) {
     console.warn('Failed to save attendance_rounding_rules:', e);
   }
+};
+
+/**
+ * 実DB（tenantsテーブル）から打刻丸めルールを取得（SSOT）
+ */
+export const fetchAttendanceRoundingRulesFromDb = async (tenantId?: string | null): Promise<AttendanceRoundingRules> => {
+  if (!tenantId) return DEFAULT_ROUNDING_RULES;
+  try {
+    const { data, error } = await supabase
+      .from('tenants')
+      .select('attendance_rounding_settings, work_calendar_settings')
+      .eq('id', tenantId)
+      .maybeSingle();
+
+    if (!error && data) {
+      if (data.attendance_rounding_settings) {
+        const rules = { ...DEFAULT_ROUNDING_RULES, ...data.attendance_rounding_settings };
+        saveAttendanceRoundingRules(tenantId, rules);
+        return rules;
+      }
+      if (data.work_calendar_settings?.attendance_rounding_rules) {
+        const rules = { ...DEFAULT_ROUNDING_RULES, ...data.work_calendar_settings.attendance_rounding_rules };
+        saveAttendanceRoundingRules(tenantId, rules);
+        return rules;
+      }
+    }
+  } catch (e) {
+    console.warn('fetchAttendanceRoundingRulesFromDb note:', e);
+  }
+  return getAttendanceRoundingRules(tenantId);
 };
 
 // -------------------------------------------------------------------------

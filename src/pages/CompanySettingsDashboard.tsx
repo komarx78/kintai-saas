@@ -33,7 +33,6 @@ import {
   POSITION_PRESETS,
   DEPARTMENT_PRESETS,
   getDepartmentTheme,
-  getPositionsFromStorage,
   savePositionsToStorage
 } from '../lib/orgChart';
 import { 
@@ -288,36 +287,6 @@ export const addDeletedDepartmentNameToStorage = (tId: string | null | undefined
     current.add(name);
     localStorage.setItem(`deleted_department_names_${tId}`, JSON.stringify(Array.from(current)));
   } catch (_) {}
-};
-
-const getDepartmentsFromStorage = (tId: string): DepartmentMaster[] => {
-  try {
-    if (!tId) return [];
-    const deletedNames = getDeletedDepartmentNamesFromStorage(tId);
-    const raw = localStorage.getItem(`company_departments_${tId}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const validMap = new Map<string, DepartmentMaster>();
-        parsed.forEach((d: DepartmentMaster) => {
-          const cleanName = sanitizeDepartmentName(d.name);
-          // 偽部署および削除済み部署は100%復元しない
-          if (
-            isValidDepartmentName(cleanName) &&
-            !isStoreRoleDept(cleanName) &&
-            !deletedNames.has(cleanName) &&
-            !validMap.has(cleanName)
-          ) {
-            validMap.set(cleanName, { ...d, name: cleanName });
-          }
-        });
-        return Array.from(validMap.values());
-      }
-    }
-  } catch (e) {
-    console.warn('LocalStorage departments parse error:', e);
-  }
-  return [];
 };
 
 const saveDepartmentsToStorage = (tId: string, depts: DepartmentMaster[]) => {
@@ -867,26 +836,18 @@ export default function CompanySettingsDashboard() {
         console.error('Failed to sync LINE config from DB:', err);
       }
 
-      // 🏛️ 社会保険・労働保険マスタの復元（DB + 自社専用LocalStorage）
-      let loadedInsurance = {
-        shakai_hoken_office_symbol: tData?.shakai_hoken_settings?.office_symbol || '',
-        shakai_hoken_office_number: tData?.shakai_hoken_office_number || tData?.shakai_hoken_settings?.office_number || '',
-        employment_insurance_office_number: tData?.employment_insurance_office_number || '',
-        labor_insurance_number: tData?.labor_insurance_number || ''
+      // 🏛️ 社会保険・労働保険マスタの復元（実DB SupabaseをSSOTとする）
+      const dbIns = (tData as any)?.insurance_master_settings || tData?.shakai_hoken_settings || {};
+      const loadedInsurance = {
+        shakai_hoken_office_symbol: dbIns.shakai_hoken_office_symbol || dbIns.office_symbol || '',
+        shakai_hoken_office_number: tData?.shakai_hoken_office_number || dbIns.shakai_hoken_office_number || dbIns.office_number || '',
+        employment_insurance_office_number: tData?.employment_insurance_office_number || dbIns.employment_insurance_office_number || '',
+        labor_insurance_number: tData?.labor_insurance_number || dbIns.labor_insurance_number || ''
       };
-      try {
-        const rawIns = localStorage.getItem(`company_insurance_settings_${tenantIdData}`);
-        if (rawIns) {
-          const parsedIns = JSON.parse(rawIns);
-          loadedInsurance = {
-            shakai_hoken_office_symbol: parsedIns.shakai_hoken_office_symbol || loadedInsurance.shakai_hoken_office_symbol,
-            shakai_hoken_office_number: parsedIns.shakai_hoken_office_number || loadedInsurance.shakai_hoken_office_number,
-            employment_insurance_office_number: parsedIns.employment_insurance_office_number || loadedInsurance.employment_insurance_office_number,
-            labor_insurance_number: parsedIns.labor_insurance_number || loadedInsurance.labor_insurance_number
-          };
-        }
-      } catch (e) {}
       setInsuranceMaster(loadedInsurance);
+      try {
+        localStorage.setItem(`company_insurance_settings_${tenantIdData}`, JSON.stringify(loadedInsurance));
+      } catch (_) {}
 
 
       if (tData) {
@@ -954,10 +915,35 @@ export default function CompanySettingsDashboard() {
           setOnboardingSteps(getWorkflowStepsFromStorage());
         }
 
-        if (tData.position_settings && Array.isArray(tData.position_settings)) {
-          setPositions(tData.position_settings);
-        } else {
-          setPositions(getPositionsFromStorage(tenantIdData));
+        // 🏢 役職マスタ復元（実DB company_position_masters / tenants.position_settings をSSOTとする）
+        let loadedPositions: PositionMaster[] = [];
+        try {
+          const { data: dbPosData, error: dbPosErr } = await supabase
+            .from('company_position_masters')
+            .select('*')
+            .eq('tenant_id', tenantIdData)
+            .order('display_order', { ascending: true });
+          if (!dbPosErr && dbPosData && dbPosData.length > 0) {
+            loadedPositions = dbPosData.map(p => ({
+              id: p.id,
+              name: p.name,
+              rank_level: p.rank_level,
+              display_order: p.display_order,
+              default_allowance: p.default_allowance || 0
+            }));
+          }
+        } catch (_) {}
+
+        if (loadedPositions.length === 0) {
+          const pSettings = (tData as any).position_settings || (tData as any).position_masters;
+          if (Array.isArray(pSettings) && pSettings.length > 0) {
+            loadedPositions = pSettings;
+          }
+        }
+
+        setPositions(loadedPositions);
+        if (loadedPositions.length > 0) {
+          savePositionsToStorage(loadedPositions, tenantIdData);
         }
 
         // 💳 テナント課金情報・プラン復元
@@ -976,49 +962,28 @@ export default function CompanySettingsDashboard() {
         });
       } else {
         setOnboardingSteps(getWorkflowStepsFromStorage());
-        setPositions(getPositionsFromStorage(tenantIdData));
+        setPositions([]);
       }
 
-      // 部署マスタ取得（DBまたはLocalStorageバックアップから確実に復元）
-      const deletedNames = getDeletedDepartmentNamesFromStorage(tenantIdData);
+      // 部署マスタ取得（実DB department_masters をSSOTとする）
       let deptsLoaded: DepartmentMaster[] = [];
       try {
-        const { data: deptData } = await supabase
+        const { data: deptData, error: deptErr } = await supabase
           .from('department_masters')
           .select('*')
           .eq('tenant_id', tenantIdData)
           .order('display_order', { ascending: true });
-        if (deptData && deptData.length > 0) {
-          // DBデータからも偽部署（職種名）と明示的削除済み部署を徹底排除
-          deptsLoaded = deptData.filter(d => !isStoreRoleDept(d.name) && !deletedNames.has(d.name));
+        if (!deptErr && deptData && deptData.length > 0) {
+          // DBデータから偽部署（職種名）を排除
+          deptsLoaded = deptData.filter(d => !isStoreRoleDept(d.name));
         }
       } catch (e) {
         console.warn('Fetch department masters from DB error:', e);
       }
 
-      // DBにない、または所属長が空の場合はLocalStorageから確実にマージ復元
-      const storageDepts = getDepartmentsFromStorage(tenantIdData);
-      if (storageDepts.length > 0) {
-        const mergedMap = new Map<string, DepartmentMaster>();
-        deptsLoaded.forEach(d => mergedMap.set(d.name, d));
-        storageDepts.forEach(sd => {
-          if (!isStoreRoleDept(sd.name) && !deletedNames.has(sd.name)) {
-            if (mergedMap.has(sd.name)) {
-              const current = mergedMap.get(sd.name)!;
-              mergedMap.set(sd.name, {
-                ...current,
-                manager_user_id: sd.manager_user_id || current.manager_user_id,
-                manager_user_name: sd.manager_user_name || current.manager_user_name
-              });
-            } else {
-              mergedMap.set(sd.name, sd);
-            }
-          }
-        });
-        deptsLoaded = Array.from(mergedMap.values());
-      }
-      saveDepartmentsToStorage(tenantIdData, deptsLoaded);
+      // 実DBの取得値を唯一の真実（SSOT）としてセット（LocalStorageゾンビマージ完全撤廃）
       setDepartments(deptsLoaded);
+      saveDepartmentsToStorage(tenantIdData, deptsLoaded);
 
       // 🏪 店舗・拠点マスタ取得（DBとLocalStorageのハイブリッド復元・勝手なダミー注入を撤廃）
       try {
@@ -1048,11 +1013,28 @@ export default function CompanySettingsDashboard() {
         ]);
       }
 
-      // ⚙️ 打刻丸めルールの取得（DB / LocalStorage）
-      const loadedRules = getAttendanceRoundingRules(tenantIdData);
+      // ⚙️ 打刻丸めルールの取得（実DB tenantsテーブルをSSOTとする）
+      let loadedRules: AttendanceRoundingRules = DEFAULT_ROUNDING_RULES;
+      if ((tData as any)?.attendance_rounding_settings) {
+        loadedRules = { ...DEFAULT_ROUNDING_RULES, ...(tData as any).attendance_rounding_settings };
+      } else if (tData?.work_calendar_settings?.attendance_rounding_rules) {
+        loadedRules = { ...DEFAULT_ROUNDING_RULES, ...tData.work_calendar_settings.attendance_rounding_rules };
+      } else {
+        loadedRules = getAttendanceRoundingRules(tenantIdData);
+      }
       setAttendanceRules(loadedRules);
-      const loadedPresets = getCustomPresetsFromStorage(tenantIdData);
+      saveAttendanceRoundingRules(tenantIdData, loadedRules);
+
+      let loadedPresets: CustomAttendancePreset[] = [];
+      if ((tData as any)?.custom_rounding_presets && Array.isArray((tData as any).custom_rounding_presets)) {
+        loadedPresets = (tData as any).custom_rounding_presets;
+      } else if (tData?.work_calendar_settings?.attendance_custom_presets && Array.isArray(tData.work_calendar_settings.attendance_custom_presets)) {
+        loadedPresets = tData.work_calendar_settings.attendance_custom_presets;
+      } else {
+        loadedPresets = getCustomPresetsFromStorage(tenantIdData);
+      }
       setCustomPresets(loadedPresets);
+      saveCustomPresetsToStorage(tenantIdData, loadedPresets);
 
       // 自社ユーザー一覧（役職・所属長・組織図用）の一元取得（400エラー対策済み）
       const { data: uData } = await supabase
@@ -1104,23 +1086,30 @@ export default function CompanySettingsDashboard() {
 
       setCompanyUsers(mergedUsers);
 
-      // 7. 資格手当マスタ取得 (LocalStorage & DB)
-      const loadedQuals = getQualificationsFromStorage(tenantIdData);
+      // 7. 資格手当マスタ取得 (実DB company_qualification_masters をSSOTとする)
       try {
-        const { data: qData } = await supabase
+        const { data: qData, error: qErr } = await supabase
           .from('company_qualification_masters')
           .select('*')
           .eq('tenant_id', tenantIdData)
           .order('display_order', { ascending: true });
 
-        if (qData && qData.length > 0) {
+        if (!qErr && qData) {
           setQualifications(qData);
           saveQualificationsToStorage(tenantIdData, qData);
+        } else if ((tData as any)?.qualification_masters_data && Array.isArray((tData as any).qualification_masters_data)) {
+          setQualifications((tData as any).qualification_masters_data);
+          saveQualificationsToStorage(tenantIdData, (tData as any).qualification_masters_data);
         } else {
-          setQualifications(loadedQuals);
+          setQualifications([]);
         }
       } catch (qErr) {
-        setQualifications(loadedQuals);
+        console.warn('company_qualification_masters fetch note:', qErr);
+        if ((tData as any)?.qualification_masters_data && Array.isArray((tData as any).qualification_masters_data)) {
+          setQualifications((tData as any).qualification_masters_data);
+        } else {
+          setQualifications([]);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -1647,7 +1636,7 @@ export default function CompanySettingsDashboard() {
       saveAttendanceRoundingRules(tenantId, attendanceRules);
       saveCustomPresetsToStorage(tenantId, customPresets);
       saveWorkflowStepsToStorage(onboardingSteps);
-      savePositionsToStorage(positions);
+      savePositionsToStorage(positions, tenantId);
       saveDepartmentsToStorage(tenantId, departments);
       saveStoresToStorage(tenantId, stores);
       try {
@@ -1737,7 +1726,12 @@ export default function CompanySettingsDashboard() {
           qualification_masters_data: qualifications,
           onboarding_workflow_settings: onboardingSteps,
           position_settings: positions,
+          position_masters: positions,
+          // ⚙️ 打刻丸め設定・カスタムプリセットのDB一本化
+          attendance_rounding_settings: attendanceRules,
+          custom_rounding_presets: customPresets,
           // 🏛️ 社会保険・雇用保険・労働保険 事業所マスタ（SSOT一元化）
+          insurance_master_settings: cleanInsurance,
           shakai_hoken_settings: {
             office_symbol: cleanInsurance.shakai_hoken_office_symbol,
             office_number: cleanInsurance.shakai_hoken_office_number
@@ -1752,7 +1746,7 @@ export default function CompanySettingsDashboard() {
 
       if (!savedToTenants) {
         try {
-          // フォールバック: address, name, company_seal_url などの安全カラムで保存
+          // フォールバック: address, name, company_seal_url などの安全カラムで保存（役職マスタ・打刻丸めも必ず保持）
           const fbPayload: Record<string, any> = {
             name: basicInfo.name,
             address: basicInfo.address,
@@ -1761,6 +1755,11 @@ export default function CompanySettingsDashboard() {
             work_calendar_settings: updatedCalendar,
             payroll_common_settings: { ...payrollSettings, prefecture_code: autoPrefCode },
             employment_rules_text: employmentRulesText,
+            position_settings: positions,
+            position_masters: positions,
+            attendance_rounding_settings: attendanceRules,
+            custom_rounding_presets: customPresets,
+            insurance_master_settings: cleanInsurance,
             shakai_hoken_settings: {
               office_symbol: cleanInsurance.shakai_hoken_office_symbol,
               office_number: cleanInsurance.shakai_hoken_office_number
@@ -1801,6 +1800,47 @@ export default function CompanySettingsDashboard() {
         }
       }
 
+      // 🏢 役職マスタの保存（DB ＆ LocalStorage完全同期・専用テーブル＋tenants）
+      savePositionsToStorage(positions, tenantId);
+      if (tenantId) {
+        try {
+          await supabase.from('company_position_masters').delete().eq('tenant_id', tenantId);
+          const posInserts = positions.map((p, idx) => ({
+            id: p.id || `pos_${tenantId}_${idx + 1}_${Date.now()}`,
+            tenant_id: tenantId,
+            name: p.name,
+            rank_level: p.rank_level,
+            display_order: p.display_order ?? (idx + 1),
+            default_allowance: p.default_allowance || 0
+          }));
+          if (posInserts.length > 0) {
+            await supabase.from('company_position_masters').insert(posInserts);
+          }
+        } catch (pDbErr) {
+          console.warn('company_position_masters DB sync warning:', pDbErr);
+        }
+      }
+
+      // 🏢 部署マスタの保存（DB department_masters 専用テーブルへ完全実永続化）
+      if (tenantId) {
+        try {
+          await supabase.from('department_masters').delete().eq('tenant_id', tenantId);
+          if (departments.length > 0) {
+            const deptInserts = departments.map((d, idx) => ({
+              id: d.id || `dept_${tenantId}_${idx + 1}_${Date.now()}`,
+              tenant_id: tenantId,
+              name: d.name,
+              manager_user_id: d.manager_user_id || null,
+              manager_user_name: d.manager_user_name || null,
+              display_order: d.display_order ?? (idx + 1)
+            }));
+            await supabase.from('department_masters').insert(deptInserts);
+          }
+        } catch (dDbErr) {
+          console.warn('department_masters DB sync warning:', dDbErr);
+        }
+      }
+
       setSaveSuccessMsg('✅ 全社共通マスタ設定を正常に保存しました！\n「組織図」「勤怠」「シフト」「給与」「資格手当」「入退社・契約書」の全システムに即座に反映されました。');
       setTimeout(() => setSaveSuccessMsg(null), 5000);
       alert('🏛️ 全社共通マスタ設定を保存しました！\n「組織図」「勤怠」「シフト」「給与」「資格手当」「入退社・契約書」の全システムに即座に反映されました。');
@@ -1813,8 +1853,8 @@ export default function CompanySettingsDashboard() {
     }
   };
 
-  // 🎨 自社打刻丸めカスタムプリセットの新規保存
-  const handleSaveNewPreset = () => {
+  // 🎨 自社打刻丸めカスタムプリセットの新規保存（実DB tenants テーブルへ即時永続化）
+  const handleSaveNewPreset = async () => {
     if (!newPresetName.trim()) {
       alert('プリセット名を入力してください');
       return;
@@ -1830,6 +1870,13 @@ export default function CompanySettingsDashboard() {
     setCustomPresets(updated);
     if (tenantId) {
       saveCustomPresetsToStorage(tenantId, updated);
+      try {
+        await supabase.from('tenants').update({
+          custom_rounding_presets: updated
+        }).eq('id', tenantId);
+      } catch (dbErr) {
+        console.warn('DB custom_rounding_presets update note:', dbErr);
+      }
     }
     setNewPresetName('');
     setNewPresetDesc('');
@@ -1837,8 +1884,8 @@ export default function CompanySettingsDashboard() {
     showToast(`✨ 新規プリセット「${newPreset.name}」を保存しました`);
   };
 
-  // 🗑️ 自社打刻丸めカスタムプリセットの削除
-  const handleDeleteCustomPreset = (presetId: string, e: React.MouseEvent) => {
+  // 🗑️ 自社打刻丸めカスタムプリセットの削除（実DB tenants テーブルへ即時永続化）
+  const handleDeleteCustomPreset = async (presetId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const target = customPresets.find(p => p.id === presetId);
     if (!window.confirm(`カスタムプリセット「${target?.name || ''}」を削除しますか？`)) return;
@@ -1846,6 +1893,13 @@ export default function CompanySettingsDashboard() {
     setCustomPresets(updated);
     if (tenantId) {
       saveCustomPresetsToStorage(tenantId, updated);
+      try {
+        await supabase.from('tenants').update({
+          custom_rounding_presets: updated
+        }).eq('id', tenantId);
+      } catch (dbErr) {
+        console.warn('DB custom_rounding_presets delete note:', dbErr);
+      }
     }
     showToast('🗑️ カスタムプリセットを削除しました');
   };
@@ -1892,6 +1946,40 @@ export default function CompanySettingsDashboard() {
     }
   };
 
+  // 🏢 役職マスタをDB（tenantsテーブル ＆ company_position_mastersテーブル）へ安全に即時自動永続化
+  const syncPositionsToDb = async (items: PositionMaster[], targetTenantId?: string | null) => {
+    const tid = targetTenantId || tenantId || localStorage.getItem('current_tenant_id');
+    if (!tid) return;
+
+    // 1. tenants テーブルの position_settings, position_masters 更新
+    try {
+      await supabase.from('tenants').update({
+        position_settings: items,
+        position_masters: items
+      }).eq('id', tid);
+    } catch (e) {
+      console.warn('DB sync positions to tenants error:', e);
+    }
+
+    // 2. company_position_masters 専用テーブルへの全件洗い替え保存
+    try {
+      await supabase.from('company_position_masters').delete().eq('tenant_id', tid);
+      if (items.length > 0) {
+        const rows = items.map((item, idx) => ({
+          id: item.id || `pos_${tid}_${idx + 1}_${Date.now()}`,
+          tenant_id: tid,
+          name: item.name,
+          rank_level: item.rank_level,
+          display_order: item.display_order ?? (idx + 1),
+          default_allowance: item.default_allowance || 0
+        }));
+        await supabase.from('company_position_masters').insert(rows);
+      }
+    } catch (e) {
+      console.warn('DB sync positions to company_position_masters error:', e);
+    }
+  };
+
   // 役職追加
   const handleAddPosition = () => {
     if (!newPositionName.trim()) {
@@ -1907,6 +1995,7 @@ export default function CompanySettingsDashboard() {
     const updated = [...positions, newPos];
     setPositions(updated);
     savePositionsToStorage(updated, tenantId);
+    syncPositionsToDb(updated, tenantId);
     setNewPositionName('');
   };
 
@@ -1916,6 +2005,7 @@ export default function CompanySettingsDashboard() {
     const updated = positions.filter(p => p.id !== id);
     setPositions(updated);
     savePositionsToStorage(updated, tenantId);
+    syncPositionsToDb(updated, tenantId);
   };
 
   // 役職の階層内順序移動（上へ）
@@ -1935,6 +2025,7 @@ export default function CompanySettingsDashboard() {
     const reordered = newPositions.map((p, i) => ({ ...p, display_order: i + 1 }));
     setPositions(reordered);
     savePositionsToStorage(reordered, tenantId);
+    syncPositionsToDb(reordered, tenantId);
   };
 
   // 役職の階層内順序移動（下へ）
@@ -1954,6 +2045,7 @@ export default function CompanySettingsDashboard() {
     const reordered = newPositions.map((p, i) => ({ ...p, display_order: i + 1 }));
     setPositions(reordered);
     savePositionsToStorage(reordered, tenantId);
+    syncPositionsToDb(reordered, tenantId);
   };
 
   // 役職の階層ランク変更
@@ -1966,6 +2058,7 @@ export default function CompanySettingsDashboard() {
     });
     setPositions(updated);
     savePositionsToStorage(updated, tenantId);
+    syncPositionsToDb(updated, tenantId);
   };
 
   // 役職名のインライン編集
@@ -1987,6 +2080,7 @@ export default function CompanySettingsDashboard() {
     });
     setPositions(updated);
     savePositionsToStorage(updated, tenantId);
+    syncPositionsToDb(updated, tenantId);
     setEditingPositionId(null);
     setEditingPositionNameText('');
   };
@@ -1996,10 +2090,14 @@ export default function CompanySettingsDashboard() {
     setEditingPositionNameText('');
   };
 
-  // 業種・規模別プリセット適用
-  const handleApplyPreset = (presetId: string) => {
+  // 業種・規模別プリセット適用（DB実永続化 ＆ LocalStorage完全同期）
+  const handleApplyPreset = async (presetId: string) => {
     const preset = POSITION_PRESETS.find(p => p.id === presetId);
-    if (!preset) return;
+    const activeTenantId = tenantId || localStorage.getItem('current_tenant_id');
+    if (!preset || !activeTenantId) {
+      alert('テナント情報が取得できませんでした。ページを再読み込みしてください。');
+      return;
+    }
     if (positions.length > 0) {
       if (!confirm(`役職マスタに「${preset.name}」（${preset.targetScale}）を適用しますか？\n\n【登録される役職】\n${preset.positions.map(p => `・Lv.${p.rank_level} ${p.name}`).join('\n')}\n\n※ 現在の登録内容は上書きされます。`)) {
         return;
@@ -2012,9 +2110,20 @@ export default function CompanySettingsDashboard() {
       display_order: idx + 1,
       default_allowance: p.default_allowance || 0
     }));
+
+    // 1. 画面State即時反映
     setPositions(newItems);
-    savePositionsToStorage(newItems, tenantId);
-    alert(`✨ 「${preset.name}」の役職セット（全${newItems.length}件）を適用しました！\n必要に応じて役職名の変更や不要な役職の削除を行ってください。`);
+
+    // 2. LocalStorage二重即時保存
+    savePositionsToStorage(newItems, activeTenantId);
+    try {
+      localStorage.setItem(`company_position_masters_${activeTenantId}`, JSON.stringify(newItems));
+    } catch (_) {}
+
+    // 3. Supabase DB即時永続化（tenantsテーブル ＆ company_position_masters 専用テーブル）
+    await syncPositionsToDb(newItems, activeTenantId);
+
+    alert(`✨ 「${preset.name}」の役職セット（全${newItems.length}件）を正常に適用・保存しました！\n必要に応じて役職名の変更や不要な役職の削除を行ってください。`);
   };
 
   // 🚀 かんたん初期設定スタートガイドへスムーズスクロール

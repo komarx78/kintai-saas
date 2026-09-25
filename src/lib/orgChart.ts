@@ -101,14 +101,22 @@ export const POSITION_PRESETS: PositionPreset[] = [
 
 export const getPositionsFromStorage = (tenantId?: string | null): PositionMaster[] => {
   try {
-    const key = tenantId ? `company_position_masters_${tenantId}` : null;
-    if (key) {
-      const saved = localStorage.getItem(key);
+    // 1. 自社専用キーから読み込み
+    if (tenantId) {
+      const saved = localStorage.getItem(`company_position_masters_${tenantId}`);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed;
         }
+      }
+    }
+    // 2. 汎用フォールバックキーから読み込み
+    const genericSaved = localStorage.getItem('company_position_masters');
+    if (genericSaved) {
+      const parsed = JSON.parse(genericSaved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
       }
     }
   } catch (e) {
@@ -122,7 +130,8 @@ export const savePositionsToStorage = (positions: PositionMaster[], tenantId?: s
     if (tenantId) {
       localStorage.setItem(`company_position_masters_${tenantId}`, JSON.stringify(positions));
     }
-    localStorage.removeItem('company_position_masters');
+    // 汎用キーにも常にバックアップ保存（tenantId欠落時や別タブ参照時のセーフティネット）
+    localStorage.setItem('company_position_masters', JSON.stringify(positions));
   } catch (e) {
     console.warn('Save positions error:', e);
   }
