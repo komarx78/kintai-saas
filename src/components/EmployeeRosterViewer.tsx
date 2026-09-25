@@ -128,19 +128,27 @@ function calculateWorkYears(joinDateStr?: string, retirementDateStr?: string): s
 
 // 住所パースヘルパー
 function parseAddress(rawAddress: string = '') {
+  if (!rawAddress) {
+    return {
+      prefecture: '',
+      city: '',
+      town: '',
+      building: ''
+    };
+  }
   const match = rawAddress.match(/^([^\d]+[都道府県])?([^\d]+[市区町村])?(.+)?$/);
   if (match) {
     return {
-      prefecture: match[1] || '京都府',
-      city: match[2] || '京都市山科区',
-      town: match[3] || '大塚西浦町３−５７',
+      prefecture: match[1] || '',
+      city: match[2] || '',
+      town: match[3] || '',
       building: ''
     };
   }
   return {
-    prefecture: '京都府',
-    city: '京都市山科区',
-    town: rawAddress || '大塚西浦町３−５７',
+    prefecture: '',
+    city: '',
+    town: rawAddress,
     building: ''
   };
 }
@@ -228,13 +236,13 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
       '現住所', '在籍状況', '雇入年月日', '所属部署', '役職', '給与形態', '基本給'
     ];
     const row = [
-      currentEmployee.employee_number || '0001',
+      currentEmployee.employee_number || '',
       currentEmployee.name,
       currentEmployee.name_kana || '',
-      currentEmployee.gender || '男性',
+      currentEmployee.gender || '',
       currentEmployee.birth_date || '',
       currentEmployee.phone || '',
-      currentEmployee.postal_code || '607-8125',
+      currentEmployee.postal_code || '',
       currentEmployee.address || '',
       currentEmployee.is_retired ? '退職' : '在籍中',
       currentEmployee.join_date || '',
@@ -641,11 +649,11 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                               </tr>
                               <tr className="hover:bg-slate-50/50">
                                 <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">氏名（フリガナ）</td>
-                                <td className="px-4 py-2.5 text-slate-700">{currentEmployee.name_kana || 'コマイシュウイチロウ'}</td>
+                                <td className="px-4 py-2.5 text-slate-700">{currentEmployee.name_kana || '-'}</td>
                               </tr>
                               <tr className="hover:bg-slate-50/50">
                                 <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">性別</td>
-                                <td className="px-4 py-2.5 text-slate-700">{currentEmployee.gender || '男'}</td>
+                                <td className="px-4 py-2.5 text-slate-700">{currentEmployee.gender || '-'}</td>
                               </tr>
                               <tr className="hover:bg-slate-50/50">
                                 <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">生年月日</td>
@@ -655,11 +663,11 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                               </tr>
                               <tr className="hover:bg-slate-50/50">
                                 <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">電話番号</td>
-                                <td className="px-4 py-2.5 text-slate-700 font-mono">{currentEmployee.phone || '090-0000-0000'}</td>
+                                <td className="px-4 py-2.5 text-slate-700 font-mono">{currentEmployee.phone || '-'}</td>
                               </tr>
                               <tr className="hover:bg-slate-50/50">
                                 <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">郵便番号</td>
-                                <td className="px-4 py-2.5 text-slate-700 font-mono">{currentEmployee.postal_code || '607-8125'}</td>
+                                <td className="px-4 py-2.5 text-slate-700 font-mono">{currentEmployee.postal_code || '-'}</td>
                               </tr>
                               <tr className="hover:bg-slate-50/50">
                                 <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">都道府県</td>
@@ -1005,11 +1013,11 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                     <tr>
                       <th>氏名（フリガナ）</th>
                       <td>
-                        <div className="text-[7.5pt] text-slate-500 font-normal leading-tight">{currentEmployee.name_kana || 'コマイ シュウイチロウ'}</div>
+                        <div className="text-[7.5pt] text-slate-500 font-normal leading-tight">{currentEmployee.name_kana || ''}</div>
                         <div className="text-[13pt] font-black tracking-wider text-slate-950 mt-0.5">{currentEmployee.name}</div>
                       </td>
                       <th>性　別</th>
-                      <td className="font-bold text-center text-sm text-slate-900">{currentEmployee.gender || '男'}</td>
+                      <td className="font-bold text-center text-sm text-slate-900">{currentEmployee.gender || '-'}</td>
                     </tr>
 
                     {/* 2. 生年月日・電話 */}
@@ -1019,15 +1027,15 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                         {warekiBirth} {age !== null && <span className="font-sans font-bold text-slate-800">（満{age}歳）</span>}
                       </td>
                       <th>電話番号</th>
-                      <td className="font-mono text-slate-900">{currentEmployee.phone || '090-0000-0000'}</td>
+                      <td className="font-mono text-slate-900">{currentEmployee.phone || '-'}</td>
                     </tr>
 
                     {/* 3. 現住所 */}
                     <tr>
                       <th>現 住 所</th>
                       <td colSpan={3}>
-                        <div className="text-[7.5pt] text-slate-500 font-mono">〒{currentEmployee.postal_code || '607-8125'}</div>
-                        <div className="font-bold text-slate-900 mt-0.5">{currentEmployee.address || '京都府京都市山科区大塚西浦町３−５７'}</div>
+                        <div className="text-[7.5pt] text-slate-500 font-mono">{currentEmployee.postal_code ? `〒${currentEmployee.postal_code}` : '-'}</div>
+                        <div className="font-bold text-slate-900 mt-0.5">{currentEmployee.address || '-'}</div>
                       </td>
                     </tr>
 
@@ -1036,7 +1044,7 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                       <th>家族・扶養親族</th>
                       <td>扶養親族数: <span className="font-bold font-mono text-slate-900">{currentEmployee.dependents_count || 0}</span> 名</td>
                       <th>緊急連絡先</th>
-                      <td className="font-mono text-[8.5pt] text-slate-900">{currentEmployee.phone || '同上（本人携帯）'}</td>
+                      <td className="font-mono text-[8.5pt] text-slate-900">{currentEmployee.phone || '-'}</td>
                     </tr>
 
                     {/* 5. 履歴（学歴・職歴・社内異動・昇格等） ※高さを広げて用紙全体を満たす */}
@@ -1099,14 +1107,16 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                       </td>
                       <th>退職の事由</th>
                       <td className="text-slate-900">
-                        {currentEmployee.is_retired ? '自己都合退職（合意解約）' : '-'}
+                        {currentEmployee.is_retired ? (currentCustom.retirement_reason || '自己都合退職（合意解約）') : '-'}
                       </td>
                     </tr>
 
                     {/* 10. 死亡年月日・原因 */}
                     <tr>
                       <th>死亡年月日・原因</th>
-                      <td colSpan={3} className="text-slate-400">-</td>
+                      <td colSpan={3} className={currentCustom.death_info ? "text-slate-900 font-bold" : "text-slate-400"}>
+                        {currentCustom.death_info || '-'}
+                      </td>
                     </tr>
                   </tbody>
                 </table>

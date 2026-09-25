@@ -13,6 +13,7 @@ import {
   broadcastEmploymentLossCoordinates,
   type EmploymentLossFieldConfig
 } from '../lib/employmentLossDocCoordinates';
+import { supabase } from '../lib/supabase';
 import { OfficialEmploymentLossDoc } from './OfficialEmploymentLossDoc';
 
 export const EmploymentLossDocMasterInspector: React.FC = () => {
@@ -28,6 +29,45 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [previewZoom, setPreviewZoom] = useState<number>(100);
+
+  // 🏢 テナント会社情報動的ロード
+  const [companyInfo, setCompanyInfo] = useState({
+    name: '自社事業所',
+    address: '',
+    representative_name: '',
+    phone_number: '',
+    corporate_number: '',
+    company_seal_url: ''
+  });
+  const [officeNumber, setOfficeNumber] = useState('');
+
+  useEffect(() => {
+    const fetchCompany = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
+          if (userData?.tenant_id) {
+            const { data: tData } = await supabase.from('tenants').select('*').eq('id', userData.tenant_id).maybeSingle();
+            if (tData) {
+              setCompanyInfo({
+                name: tData.name || '自社事業所',
+                address: tData.address || '',
+                representative_name: tData.representative_name || '',
+                phone_number: tData.phone_number || '',
+                corporate_number: tData.corporate_number || '',
+                company_seal_url: tData.company_seal_url || ''
+              });
+              setOfficeNumber(tData.employment_insurance_office_number || '');
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Tenant load warning:', err);
+      }
+    };
+    fetchCompany();
+  }, []);
 
   // マウント時にDBから全社共有座標を取得
   useEffect(() => {
@@ -279,15 +319,8 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
       {activeTab === 'input_preview' && (
         <OfficialEmploymentLossDoc
           customCoords={fields}
-          companyInfo={{
-            name: 'サンプル株式会社',
-            address: '東京都千代田区霞が関1-1-1',
-            representative_name: '代表取締役 山田 太郎',
-            phone_number: '03-1234-5678',
-            corporate_number: '',
-            company_seal_url: ''
-          }}
-          officeNumber="1301-123456-7"
+          companyInfo={companyInfo}
+          officeNumber={officeNumber || '－'}
           employees={[
             {
               id: 'demo-retiree-1',

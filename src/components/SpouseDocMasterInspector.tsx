@@ -14,6 +14,7 @@ import {
   type SpouseDocFieldConfig,
   type SpouseDocSection
 } from '../lib/spouseDocCoordinates';
+import { supabase } from '../lib/supabase';
 import OfficialSpouseDeductionDoc, { type SpouseDeductionDocData } from './OfficialSpouseDeductionDoc';
 
 export const SpouseDocMasterInspector: React.FC = () => {
@@ -27,6 +28,39 @@ export const SpouseDocMasterInspector: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [previewZoom, setPreviewZoom] = useState<number>(100);
+
+  // 🏢 テナント会社情報動的ロード
+  const [companyInfo, setCompanyInfo] = useState({
+    name: '自社事業所',
+    address: '',
+    corporate_number: '',
+    tax_office_name: ''
+  });
+
+  useEffect(() => {
+    const fetchCompany = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
+          if (userData?.tenant_id) {
+            const { data: tData } = await supabase.from('tenants').select('*').eq('id', userData.tenant_id).maybeSingle();
+            if (tData) {
+              setCompanyInfo({
+                name: tData.name || '自社事業所',
+                address: tData.address || '',
+                corporate_number: tData.corporate_number || '',
+                tax_office_name: (tData as any).tax_office_name || ''
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Tenant load warning:', err);
+      }
+    };
+    fetchCompany();
+  }, []);
 
   // マウント時にDBから全社共有座標を取得
   useEffect(() => {
@@ -272,11 +306,11 @@ export const SpouseDocMasterInspector: React.FC = () => {
 
   // デモデータ（直接入力プレビュー用）
   const demoPreviewData: SpouseDeductionDocData = {
-    year: 2026,
-    companyName: '株式会社オアシスホールディングス',
-    companyAddress: '東京都千代田区霞が関1-1-1',
-    corporateNumber: '1234567890123',
-    taxOfficeName: '千代田',
+    year: new Date().getFullYear(),
+    companyName: companyInfo.name || '自社事業所',
+    companyAddress: companyInfo.address || '',
+    corporateNumber: companyInfo.corporate_number || '',
+    taxOfficeName: companyInfo.tax_office_name || '',
     employeeName: '山田 太郎',
     employeeNameKana: 'ヤマダ タロウ',
     employeeAddress: '東京都世田谷区桜丘2-10-5',
@@ -289,7 +323,7 @@ export const SpouseDocMasterInspector: React.FC = () => {
     spouseIncomeEstimate: 450000,
     spouseAddress: '同居',
     spouseMyNumber: '987654321098',
-    appliedDate: '2026-11-15'
+    appliedDate: `${new Date().getFullYear()}-11-15`
   };
 
   return (

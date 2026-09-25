@@ -841,6 +841,59 @@ export interface RetirementTaxResult {
   calculationNotes: string;
 }
 
+/**
+ * 🛡️ 所得税法施行令第69条 ＆ 所得税基本通達30-7（勤続期間の計算の細目）
+ * 暦（民法第143条）に従って計算し、1月未満の端数日があるときは1月、1年未満の端数月があるときは1年に切り上げる。
+ */
+export function calculateServiceYears(joinDate: string | Date, retirementDate: string | Date): {
+  serviceYears: number;
+  totalMonths: number;
+  rawYears: number;
+  rawMonths: number;
+  rawDays: number;
+} {
+  const jD = typeof joinDate === 'string' ? new Date(joinDate) : joinDate;
+  const rD = typeof retirementDate === 'string' ? new Date(retirementDate) : retirementDate;
+
+  const jY = jD.getFullYear();
+  const jM = jD.getMonth() + 1;
+  const jDay = jD.getDate();
+
+  const rY = rD.getFullYear();
+  const rM = rD.getMonth() + 1;
+  const rDay = rD.getDate();
+
+  let years = rY - jY;
+  let months = rM - jM;
+  let days = rDay - jDay + 1; // 初日参入（勤務開始日から退職日まで）
+
+  if (days < 0) {
+    months -= 1;
+    const prevMonthLastDay = new Date(rY, rM - 1, 0).getDate();
+    days += prevMonthLastDay;
+  }
+
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+
+  // 1月未満の端数日があるときはこれを1月とする（所基通30-7）
+  let totalCalculatedMonths = years * 12 + months + (days > 0 ? 1 : 0);
+  if (totalCalculatedMonths <= 0) totalCalculatedMonths = 1;
+
+  // 1年未満の端数月があるときはこれを1年とする（所令69条第2項）
+  const serviceYears = Math.max(1, Math.ceil(totalCalculatedMonths / 12));
+
+  return {
+    serviceYears,
+    totalMonths: totalCalculatedMonths,
+    rawYears: years,
+    rawMonths: months,
+    rawDays: days
+  };
+}
+
 export function calculateRetirementIncomeTax(params: {
   severancePay: number;
   joinDate: string | Date;
@@ -864,16 +917,8 @@ export function calculateRetirementIncomeTax(params: {
     };
   }
 
-  const jD = new Date(joinDate);
-  const rD = new Date(retirementDate);
+  const { serviceYears } = calculateServiceYears(joinDate, retirementDate);
 
-  let totalMonths = (rD.getFullYear() - jD.getFullYear()) * 12 + (rD.getMonth() - jD.getMonth());
-  if (rD.getDate() >= jD.getDate()) {
-    totalMonths += 1;
-  }
-  if (totalMonths <= 0) totalMonths = 1;
-
-  const serviceYears = Math.max(1, Math.ceil(totalMonths / 12));
 
   let deduction = 0;
   if (serviceYears <= 20) {

@@ -1285,7 +1285,10 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                     }`}>
                       <div className="text-[11px] font-bold text-rose-600">総残業時間</div>
                       <div className="text-lg font-black text-rose-900">{selectedUserSummary.overtimeHours}<span className="text-xs font-normal ml-0.5">h</span></div>
-                      {parseFloat(selectedUserSummary.overtimeHours) >= 80 && (
+                      {parseFloat(selectedUserSummary.overtimeHours) >= 100 && (
+                        <div className="text-[9px] font-black text-red-700 bg-red-100 px-1 rounded mt-0.5 animate-pulse">🛑 労基法違反(100h超)</div>
+                      )}
+                      {parseFloat(selectedUserSummary.overtimeHours) >= 80 && parseFloat(selectedUserSummary.overtimeHours) < 100 && (
                         <div className="text-[9px] font-black text-rose-700 bg-rose-100 px-1 rounded mt-0.5 animate-pulse">🚨 過労死ライン</div>
                       )}
                       {parseFloat(selectedUserSummary.overtimeHours) >= 60 && parseFloat(selectedUserSummary.overtimeHours) < 80 && (

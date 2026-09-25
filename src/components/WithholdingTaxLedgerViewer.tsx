@@ -722,10 +722,10 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
                       </div>
                       <div className="flex-1 px-1.5 py-0.5 leading-tight">
                         <span className="font-mono text-[6.5pt] text-slate-500 mr-1">
-                          （郵便番号 {currentEmployee?.postal_code ? `${currentEmployee.postal_code.slice(0, 3)} - ${currentEmployee.postal_code.slice(3)}` : '607 - 8125'}）
+                          （郵便番号 {currentEmployee?.postal_code ? `${currentEmployee.postal_code.slice(0, 3)} - ${currentEmployee.postal_code.slice(3)}` : '　　 - 　　'}）
                         </span>
                         <span className="font-bold text-slate-900">
-                          {currentEmployee?.address || '京都府京都市山科区大塚西浦町３－５７'}
+                          {currentEmployee?.address || '－'}
                         </span>
                       </div>
                     </div>
@@ -748,7 +748,7 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
                           生年月日 {birthWareki.gengo} <span className="font-mono font-bold">{birthWareki.year}</span> 年 <span className="font-mono font-bold">{birthWareki.month}</span> 月 <span className="font-mono font-bold">{birthWareki.day}</span> 日 生
                         </div>
                         <div className="text-slate-500 text-[6.5pt]">
-                          整理番号: <span className="font-mono text-slate-900 font-bold">{currentEmployee?.employee_number || '0001'}</span>
+                          整理番号: <span className="font-mono text-slate-900 font-bold">{currentEmployee?.employee_number || '-'}</span>
                         </div>
                       </div>
                     </div>

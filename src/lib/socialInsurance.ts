@@ -518,7 +518,9 @@ export interface MonthlyRevisionCheckParams {
 }
 
 export interface MonthlyRevisionResult {
-  isEligible: boolean;
+  isEligible: boolean; // 健康保険または厚生年金のいずれかが随時改定該当
+  isHealthEligible: boolean; // 健康保険が随時改定該当
+  isPensionEligible: boolean; // 厚生年金が随時改定該当
   averageWage: number;
   newHealthStandard: number;
   newPensionStandard: number;
@@ -534,6 +536,8 @@ export function checkMonthlyRevisionEligibility(params: MonthlyRevisionCheckPara
   if (consecutiveMonths.length < 3) {
     return {
       isEligible: false,
+      isHealthEligible: false,
+      isPensionEligible: false,
       averageWage: 0,
       newHealthStandard: currentHealthStandard,
       newPensionStandard: currentPensionStandard,
@@ -547,6 +551,8 @@ export function checkMonthlyRevisionEligibility(params: MonthlyRevisionCheckPara
   if (!allDaysValid) {
     return {
       isEligible: false,
+      isHealthEligible: false,
+      isPensionEligible: false,
       averageWage: 0,
       newHealthStandard: currentHealthStandard,
       newPensionStandard: currentPensionStandard,
@@ -564,36 +570,58 @@ export function checkMonthlyRevisionEligibility(params: MonthlyRevisionCheckPara
 
   const curHealthRowIndex = HEALTH_REMUNERATION_TABLE.findIndex(r => r.standard === currentHealthStandard);
   const newHealthRowIndex = HEALTH_REMUNERATION_TABLE.findIndex(r => r.standard === newHealthStandard);
-  const healthGradeDiff = (curHealthRowIndex !== -1 && newHealthRowIndex !== -1)
-    ? Math.abs(newHealthRowIndex - curHealthRowIndex)
-    : 0;
+  const curHealthGrade = curHealthRowIndex !== -1 ? HEALTH_REMUNERATION_TABLE[curHealthRowIndex].grade : 1;
+  const newHealthGrade = newHealthRowIndex !== -1 ? HEALTH_REMUNERATION_TABLE[newHealthRowIndex].grade : 1;
+  const healthGradeDiff = Math.abs(newHealthGrade - curHealthGrade);
+
+  // 厚生年金等級（1〜32等級: 健保4等級=厚年1等級、健保35等級=厚年32等級）
+  const curPensionGrade = Math.max(1, Math.min(32, curHealthGrade - 3));
+  const newPensionGrade = Math.max(1, Math.min(32, newHealthGrade - 3));
+  const pensionGradeDiff = Math.abs(newPensionGrade - curPensionGrade);
 
   const isHealthGradeEligible = healthGradeDiff >= 2;
+  const isPensionGradeEligible = pensionGradeDiff >= 2;
 
-  let isDirectionMatching = true;
+  let isHealthDirectionMatching = true;
   if (fixedWageChangeType === 'increase' && newHealthStandard < currentHealthStandard) {
-    isDirectionMatching = false;
+    isHealthDirectionMatching = false;
   } else if (fixedWageChangeType === 'decrease' && newHealthStandard > currentHealthStandard) {
-    isDirectionMatching = false;
+    isHealthDirectionMatching = false;
   }
 
-  const isEligible = isHealthGradeEligible && isDirectionMatching;
+  let isPensionDirectionMatching = true;
+  if (fixedWageChangeType === 'increase' && newPensionStandard < currentPensionStandard) {
+    isPensionDirectionMatching = false;
+  } else if (fixedWageChangeType === 'decrease' && newPensionStandard > currentPensionStandard) {
+    isPensionDirectionMatching = false;
+  }
+
+  const isHealthEligible = isHealthGradeEligible && isHealthDirectionMatching;
+  const isPensionEligible = isPensionGradeEligible && isPensionDirectionMatching;
+  const isEligible = isHealthEligible || isPensionEligible;
+
   let reason = '';
-  if (isEligible) {
-    reason = `固定的賃金の${fixedWageChangeType === 'increase' ? '昇給' : '降給'}に伴い、標準報酬月額が${healthGradeDiff}等級変動（${currentHealthStandard.toLocaleString()}円 -> ${newHealthStandard.toLocaleString()}円）したため、随時改定（月額変更届）の届出が必要です。`;
-  } else if (!isDirectionMatching) {
-    reason = `固定的賃金は${fixedWageChangeType === 'increase' ? '昇給' : '降給'}していますが、残業等の減少により総支給額が逆方向に変動しているため、随時改定の対象外です。`;
+  if (isHealthEligible && isPensionEligible) {
+    reason = `固定的賃金の${fixedWageChangeType === 'increase' ? '昇給' : '降給'}に伴い、健康保険（${healthGradeDiff}等級差）および厚生年金（${pensionGradeDiff}等級差）ともに随時改定の届出が必要です。`;
+  } else if (isHealthEligible && !isPensionEligible) {
+    reason = `健康保険のみ${healthGradeDiff}等級変動し随時改定の対象です（厚生年金は${pensionGradeDiff}等級差のため対象外）。`;
+  } else if (!isHealthEligible && isPensionEligible) {
+    reason = `厚生年金のみ${pensionGradeDiff}等級変動し随時改定の対象です（健康保険は${healthGradeDiff}等級差のため対象外）。`;
+  } else if (!isHealthDirectionMatching) {
+    reason = `固定的賃金は${fixedWageChangeType === 'increase' ? '昇給' : '降給'}していますが、残業等の減少により総支給額が逆方向に変動しているため、随時改定の対象外です（昭和33年保発第66号）。`;
   } else {
-    reason = `変動後の標準報酬月額の差が${healthGradeDiff}等級であり、法定要件である「2等級以上の差」に達していないため、随時改定の対象外です。`;
+    reason = `変動後の標準報酬月額の差が健康保険${healthGradeDiff}等級・厚生年金${pensionGradeDiff}等級であり、法定要件である「2等級以上の差」に達していないため、随時改定の対象外です。`;
   }
 
   return {
     isEligible,
+    isHealthEligible,
+    isPensionEligible,
     averageWage,
     newHealthStandard,
     newPensionStandard,
     healthGradeDiff,
-    pensionGradeDiff: healthGradeDiff,
+    pensionGradeDiff,
     reason
   };
 }

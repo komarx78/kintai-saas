@@ -1144,22 +1144,22 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
                 <div className="grid grid-cols-12 gap-x-2 gap-y-0.5 text-[7.5px]">
                   <div className="col-span-2 text-slate-500 font-bold">事業所所在地</div>
                   <div className="col-span-10 font-medium text-slate-900 truncate">
-                    {data.companyAddress || '東京都千代田区霞が関1-1-1'}
+                    {data.companyAddress || '－'}
                   </div>
 
                   <div className="col-span-2 text-slate-500 font-bold">事業所名称</div>
                   <div className="col-span-10 font-bold text-slate-900 truncate">
-                    {data.companyName || '株式会社 サンプル'}
+                    {data.companyName || '－'}
                   </div>
 
                   <div className="col-span-2 text-slate-500 font-bold">事業主氏名</div>
                   <div className="col-span-5 font-bold text-slate-900 truncate">
-                    {data.companyOwnerName || '代表取締役 山田 太郎'}
+                    {data.companyOwnerName || '－'}
                   </div>
 
                   <div className="col-span-2 text-slate-500 font-bold text-right">電話番号</div>
                   <div className="col-span-3 font-mono font-bold text-slate-900">
-                    {data.companyPhone || '03-1234-5678'}
+                    {data.companyPhone || '－'}
                   </div>
                 </div>
               </div>

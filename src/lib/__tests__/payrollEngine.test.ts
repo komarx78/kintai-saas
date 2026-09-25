@@ -1,4 +1,11 @@
-import { calculatePayroll, calculateResidentTaxLumpSum, calculateRetirementIncomeTax, type EmployeePayrollProfile, type AttendanceSummary } from '../payrollEngine';
+import { 
+  calculatePayroll, 
+  calculateResidentTaxLumpSum, 
+  calculateRetirementIncomeTax, 
+  calculateServiceYears,
+  type EmployeePayrollProfile, 
+  type AttendanceSummary 
+} from '../payrollEngine';
 import { 
   isNursingInsuranceApplicable, 
   lookupStandardMonthlyRemuneration, 
@@ -258,10 +265,34 @@ export function runPayrollEngineTests(): { success: boolean; results: string[] }
       ]
     });
 
-    if (geppenEligible.isEligible === true && geppenEligible.healthGradeDiff >= 2 && geppenNotEligible.isEligible === false) {
-      results.push('✅ テスト10 パス: 随時改定（月変・3ヶ月連続基準日数クリア＆2等級差判定）が完全正確');
+    // 高額所得者のエッジケース: 従前620,000円（健保34等級・厚年31等級） → 800,000円へ昇給
+    // 健保は39等級（5等級差 ≧ 2等級、健保該当）
+    // 厚年は上限の32等級（1等級差 < 2等級、厚年非該当）
+    const geppenHighIncome = checkMonthlyRevisionEligibility({
+      currentHealthStandard: 620000,
+      currentPensionStandard: 620000,
+      fixedWageChangeType: 'increase',
+      isShortTimeWorker: false,
+      consecutiveMonths: [
+        { baseDays: 20, totalWage: 800000 },
+        { baseDays: 20, totalWage: 800000 },
+        { baseDays: 20, totalWage: 800000 }
+      ]
+    });
+
+    if (
+      geppenEligible.isEligible === true &&
+      geppenEligible.isHealthEligible === true &&
+      geppenEligible.isPensionEligible === true &&
+      geppenEligible.healthGradeDiff >= 2 &&
+      geppenNotEligible.isEligible === false &&
+      geppenHighIncome.isHealthEligible === true &&
+      geppenHighIncome.isPensionEligible === false &&
+      geppenHighIncome.pensionGradeDiff === 1
+    ) {
+      results.push('✅ テスト10 パス: 随時改定（月変・3ヶ月連続基準日数クリア＆2等級差・厚年32等級上限独立判定）が完全正確');
     } else {
-      results.push(`❌ テスト10 失敗: 随時改定判定不整合 (elig:${geppenEligible.isEligible}, diff:${geppenEligible.healthGradeDiff}, notElig:${geppenNotEligible.isEligible})`);
+      results.push(`❌ テスト10 失敗: 随時改定判定不整合 (elig:${geppenEligible.isEligible}, highHealth:${geppenHighIncome.isHealthEligible}, highPension:${geppenHighIncome.isPensionEligible}, penDiff:${geppenHighIncome.pensionGradeDiff})`);
     }
   }
 
@@ -296,6 +327,83 @@ export function runPayrollEngineTests(): { success: boolean; results: string[] }
     }
   }
 
+  // ==========================================
+  // テスト12: 退職所得の勤続年数暦日端数切上げ（所令69条）＆ 2022年税制改正エッジケース
+  // ==========================================
+  {
+    // A: 暦日端数切上げ（満4年0日 vs 満4年1日）
+    const syExact4 = calculateServiceYears('2020-04-01', '2024-03-31');
+    const syOver4 = calculateServiceYears('2020-04-01', '2024-04-01');
+    const syMidExact4 = calculateServiceYears('2020-04-15', '2024-04-14');
+    const syMidOver4 = calculateServiceYears('2020-04-15', '2024-04-15');
+
+    // B: 勤続25年（20年超: 800万 + 70万 * 5 = 1,150万円）
+    const ret25Years = calculateRetirementIncomeTax({
+      severancePay: 15000000,
+      joinDate: '1999-04-01',
+      retirementDate: '2024-03-31',
+      isOfficer: false,
+      isDisabilityRetirement: false
+    });
+
+    // C: 障害者退職（100万円加算 → 1,250万円控除）
+    const retDisability = calculateRetirementIncomeTax({
+      severancePay: 15000000,
+      joinDate: '1999-04-01',
+      retirementDate: '2024-03-31',
+      isOfficer: false,
+      isDisabilityRetirement: true
+    });
+
+    // D: 令和4年改正 短期役員退職金（勤続3年、退職金500万円）
+    // 控除: 40万 * 3 = 120万円（最低80万円以上クリア）
+    // 役員のため超過額 (500万 - 120万 = 380万円) に1/2適用なし（全額380万円が課税退職所得）
+    const retShortOfficer = calculateRetirementIncomeTax({
+      severancePay: 5000000,
+      joinDate: '2021-04-01',
+      retirementDate: '2024-03-31',
+      isOfficer: true,
+      isDisabilityRetirement: false
+    });
+
+    // E: 令和4年改正 短期一般社員退職金（勤続3年、退職金500万円）
+    // 控除: 120万円。超過額380万円。
+    // 一般社員のため300万円までは1/2 (150万円)、残りの80万円は全額 (80万円) → 計230万円が課税退職所得
+    const retShortEmployee = calculateRetirementIncomeTax({
+      severancePay: 5000000,
+      joinDate: '2021-04-01',
+      retirementDate: '2024-03-31',
+      isOfficer: false,
+      isDisabilityRetirement: false
+    });
+
+    if (
+      syExact4.serviceYears === 4 &&
+      syOver4.serviceYears === 5 &&
+      syMidExact4.serviceYears === 4 &&
+      syMidOver4.serviceYears === 5 &&
+      ret25Years.deductionAmount === 11500000 &&
+      retDisability.deductionAmount === 12500000 &&
+      retShortOfficer.taxableRetirementIncome === 3800000 &&
+      retShortEmployee.taxableRetirementIncome === 2300000
+    ) {
+      results.push('✅ テスト12 パス: 暦日端数切上げ（満4年0日=4年/満4年1日=5年）・勤続20年超控除・障害加算・短期役員等1/2除外（令和4年改正）が完全正確');
+    } else {
+      results.push(`❌ テスト12 失敗: 退職所得エッジケース不整合 (exact4:${syExact4.serviceYears}, over4:${syOver4.serviceYears}, ded25:${ret25Years.deductionAmount}, disDed:${retDisability.deductionAmount}, offTax:${retShortOfficer.taxableRetirementIncome}, empTax:${retShortEmployee.taxableRetirementIncome})`);
+    }
+  }
+
   const allPassed = results.every(r => r.startsWith('✅'));
+
   return { success: allPassed, results };
 }
+
+// CLIから直接実行された場合の自動実行
+if (typeof globalThis !== 'undefined' && (globalThis as any).process) {
+  const { success, results } = runPayrollEngineTests();
+  results.forEach(r => console.log(r));
+  if (!success) {
+    (globalThis as any).process.exit(1);
+  }
+}
+
