@@ -2750,20 +2750,37 @@ export default function CompanySettingsDashboard() {
     }
   };
 
-  // 共通の保存ボタンスニペット
+  // 共通の保存ボタンスニペット（強調・安心設計）
   const renderSaveFooter = () => (
-    <div className="pt-6 mt-6 border-t border-slate-200 flex items-center justify-between">
-      <div className="text-xs text-slate-500 font-bold">
-        ※ 変更内容は「設定を一括保存」を押すと全4システムへ即時反映されます。
+    <div className="pt-6 mt-8 border-t-2 border-indigo-100">
+      <div className="bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-purple-500/10 border-2 border-indigo-200/90 rounded-3xl p-5 sm:p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3.5 text-center md:text-left">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-black text-xl shadow-md shrink-0">
+            💾
+          </div>
+          <div className="space-y-1">
+            <div className="font-black text-sm text-slate-900 flex items-center justify-center md:justify-start gap-2">
+              <span>【重要】変更した設定は「設定を一括保存」を押して確定してください</span>
+              <span className="text-[10px] bg-rose-100 text-rose-800 font-extrabold px-2 py-0.5 rounded-full border border-rose-200 animate-pulse">
+                保存必須
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              設定を変更しただけでは確定されません。右のボタンを押すことで、勤怠管理・有給・シフト・給与計算の<strong>全システムへ100%即時反映・安全保存</strong>されます。
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSaveAllSettings}
+          disabled={isSaving}
+          className="w-full md:w-auto bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-700 hover:to-purple-700 text-white font-black text-sm px-8 py-3.5 rounded-2xl shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+        >
+          {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5 text-indigo-200" />}
+          <span>設定を一括保存する</span>
+        </button>
       </div>
-      <button
-        onClick={handleSaveAllSettings}
-        disabled={isSaving}
-        className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-6 py-3 rounded-2xl shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
-      >
-        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-        設定を一括保存する
-      </button>
     </div>
   );
 
@@ -2817,10 +2834,11 @@ export default function CompanySettingsDashboard() {
           <button
             onClick={handleSaveAllSettings}
             disabled={isSaving}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-700 hover:to-purple-700 text-white font-black text-xs px-4 py-2.5 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transform hover:scale-105"
+            title="変更したすべての設定を全システムへ一括反映・保存します"
           >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            設定を一括保存
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-indigo-200 animate-pulse" />}
+            <span>設定を一括保存</span>
           </button>
           <AppSwitcher currentApp="portal" role="admin" />
           <button
@@ -2993,6 +3011,26 @@ export default function CompanySettingsDashboard() {
                 お試し中
               </span>
             )}
+          </button>
+        </div>
+
+        {/* 💾 全タブ共通：保存必須ガイダンス ＆ クイック一括保存バー */}
+        <div className="bg-gradient-to-r from-amber-50 via-orange-50/50 to-indigo-50/60 border-2 border-amber-200/90 rounded-2xl p-3 sm:px-5 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-2.5 text-xs text-amber-950 font-bold">
+            <span className="text-base shrink-0">💡</span>
+            <span className="leading-snug">
+              各タブで設定を変更した後は、必ず右上の<strong>「設定を一括保存」</strong>または最下部の保存ボタンを押して確定してください（※ 保存しないと変更内容は反映されません）。
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleSaveAllSettings}
+            disabled={isSaving}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs hover:shadow-md whitespace-nowrap shrink-0 self-end sm:self-auto transform hover:scale-102"
+            title="変更したすべての設定を全システムへ一括反映・保存します"
+          >
+            {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            <span>今すぐ一括保存</span>
           </button>
         </div>
 
@@ -7718,8 +7756,8 @@ export default function CompanySettingsDashboard() {
         </div>
       )}
 
-      {/* 🚀 画面右下常設：かんたん初期設定スタートガイド帰還フロートボタン */}
-      <div className="fixed bottom-6 right-6 z-40">
+      {/* 🚀 画面右下常設：かんたん初期設定スタートガイド帰還フロートボタン（AI相談ボタンの真上に配置） */}
+      <div className="fixed bottom-24 right-6 z-40">
         <button
           type="button"
           onClick={scrollToStartupGuide}
