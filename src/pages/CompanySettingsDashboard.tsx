@@ -1239,15 +1239,6 @@ export default function CompanySettingsDashboard() {
     // 1. マスタ登録済みの部署（偽部署および削除済み部署を除外）
     const deletedNames = getDeletedDepartmentNamesFromStorage(tenantId);
     const baseDepartments = departments.filter(d => !isStoreRoleDept(d.name) && !deletedNames.has(d.name));
-    // 店舗運営部がマスタに存在しない場合は標準として追加
-    if (!baseDepartments.some(d => d.name === '店舗運営部') && !deletedNames.has('店舗運営部')) {
-      baseDepartments.push({
-        id: 'dept-store-ops',
-        name: '店舗運営部',
-        display_order: 2,
-        calendar_pattern_id: 'cal-shift'
-      });
-    }
 
     const deptList: OrgDepartmentNode[] = baseDepartments.map(d => {
       const members = companyUsers.filter(u => {
@@ -3009,7 +3000,16 @@ export default function CompanySettingsDashboard() {
                 </div>
 
                 <div className="flex items-stretch justify-start gap-4 overflow-x-auto pb-4 pt-2">
-                  {computedOrgDepartments.map((dept, idx) => (
+                  {computedOrgDepartments.length === 0 ? (
+                    <div className="w-full py-10 px-6 text-center bg-slate-50/80 rounded-2xl border-2 border-dashed border-slate-200 space-y-2">
+                      <Building2 className="w-8 h-8 text-slate-300 mx-auto" />
+                      <div className="text-xs font-bold text-slate-600">登録されている部署はありません</div>
+                      <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                        上部の「新しい部署名」入力欄から、自社の組織構成に合わせて部署（例: 企画部、開発部、総務部など）を自由に追加してください。
+                      </p>
+                    </div>
+                  ) : (
+                    computedOrgDepartments.map((dept, idx) => (
                     <div
                       key={dept.id}
                       className="min-w-[270px] max-w-[320px] flex-1 bg-slate-50/80 hover:bg-slate-50 rounded-2xl border-2 border-slate-200 p-4 space-y-3.5 shadow-xs transition flex flex-col justify-between"
@@ -3027,15 +3027,13 @@ export default function CompanySettingsDashboard() {
                             <span className="text-[10px] font-bold bg-white text-slate-600 border border-slate-200 px-2 py-0.5 rounded-full">
                               {dept.members.length}名
                             </span>
-                            {dept.name !== '店舗運営部' && (
-                              <button
-                                onClick={() => handleDeleteDepartment(dept.id, dept.name)}
-                                className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
-                                title="この部署を削除"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                            <button
+                              onClick={() => handleDeleteDepartment(dept.id, dept.name)}
+                              className="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                              title="この部署を削除"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
 
@@ -3265,7 +3263,7 @@ export default function CompanySettingsDashboard() {
                         </button>
                       </div>
                     </div>
-                  ))}
+                  )))}
                 </div>
               </div>
             </div>
