@@ -969,6 +969,24 @@ export default function CompanySettingsDashboard() {
         if (!deptErr && deptData && deptData.length > 0) {
           // DBデータから偽部署（職種名）を排除
           deptsLoaded = deptData.filter(d => !isStoreRoleDept(d.name));
+          // LocalStorageからマネージャー情報等のローカル付加情報を復元
+          try {
+            const rawLocal = localStorage.getItem(`company_departments_${tenantIdData}`);
+            if (rawLocal) {
+              const parsed = JSON.parse(rawLocal);
+              if (Array.isArray(parsed)) {
+                const map = new Map(parsed.map((p: any) => [p.name, p]));
+                deptsLoaded = deptsLoaded.map(d => {
+                  const localMatch = map.get(d.name);
+                  return {
+                    ...d,
+                    manager_user_id: d.manager_user_id || localMatch?.manager_user_id,
+                    manager_user_name: d.manager_user_name || localMatch?.manager_user_name
+                  };
+                });
+              }
+            }
+          } catch (_) {}
         } else if (deptErr) {
           console.warn('Fetch department masters from DB error, using fallback:', deptErr);
         }
@@ -1818,8 +1836,6 @@ export default function CompanySettingsDashboard() {
               const row: any = {
                 tenant_id: tenantId,
                 name: d.name,
-                manager_user_id: d.manager_user_id || null,
-                manager_user_name: d.manager_user_name || null,
                 display_order: d.display_order ?? (idx + 1)
               };
               if (isUuid) {
@@ -2401,17 +2417,32 @@ export default function CompanySettingsDashboard() {
     if (!tenantId || !newDeptName.trim()) return;
     const targetUser = companyUsers.find(u => u.id === newDeptManagerId);
     try {
-      await supabase.from('department_masters').insert({
+      const { data: insData, error: insErr } = await supabase.from('department_masters').insert({
         tenant_id: tenantId,
         name: newDeptName.trim(),
-        manager_user_id: newDeptManagerId || null,
-        manager_user_name: targetUser ? targetUser.name : null,
         display_order: departments.length + 1
-      });
+      }).select();
+      if (insErr) {
+        console.warn('handleAddDepartment DB warning:', insErr);
+      }
+      
+      const createdId = insData?.[0]?.id || `dept_${Date.now()}`;
+      const newDept: DepartmentMaster = {
+        id: createdId,
+        name: newDeptName.trim(),
+        manager_user_id: newDeptManagerId || undefined,
+        manager_user_name: targetUser ? targetUser.name : undefined,
+        display_order: departments.length + 1
+      };
+      const updated = [...departments, newDept];
+      setDepartments(updated);
+      saveDepartmentsToStorage(tenantId, updated);
+
       setNewDeptName('');
       setNewDeptManagerId('');
       await fetchData();
     } catch (e) {
+      console.error('handleAddDepartment error:', e);
       alert('部署の追加に失敗しました。');
     }
   };
@@ -2468,20 +2499,12 @@ export default function CompanySettingsDashboard() {
           .eq('name', targetDeptName);
 
         if (existRecords && existRecords.length > 0) {
-          await supabase
-            .from('department_masters')
-            .update({
-              manager_user_id: managerUserId || null,
-              manager_user_name: managerName || null
-            })
-            .eq('id', existRecords[0].id);
+          // department_masters には manager_user_id カラムが存在しないため、実カラムのみ保持
         } else {
           const isUuid = targetDeptId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetDeptId);
           const insertPayload: any = {
             tenant_id: tenantId,
             name: targetDeptName,
-            manager_user_id: managerUserId || null,
-            manager_user_name: managerName || null,
             display_order: updatedDepts.length
           };
           if (isUuid) {

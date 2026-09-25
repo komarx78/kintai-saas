@@ -1,3 +1,4 @@
+
 import { supabase } from './supabase';
 
 /**
@@ -32,21 +33,7 @@ const STORAGE_KEY = 'kap_master_rate_alert_settings_v1';
  */
 export const getMasterRateAlertSettings = async (): Promise<MasterRateAlertSettings> => {
   try {
-    // 1. system_settings または特権テーブルから取得試行
-    const { data } = await supabase
-      .from('system_settings')
-      .select('value')
-      .eq('key', 'master_rate_alert_settings')
-      .maybeSingle();
-
-    if (data && data.value) {
-      return {
-        ...DEFAULT_MASTER_ALERT_SETTINGS,
-        ...data.value
-      };
-    }
-
-    // 2. LocalStorage フォールバック
+    // 1. LocalStorage を最優先参照（SSOT）
     const local = localStorage.getItem(STORAGE_KEY);
     if (local) {
       return {
@@ -73,20 +60,6 @@ export const saveMasterRateAlertSettings = async (
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-
-    // DBへの安全な保存試行
-    try {
-      await supabase
-        .from('system_settings')
-        .upsert({
-          key: 'master_rate_alert_settings',
-          value: updated,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'key' });
-    } catch (dbErr) {
-      console.warn('DB save note (using local cache):', dbErr);
-    }
-
     return { success: true };
   } catch (e: any) {
     return { success: false, error: e.message || '保存に失敗しました' };

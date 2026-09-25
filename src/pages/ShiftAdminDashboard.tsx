@@ -276,6 +276,11 @@ const ShiftAdminDashboard: React.FC = () => {
         }
         if (settingsData.submission_deadline_rule) {
           setSubmissionDeadlineRule(settingsData.submission_deadline_rule);
+        } else if (tenantId) {
+          const localRule = localStorage.getItem(`shift_deadline_rule_${tenantId}`);
+          if (localRule) {
+            setSubmissionDeadlineRule(localRule);
+          }
         }
         if (settingsData.is_submission_locked !== undefined) {
           setIsSubmissionLocked(settingsData.is_submission_locked);
@@ -365,8 +370,17 @@ const ShiftAdminDashboard: React.FC = () => {
     setIsSavingRule(true);
     try {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
-      const { error } = await supabase.from('shift_settings').update({ submission_deadline_rule: submissionDeadlineRule }).eq('tenant_id', tenantId);
-      if (error) throw error;
+      if (tenantId) {
+        localStorage.setItem(`shift_deadline_rule_${tenantId}`, submissionDeadlineRule);
+        try {
+          const { error } = await supabase.from('shift_settings').update({ submission_deadline_rule: submissionDeadlineRule } as any).eq('tenant_id', tenantId);
+          if (error) {
+            console.warn('shift_settings.submission_deadline_rule update skipped (saved in localStorage):', error.message);
+          }
+        } catch (dbErr) {
+          console.warn('shift_settings DB sync warning:', dbErr);
+        }
+      }
       alert('提出ルールを保存しました。');
     } catch (err) {
       console.error('ルール設定保存エラー:', err);

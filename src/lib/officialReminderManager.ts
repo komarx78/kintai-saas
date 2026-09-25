@@ -201,35 +201,27 @@ const STORAGE_KEY_PREFIX = 'kap_official_reminder_settings_';
 export const getOfficialReminderSettings = async (tenantId: string): Promise<OfficialReminderSettings> => {
   if (!tenantId) return DEFAULT_OFFICIAL_REMINDER_SETTINGS;
   try {
+    // 1. LocalStorage を最優先参照
+    const local = localStorage.getItem(`${STORAGE_KEY_PREFIX}${tenantId}`);
+    if (local) {
+      try {
+        return {
+          ...DEFAULT_OFFICIAL_REMINDER_SETTINGS,
+          ...JSON.parse(local)
+        };
+      } catch (_) {}
+    }
+
+    // 2. テナント実在カラム（representative_name）から初期値を構築
     const { data: tenant } = await supabase
       .from('tenants')
-      .select('official_reminder_settings, notification_email, representative_name')
+      .select('id, representative_name')
       .eq('id', tenantId)
       .maybeSingle();
 
-    if (tenant && (tenant as any).official_reminder_settings) {
-      return {
-        ...DEFAULT_OFFICIAL_REMINDER_SETTINGS,
-        ...(tenant as any).official_reminder_settings
-      };
-    }
-
-    // LocalStorage フォールバック
-    const local = localStorage.getItem(`${STORAGE_KEY_PREFIX}${tenantId}`);
-    if (local) {
-      return {
-        ...DEFAULT_OFFICIAL_REMINDER_SETTINGS,
-        ...JSON.parse(local)
-      };
-    }
-
-    // テナントの基本メールがある場合はそれを初期値に
-    const fallbackEmails: string[] = [];
-    if (tenant?.notification_email) fallbackEmails.push(tenant.notification_email);
-
     return {
       ...DEFAULT_OFFICIAL_REMINDER_SETTINGS,
-      recipient_emails: fallbackEmails,
+      recipient_emails: [],
       recipient_name: tenant?.representative_name ? `${tenant.representative_name} 様` : '人事労務ご担当者'
     };
   } catch (e) {
@@ -239,7 +231,7 @@ export const getOfficialReminderSettings = async (tenantId: string): Promise<Off
 };
 
 /**
- * 宛先マスタ設定の保存（DB ＆ LocalStorage ダブル永続化）
+ * 宛先マスタ設定の保存（LocalStorage 永続化）
  */
 export const saveOfficialReminderSettings = async (
   tenantId: string,
@@ -252,18 +244,8 @@ export const saveOfficialReminderSettings = async (
       updated_at: new Date().toISOString()
     };
 
-    // 1. LocalStorageへ即時保存
+    // 1. LocalStorageへ即時保存（SSOT）
     localStorage.setItem(`${STORAGE_KEY_PREFIX}${tenantId}`, JSON.stringify(updated));
-
-    // 2. tenantsテーブルのofficial_reminder_settingsへ保存試行
-    const { error } = await supabase
-      .from('tenants')
-      .update({ official_reminder_settings: updated } as any)
-      .eq('id', tenantId);
-
-    if (error) {
-      console.warn('DB update failed, using localStorage cache:', error.message);
-    }
 
     return { success: true };
   } catch (e: any) {

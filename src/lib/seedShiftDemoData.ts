@@ -114,14 +114,13 @@ export async function seedShiftDemoData(tenantId: string): Promise<SeedResult> {
       } catch {}
     }
 
-    // shift_employee_settings の配備
+    // shift_employee_settings の配備（実在カラム base_wage, default_role を使用）
     try {
       await supabase.from('shift_employee_settings').upsert({
         tenant_id: tenantId,
         user_id: staff.id,
-        hourly_wage: hourlyWage,
-        default_role: assignedRole,
-        roles: [assignedRole]
+        base_wage: hourlyWage,
+        default_role: assignedRole
       });
     } catch (e) {
       console.warn('shift_employee_settings upsert error:', e);

@@ -1,4 +1,3 @@
-import { supabase } from './supabase';
 import type { SystemImprovementSuggestion } from './systemSupportManager';
 
 /**
@@ -121,24 +120,6 @@ function doPost(e) {
  * 通知設定の取得
  */
 export async function fetchNotificationSettings(): Promise<SystemNotificationSettings> {
-  try {
-    const { data, error } = await supabase
-      .from('system_settings')
-      .select('notification_settings')
-      .limit(1)
-      .maybeSingle();
-
-    if (!error && data?.notification_settings) {
-      const parsed = typeof data.notification_settings === 'string' 
-        ? JSON.parse(data.notification_settings) 
-        : data.notification_settings;
-      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(parsed));
-      return { ...DEFAULT_NOTIFICATION_SETTINGS, ...parsed };
-    }
-  } catch (e) {
-    console.warn('DB notification settings not accessible, checking local:', e);
-  }
-
   const local = localStorage.getItem(SETTINGS_STORAGE_KEY);
   if (local) {
     try {
@@ -158,24 +139,6 @@ export async function saveNotificationSettings(settings: SystemNotificationSetti
   };
 
   localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(updated));
-
-  try {
-    const { data: existing } = await supabase
-      .from('system_settings')
-      .select('id')
-      .limit(1)
-      .maybeSingle();
-
-    if (existing?.id) {
-      await supabase
-        .from('system_settings')
-        .update({ notification_settings: updated })
-        .eq('id', existing.id);
-    }
-  } catch (e) {
-    console.warn('Could not save notification settings to DB:', e);
-  }
-
   return true;
 }
 

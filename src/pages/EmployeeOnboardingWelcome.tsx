@@ -812,11 +812,6 @@ export default function EmployeeOnboardingWelcome() {
     const handleLineFriendAdd = async () => {
       if (effectiveTenantId && effectiveUserId) {
         toggleStaffLineLinkStatus(effectiveTenantId, effectiveUserId, true);
-        try {
-          await supabase.from('users').update({ contact_line_id: 'line_linked' }).eq('id', effectiveUserId);
-        } catch (e) {
-          console.warn('Sync contact_line_id note:', e);
-        }
       }
     };
 

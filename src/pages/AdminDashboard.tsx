@@ -746,14 +746,30 @@ ${tenantId || '（エラー：コード取得失敗）'}
         const { error } = await supabase
           .from('users')
           .update({
-            status: 'active',
-            is_retired: false,
             has_kintai_access: true,
             has_shift_access: true
           })
           .eq('id', emp.id);
 
         if (error) throw error;
+
+        // 大元労務マスタ（employee_onboarding_profiles）も在籍へ同期
+        try {
+          await supabase
+            .from('employee_onboarding_profiles')
+            .upsert({
+              tenant_id: tenantId,
+              user_id: emp.id,
+              status: 'active',
+              join_date: emp.join_date !== '-' ? emp.join_date : '2026-04-01',
+              retirement_date: null,
+              retirement_reason: '',
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'tenant_id,user_id' });
+        } catch (onbErr) {
+          console.warn('employee_onboarding_profiles reactivate note:', onbErr);
+        }
+
         alert(`「${emp.name}」さんを在籍状態へ復帰しました。`);
         await fetchEmployees();
       } catch (err: any) {
@@ -766,14 +782,30 @@ ${tenantId || '（エラー：コード取得失敗）'}
         const { error } = await supabase
           .from('users')
           .update({
-            status: 'retired',
-            is_retired: true,
             has_kintai_access: false,
             has_shift_access: false
           })
           .eq('id', emp.id);
 
         if (error) throw error;
+
+        // 大元労務マスタ（employee_onboarding_profiles）も退職へ同期
+        try {
+          await supabase
+            .from('employee_onboarding_profiles')
+            .upsert({
+              tenant_id: tenantId,
+              user_id: emp.id,
+              status: 'retired',
+              join_date: emp.join_date !== '-' ? emp.join_date : '2026-04-01',
+              retirement_date: new Date().toISOString().split('T')[0],
+              retirement_reason: '退職',
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'tenant_id,user_id' });
+        } catch (onbErr) {
+          console.warn('employee_onboarding_profiles retire note:', onbErr);
+        }
+
         alert(`「${emp.name}」さんを退職処理いたしました。`);
         await fetchEmployees();
       } catch (err: any) {

@@ -87,7 +87,7 @@ const ShiftEmployeeMaster: React.FC = () => {
           has_shift_access: u.has_shift_access || false,
           hire_date: s?.hire_date || '',
           max_hours_per_week: s?.max_hours_per_week || 40,
-          min_shift_hours: s?.min_shift_hours || 3,
+          min_shift_hours: (s as any)?.min_shift_hours || Number(localStorage.getItem(`shift_employee_min_hours_${u.id}`) || 3),
           priority_score: s?.priority_score || 3,
           default_role: s?.default_role || '',
           base_wage: s?.base_wage || 1000
@@ -130,12 +130,16 @@ const ShiftEmployeeMaster: React.FC = () => {
           .eq('user_id', emp.user_id)
           .maybeSingle();
 
+        // min_shift_hours はDB実カラム未配備のためLocalStorageにバックアップ保存
+        if (emp.min_shift_hours) {
+          localStorage.setItem(`shift_employee_min_hours_${emp.user_id}`, String(emp.min_shift_hours));
+        }
+
         const payload = {
           tenant_id: tenantId,
           user_id: emp.user_id,
           hire_date: emp.hire_date || null,
           max_hours_per_week: emp.max_hours_per_week,
-          min_shift_hours: emp.min_shift_hours,
           priority_score: emp.priority_score,
           default_role: emp.default_role,
           base_wage: emp.base_wage,
