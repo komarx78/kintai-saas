@@ -3391,31 +3391,9 @@ export default function CompanySettingsDashboard() {
                     自社の役職と階層ランク（Lv.1 経営陣 〜 Lv.5 一般スタッフ）を定義します。承認フローや組織図に自動連動します。
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                  <span className="text-[10px] font-bold text-slate-400 mr-0.5 hidden xl:inline">📋 かんたん業種別プリセット:</span>
-                  <button
-                    onClick={() => handleApplyPreset('standard_corporate')}
-                    className="text-[11px] font-bold text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 px-2.5 py-1 rounded-xl transition flex items-center gap-1 cursor-pointer shadow-2xs"
-                    title="役員・部長・課長・主任・一般の標準構成"
-                  >
-                    🏢 一般企業(標準)
-                  </button>
-                  <button
-                    onClick={() => handleApplyPreset('store_service')}
-                    className="text-[11px] font-bold text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 px-2.5 py-1 rounded-xl transition flex items-center gap-1 cursor-pointer shadow-2xs"
-                    title="店長・エリアマネージャー・スタッフ構成"
-                  >
-                    🏪 店舗・サービス
-                  </button>
-                  <button
-                    onClick={() => handleApplyPreset('simple_small')}
-                    className="text-[11px] font-bold text-emerald-800 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-xl transition flex items-center gap-1 cursor-pointer shadow-2xs"
-                    title="代表とスタッフの2階層のみ。10名未満の小規模企業に最適"
-                  >
-                    ⚡ 超シンプル(~10名)
-                  </button>
-                  <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-xl ml-1">
-                    {positions.length}件
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl">
+                    登録役職数: <strong className="text-indigo-600 font-black">{positions.length}</strong> 件
                   </span>
                 </div>
               </div>
@@ -3484,47 +3462,77 @@ export default function CompanySettingsDashboard() {
                 {/* 右側カラム (lg:col-span-7): 階層別ピラミッド縦並びリスト */}
                 <div className="lg:col-span-7 space-y-3">
                   {/* 💡 初めて設定される企業様への安心ガイダンス */}
-                  <div className="bg-emerald-50/90 border border-emerald-200 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-emerald-900 leading-relaxed shadow-2xs">
-                    <span className="text-base shrink-0 select-none mt-0.5">💡</span>
-                    <div className="space-y-0.5">
-                      <div className="font-black text-emerald-950 flex items-center gap-1.5 flex-wrap">
-                        <span>初めて設定される企業様・小規模オフィスの皆様へ</span>
-                        <span className="text-[10px] font-bold bg-emerald-200/80 text-emerald-900 px-2 py-0.2 rounded-full">
-                          未登録の階層があっても正常稼働
-                        </span>
+                  {/* 💡 かんたん役職セットアップ ＆ ガイダンス一体型カード（説明と選択を一体化） */}
+                  <div className="bg-gradient-to-br from-emerald-50/90 via-teal-50/50 to-white border border-emerald-200 rounded-2xl p-4 shadow-2xs space-y-3">
+                    <div className="flex items-start gap-2.5">
+                      <span className="text-lg shrink-0 select-none mt-0.5">💡</span>
+                      <div className="space-y-0.5 flex-1 min-w-0">
+                        <div className="font-black text-xs text-emerald-950 flex items-center gap-1.5 flex-wrap">
+                          <span>初めて設定される企業様・小規模オフィスの皆様へ</span>
+                          <span className="text-[10px] font-bold bg-emerald-200/80 text-emerald-900 px-2 py-0.2 rounded-full">
+                            未登録の階層があっても正常稼働
+                          </span>
+                        </div>
+                        <p className="text-emerald-800 text-[11px] leading-relaxed">
+                          ゼロから役職を考える必要はありません。自社の規模に合わせて下の<strong>3つのセットから選ぶだけ</strong>で一瞬で展開されます。
+                          <span className="text-emerald-700 block text-[10px] mt-0.5">
+                            ※ 10名未満の企業様は「代表」と「一般スタッフ」の2階層だけでも勤怠・給与・申請はすべて正常に運用できます。自社にない階層は空欄で問題ありません。
+                          </span>
+                        </p>
                       </div>
-                      <p className="text-emerald-800 text-[11px]">
-                        すべての階層（Lv.1〜5）を埋める必要はありません。10名未満の企業様は<strong>「代表取締役」と「一般スタッフ」の2階層だけ</strong>でも勤怠・給与・申請はすべて正常に運用できます。自社にない役職階層は空欄のままで全く問題ありません。
-                      </p>
+                    </div>
+
+                    {/* 3つのプリセット選択ボタングループ（読んだ直後にその場でワンタップ） */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
+                      <button
+                        onClick={() => handleApplyPreset('standard_corporate')}
+                        className="bg-white hover:bg-indigo-50/70 border border-slate-200 hover:border-indigo-300 p-2.5 rounded-xl text-left transition group cursor-pointer shadow-2xs hover:shadow-xs"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm">🏢</span>
+                          <span className="text-[9px] font-bold bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded">標準7役職</span>
+                        </div>
+                        <div className="font-black text-xs text-slate-800 group-hover:text-indigo-600 transition">
+                          一般企業・オフィス
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                          役員・部長・課長・主任・一般
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => handleApplyPreset('store_service')}
+                        className="bg-white hover:bg-blue-50/70 border border-slate-200 hover:border-blue-300 p-2.5 rounded-xl text-left transition group cursor-pointer shadow-2xs hover:shadow-xs"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm">🏪</span>
+                          <span className="text-[9px] font-bold bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded">現場6役職</span>
+                        </div>
+                        <div className="font-black text-xs text-slate-800 group-hover:text-blue-600 transition">
+                          店舗・サービス業
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                          店長・エリア長・アルバイト
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => handleApplyPreset('simple_small')}
+                        className="bg-emerald-600 hover:bg-emerald-700 border border-emerald-600 text-white p-2.5 rounded-xl text-left transition group cursor-pointer shadow-2xs hover:shadow-md"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm">⚡</span>
+                          <span className="text-[9px] font-black bg-white/20 text-white px-1.5 py-0.2 rounded">迷ったらコレ</span>
+                        </div>
+                        <div className="font-black text-xs text-white">
+                          超シンプル (~10名)
+                        </div>
+                        <div className="text-[10px] text-emerald-100 mt-0.5 leading-tight">
+                          代表 と 一般スタッフ の2階層のみ
+                        </div>
+                      </button>
                     </div>
                   </div>
-
-                  {/* 役職が1件以下の時のワンクリック適用ハイライト */}
-                  {positions.length <= 1 && (
-                    <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-amber-900 shadow-2xs">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
-                        <div>
-                          <span className="font-bold block text-amber-950">ワンクリックで自社の役職セットを一括登録できます</span>
-                          <span className="text-[11px] text-amber-800">ゼロから作らず、右上のプリセットから自社に合うセットを選ぶのがおすすめです。</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          onClick={() => handleApplyPreset('standard_corporate')}
-                          className="bg-white hover:bg-amber-100 border border-amber-300 text-amber-950 font-bold px-2.5 py-1.5 rounded-xl text-[11px] cursor-pointer shadow-2xs transition"
-                        >
-                          🏢 標準セット
-                        </button>
-                        <button
-                          onClick={() => handleApplyPreset('simple_small')}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1.5 rounded-xl text-[11px] cursor-pointer shadow-2xs transition"
-                        >
-                          ⚡ 2階層セット
-                        </button>
-                      </div>
-                    </div>
-                  )}
 
                   <div className="text-xs font-bold text-slate-700 flex items-center justify-between pt-1">
                     <span>役職階層ピラミッド体系</span>
