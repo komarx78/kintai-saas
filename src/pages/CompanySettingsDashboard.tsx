@@ -42,7 +42,7 @@ import {
 } from '../lib/onboardingWorkflow';
 import { 
   Building2, Users, Calendar, DollarSign, BookOpen, 
-  ArrowLeft, LogOut, Loader2, Save, Plus, Trash2, 
+  ArrowLeft, ArrowRight, LogOut, Loader2, Save, Plus, Trash2, 
   Sparkles, Bot, Clock, ShieldCheck, Printer, X,
   UserCheck, ArrowUp, ArrowDown, RotateCcw, Edit3,
   Network,  Award, Crown, Shield, FileText, Upload,
@@ -2011,6 +2011,15 @@ export default function CompanySettingsDashboard() {
     alert(`✨ 「${preset.name}」の役職セット（全${newItems.length}件）を適用しました！\n必要に応じて役職名の変更や不要な役職の削除を行ってください。`);
   };
 
+  // 🚀 かんたん初期設定スタートガイドへスムーズスクロール
+  const scrollToStartupGuide = () => {
+    window.dispatchEvent(new CustomEvent('open-startup-guide'));
+    const el = document.getElementById('startup-guide-section');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   // 📜 資格手当マスタ追加
   const handleAddQualification = async () => {
     if (!newQualName.trim()) {
@@ -2671,6 +2680,7 @@ export default function CompanySettingsDashboard() {
           payrollSettings={payrollSettings}
           calendarSettings={calendarSettings}
           companyUsers={companyUsers}
+          positions={positions}
           activeTab={activeTab}
           onSelectTab={(tab) => {
             setActiveTab(tab);
@@ -3659,6 +3669,41 @@ export default function CompanySettingsDashboard() {
                     })}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* 🚀 STEP 3 完了ネクストアクション・バー（役職設定完了後の次ステップ誘導） */}
+            <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-blue-500/10 border-2 border-indigo-200/80 rounded-3xl p-5 sm:p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+              <div className="space-y-1 text-center md:text-left">
+                <div className="font-black text-sm text-slate-800 flex items-center justify-center md:justify-start gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-600 animate-pulse" />
+                  <span>役職・組織（STEP 3）の設定お疲れ様でした！</span>
+                  <span className="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">
+                    進捗 60%
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  組織の土台が整いました。次は<strong>「社員・パートさんの基本台帳登録・契約書作成（STEP 4）」</strong>へ進みましょう。
+                </p>
+              </div>
+              <div className="flex items-center gap-2.5 shrink-0 w-full md:w-auto">
+                <button
+                  type="button"
+                  onClick={scrollToStartupGuide}
+                  className="flex-1 md:flex-none bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="画面最上部のスタートガイドへ戻って進捗を確認"
+                >
+                  <ArrowUp className="w-3.5 h-3.5 text-slate-500" />
+                  <span>スタートガイドに戻る</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/onboarding/admin?from=company_settings')}
+                  className="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:shadow-md"
+                >
+                  <span>次へ進む: 社員登録 (STEP 4)</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
 
@@ -7150,6 +7195,32 @@ export default function CompanySettingsDashboard() {
         isOpen={isHelpOpen} 
         onClose={() => setIsHelpOpen(false)} 
       />
+
+      {/* 🚀 画面右下常設：かんたん初期設定スタートガイド帰還フロートボタン */}
+      <div className="fixed bottom-6 right-6 z-40">
+        <button
+          type="button"
+          onClick={scrollToStartupGuide}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-4 py-3 rounded-2xl shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-0.5 flex items-center gap-2.5 cursor-pointer border-2 border-emerald-400/80 group"
+          title="画面最上部の「かんたん初期設定スタートガイド」へ移動"
+        >
+          <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+            <Sparkles className="w-4 h-4 text-white animate-pulse" />
+          </div>
+          <div className="text-left">
+            <div className="text-[10px] text-emerald-100 font-bold leading-tight">
+              初期設定ガイドへ戻る
+            </div>
+            <div className="text-xs font-black tracking-tight flex items-center gap-1.5">
+              <span>🚀 スタートガイド</span>
+              <span className="text-[9px] bg-emerald-800/80 text-emerald-200 px-1.5 py-0.2 rounded-full font-bold">
+                {positions.length > 0 || departments.length > 0 ? 'STEP 3完了' : 'STEP 1'}
+              </span>
+            </div>
+          </div>
+          <ArrowUp className="w-4 h-4 text-emerald-200 group-hover:text-white transition ml-0.5" />
+        </button>
+      </div>
     </div>
   );
 }

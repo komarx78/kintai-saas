@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Building2, 
@@ -38,6 +38,7 @@ interface StartupGuideCardProps {
     holiday_text_summary?: string;
   };
   companyUsers: Array<{ id: string; name: string; role?: string; department?: string }>;
+  positions?: Array<{ id: string; name: string; rank_level?: number }>;
   activeTab: string;
   onSelectTab: (tab: any) => void;
   onOpenCsvImport: () => void;
@@ -52,6 +53,7 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
   payrollSettings,
   calendarSettings,
   companyUsers,
+  positions,
   activeTab,
   onSelectTab,
   onOpenCsvImport,
@@ -78,6 +80,18 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
     } catch (_) {}
   };
 
+  // 外部からの「スタートガイドを開く」要求を受け取る
+  useEffect(() => {
+    const handleOpen = () => {
+      setIsOpen(true);
+      try {
+        localStorage.setItem('startup_guide_is_open', JSON.stringify(true));
+      } catch (_) {}
+    };
+    window.addEventListener('open-startup-guide', handleOpen);
+    return () => window.removeEventListener('open-startup-guide', handleOpen);
+  }, []);
+
   // 1. 各ステップの完了状況を実データからリアルタイム厳格判定（憲法1条・憲法2条）
   // STEP 1: 会社名と代表者名の入力
   const isStep1Done = Boolean(basicInfo.name?.trim() && basicInfo.representative_name?.trim());
@@ -89,8 +103,10 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
   );
   const isStep2Done = isStep2Saved;
 
-  // STEP 3: 組織・部署（店舗）が1件以上登録されているか
-  const isStep3Done = departments.length > 0;
+  // STEP 3: 組織・部署（店舗）または役職が1件以上登録されているか
+  const posCount = positions?.length || 0;
+  const deptCount = departments?.length || 0;
+  const isStep3Done = deptCount > 0 || posCount > 0;
 
   // STEP 4: 管理者（admin/superadmin/代表）以外の「一般社員・パートさん」が実際に1名以上登録されているか
   // （※初期アカウントやテスト用管理者の存在による誤判定を完全遮断）
@@ -167,7 +183,9 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
       icon: Network,
       isDone: isStep3Done,
       actionText: isStep3Done ? '部署・役職を確認・変更' : '部署・役職を追加する',
-      doneSummary: isStep3Done ? `登録数: ${departments.length} 部署` : '未登録（0部署）'
+      doneSummary: isStep3Done 
+        ? `登録済み: ${deptCount > 0 ? `${deptCount}部署` : ''}${deptCount > 0 && posCount > 0 ? ' / ' : ''}${posCount > 0 ? `${posCount}役職` : ''}` 
+        : '未登録（0部署・0役職）'
     },
     {
       stepNumber: 4,
@@ -197,7 +215,7 @@ export const StartupGuideCard: React.FC<StartupGuideCardProps> = ({
   ];
 
   return (
-    <div className="bg-gradient-to-br from-emerald-50 via-teal-50/50 to-indigo-50/40 rounded-3xl border-2 border-emerald-300/80 shadow-md p-5 sm:p-7 transition-all">
+    <div id="startup-guide-section" className="bg-gradient-to-br from-emerald-50 via-teal-50/50 to-indigo-50/40 rounded-3xl border-2 border-emerald-300/80 shadow-md p-5 sm:p-7 transition-all scroll-mt-6">
       {/* 上部ヘッダー */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
