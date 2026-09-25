@@ -1537,7 +1537,10 @@ const UserDashboard = () => {
                             if (r.check_in_time && r.check_out_time) {
                               const [inH, inM] = r.check_in_time.split(':').map(Number);
                               const [outH, outM] = r.check_out_time.split(':').map(Number);
-                              const total = Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
+                              let inTotal = inH * 60 + inM;
+                              let outTotal = outH * 60 + outM;
+                              if (outTotal < inTotal) outTotal += 24 * 60; // 🛡️ 日跨ぎ夜勤（22:00〜翌06:00等）救済正規化
+                              const total = Math.max(0, outTotal - inTotal);
                               let breakM = r.break_minutes !== undefined && r.break_minutes !== null 
                                 ? Number(r.break_minutes) 
                                 : (total >= 480 ? 60 : (total >= 360 ? 45 : 0));
@@ -1557,7 +1560,10 @@ const UserDashboard = () => {
                             if (r.check_in_time && r.check_out_time) {
                               const [inH, inM] = r.check_in_time.split(':').map(Number);
                               const [outH, outM] = r.check_out_time.split(':').map(Number);
-                              const total = Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
+                              let inTotal = inH * 60 + inM;
+                              let outTotal = outH * 60 + outM;
+                              if (outTotal < inTotal) outTotal += 24 * 60; // 🛡️ 日跨ぎ夜勤救済正規化
+                              const total = Math.max(0, outTotal - inTotal);
                               let breakM = r.break_minutes !== undefined && r.break_minutes !== null 
                                 ? Number(r.break_minutes) 
                                 : (total >= 480 ? 60 : (total >= 360 ? 45 : 0));
