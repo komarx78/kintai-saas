@@ -3,6 +3,7 @@ import {
   calculateResidentTaxLumpSum, 
   calculateRetirementIncomeTax, 
   calculateServiceYears,
+  calculateBonusDeductions,
   type EmployeePayrollProfile, 
   type AttendanceSummary 
 } from '../payrollEngine';
@@ -390,6 +391,60 @@ export function runPayrollEngineTests(): { success: boolean; results: string[] }
       results.push('✅ テスト12 パス: 暦日端数切上げ（満4年0日=4年/満4年1日=5年）・勤続20年超控除・障害加算・短期役員等1/2除外（令和4年改正）が完全正確');
     } else {
       results.push(`❌ テスト12 失敗: 退職所得エッジケース不整合 (exact4:${syExact4.serviceYears}, over4:${syOver4.serviceYears}, ded25:${ret25Years.deductionAmount}, disDed:${retDisability.deductionAmount}, offTax:${retShortOfficer.taxableRetirementIncome}, empTax:${retShortEmployee.taxableRetirementIncome})`);
+    }
+  }
+
+  // ==========================================
+  // テスト13: 賞与控除額（健保法45条千円切捨て・厚年150万上限・誕生日前日介護判定・都道府県折半料率）
+  // ==========================================
+  {
+    // A: 千円未満切捨て（1,000,500円 → 1,000,000円）＆ 厚生年金上限（200万円 → 150万円制限）
+    const bonusHigh = calculateBonusDeductions({
+      bonusGross: 2000500,
+      birthDate: '1999-01-01', // 25歳（介護非該当）
+      prefectureCode: '13', // 東京都
+      lastMonthTaxBase: 300000,
+      dependentsCount: 1
+    });
+
+    // B: 介護保険該当年齢（40歳到達日は誕生日前日）
+    // 1984年7月1日生まれ → 2024年6月30日（前日）に40歳到達 → 該当
+    const bonusTurn40Applicable = calculateBonusDeductions({
+      bonusGross: 1000000,
+      birthDate: '1984-07-01',
+      targetDate: '2024-06-30',
+      prefectureCode: '13',
+      lastMonthTaxBase: 300000
+    });
+
+    // 1984年7月2日生まれ → 2024年6月30日時点では未到達（7月1日に到達） → 非該当
+    const bonusTurn40NotApplicable = calculateBonusDeductions({
+      bonusGross: 1000000,
+      birthDate: '1984-07-02',
+      targetDate: '2024-06-30',
+      prefectureCode: '13',
+      lastMonthTaxBase: 300000
+    });
+
+    // 検証:
+    // bonusHigh:
+    // standardBonus = 2,000,000円
+    // health = 2,000,000 * 9.85% / 2 = 98,500円
+    // pension = 1,500,000 * 18.30% / 2 = 137,250円（150万円上限クリア）
+    // employment = 2,000,500 * 0.6% = 12,003円
+    // bonusTurn40Applicable: nursing > 0
+    // bonusTurn40NotApplicable: nursing === 0
+    if (
+      bonusHigh.standardBonus === 2000000 &&
+      bonusHigh.welfarePension === 137250 &&
+      bonusHigh.healthInsurance === 98500 &&
+      bonusHigh.employmentInsurance === 12003 &&
+      bonusTurn40Applicable.nursingInsurance > 0 &&
+      bonusTurn40NotApplicable.nursingInsurance === 0
+    ) {
+      results.push('✅ テスト13 パス: 賞与控除（千円切捨て・厚年150万上限・誕生日前日介護判定・都道府県折半料率）が完全正確');
+    } else {
+      results.push(`❌ テスト13 失敗: 賞与計算不整合 (std:${bonusHigh.standardBonus}, pen:${bonusHigh.welfarePension}, health:${bonusHigh.healthInsurance}, emp:${bonusHigh.employmentInsurance}, nursingApp:${bonusTurn40Applicable.nursingInsurance}, nursingNot:${bonusTurn40NotApplicable.nursingInsurance})`);
     }
   }
 

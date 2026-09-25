@@ -3,7 +3,12 @@
  * 労働基準法および日本の税務・社会保険制度に準拠した給与自動計算ロジック
  */
 
-import { calculateSocialInsuranceDeduction, determineRetirementSocialInsuranceMonths } from './socialInsurance';
+import { 
+  calculateSocialInsuranceDeduction, 
+  determineRetirementSocialInsuranceMonths,
+  isNursingInsuranceApplicable,
+  getPrefectureRate
+} from './socialInsurance';
 
 export interface EmployeePayrollProfile {
   id?: string;
@@ -540,12 +545,14 @@ export function calculateBonusDeductions(params: {
   lastMonthTaxBase?: number; // 前月の社会保険料控除後の給与等（税額基礎）
   dependentsCount?: number; // 扶養親族等の数
   birthDate?: string | Date | null; // 生年月日（40〜64歳介護保険判定）
+  targetDate?: string | Date; // 賞与支給日（誕生日前日基準の正確な年齢判定用、デフォルト現在日）
+  prefectureCode?: string; // 都道府県コード（全国47都道府県の健康保険・介護保険料率自動適用）
   isHealthEnabled?: boolean; // 健康保険加入
   isPensionEnabled?: boolean; // 厚生年金加入
   isEmploymentEnabled?: boolean; // 雇用保険加入
   isExecutive?: boolean; // 役員（雇用保険対象外）
-  healthRate?: number; // 健康保険料率（本人負担・折半後、デフォルト約0.04985）
-  nursingRate?: number; // 介護保険料率（本人負担、デフォルト約0.008）
+  healthRate?: number; // 健康保険料率（指定時は優先、未指定時は都道府県または全国平均）
+  nursingRate?: number; // 介護保険料率（指定時は優先、未指定時は都道府県または全国平均）
   pensionRate?: number; // 厚生年金保険料率（本人負担、9.15%）
   employmentRate?: number; // 雇用保険料率（本人負担、一般 0.006 = 6/1000）
 }): {
@@ -564,14 +571,12 @@ export function calculateBonusDeductions(params: {
     lastMonthTaxBase = 0,
     dependentsCount = 0,
     birthDate,
+    targetDate,
+    prefectureCode,
     isHealthEnabled = true,
     isPensionEnabled = true,
     isEmploymentEnabled = true,
-    isExecutive = false,
-    healthRate = 0.04985,
-    nursingRate = 0.008,
-    pensionRate = 0.0915,
-    employmentRate = 0.006
+    isExecutive = false
   } = params;
 
   if (bonusGross <= 0) {
@@ -588,34 +593,47 @@ export function calculateBonusDeductions(params: {
     };
   }
 
+  // 都道府県料率の自動解決
+  let effectiveHealthRate = params.healthRate;
+  let effectiveNursingRate = params.nursingRate;
+  let effectivePensionRate = params.pensionRate ?? 0.0915;
+  let effectiveEmploymentRate = params.employmentRate ?? 0.006;
+
+  if (prefectureCode) {
+    const pref = getPrefectureRate(prefectureCode);
+    if (effectiveHealthRate === undefined) effectiveHealthRate = pref.healthRate / 2;
+    if (effectiveNursingRate === undefined) effectiveNursingRate = pref.nursingRate / 2;
+    if (params.employmentRate === undefined) effectiveEmploymentRate = pref.employmentRate;
+    if (params.pensionRate === undefined) effectivePensionRate = pref.pensionRate / 2;
+  } else {
+    if (effectiveHealthRate === undefined) effectiveHealthRate = 0.04985;
+    if (effectiveNursingRate === undefined) effectiveNursingRate = 0.008;
+  }
+
   // 1. 標準賞与額の算定（健康保険法第45条・厚生年金保険法第24条の4: 千円未満切捨て）
   const standardBonus = Math.floor(bonusGross / 1000) * 1000;
 
   // 2. 健康保険・介護保険の標準賞与額（年度累計上限 573万円）
   const healthBonusBase = Math.min(5730000, standardBonus);
 
-  // 介護保険該当判定（40歳以上65歳未満）
+  // 🛡️ 介護保険該当判定（40歳以上65歳未満・誕生日前日基準・介護保険法第9条完全準拠）
   let isNursing = false;
   if (birthDate) {
-    const b = new Date(birthDate);
-    const now = new Date();
-    let age = now.getFullYear() - b.getFullYear();
-    const mDiff = now.getMonth() - b.getMonth();
-    if (mDiff < 0 || (mDiff === 0 && now.getDate() < b.getDate())) {
-      age--;
-    }
-    isNursing = age >= 40 && age < 65;
+    const evalDate = targetDate 
+      ? (typeof targetDate === 'string' ? new Date(targetDate) : targetDate)
+      : new Date();
+    isNursing = isNursingInsuranceApplicable(birthDate, evalDate);
   }
 
-  const healthInsurance = isHealthEnabled ? Math.round(healthBonusBase * healthRate) : 0;
-  const nursingInsurance = (isHealthEnabled && isNursing) ? Math.round(healthBonusBase * nursingRate) : 0;
+  const healthInsurance = isHealthEnabled ? Math.round(healthBonusBase * effectiveHealthRate) : 0;
+  const nursingInsurance = (isHealthEnabled && isNursing) ? Math.round(healthBonusBase * effectiveNursingRate) : 0;
 
   // 3. 厚生年金保険の標準賞与額（1ヶ月あたり上限 150万円）
   const pensionBonusBase = Math.min(1500000, standardBonus);
-  const welfarePension = isPensionEnabled ? Math.round(pensionBonusBase * pensionRate) : 0;
+  const welfarePension = isPensionEnabled ? Math.round(pensionBonusBase * effectivePensionRate) : 0;
 
-  // 4. 雇用保険料（標準賞与額ではなく、賞与総支給額そのものに乗じる・役員は除外）
-  const employmentInsurance = (isEmploymentEnabled && !isExecutive) ? Math.round(bonusGross * employmentRate) : 0;
+  // 4. 雇用保険料（標準賞与額ではなく、賞与総支給額そのものに乗じる・役員は除外・50銭基準四捨五入）
+  const employmentInsurance = (isEmploymentEnabled && !isExecutive) ? Math.round(bonusGross * effectiveEmploymentRate) : 0;
 
   const socialInsuranceTotal = healthInsurance + nursingInsurance + welfarePension + employmentInsurance;
 

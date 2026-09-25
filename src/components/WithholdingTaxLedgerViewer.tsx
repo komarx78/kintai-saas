@@ -256,13 +256,17 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
       }
 
       const gross = Number(actualPayslip.total_earnings || 0);
+      // 🛡️ 所得税法第9条第1項第5号・所令20条の2: 非課税通勤手当（月15万円上限）は源泉徴収簿の課税支給金額から除外
+      const nonTaxableCommuting = actualPayslip.commuting_taxable ? 0 : Math.min(Number(actualPayslip.commuting_allowance || 0), 150000);
+      const taxableWage = Math.max(0, gross - nonTaxableCommuting);
+
       const social = Number(
         (actualPayslip.health_insurance || 0) +
         (actualPayslip.nursing_insurance || 0) +
         (actualPayslip.pension_insurance || 0) +
         (actualPayslip.employment_insurance || 0)
       );
-      const afterSocial = Math.max(0, gross - social);
+      const afterSocial = Math.max(0, taxableWage - social);
       const tax = Number(actualPayslip.income_tax || 0);
       const adjustment = 0;
       const netTax = Math.max(0, tax - adjustment);
@@ -270,7 +274,7 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
       return {
         month,
         payDate,
-        gross,
+        gross: taxableWage,
         social,
         afterSocial,
         dependents: `${depCount}`,
