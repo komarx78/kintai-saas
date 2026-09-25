@@ -231,8 +231,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
 
           try {
             const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
-            const { data: cmsData } = await supabase.from('company_master_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
-            setCompanySettings({ ...tData, ...cmsData });
+            setCompanySettings(tData || {});
           } catch (e) {}
         }
 

@@ -113,7 +113,7 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
       // 労務・入社手続きマスタ
       const { data: onboardingData } = await supabase
         .from('employee_onboarding_profiles')
-        .select('user_id, base_salary, department, position_name, employment_type, salary_type')
+        .select('user_id, base_salary, salary_type')
         .eq('tenant_id', tenantId);
 
       // 給与基本マスタ（employee_payroll_profiles: 最新改定基本給のSSOT）

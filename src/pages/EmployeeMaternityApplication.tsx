@@ -129,21 +129,29 @@ export default function EmployeeMaternityApplication() {
       if (activeUserId) {
         const { data: userDoc } = await supabase
           .from('users')
-          .select('name, email, phone, resident_tax_monthly, resident_tax_details')
+          .select('name, email, phone')
           .eq('id', activeUserId)
+          .maybeSingle();
+
+        const { data: payDoc } = await supabase
+          .from('employee_payroll_profiles')
+          .select('resident_tax_monthly, resident_tax_details')
+          .eq('user_id', activeUserId)
           .maybeSingle();
 
         if (userDoc) {
           if (!employeeName && userDoc.name) setEmployeeName(userDoc.name);
-          if (userDoc.resident_tax_monthly) setEmployeeResidentTax(userDoc.resident_tax_monthly);
-          if (userDoc.resident_tax_details) setResidentTaxDetails(userDoc.resident_tax_details);
-          
           setFormData(prev => ({
             ...prev,
             contactEmail: prev.contactEmail || userDoc.email || '',
             contactPhone: prev.contactPhone || userDoc.phone || '',
             applicantSignature: prev.applicantSignature || userDoc.name || employeeName || ''
           }));
+        }
+
+        if (payDoc) {
+          if (payDoc.resident_tax_monthly) setEmployeeResidentTax(payDoc.resident_tax_monthly);
+          if (payDoc.resident_tax_details) setResidentTaxDetails(payDoc.resident_tax_details);
         }
 
         // 既存の産休データがあれば読み込む

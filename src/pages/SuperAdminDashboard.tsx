@@ -258,7 +258,7 @@ export default function SuperAdminDashboard() {
     try {
       // 1. 外部キー参照テーブルの関連データを先行クリーンアップ
       try { await supabase.from('attendance_records').delete().eq('tenant_id', tenant.id); } catch (_) {}
-      try { await supabase.from('leave_applications').delete().eq('tenant_id', tenant.id); } catch (_) {}
+      try { await supabase.from('leave_requests').delete().eq('tenant_id', tenant.id); } catch (_) {}
       try { await supabase.from('salary_revision_history').delete().eq('tenant_id', tenant.id); } catch (_) {}
       try { await supabase.from('employee_payroll_profiles').delete().eq('tenant_id', tenant.id); } catch (_) {}
       try { await supabase.from('users').delete().eq('tenant_id', tenant.id); } catch (_) {}

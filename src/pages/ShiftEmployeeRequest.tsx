@@ -55,11 +55,12 @@ const ShiftEmployeeRequest: React.FC = () => {
 
       const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
       if (tenantIdData) {
-        const { data: settings } = await supabase.from('shift_settings').select('submission_deadline_rule, is_submission_locked, auto_lock_day, auto_lock_days').eq('tenant_id', tenantIdData).single();
+        const { data: settings } = await supabase.from('shift_settings').select('is_submission_locked, auto_lock_day, auto_lock_days').eq('tenant_id', tenantIdData).maybeSingle();
+        const localRule = localStorage.getItem(`shift_deadline_rule_${tenantIdData}`);
+        if (localRule) {
+          setDeadlineRule(localRule);
+        }
         if (settings) {
-          if (settings.submission_deadline_rule) {
-            setDeadlineRule(settings.submission_deadline_rule);
-          }
           let locked = settings.is_submission_locked || false;
 
           // 新しい auto_lock_days (文字列: "10,25" など) がある場合

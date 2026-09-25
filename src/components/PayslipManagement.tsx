@@ -473,11 +473,10 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     if (!tenantId) return;
     setIsLoading(true);
     try {
-      // 1. 会社情報取得 (tenants & company_master_settings & LocalStorage)
+      // 1. 会社情報取得 (tenants & LocalStorage SSOT)
       const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
-      const { data: cmsData } = await supabase.from('company_master_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
       
-      let companyAddress = cmsData?.address || tData?.address || '';
+      let companyAddress = tData?.address || '';
       if (!companyAddress) {
         try {
           const rawLocal = localStorage.getItem(`company_basic_settings_${tenantId}`) || 
@@ -493,7 +492,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const detectedPrefCode = extractPrefectureCodeFromAddress(companyAddress) || 
                                (companyAddress?.includes('滋賀') ? '25' : null) || 
                                '13'; // デフォルト東京都
-      setTenantInfo({ ...tData, ...cmsData, address: companyAddress || '', prefecture_code: detectedPrefCode });
+      setTenantInfo({ ...tData, address: companyAddress || '', prefecture_code: detectedPrefCode });
 
       // 2. 給与基本設定取得
       const { data: setRow } = await supabase.from('payroll_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
@@ -800,16 +799,34 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         console.warn('leave_requests fetch error:', lErr);
       }
 
-      // 当月のシフト予定データ取得 (shifts)
+      // 当月のシフト予定データ取得 (advanced_shifts を優先、フォールバックで shifts)
       let shiftsList: any[] = [];
       try {
-        const { data: sData } = await supabase
-          .from('shifts')
-          .select('*')
+        const { data: advShifts } = await supabase
+          .from('advanced_shifts')
+          .select('user_id, date, target_date, start_time, end_time')
           .eq('tenant_id', tenantId)
-          .gte('date', monthStartDate)
-          .lte('date', monthEndDate);
-        if (sData) shiftsList = sData;
+          .gte('target_date', monthStartDate)
+          .lte('target_date', monthEndDate);
+        if (advShifts && advShifts.length > 0) {
+          shiftsList = advShifts.map((s: any) => ({
+            ...s,
+            date: s.date || s.target_date
+          }));
+        } else {
+          const { data: sData } = await supabase
+            .from('shifts')
+            .select('user_id, work_date, start_time, end_time')
+            .eq('tenant_id', tenantId)
+            .gte('work_date', monthStartDate)
+            .lte('work_date', monthEndDate);
+          if (sData) {
+            shiftsList = sData.map((s: any) => ({
+              ...s,
+              date: s.work_date
+            }));
+          }
+        }
       } catch (sErr) {
         console.warn('shifts fetch error:', sErr);
       }
@@ -1341,14 +1358,37 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         .gte('start_date', monthStartDate)
         .lte('start_date', monthEndDate);
 
-      // 当該社員のシフト予定 (shifts) を取得
-      const { data: userShiftData } = await supabase
-        .from('shifts')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .eq('user_id', userId)
-        .gte('date', monthStartDate)
-        .lte('date', monthEndDate);
+      // 当該社員のシフト予定 (advanced_shifts / shifts) を取得
+      let userShiftData: any[] = [];
+      try {
+        const { data: advData } = await supabase
+          .from('advanced_shifts')
+          .select('user_id, date, target_date, start_time, end_time')
+          .eq('tenant_id', tenantId)
+          .eq('user_id', userId)
+          .gte('target_date', monthStartDate)
+          .lte('target_date', monthEndDate);
+        if (advData && advData.length > 0) {
+          userShiftData = advData.map((s: any) => ({
+            ...s,
+            date: s.date || s.target_date
+          }));
+        } else {
+          const { data: legacyShifts } = await supabase
+            .from('shifts')
+            .select('user_id, work_date, start_time, end_time')
+            .eq('tenant_id', tenantId)
+            .eq('user_id', userId)
+            .gte('work_date', monthStartDate)
+            .lte('work_date', monthEndDate);
+          if (legacyShifts) {
+            userShiftData = legacyShifts.map((s: any) => ({
+              ...s,
+              date: s.work_date
+            }));
+          }
+        }
+      } catch (_) {}
 
       const userAtt = userAttData || [];
       const userReqs = (userLeaveData || []).filter((r: any) => 

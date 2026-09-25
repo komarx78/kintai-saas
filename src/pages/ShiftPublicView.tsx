@@ -93,12 +93,12 @@ export default function ShiftPublicView() {
       try {
         const { data } = await supabase
           .from('tenants')
-          .select('name, company_name')
+          .select('name')
           .eq('id', tenantId)
           .maybeSingle();
 
         if (data) {
-          setCompanyName(data.company_name || data.name || 'みんなのらくまる労務');
+          setCompanyName(data.name || 'みんなのらくまる労務');
         }
       } catch (err) {
         console.error('Failed to load tenant info:', err);

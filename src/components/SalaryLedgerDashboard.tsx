@@ -285,7 +285,6 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
 
       try {
         const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
-        const { data: cmsData } = await supabase.from('company_master_settings').select('*').eq('tenant_id', tenantId).maybeSingle();
         if (tData) {
           compInfo = { ...compInfo, ...tData };
           if (tData.name) compInfo.name = tData.name;
@@ -293,7 +292,6 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
           if (tData.representative_name) compInfo.representative_name = tData.representative_name;
           if (tData.company_seal_url) compInfo.company_seal_url = tData.company_seal_url;
         }
-        if (cmsData) compInfo = { ...compInfo, ...cmsData };
       } catch (e) {}
 
       try {

@@ -1712,17 +1712,6 @@ export default function CompanySettingsDashboard() {
         console.warn('payroll_settings sync:', pErr);
       }
 
-      // 2. company_master_settings への保存
-      try {
-        await supabase.from('company_master_settings').upsert({
-          tenant_id: tenantId,
-          ...basicInfo,
-          company_seal_url: companySealUrl,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'tenant_id' });
-      } catch (cmsErr) {
-        console.warn('company_master_settings sync:', cmsErr);
-      }
 
       // 🏛️ 社会保険・雇用保険・労働保険マスタの最終正規化（念押し自動補正）
       const cleanInsurance = {
@@ -1805,26 +1794,8 @@ export default function CompanySettingsDashboard() {
         }
       }
 
-      // 🏢 役職マスタの保存（DB ＆ LocalStorage完全同期・専用テーブル＋tenants）
+      // 🏢 役職マスタの保存（tenants テーブル position_settings および LocalStorage へ完全永続化）
       savePositionsToStorage(positions, tenantId);
-      if (tenantId) {
-        try {
-          await supabase.from('company_position_masters').delete().eq('tenant_id', tenantId);
-          const posInserts = positions.map((p, idx) => ({
-            id: p.id || `pos_${tenantId}_${idx + 1}_${Date.now()}`,
-            tenant_id: tenantId,
-            name: p.name,
-            rank_level: p.rank_level,
-            display_order: p.display_order ?? (idx + 1),
-            default_allowance: p.default_allowance || 0
-          }));
-          if (posInserts.length > 0) {
-            await supabase.from('company_position_masters').insert(posInserts);
-          }
-        } catch (pDbErr) {
-          console.warn('company_position_masters DB sync warning:', pDbErr);
-        }
-      }
 
       // 🏢 部署マスタの保存（DB department_masters 専用テーブルへ完全実永続化）
       if (tenantId) {
@@ -1986,21 +1957,6 @@ export default function CompanySettingsDashboard() {
       console.warn('DB sync positions to tenants exception:', e);
     }
 
-    // 2. company_position_masters 専用テーブルが存在する場合は洗い替え保存（存在しない場合は安全にスキップ）
-    try {
-      const { error: delErr } = await supabase.from('company_position_masters').delete().eq('tenant_id', tid);
-      if (!delErr && items.length > 0) {
-        const rows = items.map((item, idx) => ({
-          id: item.id || `pos_${tid}_${idx + 1}_${Date.now()}`,
-          tenant_id: tid,
-          name: item.name,
-          rank_level: item.rank_level,
-          display_order: item.display_order ?? (idx + 1),
-          default_allowance: item.default_allowance || 0
-        }));
-        await supabase.from('company_position_masters').insert(rows);
-      }
-    } catch (_) {}
   };
 
   // 役職追加
