@@ -3167,50 +3167,24 @@ export default function CompanySettingsDashboard() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  {/* 新規部署追加ボタン（インライン入力トグル） */}
-                  <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
-                    <input
-                      type="text"
-                      placeholder="新しい部署名（例: 企画部）"
-                      value={newDeptName}
-                      onChange={e => setNewDeptName(e.target.value)}
-                      className="bg-white border border-slate-300 rounded-xl px-2.5 py-1 text-xs font-bold text-slate-800 w-36 sm:w-44"
-                    />
-                    <button
-                      onClick={handleAddDepartment}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> 部署追加
-                    </button>
-                  </div>
-
-                  {/* ✨ 業種別部門テンプレートボタン */}
-                  <button
-                    onClick={() => setIsDeptPresetModalOpen(true)}
-                    className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
-                    title="業種・業界に合わせた標準的な部署セットをワンクリックで一括生成します"
-                  >
-                    <Wand2 className="w-3.5 h-3.5 text-amber-200" />
-                    <span>業種別テンプレート</span>
-                  </button>
-
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => navigate('/onboarding/admin?action=add&from=company_settings')}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
-                    title="入退社・労務書類管理システムを開いて新しい社員を登録します（登録完了後、戻るボタンでこの画面に戻れます）"
+                    title="入退社・労務書類管理システムを開いて新しい社員を登録します"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>社員を追加（労務台帳へ）</span>
+                    <span>社員を追加</span>
                     <ExternalLink className="w-3 h-3 opacity-80" />
                   </button>
 
                   <button
                     onClick={() => navigate('/onboarding/admin?action=import&from=company_settings')}
                     className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
-                    title="入退社・労務書類管理システムを開いて社員リストCSVを一括取り込みします（取り込み後、戻るボタンでこの画面に戻れます）"
+                    title="社員リストCSVを一括取り込みします"
                   >
                     <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                    <span>社員一括CSVインポート（労務台帳へ）</span>
+                    <span>社員一括CSV</span>
                     <ExternalLink className="w-3 h-3 text-emerald-600" />
                   </button>
 
@@ -3219,8 +3193,97 @@ export default function CompanySettingsDashboard() {
                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
                   >
                     <Printer className="w-4 h-4" />
-                    A4印刷 / PDF出力
+                    A4印刷 / PDF
                   </button>
+                </div>
+              </div>
+
+              {/* 💡 らくまる組織図・初心者向け かんたん3ステップ設定ガイドバナー */}
+              <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/80 to-purple-50/80 p-5 rounded-2xl border-2 border-indigo-200/80 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-indigo-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-xl shadow-xs shrink-0">
+                      💡
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                        らくまる組織図・初心者向け かんたん設定ガイド
+                        <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full border border-indigo-200">
+                          迷ったらここをチェック
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        設定した組織図は、入退社手続き・有給や残業の承認ルート・休日カレンダー・給与計算へ全自動連動します。
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* ✨ 業種別テンプレートボタン（ガイド内でも一番目立たせる） */}
+                  <button
+                    onClick={() => setIsDeptPresetModalOpen(true)}
+                    className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-2 shadow-sm cursor-pointer whitespace-nowrap self-start sm:self-auto transform hover:scale-[1.02]"
+                    title="自社の業種に合った標準的な部門セットを一括生成します"
+                  >
+                    <Wand2 className="w-4 h-4 text-amber-200 animate-pulse" />
+                    <span>✨ 業種別テンプレートから一括作成</span>
+                  </button>
+                </div>
+
+                {/* 🚀 3ステップ進め方カード */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="bg-white p-3.5 rounded-xl border border-indigo-100 shadow-2xs space-y-2 flex flex-col justify-between">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                          STEP 1: 部署を作る
+                        </span>
+                        <span className="text-base">🏢</span>
+                      </div>
+                      <div className="text-xs font-black text-slate-800">自社の部門を揃える</div>
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        右上の「業種別テンプレート」から選ぶか、入力欄から自社の部署（例: 営業部、管理部等）を追加します。
+                      </p>
+                    </div>
+                    <div className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg font-bold border border-emerald-100">
+                      🔰 名前変更（✎）や並び替え（← →）も後から自由！
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-3.5 rounded-xl border border-indigo-100 shadow-2xs space-y-2 flex flex-col justify-between">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                          STEP 2: 責任者と休日を選ぶ
+                        </span>
+                        <span className="text-base">👔</span>
+                      </div>
+                      <div className="text-xs font-black text-slate-800">所属長 ＆ カレンダー設定</div>
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        各部署カード内で「部門責任者（承認者）」と「適用営業カレンダー（土日祝休み／シフト制等）」を選びます。
+                      </p>
+                    </div>
+                    <div className="text-[10px] text-amber-800 bg-amber-50 px-2 py-1 rounded-lg font-bold border border-amber-100">
+                      ⚡ 有給・残業の承認通知が自動で届くようになります
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-3.5 rounded-xl border border-indigo-100 shadow-2xs space-y-2 flex flex-col justify-between">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-purple-600 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                          STEP 3: 社員を配属する
+                        </span>
+                        <span className="text-base">👤</span>
+                      </div>
+                      <div className="text-xs font-black text-slate-800">スタッフの配属・役職決定</div>
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        部署カード内の「＋社員を配属」や社員名クリックで、各スタッフの配属先と役職（部長、主任等）を決定します。
+                      </p>
+                    </div>
+                    <div className="text-[10px] text-purple-800 bg-purple-50 px-2 py-1 rounded-lg font-bold border border-purple-100">
+                      📊 労務台帳・勤怠・給与計算へ全自動連動完了！
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -3296,26 +3359,51 @@ export default function CompanySettingsDashboard() {
                 </div>
               )}
 
-              {/* 🌳 組織図ツリー視覚コネクタ（経営陣から各部門への結合ライン） */}
+              {/* 🌳 経営陣から各部門への組織統括ツリーコネクタ */}
               {computedOrgDepartments.length > 0 && (
-                <div className="relative py-2 flex flex-col items-center justify-center">
-                  <div className="w-0.5 h-3 bg-indigo-200" />
-                  <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-full text-[10px] font-bold text-indigo-700 shadow-2xs">
-                    <Network className="w-3 h-3 text-indigo-500" />
-                    <span>組織統括ライン（経営陣 ── 各事業部門）</span>
+                <div className="relative py-1.5 flex items-center justify-center">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+                    <div className="w-16 h-px bg-indigo-200" />
+                    <span className="flex items-center gap-1 text-[11px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full font-black shadow-2xs">
+                      <ArrowDown className="w-3 h-3 text-indigo-500 animate-bounce" />
+                      <span>経営陣の管掌下にある事業部門一覧</span>
+                    </span>
+                    <div className="w-16 h-px bg-indigo-200" />
                   </div>
-                  <div className="w-0.5 h-3 bg-indigo-200" />
                 </div>
               )}
 
               {/* 🏢 各部門・部署カード（横一列ツリー展開） */}
-              <div className="space-y-2">
-                <div className="text-xs font-bold text-slate-500 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Building2 className="w-4 h-4 text-indigo-600" />
-                    <span>各部門・配属一覧（全{computedOrgDepartments.length}部署 / 総員{companyUsers.length}名）:</span>
-                  </span>
-                  <span className="text-[11px] text-slate-400">※ 社員名クリックで役職変更、所属長枠で責任者アサイン</span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 gap-2">
+                  <div>
+                    <div className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                      <Building2 className="w-4 h-4 text-indigo-600" />
+                      <span>各部門・配属一覧（全{computedOrgDepartments.length}部署 / 総員{companyUsers.length}名）</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      ※ 部署カードごとに「部門長」や「休日規定」を設定し、社員を配属できます（名前変更や並び替えも可能）
+                    </p>
+                  </div>
+
+                  {/* 新規部署追加ボタン（インライン入力トグル） */}
+                  <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-200 self-start sm:self-auto">
+                    <input
+                      type="text"
+                      placeholder="新しい部署名（例: 企画部）"
+                      value={newDeptName}
+                      onChange={e => setNewDeptName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleAddDepartment();
+                      }}
+                      className="bg-white border border-slate-300 rounded-xl px-2.5 py-1 text-xs font-bold text-slate-800 w-36 sm:w-44"
+                    />
+                    <button
+                      onClick={handleAddDepartment}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer whitespace-nowrap shadow-2xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> 部署追加
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-stretch justify-start gap-4 overflow-x-auto pb-4 pt-2">
@@ -3469,16 +3557,18 @@ export default function CompanySettingsDashboard() {
                               </div>
 
                               {/* 部門長・所属長アサイン枠 */}
-                              <div className="bg-amber-50/80 border border-amber-200 p-2.5 rounded-xl space-y-1">
-                                <div className="text-[9px] font-black text-amber-800 flex items-center justify-between">
+                              <div className="bg-amber-50/80 border border-amber-200 p-2.5 rounded-xl space-y-1.5">
+                                <div className="text-[10px] font-black text-amber-800 flex items-center justify-between">
                                   <span className="flex items-center gap-1">
-                                    <UserCheck className="w-3 h-3 text-amber-600" />
+                                    <UserCheck className="w-3.5 h-3.5 text-amber-600" />
                                     部門責任者（所属長）
                                   </span>
-                                  {dept.manager_user_name && (
+                                  {dept.manager_user_name ? (
                                     <span className="text-[9px] bg-amber-200/80 text-amber-900 px-1.5 py-0.2 rounded font-bold">
                                       任命済
                                     </span>
+                                  ) : (
+                                    <span className="text-[9px] text-amber-600 font-bold">未指定でもOK</span>
                                   )}
                                 </div>
                                 <select
@@ -3497,17 +3587,20 @@ export default function CompanySettingsDashboard() {
                                     </option>
                                   ))}
                                 </select>
+                                <p className="text-[9px] text-amber-800/90 leading-tight">
+                                  ※ この部署のスタッフから届く有給申請・残業申請を承認するリーダーを指定します
+                                </p>
                               </div>
 
                               {/* 📅 適用営業カレンダー（休日規程）アサイン枠 */}
-                              <div className="bg-indigo-50/70 border border-indigo-200 p-2.5 rounded-xl space-y-1">
-                                <div className="text-[9px] font-black text-indigo-900 flex items-center justify-between">
+                              <div className="bg-indigo-50/70 border border-indigo-200 p-2.5 rounded-xl space-y-1.5">
+                                <div className="text-[10px] font-black text-indigo-900 flex items-center justify-between">
                                   <span className="flex items-center gap-1">
-                                    <Calendar className="w-3 h-3 text-indigo-600" />
+                                    <Calendar className="w-3.5 h-3.5 text-indigo-600" />
                                     適用営業カレンダー（休日規程）
                                   </span>
-                                  <span className="text-[9px] text-indigo-600 font-bold">
-                                    連動設定
+                                  <span className="text-[9px] text-indigo-600 font-bold bg-white px-1.5 py-0.2 rounded border border-indigo-200">
+                                    勤怠自動連動
                                   </span>
                                 </div>
                                 <select
@@ -3521,6 +3614,9 @@ export default function CompanySettingsDashboard() {
                                     </option>
                                   ))}
                                 </select>
+                                <p className="text-[9px] text-indigo-800/90 leading-tight">
+                                  ※ この部署の年間休日（土日祝休み／シフト制など）がタイムカード集計に自動反映されます
+                                </p>
                               </div>
 
                               {/* 所属メンバーリスト（店舗運営部は登録店舗が存在する場合のみ配下店舗ツリー構造を展開） */}
@@ -3629,7 +3725,10 @@ export default function CompanySettingsDashboard() {
                                   </div>
                                 ) : (
                                   <div>
-                                    <div className="text-[10px] font-bold text-slate-400 mb-1">所属メンバー一覧:</div>
+                                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 mb-1">
+                                      <span>所属メンバー（全{dept.members.length}名）:</span>
+                                      <span className="text-[9px] text-slate-400">※ 名前クリックで役職・配属変更</span>
+                                    </div>
                                     <div className="space-y-1 max-h-48 overflow-y-auto text-xs pr-1">
                                       {dept.members.length > 0 ? (
                                         dept.members.map(m => (
