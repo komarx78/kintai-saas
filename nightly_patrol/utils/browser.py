@@ -1,7 +1,7 @@
 import os
 from typing import Tuple, List
 from playwright.sync_api import sync_playwright, Browser, Page, BrowserContext
-from ..config import HEADLESS, BROWSER_CHANNEL, DEFAULT_TIMEOUT_MS, REPORTS_DIR
+from ..config import HEADLESS, BROWSER_CHANNEL, DEFAULT_TIMEOUT_MS, REPORTS_DIR, SLOW_MO_MS
 
 class BrowserManager:
     """Windows標準のEdgeを活用したPlaywrightブラウザマネージャー"""
@@ -17,11 +17,12 @@ class BrowserManager:
     def start(self) -> Page:
         self.playwright = sync_playwright().start()
         
-        # WindowsのMicrosoft Edgeで起動
+        # WindowsのMicrosoft Edgeで起動（有頭・人間が見えるスピードで実行可能）
         try:
             self.browser = self.playwright.chromium.launch(
                 channel=BROWSER_CHANNEL,
                 headless=HEADLESS,
+                slow_mo=SLOW_MO_MS,
                 args=["--no-sandbox", "--disable-dev-shm-usage"]
             )
         except Exception as e:
@@ -29,6 +30,7 @@ class BrowserManager:
             self.browser = self.playwright.chromium.launch(
                 channel="chrome",
                 headless=HEADLESS,
+                slow_mo=SLOW_MO_MS,
                 args=["--no-sandbox", "--disable-dev-shm-usage"]
             )
 

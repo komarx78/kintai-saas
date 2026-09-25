@@ -5,10 +5,16 @@ import os
 BASE_URL = os.getenv("PATROL_TARGET_URL", "http://localhost:5173")
 
 # 🖥️ ブラウザ実行設定
-# 夜間無人時は True（画面非表示で超高速実行）、日中デバッグ時は False（画面を見ながら実行）
-HEADLESS = os.getenv("PATROL_HEADLESS", "true").lower() == "true"
+# デフォルト: False（画面を表示して、人間が目で動きを確認できるモード）
+# 夜間無人・完全バックグラウンド時は True（画面非表示）
+HEADLESS = os.getenv("PATROL_HEADLESS", "false").lower() == "true"
+
+# ⏱️ 人間の目で見えるアニメーション速度（ミリ秒）
+# 0: 最速（一瞬） / 800: 人間が操作を追える快適な速度
+SLOW_MO_MS = int(os.getenv("PATROL_SLOW_MO", "800" if not HEADLESS else "0"))
+
 BROWSER_CHANNEL = "msedge"  # Windows標準のMicrosoft Edgeを活用
-DEFAULT_TIMEOUT_MS = 15000  # 各アクションの最大待機時間（15秒）
+DEFAULT_TIMEOUT_MS = 20000  # 各アクションの最大待機時間（20秒）
 
 # 🛡️ Supabase 実DB直接監査設定（司馬懿の眼）
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://phhrulzeaomqsvrregpc.supabase.co")
