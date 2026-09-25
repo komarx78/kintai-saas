@@ -318,8 +318,18 @@ export const calculateDailyAttendanceDetails = (
   if (rawCheckOut && scheduledEndTime) {
     const outM = timeToMinutes(rawCheckOut);
     const endM = timeToMinutes(scheduledEndTime);
-    if (outM !== null && endM !== null && outM < endM) {
-      result.isEarlyLeave = true;
+    const startM = timeToMinutes(scheduledStartTime);
+    if (outM !== null && endM !== null) {
+      if (startM !== null && startM > endM) {
+        // 日跨ぎシフト（例: 22:00〜翌07:00）
+        const normalizedEndM = endM + 24 * 60;
+        const normalizedOutM = (outM < startM) ? (outM + 24 * 60) : outM;
+        if (normalizedOutM < normalizedEndM) {
+          result.isEarlyLeave = true;
+        }
+      } else if (outM < endM) {
+        result.isEarlyLeave = true;
+      }
     }
   }
 
@@ -328,9 +338,14 @@ export const calculateDailyAttendanceDetails = (
 
   const inM = timeToMinutes(roundedIn);
   const outM = timeToMinutes(roundedOut);
-  if (inM === null || outM === null || outM <= inM) return result;
+  if (inM === null || outM === null) return result;
 
-  const totalStayMinutes = outM - inM;
+  // 🌙 日跨ぎ夜勤対応（退勤時刻の方が出勤時刻より小さい場合は翌日退勤として24時間を加算）
+  let totalStayMinutes = outM - inM;
+  if (totalStayMinutes < 0) {
+    totalStayMinutes += 24 * 60;
+  }
+  if (totalStayMinutes <= 0) return result;
 
   // 休憩時間の決定
   let breakMins = 0;
