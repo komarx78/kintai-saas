@@ -299,9 +299,24 @@ export async function saveMaternityLeaveRecord(record: MaternityLeaveRecord): Pr
       }
     } catch (_) {}
 
+    // childcare_extended などのDB未配備カラムを安全にチェックリスト/備考へ退避し、実在カラムのみ抽出
+    const { 
+      childcare_extended, 
+      attachment_mynumber_url, 
+      attachment_mynumber_filename, 
+      ...cleanData 
+    } = dataToSave as any;
+
+    if (childcare_extended && childcare_extended !== 'none') {
+      cleanData.checklist = {
+        ...(cleanData.checklist || DEFAULT_MATERNITY_CHECKLIST),
+        childcare_extended
+      };
+    }
+
     const { error } = await supabase
       .from('employee_maternity_leaves')
-      .upsert(dataToSave, { onConflict: 'tenant_id,user_id' });
+      .upsert(cleanData, { onConflict: 'tenant_id,user_id' });
 
     if (error) {
       console.error('saveMaternityLeaveRecord error:', error);
@@ -377,6 +392,11 @@ export async function submitEmployeeMaternityApplication(params: {
     }
 
     // 2. employee_maternity_leaves へ Upsert
+    const resolvedChecklist = {
+      ...(record.checklist || DEFAULT_MATERNITY_CHECKLIST),
+      childcare_extended: record.childcare_extended || 'none'
+    };
+
     const upsertData: any = {
       tenant_id: tenantId,
       user_id: userId,
@@ -389,7 +409,6 @@ export async function submitEmployeeMaternityApplication(params: {
       childcare_leave_start_date: sanitizeDate(record.childcare_leave_start_date),
       childcare_leave_end_date: sanitizeDate(record.childcare_leave_end_date),
       return_to_work_date: sanitizeDate(record.return_to_work_date),
-      childcare_extended: record.childcare_extended || 'none',
       child_name: record.child_name || '',
       child_birth_date: sanitizeDate(record.child_birth_date),
       child_relationship: record.child_relationship || '実子',
@@ -398,7 +417,7 @@ export async function submitEmployeeMaternityApplication(params: {
       contact_email: record.contact_email || '',
       contact_line_id: record.contact_line_id || '',
       remarks: record.remarks || '',
-      checklist: record.checklist || DEFAULT_MATERNITY_CHECKLIST,
+      checklist: resolvedChecklist,
       attachment_handbook_url: record.attachment_handbook_url || null,
       attachment_handbook_filename: record.attachment_handbook_filename || '',
       resident_tax_advance: record.resident_tax_advance || { startDate: '', records: [], totalAmount: 0, settledAmount: 0 },

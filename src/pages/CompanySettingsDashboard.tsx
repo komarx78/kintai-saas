@@ -940,7 +940,7 @@ export default function CompanySettingsDashboard() {
         }
 
         // 💳 テナント課金情報・プラン復元
-        let loadedSquareUrl = tData.square_checkout_url || '';
+        let loadedSquareUrl = tData.payroll_common_settings?.square_checkout_url || '';
         try {
           const localUrl = localStorage.getItem(`square_checkout_url_${tenantIdData}`);
           if (localUrl) loadedSquareUrl = localUrl;
@@ -1701,13 +1701,22 @@ export default function CompanySettingsDashboard() {
         prefecture_code: autoPrefCode
       };
 
-      // 1. payroll_settings への都道府県コード・締切日・支払日同期
+      // 1. payroll_settings への都道府県コード・締切日・支払日同期（実在カラムのみ厳格バインド）
       try {
-        await supabase.from('payroll_settings').upsert({
+        const cleanPayrollSettingsPayload: any = {
           tenant_id: tenantId,
-          ...mergedPayrollSettings,
+          closing_day: mergedPayrollSettings.closing_day,
+          payment_month: mergedPayrollSettings.payment_month,
+          payment_day: mergedPayrollSettings.payment_day,
+          prefecture_code: mergedPayrollSettings.prefecture_code || '25',
           updated_at: new Date().toISOString()
-        }, { onConflict: 'tenant_id' });
+        };
+        if ((mergedPayrollSettings as any).health_insurance_rate !== undefined) cleanPayrollSettingsPayload.health_insurance_rate = (mergedPayrollSettings as any).health_insurance_rate;
+        if ((mergedPayrollSettings as any).nursing_insurance_rate !== undefined) cleanPayrollSettingsPayload.nursing_insurance_rate = (mergedPayrollSettings as any).nursing_insurance_rate;
+        if ((mergedPayrollSettings as any).pension_insurance_rate !== undefined) cleanPayrollSettingsPayload.pension_insurance_rate = (mergedPayrollSettings as any).pension_insurance_rate;
+        if ((mergedPayrollSettings as any).employment_insurance_rate !== undefined) cleanPayrollSettingsPayload.employment_insurance_rate = (mergedPayrollSettings as any).employment_insurance_rate;
+
+        await supabase.from('payroll_settings').upsert(cleanPayrollSettingsPayload, { onConflict: 'tenant_id' });
       } catch (pErr) {
         console.warn('payroll_settings sync:', pErr);
       }
@@ -1925,8 +1934,13 @@ export default function CompanySettingsDashboard() {
       const cleanUrl = url.trim();
       localStorage.setItem(`square_checkout_url_${tenantId}`, cleanUrl);
       try {
-        await supabase.from('tenants').update({
+        const { data: curT } = await supabase.from('tenants').select('payroll_common_settings').eq('id', tenantId).maybeSingle();
+        const updatedPayrollCommon = {
+          ...(curT?.payroll_common_settings || {}),
           square_checkout_url: cleanUrl
+        };
+        await supabase.from('tenants').update({
+          payroll_common_settings: updatedPayrollCommon
         }).eq('id', tenantId);
       } catch (_) {}
       setTenantBilling(prev => ({ ...prev, square_checkout_url: cleanUrl }));

@@ -221,6 +221,8 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
         } catch {}
       }
 
+      const userMap = new Map((usersData || []).map(u => [u.id, u]));
+
       let revList: SalaryRevisionRecord[] = [];
       try {
         const { data: revData } = await supabase
@@ -229,7 +231,16 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
           .eq('tenant_id', tenantId)
           .order('revision_date', { ascending: false });
 
-        if (revData) revList = revData;
+        if (revData) {
+          revList = revData.map((r: any) => {
+            const u = userMap.get(r.user_id);
+            return {
+              ...r,
+              user_name: r.user_name || u?.name || '未設定',
+              department: r.department || u?.department || '-'
+            };
+          });
+        }
       } catch (e) {
         console.warn('salary_revision_history fetch error:', e);
       }
@@ -244,7 +255,8 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
           if (missingInDb.length > 0) {
             console.log(`[Auto-Sync] Uploading ${missingInDb.length} local revision records to Supabase...`);
             try {
-              const { error: insErr } = await supabase.from('salary_revision_history').insert(missingInDb);
+              const cleanMissingInDb = missingInDb.map(({ user_name, department, ...rest }: any) => rest);
+              const { error: insErr } = await supabase.from('salary_revision_history').insert(cleanMissingInDb);
               if (!insErr) {
                 revList = [...missingInDb, ...revList];
               } else {
@@ -676,9 +688,10 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
         }
       }
 
-      // 昇給履歴テーブルに一括INSERT
+      // 昇給履歴テーブルに一括INSERT（実在カラムのみを抽出）
       try {
-        await supabase.from('salary_revision_history').insert(newHistoryRecords);
+        const cleanHistoryRecords = newHistoryRecords.map(({ user_name, department, ...rest }) => rest);
+        await supabase.from('salary_revision_history').insert(cleanHistoryRecords);
       } catch (e) {
         console.warn('Batch revision history insert notice:', e);
       }
@@ -793,7 +806,8 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
       };
 
       try {
-        await supabase.from('salary_revision_history').insert([revisionPayload]);
+        const { user_name, department, ...cleanRevisionPayload } = revisionPayload;
+        await supabase.from('salary_revision_history').insert([cleanRevisionPayload]);
       } catch (e) {
         console.warn('DB error, using local fallback:', e);
       }
@@ -906,30 +920,32 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
         await saveRevisionContracts(tenantId, localDocs);
       }
 
-      // 2. 昇給履歴テーブルの同期
+      // 2. 昇給履歴テーブルの同期（実在カラムのみを抽出）
       const savedRev = localStorage.getItem(`salary_revisions_${tenantId}`);
       if (savedRev) {
         try {
           const parsedRev = JSON.parse(savedRev);
           if (Array.isArray(parsedRev) && parsedRev.length > 0) {
+            const cleanParsedRev = parsedRev.map(({ user_name, department, ...rest }: any) => rest);
             const { error: revErr } = await supabase
               .from('salary_revision_history')
-              .upsert(parsedRev, { onConflict: 'id' });
+              .upsert(cleanParsedRev, { onConflict: 'id' });
             if (revErr) console.warn('Revision history upsert error:', revErr);
           }
         } catch (e) {}
       }
 
-      // 3. 給与プロファイル（基本給・手当）の同期
+      // 3. 給与プロファイル（基本給・手当）の同期（実在カラムのみを抽出）
       const savedProfiles = localStorage.getItem(`payroll_profiles_${tenantId}`);
       if (savedProfiles) {
         try {
           const parsedProf = JSON.parse(savedProfiles);
           const profList = Object.values(parsedProf);
           if (profList.length > 0) {
+            const cleanProfList = profList.map(({ special_allowance, ...rest }: any) => rest);
             const { error: profErr } = await supabase
               .from('employee_payroll_profiles')
-              .upsert(profList, { onConflict: 'tenant_id,user_id' });
+              .upsert(cleanProfList, { onConflict: 'tenant_id,user_id' });
             if (profErr) console.warn('Profiles upsert error:', profErr);
           }
         } catch (e) {}
