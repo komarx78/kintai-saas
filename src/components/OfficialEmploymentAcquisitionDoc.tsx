@@ -198,9 +198,17 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
       employerName: companyInfo.name,
       employerRep: companyInfo.representative_name,
       employerPhone: companyInfo.phone_number,
-      targetHelloWork: '大津'
+      targetHelloWork: (companyInfo as any).hello_work_name || (companyInfo as any).competent_hello_work || (() => {
+        const addr = companyInfo.address || '';
+        const match = addr.match(/[都道府県]([^\s0-9丁目番地号]+?[市区町村])/);
+        if (match) {
+          return match[1].replace(/[市区町村]$/, '');
+        }
+        return '';
+      })()
     };
   }, [officeNumber, companyInfo]);
+
 
   // 従業員切り替え時に初期値を自動計算・反映（SSOT連動）
   useEffect(() => {
@@ -918,9 +926,10 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
                           value={formValues.employerPhone || ''}
                           onChange={(e) => handleInputChange('employerPhone', e.target.value)}
                           className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 font-mono font-bold text-slate-800 text-xs"
-                          placeholder="077-574-6907"
+                          placeholder="03-1234-5678"
                         />
                       </div>
+
                     </div>
 
                     <div>

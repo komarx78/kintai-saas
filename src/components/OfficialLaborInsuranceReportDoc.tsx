@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../lib/supabase';
 import { Printer, Download, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
 export interface LaborInsuranceEmployee {
@@ -26,6 +27,7 @@ export interface OfficialLaborInsuranceReportDocProps {
   employees: LaborInsuranceEmployee[];
   targetFiscalYear?: number; // 対象年度 (例: 2026)
   onBack: () => void;
+  tenantId?: string;
 }
 
 export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceReportDocProps> = ({
@@ -33,40 +35,140 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
   laborInsuranceNumber = '25-1-02-123456-000',
   employees,
   targetFiscalYear = new Date().getFullYear(),
-  onBack
+  onBack,
+  tenantId
 }) => {
+
   const [fiscalYear, setFiscalYear] = useState<number>(targetFiscalYear);
   // 保険料率設定（初期値：一般事業の標準値）
   const accidentInsuranceRate = 3.0; // 労災保険率 3.0/1000 (千分率)
   const employmentInsuranceRate = 15.5; // 雇用保険率 15.5/1000 (一般事業)
   const generalContributionRate = 0.02; // 一般拠出金率 0.02/1000
 
+  // 🛡️ 実DB（payslipsテーブル）からの労働保険算定対象期間（前年4月〜当年3月）確定データ取得（SSOT原則・憲法14条）
+  const [dbPayslips, setDbPayslips] = useState<any[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLaborPayslips = async () => {
+      try {
+        const startYM = `${fiscalYear - 1}-04`;
+        const endYM = `${fiscalYear}-03`;
+        let query = supabase
+          .from('payslips')
+          .select('*')
+          .gte('year_month', startYM)
+          .lte('year_month', endYM);
+
+        if (tenantId) {
+          query = query.eq('tenant_id', tenantId);
+        }
+
+        const { data, error } = await query;
+        if (!error && data && isMounted) {
+          setDbPayslips(data);
+        }
+      } catch (err) {
+        console.warn('OfficialLaborInsuranceReport dbPayslips fetch error:', err);
+      }
+    };
+
+    fetchLaborPayslips();
+    return () => {
+      isMounted = false;
+    };
+  }, [fiscalYear, tenantId]);
+
   const handlePrint = () => {
     window.print();
   };
 
-  // 全従業員の賃金集計（年間想定額）
+  // 全従業員の賃金集計（実確定給与実績優先 ＆ 推計捏造完全根絶）
   // 役員（executive）は労災・雇用対象外
-  const eligibleEmployees = employees.map(emp => {
-    const isExecutive = emp.employment_type === 'executive' || emp.role?.includes('役員') || emp.role?.includes('代表');
-    const isPartTime = emp.employment_type === 'part-time';
-    
-    // 年間賃金概算（月給 × 12 + 賞与2ヶ月想定）
-    const monthlyWage = emp.base_salary || 0;
-    const annualWage = monthlyWage * 14;
+  const eligibleEmployees = useMemo(() => {
+    return employees.map(emp => {
+      const isExecutive = emp.employment_type === 'executive' || emp.role?.includes('役員') || emp.role?.includes('代表');
+      const isPartTime = emp.employment_type === 'part-time';
 
-    const isAccidentEligible = !isExecutive; // 役員以外は全員労災対象
-    const isEmploymentEligible = !isExecutive && (emp.employment_insurance_joined !== false); // 雇用保険加入者
+      // 対象年度（前年4月〜当年3月）の本人の実DB確定レコードを抽出
+      const empSlips = dbPayslips.filter(p => p.user_id === emp.id);
 
-    return {
-      ...emp,
-      isExecutive,
-      isPartTime,
-      annualWage,
-      isAccidentEligible,
-      isEmploymentEligible
-    };
-  });
+      // LocalStorageからのフォールバック補完
+      const slipMap = new Map<string, any>();
+      empSlips.forEach(p => slipMap.set(p.year_month, p));
+
+      if (tenantId) {
+        // 前年4月〜12月
+        for (let m = 4; m <= 12; m++) {
+          const ym = `${fiscalYear - 1}-${String(m).padStart(2, '0')}`;
+          if (!slipMap.has(ym)) {
+            try {
+              const raw = localStorage.getItem(`saved_payslips_${tenantId}_${ym}`);
+              if (raw) {
+                const list = JSON.parse(raw);
+                if (Array.isArray(list)) {
+                  const found = list.find((p: any) => p.user_id === emp.id);
+                  if (found) slipMap.set(ym, found);
+                }
+              }
+            } catch (_) {}
+          }
+        }
+        // 当年1月〜3月
+        for (let m = 1; m <= 3; m++) {
+          const ym = `${fiscalYear}-${String(m).padStart(2, '0')}`;
+          if (!slipMap.has(ym)) {
+            try {
+              const raw = localStorage.getItem(`saved_payslips_${tenantId}_${ym}`);
+              if (raw) {
+                const list = JSON.parse(raw);
+                if (Array.isArray(list)) {
+                  const found = list.find((p: any) => p.user_id === emp.id);
+                  if (found) slipMap.set(ym, found);
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      const confirmedSlips = Array.from(slipMap.values());
+      const hasActualRecords = confirmedSlips.length > 0;
+
+      let annualWage = 0;
+      if (hasActualRecords) {
+        // 🛡️ 実確定給与レコードの厳格累計
+        confirmedSlips.forEach(s => {
+          const gross = Number(s.total_earnings || (
+            (s.base_salary || 0) + (s.overtime_allowance || 0) + 
+            (s.position_allowance || 0) + (s.housing_allowance || 0) +
+            (s.qualification_allowance || 0) + (s.family_allowance || 0) +
+            (s.commuting_allowance || 0) + (s.special_allowance || 0)
+          ));
+          annualWage += gross;
+        });
+      } else {
+        // 確定データ未登録月は基本給×月数（退職者は在籍期間考慮）。「賞与2ヶ月分」の勝手な捏造は完全根絶！
+        const monthlyWage = emp.base_salary || 0;
+        annualWage = monthlyWage * (emp.is_retired ? 6 : 12);
+      }
+
+      const isAccidentEligible = !isExecutive; // 役員以外は全員労災対象
+      const isEmploymentEligible = !isExecutive && (emp.employment_insurance_joined !== false); // 雇用保険加入者
+
+      return {
+        ...emp,
+        isExecutive,
+        isPartTime,
+        annualWage,
+        isAccidentEligible,
+        isEmploymentEligible,
+        hasActualRecords,
+        confirmedMonthsCount: confirmedSlips.length
+      };
+    });
+  }, [employees, dbPayslips, fiscalYear, tenantId]);
+
 
   // 1. 労災保険対象
   const accidentWorkers = eligibleEmployees.filter(e => e.isAccidentEligible);

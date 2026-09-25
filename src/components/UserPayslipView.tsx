@@ -9,8 +9,10 @@ import { OfficialLaborContractDoc, type LaborContractData } from './OfficialLabo
 import { OfficialTaxWithholdingSlipDoc } from './OfficialTaxWithholdingSlipDoc';
 import { fetchRevisionContracts, signRevisionContract, type RevisionContractDoc } from '../lib/revisionContracts';
 import { getLaborContractTemplateFromStorage } from '../lib/laborContractTemplate';
+import { calculateNetEmploymentIncome } from '../lib/payrollEngine';
 
 interface UserPayslipViewProps {
+
   userId: string;
   userName: string;
   tenantId?: string | null;
@@ -733,13 +735,64 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
       {/* 3. 🧾 源泉徴収票（国税庁公式原本様式 NTAOHSZ062010060）                     */}
       {/* ========================================================================= */}
       {activeDocTab === 'tax_slip' && (() => {
-        const base = userProfile.base_salary || 0;
-        const totalPaid = base * (userProfile.is_retired ? 8 : 12) + Math.round(base * 2.0);
-        const socialDeducted = Math.round(totalPaid * 0.1475);
-        const deductionAfterPayment = Math.round(totalPaid * 0.7);
-        const totalIncomeDeduction = socialDeducted + 480000;
-        const taxable = Math.max(0, deductionAfterPayment - totalIncomeDeduction);
-        const taxDeducted = Math.round(taxable * 0.05 * 1.021);
+
+        // 🛡️ 実確定データ（payslips・確定賞与）からの対象年累計集計（SSOT原則・憲法14条）
+        const targetYearPayslips = payslips.filter(p => {
+          const ym = p.year_month || '';
+          return ym.startsWith(`${selectedTaxYear}-`);
+        });
+
+        const targetYearBonuses = (publishedBonusList || []).filter(b => {
+          const payDate = b.payment_date || b.created_at || '';
+          return payDate.startsWith(`${selectedTaxYear}-`);
+        });
+
+        const hasConfirmedData = targetYearPayslips.length > 0 || targetYearBonuses.length > 0;
+
+        let totalPaid = 0;
+        let socialDeducted = 0;
+        let taxDeducted = 0;
+
+        if (hasConfirmedData) {
+          // 給与確定データからの集計
+          targetYearPayslips.forEach(p => {
+            const gross = Number(p.total_earnings || (
+              (p.base_salary || 0) + (p.overtime_allowance || 0) + 
+              (p.position_allowance || 0) + (p.housing_allowance || 0) +
+              (p.qualification_allowance || 0) + (p.family_allowance || 0) +
+              (p.commuting_allowance || 0) + (p.special_allowance || 0)
+            ));
+            totalPaid += gross;
+
+            const soc = Number(
+              (p.health_insurance || 0) + (p.nursing_insurance || 0) +
+              (p.pension_insurance || 0) + (p.employment_insurance || 0)
+            );
+            socialDeducted += soc;
+
+            taxDeducted += Number(p.income_tax || 0);
+          });
+
+          // 賞与確定データからの集計
+          targetYearBonuses.forEach(b => {
+            const bGross = Number(b.bonus_gross || (b.currency_amount || 0));
+            totalPaid += bGross;
+
+            const bSoc = Number(b.social_insurance_total || (
+              (b.health_insurance || 0) + (b.nursing_insurance || 0) +
+              (b.welfare_pension || 0) + (b.employment_insurance || 0)
+            ));
+            socialDeducted += bSoc;
+
+            taxDeducted += Number(b.income_tax || 0);
+          });
+        }
+
+        // 🎌 国税庁告示公式「給与所得控除後の給与等の金額」準拠（推計0.7掛けの完全根絶）
+        const deductionAfterPayment = totalPaid > 0 ? calculateNetEmploymentIncome(totalPaid) : 0;
+        // 基礎控除 480,000円（所得税法第86条）
+        const basicDeduction = totalPaid > 0 ? 480000 : 0;
+        const totalIncomeDeduction = totalPaid > 0 ? (socialDeducted + basicDeduction) : 0;
 
         return (
           <div className="space-y-6">
@@ -783,6 +836,21 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
                 </button>
               </div>
             </div>
+
+            {/* 確定データ未登録時の親切案内バッジ */}
+            {!hasConfirmedData && (
+              <div className="bg-amber-50 border border-amber-300 text-amber-900 p-4 rounded-2xl text-xs flex items-start gap-3 print:hidden shadow-xs">
+                <span className="font-black text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded text-[10px] shrink-0 mt-0.5">
+                  確定データ待機中
+                </span>
+                <div className="leading-relaxed">
+                  <span className="font-bold">令和{selectedTaxYear - 2018}年分の確定済み給与・賞与明細がまだありません。</span>
+                  <span className="text-amber-800 text-[11px] block mt-0.5">
+                    公的書類の虚偽記載を防ぐため、架空の概算値は表示されません。月次の給与明細が確定公開されると自動的に合算反映されます。
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* 実務・税法（所得税法第226条）案内バッジ */}
             {selectedTaxYear >= currentCalYear && !userProfile.is_retired && (
@@ -833,7 +901,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
                   withholdingTaxAmount: taxDeducted,
                   socialInsuranceAmount: socialDeducted,
                   dependentsCount: userProfile.dependents_count,
-                  basicDeduction: 480000,
+                  basicDeduction: basicDeduction,
                   companyAddress: companyAddress,
                   companyName: tenantName,
                   companyPhone: companyPhone,

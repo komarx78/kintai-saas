@@ -621,3 +621,55 @@ export function calculateBonusDeductions(params: {
     netPay
   };
 }
+
+/**
+ * 給与所得控除額の計算（所得税法第28条・令和2年分以降）
+ * @param grossPay 年間給与支払金額（給与・賞与の総支給額額面）
+ */
+export function calculateEmploymentIncomeDeduction(grossPay: number): number {
+  if (grossPay <= 0) return 0;
+  if (grossPay <= 550000) {
+    return grossPay; // 55万円以下の場合は全額控除
+  } else if (grossPay <= 1625000) {
+    return 550000;
+  } else if (grossPay <= 1800000) {
+    return Math.floor(grossPay * 0.40 - 100000);
+  } else if (grossPay <= 3600000) {
+    return Math.floor(grossPay * 0.30 + 80000);
+  } else if (grossPay <= 6600000) {
+    return Math.floor(grossPay * 0.20 + 440000);
+  } else if (grossPay <= 8500000) {
+    return Math.floor(grossPay * 0.10 + 1100000);
+  } else {
+    return 1950000; // 給与等の収入金額が850万円を超える場合は一律195万円（上限）
+  }
+}
+
+/**
+ * 給与所得控除後の金額（給与所得金額）の計算
+ * 国税庁告示「年末調整等のための給与所得控除後の給与等の金額の表（令和2年分以降）」完全準拠
+ * 源泉徴収票（G05欄）に記載される正式金額
+ * @param grossPay 年間給与支払金額
+ */
+export function calculateNetEmploymentIncome(grossPay: number): number {
+  if (grossPay <= 0) return 0;
+  if (grossPay <= 550000) return 0;
+  if (grossPay <= 1625000) return grossPay - 550000;
+
+  // 1,625,000円超〜6,600,000円以下の場合は、給与収入金額を4,000円で除して端数切捨て×4,000円とする端数整理特例（告示）
+  if (grossPay < 1800000) {
+    const a = Math.floor(grossPay / 4000) * 4000;
+    return Math.floor(a * 0.6) + 100000;
+  } else if (grossPay < 3600000) {
+    const a = Math.floor(grossPay / 4000) * 4000;
+    return Math.floor(a * 0.7) - 80000;
+  } else if (grossPay < 6600000) {
+    const a = Math.floor(grossPay / 4000) * 4000;
+    return Math.floor(a * 0.8) - 440000;
+  } else if (grossPay <= 8500000) {
+    return grossPay - Math.floor(grossPay * 0.10 + 1100000);
+  } else {
+    return grossPay - 1950000;
+  }
+}
+

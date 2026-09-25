@@ -163,6 +163,31 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
     const retWareki = toWareki(retDateStr);
     const lossWareki = toWareki(lossDateStr);
 
+    // 会社電話番号の安全分解（ハイフン有無両対応）
+    const rawPhone = (companyInfo?.phone_number || companyInfo?.phone || '').replace(/[^0-9]/g, '');
+    let telArea = '';
+    let telLocal = '';
+    let telNumber = '';
+    if (rawPhone.length === 10) {
+      if (rawPhone.startsWith('03') || rawPhone.startsWith('06')) {
+        telArea = rawPhone.slice(0, 2);
+        telLocal = rawPhone.slice(2, 6);
+        telNumber = rawPhone.slice(6);
+      } else {
+        telArea = rawPhone.slice(0, 3);
+        telLocal = rawPhone.slice(3, 6);
+        telNumber = rawPhone.slice(6);
+      }
+    } else if (rawPhone.length >= 11) {
+      telArea = rawPhone.slice(0, 3);
+      telLocal = rawPhone.slice(3, 7);
+      telNumber = rawPhone.slice(7, 11);
+    } else if (rawPhone.length > 0) {
+      telArea = rawPhone.slice(0, 3);
+      telLocal = rawPhone.slice(3, 6);
+      telNumber = rawPhone.slice(6);
+    }
+
     return {
       submitYear: subY,
       submitMonth: subM,
@@ -170,13 +195,14 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
       officeSymbol_1: symLeft,
       officeSymbol_2: symRight,
       officeNumber: offNum,
-      officeZipCode: (companyInfo?.postal_code || '5200001').replace(/[^0-9]/g, ''),
-      officeAddress: companyInfo?.address || '滋賀県大津市坂本3丁目21-16',
-      officeName: companyInfo?.company_name || '株式会社cocotte',
-      ownerName: companyInfo?.representative_name ? `代表取締役 ${companyInfo.representative_name}` : '代表取締役 駒井 秀一朗',
-      officeTel_area: '077',
-      officeTel_local: '574',
-      officeTel_number: '6907',
+      officeZipCode: (companyInfo?.postal_code || companyInfo?.zip_code || '').replace(/[^0-9]/g, ''),
+      officeAddress: companyInfo?.address || '',
+      officeName: companyInfo?.company_name || companyInfo?.name || '',
+      ownerName: companyInfo?.representative_name ? `代表取締役 ${companyInfo.representative_name}` : '',
+      officeTel_area: telArea,
+      officeTel_local: telLocal,
+      officeTel_number: telNumber,
+
 
       // 被保険者1
       insuredPersonNumber_1: '001',

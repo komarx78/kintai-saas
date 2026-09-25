@@ -42,6 +42,7 @@ export interface OfficialEmploymentInsuranceDocProps {
   selectedEmployeeId: string;
   onSelectEmployee: (id: string) => void;
   onBack: () => void;
+  tenantId?: string;
 }
 
 export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranceDocProps> = ({
@@ -51,8 +52,10 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
   employees,
   selectedEmployeeId,
   onSelectEmployee,
-  onBack
+  onBack,
+  tenantId
 }) => {
+
   const [docType, setDocType] = useState<'acquisition' | 'loss' | 'separation'>(initialType);
   
   // 🔍 検索・フィルタリングState
@@ -330,8 +333,10 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
           onSelectEmployee={onSelectEmployee}
           onBack={onBack}
           hideHeader={true}
+          tenantId={tenantId}
         />
       ) : docType === 'acquisition' ? (
+
         <OfficialEmploymentAcquisitionDoc
           companyInfo={companyInfo}
           officeNumber={officeNumber}

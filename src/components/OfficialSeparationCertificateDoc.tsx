@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import { 
   Printer, ArrowLeft, CheckSquare, Square, Copy, Check, 
   Eye, Sliders, User, FileText, RefreshCw, ShieldCheck
@@ -37,6 +38,7 @@ export interface OfficialSeparationCertificateDocProps {
   onSelectEmployee: (id: string) => void;
   onBack: () => void;
   hideHeader?: boolean;
+  tenantId?: string;
 }
 
 // 和暦変換ユーティリティ
@@ -75,7 +77,8 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
   selectedEmployeeId,
   onSelectEmployee,
   onBack,
-  hideHeader = false
+  hideHeader = false,
+  tenantId
 }) => {
   // 表示モード: 'nav' (転記ナビゲーション) | 'print' (公式A4下書き印刷プレビュー)
   const [viewMode, setViewMode] = useState<'nav' | 'print'>('nav');
@@ -94,6 +97,40 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
 
   // 対象従業員
   const currentEmployee = employees.find(e => e.id === selectedEmployeeId) || employees[0];
+
+  // 🛡️ 実DB（payslipsテーブル）からの確定給与データ一括取得（SSOT原則・憲法14条）
+  const [dbPayslips, setDbPayslips] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!currentEmployee?.id) return;
+    let isMounted = true;
+
+    const fetchPayslips = async () => {
+      try {
+        let query = supabase
+          .from('payslips')
+          .select('*')
+          .eq('user_id', currentEmployee.id)
+          .order('year_month', { ascending: false });
+
+        if (tenantId) {
+          query = query.eq('tenant_id', tenantId);
+        }
+
+        const { data, error } = await query;
+        if (!error && data && isMounted) {
+          setDbPayslips(data);
+        }
+      } catch (err) {
+        console.warn('OfficialSeparationCertificate dbPayslips fetch error:', err);
+      }
+    };
+
+    fetchPayslips();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentEmployee?.id, tenantId]);
 
   // 転記チェックの切り替え
   const toggleFieldCheck = (key: string) => {
@@ -132,7 +169,7 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
 
   const monthlyBaseWage = currentEmployee?.base_salary || 0;
 
-  // 賃金支払状況テーブルの自動算定（退職日から逆算）
+  // 賃金支払状況テーブルの自動算定（退職日から逆算・実DB SSOT直結）
   const wageRows = useMemo(() => {
     const rows = [];
     const baseDate = new Date(retDate.getFullYear(), retDate.getMonth(), retDate.getDate());
@@ -150,6 +187,9 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
       // ⑩ 賃金支払対象期間: 給与締日に応じた期間
       let payStartStr = '';
       let payEndStr = '';
+      let targetYear = pEnd.getFullYear();
+      let targetMonth = pEnd.getMonth() + 1;
+
       if (closingDay >= 28) {
         // 末日締め
         payStartStr = startStr;
@@ -160,17 +200,83 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
         const cpStart = new Date(baseDate.getFullYear(), baseDate.getMonth() - i - 1, closingDay + 1);
         payStartStr = `${cpStart.getFullYear()}/${String(cpStart.getMonth() + 1).padStart(2, '0')}/${String(cpStart.getDate()).padStart(2, '0')}`;
         payEndStr = `${cpEnd.getFullYear()}/${String(cpEnd.getMonth() + 1).padStart(2, '0')}/${String(cpEnd.getDate()).padStart(2, '0')}`;
+        targetYear = cpEnd.getFullYear();
+        targetMonth = cpEnd.getMonth() + 1;
       }
       const payStartWareki = toWarekiShort(payStartStr);
       const payEndWareki = toWarekiShort(payEndStr);
 
-      // 基礎日数 (月給なら所定労働日数または暦日数、通常20〜22日程度)
-      const baseDays = 21; 
+      // 実確定給与レコード（payslips）の照合（実DB優先 ＆ LocalStorageフォールバック）
+      const targetYM = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+      let actualPayslip: any = dbPayslips.find(
+        (p: any) => p.user_id === currentEmployee?.id && p.year_month === targetYM
+      );
 
-      // 賃金額A (基本給・固定手当)
-      const wageA = monthlyBaseWage;
-      // 賃金額B (時間外手当・変動手当: 8%推計)
-      const wageB = Math.round(monthlyBaseWage * 0.08);
+      if (!actualPayslip && tenantId) {
+        try {
+          const raw = localStorage.getItem(`saved_payslips_${tenantId}_${targetYM}`);
+          if (raw) {
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+              actualPayslip = list.find((p: any) => p.user_id === currentEmployee?.id);
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 入社日・在職期間の判定
+      const joinDateObj = currentEmployee?.join_date ? new Date(currentEmployee.join_date) : null;
+      const isBeforeJoin = joinDateObj && pEnd < joinDateObj;
+
+      let baseDays = 0;
+      let wageA = 0;
+      let wageB = 0;
+      let note = i === 0 ? '退職月' : '';
+
+      if (isBeforeJoin) {
+        // 入社前の期間は厳格に0・実績なし（憲法14条）
+        baseDays = 0;
+        wageA = 0;
+        wageB = 0;
+        note = '入社前';
+      } else if (actualPayslip) {
+        // 🛡️ 実DB確定レコードからの厳格マッピング（推計捏造の完全根絶）
+        const workDays = Number(actualPayslip.work_days || 0);
+        // 完全月給（欠勤なし）の場合は暦日数、出勤実績がある場合は出勤日数
+        const maxDaysInMonth = new Date(targetYear, targetMonth, 0).getDate();
+        baseDays = workDays > 0 ? workDays : (closingDay >= 28 ? maxDaysInMonth : 21);
+
+        // 賃金額A: 基本給 + 固定的手当（役職手当・職能手当・住宅手当・家族手当等）
+        const base = Number(actualPayslip.base_salary || 0);
+        const fixedAllowances = Number(
+          (actualPayslip.position_allowance || 0) +
+          (actualPayslip.housing_allowance || 0) +
+          (actualPayslip.qualification_allowance || 0) +
+          (actualPayslip.family_allowance || 0)
+        );
+        wageA = base + fixedAllowances;
+
+        // 賃金額B: 時間外手当（残業手当・休日手当・深夜手当） + 変動手当（通勤・特別等）
+        const overtime = Number(actualPayslip.overtime_allowance || 0);
+        const variableAllowances = Number(
+          (actualPayslip.commuting_allowance || 0) +
+          (actualPayslip.special_allowance || 0)
+        );
+        wageB = overtime + variableAllowances;
+
+        const totalEarn = Number(actualPayslip.total_earnings || (wageA + wageB));
+        if (totalEarn > 0 && wageA === 0 && wageB === 0) {
+          wageA = totalEarn;
+        }
+      } else {
+        // 確定給与データ未登録の月（推計8%を捏造せず、基本給のみを計上し備考に未確定を明示）
+        const maxDaysInMonth = new Date(targetYear, targetMonth, 0).getDate();
+        baseDays = closingDay >= 28 ? maxDaysInMonth : 21;
+        wageA = monthlyBaseWage;
+        wageB = 0;
+        if (!note) note = '未確定（基本給のみ）';
+      }
+
       const wageTotal = wageA + wageB;
 
       rows.push({
@@ -192,12 +298,13 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
         wageB,
         wageTotal,
         // ⑬ 備考
-        note: i === 0 ? '退職月' : ''
+        note
       });
     }
 
     return rows;
-  }, [retDate, monthCount, closingDay, monthlyBaseWage]);
+  }, [retDate, monthCount, closingDay, monthlyBaseWage, dbPayslips, currentEmployee, tenantId]);
+
 
   // 12ヶ月（または全期間）合計値計算
   const totalWageA = useMemo(() => wageRows.reduce((sum, r) => sum + r.wageA, 0), [wageRows]);

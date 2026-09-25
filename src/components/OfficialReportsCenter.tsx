@@ -21,8 +21,10 @@ import { OfficialLaborInsuranceReportDoc } from './OfficialLaborInsuranceReportD
 import { OfficialLeaveProcedureDoc } from './OfficialLeaveProcedureDoc';
 import { OfficialReminderSettingsModal } from './OfficialReminderSettingsModal';
 import { Bell } from 'lucide-react';
+import { calculateNetEmploymentIncome } from '../lib/payrollEngine';
 
 export interface OfficialReportsCenterProps {
+
   tenantId: string;
 }
 
@@ -102,9 +104,39 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
   const [payrollProfiles, setPayrollProfiles] = useState<Record<string, any>>({});
   const [bonusUpdateTick, setBonusUpdateTick] = useState(0);
 
+  // 🛡️ 実DB（payslipsテーブル）からの対象年度確定給与データ（SSOT原則・憲法14条）
+  const [dbPayslips, setDbPayslips] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    let isMounted = true;
+    const fetchYearlyPayslips = async () => {
+      try {
+        const startYM = `${selectedYear}-01`;
+        const endYM = `${selectedYear}-12`;
+        const { data, error } = await supabase
+          .from('payslips')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .gte('year_month', startYM)
+          .lte('year_month', endYM);
+        if (!error && data && isMounted) {
+          setDbPayslips(data);
+        }
+      } catch (err) {
+        console.warn('OfficialReportsCenter fetchYearlyPayslips error:', err);
+      }
+    };
+    fetchYearlyPayslips();
+    return () => {
+      isMounted = false;
+    };
+  }, [tenantId, selectedYear]);
+
   useEffect(() => {
     fetchMasterData();
   }, [tenantId, bonusUpdateTick]);
+
 
   const fetchMasterData = async () => {
     if (!tenantId) return;
@@ -1159,6 +1191,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               selectedEmployeeId={selectedEmployeeId === 'all' ? (employees[0]?.id || '') : selectedEmployeeId}
               onSelectEmployee={(id) => setSelectedEmployeeId(id)}
               onBack={() => setSelectedDocType(null)}
+              tenantId={tenantId}
             />
           </div>
         </div>
@@ -1173,7 +1206,9 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               selectedEmployeeId={selectedEmployeeId === 'all' ? (employees[0]?.id || '') : selectedEmployeeId}
               onSelectEmployee={(id) => setSelectedEmployeeId(id)}
               onBack={() => setSelectedDocType(null)}
+              tenantId={tenantId}
             />
+
           </div>
         </div>
       ) : selectedDocType === 'labor_insurance_report' ? (
@@ -1185,7 +1220,9 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               employees={employees as any}
               targetFiscalYear={selectedYear}
               onBack={() => setSelectedDocType(null)}
+              tenantId={tenantId}
             />
+
           </div>
         </div>
       ) : selectedDocType === 'leave_procedure_doc' ? (
@@ -1911,15 +1948,77 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                   ? employees.find(e => e.id === selectedEmployeeId) || employees[0]
                   : retiredEmps.length > 0 ? retiredEmps[0] : employees[0];
 
-                const totalPaid = targetEmp.base_salary * (targetEmp.is_retired ? 8 : 12);
-                const socialDeducted = Math.round(totalPaid * 0.1475);
-                const deductionAfterPayment = Math.round(totalPaid * 0.7);
-                const totalIncomeDeduction = socialDeducted + 480000;
-                const taxable = Math.max(0, deductionAfterPayment - totalIncomeDeduction);
-                const taxDeducted = Math.round(taxable * 0.05 * 1.021);
+                // 🛡️ 実DB（payslips）からの対象従業員・対象年度確定給与レコード抽出（SSOT原則・憲法14条）
+                const empPayslips = dbPayslips.filter((p: any) => p.user_id === targetEmp?.id);
+                const mergedPayslipsMap = new Map<string, any>();
+                empPayslips.forEach(p => mergedPayslipsMap.set(p.year_month, p));
+
+                if (tenantId) {
+                  for (let m = 1; m <= 12; m++) {
+                    const ym = `${selectedYear}-${String(m).padStart(2, '0')}`;
+                    if (!mergedPayslipsMap.has(ym)) {
+                      try {
+                        const raw = localStorage.getItem(`saved_payslips_${tenantId}_${ym}`);
+                        if (raw) {
+                          const list = JSON.parse(raw);
+                          if (Array.isArray(list)) {
+                            const found = list.find((p: any) => p.user_id === targetEmp?.id);
+                            if (found) mergedPayslipsMap.set(ym, found);
+                          }
+                        }
+                      } catch (_) {}
+                    }
+                  }
+                }
+
+                const targetPayslipList = Array.from(mergedPayslipsMap.values());
+                const hasConfirmedData = targetPayslipList.length > 0;
+
+                let totalPaid = 0;
+                let socialDeducted = 0;
+                let taxDeducted = 0;
+
+                if (hasConfirmedData) {
+                  targetPayslipList.forEach(p => {
+                    const gross = Number(p.total_earnings || (
+                      (p.base_salary || 0) + (p.overtime_allowance || 0) + 
+                      (p.position_allowance || 0) + (p.housing_allowance || 0) +
+                      (p.qualification_allowance || 0) + (p.family_allowance || 0) +
+                      (p.commuting_allowance || 0) + (p.special_allowance || 0)
+                    ));
+                    totalPaid += gross;
+
+                    const soc = Number(
+                      (p.health_insurance || 0) + (p.nursing_insurance || 0) +
+                      (p.pension_insurance || 0) + (p.employment_insurance || 0)
+                    );
+                    socialDeducted += soc;
+
+                    taxDeducted += Number(p.income_tax || 0);
+                  });
+                }
+
+                // 🎌 国税庁告示公式「給与所得控除後の給与等の金額」準拠（推計0.7掛けの完全根絶）
+                const deductionAfterPayment = totalPaid > 0 ? calculateNetEmploymentIncome(totalPaid) : 0;
+                // 基礎控除 480,000円（所得税法第86条）
+                const basicDeduction = totalPaid > 0 ? 480000 : 0;
+                const totalIncomeDeduction = totalPaid > 0 ? (socialDeducted + basicDeduction) : 0;
 
                 return (
                   <div className="max-w-4xl mx-auto space-y-4">
+                    {!hasConfirmedData && (
+                      <div className="bg-amber-50 border border-amber-300 text-amber-900 p-4 rounded-2xl text-xs flex items-start gap-3 print:hidden shadow-xs">
+                        <span className="font-black text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded text-[10px] shrink-0 mt-0.5">
+                          確定データ待機中
+                        </span>
+                        <div className="leading-relaxed">
+                          <span className="font-bold">令和{selectedYear - 2018}年分の給与確定データ（payslips）が未登録です。</span>
+                          <span className="text-amber-800 text-[11px] block mt-0.5">
+                            公的帳票の虚偽記載を防止するため、推測・架空の概算は表示せず0円となっております。給与計算確定（または過去分登録）を行うと自動的に確定実績が反映されます。
+                          </span>
+                        </div>
+                      </div>
+                    )}
                     {selectedYear >= new Date().getFullYear() && !targetEmp.is_retired && (
                       <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3.5 rounded-2xl text-xs flex items-start gap-2.5 print:hidden">
                         <span className="font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded text-[10px] shrink-0">
@@ -1949,7 +2048,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                         withholdingTaxAmount: taxDeducted,
                         socialInsuranceAmount: socialDeducted,
                         dependentsCount: targetEmp.dependents_count,
-                        basicDeduction: 480000,
+                        basicDeduction: basicDeduction,
                         companyAddress: companyInfo.address,
                         companyName: companyInfo.name,
                         companyPhone: companyInfo.phone_number,
@@ -1960,6 +2059,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                   </div>
                 );
               })()}
+
 
               {/* ----------------------------------------------------------------- */}
               {/* ⑧ 賃金台帳（労働基準法第108条 法定帳簿・MFクラウド給与準拠）      */}
