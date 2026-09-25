@@ -90,6 +90,15 @@ export interface DepartmentMaster {
   calendar_pattern_id?: string; // 📅 適用営業カレンダーID
 }
 
+// 👑 役職階層ランク（Lv.1〜5）メタ定義
+export const POSITION_RANKS_META = [
+  { rank: 1, label: '1. 経営陣 (役員)', badge: 'Lv.1 役員', color: 'text-amber-800 bg-amber-50 border-amber-200', border: 'border-amber-200', bg: 'bg-amber-50/40', icon: '👑', desc: '代表取締役、専務、常務、取締役など' },
+  { rank: 2, label: '2. 部門長 (部長等)', badge: 'Lv.2 部門長', color: 'text-indigo-800 bg-indigo-50 border-indigo-200', border: 'border-indigo-200', bg: 'bg-indigo-50/40', icon: '👔', desc: '本部長、部長、事業部長、統括など' },
+  { rank: 3, label: '3. 中間管理職 (課長・マネージャー)', badge: 'Lv.3 中間管理職', color: 'text-blue-800 bg-blue-50 border-blue-200', border: 'border-blue-200', bg: 'bg-blue-50/40', icon: '🏢', desc: '課長、マネージャー、店長、エリア長など' },
+  { rank: 4, label: '4. 現場リーダー・主任', badge: 'Lv.4 リーダー', color: 'text-emerald-800 bg-emerald-50 border-emerald-200', border: 'border-emerald-200', bg: 'bg-emerald-50/40', icon: '🎖️', desc: '係長、主任、チーフ、現場リーダーなど' },
+  { rank: 5, label: '5. 一般社員・スタッフ', badge: 'Lv.5 一般', color: 'text-slate-700 bg-slate-100 border-slate-200', border: 'border-slate-200', bg: 'bg-slate-50/60', icon: '👤', desc: '一般社員、契約社員、パート・アルバイトなど' },
+];
+
 // 📅 会社営業カレンダー・休日パターン定義（複数カレンダー対応SSOT）
 export interface CompanyCalendarPattern {
   id: string;
@@ -635,6 +644,8 @@ export default function CompanySettingsDashboard() {
   const [positions, setPositions] = useState<PositionMaster[]>(DEFAULT_POSITIONS);
   const [newPositionName, setNewPositionName] = useState('');
   const [newPositionRank, setNewPositionRank] = useState(4);
+  const [editingPositionId, setEditingPositionId] = useState<string | null>(null);
+  const [editingPositionNameText, setEditingPositionNameText] = useState('');
   const [isOrgChartPrintModalOpen, setIsOrgChartPrintModalOpen] = useState(false);
   const [editingUserModal, setEditingUserModal] = useState<{
     isOpen: boolean;
@@ -939,7 +950,7 @@ export default function CompanySettingsDashboard() {
         if (tData.position_settings && Array.isArray(tData.position_settings)) {
           setPositions(tData.position_settings);
         } else {
-          setPositions(getPositionsFromStorage());
+          setPositions(getPositionsFromStorage(tenantIdData));
         }
 
         // 💳 テナント課金情報・プラン復元
@@ -958,7 +969,7 @@ export default function CompanySettingsDashboard() {
         });
       } else {
         setOnboardingSteps(getWorkflowStepsFromStorage());
-        setPositions(getPositionsFromStorage());
+        setPositions(getPositionsFromStorage(tenantIdData));
       }
 
       // 部署マスタ取得（DBまたはLocalStorageバックアップから確実に復元）
@@ -1888,7 +1899,7 @@ export default function CompanySettingsDashboard() {
     };
     const updated = [...positions, newPos];
     setPositions(updated);
-    savePositionsToStorage(updated);
+    savePositionsToStorage(updated, tenantId);
     setNewPositionName('');
   };
 
@@ -1897,7 +1908,93 @@ export default function CompanySettingsDashboard() {
     if (!confirm('この役職を削除しますか？')) return;
     const updated = positions.filter(p => p.id !== id);
     setPositions(updated);
-    savePositionsToStorage(updated);
+    savePositionsToStorage(updated, tenantId);
+  };
+
+  // 役職の階層内順序移動（上へ）
+  const handleMovePositionUp = (id: string) => {
+    const target = positions.find(p => p.id === id);
+    if (!target) return;
+    const sameRankList = positions.filter(p => p.rank_level === target.rank_level);
+    const idxInRank = sameRankList.findIndex(p => p.id === id);
+    if (idxInRank <= 0) return;
+
+    const prevItem = sameRankList[idxInRank - 1];
+    const newPositions = [...positions];
+    const idxTarget = newPositions.findIndex(p => p.id === id);
+    const idxPrev = newPositions.findIndex(p => p.id === prevItem.id);
+    [newPositions[idxTarget], newPositions[idxPrev]] = [newPositions[idxPrev], newPositions[idxTarget]];
+
+    const reordered = newPositions.map((p, i) => ({ ...p, display_order: i + 1 }));
+    setPositions(reordered);
+    savePositionsToStorage(reordered, tenantId);
+  };
+
+  // 役職の階層内順序移動（下へ）
+  const handleMovePositionDown = (id: string) => {
+    const target = positions.find(p => p.id === id);
+    if (!target) return;
+    const sameRankList = positions.filter(p => p.rank_level === target.rank_level);
+    const idxInRank = sameRankList.findIndex(p => p.id === id);
+    if (idxInRank >= sameRankList.length - 1 || idxInRank === -1) return;
+
+    const nextItem = sameRankList[idxInRank + 1];
+    const newPositions = [...positions];
+    const idxTarget = newPositions.findIndex(p => p.id === id);
+    const idxNext = newPositions.findIndex(p => p.id === nextItem.id);
+    [newPositions[idxTarget], newPositions[idxNext]] = [newPositions[idxNext], newPositions[idxTarget]];
+
+    const reordered = newPositions.map((p, i) => ({ ...p, display_order: i + 1 }));
+    setPositions(reordered);
+    savePositionsToStorage(reordered, tenantId);
+  };
+
+  // 役職の階層ランク変更
+  const handleUpdatePositionRank = (id: string, newRank: number) => {
+    const updated = positions.map(p => {
+      if (p.id === id) {
+        return { ...p, rank_level: newRank };
+      }
+      return p;
+    });
+    setPositions(updated);
+    savePositionsToStorage(updated, tenantId);
+  };
+
+  // 役職名のインライン編集
+  const handleStartEditPosition = (pos: PositionMaster) => {
+    setEditingPositionId(pos.id);
+    setEditingPositionNameText(pos.name);
+  };
+
+  const handleSaveEditPosition = (id: string) => {
+    if (!editingPositionNameText.trim()) {
+      alert('役職名を入力してください。');
+      return;
+    }
+    const updated = positions.map(p => {
+      if (p.id === id) {
+        return { ...p, name: editingPositionNameText.trim() };
+      }
+      return p;
+    });
+    setPositions(updated);
+    savePositionsToStorage(updated, tenantId);
+    setEditingPositionId(null);
+    setEditingPositionNameText('');
+  };
+
+  const handleCancelEditPosition = () => {
+    setEditingPositionId(null);
+    setEditingPositionNameText('');
+  };
+
+  // 標準セット復元
+  const handleResetDefaultPositions = () => {
+    if (!confirm('役職マスタを標準の初期セット（代表取締役、役員、部長、課長、主任、一般等）に復元しますか？現在の登録内容は上書きされます。')) return;
+    setPositions(DEFAULT_POSITIONS);
+    savePositionsToStorage(DEFAULT_POSITIONS, tenantId);
+    alert('✅ 標準役職セットを復元しました！');
   };
 
   // 📜 資格手当マスタ追加
@@ -3269,71 +3366,218 @@ export default function CompanySettingsDashboard() {
             </div>
 
             {/* 👔 2. 役職マスタ管理（Position Masters） */}
-            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-100 gap-2">
                 <div>
                   <h4 className="font-black text-slate-800 text-sm flex items-center gap-2">
                     <Award className="w-4 h-4 text-indigo-600" />
-                    役職マスタ定義（Position Masters）
+                    役職マスタ定義 ＆ 階層体系（Position Masters）
                   </h4>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    自社の役職（代表、役員、部長、店長、リーダー、一般など）と階層ランクを定義します。
+                    自社の役職と階層ランク（Lv.1 経営陣 〜 Lv.5 一般スタッフ）を定義します。承認フローや組織図に自動連動します。
                   </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-xl">
+                    登録役職数: {positions.length}件
+                  </span>
+                  <button
+                    onClick={handleResetDefaultPositions}
+                    className="text-[11px] font-bold text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 px-2.5 py-1 rounded-xl transition flex items-center gap-1 cursor-pointer"
+                    title="標準の初期役職セットに復元"
+                  >
+                    <RotateCcw className="w-3 h-3" /> 標準セット復元
+                  </button>
                 </div>
               </div>
 
-              {/* 新規役職追加 */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row gap-2 max-w-2xl">
-                <input
-                  type="text"
-                  placeholder="新しい役職名（例: 部長 / 課長 / 主任 / リーダー）"
-                  value={newPositionName}
-                  onChange={e => setNewPositionName(e.target.value)}
-                  className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
-                />
-                <select
-                  value={newPositionRank}
-                  onChange={e => setNewPositionRank(Number(e.target.value))}
-                  className="w-full sm:w-56 bg-white border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-800"
-                >
-                  <option value={1}>階層: 1. 経営陣(役員)</option>
-                  <option value={2}>階層: 2. 部門長(部長等)</option>
-                  <option value={3}>階層: 3. 中間管理職(課長・マネージャー)</option>
-                  <option value={4}>階層: 4. 現場リーダー・主任</option>
-                  <option value={5}>階層: 5. 一般社員・スタッフ</option>
-                </select>
-                <button
-                  onClick={handleAddPosition}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap shadow-xs"
-                >
-                  <Plus className="w-4 h-4" /> 役職を追加
-                </button>
-              </div>
-
-              {/* 役職一覧バッジ */}
-              <div className="flex flex-wrap gap-2 pt-2">
-                {positions.map(p => (
-                  <div
-                    key={p.id}
-                    className="bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-2 text-xs shadow-xs"
-                  >
-                    <span className="font-bold text-slate-800">{p.name}</span>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
-                      p.rank_level === 1 ? 'bg-amber-100 text-amber-800' :
-                      p.rank_level === 2 ? 'bg-indigo-100 text-indigo-800' :
-                      p.rank_level === 3 ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-700'
-                    }`}>
-                      Lv.{p.rank_level}
-                    </span>
-                    <button
-                      onClick={() => handleDeletePosition(p.id)}
-                      className="text-slate-400 hover:text-rose-600 p-0.5 rounded cursor-pointer transition"
-                      title="役職を削除"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+              {/* 2カラム構成：左側に登録フォーム、右側に階層別ピラミッド縦並び */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* 左側カラム (lg:col-span-5): 役職登録フォーム ＆ ガイド */}
+                <div className="lg:col-span-5 space-y-4">
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                    <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                      新しい役職を追加
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1">
+                          役職名 <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="例: 部長 / 課長 / 主任 / リーダー"
+                          value={newPositionName}
+                          onChange={e => setNewPositionName(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1">
+                          所属階層ランク
+                        </label>
+                        <select
+                          value={newPositionRank}
+                          onChange={e => setNewPositionRank(Number(e.target.value))}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-800"
+                        >
+                          <option value={1}>👑 階層: 1. 経営陣(役員)</option>
+                          <option value={2}>👔 階層: 2. 部門長(部長等)</option>
+                          <option value={3}>🏢 階層: 3. 中間管理職(課長・マネージャー)</option>
+                          <option value={4}>🎖️ 階層: 4. 現場リーダー・主任</option>
+                          <option value={5}>👤 階層: 5. 一般社員・スタッフ</option>
+                        </select>
+                      </div>
+                      <button
+                        onClick={handleAddPosition}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <Plus className="w-4 h-4" /> この役職を追加
+                      </button>
+                    </div>
                   </div>
-                ))}
+
+                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 text-[11px] text-slate-600 space-y-1.5 leading-relaxed">
+                    <div className="font-bold text-indigo-900 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                      役職階層ランクと権限の連動
+                    </div>
+                    <p>
+                      階層ランク（Lv.1〜5）は、各種申請（有給・残業・シフト）の<strong>承認権限</strong>や組織図の上下関係に連動します。
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      ※ 右側のピラミッドから「▲▼」ボタンで並び順の入れ替え、「階層セレクト」で即座にランクを変更できます。
+                    </p>
+                  </div>
+                </div>
+
+                {/* 右側カラム (lg:col-span-7): 階層別ピラミッド縦並びリスト */}
+                <div className="lg:col-span-7 space-y-3">
+                  <div className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span>役職階層ピラミッド体系</span>
+                    <span className="text-[10px] text-slate-400 font-normal">▲▼で同一階層内の並び順入れ替え / 階層変更可能</span>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {POSITION_RANKS_META.map(meta => {
+                      const rankPositions = positions.filter(p => p.rank_level === meta.rank);
+                      return (
+                        <div key={meta.rank} className={`rounded-2xl border ${meta.border} ${meta.bg} p-3 transition`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm">{meta.icon}</span>
+                              <span className="font-black text-xs text-slate-800">{meta.label}</span>
+                              <span className={`text-[9px] font-black px-1.5 py-0.2 rounded border ${meta.color}`}>
+                                {rankPositions.length}件
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 hidden sm:inline">{meta.desc}</span>
+                          </div>
+
+                          {rankPositions.length === 0 ? (
+                            <div className="text-[11px] text-slate-400 py-1.5 px-3 bg-white/60 rounded-xl border border-dashed border-slate-200 text-center">
+                              この階層に登録されている役職はありません
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {rankPositions.map((p, idx) => (
+                                <div
+                                  key={p.id}
+                                  className="bg-white px-3 py-2 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-2 text-xs"
+                                >
+                                  {editingPositionId === p.id ? (
+                                    <div className="flex items-center gap-1 flex-1">
+                                      <input
+                                        type="text"
+                                        value={editingPositionNameText}
+                                        onChange={e => setEditingPositionNameText(e.target.value)}
+                                        className="flex-1 bg-indigo-50/50 border border-indigo-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-800"
+                                        autoFocus
+                                      />
+                                      <button
+                                        onClick={() => handleSaveEditPosition(p.id)}
+                                        className="bg-indigo-600 text-white px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer"
+                                      >
+                                        保存
+                                      </button>
+                                      <button
+                                        onClick={handleCancelEditPosition}
+                                        className="bg-slate-200 text-slate-700 px-2 py-1 rounded-lg text-[10px] cursor-pointer"
+                                      >
+                                        取消
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                      <span className="font-black text-slate-800 truncate">{p.name}</span>
+                                      <button
+                                        onClick={() => handleStartEditPosition(p)}
+                                        className="text-slate-300 hover:text-indigo-600 transition cursor-pointer p-0.5"
+                                        title="役職名を変更"
+                                      >
+                                        <Edit3 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {/* 階層移動セレクト */}
+                                    <select
+                                      value={p.rank_level}
+                                      onChange={e => handleUpdatePositionRank(p.id, Number(e.target.value))}
+                                      className="text-[10px] font-bold bg-slate-50 border border-slate-200 rounded-lg px-1.5 py-1 text-slate-700 cursor-pointer"
+                                      title="階層を変更"
+                                    >
+                                      <option value={1}>Lv.1 役員</option>
+                                      <option value={2}>Lv.2 部長</option>
+                                      <option value={3}>Lv.3 課長</option>
+                                      <option value={4}>Lv.4 主任</option>
+                                      <option value={5}>Lv.5 一般</option>
+                                    </select>
+
+                                    {/* 上へボタン */}
+                                    <button
+                                      onClick={() => handleMovePositionUp(p.id)}
+                                      disabled={idx === 0}
+                                      className={`p-1 rounded border border-slate-200 ${
+                                        idx === 0 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-50 cursor-pointer'
+                                      }`}
+                                      title="同一階層内で上へ移動"
+                                    >
+                                      <ArrowUp className="w-3 h-3" />
+                                    </button>
+
+                                    {/* 下へボタン */}
+                                    <button
+                                      onClick={() => handleMovePositionDown(p.id)}
+                                      disabled={idx === rankPositions.length - 1}
+                                      className={`p-1 rounded border border-slate-200 ${
+                                        idx === rankPositions.length - 1 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-600 hover:text-indigo-600 hover:bg-slate-50 cursor-pointer'
+                                      }`}
+                                      title="同一階層内で下へ移動"
+                                    >
+                                      <ArrowDown className="w-3 h-3" />
+                                    </button>
+
+                                    {/* 削除ボタン */}
+                                    <button
+                                      onClick={() => handleDeletePosition(p.id)}
+                                      className="p-1 rounded text-slate-300 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition cursor-pointer"
+                                      title="役職を削除"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
 
