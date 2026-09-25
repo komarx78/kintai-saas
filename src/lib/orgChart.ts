@@ -41,6 +41,64 @@ export const DEFAULT_POSITIONS: PositionMaster[] = [
   { id: 'pos_10', name: 'パート・アルバイト', rank_level: 5, display_order: 10, default_allowance: 0 },
 ];
 
+export interface PositionPreset {
+  id: string;
+  name: string;
+  badge: string;
+  icon: string;
+  targetScale: string;
+  description: string;
+  positions: Array<{ name: string; rank_level: number; default_allowance?: number }>;
+}
+
+export const POSITION_PRESETS: PositionPreset[] = [
+  {
+    id: 'standard_corporate',
+    name: '一般企業・オフィス（標準）',
+    badge: '🏢 標準',
+    icon: '🏢',
+    targetScale: '中規模〜標準（10名〜100名）',
+    description: '役員から部長、課長、主任、一般社員まで揃った王道の組織構成',
+    positions: [
+      { name: '代表取締役', rank_level: 1, default_allowance: 0 },
+      { name: '取締役・役員', rank_level: 1, default_allowance: 0 },
+      { name: '部長・本部長', rank_level: 2, default_allowance: 50000 },
+      { name: '課長・マネージャー', rank_level: 3, default_allowance: 30000 },
+      { name: '主任・現場リーダー', rank_level: 4, default_allowance: 10000 },
+      { name: '一般社員', rank_level: 5, default_allowance: 0 },
+      { name: 'パート・アルバイト', rank_level: 5, default_allowance: 0 },
+    ]
+  },
+  {
+    id: 'store_service',
+    name: '店舗・サービス・飲食業',
+    badge: '🏪 店舗向け',
+    icon: '🏪',
+    targetScale: '多拠点・店舗運営',
+    description: '店長やエリアマネージャー、現場リーダーを中心とした店舗・サービス構成',
+    positions: [
+      { name: '代表取締役 / オーナー', rank_level: 1, default_allowance: 0 },
+      { name: 'エリアマネージャー / 統括', rank_level: 2, default_allowance: 40000 },
+      { name: '店長 / 拠点責任者', rank_level: 3, default_allowance: 30000 },
+      { name: '副店長 / チーフリーダー', rank_level: 4, default_allowance: 15000 },
+      { name: 'スタッフ（一般）', rank_level: 5, default_allowance: 0 },
+      { name: 'アルバイト・パート', rank_level: 5, default_allowance: 0 },
+    ]
+  },
+  {
+    id: 'simple_small',
+    name: '超シンプル（小規模・個人店）',
+    badge: '⚡ 小規模(~10名)',
+    icon: '⚡',
+    targetScale: '〜10名向け（スタートアップ・個人店・クリニック）',
+    description: '「代表」と「一般スタッフ」の2階層のみ。経営が分からなくても即座に迷わず運用可能！',
+    positions: [
+      { name: '代表 / 責任者', rank_level: 1, default_allowance: 0 },
+      { name: '一般スタッフ', rank_level: 5, default_allowance: 0 },
+    ]
+  }
+];
+
 export const getPositionsFromStorage = (tenantId?: string | null): PositionMaster[] => {
   try {
     const key = tenantId ? `company_position_masters_${tenantId}` : null;
