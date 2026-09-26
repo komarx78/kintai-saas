@@ -272,28 +272,70 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     example: '300',
     description: '2段目：従前厚生年金標準報酬（千円単位・右寄せ）'
   },
+  // ── ⑥ 従前改定月（原本「年」「月」の各左側空欄） ──
   {
-    id: 'empPreviousRevisionYM',
-    name: '⑥ 従前改定月',
+    id: 'empPrevRevYear',
+    name: '⑥ 従前改定 年（和暦）',
     section: 'row_template',
-    x: 32.5,
-    y: 2.8,
+    x: 34.6,
+    y: 4.4,
     fontSize: 9.5,
-    width: 11.0,
-    example: '7-09',
-    description: '2段目：従前の改定月'
+    width: 3.2,
+    align: 'center',
+    example: '7',
+    description: '2段目：従前改定「年」の左側空欄'
   },
   {
-    id: 'empWageChangeType',
-    name: '⑦ 昇(降)給（区分・年月）',
+    id: 'empPrevRevMonth',
+    name: '⑥ 従前改定 月',
     section: 'row_template',
-    x: 44.5,
-    y: 2.8,
+    x: 39.4,
+    y: 4.4,
     fontSize: 9.5,
-    width: 12.0,
-    example: '1.昇給 8-06',
-    description: '2段目：昇降給区分および変動年月'
+    width: 3.2,
+    align: 'center',
+    example: '9',
+    description: '2段目：従前改定「月」の左側空欄'
   },
+
+  // ── ⑦ 昇(降)給（年月 ＆ 区分〇囲み） ──
+  {
+    id: 'empWageChangeYear',
+    name: '⑦ 昇(降)給 年（和暦）',
+    section: 'row_template',
+    x: 45.2,
+    y: 4.4,
+    fontSize: 9.5,
+    width: 2.8,
+    align: 'center',
+    example: '8',
+    description: '2段目：昇(降)給「年」の左側空欄'
+  },
+  {
+    id: 'empWageChangeMonth',
+    name: '⑦ 昇(降)給 月',
+    section: 'row_template',
+    x: 49.2,
+    y: 4.4,
+    fontSize: 9.5,
+    width: 2.8,
+    align: 'center',
+    example: '6',
+    description: '2段目：昇(降)給「月」の左側空欄'
+  },
+  {
+    id: 'empWageChangeCircle',
+    name: '⑦ 昇(降)給 区分〇印',
+    section: 'row_template',
+    x: 52.8,
+    y: 2.7,
+    fontSize: 10,
+    width: 3.4,
+    align: 'center',
+    example: '〇',
+    description: '2段目：原本「1. 昇給」または「2. 降給」を囲む〇印'
+  },
+
   {
     id: 'empRetroactiveAmount',
     name: '⑧ 遡及支払額',
@@ -302,19 +344,35 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     y: 2.8,
     fontSize: 9.5,
     width: 15.5,
+    align: 'right',
     example: '0',
     description: '2段目：遡及支払額（右寄せ）'
   },
+
+  // ── ⑱ 備考欄（該当番号〇印 ＆ カッコ内理由テキスト） ──
   {
-    id: 'empRemarks',
-    name: '⑱ 備考欄',
+    id: 'empRemarksCircle',
+    name: '⑱ 備考 該当番号〇印',
     section: 'row_template',
-    x: 73.6,
-    y: 2.8,
+    x: 74.0,
+    y: 6.4,
+    fontSize: 10,
+    width: 2.0,
+    align: 'center',
+    example: '〇',
+    description: '2段目：原本「4. 昇給・降給の理由」等の番号を囲む〇印'
+  },
+  {
+    id: 'empRemarksReason',
+    name: '⑱ 昇給・降給の理由（カッコ内）',
+    section: 'row_template',
+    x: 76.5,
+    y: 7.5,
     fontSize: 8.5,
-    width: 21.0,
-    example: '4.昇給・降給の理由（基本給昇給）',
-    description: '2段目：備考欄'
+    width: 17.0,
+    align: 'left',
+    example: '基本給昇給',
+    description: '2段目：原本「4. 昇給・降給の理由」カッコ ( ) 内の理由テキスト'
   },
 
   // ── 行内 3段目（3ヶ月支給実績・小行1〜3） ──

@@ -101,6 +101,19 @@ export const formatNenkinYM = (ymStr?: string): string => {
   return `${eraY}-${m}`;
 };
 
+/**
+ * 年月（YYYY-MM）を年金機構和暦年と月に分割
+ */
+export const splitNenkinYM = (ymStr?: string): { y: string; m: string } => {
+  if (!ymStr) return { y: '', m: '' };
+  const parts = ymStr.split('-');
+  if (parts.length < 2) return { y: '', m: '' };
+  const y = parseInt(parts[0], 10);
+  const m = String(parseInt(parts[1], 10)); // '6' or '9'
+  const eraY = y >= 2019 ? String(y - 2018) : y >= 1989 ? String(y - 1988) : String(y);
+  return { y: eraY, m };
+};
+
 export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
   data,
   canEditCoordinates = false,
@@ -539,10 +552,23 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
 
                 const fCurH = getF('empCurrentHealthStandard', 9.8, 2.8, 10.5, 10.5, 'right');
                 const fCurP = getF('empCurrentPensionStandard', 21.0, 2.8, 10.5, 10.5, 'right');
-                const fPrevYM = getF('empPreviousRevisionYM', 32.5, 2.8, 9.5, 11.0, 'center');
-                const fChange = getF('empWageChangeType', 44.5, 2.8, 9.5, 12.0, 'center');
+
+                // ⑥ 従前改定月（年・月分離）
+                const fPrevY = getF('empPrevRevYear', 34.6, 4.4, 9.5, 3.2, 'center');
+                const fPrevM = getF('empPrevRevMonth', 39.4, 4.4, 9.5, 3.2, 'center');
+                const prevRevDate = splitNenkinYM(emp.previousRevisionYM);
+
+                // ⑦ 昇(降)給（年月 ＆ 区分〇囲み）
+                const fWageY = getF('empWageChangeYear', 45.2, 4.4, 9.5, 2.8, 'center');
+                const fWageM = getF('empWageChangeMonth', 49.2, 4.4, 9.5, 2.8, 'center');
+                const fWageCircle = getF('empWageChangeCircle', 52.8, 2.7, 10, 3.4, 'center');
+                const wageChangeDate = splitNenkinYM(emp.wageChangeYM);
+
                 const fRetro = getF('empRetroactiveAmount', 57.2, 2.8, 9.5, 15.5, 'right');
-                const fRem = getF('empRemarks', 73.6, 2.8, 8.5, 21.0, 'left');
+
+                // ⑱ 備考欄（該当番号〇印 ＆ カッコ内理由テキスト）
+                const fRemCircle = getF('empRemarksCircle', 74.0, 6.4, 10, 2.0, 'center');
+                const fRemReason = getF('empRemarksReason', 76.5, 7.5, 8.5, 17.0, 'left');
 
                 // 千円単位換算（例: 300,000円 -> 300千円）
                 const healthInThousands = Math.round((emp.currentHealthStandard || 0) / 1000);
@@ -596,17 +622,70 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                     {/* ⑤ 従前の標準報酬（厚生年金・千円） */}
                     {renderRowField(pensionInThousands ? pensionInThousands.toLocaleString() : '', fCurP, rowTop, 'font-mono font-bold')}
 
-                    {/* ⑥ 従前改定月 */}
-                    {renderRowField(formatNenkinYM(emp.previousRevisionYM), fPrevYM, rowTop, 'font-mono text-xs')}
+                    {/* ⑥ 従前改定月（年・月） */}
+                    {prevRevDate.y && renderRowField(prevRevDate.y, fPrevY, rowTop, 'font-mono font-bold')}
+                    {prevRevDate.m && renderRowField(prevRevDate.m, fPrevM, rowTop, 'font-mono font-bold')}
 
-                    {/* ⑦ 昇(降)給（区分 ＆ 年月） */}
-                    {renderRowField(`${emp.wageChangeType || ''} ${formatNenkinYM(emp.wageChangeYM)}`.trim(), fChange, rowTop, 'font-bold text-xs')}
+                    {/* ⑦ 昇(降)給 年月（年・月） */}
+                    {wageChangeDate.y && renderRowField(wageChangeDate.y, fWageY, rowTop, 'font-mono font-bold')}
+                    {wageChangeDate.m && renderRowField(wageChangeDate.m, fWageM, rowTop, 'font-mono font-bold')}
+
+                    {/* ⑦ 昇(降)給 区分〇囲み（原本の「1. 昇給」または「2. 降給」を美しく囲む） */}
+                    {(() => {
+                      const isDecrease = emp.wageChangeType === '2.降給';
+                      // 降給時は下段（+1.5%）へ自動オフセット
+                      const circleY = isDecrease ? fWageCircle.y + 1.5 : fWageCircle.y;
+                      return (
+                        <div
+                          className="absolute flex items-center justify-center pointer-events-none"
+                          style={{
+                            top: `${rowTop + circleY}%`,
+                            left: `${fWageCircle.x}%`,
+                            width: `${fWageCircle.width || 3.4}%`,
+                            height: '1.45%'
+                          }}
+                        >
+                          <div className="w-full h-full rounded-full border-2 border-red-600 print:border-slate-900" />
+                        </div>
+                      );
+                    })()}
 
                     {/* ⑧ 遡及支払額 */}
                     {renderRowField((emp.retroactiveAmount || 0) > 0 ? emp.retroactiveAmount?.toLocaleString() : '', fRetro, rowTop, 'font-mono text-xs')}
 
-                    {/* ⑱ 備考 */}
-                    {renderRowField(emp.remarks || (emp.isShortTimeWorker ? '3.短時間労働者' : '4.昇給・降給の理由'), fRem, rowTop, 'text-xs truncate')}
+                    {/* ⑱ 備考 該当番号〇印（通常は4.昇給降給の理由、短時間なら3、70歳なら1） */}
+                    {(() => {
+                      let circleY = fRemCircle.y; // デフォルト: 4.昇給・降給の理由 (y:約6.4%)
+                      let circleX = fRemCircle.x;
+                      if (emp.isOver70) {
+                        circleY = fRemCircle.y - 3.2; // 1.70歳以上被用者
+                      } else if (emp.isShortTimeWorker) {
+                        circleY = fRemCircle.y - 1.0; // 3.短時間労働者
+                      }
+                      return (
+                        <div
+                          className="absolute flex items-center justify-center pointer-events-none"
+                          style={{
+                            top: `${rowTop + circleY}%`,
+                            left: `${circleX}%`,
+                            width: `${fRemCircle.width || 2.0}%`,
+                            height: '1.35%'
+                          }}
+                        >
+                          <div className="w-full h-full rounded-full border-2 border-red-600 print:border-slate-900" />
+                        </div>
+                      );
+                    })()}
+
+                    {/* ⑱ 備考 昇給・降給の理由テキスト（原本カッコ内のみに印字） */}
+                    {(() => {
+                      const rawRemarks = emp.remarks || (emp.isShortTimeWorker ? '短時間労働者' : '基本給改定のため');
+                      const cleanReason = rawRemarks
+                        .replace(/^[0-9]\.\s*[^()（）]*[()（]/, '') // "4.昇給・降給の理由(" 等を除去
+                        .replace(/[)）]$/, '')
+                        .trim();
+                      return renderRowField(cleanReason, fRemReason, rowTop, 'text-xs font-bold truncate');
+                    })()}
 
                     {/* ── 3段目：3ヶ月支給実績 ── */}
                     {/* 1ヶ月目 */}

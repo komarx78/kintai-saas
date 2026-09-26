@@ -954,17 +954,94 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                       const rfAlign = rf.align || (
                         (rf.id === 'empCurrentHealthStandard' || rf.id === 'empCurrentPensionStandard' || rf.id === 'empRetroactiveAmount')
                           ? 'right'
-                          : (rf.id === 'empInsuranceNumber' || rf.id === 'empBirth' || rf.id === 'empRevisionYearMonth' || rf.id === 'empPreviousRevisionYM' || rf.id === 'empWageChangeType')
-                            ? 'center'
-                            : 'left'
+                          : (rf.id === 'empName' || rf.id === 'empRemarksReason')
+                            ? 'left'
+                            : 'center'
                       );
                       const justifyContent = rfAlign === 'right' ? 'flex-end' : rfAlign === 'center' ? 'center' : 'flex-start';
+
+                      // 〇囲み印字の特殊プレビュー
+                      if (rf.id === 'empWageChangeCircle') {
+                        return (
+                          <div
+                            key={`${rf.id}-r${rowIdx}`}
+                            onMouseDown={e => {
+                              if (rowIdx === 0) handleStartDrag(rf.id, e);
+                            }}
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedFieldId(rf.id);
+                              setSelectedSection('row_template');
+                            }}
+                            style={{
+                              position: 'absolute',
+                              left: `${rf.x}%`,
+                              top: `${currRowTop + (rowIdx === 1 ? rf.y + 1.5 : rf.y)}%`,
+                              width: `${rf.width || 3.4}%`,
+                              height: '1.45%',
+                              cursor: rowIdx === 0 ? (isDraggingThis ? 'grabbing' : 'grab') : 'pointer',
+                              userSelect: 'none',
+                              pointerEvents: 'auto',
+                              opacity: rowIdx === 1 ? 0.6 : 1
+                            }}
+                            className={`p-0.5 rounded transition-all flex items-center justify-center ${
+                              isSelected
+                                ? 'ring-2 ring-purple-500 bg-purple-500/20 z-30'
+                                : 'hover:ring-1 hover:ring-purple-400 z-10'
+                            }`}
+                            title={`${rf.name} (ドラッグまたは十字キーで丸の位置を微調整)`}
+                          >
+                            <div className="w-full h-full rounded-full border-2 border-red-600 bg-red-500/10 flex items-center justify-center">
+                              <span className="text-[7px] font-black text-red-600 select-none">〇</span>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      if (rf.id === 'empRemarksCircle') {
+                        return (
+                          <div
+                            key={`${rf.id}-r${rowIdx}`}
+                            onMouseDown={e => {
+                              if (rowIdx === 0) handleStartDrag(rf.id, e);
+                            }}
+                            onClick={e => {
+                              e.stopPropagation();
+                              setSelectedFieldId(rf.id);
+                              setSelectedSection('row_template');
+                            }}
+                            style={{
+                              position: 'absolute',
+                              left: `${rf.x}%`,
+                              top: `${currRowTop + rf.y}%`,
+                              width: `${rf.width || 2.0}%`,
+                              height: '1.35%',
+                              cursor: rowIdx === 0 ? (isDraggingThis ? 'grabbing' : 'grab') : 'pointer',
+                              userSelect: 'none',
+                              pointerEvents: 'auto',
+                              opacity: rowIdx === 1 ? 0.6 : 1
+                            }}
+                            className={`p-0.5 rounded transition-all flex items-center justify-center ${
+                              isSelected
+                                ? 'ring-2 ring-purple-500 bg-purple-500/20 z-30'
+                                : 'hover:ring-1 hover:ring-purple-400 z-10'
+                            }`}
+                            title={`${rf.name} (ドラッグまたは十字キーで丸の位置を微調整)`}
+                          >
+                            <div className="w-full h-full rounded-full border-2 border-red-600 bg-red-500/10 flex items-center justify-center">
+                              <span className="text-[7px] font-black text-red-600 select-none">〇</span>
+                            </div>
+                          </div>
+                        );
+                      }
 
                       let textVal = rf.example || '';
                       if (rf.id === 'empInsuranceNumber') {
                         textVal = rowIdx === 0 ? '1' : '2';
                       } else if (rf.id === 'empName') {
                         textVal = rowIdx === 0 ? '山田 太郎' : '佐藤 花子';
+                      } else if (rf.id === 'empRemarksReason') {
+                        textVal = rowIdx === 0 ? '基本給昇給' : 'ベースアップ';
                       }
 
                       return (
