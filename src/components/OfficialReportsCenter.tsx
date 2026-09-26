@@ -20,6 +20,7 @@ import { OfficialSeparationCertificateDoc } from './OfficialSeparationCertificat
 import { OfficialLaborInsuranceReportDoc } from './OfficialLaborInsuranceReportDoc';
 import { OfficialLeaveProcedureDoc } from './OfficialLeaveProcedureDoc';
 import { OfficialReminderSettingsModal } from './OfficialReminderSettingsModal';
+import { MonthlyRevisionReportModal } from './MonthlyRevisionReportModal';
 import { Bell } from 'lucide-react';
 import { calculateNetEmploymentIncome } from '../lib/payrollEngine';
 
@@ -94,6 +95,8 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
 
   // 🎁 賞与算定・一括入力詳細エディタ用State
   const [bonusReportModalOpen, setBonusReportModalOpen] = useState(false);
+  // 📋 被保険者報酬月額変更届（月変・随時改定）モーダル用State
+  const [monthlyRevisionModalOpen, setMonthlyRevisionModalOpen] = useState(false);
   // 🔔 公的届出・社保改定通知マスタモーダル用State
   const [reminderModalOpen, setReminderModalOpen] = useState(false);
   const [officeSymbol, setOfficeSymbol] = useState<string>('');
@@ -973,7 +976,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
             <span className="text-[11px] text-slate-400 font-bold">公式提出様式準拠</span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* 1. 社会保険 資格取得・喪失届 */}
             <button
               onClick={() => setSelectedDocType('social_insurance_doc')}
@@ -998,7 +1001,31 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 transition" />
             </button>
 
-            {/* 2. 雇用保険 資格取得・喪失届 */}
+            {/* 2. 被保険者報酬月額変更届（月変・随時改定 ★NEW!） */}
+            <button
+              onClick={() => setMonthlyRevisionModalOpen(true)}
+              className="bg-white hover:bg-purple-50/50 p-4 rounded-2xl border-2 border-purple-300 hover:border-purple-500 shadow-xs hover:shadow-md transition flex items-center justify-between text-left group cursor-pointer ring-2 ring-purple-500/10"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-purple-100 group-hover:bg-purple-600 text-purple-600 group-hover:text-white flex items-center justify-center transition shadow-2xs">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-black text-slate-800 group-hover:text-purple-700 transition flex items-center gap-1.5">
+                    月額変更届（月変）
+                    <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded font-black border border-purple-300 animate-pulse">
+                      随時改定
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-purple-600 font-bold mt-0.5">
+                    固定給変動＋2等級差自動判定・コード2221公式用紙
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-purple-500 group-hover:text-purple-700 transition" />
+            </button>
+
+            {/* 3. 雇用保険 資格取得・喪失届 */}
             <button
               onClick={() => setSelectedDocType('employment_insurance_doc')}
               className="bg-white hover:bg-slate-50/80 p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition flex items-center justify-between text-left group cursor-pointer"
@@ -1022,7 +1049,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-600 transition" />
             </button>
 
-            {/* 3. 離職証明書（離職票） */}
+            {/* 4. 離職証明書（離職票） */}
             <button
               onClick={() => setSelectedDocType('employment_separation_doc')}
               className="bg-white hover:bg-slate-50/80 p-4 rounded-2xl border border-slate-200 shadow-2xs hover:shadow-xs transition flex items-center justify-between text-left group cursor-pointer"
@@ -2173,6 +2200,20 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           tenantName={companyInfo.name}
           isOpen={reminderModalOpen}
           onClose={() => setReminderModalOpen(false)}
+        />
+      )}
+
+      {/* 📋 被保険者報酬月額変更届（月変・随時改定）モーダル */}
+      {monthlyRevisionModalOpen && (
+        <MonthlyRevisionReportModal
+          isOpen={monthlyRevisionModalOpen}
+          onClose={() => setMonthlyRevisionModalOpen(false)}
+          tenantId={tenantId}
+          tenantInfo={tenantInfo}
+          employees={employees}
+          payrollProfiles={payrollProfiles}
+          payslips={dbPayslips}
+          initialYearMonth={`${selectedYear}-${String(selectedMonth).padStart(2, '0')}`}
         />
       )}
 
