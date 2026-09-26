@@ -140,8 +140,8 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
   const analyzedUsers = useMemo(() => {
     return users.map(emp => {
       const isDispatch = emp.role === 'dispatch' || emp.employment_type === '派遣';
-      const weeklyDays = Number(emp.weekly_working_days) || 5;
       const empType = emp.employment_type === 'part-time' || emp.employment_type === 'パート' ? 'パート' : '正社員';
+      const weeklyDays = Number(emp.weekly_working_days) || (empType === 'パート' ? 3 : 5);
 
       // 個人設定 または 全社設定を適用
       const userCustomMode = userCalcModeMap[emp.id] || 'default';
@@ -382,7 +382,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
         paid_leave_balance: balance,
         join_date: editingUser.join_date || null,
         employment_type: editingUser.empType === 'パート' ? 'part-time' : 'full-time',
-        weekly_working_days: Number(editingUser.weekly_working_days) || 5
+        weekly_working_days: Number(editingUser.weekly_working_days) || (editingUser.empType === 'パート' || editingUser.employment_type === 'part-time' ? 3 : 5)
       }).eq('id', editingUser.id);
       if (tenantId) query.eq('tenant_id', tenantId);
       const { error } = await query;
@@ -1142,8 +1142,8 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
             </div>
 
             {(() => {
-              const weeklyDays = Number(editingUser.weekly_working_days) || 5;
-              const empType = editingUser.empType || '正社員';
+              const empType = editingUser.empType || (editingUser.employment_type === 'part-time' || editingUser.employment_type === 'パート' ? 'パート' : '正社員');
+              const weeklyDays = Number(editingUser.weekly_working_days) || (empType === 'パート' ? 3 : 5);
               const userCustomMode = editingUser.userCustomMode || userCalcModeMap[editingUser.id] || 'default';
               const effectiveMode: PaidLeaveCalcMode = userCustomMode === 'default' ? companyCalcMode : userCustomMode;
               const empAtt = attendanceRecords.filter(r => r.user_id === editingUser.id);
@@ -1303,7 +1303,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                       <div>
                         <label className="block text-xs font-black text-slate-700 mb-1">雇用契約の週所定日数</label>
                         <select 
-                          value={editingUser.weekly_working_days || 5} 
+                          value={editingUser.weekly_working_days || (editingUser.empType === 'パート' || editingUser.employment_type === 'part-time' ? 3 : 5)} 
                           onChange={e => setEditingUser({...editingUser, weekly_working_days: Number(e.target.value)})} 
                           className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm bg-white"
                         >
