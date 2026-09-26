@@ -8,6 +8,7 @@ interface OrgChartPrintModalProps {
   companyInfo: {
     name: string;
     representative_name: string;
+    representative_position?: string;
     address: string;
     phone_number: string;
   };
@@ -117,8 +118,8 @@ export const OrgChartPrintModal: FC<OrgChartPrintModalProps> = ({
                       ))
                     ) : (
                       <div className="flex items-center justify-between bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700 text-xs">
-                        <span className="text-[10px] text-amber-300 font-bold">代表取締役</span>
-                        <span className="font-black text-white text-sm">{companyInfo.representative_name.replace('代表取締役', '').trim() || '代表取締役'}</span>
+                        <span className="text-[10px] text-amber-300 font-bold">{companyInfo.representative_position || '代表取締役'}</span>
+                        <span className="font-black text-white text-sm">{companyInfo.representative_name.replace('代表取締役', '').trim() || '（代表者未設定）'}</span>
                       </div>
                     )}
                   </div>

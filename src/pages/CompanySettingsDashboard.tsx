@@ -644,10 +644,19 @@ export default function CompanySettingsDashboard() {
   });
 
   // 1. 会社基本情報State
-  const [basicInfo, setBasicInfo] = useState({
+  const [basicInfo, setBasicInfo] = useState<{
+    name: string;
+    address: string;
+    representative_name: string;
+    representative_position?: string;
+    phone_number: string;
+    corporate_number: string;
+    company_seal_url: string;
+  }>({
     name: '',
     address: '',
     representative_name: '',
+    representative_position: '',
     phone_number: '',
     corporate_number: '',
     company_seal_url: ''
@@ -772,6 +781,7 @@ export default function CompanySettingsDashboard() {
         name: string;
         address: string;
         representative_name: string;
+        representative_position?: string;
         phone_number: string;
         corporate_number: string;
         company_seal_url: string;
@@ -779,6 +789,7 @@ export default function CompanySettingsDashboard() {
         name: tData?.name || '',
         address: tData?.address || '',
         representative_name: tData?.representative_name || '',
+        representative_position: tData?.representative_position || '',
         phone_number: tData?.phone_number || '',
         corporate_number: tData?.corporate_number || '',
         company_seal_url: tData?.company_seal_url || ''
@@ -1111,9 +1122,9 @@ export default function CompanySettingsDashboard() {
       if (user && !mergedUsers.some(u => u.id === user.id)) {
         const selfUser: OrgMemberInfo = {
           id: user.id,
-          name: basicInfo.representative_name.replace('代表取締役', '').trim() || user.email?.split('@')[0] || '代表取締役',
+          name: basicInfo.representative_name.replace('代表取締役', '').trim() || (user.user_metadata as any)?.name || user.email?.split('@')[0] || '管理者',
           role: 'admin',
-          position_name: '代表取締役',
+          position_name: basicInfo.representative_position || '代表取締役',
           department: undefined
         };
         mergedUsers.unshift(selfUser);
@@ -3528,8 +3539,8 @@ export default function CompanySettingsDashboard() {
                   ) : (
                     <div className="bg-white p-3 rounded-xl border border-indigo-200 shadow-xs flex items-center justify-between">
                       <div>
-                        <span className="text-[10px] font-bold text-indigo-700 block">代表取締役</span>
-                        <span className="text-xs font-black text-slate-800">{basicInfo.representative_name.replace('代表取締役', '').trim() || '代表取締役'}</span>
+                        <span className="text-[10px] font-bold text-indigo-700 block">{basicInfo.representative_position || '代表取締役'}</span>
+                        <span className="text-xs font-black text-slate-800">{basicInfo.representative_name.replace('代表取締役', '').trim() || '（代表者未設定）'}</span>
                       </div>
                       <span className="text-[9px] bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded font-bold">
                         代表
