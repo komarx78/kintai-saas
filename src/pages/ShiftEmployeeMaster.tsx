@@ -119,8 +119,13 @@ const ShiftEmployeeMaster: React.FC = () => {
     try {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
       
+      if (!tenantId) {
+        alert('テナントIDが取得できませんでした。');
+        return;
+      }
+      
       for (const emp of employees) {
-        await supabase.from('users').update({ has_shift_access: emp.has_shift_access }).eq('id', emp.user_id);
+        await supabase.from('users').update({ has_shift_access: emp.has_shift_access }).eq('id', emp.user_id).eq('tenant_id', tenantId);
       }
 
       for (const emp of employees.filter(e => e.has_shift_access)) {
@@ -128,6 +133,7 @@ const ShiftEmployeeMaster: React.FC = () => {
           .from('shift_employee_settings')
           .select('id')
           .eq('user_id', emp.user_id)
+          .eq('tenant_id', tenantId)
           .maybeSingle();
 
         // min_shift_hours はDB実カラム未配備のためLocalStorageにバックアップ保存
@@ -147,7 +153,7 @@ const ShiftEmployeeMaster: React.FC = () => {
         };
 
         if (exist) {
-          await supabase.from('shift_employee_settings').update(payload).eq('id', exist.id);
+          await supabase.from('shift_employee_settings').update(payload).eq('id', exist.id).eq('tenant_id', tenantId);
         } else {
           await supabase.from('shift_employee_settings').insert(payload);
         }

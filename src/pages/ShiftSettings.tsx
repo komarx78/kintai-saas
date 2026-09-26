@@ -107,7 +107,11 @@ const ShiftSettings: React.FC = () => {
 
   const handleUpdateRole = async (id: string, field: string, value: string) => {
     try {
-      await supabase.from('shift_roles').update({ [field]: value }).eq('id', id);
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
+      let query = supabase.from('shift_roles').update({ [field]: value }).eq('id', id);
+      if (tenantId) query = query.eq('tenant_id', tenantId);
+      const { error } = await query;
+      if (error) throw error;
       setRoles(roles.map(r => r.id === id ? { ...r, [field]: value } : r));
     } catch (err) {
       console.error(err); alert('エラーが発生しました: ' + (err as any).message);
@@ -117,7 +121,11 @@ const ShiftSettings: React.FC = () => {
   const handleDeleteRole = async (id: string) => {
     if (!window.confirm('本当に削除しますか？')) return;
     try {
-      await supabase.from('shift_roles').delete().eq('id', id);
+      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
+      let query = supabase.from('shift_roles').delete().eq('id', id);
+      if (tenantId) query = query.eq('tenant_id', tenantId);
+      const { error } = await query;
+      if (error) throw error;
       setRoles(roles.filter(r => r.id !== id));
     } catch (err) {
       console.error(err); alert('エラーが発生しました: ' + (err as any).message);
