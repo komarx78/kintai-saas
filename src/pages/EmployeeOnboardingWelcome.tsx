@@ -1495,7 +1495,7 @@ export default function EmployeeOnboardingWelcome() {
                         {originSuggestions.length > 0 && (
                           <div className="mt-1.5 space-y-1.5 bg-slate-900/95 p-2 rounded-xl border border-cyan-500/30 text-[10px]">
                             <div className="text-cyan-400 font-bold flex items-center justify-between">
-                              <span className="flex items-center gap-1">📍 推定地区: <strong className="text-white">{originRegionHint || '滋賀県・京都府・東京都ほか'}</strong></span>
+                              <span className="flex items-center gap-1">📍 推定地区: <strong className="text-white">{originRegionHint || '全国対応'}</strong></span>
                               <span className="text-[9px] text-slate-400">タップで適用</span>
                             </div>
                             <div className="flex flex-wrap gap-1">
@@ -1514,10 +1514,10 @@ export default function EmployeeOnboardingWelcome() {
                                     type="button"
                                     onClick={async () => {
                                       const newOrigin = s.formalStationName;
-                                      const dest = commutingData.destinationStation || '新大阪駅';
+                                      const dest = commutingData.destinationStation || '';
                                       
-                                      // 実運賃・複数乗り継ぎルートを即時自動生成
-                                      const generatedSegs = await generateMultiRouteWithAi(newOrigin, dest);
+                                      // 実運賃・複数乗り継ぎルートを即時自動生成（目的地が設定されている場合のみ）
+                                      const generatedSegs = dest ? await generateMultiRouteWithAi(newOrigin, dest) : [];
 
                                       setCommutingData(prev => ({
                                         ...prev,
@@ -1564,7 +1564,7 @@ export default function EmployeeOnboardingWelcome() {
                             if (destTimerRef.current) clearTimeout(destTimerRef.current);
                             if (val.trim().length >= 1) {
                               destTimerRef.current = setTimeout(async () => {
-                                const compAddr = tenantInfo?.address || '滋賀県・東京都千代田区';
+                                const compAddr = tenantInfo?.address || '';
                                 const res = await resolveStationSuggestions(val, compAddr);
                                 if (res.regionHint) setDestRegionHint(res.regionHint);
                                 if (res.suggestions.length > 0) setDestSuggestions(res.suggestions);
@@ -1578,7 +1578,7 @@ export default function EmployeeOnboardingWelcome() {
                         {destSuggestions.length > 0 && (
                           <div className="mt-1.5 space-y-1.5 bg-slate-900/95 p-2 rounded-xl border border-cyan-500/30 text-[10px]">
                             <div className="text-cyan-400 font-bold flex items-center justify-between">
-                              <span className="flex items-center gap-1">📍 推定地区: <strong className="text-white">{destRegionHint || '大阪府大阪市淀川区'}</strong></span>
+                              <span className="flex items-center gap-1">📍 推定地区: <strong className="text-white">{destRegionHint || '会社所在地周辺'}</strong></span>
                               <span className="text-[9px] text-slate-400">タップで適用</span>
                             </div>
                             <div className="flex flex-wrap gap-1">
@@ -1596,12 +1596,12 @@ export default function EmployeeOnboardingWelcome() {
                                     key={idx}
                                     type="button"
                                     onClick={async () => {
-                                      const origin = commutingData.originStation || '花山稲荷（バス停）';
+                                      const origin = commutingData.originStation || '';
                                       const newDest = s.formalStationName;
                                       setIsAiRouting(true);
                                       try {
-                                        // 実運賃・複数乗り継ぎルートを即時自動生成
-                                        const generatedSegs = await generateMultiRouteWithAi(origin, newDest);
+                                        // 実運賃・複数乗り継ぎルートを即時自動生成（出発地が入力されている場合のみ）
+                                        const generatedSegs = origin ? await generateMultiRouteWithAi(origin, newDest) : [];
 
                                         setCommutingData(prev => ({
                                           ...prev,
