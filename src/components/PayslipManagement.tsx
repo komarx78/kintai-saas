@@ -220,8 +220,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
   // 勤怠・給与の内訳詳細アコーディオン展開中のユーザーID
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
-  // 表示モード（'card': 全詳細常時表示カードビュー / 'table': コンパクト表ビュー）
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+  // 表示モード（'table': 給与一覧表（初期表示） / 'card': 詳細カード）
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('table');
 
   const updateLocalStorageBackup = (payload: any) => {
     if (!payload.tenant_id) return;
@@ -3096,7 +3096,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               }`}
             >
               <List className="w-3.5 h-3.5" />
-              <span>📋 スプレッドシート表（推奨）</span>
+              <span>📋 給与一覧表</span>
             </button>
             <button
               onClick={() => setViewMode('card')}
@@ -3105,7 +3105,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
-              <span>📑 全開カード一覧</span>
+              <span>📑 詳細カード</span>
             </button>
           </div>
         </div>
