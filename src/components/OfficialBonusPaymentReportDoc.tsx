@@ -95,12 +95,9 @@ export const checkIfOver70 = (birthDateStr?: string, paymentDateStr?: string): b
   const pay = new Date(paymentDateStr);
   if (isNaN(birth.getTime()) || isNaN(pay.getTime())) return false;
 
-  let age = pay.getFullYear() - birth.getFullYear();
-  const mDiff = pay.getMonth() - birth.getMonth();
-  if (mDiff < 0 || (mDiff === 0 && pay.getDate() < birth.getDate())) {
-    age--;
-  }
-  return age >= 70;
+  // 満70歳到達日 ＝ 70年後の誕生日の前日（明治35年法律第50号・厚生年金保険法第9条・第14条）
+  const age70Reached = new Date(birth.getFullYear() + 70, birth.getMonth(), birth.getDate() - 1);
+  return pay.getTime() >= age70Reached.getTime();
 };
 
 /**

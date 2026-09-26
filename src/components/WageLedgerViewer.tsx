@@ -237,18 +237,22 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
         (actualPayslip.special_allowance || 0)
       );
       const gross = Number(actualPayslip.total_earnings || (basePay + overtimePay + midnightPay + holidayPay + allowanceTotal));
-      const taxable = gross;
+      // 🛡️ 所得税法第9条・所令20条の2: 非課税通勤手当（月15万円上限）を課税支給額から除外
+      const nonTaxCommuting = actualPayslip.commuting_taxable ? 0 : Math.min(Number(actualPayslip.commuting_allowance || 0), 150000);
+      const taxable = Math.max(0, gross - nonTaxCommuting);
 
       const health = Number(actualPayslip.health_insurance || 0);
       const nursing = Number(actualPayslip.nursing_insurance || 0);
       const pension = Number(actualPayslip.pension_insurance || 0);
       const empIns = Number(actualPayslip.employment_insurance || 0);
-      const childCare = isExecutive ? 925 : 0;
+      // 🛡️ 子ども・子育て拠出金は法律上（子ども・子育て支援法第69条）事業主全額負担のため従業員控除は0円
+      const childCare = 0;
+      const otherDed = Number(actualPayslip.other_deductions || 0);
       const socTotal = health + nursing + pension + empIns;
 
       const incomeTax = Number(actualPayslip.income_tax || 0);
       const residentTax = Number(actualPayslip.resident_tax || 0);
-      const dedTotal = Number(actualPayslip.total_deductions || (socTotal + incomeTax + residentTax + childCare));
+      const dedTotal = Number(actualPayslip.total_deductions || (socTotal + incomeTax + residentTax + otherDed));
       const afterSoc = gross - socTotal;
       const net = Number(actualPayslip.net_salary || (gross - dedTotal));
 
@@ -353,6 +357,42 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
       bankTransferRemaining: 0
     });
   }, [monthlyDataList]);
+
+  // 🛡️ 労働基準法第108条・施行規則第54条第2項: 賞与支払実績の抽出（SSOT原則・憲法14条）
+  const userBonusList = useMemo(() => {
+    if (!currentEmployee || !tenantId) return [];
+    let bonuses: any[] = [];
+    try {
+      const mfRaw = localStorage.getItem(`mf_bonus_campaigns_${tenantId}`);
+      if (mfRaw) {
+        const camps = JSON.parse(mfRaw);
+        if (Array.isArray(camps)) {
+          camps.forEach((camp: any) => {
+            const payDate = camp.payment_date || camp.created_at || '';
+            if (payDate.startsWith(`${selectedYear}-`)) {
+              const r = (camp.records || []).find((rec: any) => rec.user_id === currentEmployee.id);
+              if (r && Number(r.bonus_gross || 0) > 0) {
+                bonuses.push({
+                  title: camp.title || '賞与',
+                  paymentDate: payDate,
+                  gross: Number(r.bonus_gross || 0),
+                  health: Number(r.health_insurance || 0),
+                  nursing: Number(r.nursing_insurance || 0),
+                  pension: Number(r.welfare_pension || 0),
+                  employment: Number(r.employment_insurance || 0),
+                  socialTotal: Number(r.social_insurance_total || 0),
+                  incomeTax: Number(r.income_tax || 0),
+                  deductionTotal: Number(r.deduction_total || 0),
+                  netPay: Number(r.net_pay || 0)
+                });
+              }
+            }
+          });
+        }
+      }
+    } catch (_) {}
+    return bonuses;
+  }, [currentEmployee, tenantId, selectedYear]);
 
   // 表示する項目一覧定義（労基則第54条法定項目完全準拠 ＆ MFクラウド給与スタイル）
   const tableRows = useMemo(() => {
@@ -923,6 +963,79 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
                 )}
 
               </div>
+
+              {/* 🎁 賞与・一時金の支払記録（労働基準法施行規則第54条第2項完全準拠） */}
+              {userBonusList.length > 0 && (
+                <div className="mt-4 border border-slate-300 rounded-2xl overflow-hidden shadow-xs bg-white">
+                  <div className="bg-slate-100/80 px-4 py-2 border-b border-slate-300 flex items-center justify-between">
+                    <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                      <span>🎁 賞与・一時金の支払記録</span>
+                      <span className="text-[10px] font-normal text-slate-500 font-sans">（労働基準法施行規則第54条第2項）</span>
+                    </span>
+                    <span className="text-[11px] font-mono text-slate-600 font-bold">
+                      対象年計: ¥{userBonusList.reduce((acc, b) => acc + b.gross, 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-xs text-right font-mono min-w-[700px]">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
+                          <th className="p-2 text-left font-sans border-r border-slate-200">賞与種別</th>
+                          <th className="p-2 text-center border-r border-slate-200">支給月日</th>
+                          <th className="p-2 border-r border-slate-200">総支給額</th>
+                          <th className="p-2 border-r border-slate-200">健康保険料</th>
+                          <th className="p-2 border-r border-slate-200">介護保険料</th>
+                          <th className="p-2 border-r border-slate-200">厚生年金保険料</th>
+                          <th className="p-2 border-r border-slate-200">雇用保険料</th>
+                          <th className="p-2 border-r border-slate-200 font-bold text-slate-800">社会保険計</th>
+                          <th className="p-2 border-r border-slate-200">源泉所得税</th>
+                          <th className="p-2 border-r border-slate-200 font-bold text-slate-800">控除計</th>
+                          <th className="p-2 bg-emerald-50/60 font-black text-emerald-950 pr-3">差引支給額</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {userBonusList.map((b, bIdx) => (
+                          <tr key={bIdx} className="hover:bg-slate-50/80 transition">
+                            <td className="p-2 text-left font-sans font-bold text-slate-800 border-r border-slate-200">
+                              {b.title}
+                            </td>
+                            <td className="p-2 text-center border-r border-slate-200 text-slate-600">
+                              {b.paymentDate}
+                            </td>
+                            <td className="p-2 font-bold text-slate-900 border-r border-slate-200">
+                              ¥{b.gross.toLocaleString()}
+                            </td>
+                            <td className="p-2 text-slate-600 border-r border-slate-200">
+                              ¥{b.health.toLocaleString()}
+                            </td>
+                            <td className="p-2 text-slate-600 border-r border-slate-200">
+                              {b.nursing > 0 ? `¥${b.nursing.toLocaleString()}` : '-'}
+                            </td>
+                            <td className="p-2 text-slate-600 border-r border-slate-200">
+                              ¥{b.pension.toLocaleString()}
+                            </td>
+                            <td className="p-2 text-slate-600 border-r border-slate-200">
+                              ¥{b.employment.toLocaleString()}
+                            </td>
+                            <td className="p-2 font-bold text-slate-800 border-r border-slate-200">
+                              ¥{b.socialTotal.toLocaleString()}
+                            </td>
+                            <td className="p-2 text-slate-600 border-r border-slate-200">
+                              ¥{b.incomeTax.toLocaleString()}
+                            </td>
+                            <td className="p-2 font-bold text-slate-800 border-r border-slate-200">
+                              ¥{b.deductionTotal.toLocaleString()}
+                            </td>
+                            <td className="p-2 font-black text-emerald-900 bg-emerald-50/40 pr-3">
+                              ¥{b.netPay.toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* 🖨️ 印刷専用法定フッター注記（保存義務・発行元） */}
               <div className="mf-wage-ledger-footer hidden print:flex justify-between items-center text-[7.5pt] text-slate-500 pt-1.5 font-sans">
