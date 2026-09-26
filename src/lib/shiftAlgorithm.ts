@@ -53,7 +53,7 @@ export function calculateLaborCost(advanced_shifts: AdvancedShift[], user_wage_s
     if (shift.status !== 'confirmed') continue;
     
     const wageSetting = wageMap.get(shift.user_id);
-    const hourlyWage = wageSetting ? wageSetting.base_wage : 1100;
+    const hourlyWage = Number(wageSetting?.base_wage) || 0;
 
     const startParts = shift.start_time.split(':').map(Number);
     const endParts = shift.end_time.split(':').map(Number);

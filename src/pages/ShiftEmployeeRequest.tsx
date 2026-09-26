@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, ArrowLeft, CheckCircle2, X } from 'lucide-react';
+import { Calendar as CalendarIcon, ArrowLeft, CheckCircle2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
@@ -29,11 +29,15 @@ const ShiftEmployeeRequest: React.FC = () => {
   const [isLocked, setIsLocked] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   
-  // 当月（1ヶ月）のカレンダー
-  const currentMonthStart = startOfMonth(new Date());
+  // 📅 表示対象月（当月・翌月への切り替え対応 SSOT）
+  const [viewDate, setViewDate] = useState<Date>(() => startOfMonth(new Date()));
+  const currentMonthStart = startOfMonth(viewDate);
   const calendarStart = startOfWeek(currentMonthStart, { weekStartsOn: 0 }); // 日曜始まり
   const calendarEnd = endOfWeek(endOfMonth(currentMonthStart), { weekStartsOn: 0 });
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+
+  const prevMonth = () => setViewDate(prev => subMonths(prev, 1));
+  const nextMonth = () => setViewDate(prev => addMonths(prev, 1));
 
   const [requests, setRequests] = useState<Record<string, ShiftRequest>>({});
   const [confirmedShifts, setConfirmedShifts] = useState<ShiftRequest[]>([]);
@@ -46,7 +50,7 @@ const ShiftEmployeeRequest: React.FC = () => {
 
   useEffect(() => {
     fetchExistingRequests();
-  }, []);
+  }, [viewDate]);
 
   const fetchExistingRequests = async () => {
     try {
@@ -223,7 +227,7 @@ const ShiftEmployeeRequest: React.FC = () => {
         .lte('target_date', endDate);
 
       const toInsert = Object.values(requests)
-        .filter(r => r.type !== 'none')
+        .filter(r => r.type !== 'none' && isSameMonth(r.date, currentMonthStart))
         .map(r => ({
           tenant_id: tenantIdData,
           user_id: user.id,
@@ -275,10 +279,26 @@ const ShiftEmployeeRequest: React.FC = () => {
         <button onClick={() => navigate('/portal')} className="p-2 -ml-2 rounded-full hover:bg-white/50 transition-colors">
           <ArrowLeft className="w-6 h-6 text-slate-700" />
         </button>
-        <h1 className="text-lg font-bold text-slate-800 flex items-center">
-          <CalendarIcon className="w-5 h-5 mr-2 text-indigo-600" />
-          {format(currentMonthStart, 'yyyy年M月')}のシフト希望
-        </h1>
+        <div className="flex items-center space-x-1 sm:space-x-2">
+          <button 
+            onClick={prevMonth} 
+            className="p-1 sm:p-1.5 rounded-xl hover:bg-white/60 text-slate-600 transition flex items-center justify-center cursor-pointer"
+            title="前月へ"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-sm sm:text-lg font-bold text-slate-800 flex items-center whitespace-nowrap">
+            <CalendarIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-1 text-indigo-600 shrink-0" />
+            {format(currentMonthStart, 'yyyy年M月')} 希望
+          </h1>
+          <button 
+            onClick={nextMonth} 
+            className="p-1 sm:p-1.5 rounded-xl hover:bg-white/60 text-slate-600 transition flex items-center justify-center cursor-pointer"
+            title="翌月へ"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setIsHelpOpen(true)}
