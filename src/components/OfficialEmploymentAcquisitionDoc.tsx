@@ -363,7 +363,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
       window.removeEventListener('mousemove', handleGlobalMouseMove);
       window.removeEventListener('mouseup', handleGlobalMouseUp);
     };
-  }, [draggingFieldId, updateFieldCoord, coords]);
+  }, [draggingFieldId, updateFieldCoord, coords, resolvedTenantId]);
 
   // PDF.js による原本第1面のCanvasレンダリング（原本画像の取得）
   useEffect(() => {

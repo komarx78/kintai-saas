@@ -949,7 +949,7 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
 
       {/* 🛠️ 印字座標マスタ微調整モーダル */}
       {showInspectorModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+        <div className="print:hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
           <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-7xl max-h-[94vh] overflow-hidden flex flex-col shadow-2xl">
             <div className="p-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
               <div className="flex items-center gap-2">

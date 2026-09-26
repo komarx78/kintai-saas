@@ -517,7 +517,7 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
                 width: '210mm',
                 height: '297mm'
               }}
-              className="bg-white relative shadow-2xl border border-slate-400 overflow-hidden select-none box-border print:shadow-none print:border-none print:transform-none print:w-full print:h-[297mm]"
+              className="official-hp-loss-print-container bg-white relative shadow-2xl border border-slate-400 overflow-hidden select-none box-border print:shadow-none print:border-none print:transform-none print:w-[210mm] print:h-[297mm]"
             >
               {/* 原本背景画像（PDF.jsレンダリング） */}
               {bgPdfImg ? (
@@ -905,6 +905,53 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
           </div>
         )}
       </div>
+
+      {/* 🖨️ A4縦・マージンゼロ・等倍印刷CSS（荀彧 帳票門番規定） */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0mm;
+          }
+          html, body {
+            width: 210mm !important;
+            height: 297mm !important;
+            margin: 0mm !important;
+            padding: 0mm !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .official-hp-loss-print-container {
+            width: 210mm !important;
+            height: 297mm !important;
+            min-width: 210mm !important;
+            max-width: 210mm !important;
+            min-height: 297mm !important;
+            max-height: 297mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            transform: none !important;
+            container-type: inline-size !important;
+            position: relative !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            overflow: hidden !important;
+          }
+          .official-hp-loss-print-container img {
+            width: 210mm !important;
+            height: 297mm !important;
+            object-fit: fill !important;
+            display: block !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };

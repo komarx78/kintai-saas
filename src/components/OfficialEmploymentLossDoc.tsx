@@ -392,7 +392,7 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
       window.removeEventListener('mousemove', handleGlobalMouseMove);
       window.removeEventListener('mouseup', handleGlobalMouseUp);
     };
-  }, [draggingFieldId, updateFieldCoord, coords]);
+  }, [draggingFieldId, updateFieldCoord, coords, resolvedTenantId]);
 
   // PDF.js による原本第1面のCanvasレンダリング
   useEffect(() => {
