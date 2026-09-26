@@ -107,11 +107,14 @@ export default function EmployeeOnboardingSubmission() {
         setTenantId(userData.tenant_id);
 
         // 既存の給与プロファイルがあれば口座初期値にセット
-        const { data: payProf } = await supabase
+        let payProfQuery = supabase
           .from('employee_payroll_profiles')
           .select('*')
-          .eq('user_id', user.id)
-          .maybeSingle();
+          .eq('user_id', user.id);
+        if (userData.tenant_id) {
+          payProfQuery = payProfQuery.eq('tenant_id', userData.tenant_id);
+        }
+        const { data: payProf } = await payProfQuery.maybeSingle();
 
         if (payProf) {
           setBankForm(prev => ({
@@ -132,11 +135,14 @@ export default function EmployeeOnboardingSubmission() {
         }
 
         // 提出済み書類履歴の取得
-        const { data: subData } = await supabase
+        let subQuery = supabase
           .from('employee_document_submissions')
           .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
+          .eq('user_id', user.id);
+        if (userData.tenant_id) {
+          subQuery = subQuery.eq('tenant_id', userData.tenant_id);
+        }
+        const { data: subData } = await subQuery.order('created_at', { ascending: false });
 
         setSubmissions(subData || []);
       }
@@ -203,7 +209,7 @@ export default function EmployeeOnboardingSubmission() {
             birth_date: formData.birth_date || null,
             address: formData.address || null,
             phone: formData.phone || null
-          }).eq('id', userId);
+          }).eq('id', userId).eq('tenant_id', tenantId);
 
           if (formData.birth_date) {
             await supabase.from('employee_payroll_profiles').upsert({

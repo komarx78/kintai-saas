@@ -688,7 +688,7 @@ export default function OnboardingAdminDashboard() {
       if (tData?.onboarding_workflow_settings && Array.isArray(tData.onboarding_workflow_settings)) {
         setWorkflowSteps(tData.onboarding_workflow_settings);
       } else {
-        setWorkflowSteps(getWorkflowStepsFromStorage());
+        setWorkflowSteps(getWorkflowStepsFromStorage(tenantIdData));
       }
 
       // 部署マスタ取得（DB、会社設定LocalStorage、標準初期部署の多層フォールバック）
@@ -918,7 +918,7 @@ export default function OnboardingAdminDashboard() {
           if (rawDept !== cleanDept && cleanDept) {
             console.log(`[Sanitize] Auto-repairing invalid user department: "${rawDept}" -> "${cleanDept}" (User: ${u.id})`);
             u.department = cleanDept;
-            supabase.from('users').update({ department: cleanDept }).eq('id', u.id).then(() => {}, () => {});
+            supabase.from('users').update({ department: cleanDept }).eq('id', u.id).eq('tenant_id', tenantIdData).then(() => {}, () => {});
           }
 
           if (cleanDept && isValidDepartmentName(cleanDept) && !deptNames.has(cleanDept)) {

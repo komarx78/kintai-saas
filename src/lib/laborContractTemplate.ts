@@ -223,7 +223,7 @@ export async function fetchLaborContractTemplate(tId: string): Promise<LaborCont
       result = { ...DEFAULT_LABOR_CONTRACT_TEMPLATE, ...tData.labor_contract_template_data };
       const payload = JSON.stringify(result);
       localStorage.setItem(`labor_contract_template_${tId}`, payload);
-      localStorage.setItem('labor_contract_template', payload);
+      localStorage.removeItem('labor_contract_template'); // グローバル汚染キーを安全にパージ
     }
   } catch (err) {
     console.warn('DB fetch labor contract template notice:', err);
@@ -236,7 +236,7 @@ export async function saveLaborContractTemplateToStorage(tId: string, tpl: Labor
   try {
     const payload = JSON.stringify({ ...tpl, updated_at: new Date().toISOString() });
     localStorage.setItem(`labor_contract_template_${tId}`, payload);
-    localStorage.setItem('labor_contract_template', payload);
+    localStorage.removeItem('labor_contract_template'); // グローバル汚染キーを安全にパージ
   } catch (e) {
     console.warn('Failed to save labor_contract_template to LocalStorage:', e);
   }
