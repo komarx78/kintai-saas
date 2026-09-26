@@ -220,7 +220,7 @@ export function calculatePayroll(
 
   // 1. 支給額の計算
   let baseSalary = 0;
-  let hourlyRate = profile.hourly_wage || 1100;
+  let hourlyRate = profile.hourly_wage || 0;
   let overtimeAllowance = 0;
   let midnightAllowance = 0;
   let holidayAllowance = 0;
@@ -363,7 +363,7 @@ export function calculatePayroll(
   // 法定労務SSOT原則: 標準報酬月額は「固定的給与」に基づき定時決定・資格取得決定され1年間固定される。
   // 万が一マスタで標準報酬月額が未設定の場合でも、当月の残業手当（非固定的手当）の波で社保料が毎月変動するのを物理遮断する！
   const standardContractBaseSalary = profile.salary_type === 'hourly'
-    ? (profile.base_salary > 0 ? profile.base_salary : (profile.hourly_wage || 1100) * 160)
+    ? (profile.base_salary > 0 ? profile.base_salary : (profile.hourly_wage || 0) * 160)
     : (profile.base_salary || 0);
 
   const fixedMonthlyRemuneration = Math.max(0,

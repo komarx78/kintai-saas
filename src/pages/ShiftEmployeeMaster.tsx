@@ -53,7 +53,7 @@ const ShiftEmployeeMaster: React.FC = () => {
         if (tData) setTenantName(tData.name);
       }
 
-      const { data: usersData } = await supabase.from('users').select('id, name, role, department, employment_type, has_shift_access').eq('tenant_id', tId);
+      const { data: usersData } = await supabase.from('users').select('id, name, role, department, employment_type, has_shift_access, hourly_wage, base_salary, salary_type').eq('tenant_id', tId);
 
       if (tId) {
         // 📱 LINE連携マップ復元
@@ -78,6 +78,10 @@ const ShiftEmployeeMaster: React.FC = () => {
 
       const merged = (usersData || []).map(u => {
         const s = (settingsData || []).find(sd => sd.user_id === u.id);
+        const resolvedWage = s?.base_wage !== undefined && s?.base_wage !== null 
+          ? Number(s.base_wage) 
+          : (Number((u as any).hourly_wage) || 0);
+
         return {
           user_id: u.id,
           name: u.name,
@@ -90,7 +94,7 @@ const ShiftEmployeeMaster: React.FC = () => {
           min_shift_hours: (s as any)?.min_shift_hours || Number(localStorage.getItem(`shift_employee_min_hours_${u.id}`) || 3),
           priority_score: s?.priority_score || 3,
           default_role: s?.default_role || '',
-          base_wage: s?.base_wage || 1000
+          base_wage: resolvedWage
         };
       });
 

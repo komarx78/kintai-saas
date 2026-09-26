@@ -378,9 +378,6 @@ const ShiftCalendarView: React.FC = () => {
         console.warn('店舗マスタ取得エラー:', e);
         storeNames = getStoresFromStorage(tenantIdData).map(s => s.name).filter(Boolean);
       }
-      if (storeNames.length === 0) {
-        storeNames = ['新宿店', '渋谷店', '池袋店'];
-      }
       setDepartmentsList(storeNames);
 
       // 🏢 本部スタッフ（総務・人事・管理部・営業部など、シフト勤務を行わないスタッフ）をシフトカレンダーから完全除外
@@ -563,7 +560,7 @@ const ShiftCalendarView: React.FC = () => {
 
       // 勤務先店舗の確定
       const assignedUser = users.find(u => u.id === modalData.user_id);
-      const targetStore = modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : (assignedUser?.store_name || assignedUser?.department || departmentsList[0] || '新宿店'));
+      const targetStore = modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : (assignedUser?.store_name || assignedUser?.department || departmentsList[0] || ''));
 
       // 🚨 店舗間応援機能が有効な場合：同一日・他店舗へのダブルブッキング防止チェック
       if (enableStoreHelp && modalData.user_id && modalData.target_date) {
@@ -2859,14 +2856,14 @@ const ShiftCalendarView: React.FC = () => {
                     </span>
                   </label>
                   <select
-                    value={modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : (departmentsList[0] || '新宿店'))}
+                    value={modalData.store_name || (selectedDepartment !== 'all' ? selectedDepartment : (departmentsList[0] || ''))}
                     onChange={e => setModalData({...modalData, store_name: e.target.value})}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-bold text-slate-800"
                   >
                     {departmentsList.map(d => (
                       <option key={d} value={d}>🏪 {d}</option>
                     ))}
-                    {departmentsList.length === 0 && <option value="新宿店">🏪 新宿店</option>}
+                    {departmentsList.length === 0 && <option value="">🏪 店舗指定なし（全社共通）</option>}
                   </select>
                 </div>
               )}

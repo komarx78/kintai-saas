@@ -2470,7 +2470,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                   paidLeaveGrantDays: 10,
                   salaryType: prof?.salary_type === 'hourly' ? 'hourly' : 'monthly',
                   baseSalary: previewContractDoc.base_salary,
-                  hourlyWage: prof?.hourly_wage || 1150,
+                  hourlyWage: prof?.hourly_wage || 0,
                   positionAllowance: previewContractDoc.position_allowance,
                   qualificationAllowance: previewContractDoc.qualification_allowance,
                   housingAllowance: previewContractDoc.housing_allowance,

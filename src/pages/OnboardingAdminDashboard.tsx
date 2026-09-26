@@ -7214,14 +7214,14 @@ export default function OnboardingAdminDashboard() {
                       branchName: targetEmp?.branch_name || '',
                       accountNumber: targetEmp?.account_number || '',
                       accountHolder: targetEmp?.account_holder || targetEmp?.name || '',
-                      commutingAmount: targetEmp?.commuting_allowance || 15000
+                      commutingAmount: targetEmp?.commuting_allowance || 0
                     }));
                   }}
                   className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800"
                 >
                   <option value="">従業員を選択してください</option>
                   {employees.filter(e => e.status !== 'retired').map(e => (
-                    <option key={e.user_id} value={e.user_id}>{e.name} ({e.department || '営業部'})</option>
+                    <option key={e.user_id} value={e.user_id}>{e.name} ({e.department || '部署未設定'})</option>
                   ))}
                 </select>
               </div>

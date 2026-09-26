@@ -58,9 +58,6 @@ const ShiftRequirementSettings: React.FC = () => {
       } catch {
         storeNames = getStoresFromStorage(tenantIdData).map(s => s.name).filter(Boolean);
       }
-      if (storeNames.length === 0) {
-        storeNames = ['新宿店', '渋谷店', '池袋店'];
-      }
       setDepartmentsList(storeNames);
 
       // 2. 役割マスタの取得

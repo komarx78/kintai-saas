@@ -127,9 +127,6 @@ export const ShiftRequestsView: React.FC = () => {
       } catch {
         storeNames = getStoresFromStorage(tenantId).map(s => s.name).filter(Boolean);
       }
-      if (storeNames.length === 0) {
-        storeNames = ['新宿店', '渋谷店', '池袋店'];
-      }
       setDepartmentsList(storeNames);
 
       const userMap: Record<string, { id: string; name: string; email?: string; department?: string; store_name?: string }> = {};
