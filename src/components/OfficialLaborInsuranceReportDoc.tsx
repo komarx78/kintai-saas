@@ -52,6 +52,14 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
     let isMounted = true;
     const fetchLaborPayslips = async () => {
       try {
+        let activeTenantId = tenantId;
+        if (!activeTenantId) {
+          try {
+            const { data: tid } = await supabase.rpc('get_user_tenant_id');
+            if (tid) activeTenantId = tid;
+          } catch (_) {}
+        }
+
         const startYM = `${fiscalYear - 1}-04`;
         const endYM = `${fiscalYear}-03`;
         let query = supabase
@@ -60,8 +68,8 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
           .gte('year_month', startYM)
           .lte('year_month', endYM);
 
-        if (tenantId) {
-          query = query.eq('tenant_id', tenantId);
+        if (activeTenantId) {
+          query = query.eq('tenant_id', activeTenantId);
         }
 
         const { data, error } = await query;

@@ -107,14 +107,22 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
 
     const fetchPayslips = async () => {
       try {
+        let activeTenantId = tenantId;
+        if (!activeTenantId) {
+          try {
+            const { data: tid } = await supabase.rpc('get_user_tenant_id');
+            if (tid) activeTenantId = tid;
+          } catch (_) {}
+        }
+
         let query = supabase
           .from('payslips')
           .select('*')
           .eq('user_id', currentEmployee.id)
           .order('year_month', { ascending: false });
 
-        if (tenantId) {
-          query = query.eq('tenant_id', tenantId);
+        if (activeTenantId) {
+          query = query.eq('tenant_id', activeTenantId);
         }
 
         const { data, error } = await query;
