@@ -1041,7 +1041,7 @@ export default function OnboardingAdminDashboard() {
                   .eq('user_id', u.id);
               } else {
                 // 新規の場合はNOT NULLカラム（join_date）を完備してupsert
-                const jDate = conDoc.join_date || u.join_date || '2026-04-01';
+                const jDate = conDoc.join_date || u.join_date || new Date().toISOString().split('T')[0];
                 await supabase.from('employee_onboarding_profiles').upsert({
                   tenant_id: effectiveTenantId,
                   user_id: u.id,
@@ -4460,13 +4460,13 @@ export default function OnboardingAdminDashboard() {
                       employeeAddress: tData.address || rData.address || cabinetModal.employee.address || '',
                       postalCode: tData.postal_code || rData.postal_code || '',
                       myNumber: tData.my_number || '',
-                      birthDate: rData.birth_date || tData.birth_date || cabinetModal.employee.birth_date || '1998-04-01',
+                      birthDate: rData.birth_date || tData.birth_date || cabinetModal.employee.birth_date || '',
                       householderName: tData.householder_name || rData.householder_name || tData.name || cabinetModal.employee.name,
                       householderRelation: tData.householder_relation || rData.householder_relation || '本人',
                       hasSpouse: tData.has_spouse || false,
                       spouseName: tData.spouse_name || tData.spouseName || '',
                       spouseNameKana: tData.spouse_name_kana || tData.spouseNameKana || '',
-                      spouseBirthDate: tData.spouse_birth_date || tData.spouseBirthDate || '1996-05-15',
+                      spouseBirthDate: tData.spouse_birth_date || tData.spouseBirthDate || '',
                       spouseIncomeEstimate: tData.spouse_income_estimate ?? tData.spouseIncomeEstimate ?? 0,
                       spouseIsLivingTogether: tData.spouse_is_living_together !== false,
                       dependents: tData.dependents || [],
@@ -4504,11 +4504,11 @@ export default function OnboardingAdminDashboard() {
                         corporateNumber: tenantInfo?.corporate_number || '',
                         employeeName: resolvedEmp.name,
                         employeeAddress: resolvedEmp.address || '',
-                        employeeIncomeEstimate: resolvedEmp.base_salary ? resolvedEmp.base_salary * 12 : 3500000,
+                        employeeIncomeEstimate: resolvedEmp.base_salary ? resolvedEmp.base_salary * 12 : 0,
                         hasSpouse: tData.has_spouse || resolvedEmp.has_spouse || false,
                         spouseName: tData.spouse_name || '',
                         spouseNameKana: tData.spouse_name_kana || '',
-                        spouseBirthDate: tData.spouse_birth_date || '1996-05-15',
+                        spouseBirthDate: tData.spouse_birth_date || '',
                         spouseIncomeEstimate: tData.spouse_income_estimate ?? 0,
                         spouseAddress: resolvedEmp.address,
                         appliedDate: resolvedEmp.join_date
@@ -6800,7 +6800,7 @@ export default function OnboardingAdminDashboard() {
                   </div>
                   <input
                     type="date"
-                    value={wizardData.birth_date || '1995-01-01'}
+                    value={wizardData.birth_date || ''}
                     onChange={e => setWizardData({ ...wizardData, birth_date: e.target.value })}
                     className="w-full sm:w-64 bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
                   />

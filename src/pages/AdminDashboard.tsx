@@ -761,7 +761,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
               tenant_id: tenantId,
               user_id: emp.id,
               status: 'active',
-              join_date: emp.join_date !== '-' ? emp.join_date : '2026-04-01',
+              join_date: (emp.join_date && emp.join_date !== '-') ? emp.join_date : new Date().toISOString().split('T')[0],
               retirement_date: null,
               retirement_reason: '',
               updated_at: new Date().toISOString()
@@ -797,7 +797,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
               tenant_id: tenantId,
               user_id: emp.id,
               status: 'retired',
-              join_date: emp.join_date !== '-' ? emp.join_date : '2026-04-01',
+              join_date: (emp.join_date && emp.join_date !== '-') ? emp.join_date : new Date().toISOString().split('T')[0],
               retirement_date: new Date().toISOString().split('T')[0],
               retirement_reason: '退職',
               updated_at: new Date().toISOString()

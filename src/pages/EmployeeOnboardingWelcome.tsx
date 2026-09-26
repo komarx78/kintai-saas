@@ -779,7 +779,7 @@ export default function EmployeeOnboardingWelcome() {
           address_kana: basicData.addressKana || null,
           postal_code: basicData.postalCode || null,
           phone: basicData.phoneNumber || null,
-          join_date: contractAgreement.joinDate || '2026-04-01',
+          join_date: contractAgreement.joinDate || new Date().toISOString().split('T')[0],
           status: 'onboarding',
           updated_at: new Date().toISOString()
         }, { onConflict: 'tenant_id,user_id' });

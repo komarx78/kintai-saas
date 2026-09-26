@@ -135,24 +135,23 @@ export async function parseResidentCertificateImage(base64Image: string): Promis
       return {
         name: parsed.name || '',
         nameKana: parsed.nameKana || '',
-        birthDate: parsed.birthDate || '1995-04-15',
+        birthDate: parsed.birthDate || '',
         address: parsed.address || '',
         householderName: parsed.householderName || parsed.name || '',
         householderRelation: parsed.householderRelation || '本人'
       };
     } catch (err: any) {
-      console.warn('Gemini Vision OCR API failed, using fallback:', err);
+      console.warn('Gemini Vision OCR API failed:', err);
     }
   }
 
-  // APIキー未設定時のローカル画像メタ解析・フォールバック
-  await new Promise(resolve => setTimeout(resolve, 800));
+  // APIキー未設定またはエラー時は空データを返却し、手動入力を促す
   return {
-    name: '佐藤 健一',
-    nameKana: 'サトウ ケンイチ',
-    birthDate: '1995-04-15',
-    address: '東京都新宿区西新宿 2-8-1 〇〇マンション 101号室',
-    householderName: '佐藤 健一',
+    name: '',
+    nameKana: '',
+    birthDate: '',
+    address: '',
+    householderName: '',
     householderRelation: '本人'
   };
 }
@@ -188,17 +187,16 @@ export async function parseBankPassbookImage(base64Image: string): Promise<Parse
         accountHolder: parsed.accountHolder || ''
       };
     } catch (err: any) {
-      console.warn('Gemini Vision OCR API for Passbook failed, using fallback:', err);
+      console.warn('Gemini Vision OCR API for Passbook failed:', err);
     }
   }
 
-  // APIキー未設定時のフォールバック
-  await new Promise(resolve => setTimeout(resolve, 800));
+  // APIキー未設定またはエラー時は空データを返却し、手動入力を促す
   return {
-    bankName: '三井住友銀行',
-    branchName: '新宿支店',
+    bankName: '',
+    branchName: '',
     accountType: 'ordinary',
-    accountNumber: '1234567',
-    accountHolder: 'サトウ ケンイチ'
+    accountNumber: '',
+    accountHolder: ''
   };
 }
