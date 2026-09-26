@@ -21,6 +21,7 @@ import { OfficialLaborInsuranceReportDoc } from './OfficialLaborInsuranceReportD
 import { OfficialLeaveProcedureDoc } from './OfficialLeaveProcedureDoc';
 import { OfficialReminderSettingsModal } from './OfficialReminderSettingsModal';
 import { MonthlyRevisionReportModal } from './MonthlyRevisionReportModal';
+import { detectMonthlyRevisionCandidates } from '../lib/monthlyRevisionEngine';
 import { Bell } from 'lucide-react';
 import { calculateNetEmploymentIncome } from '../lib/payrollEngine';
 
@@ -135,6 +136,23 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
       isMounted = false;
     };
   }, [tenantId, selectedYear]);
+
+  // 📋 当月（selectedYear-selectedMonth）の月変対象候補の自動検知
+  const monthlyRevisionEligibleCount = React.useMemo(() => {
+    if (!employees || employees.length === 0 || !dbPayslips || dbPayslips.length === 0) return 0;
+    try {
+      const ym = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+      const detected = detectMonthlyRevisionCandidates({
+        revisionYearMonth: ym,
+        employees,
+        payrollProfiles,
+        allPayslips: dbPayslips
+      });
+      return detected.filter(c => c.isEligible).length;
+    } catch (e) {
+      return 0;
+    }
+  }, [selectedYear, selectedMonth, employees, payrollProfiles, dbPayslips]);
 
   useEffect(() => {
     fetchMasterData();
@@ -1011,11 +1029,16 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                   <FileText className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-xs font-black text-slate-800 group-hover:text-purple-700 transition flex items-center gap-1.5">
+                  <div className="text-xs font-black text-slate-800 group-hover:text-purple-700 transition flex items-center gap-1.5 flex-wrap">
                     月額変更届（月変）
-                    <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded font-black border border-purple-300 animate-pulse">
+                    <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded font-black border border-purple-300">
                       随時改定
                     </span>
+                    {monthlyRevisionEligibleCount > 0 && (
+                      <span className="text-[10px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-black shadow-xs animate-bounce flex items-center gap-1">
+                        ⚠️ {monthlyRevisionEligibleCount}名 該当！
+                      </span>
+                    )}
                   </div>
                   <div className="text-[10px] text-purple-600 font-bold mt-0.5">
                     固定給変動＋2等級差自動判定・コード2221公式用紙
