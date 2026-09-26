@@ -214,9 +214,15 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
             <td className="p-2.5">
               {isFixedTerm ? (
                 <div>
-                  <span className="font-bold">期間の定めあり:</span> {data.contractStartDate || data.joinDate} 〜 {data.contractEndDate || '未定'}
+                  <div>
+                    <span className="font-bold">期間の定めあり:</span> {data.contractStartDate || data.joinDate} 〜 {data.contractEndDate || '未定'}
+                  </div>
                   <div className="text-[11px] text-slate-600 mt-0.5">
-                    契約更新の有無: {data.contractRenewType || '自動更新する / 契約満了時の業務量・勤務成績により判断'}
+                    ・契約更新の有無: <span className="font-medium">{data.contractRenewType || '自動更新する / 契約満了時の業務量・勤務成績により判断'}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1 bg-slate-50 p-1.5 rounded border border-slate-200 space-y-0.5">
+                    <div>・更新上限（通算契約期間・更新回数）: 会社の業務上の必要性・経営状況等により判断し、通算契約期間の上限を設ける場合は事前に協議する（上限の定めのない場合は通算5年到達時に無期転換申込権が発生）。</div>
+                    <div>・無期転換ルール（労働契約法第18条）: 同一使用者との間で通算契約期間が5年を超える有期労働契約を締結している場合、本人の申込みにより期間の定めのない労働契約（無期雇用）に転換できる。</div>
                   </div>
                 </div>
               ) : (
