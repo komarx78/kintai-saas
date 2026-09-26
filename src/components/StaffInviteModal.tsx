@@ -57,8 +57,9 @@ export const StaffInviteModal: React.FC<StaffInviteModalProps> = ({
     }
   };
 
-  const kintaiUrl = `${window.location.origin}/kintai/user`;
-  const onboardingUrl = `${window.location.origin}/onboarding/welcome${tenantId ? `?tenant_id=${tenantId}` : ''}`;
+  const resolvedTenantId = tenantId || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tenant_id') || undefined : undefined);
+  const kintaiUrl = `${window.location.origin}/kintai/user${resolvedTenantId ? `?tenant_id=${resolvedTenantId}` : ''}`;
+  const onboardingUrl = `${window.location.origin}/onboarding/welcome${resolvedTenantId ? `?tenant_id=${resolvedTenantId}` : ''}`;
 
   const kintaiMsg = `【勤怠打刻システムのご案内】
 ${companyName} のスタッフの皆様へ

@@ -7967,6 +7967,7 @@ export default function OnboardingAdminDashboard() {
         onClose={() => setAccountIssueModal({ isOpen: false, staff: null })}
         staff={accountIssueModal.staff}
         companyName={tenantInfo?.name || '会社'}
+        tenantId={tenantId}
         onSuccess={({ id, email: newEmail }) => {
           setEmployees(prev => prev.map(e => (e.user_id === id) ? { ...e, email: newEmail } : e));
         }}

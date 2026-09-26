@@ -29,6 +29,7 @@ interface StaffAccountIssueModalProps {
   onClose: () => void;
   staff: TargetStaffForAccount | null;
   companyName?: string;
+  tenantId?: string | null;
   onSuccess?: (updatedStaff: { id: string; email: string }) => void;
 }
 
@@ -47,6 +48,7 @@ export const StaffAccountIssueModal: React.FC<StaffAccountIssueModalProps> = ({
   onClose,
   staff,
   companyName = '会社',
+  tenantId,
   onSuccess
 }) => {
   const [email, setEmail] = useState('');
@@ -78,7 +80,8 @@ export const StaffAccountIssueModal: React.FC<StaffAccountIssueModalProps> = ({
 
   if (!isOpen || !staff || typeof document === 'undefined') return null;
 
-  const loginUrl = `${window.location.origin}/kintai/user`;
+  const resolvedTenantId = tenantId || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tenant_id') || undefined : undefined);
+  const loginUrl = `${window.location.origin}/kintai/user${resolvedTenantId ? `?tenant_id=${resolvedTenantId}` : ''}`;
 
   const generateLineMessage = (targetEmail: string, targetPass: string) => {
     const displayEmail = targetEmail.trim() || '（スタッフ本人のメールアドレス）';
@@ -186,7 +189,7 @@ URLを開いた後、スマホ画面のメニューから「ホーム画面に�
                 ログインアカウント発行 ＆ LINE案内
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                対象スタッフ：<strong className="text-slate-800">{staff.name}</strong> 様（{staff.department || '一般'}）
+                対象スタッフ：<strong className="text-slate-800">{staff.name}</strong> 様{staff.department ? `（${staff.department}）` : '（未配属）'}
               </p>
             </div>
           </div>
