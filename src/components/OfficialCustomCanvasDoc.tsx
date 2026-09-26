@@ -51,7 +51,7 @@ export default function OfficialCustomCanvasDoc({ template, employeeData, compan
       case 'company.postal_code': return comp.postal_code || comp.zip_code || '';
       case 'company.address': return comp.address || '';
       case 'company.representative_name': return comp.representative_name || '';
-      case 'company.representative_position': return comp.representative_position || '代表取締役';
+      case 'company.representative_position': return comp.representative_position || '';
       case 'company.corporate_number': return comp.corporate_number ? String(comp.corporate_number).replace(/[^0-9]/g, '') : '';
       case 'company.labor_insurance_number': return comp.labor_insurance_number || comp.labor_insurance_no || '';
       case 'company.employment_insurance_office_number': return comp.employment_insurance_office_number || comp.employment_insurance_no || '';
@@ -71,7 +71,7 @@ export default function OfficialCustomCanvasDoc({ template, employeeData, compan
       case 'employee.postal_code_pitch': return emp.postal_code ? String(emp.postal_code).replace(/[^0-9]/g, '') : '';
       case 'employee.phone': return emp.phone || '';
       case 'employee.householder_name': return emp.householder_name || emp.name || '';
-      case 'employee.householder_relation': return emp.householder_relation || '本人';
+      case 'employee.householder_relation': return emp.householder_relation || (emp.householder_name && emp.householder_name === emp.name ? '本人' : '');
 
       // マイナンバー・社保
       case 'employee.my_number': return emp.my_number ? String(emp.my_number).replace(/[^0-9]/g, '') : '';
@@ -87,9 +87,9 @@ export default function OfficialCustomCanvasDoc({ template, employeeData, compan
       case 'employee.hourly_wage': return emp.hourly_wage ? `¥${Number(emp.hourly_wage).toLocaleString()}` : '';
       case 'employee.bank_name': return emp.bank_name || '';
       case 'employee.branch_name': return emp.branch_name || '';
-      case 'employee.account_type': return (emp.account_type === 'current' || emp.account_type === '当座') ? '当座' : '普通';
+      case 'employee.account_type': return emp.account_type ? ((emp.account_type === 'current' || emp.account_type === '当座') ? '当座' : '普通') : '';
       case 'employee.account_number': return emp.account_number ? String(emp.account_number).trim().padStart(7, '0') : '';
-      case 'employee.account_holder': return emp.account_holder || emp.name || '';
+      case 'employee.account_holder': return emp.account_holder || (emp.bank_name || emp.account_number ? emp.name || '' : '');
 
       // 配偶者・扶養
       case 'employee.spouse_name': return emp.spouse_name || '';
