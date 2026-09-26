@@ -8,11 +8,11 @@ export interface CustomDocRenderProps {
   scale?: number;
 }
 
-// 和暦変換ヘルパー
+// 和暦変換ヘルパー（※憲法14条：未登録・空日付時に架空の日付を捏造しない）
 const toWareki = (dateStr?: string) => {
-  if (!dateStr) return { era: '令', year: '8', month: '1', day: '1', fullWareki: '令和8年1月1日' };
+  if (!dateStr) return { era: '令', year: '', month: '', day: '', fullWareki: '' };
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return { era: '令', year: '8', month: '1', day: '1', fullWareki: '令和8年1月1日' };
+  if (isNaN(d.getTime())) return { era: '令', year: '', month: '', day: '', fullWareki: '' };
   const y = d.getFullYear();
   const m = d.getMonth() + 1;
   const day = d.getDate();
@@ -26,8 +26,11 @@ const toWareki = (dateStr?: string) => {
   } else if (d >= new Date('1926-12-25')) {
     const wy = y - 1925;
     return { era: '昭', year: wy === 1 ? '元' : String(wy), month: String(m), day: String(day), fullWareki: `昭和${wy === 1 ? '元' : wy}年${m}月${day}日` };
+  } else if (d >= new Date('1912-07-30')) {
+    const wy = y - 1911;
+    return { era: '大', year: wy === 1 ? '元' : String(wy), month: String(m), day: String(day), fullWareki: `大正${wy === 1 ? '元' : wy}年${m}月${day}日` };
   }
-  return { era: '令', year: '8', month: '1', day: '1', fullWareki: '令和8年1月1日' };
+  return { era: '令', year: String(y), month: String(m), day: String(day), fullWareki: `${y}年${m}月${day}日` };
 };
 
 export default function OfficialCustomCanvasDoc({ template, employeeData, companyData, scale = 2.5 }: CustomDocRenderProps) {
@@ -45,15 +48,19 @@ export default function OfficialCustomCanvasDoc({ template, employeeData, compan
     switch (key) {
       // 会社情報
       case 'company.name': return comp.name || '';
+      case 'company.postal_code': return comp.postal_code || comp.zip_code || '';
       case 'company.address': return comp.address || '';
       case 'company.representative_name': return comp.representative_name || '';
-      case 'company.corporate_number': return comp.corporate_number || '';
+      case 'company.representative_position': return comp.representative_position || '代表取締役';
+      case 'company.corporate_number': return comp.corporate_number ? String(comp.corporate_number).replace(/[^0-9]/g, '') : '';
+      case 'company.labor_insurance_number': return comp.labor_insurance_number || comp.labor_insurance_no || '';
+      case 'company.employment_insurance_office_number': return comp.employment_insurance_office_number || comp.employment_insurance_no || '';
       case 'company.phone': return comp.phone || '';
       case 'company.tax_office_name': return comp.tax_office_name || '';
       case 'company.nenkin_office_name': return comp.nenkin_office_name || '';
 
       // 従業員基本
-      case 'employee.name': return emp.name || '従業員';
+      case 'employee.name': return emp.name || '';
       case 'employee.name_kana': return emp.name_kana || '';
       case 'employee.birth_date_wareki_y': return birthWareki.year;
       case 'employee.birth_date_m': return birthWareki.month;
@@ -61,26 +68,27 @@ export default function OfficialCustomCanvasDoc({ template, employeeData, compan
       case 'employee.birth_date_seireki': return emp.birth_date ? String(emp.birth_date).substring(0, 10) : '';
       case 'employee.address': return emp.address || '';
       case 'employee.postal_code': return emp.postal_code || '';
+      case 'employee.postal_code_pitch': return emp.postal_code ? String(emp.postal_code).replace(/[^0-9]/g, '') : '';
       case 'employee.phone': return emp.phone || '';
       case 'employee.householder_name': return emp.householder_name || emp.name || '';
       case 'employee.householder_relation': return emp.householder_relation || '本人';
 
       // マイナンバー・社保
-      case 'employee.my_number': return emp.my_number ? emp.my_number.replace(/[^0-9]/g, '') : '************';
-      case 'employee.pension_number': return emp.pension_number || '';
-      case 'employee.employment_insurance_number': return emp.employment_insurance_number || '';
+      case 'employee.my_number': return emp.my_number ? String(emp.my_number).replace(/[^0-9]/g, '') : '';
+      case 'employee.pension_number': return emp.pension_number ? String(emp.pension_number).replace(/[^0-9]/g, '') : '';
+      case 'employee.employment_insurance_number': return emp.employment_insurance_number ? String(emp.employment_insurance_number).replace(/[^0-9]/g, '') : '';
 
       // 雇用・給与・口座
       case 'employee.join_date_wareki': return joinWareki.fullWareki;
       case 'employee.join_date_seireki': return emp.join_date ? String(emp.join_date).substring(0, 10) : '';
-      case 'employee.department': return emp.department || '営業部';
+      case 'employee.department': return emp.department || '';
       case 'employee.position_name': return emp.position_name || '';
       case 'employee.base_salary': return emp.base_salary ? `¥${Number(emp.base_salary).toLocaleString()}` : '';
       case 'employee.hourly_wage': return emp.hourly_wage ? `¥${Number(emp.hourly_wage).toLocaleString()}` : '';
       case 'employee.bank_name': return emp.bank_name || '';
       case 'employee.branch_name': return emp.branch_name || '';
-      case 'employee.account_type': return emp.account_type === 'current' ? '当座' : '普通';
-      case 'employee.account_number': return emp.account_number || '';
+      case 'employee.account_type': return (emp.account_type === 'current' || emp.account_type === '当座') ? '当座' : '普通';
+      case 'employee.account_number': return emp.account_number ? String(emp.account_number).trim().padStart(7, '0') : '';
       case 'employee.account_holder': return emp.account_holder || emp.name || '';
 
       // 配偶者・扶養
@@ -88,7 +96,7 @@ export default function OfficialCustomCanvasDoc({ template, employeeData, compan
       case 'employee.spouse_name_kana': return emp.spouse_name_kana || '';
       case 'employee.spouse_birth_date': return emp.spouse_birth_date ? String(emp.spouse_birth_date).substring(0, 10) : '';
       case 'employee.spouse_income_estimate': return emp.spouse_income_estimate ? `¥${Number(emp.spouse_income_estimate).toLocaleString()}` : '';
-      case 'employee.dependents_count': return emp.dependents_count !== undefined ? `${emp.dependents_count}名` : '0名';
+      case 'employee.dependents_count': return emp.dependents_count !== undefined ? String(emp.dependents_count) : (Array.isArray(emp.dependents) ? String(emp.dependents.length) : '0');
       case 'employee.dep1_name': return emp.dependents?.[0]?.name || '';
       case 'employee.dep1_relation': return emp.dependents?.[0]?.relation || '';
       case 'employee.dep1_birth_date': return emp.dependents?.[0]?.birthDate || '';

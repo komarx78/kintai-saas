@@ -255,6 +255,8 @@ export default function CustomDocDesignerModal({
     setIsSaving(true);
     const template: CustomDocTemplate = {
       id: initialTemplate?.id || `custom_doc_${Date.now()}`,
+      tenant_id: tenantId || initialTemplate?.tenant_id,
+      is_system_preset: !tenantId && !initialTemplate?.tenant_id,
       title: title.trim(),
       category,
       description: description.trim(),
