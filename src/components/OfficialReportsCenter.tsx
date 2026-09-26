@@ -1983,9 +1983,24 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                       camps.forEach((camp: any) => {
                         const payDate = camp.payment_date || camp.created_at || '';
                         if (payDate.startsWith(`${selectedYear}-`)) {
-                          const r = (camp.records || []).find((rec: any) => rec.user_id === targetEmp?.id);
-                          if (r && Number(r.bonus_gross || 0) > 0) {
-                            targetYearBonuses.push(r);
+                          const items = Array.isArray(camp.items) ? camp.items : Array.isArray(camp.records) ? camp.records : [];
+                          const r = items.find((rec: any) => 
+                            (rec.user_id && rec.user_id === targetEmp?.id) ||
+                            (rec.employee_id && rec.employee_id === targetEmp?.id)
+                          );
+                          if (r) {
+                            const gross = Number(r.bonus_gross || r.gross_bonus || r.bonus_amount || r.currency_amount || 0);
+                            if (gross > 0) {
+                              targetYearBonuses.push({
+                                ...r,
+                                bonus_gross: gross,
+                                social_insurance_total: Number(r.social_insurance_total || r.total_social_insurance || (
+                                  (r.health_insurance || 0) + (r.nursing_insurance || 0) +
+                                  (r.welfare_pension || r.pension_insurance || 0) + (r.employment_insurance || 0)
+                                )),
+                                income_tax: Number(r.income_tax || r.withholding_tax || 0)
+                              });
+                            }
                           }
                         }
                       });

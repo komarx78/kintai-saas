@@ -245,9 +245,11 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
           try {
             const allCampaigns: any[] = JSON.parse(storedBonus);
             allCampaigns.forEach(camp => {
-              if (camp.status === 'published' && Array.isArray(camp.records)) {
-                const myRec = camp.records.find((r: any) => 
-                  (userId && r.user_id === userId) ||
+              const isEligibleStatus = camp.status === 'published' || camp.status === 'confirmed';
+              const items = Array.isArray(camp.items) ? camp.items : Array.isArray(camp.records) ? camp.records : [];
+              if (isEligibleStatus && items.length > 0) {
+                const myRec = items.find((r: any) => 
+                  (userId && (r.user_id === userId || r.employee_id === userId)) ||
                   (userName && r.user_name && r.user_name.replace(/\s+/g, '') === userName.replace(/\s+/g, ''))
                 );
                 if (myRec) {
@@ -778,16 +780,17 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
 
           // 賞与確定データからの集計
           targetYearBonuses.forEach(b => {
-            const bGross = Number(b.bonus_gross || (b.currency_amount || 0));
+            const bRec = b.record || b;
+            const bGross = Number(bRec.bonus_gross || bRec.gross_bonus || bRec.bonus_amount || bRec.currency_amount || 0);
             totalPaid += bGross;
 
-            const bSoc = Number(b.social_insurance_total || (
-              (b.health_insurance || 0) + (b.nursing_insurance || 0) +
-              (b.welfare_pension || 0) + (b.employment_insurance || 0)
+            const bSoc = Number(bRec.social_insurance_total || bRec.total_social_insurance || (
+              (bRec.health_insurance || 0) + (bRec.nursing_insurance || 0) +
+              (bRec.welfare_pension || bRec.pension_insurance || 0) + (bRec.employment_insurance || 0)
             ));
             socialDeducted += bSoc;
 
-            taxDeducted += Number(b.income_tax || 0);
+            taxDeducted += Number(bRec.income_tax || bRec.withholding_tax || 0);
           });
         }
 
