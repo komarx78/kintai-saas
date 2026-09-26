@@ -148,9 +148,9 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
           annualWage += gross;
         });
       } else {
-        // 確定データ未登録月は基本給×月数（退職者は在籍期間考慮）。「賞与2ヶ月分」の勝手な捏造は完全根絶！
-        const monthlyWage = emp.base_salary || 0;
-        annualWage = monthlyWage * (emp.is_retired ? 6 : 12);
+        // 🛡️ 憲法14条・労働保険徴収法第19条厳格準拠:
+        // 確定給与データが存在しない場合は、架空の月数倍率（×12等）で推測捏造を行わず、厳格に0円とする
+        annualWage = 0;
       }
 
       // 🛡️ 実確定賞与（mf_bonus_campaigns_${tenantId}）の取得・合算（労働保険徴収法第2条第2項、労基法第11条）
@@ -296,6 +296,21 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
           </button>
         </div>
       </div>
+
+      {/* 確定データ未登録時の安心ガイダンス（印刷時は非表示） */}
+      {accidentTotalWage === 0 && (
+        <div className="bg-amber-50 border border-amber-300 text-amber-900 p-4 rounded-2xl text-xs flex items-start gap-3 print:hidden shadow-xs">
+          <span className="font-black text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded text-[10px] shrink-0 mt-0.5">
+            確定データ待機中
+          </span>
+          <div className="leading-relaxed">
+            <span className="font-bold">令和{fiscalYear - 2018}年度（前年4月〜当年3月）の確定済み給与データが未登録です。</span>
+            <span className="text-amber-800 text-[11px] block mt-0.5">
+              公的申告書の虚偽記載を防止するため、架空の概算（基本給×12等）は算入せず0円となっております。給与計算確定を行うと自動的に確定実績が報告書へ集計されます。
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* 印刷・公式A4原本コンテナ */}
       <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl flex justify-center overflow-x-auto print:p-0 print:m-0 print:bg-white print:overflow-visible">
