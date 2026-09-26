@@ -960,8 +960,8 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                       );
                       const justifyContent = rfAlign === 'right' ? 'flex-end' : rfAlign === 'center' ? 'center' : 'flex-start';
 
-                      // 〇囲み印字の特殊プレビュー
-                      if (rf.id === 'empWageChangeCircle') {
+                      // ⑦ 昇(降)給 区分〇囲みプレビュー（1. 昇給 / 2. 降給）
+                      if (rf.id === 'empWageChangeCircle1' || rf.id === 'empWageChangeCircle2' || rf.id === 'empWageChangeCircle') {
                         return (
                           <div
                             key={`${rf.id}-r${rowIdx}`}
@@ -976,9 +976,9 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                             style={{
                               position: 'absolute',
                               left: `${rf.x}%`,
-                              top: `${currRowTop + (rowIdx === 1 ? rf.y + 1.5 : rf.y)}%`,
-                              width: `${rf.width || 3.4}%`,
-                              height: '1.45%',
+                              top: `${currRowTop + rf.y}%`,
+                              width: `${rf.width || 6.0}%`,
+                              height: '1.2%',
                               cursor: rowIdx === 0 ? (isDraggingThis ? 'grabbing' : 'grab') : 'pointer',
                               userSelect: 'none',
                               pointerEvents: 'auto',
@@ -989,7 +989,7 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                                 ? 'ring-2 ring-purple-500 bg-purple-500/20 z-30'
                                 : 'hover:ring-1 hover:ring-purple-400 z-10'
                             }`}
-                            title={`${rf.name} (ドラッグまたは十字キーで丸の位置を微調整)`}
+                            title={`${rf.name} (クリックして選択・ドラッグまたは十字キーで位置を微調整)`}
                           >
                             <div className="w-full h-full rounded-full border-2 border-red-600 bg-red-500/10 flex items-center justify-center">
                               <span className="text-[7px] font-black text-red-600 select-none">〇</span>
@@ -998,7 +998,8 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                         );
                       }
 
-                      if (rf.id === 'empRemarksCircle') {
+                      // ⑱ 備考欄 〇囲みプレビュー（1〜6の個別丸印すべて対応）
+                      if (rf.id.startsWith('empRemarksCircle')) {
                         return (
                           <div
                             key={`${rf.id}-r${rowIdx}`}
@@ -1015,7 +1016,7 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                               left: `${rf.x}%`,
                               top: `${currRowTop + rf.y}%`,
                               width: `${rf.width || 2.0}%`,
-                              height: '1.35%',
+                              height: '1.25%',
                               cursor: rowIdx === 0 ? (isDraggingThis ? 'grabbing' : 'grab') : 'pointer',
                               userSelect: 'none',
                               pointerEvents: 'auto',
@@ -1026,7 +1027,7 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                                 ? 'ring-2 ring-purple-500 bg-purple-500/20 z-30'
                                 : 'hover:ring-1 hover:ring-purple-400 z-10'
                             }`}
-                            title={`${rf.name} (ドラッグまたは十字キーで丸の位置を微調整)`}
+                            title={`${rf.name} (クリックして選択・ドラッグまたは十字キーで位置を微調整)`}
                           >
                             <div className="w-full h-full rounded-full border-2 border-red-600 bg-red-500/10 flex items-center justify-center">
                               <span className="text-[7px] font-black text-red-600 select-none">〇</span>

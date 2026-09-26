@@ -317,25 +317,37 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     id: 'empWageChangeMonth',
     name: '⑦ 昇(降)給 月',
     section: 'row_template',
-    x: 48.6,
-    y: 4.4,
+    x: 44.8,
+    y: 4.1,
     fontSize: 9.5,
-    width: 3.0,
+    width: 3.2,
     align: 'center',
     example: '6',
     description: '2段目：昇(降)給「月」の左側空欄（※原本には年の記入欄はありません）'
   },
   {
-    id: 'empWageChangeCircle',
-    name: '⑦ 昇(降)給 区分〇印',
+    id: 'empWageChangeCircle1',
+    name: '⑦ 区分〇印（1. 昇給）',
     section: 'row_template',
-    x: 52.8,
-    y: 2.7,
+    x: 51.2,
+    y: 2.2,
     fontSize: 10,
-    width: 3.4,
+    width: 6.0,
     align: 'center',
     example: '〇',
-    description: '2段目：原本「1. 昇給」または「2. 降給」を囲む〇印'
+    description: '2段目：原本「1. 昇給」を囲む〇印'
+  },
+  {
+    id: 'empWageChangeCircle2',
+    name: '⑦ 区分〇印（2. 降給）',
+    section: 'row_template',
+    x: 51.2,
+    y: 3.7,
+    fontSize: 10,
+    width: 6.0,
+    align: 'center',
+    example: '〇',
+    description: '2段目：原本「2. 降給」を囲む〇印'
   },
 
   {
@@ -351,27 +363,87 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     description: '2段目：遡及支払額（右寄せ）'
   },
 
-  // ── ⑱ 備考欄（該当番号〇印 ＆ カッコ内理由テキスト） ──
+  // ── ⑱ 備考欄（該当番号〇印1〜6 ＆ カッコ内理由テキスト） ──
   {
-    id: 'empRemarksCircle',
-    name: '⑱ 備考 該当番号〇印',
+    id: 'empRemarksCircle1',
+    name: '⑱ 備考〇印（1. 70歳以上）',
     section: 'row_template',
-    x: 74.0,
-    y: 6.4,
+    x: 73.6,
+    y: 1.8,
     fontSize: 10,
     width: 2.0,
     align: 'center',
     example: '〇',
-    description: '2段目：原本「4. 昇給・降給の理由」等の番号を囲む〇印'
+    description: '備考：原本「1. 70歳以上被用者月額変更」の番号を囲む〇印'
+  },
+  {
+    id: 'empRemarksCircle2',
+    name: '⑱ 備考〇印（2. 二以上勤務）',
+    section: 'row_template',
+    x: 73.8,
+    y: 2.7,
+    fontSize: 10,
+    width: 2.0,
+    align: 'center',
+    example: '〇',
+    description: '備考：原本「2. 二以上勤務」の番号を囲む〇印'
+  },
+  {
+    id: 'empRemarksCircle3',
+    name: '⑱ 備考〇印（3. 短時間労働者）',
+    section: 'row_template',
+    x: 74.2,
+    y: 4.1,
+    fontSize: 10,
+    width: 2.0,
+    align: 'center',
+    example: '〇',
+    description: '備考：原本「3. 短時間労働者」の番号を囲む〇印'
+  },
+  {
+    id: 'empRemarksCircle4',
+    name: '⑱ 備考〇印（4. 昇降給理由）',
+    section: 'row_template',
+    x: 74.2,
+    y: 5.2,
+    fontSize: 10,
+    width: 2.0,
+    align: 'center',
+    example: '〇',
+    description: '備考：原本「4. 昇給・降給の理由」の番号を囲む〇印'
+  },
+  {
+    id: 'empRemarksCircle5',
+    name: '⑱ 備考〇印（5. 健保のみ）',
+    section: 'row_template',
+    x: 74.4,
+    y: 7.5,
+    fontSize: 10,
+    width: 2.0,
+    align: 'center',
+    example: '〇',
+    description: '備考：原本「5. 健康保険のみ月額変更」の番号を囲む〇印'
+  },
+  {
+    id: 'empRemarksCircle6',
+    name: '⑱ 備考〇印（6. その他）',
+    section: 'row_template',
+    x: 74.2,
+    y: 9.8,
+    fontSize: 10,
+    width: 2.0,
+    align: 'center',
+    example: '〇',
+    description: '備考：原本「6. その他」の番号を囲む〇印'
   },
   {
     id: 'empRemarksReason',
     name: '⑱ 昇給・降給の理由（カッコ内）',
     section: 'row_template',
     x: 76.5,
-    y: 7.5,
+    y: 6.1,
     fontSize: 8.5,
-    width: 17.0,
+    width: 17.5,
     align: 'left',
     example: '基本給昇給',
     description: '2段目：原本「4. 昇給・降給の理由」カッコ ( ) 内の理由テキスト'
@@ -602,6 +674,21 @@ export function mergeWithDefaultMonthlyRevisionFields(
             y: oldZip.y !== undefined ? oldZip.y : def.y,
             fontSize: oldZip.fontSize !== undefined ? oldZip.fontSize : def.fontSize
           };
+        }
+      } else if (def.id === 'empWageChangeCircle1') {
+        const oldCircle = customList.find((p: any) => p.id === 'empWageChangeCircle');
+        if (oldCircle) {
+          custom = { ...def, x: oldCircle.x ?? def.x, y: oldCircle.y ?? def.y, width: oldCircle.width ?? def.width };
+        }
+      } else if (def.id === 'empWageChangeCircle2') {
+        const oldCircle = customList.find((p: any) => p.id === 'empWageChangeCircle');
+        if (oldCircle) {
+          custom = { ...def, x: oldCircle.x ?? def.x, y: (oldCircle.y ?? 2.2) + 1.5, width: oldCircle.width ?? def.width };
+        }
+      } else if (def.id === 'empRemarksCircle4') {
+        const oldCircle = customList.find((p: any) => p.id === 'empRemarksCircle');
+        if (oldCircle) {
+          custom = { ...def, x: oldCircle.x ?? def.x, y: oldCircle.y ?? def.y, width: oldCircle.width ?? def.width };
         }
       }
     }

@@ -564,16 +564,22 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                 const fPrevM = getF('empPrevRevMonth', 39.4, 4.4, 9.5, 3.2, 'center');
                 const prevRevDate = splitNenkinYM(emp.previousRevisionYM);
 
-                // ⑦ 昇(降)給（※原本は「月」のみ印字、年は不要 ＆ 区分〇囲み）
-                const fWageM = getF('empWageChangeMonth', 48.6, 4.4, 9.5, 3.0, 'center');
-                const fWageCircle = getF('empWageChangeCircle', 52.8, 2.7, 10, 3.4, 'center');
+                // ⑦ 昇(降)給（※原本は「月」のみ印字、年は不要 ＆ 区分〇囲み1/2）
+                const fWageM = getF('empWageChangeMonth', 44.8, 4.1, 9.5, 3.2, 'center');
+                const fWageCircle1 = getF('empWageChangeCircle1', 51.2, 2.2, 10, 6.0, 'center');
+                const fWageCircle2 = getF('empWageChangeCircle2', 51.2, 3.7, 10, 6.0, 'center');
                 const wageChangeDate = splitNenkinYM(emp.wageChangeYM);
 
                 const fRetro = getF('empRetroactiveAmount', 57.2, 2.8, 9.5, 15.5, 'right');
 
-                // ⑱ 備考欄（該当番号〇印 ＆ カッコ内理由テキスト）
-                const fRemCircle = getF('empRemarksCircle', 74.0, 6.4, 10, 2.0, 'center');
-                const fRemReason = getF('empRemarksReason', 76.5, 7.5, 8.5, 17.0, 'left');
+                // ⑱ 備考欄（該当番号〇印1〜6 ＆ カッコ内理由テキスト）
+                const fRemCircle1 = getF('empRemarksCircle1', 73.6, 1.8, 10, 2.0, 'center');
+                const fRemCircle2 = getF('empRemarksCircle2', 73.8, 2.7, 10, 2.0, 'center');
+                const fRemCircle3 = getF('empRemarksCircle3', 74.2, 4.1, 10, 2.0, 'center');
+                const fRemCircle4 = getF('empRemarksCircle4', 74.2, 5.2, 10, 2.0, 'center');
+                const fRemCircle5 = getF('empRemarksCircle5', 74.4, 7.5, 10, 2.0, 'center');
+                const fRemCircle6 = getF('empRemarksCircle6', 74.2, 9.8, 10, 2.0, 'center');
+                const fRemReason = getF('empRemarksReason', 76.5, 6.1, 8.5, 17.5, 'left');
 
                 // 千円単位換算（例: 300,000円 -> 300千円）
                 const healthInThousands = Math.round((emp.currentHealthStandard || 0) / 1000);
@@ -638,16 +644,15 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                     {/* ⑦ 昇(降)給 区分〇囲み（原本の「1. 昇給」または「2. 降給」を美しく囲む） */}
                     {(() => {
                       const isDecrease = emp.wageChangeType === '2.降給';
-                      // 降給時は下段（+1.5%）へ自動オフセット
-                      const circleY = isDecrease ? fWageCircle.y + 1.5 : fWageCircle.y;
+                      const targetCircle = isDecrease ? fWageCircle2 : fWageCircle1;
                       return (
                         <div
                           className="absolute flex items-center justify-center pointer-events-none"
                           style={{
-                            top: `${rowTop + circleY}%`,
-                            left: `${fWageCircle.x}%`,
-                            width: `${fWageCircle.width || 3.4}%`,
-                            height: '1.45%'
+                            top: `${rowTop + targetCircle.y}%`,
+                            left: `${targetCircle.x}%`,
+                            width: `${targetCircle.width || 6.0}%`,
+                            height: '1.2%'
                           }}
                         >
                           <div className="w-full h-full rounded-full border-2 border-red-600 print:border-slate-900" />
@@ -658,7 +663,7 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                     {/* ⑧ 遡及支払額 */}
                     {renderRowField((emp.retroactiveAmount || 0) > 0 ? emp.retroactiveAmount?.toLocaleString() : '', fRetro, rowTop, 'font-mono text-xs')}
 
-                    {/* ⑱ 備考 該当番号〇印（複数〇印完全対応） */}
+                    {/* ⑱ 備考 該当番号〇印（1〜6の個別座標で高精度丸囲み） */}
                     {(() => {
                       const activeCircles: number[] = (emp.remarksCircles && emp.remarksCircles.length > 0)
                         ? emp.remarksCircles
@@ -668,26 +673,28 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                             4 // 通常の月変理由
                           ];
 
+                      const circleMap: Record<number, typeof fRemCircle1> = {
+                        1: fRemCircle1,
+                        2: fRemCircle2,
+                        3: fRemCircle3,
+                        4: fRemCircle4,
+                        5: fRemCircle5,
+                        6: fRemCircle6,
+                      };
+
                       return (
                         <>
                           {activeCircles.map(num => {
-                            let circleY = fRemCircle.y; // 4.昇給・降給の理由（デフォルト y:約6.4%）
-                            if (num === 1) circleY = fRemCircle.y - 3.2; // 1. 70歳以上
-                            else if (num === 2) circleY = fRemCircle.y - 2.1; // 2. 二以上勤務
-                            else if (num === 3) circleY = fRemCircle.y - 1.0; // 3. 短時間労働者
-                            else if (num === 4) circleY = fRemCircle.y;       // 4. 昇給降給の理由
-                            else if (num === 5) circleY = fRemCircle.y + 2.3; // 5. 健保のみ
-                            else if (num === 6) circleY = fRemCircle.y + 4.3; // 6. その他
-
+                            const cfg = circleMap[num] || fRemCircle4;
                             return (
                               <div
                                 key={`rem-circle-${num}`}
                                 className="absolute flex items-center justify-center pointer-events-none"
                                 style={{
-                                  top: `${rowTop + circleY}%`,
-                                  left: `${fRemCircle.x}%`,
-                                  width: `${fRemCircle.width || 2.0}%`,
-                                  height: '1.35%'
+                                  top: `${rowTop + cfg.y}%`,
+                                  left: `${cfg.x}%`,
+                                  width: `${cfg.width || 2.0}%`,
+                                  height: '1.25%'
                                 }}
                               >
                                 <div className="w-full h-full rounded-full border-2 border-red-600 print:border-slate-900" />
