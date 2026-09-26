@@ -2457,7 +2457,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
                   companySealUrl: sealFromLocal,
                   employeeName: previewContractDoc.user_name,
                   employeeAddress: targetEmp?.address || '',
-                  joinDate: targetEmp?.join_date || '2024-04-01',
+                  joinDate: targetEmp?.join_date || '',
                   contractType: 'indefinite',
                   trialPeriodMonths: 3,
                   workLocation: companySettings?.address || '本社',

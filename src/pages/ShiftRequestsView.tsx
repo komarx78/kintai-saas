@@ -103,18 +103,26 @@ export const ShiftRequestsView: React.FC = () => {
         }));
       } catch {}
 
-      // 🏢 本部スタッフ（総務・人事・管理部・営業部など、シフト勤務を行わないスタッフ）を完全除外
+      // 🏢 シフト対象スタッフの判定ロジック（飲食・医療・介護・製造・小売など全国全業種に完全適合）
       const HQ_DEPARTMENTS = ['総務部', '総務・管理部', '管理部', '人事部', '経理部', '財務部', '営業部', '企画部', '開発部', 'IT部', '本部', '役員'];
       let filteredShiftUsers = userList.filter((u: any) => {
+        // 1. シフトアクセス権限が明示的に無効化されている場合は除外
+        if (u.has_shift_access === false) return false;
+        // 2. 店舗が設定されているスタッフは無条件でシフト対象
         if (u.store_name && u.store_name.trim() !== '') return true;
+        // 3. パート・アルバイトは店舗未設定でも無条件でシフト対象（単一事業所・店舗なし環境を含む）
+        if (u.employment_type === 'part-time') return true;
+        // 4. 正社員で明示的に固定勤務制（fixed）または本部・管理部門所属の場合は除外
+        if (u.work_schedule_type === 'fixed') return false;
         if (HQ_DEPARTMENTS.includes(u.department || '')) return false;
-        if (u.department === '店舗運営部') return true;
-        return false;
+        // 5. 役員以外で店舗なしの現場・未配属・店舗運営部・看護・介護・製造等はすべてシフト対象として許容
+        if (u.role === 'admin' && (!u.department || u.department === '役員')) return false;
+        return true;
       });
 
-      // 🛡️ 救済フォールバック：初期状態などでまだ全員が店舗未設定・店舗運営部以外の場合、役員以外を全スタッフ候補として採用
+      // 🛡️ 救済フォールバック：全員が除外されてしまった場合、役員以外を全スタッフ候補として採用
       if (filteredShiftUsers.length === 0 && userList.length > 0) {
-        filteredShiftUsers = userList.filter((u: any) => u.department !== '役員');
+        filteredShiftUsers = userList.filter((u: any) => u.department !== '役員' && u.has_shift_access !== false);
       }
 
       setUsers(filteredShiftUsers);
