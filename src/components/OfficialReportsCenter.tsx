@@ -2054,9 +2054,27 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
 
                 // 🎌 国税庁告示公式「給与所得控除後の給与等の金額」準拠（推計0.7掛けの完全根絶）
                 const deductionAfterPayment = totalPaid > 0 ? calculateNetEmploymentIncome(totalPaid) : 0;
-                // 基礎控除 480,000円（所得税法第86条）
-                const basicDeduction = totalPaid > 0 ? 480000 : 0;
-                const totalIncomeDeduction = totalPaid > 0 ? (socialDeducted + basicDeduction) : 0;
+                
+                // 基礎控除（所得税法第86条: 合計所得2,400万円超の逓減・2,500万円超0円）
+                let basicDeduction = 0;
+                if (totalPaid > 0) {
+                  if (deductionAfterPayment > 25000000) {
+                    basicDeduction = 0;
+                  } else if (deductionAfterPayment > 24500000) {
+                    basicDeduction = 160000;
+                  } else if (deductionAfterPayment > 24000000) {
+                    basicDeduction = 320000;
+                  } else {
+                    basicDeduction = 480000;
+                  }
+                }
+
+                // 扶養控除（所得税法第84条: 一般扶養親族1人あたり380,000円）
+                const depCount = Number(targetEmp.dependents_count) || 0;
+                const depDeduction = depCount * 380000;
+
+                // 所得控除の額の合計額（G06: 社会保険料等の金額 + 扶養控除額 + 基礎控除額）
+                const totalIncomeDeduction = totalPaid > 0 ? (socialDeducted + depDeduction + basicDeduction) : 0;
 
                 return (
                   <div className="max-w-4xl mx-auto space-y-4">
