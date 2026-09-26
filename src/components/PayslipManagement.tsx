@@ -839,12 +839,14 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const prefRateDataLatest = getPrefectureRate(activePrefCode);
       const latestPayrollSettings: any = {
         prefecture_code: activePrefCode,
-        employment_insurance_rate: setRow?.employment_insurance_rate || payrollSettings.employment_insurance_rate || 0.005,
+        employment_insurance_rate: setRow?.employment_insurance_rate || payrollSettings.employment_insurance_rate || prefRateDataLatest.employmentRate || 0.006,
         health_insurance_rate: Number((prefRateDataLatest.healthRate / 2).toFixed(5)),
         nursing_insurance_rate: setRow?.nursing_insurance_rate ?? 0.008,
         pension_insurance_rate: setRow?.pension_insurance_rate ?? 0.0915,
         rounding_method: 'floor',
-        target_month: currentMonth.getMonth() + 1
+        target_month: currentMonth.getMonth() + 1,
+        target_year: currentMonth.getFullYear(),
+        year_month: currentYearMonth
       };
 
       const finalPayslips = usersList.map(u => {
@@ -1220,7 +1222,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         const calculated = calculatePayroll(profile, attSummary, {
           ...payrollSettings,
           prefecture_code: activePrefecture,
-          target_month: currentMonth.getMonth() + 1
+          target_month: currentMonth.getMonth() + 1,
+          target_year: currentMonth.getFullYear(),
+          year_month: currentYearMonth
         });
 
         const paymentDayStr = payrollSettings.payment_day === 'end_of_month' ? '28' : String(payrollSettings.payment_day);
@@ -1510,7 +1514,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const calculated = calculatePayroll(resolvedProf, attSummary, {
         ...payrollSettings,
         prefecture_code: activePrefecture,
-        target_month: currentMonth.getMonth() + 1
+        target_month: currentMonth.getMonth() + 1,
+        target_year: currentMonth.getFullYear(),
+        year_month: currentYearMonth
       });
 
       const payload: any = {

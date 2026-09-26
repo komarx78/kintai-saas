@@ -448,6 +448,76 @@ export function runPayrollEngineTests(): { success: boolean; results: string[] }
     }
   }
 
+  // ==========================================
+  // テスト14: 月給計算（calculatePayroll）の対象年月（year_month）連動・誕生日前日介護保険自動判定
+  // ==========================================
+  {
+    // 1984年5月1日生まれ（40歳到達日は2024年4月30日）
+    const profileTurn40InApr: EmployeePayrollProfile = {
+      tenant_id: 'tenant-test',
+      user_id: 'user-turn40',
+      salary_type: 'monthly',
+      base_salary: 300000,
+      hourly_wage: 0,
+      position_allowance: 0,
+      qualification_allowance: 0,
+      housing_allowance: 0,
+      family_allowance: 0,
+      commuting_allowance: 0,
+      commuting_taxable: false,
+      fixed_overtime_hours: 0,
+      fixed_overtime_allowance: 0,
+      dependents_count: 0,
+      birth_date: '1984-05-01',
+      health_insurance_enabled: true,
+      pension_insurance_enabled: true,
+      employment_insurance_enabled: true,
+      resident_tax_monthly: 0,
+      tax_bracket: 'kou'
+    };
+
+    const att: AttendanceSummary = {
+      work_days: 20,
+      actual_hours: 160,
+      overtime_hours: 0,
+      midnight_hours: 0,
+      holiday_hours: 0,
+      paid_leave_days: 0,
+      absence_days: 0,
+      late_early_hours: 0
+    };
+
+    // 2024年3月分給与（まだ40歳未到達 → 介護保険0円）
+    const payrollMar2024 = calculatePayroll(profileTurn40InApr, att, {
+      closing_day: 'end_of_month',
+      payment_month: 'current',
+      payment_day: '25',
+      prefecture_code: '13',
+      rounding_method: 'floor',
+      year_month: '2024-03',
+      target_month: 3,
+      target_year: 2024
+    });
+
+    // 2024年4月分給与（4月30日に40歳到達 → 介護保険該当）
+    const payrollApr2024 = calculatePayroll(profileTurn40InApr, att, {
+      closing_day: 'end_of_month',
+      payment_month: 'current',
+      payment_day: '25',
+      prefecture_code: '13',
+      rounding_method: 'floor',
+      year_month: '2024-04',
+      target_month: 4,
+      target_year: 2024
+    });
+
+    if (payrollMar2024.nursing_insurance === 0 && payrollApr2024.nursing_insurance > 0) {
+      results.push('✅ テスト14 パス: 月給計算（calculatePayroll）の対象年月（year_month）連動・誕生日前日介護保険判定が完全正確');
+    } else {
+      results.push(`❌ テスト14 失敗: 月給介護保険判定不整合 (Mar:${payrollMar2024.nursing_insurance}, Apr:${payrollApr2024.nursing_insurance})`);
+    }
+  }
+
   const allPassed = results.every(r => r.startsWith('✅'));
 
   return { success: allPassed, results };

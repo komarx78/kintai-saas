@@ -73,6 +73,8 @@ export interface PayrollSettings {
   pension_insurance_rate?: number; // 指定があれば上書き
   rounding_method: 'floor' | 'round';
   target_month?: number; // 支給対象月 (1〜12月)
+  target_year?: number; // 支給対象年 (西暦)
+  year_month?: string; // 支給対象年月 (YYYY-MM)
 }
 
 export interface CalculatedPayslip {
@@ -370,6 +372,18 @@ export function calculatePayroll(
     (profile.commuting_allowance || 0)
   );
 
+  // 介護保険該当判定用の基準日（対象月の末日を基準とする。未指定時は現在日）
+  let targetEvalDate = new Date();
+  if (settings?.year_month) {
+    const [y, m] = settings.year_month.split('-').map(Number);
+    if (y && m) targetEvalDate = new Date(y, m, 0); // 対象月の末日
+  } else if (settings?.target_year && settings?.target_month) {
+    targetEvalDate = new Date(settings.target_year, settings.target_month, 0);
+  } else if (settings?.target_month) {
+    const curYear = new Date().getFullYear();
+    targetEvalDate = new Date(curYear, settings.target_month, 0);
+  }
+
   // 2. 社会保険料の計算（都道府県料率 ＆ 会社雇用保険設定 ＆ 生年月日による40〜64歳介護保険自動判定）
   const socialResult = calculateSocialInsuranceDeduction({
     monthlySalary: totalEarnings, // 雇用保険料は当月の実総支給額ベース
@@ -378,7 +392,7 @@ export function calculatePayroll(
     pensionStandardRemuneration: profile.pension_standard_monthly_remuneration,
     prefectureCode: settings?.prefecture_code || '13',
     birthDate: profile.birth_date,
-    targetDate: new Date(),
+    targetDate: targetEvalDate,
     isHealthEnabled: profile.health_insurance_enabled,
     isPensionEnabled: profile.pension_insurance_enabled,
     isEmploymentEnabled: profile.employment_insurance_enabled,

@@ -302,19 +302,104 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
     );
   }, [monthlySalaryRows]);
 
-  // 賞与データ（添付画像では0円）
+  // 🛡️ 実確定賞与データ（SSOT原則・憲法14条）
   const bonusRows = useMemo(() => {
-    return [
-      { id: 1, date: '', gross: 0, social: 0, afterSocial: 0, deps: '', rate: '', tax: 0 },
-      { id: 2, date: '', gross: 0, social: 0, afterSocial: 0, deps: '', rate: '', tax: 0 },
-      { id: 3, date: '', gross: 0, social: 0, afterSocial: 0, deps: '', rate: '', tax: 0 }
-    ];
-  }, []);
+    if (!currentEmployee || !tenantId) {
+      return [
+        { id: 1, date: '', gross: 0, social: 0, afterSocial: 0, deps: '', rate: '', tax: 0, hasActual: false },
+        { id: 2, date: '', gross: 0, social: 0, afterSocial: 0, deps: '', rate: '', tax: 0, hasActual: false },
+        { id: 3, date: '', gross: 0, social: 0, afterSocial: 0, deps: '', rate: '', tax: 0, hasActual: false }
+      ];
+    }
 
-  // 賞与合計 ④〜⑥
+    let userBonuses: any[] = [];
+    try {
+      const mfRaw = localStorage.getItem(`mf_bonus_campaigns_${tenantId}`);
+      if (mfRaw) {
+        const camps = JSON.parse(mfRaw);
+        if (Array.isArray(camps)) {
+          camps.forEach((camp: any) => {
+            const payDate = camp.payment_date || camp.created_at || '';
+            if (payDate.startsWith(`${selectedYear}-`)) {
+              const r = (camp.records || []).find((rec: any) => rec.user_id === currentEmployee.id);
+              if (r && Number(r.bonus_gross || 0) > 0) {
+                userBonuses.push({
+                  campTitle: camp.title,
+                  payDate,
+                  record: r
+                });
+              }
+            }
+          });
+        }
+      }
+    } catch (_) {}
+
+    // 最大3行のテーブル枠（賞与は通常年1〜3回）
+    return [0, 1, 2].map(idx => {
+      const b = userBonuses[idx];
+      if (!b) {
+        return {
+          id: idx + 1,
+          date: '',
+          gross: 0,
+          social: 0,
+          afterSocial: 0,
+          deps: '',
+          rate: '',
+          tax: 0,
+          hasActual: false
+        };
+      }
+
+      const r = b.record;
+      const gross = Number(r.bonus_gross || 0);
+      const social = Number(r.social_insurance_total || (
+        (r.health_insurance || 0) + (r.nursing_insurance || 0) +
+        (r.welfare_pension || 0) + (r.employment_insurance || 0)
+      ));
+      const afterSocial = Math.max(0, gross - social);
+      const tax = Number(r.income_tax || 0);
+      const taxRate = afterSocial > 0 ? (tax / afterSocial) * 100 : 0;
+
+      // 日付フォーマット（例: "7 10"）
+      let dateDisplay = '';
+      if (b.payDate) {
+        const pD = new Date(b.payDate);
+        if (!isNaN(pD.getTime())) {
+          dateDisplay = `${pD.getMonth() + 1} ${pD.getDate()}`;
+        }
+      }
+
+      return {
+        id: idx + 1,
+        date: dateDisplay,
+        gross,
+        social,
+        afterSocial,
+        deps: `${currentEmployee.dependents_count || 0}`,
+        rate: taxRate > 0 ? `${taxRate.toFixed(1)}%` : '0%',
+        tax,
+        hasActual: true
+      };
+    });
+  }, [currentEmployee, tenantId, selectedYear]);
+
+  // 賞与合計 ④〜⑥（実データからの自動集計）
   const bonusTotal = useMemo(() => {
-    return { gross: 0, social: 0, afterSocial: 0, tax: 0 };
-  }, []);
+    return bonusRows.reduce(
+      (acc, r) => {
+        if (r.hasActual) {
+          acc.gross += r.gross;
+          acc.social += r.social;
+          acc.afterSocial += r.afterSocial;
+          acc.tax += r.tax;
+        }
+        return acc;
+      },
+      { gross: 0, social: 0, afterSocial: 0, tax: 0 }
+    );
+  }, [bonusRows]);
 
   // 年末調整計算
   const yearEndCalc = useMemo(() => {
@@ -926,13 +1011,27 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
                         <tbody>
                           {bonusRows.map(b => (
                             <tr key={b.id} className="border-b border-slate-300 text-right h-4.5">
-                              <td className="border-r border-slate-900 text-center p-0.5 text-slate-400">-</td>
-                              <td className="border-r border-slate-900 p-0.5 text-slate-400">0</td>
-                              <td className="border-r border-slate-900 p-0.5 text-slate-400">0</td>
-                              <td className="border-r border-slate-900 p-0.5 text-slate-400">0</td>
-                              <td className="border-r border-slate-900 text-center p-0.5 text-slate-400">-</td>
-                              <td className="border-r border-slate-900 text-center p-0.5 text-slate-400">-%</td>
-                              <td className="p-0.5 text-slate-400">0</td>
+                              <td className={`border-r border-slate-900 text-center p-0.5 ${b.hasActual ? 'text-slate-900 font-sans' : 'text-slate-400'}`}>
+                                {b.hasActual ? b.date : '-'}
+                              </td>
+                              <td className={`border-r border-slate-900 p-0.5 ${b.hasActual ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>
+                                {b.hasActual ? b.gross.toLocaleString() : '0'}
+                              </td>
+                              <td className={`border-r border-slate-900 p-0.5 ${b.hasActual ? 'text-slate-900' : 'text-slate-400'}`}>
+                                {b.hasActual ? b.social.toLocaleString() : '0'}
+                              </td>
+                              <td className={`border-r border-slate-900 p-0.5 ${b.hasActual ? 'text-slate-900 font-medium' : 'text-slate-400'}`}>
+                                {b.hasActual ? b.afterSocial.toLocaleString() : '0'}
+                              </td>
+                              <td className={`border-r border-slate-900 text-center p-0.5 ${b.hasActual ? 'text-slate-900' : 'text-slate-400'}`}>
+                                {b.hasActual ? b.deps : '-'}
+                              </td>
+                              <td className={`border-r border-slate-900 text-center p-0.5 ${b.hasActual ? 'text-slate-900' : 'text-slate-400'}`}>
+                                {b.hasActual ? b.rate : '-%'}
+                              </td>
+                              <td className={`p-0.5 ${b.hasActual ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>
+                                {b.hasActual ? b.tax.toLocaleString() : '0'}
+                              </td>
                             </tr>
                           ))}
                           {/* 賞与 計 行 */}
@@ -940,12 +1039,24 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
                             <td className="border-r border-slate-900 text-center font-sans p-0.5">
                               計　④
                             </td>
-                            <td className="border-r border-slate-900 p-0.5 text-slate-900">0</td>
-                            <td className="border-r border-slate-900 p-0.5 text-slate-900"><span className="text-[6pt] font-normal mr-1">⑤</span>0</td>
-                            <td className="border-r border-slate-900 p-0.5 text-slate-900">0</td>
-                            <td className="border-r border-slate-900 text-center p-0.5"><span className="text-[6pt] font-normal">⑥</span></td>
+                            <td className="border-r border-slate-900 p-0.5 text-slate-900">
+                              {bonusTotal.gross.toLocaleString()}
+                            </td>
+                            <td className="border-r border-slate-900 p-0.5 text-slate-900">
+                              <span className="text-[6pt] font-normal mr-1">⑤</span>
+                              {bonusTotal.social.toLocaleString()}
+                            </td>
+                            <td className="border-r border-slate-900 p-0.5 text-slate-900">
+                              {bonusTotal.afterSocial.toLocaleString()}
+                            </td>
+                            <td className="border-r border-slate-900 text-center p-0.5">
+                              <span className="text-[6pt] font-normal">⑥</span>
+                            </td>
                             <td className="border-r border-slate-900 text-center p-0.5">-</td>
-                            <td className="p-0.5 text-slate-900"><span className="text-[6pt] font-normal mr-1">⑦</span>0</td>
+                            <td className="p-0.5 text-slate-900">
+                              <span className="text-[6pt] font-normal mr-1">⑦</span>
+                              {bonusTotal.tax.toLocaleString()}
+                            </td>
                           </tr>
                         </tbody>
                       </table>
