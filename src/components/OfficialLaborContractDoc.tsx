@@ -265,7 +265,11 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
             </th>
             <td className="p-2.5">
               <div className="font-bold">
-                始業 {data.startTime || '09:00'} 〜 終業 {data.endTime || '18:00'} （休憩時間 {data.breakTimeMinutes || 60}分）
+                {data.startTime && data.endTime 
+                  ? `始業 ${data.startTime} 〜 終業 ${data.endTime} （休憩時間 ${data.breakTimeMinutes !== undefined ? data.breakTimeMinutes : 60}分）`
+                  : (data.startTime || data.endTime 
+                      ? `所定時間: ${data.startTime || ''} 〜 ${data.endTime || ''} （休憩時間 ${data.breakTimeMinutes !== undefined ? data.breakTimeMinutes : 60}分）`
+                      : '所定労働時間: シフト勤務割表または個別指示による（休憩時間は法定通り付与）')}
               </div>
               <div className="text-[11px] text-slate-600 mt-0.5">
                 時間外労働（残業）: <span className="font-bold">{data.overtimeWork || tpl.overtime_work_notes}</span>
@@ -284,9 +288,9 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
               4. 休日・休暇
             </th>
             <td className="p-2.5">
-              <div className="font-bold">{data.holidaysText || '完全週休2日制（土・日）、国民の祝日、年末年始休暇'}</div>
+              <div className="font-bold">{data.holidaysText || '会社就業カレンダー・シフト勤務割表による（週休2日または就業規則規定による）'}</div>
               <div className="text-[11px] text-slate-600 mt-0.5">
-                {tpl.paid_leave_rules_article || `年次有給休暇: 雇入れの日から6ヶ月継続勤務し、所定労働日の8割以上出勤した場合に法定通り付与（初年度 ${data.paidLeaveGrantDays || 10}日）`}
+                {tpl.paid_leave_rules_article || `年次有給休暇: 雇入れの日から6ヶ月継続勤務し、所定労働日の8割以上出勤した場合に法定通り付与（初年度 ${data.paidLeaveGrantDays !== undefined ? `${data.paidLeaveGrantDays}日` : '法定付与日数'}）`}
               </div>
               {tpl.holidays_special_notes && (
                 <div className="text-[10px] text-slate-500 mt-0.5">
@@ -380,7 +384,7 @@ export const OfficialLaborContractDoc: React.FC<OfficialLaborContractDocProps> =
                 )}
 
                 <div className="text-[11px] text-slate-600 pt-1">
-                  ・賃金締切日: {data.closingDayText || '毎月末日'} / 支払日: {data.paymentDayText || '当月25日（金融機関振込）'}
+                  ・賃金締切日: {data.closingDayText || tpl.closing_day_text || '毎月末日'} / 支払日: {data.paymentDayText || tpl.payment_day_text || '会社就業規則規定による'}
                 </div>
                 <div className="text-[11px] text-slate-600">
                   ・昇給・賞与・退職金: {tpl.raise_bonus_notes || `昇給: ${data.raisePolicy} / 賞与: ${data.bonusPolicy} / 退職金: ${data.retirementAllowance}`}
