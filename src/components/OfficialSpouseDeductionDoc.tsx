@@ -53,13 +53,14 @@ export default function OfficialSpouseDeductionDoc({
     return { label: '対象外 (1000万円超)', code: 'OUT', deduction: 0 };
   }, [empIncome]);
 
-  // 配偶者の老人判定（昭和32年1月1日以前生まれ = 70歳以上）
+  // 配偶者の老人判定（所得税法第2条第1項第33号の2: 対象年12月31日時点で70歳以上、すなわち (year - 69)年1月1日以前生まれ）
   const isElderlySpouse = useMemo(() => {
     if (!data.spouseBirthDate) return false;
     const bDate = new Date(data.spouseBirthDate);
-    const threshold = new Date('1957-01-01T23:59:59');
+    if (isNaN(bDate.getTime())) return false;
+    const threshold = new Date(year - 69, 0, 1, 23, 59, 59);
     return bDate <= threshold;
-  }, [data.spouseBirthDate]);
+  }, [data.spouseBirthDate, year]);
 
   // 2. 配偶者の所得区分・控除額判定
   const spouseDeductionResult = useMemo(() => {
