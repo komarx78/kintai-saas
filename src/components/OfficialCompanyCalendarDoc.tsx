@@ -24,7 +24,18 @@ export const OfficialCompanyCalendarDoc: React.FC<CompanyCalendarDocProps> = ({ 
   ];
 
   const totalDaysInYear = (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) ? 366 : 365;
-  const workingDaysCount = totalDaysInYear - data.annualHolidaysCount;
+
+  // 当年（1/1〜12/31）の年間実休日数（※翌年1月の年始カレンダー分を除外した純粋な年間休日数）
+  const actualAnnualHolidaysCount = React.useMemo(() => {
+    const yearPrefix = `${year}-`;
+    let count = 0;
+    data.holidaysSet.forEach(k => {
+      if (k.startsWith(yearPrefix)) count++;
+    });
+    return count > 0 ? count : (data.annualHolidaysCount || 0);
+  }, [data.holidaysSet, year, data.annualHolidaysCount]);
+
+  const workingDaysCount = totalDaysInYear - actualAnnualHolidaysCount;
 
   // 指定年月の全日付を生成
   const getDaysInMonth = (y: number, m: number) => {
@@ -104,7 +115,7 @@ export const OfficialCompanyCalendarDoc: React.FC<CompanyCalendarDocProps> = ({ 
               年間総日数: <span className="font-black text-slate-800">{totalDaysInYear}日</span>
             </div>
             <div className="bg-rose-50 border border-rose-200 rounded px-1.5 py-0.5 text-[9px] font-bold text-rose-700">
-              年間休日: <span className="font-black text-rose-800">{data.annualHolidaysCount}日</span>
+              年間休日: <span className="font-black text-rose-800">{actualAnnualHolidaysCount}日</span>
             </div>
             <div className="bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
               年間稼働: <span className="font-black text-blue-800">{workingDaysCount}日</span>

@@ -1244,6 +1244,16 @@ export default function CompanySettingsDashboard() {
     return set;
   }, [calendarSettings]);
 
+  // 当年（1/1〜12/31）の年間実休日数（※翌年1月の年末年始・仕事始め用データを除外した純粋な365/366日の年間休日数）
+  const computedAnnualHolidaysCount = useMemo(() => {
+    const yearPrefix = `${calendarSettings.year || 2026}-`;
+    let count = 0;
+    computedHolidaysSet.forEach(d => {
+      if (d.startsWith(yearPrefix)) count++;
+    });
+    return count;
+  }, [computedHolidaysSet, calendarSettings.year]);
+
   // 組織図用: 経営陣（役員・代表）の抽出
   const computedExecutives = useMemo<OrgMemberInfo[]>(() => {
     return companyUsers.filter(u => {
@@ -1370,8 +1380,8 @@ export default function CompanySettingsDashboard() {
         return {
           ...p,
           ...calendarSettings,
-          annual_holidays_count: computedHolidaysSet.size,
-          holiday_text_summary: generateHolidaySummaryText(calendarSettings, computedHolidaysSet.size)
+          annual_holidays_count: computedAnnualHolidaysCount,
+          holiday_text_summary: generateHolidaySummaryText(calendarSettings, computedAnnualHolidaysCount)
         };
       }
       return p;
@@ -1426,8 +1436,8 @@ export default function CompanySettingsDashboard() {
         return {
           ...p,
           ...calendarSettings,
-          annual_holidays_count: computedHolidaysSet.size,
-          holiday_text_summary: generateHolidaySummaryText(calendarSettings, computedHolidaysSet.size)
+          annual_holidays_count: computedAnnualHolidaysCount,
+          holiday_text_summary: generateHolidaySummaryText(calendarSettings, computedAnnualHolidaysCount)
         };
       }
       return p;
@@ -1617,7 +1627,7 @@ export default function CompanySettingsDashboard() {
     setIsSaving(true);
     try {
       // 休日要約テキストの自動生成
-      const holSummary = generateHolidaySummaryText(calendarSettings, computedHolidaysSet.size);
+      const holSummary = generateHolidaySummaryText(calendarSettings, computedAnnualHolidaysCount);
 
       // 全カレンダーパターンの最新化（現在アクティブなパターンを最新の編集Stateで同期）
       const updatedCalendarPatterns = calendarPatterns.map(p => {
@@ -1625,7 +1635,7 @@ export default function CompanySettingsDashboard() {
           return {
             ...p,
             ...calendarSettings,
-            annual_holidays_count: computedHolidaysSet.size,
+            annual_holidays_count: computedAnnualHolidaysCount,
             holiday_text_summary: holSummary
           };
         }
@@ -1640,7 +1650,7 @@ export default function CompanySettingsDashboard() {
         calendar_patterns: updatedCalendarPatterns,
         active_pattern_id: activeCalendarId,
         year: calendarSettings.year || 2026,
-        annual_holidays_count: defaultPattern.annual_holidays_count || computedHolidaysSet.size,
+        annual_holidays_count: defaultPattern.annual_holidays_count || computedAnnualHolidaysCount,
         holiday_text_summary: defaultPattern.holiday_text_summary || holSummary,
         attendance_rounding_rules: attendanceRules,
         attendance_custom_presets: customPresets
@@ -4554,7 +4564,7 @@ export default function CompanySettingsDashboard() {
                         </span>
                       )}
                       <span className={`text-[10px] font-normal ${isActive ? 'text-indigo-600' : 'text-slate-400'}`}>
-                        ({isActive ? computedHolidaysSet.size : pat.annual_holidays_count}日)
+                        ({isActive ? computedAnnualHolidaysCount : pat.annual_holidays_count}日)
                       </span>
                     </button>
                   );
@@ -4641,7 +4651,7 @@ export default function CompanySettingsDashboard() {
                     {calendarSettings.year}年 営業日・休日マップ
                   </span>
                   <span className="bg-indigo-100 text-indigo-800 font-black text-xs px-2.5 py-1 rounded-lg">
-                    年間総休日数: {computedHolidaysSet.size}日
+                    年間総休日数: {computedAnnualHolidaysCount}日
                   </span>
                 </div>
 
@@ -7278,7 +7288,7 @@ export default function CompanySettingsDashboard() {
                 companyAddress: basicInfo.address,
                 companyPhone: basicInfo.phone_number,
                 year: calendarSettings.year || 2026,
-                annualHolidaysCount: computedHolidaysSet.size,
+                annualHolidaysCount: computedAnnualHolidaysCount,
                 holidaysSet: computedHolidaysSet,
                 holidaySummaryText: calendarSettings.holiday_text_summary,
                 calendarPatternName: calendarPatterns.find(p => p.id === activeCalendarId)?.name
