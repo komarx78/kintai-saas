@@ -92,7 +92,7 @@ export const OfficialMaternityLeaveDoc: React.FC<OfficialMaternityLeaveDocProps>
             </div>
             <h2 className="text-lg font-black text-slate-800 mt-1 flex items-center gap-2">
               <span>{employee.name} 殿</span>
-              <span className="text-xs font-normal text-slate-500">（{employee.department || '一般'}）</span>
+              <span className="text-xs font-normal text-slate-500">（{employee.department || '—'}）</span>
             </h2>
           </div>
         </div>
@@ -512,7 +512,7 @@ export const OfficialMaternityLeaveDoc: React.FC<OfficialMaternityLeaveDocProps>
               産前産後休業・育児休業 手続きチェックリスト ＆ 実務フロー
             </h1>
             <p className="text-xs text-slate-500 mt-1">
-              対象者: {employee.name} 殿 / 所属: {employee.department || '一般'}
+              対象者: {employee.name} 殿 / 所属: {employee.department || '—'}
             </p>
           </div>
 

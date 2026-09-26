@@ -28,9 +28,10 @@ interface OfficialCommutingPassDocProps {
 export const OfficialCommutingPassDoc: React.FC<OfficialCommutingPassDocProps> = ({ data }) => {
   const appliedDateStr = data.appliedDate || new Date().toISOString().split('T')[0];
   const appliedParts = appliedDateStr.split('-');
-  const docY = appliedParts[0] || '2026';
-  const docM = appliedParts[1] || '01';
-  const docD = appliedParts[2] || '01';
+  const now = new Date();
+  const docY = appliedParts[0] || String(now.getFullYear());
+  const docM = appliedParts[1] || String(now.getMonth() + 1).padStart(2, '0');
+  const docD = appliedParts[2] || String(now.getDate()).padStart(2, '0');
 
   const isCar = data.transportMode === 'car_bike';
   const isWalk = data.transportMode === 'walk_bicycle';
@@ -87,7 +88,7 @@ export const OfficialCommutingPassDoc: React.FC<OfficialCommutingPassDocProps> =
         <div>
           <div className="text-[10px] font-bold text-slate-500">【申請者】</div>
           <div className="font-black text-slate-900 text-base mt-0.5">{data.employeeName} 殿</div>
-          <div className="text-[11px] text-slate-600">所属部署: {data.department || '本社'}</div>
+          <div className="text-[11px] text-slate-600">所属部署: {data.department || '—'}</div>
         </div>
         <div className="text-right text-[11px] text-slate-600">
           申請年月日: {docY}年 {docM}月 {docD}日

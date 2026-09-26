@@ -61,7 +61,7 @@ export const OfficialBankPassbookDoc: React.FC<OfficialBankPassbookDocProps> = (
         <div>
           <div className="text-[10px] font-bold text-slate-500">【届出者】</div>
           <div className="font-black text-slate-900 text-base mt-0.5">{data.employeeName} 殿</div>
-          <div className="text-[11px] text-slate-600">所属部署: {data.department || '本社'}</div>
+          <div className="text-[11px] text-slate-600">所属部署: {data.department || '—'}</div>
         </div>
         <div className="text-right text-[11px] text-slate-600">
           届出年月日: {docY}年 {docM}月 {docD}日
