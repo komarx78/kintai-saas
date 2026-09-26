@@ -38,6 +38,7 @@ import {
   formatSingleStaffPayslipShareText,
   sendStaffPayslipLineMessages
 } from '../lib/lineMessaging';
+import { calculateUsedPaidLeaveDaysInPeriod } from '../lib/paidLeaveCalculation';
 
 interface PayslipManagementProps {
   tenantId: string | null;
@@ -789,19 +790,22 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         console.warn('attendance_records fetch error:', aErr);
       }
 
-      // 当月の有給申請データ取得 (leave_requests)
-      let leaveReqs: any[] = [];
+      // 有給申請データ取得 (leave_requests: 全期間・残日数算出用 ＆ 当月分・勤怠集計用)
+      let allLeaveReqs: any[] = [];
       try {
         const { data: lData } = await supabase
           .from('leave_requests')
           .select('*')
           .eq('tenant_id', tenantId)
-          .gte('start_date', monthStartDate)
-          .lte('start_date', monthEndDate);
-        if (lData) leaveReqs = lData;
+          .neq('type', 'シフト希望')
+          .neq('type', '打刻修正');
+        if (lData) allLeaveReqs = lData;
       } catch (lErr) {
         console.warn('leave_requests fetch error:', lErr);
       }
+      const leaveReqs = allLeaveReqs.filter(r => 
+        r.start_date >= monthStartDate && r.start_date <= monthEndDate
+      );
 
       // 当月のシフト予定データ取得 (advanced_shifts を優先、フォールバックで shifts)
       let shiftsList: any[] = [];
@@ -971,12 +975,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         // 大元労務マスタから最新の給与計算（個別基本給・各種手当＋生年月日の介護保険自動判定）を実行！
         const calculated = calculatePayroll(prof, attSummary, latestPayrollSettings);
 
-        // 有給残日数（今年度付与分 + 前年度繰越分の【合計残日数】）
+        // 有給残日数（今年度付与分 + 前年度繰越分 - 累計消化日数【有給台帳と100%完全一致】）
+        const userAllReqs = allLeaveReqs.filter(r => r.user_id === u.id);
+        const userTotalUsed = calculateUsedPaidLeaveDaysInPeriod(userAllReqs);
+
         const curBal = Number(u.paid_leave_balance || 0);
         const carryBal = Number(u.paid_leave_carryover || 0);
         const hasLeaveData = (u.paid_leave_balance !== undefined && u.paid_leave_balance !== null) || 
                              (u.paid_leave_carryover !== undefined && u.paid_leave_carryover !== null);
-        const userTotalLeaveBal = hasLeaveData ? (curBal + carryBal) : (u.employment_type === 'part-time' ? 5.0 : 10.0);
+        const userTotalGranted = hasLeaveData ? (curBal + carryBal) : (u.employment_type === 'part-time' ? 5.0 : 10.0);
+        const userTotalLeaveBal = Math.max(0, userTotalGranted - userTotalUsed);
 
         return {
           id: existingSlip?.id || `draft_${u.id}_${currentYearMonth}`,
@@ -1051,17 +1059,18 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         .gte('target_date', startDate)
         .lte('target_date', endDate);
 
-      // 3. 当月の有給申請データ取得 (leave_requests)
+      // 3. 有給申請データ取得 (leave_requests: 全期間・残日数算出用 ＆ 当月分・勤怠集計用)
       const { data: reqData } = await supabase
         .from('leave_requests')
         .select('*')
         .eq('tenant_id', tenantId)
-        .gte('start_date', startDate)
-        .lte('start_date', endDate);
+        .neq('type', 'シフト希望')
+        .neq('type', '打刻修正');
 
       const records = attData || [];
       const shifts = shiftData || [];
-      const requests = reqData || [];
+      const allRequests = reqData || [];
+      const requests = allRequests.filter(r => r.start_date >= startDate && r.start_date <= endDate);
 
       const activePrefecture = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '25';
 
@@ -1268,11 +1277,14 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         });
 
         const paymentDayStr = payrollSettings.payment_day === 'end_of_month' ? '28' : String(payrollSettings.payment_day);
+        const empAllRequests = allRequests.filter(r => r.user_id === emp.id);
+        const empTotalUsed = calculateUsedPaidLeaveDaysInPeriod(empAllRequests);
         const curBalEmp = Number(emp.paid_leave_balance || 0);
         const carryBalEmp = Number(emp.paid_leave_carryover || 0);
         const hasEmpLeave = (emp.paid_leave_balance !== undefined && emp.paid_leave_balance !== null) || 
                             (emp.paid_leave_carryover !== undefined && emp.paid_leave_carryover !== null);
-        const empTotalLeaveBal = hasEmpLeave ? (curBalEmp + carryBalEmp) : (emp.employment_type === 'part-time' ? 5.0 : 10.0);
+        const empTotalGranted = hasEmpLeave ? (curBalEmp + carryBalEmp) : (emp.employment_type === 'part-time' ? 5.0 : 10.0);
+        const empTotalLeaveBal = Math.max(0, empTotalGranted - empTotalUsed);
 
         const payload: any = {
           tenant_id: tenantId,
@@ -1417,14 +1429,17 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         .gte('date', monthStartDate)
         .lte('date', monthEndDate);
 
-      // 当該社員の有給申請 (leave_requests) を取得
-      const { data: userLeaveData } = await supabase
+      // 当該社員の有給申請 (leave_requests: 全期間・残日数算出用 ＆ 当月分・勤怠集計用)
+      const { data: userAllLeaveData } = await supabase
         .from('leave_requests')
         .select('*')
         .eq('tenant_id', tenantId)
         .eq('user_id', userId)
-        .gte('start_date', monthStartDate)
-        .lte('start_date', monthEndDate);
+        .neq('type', 'シフト希望')
+        .neq('type', '打刻修正');
+
+      const userAllLeave = userAllLeaveData || [];
+      const userLeaveData = userAllLeave.filter(r => r.start_date >= monthStartDate && r.start_date <= monthEndDate);
 
       // 当該社員のシフト予定 (advanced_shifts / shifts) を取得
       let userShiftData: any[] = [];
@@ -1575,11 +1590,20 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         year_month: currentYearMonth
       });
 
+      const userTotalUsed = calculateUsedPaidLeaveDaysInPeriod(userAllLeave);
+      const curBal = Number(emp?.paid_leave_balance || 0);
+      const carryBal = Number(emp?.paid_leave_carryover || 0);
+      const hasLeave = (emp?.paid_leave_balance !== undefined && emp?.paid_leave_balance !== null) ||
+                       (emp?.paid_leave_carryover !== undefined && emp?.paid_leave_carryover !== null);
+      const totalGranted = hasLeave ? (curBal + carryBal) : (emp?.employment_type === 'part-time' ? 5.0 : 10.0);
+      const remainingLeaveDays = Math.max(0, totalGranted - userTotalUsed);
+
       const payload: any = {
         ...(existingSlip || {}),
         tenant_id: tenantId,
         user_id: userId,
         year_month: currentYearMonth,
+        paid_leave_remaining: remainingLeaveDays,
         ...calculated,
         base_salary: resolvedProf.base_salary,
         hourly_wage: resolvedProf.hourly_wage,

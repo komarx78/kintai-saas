@@ -10,6 +10,7 @@ import { OfficialTaxWithholdingSlipDoc } from './OfficialTaxWithholdingSlipDoc';
 import { fetchRevisionContracts, signRevisionContract, type RevisionContractDoc } from '../lib/revisionContracts';
 import { getLaborContractTemplateFromStorage } from '../lib/laborContractTemplate';
 import { calculateNetEmploymentIncome } from '../lib/payrollEngine';
+import { calculateUsedPaidLeaveDaysInPeriod } from '../lib/paidLeaveCalculation';
 
 interface UserPayslipViewProps {
 
@@ -165,16 +166,18 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
           }
         }
 
-        // 本人の有給残日数・ユーザー情報を取得（今年度付与分 + 前年度繰越分の【合計残日数】）
+        // 本人の有給残日数・ユーザー情報を取得（付与日数 - 累計消化日数の【実残日数】）
         let userLeaveBalance = 10.0;
         if (userId) {
           try {
             const { data: uInfo } = await supabase.from('users').select('paid_leave_balance, paid_leave_carryover').eq('id', userId).maybeSingle();
+            const { data: reqs } = await supabase.from('leave_requests').select('*').eq('user_id', userId).neq('type', 'シフト希望').neq('type', '打刻修正');
             if (uInfo) {
               const curBal = Number(uInfo.paid_leave_balance || 0);
               const carryBal = Number(uInfo.paid_leave_carryover || 0);
+              const totalUsed = calculateUsedPaidLeaveDaysInPeriod(reqs || []);
               if (uInfo.paid_leave_balance !== undefined || uInfo.paid_leave_carryover !== undefined) {
-                userLeaveBalance = curBal + carryBal;
+                userLeaveBalance = Math.max(0, (curBal + carryBal) - totalUsed);
               }
             }
           } catch (uErr) {}
