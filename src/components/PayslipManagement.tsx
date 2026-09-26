@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { 
   DollarSign, ChevronLeft, ChevronRight,
@@ -94,6 +95,7 @@ export interface Payslip {
 }
 
 export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }) => {
+  const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [employees, setEmployees] = useState<any[]>([]);
   const [payrollProfiles, setPayrollProfiles] = useState<Record<string, EmployeePayrollProfile>>({});
@@ -2513,83 +2515,159 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5 text-xs">
           {/* STEP 1 */}
-          <div className="p-3 rounded-2xl border bg-slate-50/80 border-slate-200 flex flex-col justify-between">
+          <button
+            onClick={() => navigate(tenantId ? `/kintai/admin?tenant_id=${tenantId}` : '/kintai/admin')}
+            className="p-3 rounded-2xl border bg-slate-50/80 hover:bg-blue-50/70 border-slate-200 hover:border-blue-300 flex flex-col justify-between text-left cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all group"
+            title="勤怠管理画面を開き、打刻漏れや残業申請を確認・修正します"
+          >
             <div>
-              <div className="font-black text-slate-400 text-[10px] mb-0.5">STEP 1（締め日）</div>
-              <div className="font-bold text-slate-800 flex items-center gap-1">
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="font-black text-slate-400 group-hover:text-blue-600 text-[10px]">STEP 1（締め日）</span>
+                <span className="text-[9px] bg-slate-200 group-hover:bg-blue-200 text-slate-600 group-hover:text-blue-800 font-bold px-1.5 py-0.2 rounded-full">開く ↗</span>
+              </div>
+              <div className="font-bold text-slate-800 group-hover:text-blue-900 flex items-center gap-1">
                 <span>⏰ 勤怠の確認・締め</span>
               </div>
-              <p className="text-[10px] text-slate-500 mt-1">打刻漏れや残業・有給申請の承認を完了</p>
+              <p className="text-[10px] text-slate-500 group-hover:text-slate-700 mt-1">打刻漏れや残業・有給申請の承認を完了</p>
             </div>
-          </div>
+            <div className="mt-2 text-[10px] text-blue-600 font-bold flex items-center gap-0.5">
+              <span>勤怠画面へ戻る ➔</span>
+            </div>
+          </button>
 
           {/* STEP 2 */}
-          <div className={`p-3 rounded-2xl border flex flex-col justify-between transition ${
-            !isMonthCalculated 
-              ? 'bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-300 ring-2 ring-indigo-200 shadow-xs' 
-              : 'bg-slate-50/80 border-slate-200'
-          }`}>
+          <button
+            onClick={handleAutoGenerateFromAttendance}
+            disabled={isSaving || employees.length === 0}
+            className={`p-3 rounded-2xl border flex flex-col justify-between text-left cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all group disabled:opacity-50 ${
+              !isMonthCalculated 
+                ? 'bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-300 ring-2 ring-indigo-200 shadow-xs' 
+                : 'bg-slate-50/80 hover:bg-indigo-50/60 border-slate-200 hover:border-indigo-300'
+            }`}
+            title="最新の打刻データから当月の給与を一括自動計算（または再計算）します"
+          >
             <div>
-              <div className={`font-black text-[10px] mb-0.5 ${!isMonthCalculated ? 'text-indigo-600' : 'text-slate-400'}`}>
-                STEP 2 {!isMonthCalculated && '★今ここ！'}
+              <div className="flex items-center justify-between mb-0.5">
+                <span className={`font-black text-[10px] ${!isMonthCalculated ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-600'}`}>
+                  STEP 2 {!isMonthCalculated ? '★今ここ！' : '（計算済）'}
+                </span>
+                <span className="text-[9px] bg-indigo-100 text-indigo-700 font-bold px-1.5 py-0.2 rounded-full">実行 ⚡</span>
               </div>
-              <div className={`font-bold flex items-center gap-1 ${!isMonthCalculated ? 'text-indigo-950 font-black' : 'text-slate-800'}`}>
+              <div className={`font-bold flex items-center gap-1 ${!isMonthCalculated ? 'text-indigo-950 font-black' : 'text-slate-800 group-hover:text-indigo-900'}`}>
                 <span>⚡ 勤怠から一括計算</span>
               </div>
-              <p className={`text-[10px] mt-1 ${!isMonthCalculated ? 'text-indigo-700 font-bold' : 'text-slate-500'}`}>
+              <p className={`text-[10px] mt-1 ${!isMonthCalculated ? 'text-indigo-700 font-bold' : 'text-slate-500 group-hover:text-slate-700'}`}>
                 実打刻時間・割増手当・社保・税金を自動算定
               </p>
             </div>
-          </div>
+            <div className="mt-2 text-[10px] text-indigo-600 font-bold flex items-center gap-0.5">
+              <span>{isMonthCalculated ? '🔄 最新勤怠から再計算' : '⚡ 今すぐ一括計算する'}</span>
+            </div>
+          </button>
 
           {/* STEP 3 */}
-          <div className={`p-3 rounded-2xl border flex flex-col justify-between transition ${
-            isMonthCalculated && publishedCount === 0 
-              ? 'bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-300 ring-2 ring-indigo-200 shadow-xs' 
-              : 'bg-slate-50/80 border-slate-200'
-          }`}>
+          <button
+            onClick={() => {
+              const el = document.getElementById('payslip-table-section');
+              el?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            className={`p-3 rounded-2xl border flex flex-col justify-between text-left cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all group ${
+              isMonthCalculated && publishedCount === 0 
+                ? 'bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-300 ring-2 ring-indigo-200 shadow-xs' 
+                : 'bg-slate-50/80 hover:bg-slate-100 border-slate-200'
+            }`}
+            title="下の明細テーブルへ移動し、手当や特別控除を微調整します"
+          >
             <div>
-              <div className={`font-black text-[10px] mb-0.5 ${isMonthCalculated && publishedCount === 0 ? 'text-indigo-600' : 'text-slate-400'}`}>
-                STEP 3 {isMonthCalculated && publishedCount === 0 && '★今ここ！'}
+              <div className="flex items-center justify-between mb-0.5">
+                <span className={`font-black text-[10px] ${isMonthCalculated && publishedCount === 0 ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                  STEP 3 {isMonthCalculated && publishedCount === 0 && '★今ここ！'}
+                </span>
+                <span className="text-[9px] bg-slate-200 group-hover:bg-slate-300 text-slate-700 font-bold px-1.5 py-0.2 rounded-full">確認 ↓</span>
               </div>
               <div className={`font-bold flex items-center gap-1 ${isMonthCalculated && publishedCount === 0 ? 'text-indigo-950 font-black' : 'text-slate-800'}`}>
                 <span>✏️ 明細確認・微調整</span>
               </div>
               <p className="text-[10px] text-slate-500 mt-1">手当・歩合・特別控除の個別手動調整</p>
             </div>
-          </div>
+            <div className="mt-2 text-[10px] text-slate-600 font-bold flex items-center gap-0.5">
+              <span>明細一覧表を見る ↓</span>
+            </div>
+          </button>
 
           {/* STEP 4 */}
-          <div className={`p-3 rounded-2xl border flex flex-col justify-between transition ${
-            publishedCount > 0 && publishedCount < employees.length 
-              ? 'bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-300 ring-2 ring-indigo-200 shadow-xs' 
-              : 'bg-slate-50/80 border-slate-200'
-          }`}>
+          <button
+            onClick={() => {
+              if (publishedCount === employees.length && employees.length > 0) {
+                handleUnpublishAll();
+              } else {
+                handlePublishAll();
+              }
+            }}
+            disabled={isSaving || payslips.length === 0}
+            className={`p-3 rounded-2xl border flex flex-col justify-between text-left cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all group disabled:opacity-50 ${
+              publishedCount > 0 && publishedCount < employees.length 
+                ? 'bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-300 ring-2 ring-indigo-200 shadow-xs' 
+                : publishedCount === employees.length && employees.length > 0
+                  ? 'bg-emerald-50/70 border-emerald-200 hover:border-rose-300'
+                  : 'bg-slate-50/80 hover:bg-slate-100 border-slate-200'
+            }`}
+            title={publishedCount === employees.length && employees.length > 0 ? 'クリックで確定を取り消し、下書きに戻します' : '全員の給与を一括確定してWeb公開します'}
+          >
             <div>
-              <div className="font-black text-slate-400 text-[10px] mb-0.5">STEP 4（支給前）</div>
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="font-black text-slate-400 text-[10px] mb-0.5">
+                  {publishedCount === employees.length && employees.length > 0 ? 'STEP 4（確定済）' : 'STEP 4（支給前）'}
+                </span>
+                <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
+                  publishedCount === employees.length && employees.length > 0
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {publishedCount === employees.length && employees.length > 0 ? '確定済 ✓' : '確定 🔒'}
+                </span>
+              </div>
               <div className="font-bold text-slate-800 flex items-center gap-1">
                 <span>🔒 一括確定・Web公開</span>
               </div>
               <p className="text-[10px] text-slate-500 mt-1">社員のスマホマイページへ明細を即時公開</p>
             </div>
-          </div>
+            <div className="mt-2 text-[10px] font-bold flex items-center gap-0.5">
+              {publishedCount === employees.length && employees.length > 0 ? (
+                <span className="text-rose-600 group-hover:underline">⬅ 下書きに戻す（確定取消）</span>
+              ) : (
+                <span className="text-emerald-700">✅ 全員一括確定する</span>
+              )}
+            </div>
+          </button>
 
           {/* STEP 5 */}
-          <div className={`p-3 rounded-2xl border flex flex-col justify-between transition ${
-            publishedCount === employees.length && employees.length > 0 
-              ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-200 shadow-xs' 
-              : 'bg-slate-50/80 border-slate-200'
-          }`}>
+          <button
+            onClick={handleExportBankTransferCsv}
+            disabled={payslips.length === 0}
+            className={`p-3 rounded-2xl border flex flex-col justify-between text-left cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all group disabled:opacity-50 ${
+              publishedCount === employees.length && employees.length > 0 
+                ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-200 shadow-xs' 
+                : 'bg-slate-50/80 hover:bg-slate-100 border-slate-200'
+            }`}
+            title="全銀協形式の振込CSVを出力し、ネットバンキングで一括振込を行います"
+          >
             <div>
-              <div className={`font-black text-[10px] mb-0.5 ${publishedCount === employees.length && employees.length > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
-                STEP 5（支給日）
+              <div className="flex items-center justify-between mb-0.5">
+                <span className={`font-black text-[10px] ${publishedCount === employees.length && employees.length > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
+                  STEP 5（支給日）
+                </span>
+                <span className="text-[9px] bg-slate-200 text-slate-700 font-bold px-1.5 py-0.2 rounded-full">出力 📥</span>
               </div>
               <div className={`font-bold flex items-center gap-1 ${publishedCount === employees.length && employees.length > 0 ? 'text-emerald-950 font-black' : 'text-slate-800'}`}>
                 <span>📥 振込CSV・賃金台帳</span>
               </div>
               <p className="text-[10px] text-slate-500 mt-1">全銀協CSVで銀行一括振込 ＆ 台帳印刷</p>
             </div>
-          </div>
+            <div className="mt-2 text-[10px] text-emerald-700 font-bold flex items-center gap-0.5">
+              <span>CSVダウンロード ➔</span>
+            </div>
+          </button>
         </div>
       </div>
 
@@ -2740,41 +2818,71 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 <span className="text-base font-bold">⚡ 勤怠から一括自動計算を実行</span>
               </button>
             ) : (publishedCount < employees.length || payslips.some(p => p.status !== 'published')) ? (
-              // 🌟 STEP 2 主役ボタン（優しいダスティセージグリーン）
-              <button
-                onClick={handlePublishAll}
-                disabled={isSaving || payslips.length === 0}
-                className="bg-[#2E7D62] hover:bg-[#24634E] text-white font-bold text-sm px-6 py-3 rounded-2xl transition shadow-md shadow-[#2E7D62]/20 flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
-              >
-                {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5 text-emerald-200" />}
-                <span className="text-base font-bold">✅ 全員の給与を一括確定する（Web公開）</span>
-              </button>
+              // 🌟 STEP 2/3 アクション群（一括確定 ＋ 救済ボタン：最新勤怠から再計算 ＆ 勤怠へ戻る）
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => navigate(tenantId ? `/kintai/admin?tenant_id=${tenantId}` : '/kintai/admin')}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm px-4 py-3 rounded-2xl transition border border-slate-300 flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  title="タイムカードの打刻漏れや残業申請を修正するため、勤怠管理画面へ戻ります"
+                >
+                  <Clock className="w-4 h-4 text-blue-600" />
+                  <span>⏰ 勤怠修正へ戻る</span>
+                </button>
+                <button
+                  onClick={handleAutoGenerateFromAttendance}
+                  disabled={isSaving || employees.length === 0}
+                  className="bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs sm:text-sm px-4 py-3 rounded-2xl transition border border-sky-300 flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                  title="勤怠管理で打刻を修正した後、このボタンを押せば最新の勤務時間で給与を一括再計算します"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4 text-sky-600" />}
+                  <span>🔄 最新勤怠から再計算</span>
+                </button>
+                <button
+                  onClick={handlePublishAll}
+                  disabled={isSaving || payslips.length === 0}
+                  className="bg-[#2E7D62] hover:bg-[#24634E] text-white font-bold text-sm px-6 py-3 rounded-2xl transition shadow-md shadow-[#2E7D62]/20 flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5 text-emerald-200" />}
+                  <span className="text-base font-bold">✅ 全員の給与を一括確定する（Web公開）</span>
+                </button>
+              </div>
             ) : (
-              // 🌟 STEP 3 主役ボタン（全員確定済：上品なフォレストセージ）
-              lineConfig.mode !== 'none' ? (
+              // 🌟 STEP 4/5 アクション群（全員確定済：LINE一括通知 ＋ 救済ボタン：確定を取り消して下書きに戻す）
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={handleSendPayslipLineBatch}
-                  disabled={isSendingLine || payslips.length === 0}
-                  className="bg-[#25785C] hover:bg-[#1D604A] text-white font-bold text-sm px-6 py-3 rounded-2xl transition shadow-md shadow-[#25785C]/20 flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
+                  onClick={handleUnpublishAll}
+                  disabled={isSaving || payslips.length === 0}
+                  className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs sm:text-sm px-4 py-3 rounded-2xl transition border border-rose-200 flex items-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
+                  title="確定を取り消して下書きに戻し、従業員へのWeb公開を一時取下げて手当・控除の再修正ができるようにします"
                 >
-                  {isSendingLine ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageSquare className="w-5 h-5 text-emerald-100" />}
-                  <span className="text-base font-bold">🟢 スタッフ全員へLINE一括通知する</span>
+                  <RotateCcw className="w-4 h-4 text-rose-500" />
+                  <span>⬅ 確定を取り消す（下書きに戻して修正）</span>
                 </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    setManualShareModal({
-                      isOpen: true,
-                      selectedUserId: payslips[0]?.user_id || ''
-                    });
-                  }}
-                  disabled={payslips.length === 0}
-                  className="bg-[#334155] hover:bg-[#1E293B] text-white font-bold text-sm px-6 py-3 rounded-2xl transition shadow-md flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
-                >
-                  <Copy className="w-5 h-5 text-slate-300" />
-                  <span className="text-base font-bold">📋 個人LINE送信用テキスト（個別コピー）</span>
-                </button>
-              )
+                {lineConfig.mode !== 'none' ? (
+                  <button
+                    onClick={handleSendPayslipLineBatch}
+                    disabled={isSendingLine || payslips.length === 0}
+                    className="bg-[#25785C] hover:bg-[#1D604A] text-white font-bold text-sm px-6 py-3 rounded-2xl transition shadow-md shadow-[#25785C]/20 flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSendingLine ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageSquare className="w-5 h-5 text-emerald-100" />}
+                    <span className="text-base font-bold">🟢 スタッフ全員へLINE一括通知する</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setManualShareModal({
+                        isOpen: true,
+                        selectedUserId: payslips[0]?.user_id || ''
+                      });
+                    }}
+                    disabled={payslips.length === 0}
+                    className="bg-[#334155] hover:bg-[#1E293B] text-white font-bold text-sm px-6 py-3 rounded-2xl transition shadow-md flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Copy className="w-5 h-5 text-slate-300" />
+                    <span className="text-base font-bold">📋 個人LINE送信用テキスト（個別コピー）</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -2866,8 +2974,54 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         </div>
       </div>
 
+      {/* 💡 給与計算のやり直し・ステップ戻り方レスキューガイダンス */}
+      <div className="bg-gradient-to-r from-sky-50 via-blue-50 to-indigo-50 border border-blue-200 rounded-3xl p-4 sm:p-5 shadow-xs">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs font-black text-sm">
+            💡
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+              給与計算をやり直したい・前のステップに戻りたいときは？
+              <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full">
+                安心レスキュー案内
+              </span>
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2.5 text-xs">
+              <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
+                <div className="font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+                  <span className="text-blue-600 font-black">①</span>
+                  <span>打刻漏れ・残業申請を直したい</span>
+                </div>
+                <p className="text-slate-600 text-[11px] leading-relaxed">
+                  上の<strong>「⏰ 勤怠修正へ戻る」</strong>から勤怠画面で打刻を修正し、戻ってきて<strong>「🔄 最新勤怠から再計算」</strong>を押すだけで最新時間で全自動更新されます。
+                </p>
+              </div>
+              <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
+                <div className="font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+                  <span className="text-blue-600 font-black">②</span>
+                  <span>確定した給与の金額を直したい</span>
+                </div>
+                <p className="text-slate-600 text-[11px] leading-relaxed">
+                  すでに確定済みの場合は、<strong>「⬅ 確定を取り消す（下書きに戻す）」</strong>を押せば、いつでも下書き状態に戻して手当や控除を自由に再編集できます。
+                </p>
+              </div>
+              <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
+                <div className="font-bold text-slate-800 flex items-center gap-1.5 mb-1">
+                  <span className="text-blue-600 font-black">③</span>
+                  <span>上の「STEP 1〜5」を押して移動</span>
+                </div>
+                <p className="text-slate-600 text-[11px] leading-relaxed">
+                  画面上部の<strong>「STEP 1〜5の各カード」をクリック</strong>すると、勤怠画面へのジャンプや再計算、確定取消がワンクリックでいつでも実行できます。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 給与台帳テーブル */}
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+      <div id="payslip-table-section" className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-white">
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
