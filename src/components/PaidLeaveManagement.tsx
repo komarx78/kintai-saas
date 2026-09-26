@@ -151,12 +151,15 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
       const empAtt = attendanceRecords.filter(r => r.user_id === emp.id);
 
       // 法定ハイブリッド自動計算（契約固定 vs 実績逆算）
+      const contractHours = emp.weekly_working_hours ? Number(emp.weekly_working_hours) : (emp.contract_weekly_hours ? Number(emp.contract_weekly_hours) : undefined);
       const statutory = calculateStatutoryLeaveWithMode(
         emp.join_date,
         empType,
         weeklyDays,
         effectiveMode,
-        empAtt
+        empAtt,
+        new Date(),
+        contractHours
       );
 
       // 🛡️ 有給消化日数の自動集計（労働基準法第39条第7項 基準日・法定期間厳格準拠）
@@ -251,13 +254,15 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
     try {
       for (const w of targets) {
         const statutory = w.statutory;
-        await supabase
+        const query = supabase
           .from('users')
           .update({
             paid_leave_balance: statutory.statutoryGrant,
             paid_leave_carryover: statutory.prevStatutoryGrant
           })
           .eq('id', w.id);
+        if (tenantId) query.eq('tenant_id', tenantId);
+        await query;
       }
 
       showToast(`⚡ 全 ${targets.length} 名の法定有給付与日数を自動計算・反映しました！`);
@@ -281,13 +286,15 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
 
     setIsProcessing(true);
     try {
-      const { error } = await supabase
+      const query = supabase
         .from('users')
         .update({
           paid_leave_balance: statutory.statutoryGrant,
           paid_leave_carryover: statutory.prevStatutoryGrant
         })
         .eq('id', emp.id);
+      if (tenantId) query.eq('tenant_id', tenantId);
+      const { error } = await query;
 
       if (error) throw error;
 
@@ -304,10 +311,12 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
   // 承認・却下処理
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     try {
-      const { error } = await supabase
+      const query = supabase
         .from('leave_requests')
         .update({ status: newStatus })
         .eq('id', id);
+      if (tenantId) query.eq('tenant_id', tenantId);
+      const { error } = await query;
       
       if (error) throw error;
       
@@ -352,13 +361,15 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
     e.preventDefault();
     if (!editingUser) return;
     try {
-      const { error } = await supabase.from('users').update({
+      const query = supabase.from('users').update({
         paid_leave_carryover: Number(editingUser.paid_leave_carryover) || 0,
         paid_leave_balance: Number(editingUser.paid_leave_balance) || 0,
         join_date: editingUser.join_date || null,
         employment_type: editingUser.empType === 'パート' ? 'part-time' : 'full-time',
         weekly_working_days: Number(editingUser.weekly_working_days) || 5
       }).eq('id', editingUser.id);
+      if (tenantId) query.eq('tenant_id', tenantId);
+      const { error } = await query;
       
       if (error) throw error;
 

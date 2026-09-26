@@ -256,6 +256,24 @@ export function calculateUsedPaidLeaveDaysInPeriod(
 }
 
 /**
+ * 民法第143条（暦による期間計算）に準拠した月加算ヘルパー
+ * （3月31日入社者の6ヶ月後付与日が10月1日にオーバーフローせず正確に9月30日となるよう保護）
+ */
+function addMonthsCivil(dateStr: string, monthsToAdd: number): string {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const totalMonths = (m - 1) + monthsToAdd;
+  const newYear = y + Math.floor(totalMonths / 12);
+  const newMonth = ((totalMonths % 12) + 12) % 12 + 1;
+  const daysInNewMonth = new Date(newYear, newMonth, 0).getDate();
+  const newDay = Math.min(d, daysInNewMonth);
+  const yearStr = String(newYear);
+  const monthStr = String(newMonth).padStart(2, '0');
+  const dayStr = String(newDay).padStart(2, '0');
+  return `${yearStr}-${monthStr}-${dayStr}`;
+}
+
+/**
  * 労働基準法に基づく有給休暇の総合算定（契約固定 ＆ 実績逆算ハイブリッド対応）
  */
 export function calculateStatutoryLeaveWithMode(
@@ -264,7 +282,8 @@ export function calculateStatutoryLeaveWithMode(
   contractWeeklyDays: number = 5,
   calcMode: PaidLeaveCalcMode = 'actual_worked',
   empAttendanceRecords: any[] = [],
-  targetDate: Date = new Date()
+  targetDate: Date = new Date(),
+  contractWeeklyHours?: number
 ): DetailedStatutoryLeave {
   const baseResult: DetailedStatutoryLeave = {
     statutoryGrant: 0,
@@ -311,7 +330,8 @@ export function calculateStatutoryLeaveWithMode(
   const remMonths = months % 12;
   const serviceText = years > 0 ? `${years}年${remMonths}ヶ月` : `${remMonths}ヶ月`;
 
-  const isFullTime = employmentType === '正社員' || employmentType === 'full-time' || contractWeeklyDays >= 5;
+  // 労働基準法第39条第3項：週30時間以上、または週5日以上、または正社員は通常の労働者（比例付与対象外・一般付与）
+  const isFullTime = employmentType === '正社員' || employmentType === 'full-time' || contractWeeklyDays >= 5 || (typeof contractWeeklyHours === 'number' && contractWeeklyHours >= 30);
 
   // 実績逆算の計算
   const actualStats = calculateAnnualWorkedDaysFromRecords(joinDateStr, empAttendanceRecords, targetDate);
@@ -360,22 +380,19 @@ export function calculateStatutoryLeaveWithMode(
     }
   }
 
-  // 直近付与日（基準日）および次回付与予定日
+  // 直近付与日（基準日）および次回付与予定日（民法第143条暦計算により月末31日入社の翌月1日オーバーフローを完全防止）
   let lastGrantDateStr: string | null = null;
   let obligationPeriodStart: string | null = null;
   let obligationPeriodEnd: string | null = null;
   const isObligated = currentGrant >= 10;
 
-  const nextGrantDate = new Date(joinDate);
-  nextGrantDate.setMonth(nextGrantDate.getMonth() + nextGrantMonths);
-  const nextGrantDateStr = nextGrantDate.toISOString().split('T')[0];
+  const nextGrantDateStr = addMonthsCivil(joinDateStr, nextGrantMonths);
+  const nextGrantDate = new Date(nextGrantDateStr + 'T00:00:00');
   const diffTime = nextGrantDate.getTime() - now.getTime();
   const daysUntilNextGrant = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 
   if (months >= schedule[0].months) {
-    const lastGrantDate = new Date(joinDate);
-    lastGrantDate.setMonth(lastGrantDate.getMonth() + currentGrantMonths);
-    lastGrantDateStr = lastGrantDate.toISOString().split('T')[0];
+    lastGrantDateStr = addMonthsCivil(joinDateStr, currentGrantMonths);
     obligationPeriodStart = lastGrantDateStr;
     obligationPeriodEnd = nextGrantDateStr;
   }
