@@ -396,14 +396,14 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       user_id: uId,
       salary_type: 'monthly',
       base_salary: 0,
-      hourly_wage: 1100,
+      hourly_wage: 0,
       position_allowance: 0,
       qualification_allowance: 0,
       housing_allowance: 0,
       family_allowance: 0,
       commuting_type: 'monthly',
-      commuting_daily_amount: 800,
-      commuting_allowance: 15000,
+      commuting_daily_amount: 0,
+      commuting_allowance: 0,
       commuting_taxable: false,
       fixed_overtime_hours: 0,
       fixed_overtime_allowance: 0,
@@ -660,8 +660,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         const salType = pay?.salary_type || localPayProfile?.salary_type || onb?.salary_type || localBackup?.salary_type || (u.employment_type === 'part-time' ? 'hourly' : 'monthly');
         // 基本給：給与マスタ（最新改定） > ローカル給与 > 労務マスタ > バックアップ > 0
         const bSalary = pay?.base_salary ?? localPayProfile?.base_salary ?? onb?.base_salary ?? localBackup?.base_salary ?? 0;
-        // 時給：給与マスタ > ローカル給与 > 労務マスタ > バックアップ > 1150
-        const hWage = pay?.hourly_wage ?? localPayProfile?.hourly_wage ?? onb?.hourly_wage ?? localBackup?.hourly_wage ?? 1150;
+        // 時給：給与マスタ > ローカル給与 > 労務マスタ > バックアップ > 0
+        const hWage = pay?.hourly_wage ?? localPayProfile?.hourly_wage ?? onb?.hourly_wage ?? localBackup?.hourly_wage ?? 0;
         // 役職手当
         const posAllow = pay?.position_allowance ?? localPayProfile?.position_allowance ?? onb?.position_allowance ?? localBackup?.position_allowance ?? 0;
         // 資格手当
@@ -673,9 +673,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         // 通勤手当支給区分（月額定期 / 1日実費 / 支給なし）
         const comType: 'monthly' | 'daily' | 'none' = pay?.commuting_type || localPayProfile?.commuting_type || onb?.commuting_type || localBackup?.commuting_type || (salType === 'hourly' ? 'daily' : 'monthly');
         // 1日あたりの往復交通費（実費）
-        const comDailyAmount = pay?.commuting_daily_amount ?? localPayProfile?.commuting_daily_amount ?? onb?.commuting_daily_amount ?? localBackup?.commuting_daily_amount ?? 800;
+        const comDailyAmount = pay?.commuting_daily_amount ?? localPayProfile?.commuting_daily_amount ?? onb?.commuting_daily_amount ?? localBackup?.commuting_daily_amount ?? 0;
         // 通勤手当（月額定期代）
-        const comAllow = pay?.commuting_allowance ?? localPayProfile?.commuting_allowance ?? onb?.commuting_allowance ?? localBackup?.commuting_allowance ?? 15000;
+        const comAllow = pay?.commuting_allowance ?? localPayProfile?.commuting_allowance ?? onb?.commuting_allowance ?? localBackup?.commuting_allowance ?? 0;
 
         // 銀行口座情報（SSOT: バックアップ > 労務マスタ > 給与マスタ）
         const bName = localBackup?.bank_name || onb?.bank_name || pay?.bank_name || '';
@@ -1223,14 +1223,14 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           user_id: emp.id,
           salary_type: existingProf?.salary_type || ((emp.employment_type === 'part-time' || emp.role?.includes('パート')) ? 'hourly' : 'monthly'),
           base_salary: existingProf?.base_salary ?? 0,
-          hourly_wage: existingProf?.hourly_wage ?? 1150,
+          hourly_wage: existingProf?.hourly_wage ?? 0,
           position_allowance: existingProf?.position_allowance ?? 0,
           qualification_allowance: existingProf?.qualification_allowance ?? 0,
           housing_allowance: existingProf?.housing_allowance ?? 0,
           family_allowance: existingProf?.family_allowance ?? 0,
           commuting_type: existingProf?.commuting_type || 'monthly',
-          commuting_daily_amount: existingProf?.commuting_daily_amount ?? 800,
-          commuting_allowance: existingProf?.commuting_allowance ?? 15000,
+          commuting_daily_amount: existingProf?.commuting_daily_amount ?? 0,
+          commuting_allowance: existingProf?.commuting_allowance ?? 0,
           commuting_taxable: existingProf?.commuting_taxable ?? false,
           fixed_overtime_hours: existingProf?.fixed_overtime_hours ?? 0,
           fixed_overtime_allowance: existingProf?.fixed_overtime_allowance ?? 0,
@@ -1375,14 +1375,14 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         user_id: userId,
         salary_type: dbPay?.salary_type || dbOnb?.salary_type || localBackup?.salary_type || cachedProf?.salary_type || (emp.employment_type === 'part-time' ? 'hourly' : 'monthly'),
         base_salary: dbPay?.base_salary ?? dbOnb?.base_salary ?? localBackup?.base_salary ?? cachedProf?.base_salary ?? 0,
-        hourly_wage: dbPay?.hourly_wage ?? dbOnb?.hourly_wage ?? localBackup?.hourly_wage ?? cachedProf?.hourly_wage ?? 1150,
+        hourly_wage: dbPay?.hourly_wage ?? dbOnb?.hourly_wage ?? localBackup?.hourly_wage ?? cachedProf?.hourly_wage ?? 0,
         position_allowance: dbPay?.position_allowance ?? dbOnb?.position_allowance ?? localBackup?.position_allowance ?? cachedProf?.position_allowance ?? 0,
         qualification_allowance: dbPay?.qualification_allowance ?? dbOnb?.qualification_allowance ?? localBackup?.qualification_allowance ?? cachedProf?.qualification_allowance ?? 0,
         housing_allowance: dbPay?.housing_allowance ?? dbOnb?.housing_allowance ?? localBackup?.housing_allowance ?? cachedProf?.housing_allowance ?? 0,
         family_allowance: dbPay?.family_allowance ?? dbOnb?.family_allowance ?? localBackup?.family_allowance ?? cachedProf?.family_allowance ?? 0,
         commuting_type: dbPay?.commuting_type || dbOnb?.commuting_type || localBackup?.commuting_type || cachedProf?.commuting_type || 'monthly',
-        commuting_daily_amount: dbPay?.commuting_daily_amount ?? dbOnb?.commuting_daily_amount ?? localBackup?.commuting_daily_amount ?? cachedProf?.commuting_daily_amount ?? 800,
-        commuting_allowance: dbPay?.commuting_allowance ?? dbOnb?.commuting_allowance ?? localBackup?.commuting_allowance ?? cachedProf?.commuting_allowance ?? 15000,
+        commuting_daily_amount: dbPay?.commuting_daily_amount ?? dbOnb?.commuting_daily_amount ?? localBackup?.commuting_daily_amount ?? cachedProf?.commuting_daily_amount ?? 0,
+        commuting_allowance: dbPay?.commuting_allowance ?? dbOnb?.commuting_allowance ?? localBackup?.commuting_allowance ?? cachedProf?.commuting_allowance ?? 0,
         commuting_taxable: dbPay?.commuting_taxable ?? cachedProf?.commuting_taxable ?? false,
         fixed_overtime_hours: dbPay?.fixed_overtime_hours ?? cachedProf?.fixed_overtime_hours ?? 0,
         fixed_overtime_allowance: dbPay?.fixed_overtime_allowance ?? cachedProf?.fixed_overtime_allowance ?? 0,
@@ -2311,10 +2311,11 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       return;
     }
 
-    let csvContent = '従業員コード,氏名,銀行名,支店名,口座種別,口座番号,受取人名,差引支給額(手取り振込額)\n';
-    payslips.forEach(p => {
+    const escapeCsv = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const headers = ['従業員コード', '氏名', '銀行名', '支店名', '口座種別', '口座番号', '受取人名', '差引支給額(手取り振込額)'];
+    const rows = payslips.map(p => {
       const prof = payrollProfiles[p.user_id];
-      const name = p.user?.name || '従業員';
+      const name = p.user?.name || '';
       const bName = prof?.bank_name || '';
       const brName = prof?.branch_name || '';
       const accType = prof?.account_type === 'current' ? '当座' : '普通';
@@ -2322,9 +2323,19 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const accHolder = prof?.account_holder || name;
       const amount = p.net_salary || 0;
 
-      csvContent += `"${p.user_id}","${name}","${bName}","${brName}","${accType}","${accNum}","${accHolder}",${amount}\n`;
+      return [
+        p.user_id,
+        name,
+        bName,
+        brName,
+        accType,
+        accNum,
+        accHolder,
+        amount
+      ];
     });
 
+    const csvContent = [headers, ...rows].map(row => row.map(escapeCsv).join(',')).join('\r\n');
     const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -2333,6 +2344,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // サマリー集計
