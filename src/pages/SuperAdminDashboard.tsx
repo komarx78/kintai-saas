@@ -72,7 +72,7 @@ export default function SuperAdminDashboard() {
     const checkSuperAdmin = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        navigate('/superadmin/login');
+        navigate('/master-login');
         return;
       }
       const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle();
