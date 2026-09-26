@@ -808,7 +808,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
 
     if (viewMode === 'summary') {
       const filename = `全社月間勤怠集計_${year}年${month}月.csv`;
-      const headers = ['従業員名', '部署', '雇用形態', '出勤日数', '総実働時間(h)', '総残業時間(h)', '有給取得日数', '打刻漏れ'];
+      const headers = ['従業員名', '部署', '雇用形態', '出勤日数', '総実働時間(h)', '総残業時間(h)', '休日労働時間(h)', '深夜労働時間(h)', '有給取得日数', '打刻漏れ'];
       const rows = users.map(u => {
         const s = calculateUserMonthlySummary(u);
         return [
@@ -818,6 +818,8 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           s.totalDays,
           s.totalHours,
           s.overtimeHours,
+          s.holidayHours,
+          s.midnightHours,
           s.paidLeaveDays,
           s.missedPunchCount
         ];
@@ -835,19 +837,23 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
       showToast(`📄 ${filename} をダウンロードしました！`);
     } else {
       const user = users.find(u => u.id === selectedUserId);
       const filename = `出勤簿_${user?.name || '従業員'}_${year}年${month}月.csv`;
-      const headers = ['日付', '曜日', '出勤時刻', '退勤時刻', '休憩時間', '実働時間', '残業時間', 'ステータス', '備考'];
+      const headers = ['日付', '曜日', '出勤時刻', '退勤時刻', '丸め出勤', '丸め退勤', '休憩時間', '実働時間', '残業時間', '深夜時間', 'ステータス', '備考'];
       const rows = selectedUserRows.map(r => [
         r.dateStr,
         r.dayOfWeekStr,
         r.checkIn,
         r.checkOut,
+        r.roundedCheckIn,
+        r.roundedCheckOut,
         r.breakStr,
         r.actualStr,
         r.overtimeStr,
+        r.midnightStr,
         r.status,
         r.note
       ]);
@@ -864,6 +870,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
       showToast(`📄 ${filename} をダウンロードしました！`);
     }
   };
