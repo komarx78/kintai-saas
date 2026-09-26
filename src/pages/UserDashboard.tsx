@@ -1544,7 +1544,7 @@ const UserDashboard = () => {
                               <span className="text-slate-600 bg-slate-200 px-2 py-0.5 rounded-md font-bold">公休日（休み）</span>
                             ) : (
                               <span className="text-indigo-700 font-mono text-sm font-bold">
-                                {todayShift.start_time?.substring(0, 5) || '09:00'} 〜 {todayShift.end_time?.substring(0, 5) || '18:00'} (出勤)
+                                {todayShift.start_time ? `${todayShift.start_time.substring(0, 5)} 〜 ${todayShift.end_time?.substring(0, 5) || ''}` : '時間未定'} (出勤)
                               </span>
                             )
                           ) : (
@@ -1921,7 +1921,7 @@ const UserDashboard = () => {
                                     const ds = `${y}-${m}-${d}`;
                                     setStartDate(ds);
                                     setEndDate(ds);
-                                    setPunchBreakMins((r.breakMins || 60).toString());
+                                    setPunchBreakMins((r.breakMins !== undefined && r.breakMins !== null ? r.breakMins : 60).toString());
                                     setActiveTab('requests');
                                   }}
                                   className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition text-xs border border-blue-200 font-bold"
@@ -2237,7 +2237,7 @@ const UserDashboard = () => {
                                         </span>
                                       )}
                                       <span>
-                                        {confirmed.start_time?.substring(0, 5) || '09:00'} 〜 {confirmed.end_time?.substring(0, 5) || '18:00'}
+                                        {confirmed.start_time ? `${confirmed.start_time.substring(0, 5)} 〜 ${confirmed.end_time?.substring(0, 5) || ''}` : '時間未定'}
                                       </span>
                                     </div>
                                   )}
