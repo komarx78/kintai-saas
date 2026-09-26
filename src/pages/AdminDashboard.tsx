@@ -2086,9 +2086,9 @@ ${tenantId || '（エラー：コード取得失敗）'}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">権限</label>
-                  <select name="role" defaultValue={editingEmployee?.role || '一般'} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                    <option>一般</option>
-                    <option>管理者</option>
+                  <select name="role" defaultValue={editingEmployee?.role === 'admin' || editingEmployee?.role === '管理者' ? '管理者' : '一般'} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    <option value="一般">一般</option>
+                    <option value="管理者">管理者</option>
                   </select>
                 </div>
                 <div>

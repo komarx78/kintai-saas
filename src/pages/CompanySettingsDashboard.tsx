@@ -1411,16 +1411,17 @@ export default function CompanySettingsDashboard() {
 
     setCalendarPatterns(updatedPatterns);
     setActiveCalendarId(targetId);
+    const curYear = calendarSettings.year || new Date().getFullYear();
     setCalendarSettings({
-      year: calendarSettings.year || 2026,
+      year: curYear,
       fixed_holidays: nextPattern.fixed_holidays || [],
       national_holidays_enabled: nextPattern.national_holidays_enabled ?? true,
       winter_vacation_enabled: nextPattern.winter_vacation_enabled ?? true,
-      winter_vacation_start: nextPattern.winter_vacation_start || '2026-12-29',
-      winter_vacation_end: nextPattern.winter_vacation_end || '2027-01-03',
+      winter_vacation_start: nextPattern.winter_vacation_start || `${curYear}-12-29`,
+      winter_vacation_end: nextPattern.winter_vacation_end || `${curYear + 1}-01-03`,
       summer_vacation_enabled: nextPattern.summer_vacation_enabled ?? true,
-      summer_vacation_start: nextPattern.summer_vacation_start || '2026-08-13',
-      summer_vacation_end: nextPattern.summer_vacation_end || '2026-08-16',
+      summer_vacation_start: nextPattern.summer_vacation_start || `${curYear}-08-13`,
+      summer_vacation_end: nextPattern.summer_vacation_end || `${curYear}-08-16`,
       custom_holidays: nextPattern.custom_holidays || [],
       individual_overrides: nextPattern.individual_overrides || {},
       annual_holidays_count: nextPattern.annual_holidays_count || 125,
@@ -1430,6 +1431,7 @@ export default function CompanySettingsDashboard() {
 
   // 📅 カレンダーパターンの新規追加
   const handleAddCalendarPattern = () => {
+    const curYear = calendarSettings.year || new Date().getFullYear();
     const newId = `cal-${Date.now()}`;
     const newPat: CompanyCalendarPattern = {
       id: newId,
@@ -1438,11 +1440,11 @@ export default function CompanySettingsDashboard() {
       fixed_holidays: [0, 6],
       national_holidays_enabled: true,
       winter_vacation_enabled: true,
-      winter_vacation_start: '2026-12-29',
-      winter_vacation_end: '2027-01-03',
+      winter_vacation_start: `${curYear}-12-29`,
+      winter_vacation_end: `${curYear + 1}-01-03`,
       summer_vacation_enabled: true,
-      summer_vacation_start: '2026-08-13',
-      summer_vacation_end: '2026-08-16',
+      summer_vacation_start: `${curYear}-08-13`,
+      summer_vacation_end: `${curYear}-08-16`,
       custom_holidays: [],
       individual_overrides: {},
       annual_holidays_count: 125,
@@ -4407,7 +4409,7 @@ export default function CompanySettingsDashboard() {
                     >
                       <option value="">責任者: 未指定</option>
                       {companyUsers.map(u => (
-                        <option key={u.id} value={u.id}>{u.name} ({u.department || '一般'})</option>
+                        <option key={u.id} value={u.id}>{u.name}{u.department ? ` (${u.department})` : ''}</option>
                       ))}
                     </select>
                   </div>
@@ -4495,7 +4497,7 @@ export default function CompanySettingsDashboard() {
                           <option value="">（店長: 未指定）</option>
                           {companyUsers.map(u => (
                             <option key={u.id} value={u.id}>
-                              {u.name} ({u.department || '一般'})
+                              {u.name}{u.department ? ` (${u.department})` : ''}
                             </option>
                           ))}
                         </select>
