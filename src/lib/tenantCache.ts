@@ -47,8 +47,17 @@ const TENANT_KEY_PREFIXES = [
   'maternity_leave_record_',
   'employee_master_backup_',
   'bonus_doc_coordinates_',
+  'employment_acq_coordinates_',
   'employment_loss_doc_coordinates_',
+  'health_pension_acq_coordinates_',
+  'health_pension_loss_coordinates_',
+  'spouse_doc_coordinates_',
   'tax_doc_coordinates_',
+  'attendance_custom_presets_',
+  'line_payslip_logs_',
+  'company_paid_leave_calc_mode_',
+  'user_paid_leave_calc_mode_',
+  'shift_store_help_',
 ];
 
 /**
