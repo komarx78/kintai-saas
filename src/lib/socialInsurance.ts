@@ -278,7 +278,6 @@ export function calculateSocialInsuranceDeduction(params: {
 }) {
   const {
     monthlySalary,
-    standardRemunerationBase,
     healthStandardRemuneration,
     pensionStandardRemuneration,
     prefectureCode,
@@ -293,19 +292,16 @@ export function calculateSocialInsuranceDeduction(params: {
 
   const pref = getPrefectureRate(prefectureCode);
 
-  // 🛡️ 標準報酬月額の判定基礎額（固定的賃金がある場合は残業等の変動支給に惑わされず固定判定）
-  const fallbackRemuneration = (standardRemunerationBase !== undefined && standardRemunerationBase !== null && standardRemunerationBase > 0)
-    ? standardRemunerationBase
-    : monthlySalary;
-
-  // 標準報酬月額の引当（指定があればそれを使用、なければ固定的報酬月額から判定）
+  // 🏛️ 法定労務SSOT原則（年金事務所の確定通知書に記載された標準報酬月額のみから控除）：
+  // 給与マスタで標準報酬月額が未設定（空欄・0円）の場合、勝手に給料から架空推測して天引きすることを構造的に100%完全禁止する！
+  // 決定通知書が届いてマスタに登録されるまでは、健康保険・厚生年金保険料は0円（未設定・未控除）とする。
   const healthBase = (healthStandardRemuneration && healthStandardRemuneration > 0)
     ? healthStandardRemuneration
-    : lookupStandardMonthlyRemuneration(fallbackRemuneration, 'health');
+    : 0;
 
   const pensionBase = (pensionStandardRemuneration && pensionStandardRemuneration > 0)
     ? pensionStandardRemuneration
-    : lookupStandardMonthlyRemuneration(fallbackRemuneration, 'pension');
+    : 0;
 
   // 介護保険該当フラグ（生年月日の実年齢を最優先判定、生年月日未指定時は手動指定を参照）
   let isNursing = false;

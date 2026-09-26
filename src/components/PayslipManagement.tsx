@@ -3905,12 +3905,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                       const pProf = payrollProfiles[slip.user_id];
                                       return (
                                         <>
-                                          <div className="flex justify-between">
+                                          <div className="flex justify-between items-center">
                                             <span>
                                               健康保険料
                                               {pProf?.health_standard_monthly_remuneration ? (
                                                 <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded-md ml-1.5 font-bold">
                                                   標報: ¥{pProf.health_standard_monthly_remuneration.toLocaleString()}
+                                                </span>
+                                              ) : pProf?.health_insurance_enabled ? (
+                                                <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded-md ml-1.5 font-bold">
+                                                  標報未設定（控除0円）
                                                 </span>
                                               ) : null}
                                               :
@@ -3923,12 +3927,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                               <span>¥{slip.nursing_insurance.toLocaleString()}</span>
                                             </div>
                                           ) : null}
-                                          <div className="flex justify-between">
+                                          <div className="flex justify-between items-center">
                                             <span>
                                               厚生年金保険料 (9.15%)
                                               {pProf?.pension_standard_monthly_remuneration ? (
                                                 <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded-md ml-1.5 font-bold">
                                                   標報: ¥{pProf.pension_standard_monthly_remuneration.toLocaleString()}
+                                                </span>
+                                              ) : pProf?.pension_insurance_enabled ? (
+                                                <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded-md ml-1.5 font-bold">
+                                                  標報未設定（控除0円）
                                                 </span>
                                               ) : null}
                                               :
@@ -4286,9 +4294,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
                 {/* 🏛️ 標準報酬月額（算定基礎届・決定通知書固定設定） */}
                 <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-200/80 mb-3 space-y-2">
-                  <div className="text-[11px] font-black text-indigo-950 flex items-center justify-between">
+                  <div className="text-[11px] font-black text-indigo-950 flex flex-wrap items-center justify-between gap-1">
                     <span>標準報酬月額（算定基礎届・決定通知書による固定設定）</span>
-                    <span className="text-[10px] text-indigo-600 font-bold">※空欄時は基本給・手当・通勤費から自動等級判定（毎月固定）</span>
+                    <span className="text-[10px] text-indigo-700 font-bold bg-indigo-100/70 px-2 py-0.5 rounded">※空欄時は0円（控除なし）。決定通知書の確定額を入力</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
@@ -4296,7 +4304,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                       <input
                         type="number"
                         step="1000"
-                        placeholder="例: 260000（空欄で自動判定）"
+                        placeholder="例: 260000（空欄時は控除0円）"
                         value={profileModal.profile.health_standard_monthly_remuneration ?? ''}
                         onChange={e => setProfileModal({
                           ...profileModal,
@@ -4313,7 +4321,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                       <input
                         type="number"
                         step="1000"
-                        placeholder="例: 260000（空欄で自動判定）"
+                        placeholder="例: 260000（空欄時は控除0円）"
                         value={profileModal.profile.pension_standard_monthly_remuneration ?? ''}
                         onChange={e => setProfileModal({
                           ...profileModal,
