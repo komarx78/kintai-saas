@@ -417,19 +417,37 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
     const spouseDeduction = 0; // ⑰
     const specialDep = 0; // ⑱
     const depDeduction = (currentEmployee?.dependents_count || 0) * 380000; // ⑲
-    const basicDeduction = 480000; // ⑳ 基礎控除
+    // ⑳ 基礎控除（所得税法第86条: 令和2年税制改正・合計所得2400万円超の逓減・2500万円超ゼロ判定）
+    let basicDeduction = 480000;
+    if (afterAdj > 25000000) {
+      basicDeduction = 0;
+    } else if (afterAdj > 24500000) {
+      basicDeduction = 160000;
+    } else if (afterAdj > 24000000) {
+      basicDeduction = 320000;
+    }
 
     const totalDeductions = totalSocial + decSocial + smallMutual + lifeInsurance + earthInsurance + spouseDeduction + specialDep + depDeduction + basicDeduction; // ㉑
 
     const taxableGross = Math.max(0, Math.floor((afterAdj - totalDeductions) / 1000) * 1000); // ㉒ (千円未満切捨)
 
-    // 所得税速算 ㉓
+    // 所得税速算 ㉓ (所得税法第89条完全準拠・7段階全累進税率)
     let calculatedTax = 0;
-    if (taxableGross <= 1950000) calculatedTax = Math.floor(taxableGross * 0.05);
-    else if (taxableGross <= 3300000) calculatedTax = Math.floor(taxableGross * 0.1) - 97500;
-    else if (taxableGross <= 6950000) calculatedTax = Math.floor(taxableGross * 0.2) - 427500;
-    else if (taxableGross <= 8999000) calculatedTax = Math.floor(taxableGross * 0.23) - 636000;
-    else calculatedTax = Math.floor(taxableGross * 0.33) - 1536000;
+    if (taxableGross <= 1950000) {
+      calculatedTax = Math.floor(taxableGross * 0.05);
+    } else if (taxableGross <= 3300000) {
+      calculatedTax = Math.floor(taxableGross * 0.1) - 97500;
+    } else if (taxableGross <= 6950000) {
+      calculatedTax = Math.floor(taxableGross * 0.2) - 427500;
+    } else if (taxableGross <= 9000000) {
+      calculatedTax = Math.floor(taxableGross * 0.23) - 636000;
+    } else if (taxableGross <= 18000000) {
+      calculatedTax = Math.floor(taxableGross * 0.33) - 1536000;
+    } else if (taxableGross <= 40000000) {
+      calculatedTax = Math.floor(taxableGross * 0.40) - 2796000;
+    } else {
+      calculatedTax = Math.floor(taxableGross * 0.45) - 4796000;
+    }
 
     const housingDeduction = 0; // ㉔
     const yearTaxable = Math.max(0, calculatedTax - housingDeduction); // ㉕
