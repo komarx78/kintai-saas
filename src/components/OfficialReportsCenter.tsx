@@ -298,7 +298,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                       ob.birth_date || pp.birth_date ||
                       localBackup?.birth_date || '';
 
-        const addr = depDoc.address || resDoc.address || conDoc.address || u.address || ob.address || localBackup?.address || '滋賀県大津市';
+        const addr = depDoc.address || resDoc.address || conDoc.address || u.address || ob.address || localBackup?.address || '';
         const ph = depDoc.phone || depDoc.phoneNumber || conDoc.phone || u.phone || ob.phone || localBackup?.phone || '';
         const myNum = myDoc.my_number || myDoc.myNumber || depDoc.my_number || depDoc.myNumber || ob.my_number || localBackup?.my_number || '';
 
@@ -320,18 +320,18 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
         const cType = conDoc.contract_type || ob.contract_type || (conDoc.contract_period_type === 'fixed' ? 'fixed_term' : 'indefinite');
 
         // 退職理由
-        const retReason = ob.retirement_reason || u.retirement_reason || '自己都合による退職（一身上の都合・転職のため）';
+        const retReason = ob.retirement_reason || u.retirement_reason || '';
 
         const base = conDoc.base_salary || pp.base_salary || ob.base_salary || localBackup?.base_salary || 0;
 
         return {
           id: u.id,
-          name: u.name || '従業員',
+          name: u.name || '',
           name_kana: kana,
-          department: conDoc.department || ob.department || u.department || '本社営業部',
-          position_name: conDoc.position_name || ob.position_name || '一般社員',
+          department: conDoc.department || ob.department || u.department || '',
+          position_name: conDoc.position_name || ob.position_name || '',
           role: u.role || 'employee',
-          join_date: conDoc.join_date || ob.join_date || u.join_date || '2024-04-01',
+          join_date: conDoc.join_date || ob.join_date || u.join_date || '',
           retirement_date: ob.retirement_date || u.retirement_date,
           is_retired: u.status === 'retired' || !!ob.retirement_date,
           retirement_reason: retReason,
@@ -339,9 +339,9 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           address: addr,
           phone: ph,
           my_number: myNum,
-          gender: ob.gender || '男性',
+          gender: ob.gender || '',
           base_salary: base,
-          hourly_wage: conDoc.hourly_wage || pp.hourly_wage || ob.hourly_wage || 1200,
+          hourly_wage: conDoc.hourly_wage || pp.hourly_wage || ob.hourly_wage || 0,
           salary_type: conDoc.salary_type || pp.salary_type || ob.salary_type || 'monthly',
           employment_type: conDoc.employment_type || ob.employment_type || u.employment_type || localBackup?.employment_type || (conDoc.salary_type === 'hourly' || pp.salary_type === 'hourly' || ob.salary_type === 'hourly' ? 'part-time' : 'full-time'),
           bank_name: bankDoc.bank_name || ob.bank_name || pp.bank_name || localBackup?.bank_name || '',
