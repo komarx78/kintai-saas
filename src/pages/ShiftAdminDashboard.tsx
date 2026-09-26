@@ -21,6 +21,7 @@ import {
   formatShiftReminderLineMessage, 
   sendShiftRemindersViaLine 
 } from '../lib/lineMessaging';
+import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
 
 const ShiftAdminDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -217,6 +218,7 @@ const ShiftAdminDashboard: React.FC = () => {
       const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
       if (!tenantId) return;
       setTenantId(tenantId);
+      purgeTenantLocalStorageCache(tenantId);
 
       // 📱 DBからスタッフLINE連携状態を同期（新入社員の追加情報を即時引き継ぎ）
       await syncStaffLineLinkFromDb(tenantId);

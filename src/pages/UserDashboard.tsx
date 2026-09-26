@@ -7,6 +7,7 @@ import { UserPayslipView } from '../components/UserPayslipView';
 import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { calculateStatutoryLeaveWithMode, calculateUsedPaidLeaveDaysInPeriod } from '../lib/paidLeaveCalculation';
+import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
 
 const UserDashboard = () => {
   const navigate = useNavigate();
@@ -103,6 +104,7 @@ const UserDashboard = () => {
 
         // 🏢 会社カレンダー休日設定 ＆ 打刻丸め単位のDB自動同期（全端末完全共有・テナント厳格分離）
         if (profile?.tenant_id) {
+          purgeTenantLocalStorageCache(profile.tenant_id);
           // 初期ローカルキャッシュ復元
           const storedHols = localStorage.getItem(`mock_company_holidays_${profile.tenant_id}`);
           if (storedHols) {

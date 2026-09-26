@@ -16,6 +16,7 @@ import {
   getUserPaidLeaveCalcModeMap,
   saveUserPaidLeaveCalcMode
 } from '../lib/paidLeaveCalculation';
+import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
 
 // 2026年の日本の祝日（簡易モック用リスト）
 const NATIONAL_HOLIDAYS_2026 = [
@@ -57,6 +58,7 @@ const AdminDashboard = () => {
         const { data: tenantIdData, error } = await supabase.rpc('get_user_tenant_id');
         if (tenantIdData) {
           setTenantId(tenantIdData);
+          purgeTenantLocalStorageCache(tenantIdData);
         } else if (error) {
           console.error("Error fetching tenant_id:", error);
           setDebugError('Tenant Fetch Error: ' + error.message);

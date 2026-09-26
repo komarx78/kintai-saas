@@ -8,6 +8,7 @@ import { BonusManagement } from '../components/BonusManagement';
 import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { DollarSign, ArrowLeft, LogOut, TrendingUp, FileText, Gift } from 'lucide-react';
+import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
 
 export default function PayrollAdminDashboard() {
   const navigate = useNavigate();
@@ -37,6 +38,7 @@ export default function PayrollAdminDashboard() {
 
       if (userData?.tenant_id) {
         setTenantId(userData.tenant_id);
+        purgeTenantLocalStorageCache(userData.tenant_id);
         const { data: tData } = await supabase
           .from('tenants')
           .select('name')

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { UserPayslipView } from '../components/UserPayslipView';
 import AppSwitcher from '../components/AppSwitcher';
 import { DollarSign, ArrowLeft, LogOut } from 'lucide-react';
+import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
 
 export default function PayrollUserDashboard() {
   const navigate = useNavigate();
@@ -36,6 +37,9 @@ export default function PayrollUserDashboard() {
         setUserName(userData.name || '従業員');
         setRole(userData.role === 'admin' || userData.role === 'superadmin' ? 'admin' : 'user');
         setTenantId(userData.tenant_id || null);
+        if (userData.tenant_id) {
+          purgeTenantLocalStorageCache(userData.tenant_id);
+        }
       }
     } catch (e) {
       console.error(e);

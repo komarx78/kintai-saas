@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { StaffInviteModal } from '../components/StaffInviteModal';
 import { StaffAccountIssueModal, type TargetStaffForAccount } from '../components/StaffAccountIssueModal';
+import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
 import { 
   sendOnboardingInviteViaLine, 
   getTenantLineConfig, 
@@ -669,6 +670,7 @@ export default function OnboardingAdminDashboard() {
       const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
       if (!tenantIdData) return;
       setTenantId(tenantIdData);
+      purgeTenantLocalStorageCache(tenantIdData);
 
       const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantIdData).maybeSingle();
       setTenantInfo(tData);
