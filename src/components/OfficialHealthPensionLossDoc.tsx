@@ -232,8 +232,8 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
       lossMonth_1: lossWareki.month2,
       lossDay_1: lossWareki.day2,
 
-      // 喪失原因（退職日の設定がある場合は 4:退職等）
-      lossReason_1: retDateStr ? '4' : '4',
+      // 喪失原因（日本年金機構公式コード: 4:退職等, 5:死亡, 7:障害認定, 9:70歳到達等）
+      lossReason_1: (emp.retirement_reason?.includes('死亡') || emp.is_dead) ? '5' : '4',
       retireYear_1: retWareki.year2,
       retireMonth_1: retWareki.month2,
       retireDay_1: retWareki.day2,
