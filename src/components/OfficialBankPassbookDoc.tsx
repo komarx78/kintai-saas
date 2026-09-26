@@ -74,9 +74,11 @@ export const OfficialBankPassbookDoc: React.FC<OfficialBankPassbookDocProps> = (
               預金種別 / 口座番号
             </th>
             <td className="p-3">
-              <span className="font-bold mr-3">{data.accountType === 'ordinary' ? '普通預金' : '当座預金'}</span>
-              <span className="text-base font-black text-indigo-700 tracking-wider">
-                {data.accountNumber || '*******'}
+              <span className="font-bold mr-3">
+                {data.accountType === 'current' || data.accountType === '当座' || data.accountType === '2' ? '当座預金' : '普通預金'}
+              </span>
+              <span className="text-base font-black text-indigo-700 tracking-wider font-mono">
+                {data.accountNumber ? data.accountNumber.padStart(7, '0') : '*******'}
               </span>
             </td>
           </tr>
