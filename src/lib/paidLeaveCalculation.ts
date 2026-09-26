@@ -141,26 +141,54 @@ export function calculateAnnualWorkedDaysFromRecords(
   const periodStartStr = periodStart.toISOString().split('T')[0];
   const targetDateStr = targetDate.toISOString().split('T')[0];
 
-  // 期間内の有効な出勤打刻数（check_in_timeが存在する日）
-  const workedDays = records.filter(r => {
+  // 期間内の有効な出勤打刻レコード（check_in_timeが存在する日）
+  const validRecords = records.filter(r => {
     if (!r.check_in_time) return false;
     const d = r.date;
     return d >= periodStartStr && d <= targetDateStr;
-  }).length;
+  });
+  const workedDays = validRecords.length;
 
-  const diffDays = Math.max(1, Math.round((targetDate.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)));
+  if (workedDays === 0) {
+    return {
+      actualDaysCount: 0,
+      annualConvertedDays: 0,
+      periodText: '打刻実績なし',
+      isExtrapolated: false
+    };
+  }
 
-  if (diffDays < 365) {
-    // 勤続1年未満の場合（厚労省通達: 半年実績×2、または日割り×365換算）
-    const converted = Math.round((workedDays / diffDays) * 365);
+  // 打刻データの記録範囲（最古〜最新）から実際の記録スパンを算出
+  const recordDates = validRecords.map(r => r.date).sort();
+  const earliestDateStr = recordDates[0];
+  const latestDateStr = recordDates[recordDates.length - 1];
+  const earliestDate = new Date(earliestDateStr);
+  const latestDate = new Date(latestDateStr);
+  const recordSpanDays = Math.max(1, Math.round((latestDate.getTime() - earliestDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+  // 評価期間の日数
+  const totalPeriodDays = Math.max(1, Math.round((targetDate.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)));
+
+  // システム導入初期等で打刻レコードの期間が1年未満（300日未満）の場合は、実記録スパンから高精度に年換算
+  if (recordSpanDays < 300 && recordSpanDays >= 7) {
+    const converted = Math.round((workedDays / recordSpanDays) * 365);
     return {
       actualDaysCount: workedDays,
       annualConvertedDays: Math.min(365, converted),
-      periodText: `直近${diffDays}日実績(${workedDays}日)から年換算`,
+      periodText: `実打刻期間(${recordSpanDays}日間・${workedDays}日出勤)から年換算`,
+      isExtrapolated: true
+    };
+  } else if (totalPeriodDays < 365) {
+    // 勤続1年未満の場合（厚労省通達: 半年実績×2、または日割り×365換算）
+    const converted = Math.round((workedDays / totalPeriodDays) * 365);
+    return {
+      actualDaysCount: workedDays,
+      annualConvertedDays: Math.min(365, converted),
+      periodText: `直近${totalPeriodDays}日実績(${workedDays}日)から年換算`,
       isExtrapolated: true
     };
   } else {
-    // 勤続1年以上の場合: 直近365日間の実労働日数
+    // 勤続1年以上で十分な打刻がある場合: 直近365日間の実労働日数
     return {
       actualDaysCount: workedDays,
       annualConvertedDays: workedDays,
@@ -337,13 +365,18 @@ export function calculateStatutoryLeaveWithMode(
   const actualStats = calculateAnnualWorkedDaysFromRecords(joinDateStr, empAttendanceRecords, targetDate);
   const actualEquivalent = convertAnnualDaysToWeeklyEquivalent(actualStats.annualConvertedDays);
 
-  // 適用する週日数の決定
+  // 適用する週日数の決定（🛡️ 実績逆算 ＆ 契約週日数のハイブリッド安全判定）
   let effectiveWeeklyDays = contractWeeklyDays;
   if (!isFullTime) {
-    if (calcMode === 'actual_worked' && actualStats.annualConvertedDays > 0) {
-      effectiveWeeklyDays = actualEquivalent;
+    if (calcMode === 'actual_worked' && actualStats.actualDaysCount > 0) {
+      if (actualEquivalent >= 1) {
+        effectiveWeeklyDays = actualEquivalent;
+      } else {
+        // 実績が極端に少ない（年48日未満）場合は、契約週日数を下限保障
+        effectiveWeeklyDays = Math.max(1, contractWeeklyDays);
+      }
     } else {
-      effectiveWeeklyDays = contractWeeklyDays;
+      effectiveWeeklyDays = Math.max(1, contractWeeklyDays);
     }
   } else {
     effectiveWeeklyDays = 5;
@@ -352,7 +385,8 @@ export function calculateStatutoryLeaveWithMode(
   // 該当する付与テーブルの選択
   let tier = STATUTORY_PAID_LEAVE_TIERS.find(t => t.equivalentWeeklyDays === effectiveWeeklyDays);
   if (!tier) {
-    tier = STATUTORY_PAID_LEAVE_TIERS[0];
+    // 安全下限: 週1日テーブル
+    tier = STATUTORY_PAID_LEAVE_TIERS[STATUTORY_PAID_LEAVE_TIERS.length - 1];
   }
   const schedule = tier.grants;
 

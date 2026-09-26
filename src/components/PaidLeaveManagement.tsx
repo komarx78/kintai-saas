@@ -174,8 +174,19 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
       // 3. 全期間累計消化日数（単日申請 end_date 未指定フォールバック完全対応）
       const usedDaysTotal = calculateUsedPaidLeaveDaysInPeriod(empLeaveReqs);
 
-      const carryover = Number(emp.paid_leave_carryover || 0);
-      const balance = Number(emp.paid_leave_balance || 0);
+      // 🛡️ 手動設定値の有無判定（DBに明示的な値が登録されているか）
+      const hasExplicitBalance = emp.paid_leave_balance !== null && emp.paid_leave_balance !== undefined && Number(emp.paid_leave_balance) > 0;
+      const hasExplicitCarryover = emp.paid_leave_carryover !== null && emp.paid_leave_carryover !== undefined && Number(emp.paid_leave_carryover) > 0;
+
+      // 手動設定値があれば優先、未設定（0日かつ法定日数あり）なら法定計算値を自動適用（SSOT・初期値ゼロ問題の完全根絶）
+      const balance = hasExplicitBalance 
+        ? Number(emp.paid_leave_balance) 
+        : (emp.join_date && emp.join_date !== '-' ? statutory.statutoryGrant : 0);
+
+      const carryover = hasExplicitCarryover 
+        ? Number(emp.paid_leave_carryover) 
+        : (emp.join_date && emp.join_date !== '-' && !hasExplicitBalance ? statutory.prevStatutoryGrant : 0);
+
       const totalGranted = carryover + balance;
       const remainingBalance = Math.max(0, totalGranted - usedDaysTotal);
 
@@ -194,6 +205,8 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
         statutory,
         usedDays: usedDaysInObligationPeriod, // 5日義務進捗に直結
         usedDaysTotal,
+        hasExplicitBalance,
+        hasExplicitCarryover,
         carryover,
         balance,
         totalGranted,
@@ -815,7 +828,11 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                           title={`${st.periodText}（実出勤${st.actualDaysCount}日 ➔ 年換算${st.actualWorkedDaysAnnual}日）`}
                                         >
                                           <span>⚡</span>
-                                          <span>実績: 年{st.actualWorkedDaysAnnual}日(週{st.effectiveWeeklyDays}日相当)</span>
+                                          <span>
+                                            {st.actualWorkedDaysAnnual >= 48 
+                                              ? `実績: 年${st.actualWorkedDaysAnnual}日(週${st.effectiveWeeklyDays}日相当)` 
+                                              : `実績: 年${st.actualWorkedDaysAnnual}日(契約週${st.effectiveWeeklyDays}日下限)`}
+                                          </span>
                                         </span>
                                       ) : (
                                         <span 
@@ -870,11 +887,15 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                             ) : (
                               <div>
                                 <span className="font-black text-emerald-600 text-base">{emp.balance} 日</span>
-                                {st.statutoryGrant !== emp.balance && emp.join_date && emp.join_date !== '-' && (
-                                  <div className="text-[10px] text-amber-600 font-bold">
-                                    (法定: {st.statutoryGrant}日)
+                                {emp.hasExplicitBalance && st.statutoryGrant !== emp.balance && emp.join_date && emp.join_date !== '-' ? (
+                                  <div className="text-[10px] text-amber-600 font-bold" title="手動設定値が適用されています">
+                                    (法定計算: {st.statutoryGrant}日)
                                   </div>
-                                )}
+                                ) : !emp.hasExplicitBalance && emp.join_date && emp.join_date !== '-' && emp.balance > 0 ? (
+                                  <div className="text-[9px] text-emerald-700 font-bold">
+                                    法定自動適用 ✓
+                                  </div>
+                                ) : null}
                               </div>
                             )}
                           </td>
