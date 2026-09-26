@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Users, FileText, Settings, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock, Bot, BookOpen, Sparkles, Printer, ShieldCheck, DollarSign, Building2, ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { PaidLeaveManagement } from '../components/PaidLeaveManagement';
 import { MonthlyAttendanceManagement } from '../components/MonthlyAttendanceManagement';
@@ -27,7 +27,20 @@ const NATIONAL_HOLIDAYS_2026 = [
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('employees');
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(
+    tabParam && ['employees', 'attendance', 'ledger', 'payslips', 'settings'].includes(tabParam)
+      ? tabParam
+      : 'employees'
+  );
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['employees', 'attendance', 'ledger', 'payslips', 'settings'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
   const [settingsTab, setSettingsTab] = useState('basic');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
@@ -1256,7 +1269,11 @@ ${tenantId || '（エラー：コード取得失敗）'}
           )}
 
           {activeTab === 'attendance' && (
-            <MonthlyAttendanceManagement tenantId={tenantId} onRefreshRequests={fetchRequests} />
+            <MonthlyAttendanceManagement 
+              tenantId={tenantId} 
+              onRefreshRequests={fetchRequests} 
+              initialMonth={searchParams.get('month') || undefined} 
+            />
           )}
 
           {activeTab === 'payslips' && (

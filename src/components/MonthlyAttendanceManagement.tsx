@@ -15,10 +15,36 @@ import {
 interface MonthlyAttendanceManagementProps {
   tenantId: string | null;
   onRefreshRequests?: () => Promise<void>;
+  initialMonth?: string;
 }
 
-export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementProps> = ({ tenantId, onRefreshRequests }) => {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementProps> = ({ tenantId, onRefreshRequests, initialMonth }) => {
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    if (initialMonth) {
+      const parts = initialMonth.split('-');
+      if (parts.length === 2) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        if (!isNaN(y) && !isNaN(m) && m >= 1 && m <= 12) {
+          return new Date(y, m - 1, 1);
+        }
+      }
+    }
+    return new Date();
+  });
+
+  useEffect(() => {
+    if (initialMonth) {
+      const parts = initialMonth.split('-');
+      if (parts.length === 2) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        if (!isNaN(y) && !isNaN(m) && m >= 1 && m <= 12) {
+          setCurrentMonth(new Date(y, m - 1, 1));
+        }
+      }
+    }
+  }, [initialMonth]);
   const [users, setUsers] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
@@ -899,7 +925,20 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
               <Calendar className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-slate-800 tracking-tight">月間勤怠・出勤簿管理</h1>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight">月間勤怠・出勤簿管理</h1>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ym = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+                    window.location.href = tenantId ? `/payroll/admin?month=${ym}&tenant_id=${tenantId}` : `/payroll/admin?month=${ym}`;
+                  }}
+                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-black text-xs px-3 py-1.5 rounded-xl transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title="打刻を修正した後、給与計算画面に戻って最新勤怠から再計算します"
+                >
+                  <span>⬅ 給与計算（{currentMonth.getMonth() + 1}月度）へ戻る</span>
+                </button>
+              </div>
               <p className="text-xs font-bold text-slate-500 mt-0.5">
                 全社および各従業員の月別打刻実績・残業集計・タイムカード詳細
               </p>

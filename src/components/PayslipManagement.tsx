@@ -2392,13 +2392,15 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         </div>
       </div>
 
-      {/* 🧭 初心者でも見てすぐわかる 3ステップ進行ガイド（今月の状況と次の一手） */}
+      {/* 🧭 今月の給与計算 業務フロー（迷わず進められる5ステップ統合ガイド） */}
       <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200/90 space-y-4">
+        {/* ヘッダー部：ステータス ＆ 大見出し ＆ 次の一手 */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
           <div>
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className="text-xs font-black px-3 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                今月の給与計算
+              <span className="text-xs font-black px-3 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1.5">
+                <span>🧭</span>
+                毎月の給与計算 業務フロー
               </span>
               <span className="text-xs font-bold text-slate-500">
                 {currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月度
@@ -2417,7 +2419,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                   : '⏳ 勤怠集計待ち（未計算）'}
               </span>
             </div>
-            <h3 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight">
+            <h3 className="text-base sm:text-lg font-black text-slate-800 tracking-tight">
               {!isMonthCalculated
                 ? 'タイムカード打刻から、全員の給与を一括自動計算してください'
                 : (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
@@ -2438,217 +2440,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           </div>
         </div>
 
-        {/* 3ステップ プログレスバー（視覚的進行度） */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className={`p-3.5 rounded-2xl border transition-all ${
-            !isMonthCalculated
-              ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-200'
-              : 'bg-emerald-50/50 border-emerald-200'
-          }`}>
-            <div className="flex items-center justify-between mb-1">
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                !isMonthCalculated ? 'bg-indigo-600 text-white' : 'bg-emerald-600 text-white'
-              }`}>
-                {!isMonthCalculated ? '★ STEP 1（今ここ）' : '✓ STEP 1 完了'}
-              </span>
-            </div>
-            <div className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-1.5 mt-1">
-              <span>⚡ 勤怠から一括計算</span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-0.5">打刻時間・残業・社保を全自動試算</p>
-          </div>
-
-          <div className={`p-3.5 rounded-2xl border transition-all ${
-            isMonthCalculated && (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
-              ? 'bg-indigo-50/80 border-indigo-300 ring-2 ring-indigo-200'
-              : publishedCount === employees.length && employees.length > 0
-              ? 'bg-emerald-50/50 border-emerald-200'
-              : 'bg-slate-50/80 border-slate-200 opacity-60'
-          }`}>
-            <div className="flex items-center justify-between mb-1">
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                isMonthCalculated && (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
-                  ? 'bg-indigo-600 text-white'
-                  : publishedCount === employees.length && employees.length > 0
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-slate-200 text-slate-600'
-              }`}>
-                {isMonthCalculated && (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
-                  ? '★ STEP 2（今ここ）'
-                  : publishedCount === employees.length && employees.length > 0
-                  ? '✓ STEP 2 完了'
-                  : 'STEP 2'}
-              </span>
-            </div>
-            <div className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-1.5 mt-1">
-              <span>✏️ 明細確認・微調整</span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-0.5">手当や特別控除のチェック・修正</p>
-          </div>
-
-          <div className={`p-3.5 rounded-2xl border transition-all ${
-            publishedCount === employees.length && employees.length > 0
-              ? 'bg-emerald-50/80 border-emerald-300 ring-2 ring-emerald-200'
-              : 'bg-slate-50/80 border-slate-200 opacity-60'
-          }`}>
-            <div className="flex items-center justify-between mb-1">
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                publishedCount === employees.length && employees.length > 0
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-slate-200 text-slate-600'
-              }`}>
-                {publishedCount === employees.length && employees.length > 0
-                  ? '🎉 STEP 3 完了'
-                  : 'STEP 3'}
-              </span>
-            </div>
-            <div className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-1.5 mt-1">
-              <span>🔒 一括確定 ＆ 発行</span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-0.5">Web公開・LINE通知・振込CSV出力</p>
-          </div>
-        </div>
-      </div>
-
-      {/* 📍 適用社会保険料率バッジバー（スッキリ折りたたみ式） */}
-      {(() => {
-        const prefCode = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '13';
-        const prefData = getPrefectureRate(prefCode);
-        const bType = payrollSettings.employment_insurance_business_type || 'general';
-        const eiSetting = EMPLOYMENT_INSURANCE_RATES_R8[bType];
-        const activeEmpRate = payrollSettings.employment_insurance_rate !== undefined 
-          ? payrollSettings.employment_insurance_rate 
-          : eiSetting.workerRate;
-        return (
-          <div className="bg-slate-50 hover:bg-slate-100/70 border border-slate-200/80 rounded-2xl p-2.5 px-4 text-xs transition shadow-2xs">
-            <div 
-              className="flex items-center justify-between cursor-pointer select-none"
-              onClick={() => setIsInsuranceBarOpen(!isInsuranceBarOpen)}
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400">⚙️</span>
-                <span className="font-bold text-slate-700">適用社会保険料率:</span>
-                <span className="font-black text-indigo-700 text-xs sm:text-sm">{prefData.name}</span>
-                <span className="text-slate-500 text-[11px] hidden sm:inline font-mono">
-                  （健保 {(prefData.healthRate * 100).toFixed(2)}% / 厚年 18.30% / 雇用 {(activeEmpRate * 100).toFixed(1)}%）
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-600 hover:text-indigo-800">
-                <span>{isInsuranceBarOpen ? '詳細を閉じる ▲' : '詳細・料率設定を変更 ▼'}</span>
-              </div>
-            </div>
-
-            {isInsuranceBarOpen && (
-              <div className="mt-3 pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
-                <div className="text-[11px] text-slate-600 font-mono leading-relaxed">
-                  <span>健康保険: 折半 {(prefData.healthRate * 50).toFixed(3)}% ｜ 厚生年金: 18.30% ｜ 雇用保険: {eiSetting.name} ({(activeEmpRate * 100).toFixed(1)}%) ｜ 介護保険: 1.60%</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setBonusReportModalOpen(true)}
-                    className="text-[11px] bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-700 hover:to-pink-700 text-white font-black px-3 py-1.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                    title="日本年金機構公式様式コード2265に準拠した被保険者賞与支払届を作成・A4印刷"
-                  >
-                    <Gift className="w-3.5 h-3.5" />
-                    🎁 賞与支払届（年金機構公式）
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setSettingsModalOpen(true)}
-                    className="text-[11px] bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                  >
-                    <SettingsIcon className="w-3.5 h-3.5 text-indigo-600" />
-                    料率・事業設定を変更
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* ⚠️ 全社給与改定（昇給）検知アラートバナー */}
-      {(() => {
-        const revisedList = payslips.filter(slip => {
-          const prof = payrollProfiles[slip.user_id];
-          const isH = prof?.salary_type === 'hourly' || slip.salary_type === 'hourly';
-          const masterB = isH ? (prof?.hourly_wage || 0) : (prof?.base_salary || 0);
-          const slipB = isH ? (slip.hourly_wage || 0) : (slip.base_salary || 0);
-          return masterB !== slipB && slip.status !== 'published';
-        });
-
-        if (revisedList.length > 0) {
-          return (
-            <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white rounded-3xl p-5 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-4 border border-amber-300">
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shrink-0">
-                  📢
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-black text-base tracking-tight">
-                      給与改定（昇給）が検知された社員が {revisedList.length} 名 います！
-                    </h4>
-                    <span className="bg-white text-orange-600 text-[10px] font-black px-2 py-0.5 rounded-full">
-                      最新マスタ反映待ち
-                    </span>
-                  </div>
-                  <p className="text-xs text-amber-100 mt-0.5">
-                    台帳で昇給された新給与（{revisedList.map(r => r.user?.name).slice(0, 3).join('、')}{revisedList.length > 3 ? ' 他' : ''}）が明細に未反映です。最新マスタで再計算を実行してください。
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleAutoGenerateFromAttendance}
-                className="px-5 py-2.5 bg-white text-orange-700 hover:bg-orange-50 rounded-2xl font-black text-xs transition shadow-md cursor-pointer shrink-0 flex items-center justify-center gap-2"
-              >
-                <Sparkles className="w-4 h-4 text-orange-600" />
-                ⚡ 全員を最新マスタで一括再計算する
-              </button>
-            </div>
-          );
-        }
-        return null;
-      })()}
-
-      {/* 🧭 SaaS 5段階給与計算業務ナビゲーション（迷子ゼロ導線） */}
-      <div className="bg-white rounded-3xl p-5 shadow-xs border border-slate-200/80">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100 flex items-center gap-1.5">
-              <span>🧭</span>
-              毎月の給与計算 業務フロー
-            </span>
-            <span className="text-xs text-slate-500 font-bold hidden sm:inline">
-              迷わず進められるSaaS標準の給与計算ステップ
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-400">当月の状況:</span>
-            <span className={`text-xs font-black px-2.5 py-0.5 rounded-full border ${
-              publishedCount === employees.length && employees.length > 0
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : isMonthCalculated
-                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                  : 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
-            }`}>
-              {publishedCount === employees.length && employees.length > 0 
-                ? '🎉 全員確定・公開済' 
-                : isMonthCalculated 
-                  ? '📝 勤怠計算済・確認調整中' 
-                  : '⏳ 勤怠集計待ち（未計算）'}
-            </span>
-          </div>
-        </div>
-
+        {/* 5ステップ業務ナビゲーションカード */}
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5 text-xs">
           {/* STEP 1 */}
           <button
-            onClick={() => navigate(tenantId ? `/kintai/admin?tenant_id=${tenantId}` : '/kintai/admin')}
+            onClick={() => {
+              const ym = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+              navigate(tenantId ? `/kintai/admin?tab=attendance&month=${ym}&tenant_id=${tenantId}` : `/kintai/admin?tab=attendance&month=${ym}`);
+            }}
             className="p-3 rounded-2xl border bg-slate-50/80 hover:bg-blue-50/70 border-slate-200 hover:border-blue-300 flex flex-col justify-between text-left cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all group"
-            title="勤怠管理画面を開き、打刻漏れや残業申請を確認・修正します"
+            title="当月の勤怠管理（出勤簿）画面を開き、打刻漏れや残業申請を確認・修正します"
           >
             <div>
               <div className="flex items-center justify-between mb-0.5">
@@ -2661,7 +2462,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               <p className="text-[10px] text-slate-500 group-hover:text-slate-700 mt-1">打刻漏れや残業・有給申請の承認を完了</p>
             </div>
             <div className="mt-2 text-[10px] text-blue-600 font-bold flex items-center gap-0.5">
-              <span>勤怠画面へ戻る ➔</span>
+              <span>勤怠出勤簿へ直行 ➔</span>
             </div>
           </button>
 
@@ -2800,6 +2601,110 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           </button>
         </div>
       </div>
+
+      {/* 📍 適用社会保険料率バッジバー（スッキリ折りたたみ式） */}
+      {(() => {
+        const prefCode = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '13';
+        const prefData = getPrefectureRate(prefCode);
+        const bType = payrollSettings.employment_insurance_business_type || 'general';
+        const eiSetting = EMPLOYMENT_INSURANCE_RATES_R8[bType];
+        const activeEmpRate = payrollSettings.employment_insurance_rate !== undefined 
+          ? payrollSettings.employment_insurance_rate 
+          : eiSetting.workerRate;
+        return (
+          <div className="bg-slate-50 hover:bg-slate-100/70 border border-slate-200/80 rounded-2xl p-2.5 px-4 text-xs transition shadow-2xs">
+            <div 
+              className="flex items-center justify-between cursor-pointer select-none"
+              onClick={() => setIsInsuranceBarOpen(!isInsuranceBarOpen)}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400">⚙️</span>
+                <span className="font-bold text-slate-700">適用社会保険料率:</span>
+                <span className="font-black text-indigo-700 text-xs sm:text-sm">{prefData.name}</span>
+                <span className="text-slate-500 text-[11px] hidden sm:inline font-mono">
+                  （健保 {(prefData.healthRate * 100).toFixed(2)}% / 厚年 18.30% / 雇用 {(activeEmpRate * 100).toFixed(1)}%）
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-600 hover:text-indigo-800">
+                <span>{isInsuranceBarOpen ? '詳細を閉じる ▲' : '詳細・料率設定を変更 ▼'}</span>
+              </div>
+            </div>
+
+            {isInsuranceBarOpen && (
+              <div className="mt-3 pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
+                <div className="text-[11px] text-slate-600 font-mono leading-relaxed">
+                  <span>健康保険: 折半 {(prefData.healthRate * 50).toFixed(3)}% ｜ 厚生年金: 18.30% ｜ 雇用保険: {eiSetting.name} ({(activeEmpRate * 100).toFixed(1)}%) ｜ 介護保険: 1.60%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBonusReportModalOpen(true)}
+                    className="text-[11px] bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-700 hover:to-pink-700 text-white font-black px-3 py-1.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                    title="日本年金機構公式様式コード2265に準拠した被保険者賞与支払届を作成・A4印刷"
+                  >
+                    <Gift className="w-3.5 h-3.5" />
+                    🎁 賞与支払届（年金機構公式）
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSettingsModalOpen(true)}
+                    className="text-[11px] bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <SettingsIcon className="w-3.5 h-3.5 text-indigo-600" />
+                    料率・事業設定を変更
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ⚠️ 全社給与改定（昇給）検知アラートバナー */}
+      {(() => {
+        const revisedList = payslips.filter(slip => {
+          const prof = payrollProfiles[slip.user_id];
+          const isH = prof?.salary_type === 'hourly' || slip.salary_type === 'hourly';
+          const masterB = isH ? (prof?.hourly_wage || 0) : (prof?.base_salary || 0);
+          const slipB = isH ? (slip.hourly_wage || 0) : (slip.base_salary || 0);
+          return masterB !== slipB && slip.status !== 'published';
+        });
+
+        if (revisedList.length > 0) {
+          return (
+            <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white rounded-3xl p-5 shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-4 border border-amber-300">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shrink-0">
+                  📢
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-black text-base tracking-tight">
+                      給与改定（昇給）が検知された社員が {revisedList.length} 名 います！
+                    </h4>
+                    <span className="bg-white text-orange-600 text-[10px] font-black px-2 py-0.5 rounded-full">
+                      最新マスタ反映待ち
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-100 mt-0.5">
+                    台帳で昇給された新給与（{revisedList.map(r => r.user?.name).slice(0, 3).join('、')}{revisedList.length > 3 ? ' 他' : ''}）が明細に未反映です。最新マスタで再計算を実行してください。
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleAutoGenerateFromAttendance}
+                className="px-5 py-2.5 bg-white text-orange-700 hover:bg-orange-50 rounded-2xl font-black text-xs transition shadow-md cursor-pointer shrink-0 flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4 text-orange-600" />
+                ⚡ 全員を最新マスタで一括再計算する
+              </button>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
 
       {/* 📢 未計算月ガイダンスバナー */}
       {!isMonthCalculated && (
@@ -2951,9 +2856,12 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               // 🌟 STEP 2/3 アクション群（一括確定 ＋ 救済ボタン：最新勤怠から再計算 ＆ 勤怠へ戻る）
               <div className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => navigate(tenantId ? `/kintai/admin?tenant_id=${tenantId}` : '/kintai/admin')}
+                  onClick={() => {
+                    const ym = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+                    navigate(tenantId ? `/kintai/admin?tab=attendance&month=${ym}&tenant_id=${tenantId}` : `/kintai/admin?tab=attendance&month=${ym}`);
+                  }}
                   className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm px-4 py-3 rounded-2xl transition border border-slate-300 flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  title="タイムカードの打刻漏れや残業申請を修正するため、勤怠管理画面へ戻ります"
+                  title="タイムカードの打刻漏れや残業申請を修正するため、当月の勤怠出勤簿画面へ直行します"
                 >
                   <Clock className="w-4 h-4 text-blue-600" />
                   <span>⏰ 勤怠修正へ戻る</span>
