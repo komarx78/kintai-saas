@@ -1968,25 +1968,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
   };
 
 
-  // 🔄 大元マスタ・勤怠から当月全社員の給与を一括再計算
-  const handleRecalculateAll = async () => {
-    if (!tenantId || employees.length === 0) return;
-    if (!confirm(`【${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月度】の全従業員（${employees.length}名）の給与明細を、大元労務マスタ（標準報酬月額・住民税特別徴収・扶養控除親族数・各種手当）の最新値に基づいて一括再計算します。よろしいですか？`)) return;
 
-    setIsSaving(true);
-    try {
-      for (const emp of employees) {
-        await handleRecalculateSingle(emp.id, true);
-      }
-      await fetchData();
-      alert(`🎉 全従業員（${employees.length}名）の給与明細を大元労務マスタの最新情報で一括再計算しました！`);
-    } catch (err: any) {
-      console.error('Recalculate all error:', err);
-      alert('一括再計算中にエラーが発生しました: ' + err.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
 
 
@@ -2767,26 +2749,34 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             className={`p-3 rounded-2xl border flex flex-col justify-between text-left cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all group disabled:opacity-50 ${
               !isMonthCalculated 
                 ? 'bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-300 ring-2 ring-indigo-200 shadow-xs' 
-                : 'bg-slate-50/80 hover:bg-indigo-50/60 border-slate-200 hover:border-indigo-300'
+                : 'bg-slate-50/80 hover:bg-slate-100 border-slate-200'
             }`}
-            title="最新の打刻データから当月の給与を一括自動計算（または再計算）します"
+            title={!isMonthCalculated ? 'タイムカード打刻から全員の給与を一括自動計算します' : '出勤簿の打刻を修正した場合に、最新データで再計算します'}
           >
             <div>
               <div className="flex items-center justify-between mb-0.5">
-                <span className={`font-black text-[10px] ${!isMonthCalculated ? 'text-indigo-600' : 'text-slate-400 group-hover:text-indigo-600'}`}>
-                  STEP 2 {!isMonthCalculated ? '★今ここ！' : '（計算済）'}
+                <span className={`font-black text-[10px] ${!isMonthCalculated ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                  STEP 2 {!isMonthCalculated ? '★今ここ！' : '（完了）'}
                 </span>
-                <span className="text-[9px] bg-indigo-100 text-indigo-700 font-bold px-1.5 py-0.2 rounded-full">実行 ⚡</span>
+                <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
+                  !isMonthCalculated ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'
+                }`}>
+                  {!isMonthCalculated ? '実行 ⚡' : '完了済'}
+                </span>
               </div>
-              <div className={`font-bold flex items-center gap-1 ${!isMonthCalculated ? 'text-indigo-950 font-black' : 'text-slate-800 group-hover:text-indigo-900'}`}>
-                <span>⚡ 勤怠から一括計算</span>
+              <div className={`font-bold flex items-center gap-1 ${!isMonthCalculated ? 'text-indigo-950 font-black' : 'text-slate-800'}`}>
+                <span>{!isMonthCalculated ? '⚡ 給与の自動計算' : '✅ 給与計算済み'}</span>
               </div>
-              <p className={`text-[10px] mt-1 ${!isMonthCalculated ? 'text-indigo-700 font-bold' : 'text-slate-500 group-hover:text-slate-700'}`}>
-                実打刻時間・割増手当・社保・税金を自動算定
+              <p className={`text-[10px] mt-1 ${!isMonthCalculated ? 'text-indigo-700 font-bold' : 'text-slate-500'}`}>
+                {!isMonthCalculated ? '実打刻時間・割増手当・社保・税金を自動算定' : `全${employees.length}名の勤怠から支給控除を算定済`}
               </p>
             </div>
-            <div className="mt-2 text-[10px] text-indigo-600 font-bold flex items-center gap-0.5">
-              <span>{isMonthCalculated ? '🔄 最新勤怠から再計算' : '⚡ 今すぐ一括計算する'}</span>
+            <div className="mt-2 text-[10px] font-bold flex items-center gap-0.5">
+              {!isMonthCalculated ? (
+                <span className="text-indigo-600">⚡ 全員分を一括計算する ➔</span>
+              ) : (
+                <span className="text-slate-400 group-hover:text-indigo-600 font-normal">🔄 打刻変更時のみ再計算</span>
+              )}
             </div>
           </button>
 
@@ -3261,24 +3251,25 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 <span className="text-base font-bold">⚡ 勤怠から一括自動計算を実行</span>
               </button>
             ) : (publishedCount < employees.length || payslips.some(p => p.status !== 'published')) ? (
-              // 🌟 STEP 2/3 アクション群（一括確定 ＆ 最新勤怠から一括再計算）
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={handleAutoGenerateFromAttendance}
-                  disabled={isSaving || employees.length === 0}
-                  className="bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs sm:text-sm px-4 py-3 rounded-2xl transition border border-sky-300 flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
-                  title="下の出勤簿で打刻を修正した後、このボタンを押せば全員の給与を最新データで一括再計算します"
-                >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4 text-sky-600" />}
-                  <span>🔄 最新勤怠から再計算</span>
-                </button>
+              // 🌟 STEP 3 アクション群（一括確定が圧倒的主役 ＋ 打刻修正時用の控えめな再計算）
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <button
                   onClick={handlePublishAll}
                   disabled={isSaving || payslips.length === 0}
                   className="bg-[#2E7D62] hover:bg-[#24634E] text-white font-bold text-sm px-6 py-3 rounded-2xl transition shadow-md shadow-[#2E7D62]/20 flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
+                  title="金額を確認し、全従業員の給与明細を確定してWeb公開します"
                 >
                   {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5 text-emerald-200" />}
                   <span className="text-base font-bold">✅ 全員の給与を一括確定する（Web公開）</span>
+                </button>
+                <button
+                  onClick={handleAutoGenerateFromAttendance}
+                  disabled={isSaving || employees.length === 0}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 font-bold text-xs px-3.5 py-3 rounded-2xl transition border border-slate-200 flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
+                  title="出勤簿で打刻を修正した場合にのみ押してください。最新データで給与を再集計します"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4 text-slate-500" />}
+                  <span>打刻修正後に再計算</span>
                 </button>
               </div>
             ) : (
@@ -3322,20 +3313,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           </div>
         </div>
 
-        {/* 下段：サブアクション（再計算・CSV出力・LINEロック安全バッジ・下書き戻し・設定） */}
+        {/* 下段：サブアクション（CSV出力・LINEロック安全バッジ・設定） */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <div className="flex flex-wrap items-center gap-2">
-            {/* 再計算ボタン（マスタ変更時のみ利用：控えめなスモーキー調） */}
-            <button
-              onClick={handleRecalculateAll}
-              disabled={isSaving || payslips.length === 0}
-              className="bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-800 border border-slate-200/90 font-medium text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              title="大元マスタ（標準報酬月額・住民税特別徴収・扶養親族・各種手当）の最新値で当月の全明細を再計算します"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-              <span>🔄 最新マスタから再計算</span>
-            </button>
-
             {/* 振込CSV出力 */}
             <button
               onClick={handleExportBankTransferCsv}
