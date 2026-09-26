@@ -57,26 +57,34 @@ export interface OfficialHealthPensionAcquisitionDocProps {
   hideHeader?: boolean;
 }
 
-// 和暦変換ヘルパー（元号コード: 5昭和, 7平成, 9令和）
+// 和暦変換ヘルパー（日本年金機構元号コード: 1明治, 3大正, 5昭和, 7平成, 9令和）
 function parseWarekiEraCode(dateStr?: string): { eraCode: string; year2: string; month2: string; day2: string } {
   if (!dateStr) return { eraCode: '9', year2: '08', month2: '04', day2: '01' };
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return { eraCode: '9', year2: '08', month2: '04', day2: '01' };
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const mNum = d.getMonth() + 1;
+  const dNum = d.getDate();
+  const m = String(mNum).padStart(2, '0');
+  const day = String(dNum).padStart(2, '0');
+  const ymdNum = y * 10000 + mNum * 100 + dNum;
 
-  if (y >= 2019) {
+  // 日本年金機構公式元号コード判定
+  if (ymdNum >= 20190501) {
     const ry = y - 2018;
     return { eraCode: '9', year2: String(ry).padStart(2, '0'), month2: m, day2: day };
-  } else if (y >= 1989) {
+  } else if (ymdNum >= 19890108) {
     const hy = y - 1988;
     return { eraCode: '7', year2: String(hy).padStart(2, '0'), month2: m, day2: day };
-  } else if (y >= 1926) {
+  } else if (ymdNum >= 19261225) {
     const sy = y - 1925;
     return { eraCode: '5', year2: String(sy).padStart(2, '0'), month2: m, day2: day };
+  } else if (ymdNum >= 19120730) {
+    const ty = y - 1911;
+    return { eraCode: '3', year2: String(ty).padStart(2, '0'), month2: m, day2: day };
   } else {
-    return { eraCode: '3', year2: '01', month2: m, day2: day };
+    const my = y - 1867;
+    return { eraCode: '1', year2: String(my).padStart(2, '0'), month2: m, day2: day };
   }
 }
 

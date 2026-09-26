@@ -52,26 +52,34 @@ export interface OfficialEmploymentAcquisitionDocProps {
   hideHeader?: boolean; // 親コンポーネントでヘッダー描画時の二重ヘッダー抑止フラグ
 }
 
-// 和暦変換ヘルパー（元号コード: 2大正, 3昭和, 4平成, 5令和）
+// 和暦変換ヘルパー（元号コード: 1明治, 2大正, 3昭和, 4平成, 5令和）
 function parseWarekiEraCode(dateStr?: string): { eraCode: string; year2: string; month2: string; day2: string } {
   if (!dateStr) return { eraCode: '5', year2: '08', month2: '04', day2: '01' };
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return { eraCode: '5', year2: '08', month2: '04', day2: '01' };
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const mNum = d.getMonth() + 1;
+  const dNum = d.getDate();
+  const m = String(mNum).padStart(2, '0');
+  const day = String(dNum).padStart(2, '0');
+  const ymdNum = y * 10000 + mNum * 100 + dNum;
 
-  if (y >= 2019) {
+  // 雇用保険元号コード: 1:明治, 2:大正, 3:昭和, 4:平成, 5:令和
+  if (ymdNum >= 20190501) {
     const ry = y - 2018;
     return { eraCode: '5', year2: String(ry).padStart(2, '0'), month2: m, day2: day };
-  } else if (y >= 1989) {
+  } else if (ymdNum >= 19890108) {
     const hy = y - 1988;
     return { eraCode: '4', year2: String(hy).padStart(2, '0'), month2: m, day2: day };
-  } else if (y >= 1926) {
+  } else if (ymdNum >= 19261225) {
     const sy = y - 1925;
     return { eraCode: '3', year2: String(sy).padStart(2, '0'), month2: m, day2: day };
+  } else if (ymdNum >= 19120730) {
+    const ty = y - 1911;
+    return { eraCode: '2', year2: String(ty).padStart(2, '0'), month2: m, day2: day };
   } else {
-    return { eraCode: '2', year2: '01', month2: m, day2: day };
+    const my = y - 1867;
+    return { eraCode: '1', year2: String(my).padStart(2, '0'), month2: m, day2: day };
   }
 }
 
@@ -138,17 +146,33 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
     // マイナンバー（数字12桁）
     const cleanMyNumber = (emp.my_number || '').replace(/[^0-9]/g, '');
 
-    // 賃金月額（千円単位、4桁）例: 250,000 -> 0250
-    const monthlyThousand = Math.round((emp.base_salary || 0) / 1000);
-    const wageStr = String(monthlyThousand).padStart(4, '0');
-
-    // 氏名カタカナ（全角スペース空け）
-    const rawKana = emp.name_kana || emp.name || 'コマイ　シュウイチロウ';
-
     // 雇用形態コード（3: パート、4: 有期、7: 正社員等）
     const isPart = emp.employment_type === 'part-time' || (emp.weekly_hours && emp.weekly_hours < 30);
     const isFixed = emp.contract_type === 'fixed_term' || emp.employment_type === 'contract';
     const formCode = isPart ? '3' : isFixed ? '4' : '7';
+
+    // 賃金支払態様コード（1:月給, 2:週給, 3:日給, 4:時間給, 5:その他）
+    let wageTypeCode = '1';
+    if (emp.salary_type === 'hourly') {
+      wageTypeCode = '4';
+    } else if (emp.salary_type === 'daily') {
+      wageTypeCode = '3';
+    }
+
+    // 賃金月額（千円単位、4桁）例: 250,000 -> 0250
+    // ハローワーク取扱要領: 時給・日給の場合は週所定労働時間・所定労働日数から月額見込額を換算
+    let estimatedMonthly = emp.base_salary || 0;
+    if (emp.salary_type === 'hourly') {
+      const hours = emp.weekly_hours || (isPart ? 20 : 40);
+      estimatedMonthly = Math.round(estimatedMonthly * hours * 52 / 12);
+    } else if (emp.salary_type === 'daily') {
+      estimatedMonthly = Math.round(estimatedMonthly * 21.6);
+    }
+    const monthlyThousand = Math.round(estimatedMonthly / 1000);
+    const wageStr = String(monthlyThousand).padStart(4, '0');
+
+    // 氏名カタカナ（全角スペース空け）
+    const rawKana = emp.name_kana || emp.name || 'コマイ　シュウイチロウ';
 
     // 性別コード（1:男, 2:女）
     const genderCode = emp.gender === '女' || emp.gender === 'female' ? '2' : '1';
@@ -179,7 +203,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
       officeNumber_3: cleanOffice.slice(10, 11),
       // 雇用条件・賃金・取得年月日
       causeCode: '2', // 新規雇用（中途・その他）
-      wageType: emp.salary_type === 'hourly' ? '4' : '1',
+      wageType: wageTypeCode,
       wageAmount: wageStr,
       wageThousands: wageStr,
       joinEra: join.eraCode,

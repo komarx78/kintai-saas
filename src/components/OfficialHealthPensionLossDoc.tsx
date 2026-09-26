@@ -42,26 +42,35 @@ interface OfficialHealthPensionLossDocProps {
   hideHeader?: boolean;
 }
 
-// 西暦から和暦への安全変換関数
+// 西暦から和暦への安全変換関数（日本年金機構公式元号コード: 1明治, 3大正, 5昭和, 7平成, 9令和）
 function toWareki(dateStr?: string): { eraCode: string; eraName: string; year2: string; month2: string; day2: string } {
   if (!dateStr) return { eraCode: '9', eraName: '令和', year2: '', month2: '', day2: '' };
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return { eraCode: '9', eraName: '令和', year2: '', month2: '', day2: '' };
 
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const mNum = d.getMonth() + 1;
+  const dNum = d.getDate();
+  const m = String(mNum).padStart(2, '0');
+  const day = String(dNum).padStart(2, '0');
+  const ymdNum = y * 10000 + mNum * 100 + dNum;
 
-  // 日本年金機構元号コード: 5:昭和 (1926/12/25〜1989/01/07), 7:平成 (1989/01/08〜2019/04/30), 9:令和 (2019/05/01〜)
-  if (y > 2019 || (y === 2019 && (d.getMonth() > 3 || (d.getMonth() === 3 && d.getDate() >= 1)))) {
+  // 日本年金機構元号コード: 1:明治, 3:大正, 5:昭和, 7:平成, 9:令和
+  if (ymdNum >= 20190501) {
     const wy = y - 2018;
     return { eraCode: '9', eraName: '令和', year2: String(wy).padStart(2, '0'), month2: m, day2: day };
-  } else if (y > 1989 || (y === 1989 && (d.getMonth() > 0 || (d.getMonth() === 0 && d.getDate() >= 8)))) {
+  } else if (ymdNum >= 19890108) {
     const wy = y - 1988;
     return { eraCode: '7', eraName: '平成', year2: String(wy).padStart(2, '0'), month2: m, day2: day };
-  } else {
+  } else if (ymdNum >= 19261225) {
     const wy = y - 1925;
     return { eraCode: '5', eraName: '昭和', year2: String(wy).padStart(2, '0'), month2: m, day2: day };
+  } else if (ymdNum >= 19120730) {
+    const wy = y - 1911;
+    return { eraCode: '3', eraName: '大正', year2: String(wy).padStart(2, '0'), month2: m, day2: day };
+  } else {
+    const wy = y - 1867;
+    return { eraCode: '1', eraName: '明治', year2: String(wy).padStart(2, '0'), month2: m, day2: day };
   }
 }
 
