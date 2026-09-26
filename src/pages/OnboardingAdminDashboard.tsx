@@ -403,13 +403,13 @@ export default function OnboardingAdminDashboard() {
     name_kana: '',
     email: '',
     phone: '',
-    birth_date: '1995-01-01',
+    birth_date: '',
     postal_code: '',
     address_kana: '',
     address: '',
     join_date: new Date().toISOString().split('T')[0],
     employment_type: 'full-time',
-    department: '営業部',
+    department: '',
     store_name: '',
     contract_type: 'indefinite',
     trial_period_months: 3,
@@ -424,7 +424,7 @@ export default function OnboardingAdminDashboard() {
     qualification_allowance: 0,
     housing_allowance: 0,
     family_allowance: 0,
-    commuting_allowance: 15000,
+    commuting_allowance: 0,
     health_insurance_joined: true,
     pension_insurance_joined: true,
     employment_insurance_joined: true,
@@ -609,7 +609,7 @@ export default function OnboardingAdminDashboard() {
     positionAllowance: 0,
     qualificationAllowance: 0,
     fixedOvertimeAllowance: 0,
-    department: '営業部',
+    department: '',
     storeName: '',
     joinDate: new Date().toISOString().split('T')[0],
     startTime: '09:00',
@@ -1067,11 +1067,11 @@ export default function OnboardingAdminDashboard() {
           status: onb?.status || (u.is_active === false ? 'retired' : 'active'),
           current_step_number: onb?.procedure_todo?.current_step_number || onb?.current_step_number || (onb?.status === 'onboarding' ? 1 : 5),
           step_history: onb?.procedure_todo?.step_history || onb?.step_history || [],
-          join_date: u.join_date || conDoc.join_date || onb?.join_date || '2026-04-01',
+          join_date: u.join_date || conDoc.join_date || onb?.join_date || '',
           retirement_date: onb?.retirement_date,
           retirement_reason: onb?.retirement_reason,
           employment_type: u.employment_type || (conDoc.employment_type ? (conDoc.employment_type.includes('正社員') ? 'full-time' : 'part-time') : 'full-time'),
-          department: u.department || localBackup?.department || localPos?.department || conDoc.department || '営業部',
+          department: u.department || localBackup?.department || localPos?.department || conDoc.department || '',
           store_name: u.store_name || localPos?.store_name || localBackup?.store_name || conDoc.store_name || '',
           contract_type: onb?.contract_type || 'indefinite',
           trial_period_months: onb?.trial_period_months ?? 3,
@@ -1149,7 +1149,7 @@ export default function OnboardingAdminDashboard() {
                   name: empName,
                   email: tempEmail,
                   role: 'user',
-                  department: d.department || '営業部',
+                  department: d.department || '',
                   employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
                   join_date: d.join_date || new Date().toISOString().split('T')[0],
                   birth_date: d.birth_date || null,
@@ -1172,7 +1172,7 @@ export default function OnboardingAdminDashboard() {
                     name: empName,
                     email: tempEmail,
                     role: 'user',
-                    department: d.department || '営業部',
+                    department: d.department || '',
                     employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time'
                   })
                   .select()
@@ -1236,7 +1236,7 @@ export default function OnboardingAdminDashboard() {
               step_history: [],
               join_date: conDoc.join_date || d.join_date || new Date().toISOString().split('T')[0],
               employment_type: conDoc.employment_type ? (conDoc.employment_type.includes('正社員') ? 'full-time' : 'part-time') : (d.employment_type === 'part-time' ? 'part-time' : 'full-time'),
-              department: d.department || conDoc.department || '営業部',
+              department: d.department || conDoc.department || '',
               store_name: d.store_name || conDoc.store_name || '',
               contract_type: d.contract_type || 'indefinite',
               trial_period_months: 3,
@@ -1897,7 +1897,7 @@ export default function OnboardingAdminDashboard() {
                 name_kana: d.name_kana || null,
                 email: tempEmail,
                 role: 'user',
-                department: d.department || '営業部',
+                department: d.department || '',
                 store_name: d.store_name || null,
                 employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time',
                 join_date: d.join_date || new Date().toISOString().split('T')[0],
@@ -1921,7 +1921,7 @@ export default function OnboardingAdminDashboard() {
                   name: empName,
                   email: tempEmail,
                   role: 'user',
-                  department: d.department || '営業部',
+                  department: d.department || '',
                   store_name: d.store_name || null,
                   employment_type: d.employment_type === 'part-time' ? 'part-time' : 'full-time'
                 })
@@ -2412,13 +2412,13 @@ export default function OnboardingAdminDashboard() {
         name_kana: '',
         email: '',
         phone: '',
-        birth_date: '1995-01-01',
+        birth_date: '',
         postal_code: '',
         address_kana: '',
         address: '',
         join_date: new Date().toISOString().split('T')[0],
         employment_type: 'full-time',
-        department: '営業部',
+        department: '',
         store_name: '',
         contract_type: 'indefinite',
         trial_period_months: 3,
@@ -2433,7 +2433,7 @@ export default function OnboardingAdminDashboard() {
         qualification_allowance: 0,
         housing_allowance: 0,
         family_allowance: 0,
-        commuting_allowance: 15000,
+        commuting_allowance: 0,
         health_insurance_joined: true,
         pension_insurance_joined: true,
         employment_insurance_joined: true,
@@ -3036,7 +3036,7 @@ export default function OnboardingAdminDashboard() {
       name_kana: matchedEmp.name_kana || residentData.name_kana || taxData.name_kana || contractData.name_kana || localMaster.name_kana || '',
       role: matchedEmp.role || 'employee',
       status: matchedEmp.status || 'active',
-      department: matchedEmp.department || localMaster.department || contractData.department || '営業部',
+      department: matchedEmp.department || localMaster.department || contractData.department || '',
       store_name: matchedEmp.store_name || localMaster.store_name || contractData.store_name || '',
       employment_type: contractData.employment_type || localMaster.employment_type || matchedEmp.employment_type || 'full-time',
       contract_type: contractData.contract_type || localMaster.contract_type || matchedEmp.contract_type || 'indefinite',
@@ -3335,7 +3335,7 @@ export default function OnboardingAdminDashboard() {
                 setWizardStep(1);
                 const activeDepts = departments.length > 0 ? departments : DEFAULT_DEPARTMENTS;
                 const currentDeptExists = activeDepts.some(d => d.name === wizardData.department);
-                const initialDept = currentDeptExists ? wizardData.department : (activeDepts[0]?.name || '営業部');
+                const initialDept = currentDeptExists ? wizardData.department : (activeDepts[0]?.name || '');
                 handleDepartmentChange(initialDept);
                 setWizardOpen(true);
               }}
@@ -3403,7 +3403,7 @@ export default function OnboardingAdminDashboard() {
                   positionAllowance: 0,
                   qualificationAllowance: 0,
                   fixedOvertimeAllowance: 0,
-                  department: departments[0]?.name || '営業部',
+                  department: departments[0]?.name || '',
                   storeName: '',
                   joinDate: new Date().toISOString().split('T')[0],
                   startTime: '09:00',
@@ -3537,7 +3537,7 @@ export default function OnboardingAdminDashboard() {
                                   {isRetired && <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-bold">退職</span>}
                                 </div>
                                 <div className="text-[10px] text-slate-400 flex items-center gap-1.5 flex-wrap">
-                                  <span>{emp.department || '営業部'}{emp.position_name ? ` (${emp.position_name})` : ''}</span>
+                                  <span>{emp.department || '未配属'}{emp.position_name ? ` (${emp.position_name})` : ''}</span>
                                   <span>•</span>
                                   <span>{emp.join_date}入社</span>
                                   {emp.birth_date && (
@@ -3742,7 +3742,7 @@ export default function OnboardingAdminDashboard() {
                                     positionAllowance: resolvedEmp.position_allowance || emp.position_allowance || 0,
                                     qualificationAllowance: resolvedEmp.qualification_allowance || emp.qualification_allowance || 0,
                                     fixedOvertimeAllowance: 0,
-                                    department: (resolvedEmp.store_name || emp.store_name) ? '店舗運営部' : (resolvedEmp.department || emp.department || departments[0]?.name || '営業部'),
+                                    department: (resolvedEmp.store_name || emp.store_name) ? '店舗運営部' : (resolvedEmp.department || emp.department || departments[0]?.name || ''),
                                     storeName: resolvedEmp.store_name || emp.store_name || '',
                                     joinDate: resolvedEmp.join_date || emp.join_date || new Date().toISOString().split('T')[0],
                                     startTime: emp.start_time || '09:00',
@@ -4272,7 +4272,7 @@ export default function OnboardingAdminDashboard() {
                       contractType: resolvedEmp.contract_type || 'indefinite',
                       trialPeriodMonths: resolvedEmp.trial_period_months ?? 3,
                       workLocation: contractTpl.work_location_default || '本社 および 会社が指定する就業場所',
-                      jobDescription: `${resolvedEmp.department || '営業部'}${resolvedEmp.position_name ? ` (${resolvedEmp.position_name})` : ''}における業務全般`,
+                      jobDescription: `${resolvedEmp.department ? `${resolvedEmp.department}${resolvedEmp.position_name ? ` (${resolvedEmp.position_name})` : ''}における` : (resolvedEmp.position_name ? `${resolvedEmp.position_name}における` : '')}業務全般`,
                       startTime: resolvedEmp.start_time || '09:00',
                       endTime: resolvedEmp.end_time || '18:00',
                       breakTimeMinutes: resolvedEmp.break_time_minutes || 60,
@@ -4321,7 +4321,7 @@ export default function OnboardingAdminDashboard() {
                   <OfficialCommutingPassDoc data={{
                     companyName: tenantInfo?.name || '',
                     employeeName: cData.name || resolvedEmp.name,
-                    department: resolvedEmp.department || '営業部',
+                    department: resolvedEmp.department || '',
                     transportMode: cData.transport_mode || 'train_bus',
                     originStation: cData.origin_station || '自宅最寄',
                     destinationStation: cData.destination_station || '会社最寄',
@@ -4349,7 +4349,7 @@ export default function OnboardingAdminDashboard() {
                   <OfficialBankPassbookDoc data={{
                     companyName: tenantInfo?.name || '',
                     employeeName: bData.name || resolvedEmp.name,
-                    department: resolvedEmp.department || '営業部',
+                    department: resolvedEmp.department || '',
                     bankName: bData.bank_name || resolvedEmp.bank_name || '未登録',
                     branchName: bData.branch_name || resolvedEmp.branch_name || '未登録',
                     accountType: bData.account_type || resolvedEmp.account_type || 'ordinary',
@@ -7945,7 +7945,7 @@ export default function OnboardingAdminDashboard() {
             positionAllowance: 0,
             qualificationAllowance: 0,
             fixedOvertimeAllowance: 0,
-            department: departments[0]?.name || '営業部',
+            department: departments[0]?.name || '',
             storeName: '',
             joinDate: new Date().toISOString().split('T')[0],
             startTime: '09:00',
