@@ -99,6 +99,24 @@ function addDays(dateStr: string, days: number): string {
   return formatDate(d);
 }
 
+/**
+ * 民法第143条（暦による期間計算）に完全準拠した月・年加算ヘルパー
+ * ※最後の月に応当する日がないときは、その月の末日とする（民法143条2項但書）
+ * （例: 8月31日生まれの1歳6ヶ月(18ヶ月後)が翌々年3月2日にオーバーフローするJavaScript標準バグを物理根絶）
+ */
+export function addMonthsCivil(dateStr: string, monthsToAdd: number): string {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const totalMonths = (m - 1) + monthsToAdd;
+  const newYear = y + Math.floor(totalMonths / 12);
+  const newMonth = ((totalMonths % 12) + 12) % 12 + 1;
+  // 対象月の末日を取得（翌月0日）
+  const daysInNewMonth = new Date(newYear, newMonth, 0).getDate();
+  const newDay = Math.min(d, daysInNewMonth);
+  const targetDate = new Date(newYear, newMonth - 1, newDay);
+  return formatDate(targetDate);
+}
+
 // 産前産後・育児休業期間の法令自動計算エンジン
 export function calculateMaternityDates(params: {
   expectedBirthDate: string;
@@ -120,7 +138,7 @@ export function calculateMaternityDates(params: {
     };
   }
 
-  // 1. 産前休業開始日: 単胎42日前(6週)、多胎98日前(14週)
+  // 1. 産前休業開始日: 単胎42日前(6週)、多胎98日前(14週) (労基法第65条第1項)
   const prenatalDays = pregnancyType === 'multiple' ? 98 : 42;
   const maternityLeaveStartDate = addDays(expectedBirthDate, -(prenatalDays - 1));
 
@@ -139,31 +157,23 @@ export function calculateMaternityDates(params: {
     if (diffDays < 0) isEarly = true;
   }
 
-  // 3. 産後休業期間: 出産日の翌日から56日後(8週 = 56日)
-  // 出産翌日から数えて56日目まで
+  // 3. 産後休業期間: 出産日の翌日から56日後(8週 = 56日) (労基法第65条第2項)
   const maternityLeaveEndDate = addDays(baseBirthDate, 56);
 
-  // 4. 育児休業期間: 産後休業終了の翌日から原則満1歳の誕生日の前日まで
+  // 4. 育児休業期間: 産後休業終了の翌日から原則満1歳の誕生日の前日まで (育児介護休業法第5条)
   const childcareLeaveStartDate = addDays(maternityLeaveEndDate, 1);
 
-  // 子の満1歳の誕生日前日
-  const bDate = new Date(baseBirthDate + 'T00:00:00');
-  let targetYear = bDate.getFullYear() + 1;
-  let targetMonth = bDate.getMonth();
-  let targetDay = bDate.getDate();
-
+  // 子の満年齢到達日（民法第143条暦計算）
+  let monthsToAdd = 12; // 満1歳
   if (childcareExtended === '1_year_6_months') {
-    // 1歳6ヶ月
-    targetMonth += 6;
+    monthsToAdd = 18; // 1歳6ヶ月
   } else if (childcareExtended === '2_years') {
-    // 2歳
-    targetYear += 1;
+    monthsToAdd = 24; // 2歳
   }
 
-  const endBirthTarget = new Date(targetYear, targetMonth, targetDay);
-  // 誕生日前日
-  endBirthTarget.setDate(endBirthTarget.getDate() - 1);
-  const childcareLeaveEndDate = formatDate(endBirthTarget);
+  const reachedDate = addMonthsCivil(baseBirthDate, monthsToAdd);
+  // 誕生日の前日（加齢満了日）
+  const childcareLeaveEndDate = addDays(reachedDate, -1);
 
   // 5. 復職予定日: 育休終了の翌日
   const returnToWorkDate = addDays(childcareLeaveEndDate, 1);
@@ -178,6 +188,40 @@ export function calculateMaternityDates(params: {
     isEarly,
     diffDays
   };
+}
+
+/**
+ * 👶 社会保険料免除月判定ヘルパー（健康保険法第159条・厚生年金保険法第81条の2）
+ * 休業開始日の属する月から、終了日の翌日の属する月の前月までが免除期間
+ */
+export function getMaternitySocialInsuranceExemptMonths(
+  startDateStr?: string,
+  endDateStr?: string
+): { startYearMonth: string; endYearMonth: string; exemptMonths: string[] } {
+  if (!startDateStr || !endDateStr) {
+    return { startYearMonth: '', endYearMonth: '', exemptMonths: [] };
+  }
+
+  const start = new Date(startDateStr + 'T00:00:00');
+  const endNext = new Date(endDateStr + 'T00:00:00');
+  endNext.setDate(endNext.getDate() + 1); // 終了日の翌日
+
+  const startYearMonth = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
+  
+  // 終了日の翌日の属する月の前月
+  const endMonthDate = new Date(endNext.getFullYear(), endNext.getMonth() - 1, 1);
+  const endYearMonth = `${endMonthDate.getFullYear()}-${String(endMonthDate.getMonth() + 1).padStart(2, '0')}`;
+
+  const exemptMonths: string[] = [];
+  let cur = new Date(start.getFullYear(), start.getMonth(), 1);
+  const maxEnd = new Date(endMonthDate.getFullYear(), endMonthDate.getMonth(), 1);
+
+  while (cur <= maxEnd) {
+    exemptMonths.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`);
+    cur.setMonth(cur.getMonth() + 1);
+  }
+
+  return { startYearMonth, endYearMonth, exemptMonths };
 }
 
 // 住民税立替スケジュールの自動生成

@@ -12,7 +12,8 @@ import {
   calculateMaternityDates,
   generateResidentTaxAdvanceSchedule,
   fetchMaternityLeaveRecord,
-  saveMaternityLeaveRecord
+  saveMaternityLeaveRecord,
+  getMaternitySocialInsuranceExemptMonths
 } from '../lib/maternityLeave';
 import { OfficialMaternityLeaveDoc } from './OfficialMaternityLeaveDoc';
 import { compressImageFile } from '../lib/imageCompressor';
@@ -712,6 +713,33 @@ export const MaternityLeaveModal: React.FC<MaternityLeaveModalProps> = ({
                     </p>
                   </div>
                 </div>
+
+                {/* 👶 社会保険料免除予定期間プレビュー（健康保険法第159条・厚生年金保険法第81条の2） */}
+                {record.maternity_leave_start_date && (record.childcare_leave_end_date || record.maternity_leave_end_date) && (() => {
+                  const exempt = getMaternitySocialInsuranceExemptMonths(
+                    record.maternity_leave_start_date,
+                    record.childcare_leave_end_date || record.maternity_leave_end_date
+                  );
+                  if (exempt.exemptMonths.length === 0) return null;
+                  return (
+                    <div className="mt-4 p-3 bg-gradient-to-r from-teal-50 to-emerald-50 rounded-xl border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-teal-600 shrink-0" />
+                        <div>
+                          <span className="font-bold text-teal-950">
+                            社会保険料（健康保険・厚生年金）免除予定期間：
+                          </span>
+                          <span className="font-black text-teal-800 ml-1">
+                            {exempt.startYearMonth}分 〜 {exempt.endYearMonth}分（計 {exempt.exemptMonths.length} ヶ月間免除）
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-teal-700 font-bold shrink-0">
+                        ※年金事務所への申出により会社・本人負担ともに全額免除
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* 子の情報 ＆ 休業中連絡先 */}

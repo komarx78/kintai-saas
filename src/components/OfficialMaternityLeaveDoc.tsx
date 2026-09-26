@@ -57,6 +57,18 @@ export const OfficialMaternityLeaveDoc: React.FC<OfficialMaternityLeaveDocProps>
   const retDate = formatDateJp(record.return_to_work_date);
   const childBirth = formatDateJp(record.child_birth_date || record.actual_birth_date || record.expected_birth_date);
 
+  // 産後休業開始日（実出産日または予定日の翌日。月跨ぎ・月末オーバーフローを完全遮断）
+  const rawBirthDate = record.actual_birth_date || record.expected_birth_date;
+  const postPartumStartDate = rawBirthDate ? (() => {
+    const d = new Date(rawBirthDate + 'T00:00:00');
+    d.setDate(d.getDate() + 1);
+    const yr = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const dy = String(d.getDate()).padStart(2, '0');
+    return `${yr}-${mo}-${dy}`;
+  })() : '';
+  const postPartumStart = formatDateJp(postPartumStartDate);
+
   return (
     <div className="space-y-6">
       {/* 操作ヘッダー (印刷時は非表示) */}
@@ -225,15 +237,13 @@ export const OfficialMaternityLeaveDoc: React.FC<OfficialMaternityLeaveDocProps>
               <div className="col-span-3 p-3 px-6 text-sm space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="inline-block w-16 text-center font-bold border-b border-slate-400">
-                    {record.actual_birth_date ? actDate.y : expDate.y}
+                    {postPartumStart.y}
                   </span> 年
                   <span className="inline-block w-10 text-center font-bold border-b border-slate-400">
-                    {record.actual_birth_date ? actDate.m : expDate.m}
+                    {postPartumStart.m}
                   </span> 月
                   <span className="inline-block w-10 text-center font-bold border-b border-slate-400">
-                    {record.actual_birth_date
-                      ? String(Number(actDate.d) + 1)
-                      : String(Number(expDate.d) + 1)}
+                    {postPartumStart.d}
                   </span> 日
                   <span className="ml-3 text-slate-700">から</span>
                 </div>
