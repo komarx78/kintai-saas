@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { supabase } from '../lib/supabase';
 import { 
   Printer, ZoomIn, ZoomOut, 
   Maximize2 
@@ -34,12 +35,45 @@ export interface SpouseDeductionDocData {
 interface OfficialSpouseDeductionDocProps {
   data: SpouseDeductionDocData;
   customCoords?: SpouseDocFieldConfig[];
+  tenantId?: string;
 }
 
 export default function OfficialSpouseDeductionDoc({ 
   data, 
-  customCoords 
+  customCoords,
+  tenantId
 }: OfficialSpouseDeductionDocProps) {
+  const [resolvedTenantId, setResolvedTenantId] = useState<string>(tenantId || '');
+
+  useEffect(() => {
+    if (tenantId) {
+      setResolvedTenantId(tenantId);
+      return;
+    }
+    const resolveTenant = async () => {
+      try {
+        const { data: rpcTenant } = await supabase.rpc('get_user_tenant_id');
+        if (rpcTenant) {
+          setResolvedTenantId(rpcTenant);
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile?.tenant_id) {
+            setResolvedTenantId(profile.tenant_id);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve tenant in OfficialSpouseDeductionDoc:', e);
+      }
+    };
+    resolveTenant();
+  }, [tenantId]);
   const year = data.year || 2026;
   const reiwaYear = year - 2018; // 2026 -> 8
   const spIncome = data.spouseIncomeEstimate ?? 0;
@@ -266,7 +300,7 @@ export default function OfficialSpouseDeductionDoc({
       return;
     }
     let isCancelled = false;
-    fetchSpouseDocCoordinatesFromDb().then(dbCoords => {
+    fetchSpouseDocCoordinatesFromDb(resolvedTenantId).then(dbCoords => {
       if (!isCancelled && dbCoords && dbCoords.length > 0) {
         setCoords(dbCoords);
       }
@@ -279,7 +313,7 @@ export default function OfficialSpouseDeductionDoc({
       isCancelled = true;
       window.removeEventListener(SPOUSE_DOC_COORDS_UPDATE_EVENT, handleCoordsUpdate);
     };
-  }, [customCoords]);
+  }, [customCoords, resolvedTenantId]);
 
   // 4. 原本背景画像（PDF.js描画）
   const [bgPdfImg, setBgPdfImg] = useState<string | null>(null);

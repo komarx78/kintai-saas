@@ -17,9 +17,46 @@ import {
 import { supabase } from '../lib/supabase';
 import OfficialSpouseDeductionDoc, { type SpouseDeductionDocData } from './OfficialSpouseDeductionDoc';
 
-export const SpouseDocMasterInspector: React.FC = () => {
+interface SpouseDocMasterInspectorProps {
+  tenantId?: string;
+}
+
+export const SpouseDocMasterInspector: React.FC<SpouseDocMasterInspectorProps> = ({ tenantId }) => {
   // モード: 'inspector' (座標微調整) | 'input_preview' (実際の直接入力プレビュー)
   const [activeTab, setActiveTab] = useState<'inspector' | 'input_preview'>('inspector');
+
+  // テナントID自動解決
+  const [resolvedTenantId, setResolvedTenantId] = useState<string>(tenantId || '');
+
+  useEffect(() => {
+    if (tenantId) {
+      setResolvedTenantId(tenantId);
+      return;
+    }
+    const resolveTenant = async () => {
+      try {
+        const { data: rpcTenant } = await supabase.rpc('get_user_tenant_id');
+        if (rpcTenant) {
+          setResolvedTenantId(rpcTenant);
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile?.tenant_id) {
+            setResolvedTenantId(profile.tenant_id);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve tenant in SpouseDocMasterInspector:', e);
+      }
+    };
+    resolveTenant();
+  }, [tenantId]);
 
   // インスペクター用State
   const [fields, setFields] = useState<SpouseDocFieldConfig[]>(() => loadSpouseDocCoordinates());
@@ -40,6 +77,19 @@ export const SpouseDocMasterInspector: React.FC = () => {
   useEffect(() => {
     const fetchCompany = async () => {
       try {
+        const tId = resolvedTenantId;
+        if (tId) {
+          const { data: tData } = await supabase.from('tenants').select('*').eq('id', tId).maybeSingle();
+          if (tData) {
+            setCompanyInfo({
+              name: tData.name || '自社事業所',
+              address: tData.address || '',
+              corporate_number: tData.corporate_number || '',
+              tax_office_name: (tData as any).tax_office_name || ''
+            });
+            return;
+          }
+        }
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
@@ -60,18 +110,18 @@ export const SpouseDocMasterInspector: React.FC = () => {
       }
     };
     fetchCompany();
-  }, []);
+  }, [resolvedTenantId]);
 
-  // マウント時にDBから全社共有座標を取得
+  // マウント時およびテナント確定時にDBからテナント別座標を取得
   useEffect(() => {
     let isCancelled = false;
-    fetchSpouseDocCoordinatesFromDb().then(dbCoords => {
+    fetchSpouseDocCoordinatesFromDb(resolvedTenantId).then(dbCoords => {
       if (!isCancelled && dbCoords && dbCoords.length > 0) {
         setFields(dbCoords);
       }
     });
     return () => { isCancelled = true; };
-  }, []);
+  }, [resolvedTenantId]);
 
   // 原本背景画像
   const [bgPdfImg, setBgPdfImg] = useState<string | null>(null);
@@ -282,7 +332,7 @@ export const SpouseDocMasterInspector: React.FC = () => {
     setIsSaving(true);
     saveSpouseDocCoordinates(fields);
     broadcastSpouseDocCoordinates(fields);
-    await saveSpouseDocCoordinatesToDb(fields);
+    await saveSpouseDocCoordinatesToDb(fields, resolvedTenantId);
     setIsSaving(false);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
@@ -370,6 +420,7 @@ export const SpouseDocMasterInspector: React.FC = () => {
         <OfficialSpouseDeductionDoc
           data={demoPreviewData}
           customCoords={fields}
+          tenantId={resolvedTenantId}
         />
       )}
 

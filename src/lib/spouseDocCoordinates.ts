@@ -748,17 +748,31 @@ export function broadcastSpouseDocCoordinates(fields: SpouseDocFieldConfig[]) {
   window.dispatchEvent(ev);
 }
 
-// Supabase DB からの全社同期座標取得
-export async function fetchSpouseDocCoordinatesFromDb(): Promise<SpouseDocFieldConfig[]> {
+// Supabase DB からの全社同期またはテナント別座標取得
+export async function fetchSpouseDocCoordinatesFromDb(tenantId?: string): Promise<SpouseDocFieldConfig[]> {
   try {
-    const { data } = await supabase
-      .from('system_settings')
-      .select('spouse_doc_coordinates')
-      .limit(1)
-      .maybeSingle();
+    let saved: any = null;
+    if (tenantId) {
+      const { data: tenantData } = await supabase
+        .from('tenants')
+        .select('spouse_doc_coordinates')
+        .eq('id', tenantId)
+        .maybeSingle();
+      if (tenantData?.spouse_doc_coordinates && Array.isArray(tenantData.spouse_doc_coordinates)) {
+        saved = tenantData.spouse_doc_coordinates;
+      }
+    }
+    if (!saved) {
+      const { data } = await supabase
+        .from('system_settings')
+        .select('spouse_doc_coordinates')
+        .limit(1)
+        .maybeSingle();
+      saved = data?.spouse_doc_coordinates;
+    }
 
-    if (data && data.spouse_doc_coordinates && Array.isArray(data.spouse_doc_coordinates)) {
-      const dbFields = data.spouse_doc_coordinates as SpouseDocFieldConfig[];
+    if (saved && Array.isArray(saved)) {
+      const dbFields = saved as SpouseDocFieldConfig[];
       const merged = DEFAULT_SPOUSE_DOC_FIELDS.map(def => {
         const custom = dbFields.find(p => p.id === def.id);
         if (custom) {
@@ -783,10 +797,22 @@ export async function fetchSpouseDocCoordinatesFromDb(): Promise<SpouseDocFieldC
   return loadSpouseDocCoordinates();
 }
 
-// Supabase DB への保存（UUID完全整合・レコード自動判定）
-export async function saveSpouseDocCoordinatesToDb(fields: SpouseDocFieldConfig[]): Promise<boolean> {
+// Supabase DB への保存（UUID完全整合・レコード自動判定・テナント分離対応）
+export async function saveSpouseDocCoordinatesToDb(fields: SpouseDocFieldConfig[], tenantId?: string): Promise<boolean> {
   try {
     saveSpouseDocCoordinates(fields);
+
+    if (tenantId) {
+      const res = await supabase
+        .from('tenants')
+        .update({ spouse_doc_coordinates: fields })
+        .eq('id', tenantId);
+      if (res.error) {
+        console.warn('Could not update tenant spouse_doc_coordinates:', res.error);
+        return false;
+      }
+      return true;
+    }
 
     const { data: current } = await supabase
       .from('system_settings')

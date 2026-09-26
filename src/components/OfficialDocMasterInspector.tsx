@@ -125,7 +125,7 @@ export const OfficialDocMasterInspector: React.FC<OfficialDocMasterInspectorProp
 
       {/* 選択された帳票のインスペクター本体 */}
       {activeDoc === 'spouse_deduction' ? (
-        <SpouseDocMasterInspector />
+        <SpouseDocMasterInspector tenantId={tenantId} />
       ) : activeDoc === 'employment_loss' ? (
         <EmploymentLossDocMasterInspector />
       ) : activeDoc === 'employment_acquisition' ? (

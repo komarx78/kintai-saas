@@ -4495,24 +4495,25 @@ export default function OnboardingAdminDashboard() {
                 const resolvedEmp = resolveEmployeeFullData(cabinetModal.employee);
 
                 return (
-                  <div className="space-y-4">
-                    <OfficialSpouseDeductionDoc data={{
-                      year: tData.year || 2026,
-                      companyName: tenantInfo?.name || '',
-                      companyAddress: tenantInfo?.address || '',
-                      corporateNumber: tenantInfo?.corporate_number || '',
-                      employeeName: resolvedEmp.name,
-                      employeeAddress: resolvedEmp.address || '',
-                      employeeIncomeEstimate: resolvedEmp.base_salary ? resolvedEmp.base_salary * 12 : 3500000,
-                      hasSpouse: tData.has_spouse || resolvedEmp.has_spouse || false,
-                      spouseName: tData.spouse_name || '',
-                      spouseNameKana: tData.spouse_name_kana || '',
-                      spouseBirthDate: tData.spouse_birth_date || '1996-05-15',
-                      spouseIncomeEstimate: tData.spouse_income_estimate ?? 0,
-                      spouseAddress: resolvedEmp.address,
-                      appliedDate: resolvedEmp.join_date
-                    }} />
-                  </div>
+                    <OfficialSpouseDeductionDoc
+                      tenantId={tenantInfo?.id || tenantId}
+                      data={{
+                        year: tData.year || 2026,
+                        companyName: tenantInfo?.name || '',
+                        companyAddress: tenantInfo?.address || '',
+                        corporateNumber: tenantInfo?.corporate_number || '',
+                        employeeName: resolvedEmp.name,
+                        employeeAddress: resolvedEmp.address || '',
+                        employeeIncomeEstimate: resolvedEmp.base_salary ? resolvedEmp.base_salary * 12 : 3500000,
+                        hasSpouse: tData.has_spouse || resolvedEmp.has_spouse || false,
+                        spouseName: tData.spouse_name || '',
+                        spouseNameKana: tData.spouse_name_kana || '',
+                        spouseBirthDate: tData.spouse_birth_date || '1996-05-15',
+                        spouseIncomeEstimate: tData.spouse_income_estimate ?? 0,
+                        spouseAddress: resolvedEmp.address,
+                        appliedDate: resolvedEmp.join_date
+                      }}
+                    />
                 );
               })()}
 
