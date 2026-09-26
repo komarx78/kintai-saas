@@ -983,7 +983,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         const carryBal = Number(u.paid_leave_carryover || 0);
         const hasLeaveData = (u.paid_leave_balance !== undefined && u.paid_leave_balance !== null) || 
                              (u.paid_leave_carryover !== undefined && u.paid_leave_carryover !== null);
-        const userTotalGranted = hasLeaveData ? (curBal + carryBal) : (u.employment_type === 'part-time' ? 5.0 : 10.0);
+        const userTotalGranted = hasLeaveData ? (curBal + carryBal) : 0;
         const userTotalLeaveBal = Math.max(0, userTotalGranted - userTotalUsed);
 
         return {
@@ -1283,7 +1283,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         const carryBalEmp = Number(emp.paid_leave_carryover || 0);
         const hasEmpLeave = (emp.paid_leave_balance !== undefined && emp.paid_leave_balance !== null) || 
                             (emp.paid_leave_carryover !== undefined && emp.paid_leave_carryover !== null);
-        const empTotalGranted = hasEmpLeave ? (curBalEmp + carryBalEmp) : (emp.employment_type === 'part-time' ? 5.0 : 10.0);
+        const empTotalGranted = hasEmpLeave ? (curBalEmp + carryBalEmp) : 0;
         const empTotalLeaveBal = Math.max(0, empTotalGranted - empTotalUsed);
 
         const payload: any = {
@@ -1595,7 +1595,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const carryBal = Number(emp?.paid_leave_carryover || 0);
       const hasLeave = (emp?.paid_leave_balance !== undefined && emp?.paid_leave_balance !== null) ||
                        (emp?.paid_leave_carryover !== undefined && emp?.paid_leave_carryover !== null);
-      const totalGranted = hasLeave ? (curBal + carryBal) : (emp?.employment_type === 'part-time' ? 5.0 : 10.0);
+      const totalGranted = hasLeave ? (curBal + carryBal) : 0;
       const remainingLeaveDays = Math.max(0, totalGranted - userTotalUsed);
 
       const payload: any = {
