@@ -13,6 +13,7 @@ interface RulesAiAssistantProps {
 }
 
 export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, userName }) => {
+  const [effectiveTenantId, setEffectiveTenantId] = useState<string | null>(tenantId || null);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
@@ -30,11 +31,14 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
   // 就業規則 & テナントAPIキーの取得（Supabase DB ＋ LocalStorage キャッシュ完全連動）
   useEffect(() => {
     const fetchRules = async () => {
-      let resolvedTenantId = tenantId;
+      let resolvedTenantId = tenantId || null;
 
       // 1. まずローカルストレージのキャッシュから即時復元（テナント厳格分離）
-      const saved = resolvedTenantId ? localStorage.getItem(`company_employment_rules_${resolvedTenantId}`) : null;
-      if (saved) setCompanyRules(saved);
+      if (resolvedTenantId) {
+        setEffectiveTenantId(resolvedTenantId);
+        const saved = localStorage.getItem(`company_employment_rules_${resolvedTenantId}`);
+        if (saved) setCompanyRules(saved);
+      }
 
       // 2. tenantIdが未指定の場合はログインユーザーから自動解決
       try {
@@ -42,7 +46,12 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
             const { data: uData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
-            if (uData?.tenant_id) resolvedTenantId = uData.tenant_id;
+            if (uData?.tenant_id) {
+              resolvedTenantId = uData.tenant_id;
+              setEffectiveTenantId(resolvedTenantId);
+              const saved = localStorage.getItem(`company_employment_rules_${resolvedTenantId}`);
+              if (saved) setCompanyRules(saved);
+            }
           }
         }
 
@@ -58,7 +67,7 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
             if (tData.employment_rules_text) {
               setCompanyRules(tData.employment_rules_text);
               localStorage.setItem(`company_employment_rules_${resolvedTenantId}`, tData.employment_rules_text);
-              localStorage.setItem('company_employment_rules', tData.employment_rules_text);
+              localStorage.removeItem('company_employment_rules'); // グローバル汚染キーを安全にパージ
             }
           }
         }
@@ -96,7 +105,13 @@ export const RulesAiAssistant: React.FC<RulesAiAssistantProps> = ({ tenantId, us
     setIsLoading(true);
 
     try {
-      const aiResponse = await askEmploymentRulesAI(textToSend, companyRules, newMessages, tenantApiKey, tenantId || undefined);
+      const aiResponse = await askEmploymentRulesAI(
+        textToSend, 
+        companyRules, 
+        newMessages, 
+        tenantApiKey, 
+        effectiveTenantId || tenantId || undefined
+      );
       setMessages([
         ...newMessages,
         { role: 'assistant', content: aiResponse }

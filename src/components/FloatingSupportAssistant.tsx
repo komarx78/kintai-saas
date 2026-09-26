@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { DEFAULT_SYSTEM_FAQS } from '../lib/systemSupportManager';
 import { askSystemOperationAI, getResolvedGeminiApiKey } from '../lib/gemini';
+import { supabase } from '../lib/supabase';
 
 interface FloatingSupportAssistantProps {
   tenantId?: string | null;
@@ -160,6 +161,8 @@ export const FloatingSupportAssistant: React.FC<FloatingSupportAssistantProps> =
   const [inputQuery, setInputQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [apiKeyAvailable, setApiKeyAvailable] = useState<boolean>(false);
+  const [effectiveTenantId, setEffectiveTenantId] = useState<string | null>(tenantId || null);
+  const [effectiveRole, setEffectiveRole] = useState<string | null>(role || null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const pageCtx = getCurrentPageContext(location.pathname);
@@ -167,10 +170,29 @@ export const FloatingSupportAssistant: React.FC<FloatingSupportAssistantProps> =
   // 初期化：APIキーの確認とウェルカムメッセージ
   useEffect(() => {
     const init = async () => {
-      const key = await getResolvedGeminiApiKey(tenantId || undefined);
+      let resolvedTenantId = tenantId || null;
+      let resolvedRole = role || null;
+
+      try {
+        if (!resolvedTenantId || !resolvedRole) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: uData } = await supabase.from('users').select('tenant_id, role').eq('id', user.id).maybeSingle();
+            if (uData?.tenant_id) resolvedTenantId = uData.tenant_id;
+            if (uData?.role) resolvedRole = uData.role;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to resolve auth session in FloatingSupportAssistant:', err);
+      }
+
+      setEffectiveTenantId(resolvedTenantId);
+      setEffectiveRole(resolvedRole);
+
+      const key = await getResolvedGeminiApiKey(resolvedTenantId || undefined);
       setApiKeyAvailable(!!key);
 
-      const roleLabel = role === 'admin' || role === 'superadmin' ? '管理者' : '従業員';
+      const roleLabel = resolvedRole === 'admin' || resolvedRole === 'superadmin' ? '管理者' : '従業員';
       const initialMessage: ChatMessage = {
         id: 'welcome',
         role: 'assistant',
@@ -180,7 +202,7 @@ export const FloatingSupportAssistant: React.FC<FloatingSupportAssistantProps> =
       setMessages([initialMessage]);
     };
     init();
-  }, [tenantId, userName, location.pathname]);
+  }, [tenantId, userName, role, location.pathname]);
 
   // メッセージスクロール
   useEffect(() => {
@@ -238,6 +260,7 @@ export const FloatingSupportAssistant: React.FC<FloatingSupportAssistantProps> =
 
       let replyContent = '';
       let suggestedAction: { label: string; path: string } | undefined = undefined;
+      const isAdmin = effectiveRole === 'admin' || effectiveRole === 'superadmin';
 
       // Gemini APIが利用可能な場合
       if (apiKeyAvailable) {
@@ -245,22 +268,28 @@ export const FloatingSupportAssistant: React.FC<FloatingSupportAssistantProps> =
         const knowledgeText = DEFAULT_SYSTEM_FAQS.map(f => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n');
         const pageContextInfo = `【現在ユーザーが開いている画面】\n画面名: ${pageCtx.name}\n画面の役割: ${pageCtx.description}\nURLパス: ${location.pathname}`;
         
-        const aiAnswer = await askSystemOperationAI(textToSend, knowledgeText, tenantId || undefined, pageContextInfo);
+        const aiAnswer = await askSystemOperationAI(textToSend, knowledgeText, effectiveTenantId || tenantId || undefined, pageContextInfo);
         replyContent = aiAnswer;
 
-        if (isCompanySettings) {
+        if (isCompanySettings && isAdmin) {
           suggestedAction = { label: '🏢 会社・全社労務マスタ設定へ', path: '/settings/company' };
         } else if (matchedKnowledge?.action) {
-          suggestedAction = matchedKnowledge.action;
+          const isTargetAdminOnly = matchedKnowledge.action.path.includes('/settings') || matchedKnowledge.action.path.includes('/admin');
+          if (!isTargetAdminOnly || isAdmin) {
+            suggestedAction = matchedKnowledge.action;
+          }
         }
       } else {
         // オフライン・フォールバック回答（Geminiキー未設定でも100%即答）
         if (matchedKnowledge) {
           replyContent = `${matchedKnowledge.answer}\n\n💡 ご案内画面への移動は下記のボタンから直接行えます。`;
-          suggestedAction = matchedKnowledge.action;
+          const isTargetAdminOnly = matchedKnowledge.action.path.includes('/settings') || matchedKnowledge.action.path.includes('/admin');
+          if (!isTargetAdminOnly || isAdmin) {
+            suggestedAction = matchedKnowledge.action;
+          }
         } else if (matchedFaq) {
           replyContent = `【回答】\n${matchedFaq.answer}`;
-          suggestedAction = isCompanySettings 
+          suggestedAction = (isCompanySettings && isAdmin)
             ? { label: '🏢 会社・全社労務マスタ設定へ', path: '/settings/company' }
             : { label: '該当画面を確認する', path: '/portal' };
         } else {
