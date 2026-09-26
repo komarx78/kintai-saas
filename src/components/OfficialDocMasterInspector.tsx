@@ -10,7 +10,11 @@ import { HealthPensionLossDocMasterInspector } from './HealthPensionLossDocMaste
 
 export type PublicDocType = 'employment_acquisition' | 'employment_loss' | 'bonus_report' | 'health_pension_acquisition' | 'health_pension_loss' | 'tax_withholding' | 'spouse_deduction';
 
-export const OfficialDocMasterInspector: React.FC = () => {
+export interface OfficialDocMasterInspectorProps {
+  tenantId?: string;
+}
+
+export const OfficialDocMasterInspector: React.FC<OfficialDocMasterInspectorProps> = ({ tenantId }) => {
   const [activeDoc, setActiveDoc] = useState<PublicDocType>('spouse_deduction'); // 配偶者控除等をデフォルト表示
 
   return (
@@ -133,7 +137,7 @@ export const OfficialDocMasterInspector: React.FC = () => {
       ) : activeDoc === 'bonus_report' ? (
         <BonusDocMasterInspector />
       ) : (
-        <TaxDocMasterInspector />
+        <TaxDocMasterInspector tenantId={tenantId} />
       )}
     </div>
   );

@@ -4475,7 +4475,9 @@ export default function OnboardingAdminDashboard() {
                       isWidow: tData.is_widow,
                       isWorkingStudent: tData.is_working_student,
                       appliedDate: cabinetModal.employee.join_date
-                    }} />
+                    }}
+                    tenantId={tenantInfo?.id || tenantId}
+                    />
                   </div>
                 );
               })()}

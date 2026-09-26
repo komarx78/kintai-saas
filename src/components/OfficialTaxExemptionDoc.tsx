@@ -61,6 +61,7 @@ interface TaxExemptionDocProps {
     appliedDate: string;
     isSecondarySalary?: boolean;
   };
+  tenantId?: string;
 }
 
 /**
@@ -100,7 +101,39 @@ function parseJapaneseEraDate(dateStr?: string): { era: string; year: string; mo
   return { era: '令', year: ' ', month: ' ', day: ' ' };
 }
 
-export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }) => {
+export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data, tenantId }) => {
+  const [resolvedTenantId, setResolvedTenantId] = useState<string>(tenantId || '');
+
+  useEffect(() => {
+    if (tenantId) {
+      setResolvedTenantId(tenantId);
+      return;
+    }
+    const resolveTenant = async () => {
+      try {
+        const { data: rpcTenant } = await supabase.rpc('get_user_tenant_id');
+        if (rpcTenant) {
+          setResolvedTenantId(rpcTenant);
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile?.tenant_id) {
+            setResolvedTenantId(profile.tenant_id);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve tenant in OfficialTaxExemptionDoc:', e);
+      }
+    };
+    resolveTenant();
+  }, [tenantId]);
+
   const [activeTab, setActiveTab] = useState<'canvas_doc' | 'pdf_view' | 'guide_view'>('canvas_doc');
   const [isRendering, setIsRendering] = useState(true);
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
@@ -205,13 +238,27 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data }
         // 2. 販売者マスター設定（カスタマイズ座標）の読み込み（localStorage優先で即時反映）
         let masterMap: Record<string, { x: number; y: number; fontSize: number; pitch?: number; disabled?: boolean }> = {};
         try {
-          // まずローカルストレージの最新編集を確認
-          const saved = localStorage.getItem('taxDocMasterFields');
+          // テナント専用キャッシュまたはグローバルキャッシュの確認
+          const saved = (resolvedTenantId ? localStorage.getItem(`taxDocMasterFields_${resolvedTenantId}`) : null) || localStorage.getItem('taxDocMasterFields');
           let parsed: any[] | null = saved ? JSON.parse(saved) : null;
+
+          // テナントDB設定を確認
+          if (!parsed && resolvedTenantId) {
+            const { data: tenantData } = await supabase
+              .from('tenants')
+              .select('tax_doc_coordinates')
+              .eq('id', resolvedTenantId)
+              .maybeSingle();
+            parsed = tenantData?.tax_doc_coordinates || null;
+          }
 
           // なければSupabase全社マスタを確認
           if (!parsed) {
-            const { data: sysSettings } = await supabase.from('system_settings').select('tax_doc_coordinates').limit(1).single();
+            const { data: sysSettings } = await supabase
+              .from('system_settings')
+              .select('tax_doc_coordinates')
+              .limit(1)
+              .maybeSingle();
             parsed = sysSettings?.tax_doc_coordinates || null;
           }
 

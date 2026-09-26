@@ -13,7 +13,42 @@ import { DEFAULT_TAX_FIELDS, type TaxDocFieldConfig } from '../lib/taxDocCoordin
 export type FieldConfig = TaxDocFieldConfig;
 
 
-export const TaxDocMasterInspector: React.FC = () => {
+export interface TaxDocMasterInspectorProps {
+  tenantId?: string;
+}
+
+export const TaxDocMasterInspector: React.FC<TaxDocMasterInspectorProps> = ({ tenantId }) => {
+  const [resolvedTenantId, setResolvedTenantId] = useState<string>(tenantId || '');
+
+  useEffect(() => {
+    if (tenantId) {
+      setResolvedTenantId(tenantId);
+      return;
+    }
+    const resolveTenant = async () => {
+      try {
+        const { data: rpcTenant } = await supabase.rpc('get_user_tenant_id');
+        if (rpcTenant) {
+          setResolvedTenantId(rpcTenant);
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile?.tenant_id) {
+            setResolvedTenantId(profile.tenant_id);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve tenant in TaxDocMasterInspector:', e);
+      }
+    };
+    resolveTenant();
+  }, [tenantId]);
   const [selectedSection, setSelectedSection] = useState<'header' | 'employee' | 'spouse' | 'dependent' | 'special' | 'resident' | 'retirement'>('header');
   const [selectedFieldId, setSelectedFieldId] = useState<string>('companyName');
   const [isSaving, setIsSaving] = useState(false);
@@ -42,8 +77,21 @@ export const TaxDocMasterInspector: React.FC = () => {
   useEffect(() => {
     const fetchMaster = async () => {
       try {
-        const { data } = await supabase.from('system_settings').select('tax_doc_coordinates').limit(1).single();
-        const saved = data?.tax_doc_coordinates;
+        let saved: any = null;
+        if (resolvedTenantId) {
+          const { data: tenantData } = await supabase
+            .from('tenants')
+            .select('tax_doc_coordinates')
+            .eq('id', resolvedTenantId)
+            .maybeSingle();
+          if (tenantData?.tax_doc_coordinates && Array.isArray(tenantData.tax_doc_coordinates)) {
+            saved = tenantData.tax_doc_coordinates;
+          }
+        }
+        if (!saved) {
+          const { data } = await supabase.from('system_settings').select('tax_doc_coordinates').limit(1).maybeSingle();
+          saved = data?.tax_doc_coordinates;
+        }
         if (saved && Array.isArray(saved)) {
           const parsedMap = new Map<string, any>(saved.map((f: any) => [f.id, f]));
           setFields(DEFAULT_TAX_FIELDS.map(def => {
@@ -52,7 +100,7 @@ export const TaxDocMasterInspector: React.FC = () => {
             return def;
           }));
         } else {
-          const localSaved = localStorage.getItem('taxDocMasterFields');
+          const localSaved = (resolvedTenantId ? localStorage.getItem(`taxDocMasterFields_${resolvedTenantId}`) : null) || localStorage.getItem('taxDocMasterFields');
           if (localSaved) {
             const parsed = JSON.parse(localSaved);
             const parsedMap = new Map<string, any>(parsed.map((f: any) => [f.id, f]));
@@ -68,7 +116,7 @@ export const TaxDocMasterInspector: React.FC = () => {
       }
     };
     fetchMaster();
-  }, []);
+  }, [resolvedTenantId]);
 
   const [bgBlankPdfImage, setBgBlankPdfImage] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(true);
@@ -263,15 +311,23 @@ export const TaxDocMasterInspector: React.FC = () => {
     return () => { isCancelled = true; };
   }, []);
 
-  // 全社マスター保存
+  // 全社またはテナント専用マスター保存
   const handleSaveMaster = async () => {
     setIsSaving(true);
     try {
-      const { data: current } = await supabase.from('system_settings').select('id').limit(1).single();
-      if (current) {
-        await supabase.from('system_settings').update({ tax_doc_coordinates: fields }).eq('id', current.id);
+      if (resolvedTenantId) {
+        await supabase
+          .from('tenants')
+          .update({ tax_doc_coordinates: fields })
+          .eq('id', resolvedTenantId);
+        localStorage.setItem(`taxDocMasterFields_${resolvedTenantId}`, JSON.stringify(fields));
       } else {
-        await supabase.from('system_settings').insert([{ tax_doc_coordinates: fields }]);
+        const { data: current } = await supabase.from('system_settings').select('id').limit(1).maybeSingle();
+        if (current) {
+          await supabase.from('system_settings').update({ tax_doc_coordinates: fields }).eq('id', current.id);
+        } else {
+          await supabase.from('system_settings').insert([{ tax_doc_coordinates: fields }]);
+        }
       }
       localStorage.setItem('taxDocMasterFields', JSON.stringify(fields));
       setSavedSuccess(true);
@@ -287,6 +343,9 @@ export const TaxDocMasterInspector: React.FC = () => {
   const handleResetDefaults = () => {
     if (confirm('すべての項目の座標・文字サイズを黄金比率マスター初期値にリセットしますか？')) {
       setFields(DEFAULT_TAX_FIELDS);
+      if (resolvedTenantId) {
+        localStorage.removeItem(`taxDocMasterFields_${resolvedTenantId}`);
+      }
       localStorage.removeItem('taxDocMasterFields');
     }
   };
