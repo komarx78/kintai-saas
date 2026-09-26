@@ -512,6 +512,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     let totalActualMins = 0;
     let totalOvertimeMins = 0;
     let totalMidnightMins = 0;
+    let totalHolidayMins = 0;
     let missedPunchCount = 0;
     let lateCount = 0;
 
@@ -530,9 +531,26 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           );
 
           totalActualMins += details.actualWorkMinutes;
-          totalOvertimeMins += details.overtimeMinutes;
+
+          // 🛡️ 休日判定（労基法第35条・第37条準拠）
+          const recDate = new Date(r.date);
+          const isSunday = !isNaN(recDate.getTime()) && recDate.getDay() === 0;
+          const isHoliday = Boolean(
+            r.is_holiday || 
+            r.status === '休日出勤' || 
+            r.status?.includes('休日') ||
+            (!r.shift_id && isSunday)
+          );
+
+          if (isHoliday) {
+            // 法定休日労働: 割増手当1.35倍対象・36協定80h/100h算入
+            totalHolidayMins += details.actualWorkMinutes;
+          } else {
+            totalOvertimeMins += details.overtimeMinutes;
+            if (details.isLate) lateCount += 1;
+          }
+
           totalMidnightMins += details.midnightMinutes;
-          if (details.isLate) lateCount += 1;
         } else {
           missedPunchCount += 1;
         }
@@ -548,10 +566,16 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       return acc;
     }, 0);
 
+    const overtimeHoursNum = totalOvertimeMins / 60;
+    const holidayHoursNum = totalHolidayMins / 60;
+    const overtimePlusHolidayHoursNum = (totalOvertimeMins + totalHolidayMins) / 60;
+
     return {
       totalDays,
       totalHours: (totalActualMins / 60).toFixed(1),
-      overtimeHours: (totalOvertimeMins / 60).toFixed(1),
+      overtimeHours: overtimeHoursNum.toFixed(1),
+      holidayHours: holidayHoursNum.toFixed(1),
+      overtimePlusHolidayHours: overtimePlusHolidayHoursNum.toFixed(1),
       midnightHours: (totalMidnightMins / 60).toFixed(1),
       paidLeaveDays,
       missedPunchCount,
@@ -1127,6 +1151,8 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                     ) : users.map(user => {
                       const summary = calculateUserMonthlySummary(user);
                       const overtimeNum = parseFloat(summary.overtimeHours);
+                      const holidayNum = parseFloat(summary.holidayHours);
+                      const overtimePlusHolidayNum = parseFloat(summary.overtimePlusHolidayHours);
 
                       return (
                         <tr key={user.id} className="hover:bg-blue-50/30 transition-colors">
@@ -1151,33 +1177,38 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                           <td className="p-4 text-right font-bold text-slate-800 text-sm">{summary.totalDays} 日</td>
                           <td className="p-4 text-right font-black text-slate-800 text-sm">{summary.totalHours} 時間</td>
                           <td className="p-4 text-right font-black text-sm">
-                            {overtimeNum > 0 ? (
+                            {(overtimeNum > 0 || holidayNum > 0) ? (
                               <div className="flex flex-col items-end">
                                 <span className={
-                                  overtimeNum >= 100 ? 'text-red-700 font-black bg-red-100 px-1.5 py-0.5 rounded' :
-                                  overtimeNum >= 80 ? 'text-rose-600 font-black animate-pulse' :
+                                  overtimePlusHolidayNum >= 100 ? 'text-red-700 font-black bg-red-100 px-1.5 py-0.5 rounded' :
+                                  overtimePlusHolidayNum >= 80 ? 'text-rose-600 font-black animate-pulse' :
                                   overtimeNum >= 60 ? 'text-orange-600 font-black' :
                                   overtimeNum >= 45 ? 'text-amber-600 font-black' :
                                   'text-slate-800 font-black'
                                 }>
                                   {summary.overtimeHours} 時間
                                 </span>
-                                {overtimeNum >= 100 && (
+                                {holidayNum > 0 && (
+                                  <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1 py-0.5 rounded mt-0.5">
+                                    休日労働: {summary.holidayHours}h (計: {summary.overtimePlusHolidayHours}h)
+                                  </span>
+                                )}
+                                {overtimePlusHolidayNum >= 100 && (
                                   <span className="text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 px-1 py-0.5 rounded mt-0.5">
-                                    🛑 法令違反(100h超)
+                                    🛑 法令違反(休日含100h超)
                                   </span>
                                 )}
-                                {overtimeNum >= 80 && overtimeNum < 100 && (
+                                {overtimePlusHolidayNum >= 80 && overtimePlusHolidayNum < 100 && (
                                   <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.5 rounded mt-0.5">
-                                    🚨 過労死ライン(80h超)
+                                    🚨 過労死ライン(休日含80h超)
                                   </span>
                                 )}
-                                {overtimeNum >= 60 && overtimeNum < 80 && (
+                                {overtimeNum >= 60 && overtimePlusHolidayNum < 80 && (
                                   <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200 px-1 py-0.5 rounded mt-0.5">
                                     ⚡ 割増50%適用(60h超)
                                   </span>
                                 )}
-                                {overtimeNum >= 45 && overtimeNum < 60 && (
+                                {overtimeNum >= 45 && overtimeNum < 60 && overtimePlusHolidayNum < 80 && (
                                   <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded mt-0.5">
                                     ⚠️ 36協定限度(45h)超
                                   </span>
@@ -1278,23 +1309,28 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                       <div className="text-lg font-black text-indigo-900">{selectedUserSummary.totalHours}<span className="text-xs font-normal ml-0.5">h</span></div>
                     </div>
                     <div className={`px-3.5 py-2 rounded-xl text-center border ${
-                      parseFloat(selectedUserSummary.overtimeHours) >= 80 ? 'bg-red-50 border-red-300' :
+                      parseFloat(selectedUserSummary.overtimePlusHolidayHours) >= 80 ? 'bg-red-50 border-red-300' :
                       parseFloat(selectedUserSummary.overtimeHours) >= 60 ? 'bg-orange-50 border-orange-300' :
                       parseFloat(selectedUserSummary.overtimeHours) >= 45 ? 'bg-amber-50 border-amber-300' :
                       'bg-rose-50/70 border-rose-100'
                     }`}>
-                      <div className="text-[11px] font-bold text-rose-600">総残業時間</div>
-                      <div className="text-lg font-black text-rose-900">{selectedUserSummary.overtimeHours}<span className="text-xs font-normal ml-0.5">h</span></div>
-                      {parseFloat(selectedUserSummary.overtimeHours) >= 100 && (
-                        <div className="text-[9px] font-black text-red-700 bg-red-100 px-1 rounded mt-0.5 animate-pulse">🛑 労基法違反(100h超)</div>
+                      <div className="text-[11px] font-bold text-rose-600">総残業・休日労働</div>
+                      <div className="text-lg font-black text-rose-900">
+                        {selectedUserSummary.overtimeHours}<span className="text-xs font-normal ml-0.5">h</span>
+                        {parseFloat(selectedUserSummary.holidayHours) > 0 && (
+                          <span className="text-xs font-bold text-indigo-700 ml-1.5">(休{selectedUserSummary.holidayHours}h)</span>
+                        )}
+                      </div>
+                      {parseFloat(selectedUserSummary.overtimePlusHolidayHours) >= 100 && (
+                        <div className="text-[9px] font-black text-red-700 bg-red-100 px-1 rounded mt-0.5 animate-pulse">🛑 労基法違反(休日含100h超)</div>
                       )}
-                      {parseFloat(selectedUserSummary.overtimeHours) >= 80 && parseFloat(selectedUserSummary.overtimeHours) < 100 && (
-                        <div className="text-[9px] font-black text-rose-700 bg-rose-100 px-1 rounded mt-0.5 animate-pulse">🚨 過労死ライン</div>
+                      {parseFloat(selectedUserSummary.overtimePlusHolidayHours) >= 80 && parseFloat(selectedUserSummary.overtimePlusHolidayHours) < 100 && (
+                        <div className="text-[9px] font-black text-rose-700 bg-rose-100 px-1 rounded mt-0.5 animate-pulse">🚨 過労死ライン(休日含80h超)</div>
                       )}
-                      {parseFloat(selectedUserSummary.overtimeHours) >= 60 && parseFloat(selectedUserSummary.overtimeHours) < 80 && (
+                      {parseFloat(selectedUserSummary.overtimeHours) >= 60 && parseFloat(selectedUserSummary.overtimePlusHolidayHours) < 80 && (
                         <div className="text-[9px] font-black text-orange-700 bg-orange-100 px-1 rounded mt-0.5">⚡ 割増50%適用</div>
                       )}
-                      {parseFloat(selectedUserSummary.overtimeHours) >= 45 && parseFloat(selectedUserSummary.overtimeHours) < 60 && (
+                      {parseFloat(selectedUserSummary.overtimeHours) >= 45 && parseFloat(selectedUserSummary.overtimeHours) < 60 && parseFloat(selectedUserSummary.overtimePlusHolidayHours) < 80 && (
                         <div className="text-[9px] font-black text-amber-700 bg-amber-100 px-1 rounded mt-0.5">⚠️ 36協定限度超</div>
                       )}
                     </div>
@@ -1713,6 +1749,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm bg-white disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   <option value="退勤済">退勤済（通常勤務）</option>
+                  <option value="休日出勤">休日出勤</option>
                   <option value="勤務中">勤務中</option>
                   <option value="有給">有給休暇</option>
                   <option value="代休">代休</option>

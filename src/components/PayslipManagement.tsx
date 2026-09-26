@@ -887,27 +887,44 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 roundingRules
               );
 
-              realActualMins += details.actualWorkMinutes;
+              // 🛡️ 休日労働判定（労基法第35条・第37条第1項準拠）
+              const recDate = new Date(r.date);
+              const isSunday = !isNaN(recDate.getTime()) && recDate.getDay() === 0;
+              const isHoliday = Boolean(
+                r.is_holiday || 
+                r.status === '休日出勤' || 
+                r.status?.includes('休日') ||
+                dayShift?.is_holiday ||
+                dayShift?.shift_type === 'holiday' ||
+                (!dayShift && isSunday)
+              );
 
-              if (r.overtime_minutes && r.overtime_minutes > 0) {
-                realOvertimeMins += r.overtime_minutes;
+              if (isHoliday) {
+                // 法定休日労働: 実労働時間は休日労働時間として集計（1.35倍割増手当対象）
+                realHolidayHours += Number((details.actualWorkMinutes / 60).toFixed(2));
+                realActualMins += details.actualWorkMinutes;
               } else {
-                realOvertimeMins += details.overtimeMinutes;
-              }
-
-              // 遅刻・早退集計（猶予バッファ考慮）
-              if (details.isLate) {
-                const inM = timeToMinutes(r.check_in_time);
-                const sM = timeToMinutes(schedStart);
-                if (inM !== null && sM !== null && inM > sM) {
-                  realLateEarlyMins += (inM - sM);
+                realActualMins += details.actualWorkMinutes;
+                if (r.overtime_minutes && r.overtime_minutes > 0) {
+                  realOvertimeMins += r.overtime_minutes;
+                } else {
+                  realOvertimeMins += details.overtimeMinutes;
                 }
-              }
-              if (details.isEarlyLeave) {
-                const outM = timeToMinutes(r.check_out_time);
-                const eM = timeToMinutes(schedEnd);
-                if (outM !== null && eM !== null && outM < eM) {
-                  realLateEarlyMins += (eM - outM);
+
+                // 遅刻・早退集計（猶予バッファ考慮・平日所定労働のみ対象）
+                if (details.isLate) {
+                  const inM = timeToMinutes(r.check_in_time);
+                  const sM = timeToMinutes(schedStart);
+                  if (inM !== null && sM !== null && inM > sM) {
+                    realLateEarlyMins += (inM - sM);
+                  }
+                }
+                if (details.isEarlyLeave) {
+                  const outM = timeToMinutes(r.check_out_time);
+                  const eM = timeToMinutes(schedEnd);
+                  if (outM !== null && eM !== null && outM < eM) {
+                    realLateEarlyMins += (eM - outM);
+                  }
                 }
               }
 
@@ -929,6 +946,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         const realOvertimeHours = realOvertimeMins > 0 ? Number((realOvertimeMins / 60).toFixed(1)) : 0;
         const realMidnightHours = realMidnightMins > 0 ? Number((realMidnightMins / 60).toFixed(1)) : 0;
         const realLateEarlyHours = realLateEarlyMins > 0 ? Number((realLateEarlyMins / 60).toFixed(1)) : 0;
+        const realHolidayHoursVal = Number(realHolidayHours.toFixed(1));
         const realPaidLeaveDays = empReqs.length;
 
         // 【勤怠SSOT絶対原則】：実際の打刻データ（attendance_records）を100%忠実に反映
@@ -944,7 +962,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           actual_hours: realActualHours,
           overtime_hours: realOvertimeHours,
           midnight_hours: realMidnightHours,
-          holiday_hours: realHolidayHours,
+          holiday_hours: realHolidayHoursVal,
           paid_leave_days: effectiveLeaveDays,
           absence_days: defaultAbsenceDays,
           late_early_hours: realLateEarlyHours
@@ -1078,27 +1096,43 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 roundingRules
               );
 
-              actualMins += details.actualWorkMinutes;
-              
-              if (r.overtime_minutes && r.overtime_minutes > 0) {
-                overtimeMins += r.overtime_minutes;
-              } else {
-                overtimeMins += details.overtimeMinutes;
-              }
+              // 🛡️ 休日労働判定（労基法第35条・第37条第1項準拠）
+              const recDate = new Date(r.date);
+              const isSunday = !isNaN(recDate.getTime()) && recDate.getDay() === 0;
+              const isHoliday = Boolean(
+                r.is_holiday || 
+                r.status === '休日出勤' || 
+                r.status?.includes('休日') ||
+                dayShift?.is_holiday ||
+                dayShift?.shift_type === 'holiday' ||
+                (!dayShift && isSunday)
+              );
 
-              // 遅刻・早退集計（猶予バッファ考慮）
-              if (details.isLate) {
-                const inM = timeToMinutes(r.check_in_time);
-                const sM = timeToMinutes(schedStart);
-                if (inM !== null && sM !== null && inM > sM) {
-                  lateEarlyMins += (inM - sM);
+              if (isHoliday) {
+                holidayHours += Number((details.actualWorkMinutes / 60).toFixed(2));
+                actualMins += details.actualWorkMinutes;
+              } else {
+                actualMins += details.actualWorkMinutes;
+                if (r.overtime_minutes && r.overtime_minutes > 0) {
+                  overtimeMins += r.overtime_minutes;
+                } else {
+                  overtimeMins += details.overtimeMinutes;
                 }
-              }
-              if (details.isEarlyLeave) {
-                const outM = timeToMinutes(r.check_out_time);
-                const eM = timeToMinutes(schedEnd);
-                if (outM !== null && eM !== null && outM < eM) {
-                  lateEarlyMins += (eM - outM);
+
+                // 遅刻・早退集計（猶予バッファ考慮・平日所定労働のみ対象）
+                if (details.isLate) {
+                  const inM = timeToMinutes(r.check_in_time);
+                  const sM = timeToMinutes(schedStart);
+                  if (inM !== null && sM !== null && inM > sM) {
+                    lateEarlyMins += (inM - sM);
+                  }
+                }
+                if (details.isEarlyLeave) {
+                  const outM = timeToMinutes(r.check_out_time);
+                  const eM = timeToMinutes(schedEnd);
+                  if (outM !== null && eM !== null && outM < eM) {
+                    lateEarlyMins += (eM - outM);
+                  }
                 }
               }
 
@@ -1130,7 +1164,13 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               const breakM = total > 480 ? 60 : (total > 360 ? 45 : 0);
               const work = Math.max(0, total - breakM);
               actualMins += work;
-              overtimeMins += Math.max(0, work - 480);
+
+              const isShiftHoliday = Boolean(s.is_holiday || s.shift_type === 'holiday');
+              if (isShiftHoliday) {
+                holidayHours += Number((work / 60).toFixed(2));
+              } else {
+                overtimeMins += Math.max(0, work - 480);
+              }
 
               // 🌙 シフト予定からの深夜時間集計（22:00〜翌05:00・労基法第37条4項）
               let shiftNightMins = 0;
@@ -1212,7 +1252,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           actual_hours: actualMins > 0 ? Number((actualMins / 60).toFixed(1)) : 0,
           overtime_hours: Number((overtimeMins / 60).toFixed(1)),
           midnight_hours: Number((midnightMins / 60).toFixed(1)),
-          holiday_hours: holidayHours,
+          holiday_hours: Number(holidayHours.toFixed(1)),
           paid_leave_days: paidLeaveDays,
           absence_days: autoAbsenceDays,
           late_early_hours: lateEarlyMins > 0 ? Number((lateEarlyMins / 60).toFixed(1)) : 0
@@ -1450,27 +1490,43 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               roundingRules
             );
 
-            calcActualMins += details.actualWorkMinutes;
+            // 🛡️ 休日労働判定（労基法第35条・第37条第1項準拠）
+            const recDate = new Date(r.date);
+            const isSunday = !isNaN(recDate.getTime()) && recDate.getDay() === 0;
+            const isHoliday = Boolean(
+              r.is_holiday || 
+              r.status === '休日出勤' || 
+              r.status?.includes('休日') ||
+              dayShift?.is_holiday ||
+              dayShift?.shift_type === 'holiday' ||
+              (!dayShift && isSunday)
+            );
 
-            if (r.overtime_minutes && r.overtime_minutes > 0) {
-              calcOvertimeMins += r.overtime_minutes;
+            if (isHoliday) {
+              calcHolidayHours += Number((details.actualWorkMinutes / 60).toFixed(2));
+              calcActualMins += details.actualWorkMinutes;
             } else {
-              calcOvertimeMins += details.overtimeMinutes;
-            }
-
-            // 遅刻・早退集計（猶予バッファ考慮）
-            if (details.isLate) {
-              const inM = timeToMinutes(r.check_in_time);
-              const sM = timeToMinutes(schedStart);
-              if (inM !== null && sM !== null && inM > sM) {
-                calcLateEarlyMins += (inM - sM);
+              calcActualMins += details.actualWorkMinutes;
+              if (r.overtime_minutes && r.overtime_minutes > 0) {
+                calcOvertimeMins += r.overtime_minutes;
+              } else {
+                calcOvertimeMins += details.overtimeMinutes;
               }
-            }
-            if (details.isEarlyLeave) {
-              const outM = timeToMinutes(r.check_out_time);
-              const eM = timeToMinutes(schedEnd);
-              if (outM !== null && eM !== null && outM < eM) {
-                calcLateEarlyMins += (eM - outM);
+
+              // 遅刻・早退集計（猶予バッファ考慮・平日所定労働のみ対象）
+              if (details.isLate) {
+                const inM = timeToMinutes(r.check_in_time);
+                const sM = timeToMinutes(schedStart);
+                if (inM !== null && sM !== null && inM > sM) {
+                  calcLateEarlyMins += (inM - sM);
+                }
+              }
+              if (details.isEarlyLeave) {
+                const outM = timeToMinutes(r.check_out_time);
+                const eM = timeToMinutes(schedEnd);
+                if (outM !== null && eM !== null && outM < eM) {
+                  calcLateEarlyMins += (eM - outM);
+                }
               }
             }
 
@@ -1504,7 +1560,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         actual_hours: calcActualHours,
         overtime_hours: calcOvertimeHours,
         midnight_hours: calcMidnightHours,
-        holiday_hours: calcHolidayHours,
+        holiday_hours: Number(calcHolidayHours.toFixed(1)),
         paid_leave_days: calcPaidLeaveDays,
         absence_days: autoAbsenceDays,
         late_early_hours: calcLateEarlyHours
