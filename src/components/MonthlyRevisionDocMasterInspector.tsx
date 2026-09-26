@@ -961,13 +961,19 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                       const justifyContent = rfAlign === 'right' ? 'flex-end' : rfAlign === 'center' ? 'center' : 'flex-start';
 
                       // ⑦ 昇(降)給 区分〇囲みプレビュー（1. 昇給 / 2. 降給）
-                      if (rf.id === 'empWageChangeCircle1' || rf.id === 'empWageChangeCircle2' || rf.id === 'empWageChangeCircle') {
+                      if (rf.id === 'empWageChangeCircle1' || rf.id === 'empWageChangeCircle2') {
+                        // 行0は「1. 昇給」、行1は「2. 降給」をメイン表示。選択中項目は常に表示して微調整可能
+                        const shouldDisplay = 
+                          isSelected || 
+                          (rf.id === 'empWageChangeCircle1' && rowIdx === 0) ||
+                          (rf.id === 'empWageChangeCircle2' && rowIdx === 1);
+
+                        if (!shouldDisplay && !isSelected) return null;
+
                         return (
                           <div
                             key={`${rf.id}-r${rowIdx}`}
-                            onMouseDown={e => {
-                              if (rowIdx === 0) handleStartDrag(rf.id, e);
-                            }}
+                            onMouseDown={e => handleStartDrag(rf.id, e)}
                             onClick={e => {
                               e.stopPropagation();
                               setSelectedFieldId(rf.id);
@@ -977,17 +983,17 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                               position: 'absolute',
                               left: `${rf.x}%`,
                               top: `${currRowTop + rf.y}%`,
-                              width: `${rf.width || 6.0}%`,
-                              height: '1.2%',
-                              cursor: rowIdx === 0 ? (isDraggingThis ? 'grabbing' : 'grab') : 'pointer',
+                              width: `${rf.width || 6.5}%`,
+                              height: '1.25%',
+                              cursor: isDraggingThis ? 'grabbing' : 'grab',
                               userSelect: 'none',
                               pointerEvents: 'auto',
-                              opacity: rowIdx === 1 ? 0.6 : 1
+                              zIndex: isSelected ? 30 : 15
                             }}
                             className={`p-0.5 rounded transition-all flex items-center justify-center ${
                               isSelected
-                                ? 'ring-2 ring-purple-500 bg-purple-500/20 z-30'
-                                : 'hover:ring-1 hover:ring-purple-400 z-10'
+                                ? 'ring-2 ring-purple-500 bg-purple-500/20 shadow-lg'
+                                : 'hover:ring-1 hover:ring-purple-400 opacity-90'
                             }`}
                             title={`${rf.name} (クリックして選択・ドラッグまたは十字キーで位置を微調整)`}
                           >
@@ -998,14 +1004,23 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                         );
                       }
 
-                      // ⑱ 備考欄 〇囲みプレビュー（1〜6の個別丸印すべて対応）
+                      // ⑱ 備考欄 〇囲みプレビュー（1〜6）
                       if (rf.id.startsWith('empRemarksCircle')) {
+                        const circleNum = parseInt(rf.id.replace('empRemarksCircle', ''), 10) || 4;
+                        
+                        // サンプルデータでの丸印点灯ルール:
+                        // 行0（山田太郎）: 4 (昇降給理由) に点灯
+                        // 行1（佐藤花子）: 3 (短時間) と 4 (昇降給理由) に点灯（複数点灯サンプル）
+                        const isSampleActive = 
+                          (rowIdx === 0 && circleNum === 4) ||
+                          (rowIdx === 1 && (circleNum === 3 || circleNum === 4));
+
+                        const isVisible = isSelected || isSampleActive;
+
                         return (
                           <div
                             key={`${rf.id}-r${rowIdx}`}
-                            onMouseDown={e => {
-                              if (rowIdx === 0) handleStartDrag(rf.id, e);
-                            }}
+                            onMouseDown={e => handleStartDrag(rf.id, e)}
                             onClick={e => {
                               e.stopPropagation();
                               setSelectedFieldId(rf.id);
@@ -1015,22 +1030,28 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                               position: 'absolute',
                               left: `${rf.x}%`,
                               top: `${currRowTop + rf.y}%`,
-                              width: `${rf.width || 2.0}%`,
+                              width: `${rf.width || 2.2}%`,
                               height: '1.25%',
-                              cursor: rowIdx === 0 ? (isDraggingThis ? 'grabbing' : 'grab') : 'pointer',
+                              cursor: isDraggingThis ? 'grabbing' : 'grab',
                               userSelect: 'none',
                               pointerEvents: 'auto',
-                              opacity: rowIdx === 1 ? 0.6 : 1
+                              zIndex: isSelected ? 30 : 15
                             }}
                             className={`p-0.5 rounded transition-all flex items-center justify-center ${
                               isSelected
-                                ? 'ring-2 ring-purple-500 bg-purple-500/20 z-30'
-                                : 'hover:ring-1 hover:ring-purple-400 z-10'
+                                ? 'ring-2 ring-purple-500 bg-purple-500/20 shadow-lg'
+                                : isVisible
+                                  ? 'hover:ring-1 hover:ring-purple-400 opacity-90'
+                                  : 'hover:ring-1 hover:ring-purple-400 opacity-20 hover:opacity-100'
                             }`}
                             title={`${rf.name} (クリックして選択・ドラッグまたは十字キーで位置を微調整)`}
                           >
-                            <div className="w-full h-full rounded-full border-2 border-red-600 bg-red-500/10 flex items-center justify-center">
-                              <span className="text-[7px] font-black text-red-600 select-none">〇</span>
+                            <div className={`w-full h-full rounded-full border-2 ${
+                              isVisible ? 'border-red-600 bg-red-500/10' : 'border-purple-400 border-dashed bg-purple-500/5'
+                            } flex items-center justify-center`}>
+                              <span className={`text-[7px] font-black ${isVisible ? 'text-red-600' : 'text-purple-400'} select-none`}>
+                                {circleNum}
+                              </span>
                             </div>
                           </div>
                         );

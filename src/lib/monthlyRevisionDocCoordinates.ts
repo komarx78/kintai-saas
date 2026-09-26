@@ -317,37 +317,37 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     id: 'empWageChangeMonth',
     name: '⑦ 昇(降)給 月',
     section: 'row_template',
-    x: 44.8,
-    y: 4.1,
+    x: 44.5,
+    y: 3.9,
     fontSize: 9.5,
-    width: 3.2,
+    width: 3.6,
     align: 'center',
     example: '6',
-    description: '2段目：昇(降)給「月」の左側空欄（※原本には年の記入欄はありません）'
+    description: '2段目：原本「月」文字の直前空欄（※原本には年の記入欄はありません）'
   },
   {
     id: 'empWageChangeCircle1',
     name: '⑦ 区分〇印（1. 昇給）',
     section: 'row_template',
-    x: 51.2,
-    y: 2.2,
+    x: 51.0,
+    y: 2.15,
     fontSize: 10,
-    width: 6.0,
+    width: 6.5,
     align: 'center',
     example: '〇',
-    description: '2段目：原本「1. 昇給」を囲む〇印'
+    description: '2段目：原本「1. 昇給」文字全体を美しく囲む〇印'
   },
   {
     id: 'empWageChangeCircle2',
     name: '⑦ 区分〇印（2. 降給）',
     section: 'row_template',
-    x: 51.2,
-    y: 3.7,
+    x: 51.0,
+    y: 3.65,
     fontSize: 10,
-    width: 6.0,
+    width: 6.5,
     align: 'center',
     example: '〇',
-    description: '2段目：原本「2. 降給」を囲む〇印'
+    description: '2段目：原本「2. 降給」文字全体を美しく囲む〇印'
   },
 
   {
@@ -711,7 +711,23 @@ export function mergeWithDefaultMonthlyRevisionFields(
   });
 }
 
+export const MONTHLY_REVISION_COORDS_CACHE_VERSION = 'v20260926_accurate_v4';
+
 export const loadMonthlyRevisionDocCoordinates = (tenantId?: string): MonthlyRevisionDocFieldConfig[] => {
+  const versionKey = 'monthly_revision_coords_version';
+  const currentVersion = localStorage.getItem(versionKey);
+
+  // バージョンが古い場合は古いキャッシュを一掃して最新デフォルトを強制適用
+  if (currentVersion !== MONTHLY_REVISION_COORDS_CACHE_VERSION) {
+    const defaultKey = 'monthly_revision_coords_default';
+    localStorage.removeItem(defaultKey);
+    if (tenantId) {
+      localStorage.removeItem(`monthly_revision_coords_${tenantId}`);
+    }
+    localStorage.setItem(versionKey, MONTHLY_REVISION_COORDS_CACHE_VERSION);
+    return [...DEFAULT_MONTHLY_REVISION_FIELDS];
+  }
+
   const tKey = tenantId ? `monthly_revision_coords_${tenantId}` : 'monthly_revision_coords_default';
   const saved = localStorage.getItem(tKey);
   if (saved) {
@@ -731,12 +747,16 @@ export const saveMonthlyRevisionDocCoordinates = (
   fields: MonthlyRevisionDocFieldConfig[],
   tenantId?: string
 ): void => {
+  const versionKey = 'monthly_revision_coords_version';
+  localStorage.setItem(versionKey, MONTHLY_REVISION_COORDS_CACHE_VERSION);
   const tKey = tenantId ? `monthly_revision_coords_${tenantId}` : 'monthly_revision_coords_default';
   localStorage.setItem(tKey, JSON.stringify(fields));
   window.dispatchEvent(new CustomEvent(MONTHLY_REVISION_COORDS_UPDATE_EVENT, { detail: fields }));
 };
 
 export const resetMonthlyRevisionDocCoordinates = (tenantId?: string): MonthlyRevisionDocFieldConfig[] => {
+  const versionKey = 'monthly_revision_coords_version';
+  localStorage.setItem(versionKey, MONTHLY_REVISION_COORDS_CACHE_VERSION);
   const tKey = tenantId ? `monthly_revision_coords_${tenantId}` : 'monthly_revision_coords_default';
   localStorage.removeItem(tKey);
   window.dispatchEvent(new CustomEvent(MONTHLY_REVISION_COORDS_UPDATE_EVENT, { detail: DEFAULT_MONTHLY_REVISION_FIELDS }));
