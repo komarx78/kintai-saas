@@ -75,6 +75,16 @@ export default function Portal() {
     }
   };
 
+  const navigateWithTenant = (path: string) => {
+    const tid = userData?.tenant_id;
+    if (tid && !path.includes('tenant_id=')) {
+      const separator = path.includes('?') ? '&' : '?';
+      navigate(`${path}${separator}tenant_id=${tid}`);
+    } else {
+      navigate(path);
+    }
+  };
+
   const handleLogout = async () => {
     purgeTenantLocalStorageCache();
     await supabase.auth.signOut();
@@ -171,7 +181,7 @@ export default function Portal() {
         <div className="flex items-center space-x-4">
           {(role === 'admin' || role === 'superadmin') && (
             <button
-              onClick={() => navigate('/settings/company')}
+              onClick={() => navigateWithTenant('/settings/company')}
               className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-3.5 py-2 rounded-xl transition border border-indigo-200 flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
             >
               <Building2 className="w-4 h-4 shrink-0" />
@@ -225,7 +235,7 @@ export default function Portal() {
               </div>
             </div>
             <button
-              onClick={() => navigate('/payroll/user')}
+              onClick={() => navigateWithTenant('/payroll/user')}
               className="px-5 py-2.5 bg-white text-orange-700 hover:bg-orange-50 rounded-2xl font-black text-xs transition shadow-md cursor-pointer shrink-0 flex items-center justify-center gap-2 whitespace-nowrap"
             >
               <Sparkles className="w-4 h-4 text-orange-600 shrink-0" />
@@ -263,7 +273,7 @@ export default function Portal() {
           }).map((app, index) => (
             <button
               key={app.id}
-              onClick={() => navigate(app.path)}
+              onClick={() => navigateWithTenant(app.path)}
               className={`
                 group text-left bg-white/80 backdrop-blur-md rounded-2xl p-8 border border-transparent shadow-sm 
                 transition-all duration-300 ease-out transform hover:-translate-y-1 hover:bg-white
