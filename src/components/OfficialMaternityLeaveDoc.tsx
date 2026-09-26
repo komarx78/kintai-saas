@@ -149,7 +149,7 @@ export const OfficialMaternityLeaveDoc: React.FC<OfficialMaternityLeaveDocProps>
       {/* 📄 ① 産前産後休業取得（変更）申請書 (原本1完全準拠) */}
       {/* ========================================================================= */}
       {activeTab === 'maternity' && (
-        <div className="bg-white p-10 md:p-14 max-w-[210mm] mx-auto shadow-lg border border-slate-200 rounded-2xl print:shadow-none print:border-none print:p-8 print:m-0 print:max-w-none">
+        <div className="official-maternity-print-container bg-white p-10 md:p-14 max-w-[210mm] mx-auto shadow-lg border border-slate-200 rounded-2xl print:shadow-none print:border-none print:p-8 print:m-0 print:w-[210mm]">
           {/* 右上：申請日＆氏名 */}
           <div className="flex justify-end mb-12">
             <div className="w-72 text-right text-sm text-slate-800">
@@ -325,7 +325,7 @@ export const OfficialMaternityLeaveDoc: React.FC<OfficialMaternityLeaveDocProps>
       {/* 📄 ② 育児休業取得（変更）申請書 (原本2完全準拠) */}
       {/* ========================================================================= */}
       {activeTab === 'childcare' && (
-        <div className="bg-white p-10 md:p-14 max-w-[210mm] mx-auto shadow-lg border border-slate-200 rounded-2xl print:shadow-none print:border-none print:p-8 print:m-0 print:max-w-none">
+        <div className="official-maternity-print-container bg-white p-10 md:p-14 max-w-[210mm] mx-auto shadow-lg border border-slate-200 rounded-2xl print:shadow-none print:border-none print:p-8 print:m-0 print:w-[210mm]">
           {/* 右上：申請日＆氏名 */}
           <div className="flex justify-end mb-12">
             <div className="w-72 text-right text-sm text-slate-800">
@@ -860,6 +860,37 @@ export const OfficialMaternityLeaveDoc: React.FC<OfficialMaternityLeaveDocProps>
           </div>
         </div>
       )}
+
+      {/* 🖨️ A4縦・マージンゼロ・等倍印刷CSS（荀彧 帳票門番規定） */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0mm;
+          }
+          html, body {
+            width: 210mm !important;
+            height: 297mm !important;
+            margin: 0mm !important;
+            padding: 0mm !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .official-maternity-print-container {
+            width: 210mm !important;
+            min-height: 297mm !important;
+            margin: 0 !important;
+            padding: 10mm !important;
+            border: none !important;
+            box-shadow: none !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };

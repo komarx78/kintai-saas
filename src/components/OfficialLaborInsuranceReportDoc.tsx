@@ -32,7 +32,7 @@ export interface OfficialLaborInsuranceReportDocProps {
 
 export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceReportDocProps> = ({
   companyInfo,
-  laborInsuranceNumber = '25-1-02-123456-000',
+  laborInsuranceNumber = '',
   employees,
   targetFiscalYear = new Date().getFullYear(),
   onBack,
@@ -226,23 +226,32 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
   // 確定保険料合計
   const totalDefinitePremium = accidentPremium + employmentPremium + generalContribution;
 
-  // CSVダウンロード
+  // CSVダウンロード（RFC 4180準拠エスケープ ＆ Excel文字化け防止BOM付与）
   const handleExportCsv = () => {
-    const headers = ['従業員名', '役職/種別', '年間賃金総額', '労災保険対象', '雇用保険対象'];
+    const escapeCsv = (val: any) => {
+      const s = String(val ?? '');
+      if (s.includes('"') || s.includes(',') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return `"${s}"`;
+    };
+
+    const headers = ['従業員名', '役職/種別', '年間賃金総額', '労災保険対象', '雇用保険対象'].map(escapeCsv);
     const rows = eligibleEmployees.map(e => [
       e.name,
       e.isExecutive ? '役員' : e.isPartTime ? '短時間労働者' : '一般正社員',
       e.annualWage,
       e.isAccidentEligible ? '○' : '×',
       e.isEmploymentEligible ? '○' : '×'
-    ]);
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    ].map(escapeCsv));
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = `労働保険料算定基礎資料_${fiscalYear}年度.csv`;
     link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (
@@ -322,7 +331,7 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
 
       {/* 印刷・公式A4原本コンテナ */}
       <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl flex justify-center overflow-x-auto print:p-0 print:m-0 print:bg-white print:overflow-visible">
-        <div className="w-[210mm] min-h-[297mm] bg-white p-[15mm] shadow-lg border border-slate-300 text-slate-900 font-sans print:shadow-none print:border-none print:p-0 print:w-full print:m-0 box-border text-[11px] leading-tight">
+        <div className="official-labor-insurance-print-container w-[210mm] min-h-[297mm] bg-white p-[15mm] shadow-lg border border-slate-300 text-slate-900 font-sans print:shadow-none print:border-none print:p-0 print:w-[210mm] print:m-0 box-border text-[11px] leading-tight">
 
           {/* 表題部 */}
           <div className="border-b-2 border-slate-900 pb-3 mb-4">
@@ -533,6 +542,37 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
 
         </div>
       </div>
+
+      {/* 🖨️ A4縦・マージンゼロ・等倍印刷CSS（荀彧 帳票門番規定） */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0mm;
+          }
+          html, body {
+            width: 210mm !important;
+            height: 297mm !important;
+            margin: 0mm !important;
+            padding: 0mm !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .official-labor-insurance-print-container {
+            width: 210mm !important;
+            min-height: 297mm !important;
+            margin: 0 !important;
+            padding: 10mm !important;
+            border: none !important;
+            box-shadow: none !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };

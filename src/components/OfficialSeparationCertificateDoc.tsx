@@ -72,7 +72,7 @@ function toWarekiShort(dateStr?: string): string {
 
 export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertificateDocProps> = ({
   companyInfo,
-  officeNumber = '2501-123456-7',
+  officeNumber = '',
   employees,
   selectedEmployeeId,
   onSelectEmployee,
@@ -1151,7 +1151,7 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
       {/* 🖨️ 実物用紙完全模写 A4下書き印刷プレビューモード（荀彧監修・見切れゼロ） */}
       {viewMode === 'print' && (
         <div className="bg-slate-200 p-2 sm:p-6 rounded-2xl flex justify-center overflow-x-auto print:p-0 print:m-0 print:bg-white print:overflow-visible">
-          <div className="w-[297mm] min-h-[210mm] bg-white p-[10mm] shadow-lg border border-slate-400 text-slate-900 font-sans print:shadow-none print:border-none print:p-0 print:w-full print:m-0 box-border text-[10px] leading-tight">
+          <div className="official-separation-print-container w-[297mm] min-h-[210mm] bg-white p-[10mm] shadow-lg border border-slate-400 text-slate-900 font-sans print:shadow-none print:border-none print:p-0 print:w-[297mm] print:m-0 box-border text-[10px] leading-tight">
             
             {/* 表題ヘッダー */}
             <div className="border-b-2 border-slate-900 pb-2 mb-3 flex justify-between items-start">
@@ -1181,7 +1181,7 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
                 <div className="grid grid-cols-2 gap-2 border-b border-slate-300 pb-1.5">
                   <div>
                     <span className="text-[8px] text-slate-500 font-bold block">① 被保険者番号</span>
-                    <span className="font-mono font-black text-xs tracking-wider">{currentEmployee.employment_insurance_number || '1234-567890-1'}</span>
+                    <span className="font-mono font-black text-xs tracking-wider">{currentEmployee.employment_insurance_number || ''}</span>
                   </div>
                   <div>
                     <span className="text-[8px] text-slate-500 font-bold block">② 事業所番号</span>
@@ -1192,10 +1192,10 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
                 {/* ③ 氏名 */}
                 <div className="border-b border-slate-300 pb-1.5">
                   <span className="text-[8px] text-slate-500 font-bold block">③ 離職者氏名</span>
-                  <div className="text-[9px] text-slate-500">{currentEmployee.name_kana || 'コマイ シュウイチロウ'}</div>
+                  <div className="text-[9px] text-slate-500">{currentEmployee.name_kana || ''}</div>
                   <div className="font-black text-xs text-slate-900">{currentEmployee.name}</div>
                   <div className="text-[8px] text-slate-600 mt-0.5">
-                    生年月日: {toWareki(currentEmployee.birth_date)}（{currentEmployee.gender || '男'}）
+                    生年月日: {toWareki(currentEmployee.birth_date)}{currentEmployee.gender ? `（${currentEmployee.gender}）` : ''}
                   </div>
                 </div>
 
@@ -1311,6 +1311,37 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
           </div>
         </div>
       )}
+
+      {/* 🖨️ A4横向き・マージンゼロ印刷CSS（荀彧 帳票門番規定） */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 0mm;
+          }
+          html, body {
+            width: 297mm !important;
+            height: 210mm !important;
+            margin: 0mm !important;
+            padding: 0mm !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .official-separation-print-container {
+            width: 297mm !important;
+            min-height: 210mm !important;
+            margin: 0 !important;
+            padding: 8mm !important;
+            border: none !important;
+            box-shadow: none !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };

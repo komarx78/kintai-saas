@@ -152,7 +152,7 @@ export const OfficialLeaveProcedureDoc: React.FC<OfficialLeaveProcedureDocProps>
 
       {/* 印刷・公式A4原本コンテナ */}
       <div className="bg-slate-100 p-2 sm:p-6 rounded-2xl flex justify-center overflow-x-auto print:p-0 print:m-0 print:bg-white print:overflow-visible">
-        <div className="w-[210mm] min-h-[297mm] bg-white p-[20mm] shadow-lg border border-slate-300 text-slate-900 font-sans print:shadow-none print:border-none print:p-0 print:w-full print:m-0 box-border text-[11px] leading-relaxed">
+        <div className="official-leave-print-container w-[210mm] min-h-[297mm] bg-white p-[20mm] shadow-lg border border-slate-300 text-slate-900 font-sans print:shadow-none print:border-none print:p-0 print:w-[210mm] print:m-0 box-border text-[11px] leading-relaxed">
 
           {/* 1. 休職承認通知書（会社 ➔ 従業員） */}
           {docType === 'approval' && (
@@ -400,6 +400,37 @@ export const OfficialLeaveProcedureDoc: React.FC<OfficialLeaveProcedureDocProps>
 
         </div>
       </div>
+
+      {/* 🖨️ A4縦・マージンゼロ・等倍印刷CSS（荀彧 帳票門番規定） */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0mm;
+          }
+          html, body {
+            width: 210mm !important;
+            height: 297mm !important;
+            margin: 0mm !important;
+            padding: 0mm !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .official-leave-print-container {
+            width: 210mm !important;
+            min-height: 297mm !important;
+            margin: 0 !important;
+            padding: 15mm !important;
+            border: none !important;
+            box-shadow: none !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };
