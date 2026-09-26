@@ -7,7 +7,7 @@ import {
   Users, Sparkles, Loader2, X, FileSpreadsheet,
   Settings as SettingsIcon, Download, UserCheck, CreditCard, Building2, Save,
   ChevronDown, ChevronUp, Clock, Calendar, TrendingUp, MapPin, LayoutGrid, List, RotateCcw,
-  ShieldCheck, Gift, Edit, Trash2, MessageSquare, Copy
+  ShieldCheck, Gift, Edit, Trash2, MessageSquare, Copy, AlertCircle
 } from 'lucide-react';
 import { OfficialPayslipDoc } from './OfficialPayslipDoc';
 import { BonusPaymentReportModal } from './BonusPaymentReportModal';
@@ -191,6 +191,21 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
   const [pendingLeaveRequests, setPendingLeaveRequests] = useState<any[]>([]);
   const [isPendingRequestsModalOpen, setIsPendingRequestsModalOpen] = useState(false);
   const [isProcessingApproval, setIsProcessingApproval] = useState(false);
+
+  // 🚨 勤怠打刻エラー・漏れリストState（誰の何日が漏れているか）
+  const [attendanceErrors, setAttendanceErrors] = useState<{
+    id?: string;
+    userId: string;
+    userName: string;
+    date: string;
+    dayOfWeekStr: string;
+    errorType: '退勤打刻漏れ' | '出勤打刻漏れ';
+    checkIn: string;
+    checkOut: string;
+    breakMinutes: number;
+    note: string;
+  }[]>([]);
+  const [isAttendanceErrorsModalOpen, setIsAttendanceErrorsModalOpen] = useState(false);
 
   // 📅 勤怠出勤簿・タイムカード詳細モーダルState
   const [attendanceSheetModal, setAttendanceSheetModal] = useState<{
@@ -917,6 +932,46 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         console.warn('pending leave requests fetch error:', pErr);
       }
 
+      // 🚨 打刻エラー（未退勤・未出勤）の自動検出（誰のどの日が漏れているか）
+      const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+      const errorsList: any[] = [];
+      attRecords.forEach(r => {
+        const emp = usersList.find(u => u.id === r.user_id);
+        const uName = emp?.name || '従業員';
+        const dObj = new Date(r.date);
+        const dayOfWeekStr = isNaN(dObj.getTime()) ? '' : dayNames[dObj.getDay()];
+
+        if (r.check_in_time && !r.check_out_time) {
+          errorsList.push({
+            id: r.id,
+            userId: r.user_id,
+            userName: uName,
+            date: r.date,
+            dayOfWeekStr,
+            errorType: '退勤打刻漏れ',
+            checkIn: r.check_in_time.slice(0, 5),
+            checkOut: '',
+            breakMinutes: r.break_minutes || 60,
+            note: r.note || ''
+          });
+        } else if (!r.check_in_time && r.check_out_time) {
+          errorsList.push({
+            id: r.id,
+            userId: r.user_id,
+            userName: uName,
+            date: r.date,
+            dayOfWeekStr,
+            errorType: '出勤打刻漏れ',
+            checkIn: '',
+            checkOut: r.check_out_time.slice(0, 5),
+            breakMinutes: r.break_minutes || 60,
+            note: r.note || ''
+          });
+        }
+      });
+      errorsList.sort((a, b) => b.date.localeCompare(a.date));
+      setAttendanceErrors(errorsList);
+
       // 6. 各従業員の給与明細を大元労務マスタ（SSOT）に基づいて完全最新化
       const prefRateDataLatest = getPrefectureRate(activePrefCode);
       const latestPayrollSettings: any = {
@@ -1420,6 +1475,20 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     if (!tenantId) return;
     const yearMonth = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
 
+    // 🚨 1. 打刻エラー（未退勤・未出勤）チェック
+    if (attendanceErrors.length > 0) {
+      const proceed = confirm(
+        `🚨 退勤打刻漏れなどの打刻エラーが ${attendanceErrors.length} 件残っています。\n\n` +
+        `（打刻が漏れたまま勤怠を締めると、残業代や勤務時間が正しく計算されません）\n\n` +
+        `「キャンセル」を押すと、漏れている従業員と日付を確認して今すぐ修正できます。\nこのまま締め確定ロックを実行しますか？`
+      );
+      if (!proceed) {
+        setIsAttendanceErrorsModalOpen(true);
+        return;
+      }
+    }
+
+    // 📋 2. 未承認申請（有給休暇・打刻修正）チェック
     if (pendingLeaveRequests.length > 0) {
       const proceed = confirm(
         `⚠️ 未承認の申請（有給休暇・打刻修正等）が ${pendingLeaveRequests.length} 件残っています。\n\n` +
@@ -1430,7 +1499,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         setIsPendingRequestsModalOpen(true);
         return;
       }
-    } else {
+    }
+
+    if (attendanceErrors.length === 0 && pendingLeaveRequests.length === 0) {
       if (!confirm(`【${yearMonth}度】の勤怠締め処理（確定ロック）を実行しますか？\n\n・確定後は従業員の打刻修正や申請がロックされます。\n・確定した勤怠実績データをもとに、給与の一括自動計算へ安全に進めます。`)) {
         return;
       }
@@ -2679,20 +2750,36 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               <div className="font-bold text-slate-800 flex items-center gap-1">
                 <span>{!attendanceClosingInfo.isClosed ? '⏰ 勤怠の確認・締め' : '✅ 勤怠締め完了'}</span>
               </div>
-              <div className="mt-1 text-[10px] space-y-0.5">
+              <div className="mt-1 text-[10px] space-y-1">
+                {attendanceErrors.length > 0 ? (
+                  <button
+                    onClick={() => setIsAttendanceErrorsModalOpen(true)}
+                    className="text-rose-800 font-bold bg-rose-100 hover:bg-rose-200 px-1.5 py-0.5 rounded-lg flex items-center justify-between gap-1 transition cursor-pointer w-full text-left border border-rose-200 shadow-2xs"
+                    title="誰のどの日が打刻漏れ（未退勤等）になっているか確認し、その場で修正します"
+                  >
+                    <span className="flex items-center gap-1 font-black">
+                      <AlertCircle className="w-3.5 h-3.5 text-rose-600 animate-pulse" />
+                      打刻漏れ {attendanceErrors.length}件
+                    </span>
+                    <span className="underline text-[9px] font-black">直す ➔</span>
+                  </button>
+                ) : null}
+
                 {pendingLeaveRequests.length > 0 ? (
                   <button
                     onClick={() => setIsPendingRequestsModalOpen(true)}
-                    className="text-amber-800 font-bold bg-amber-100 hover:bg-amber-200 px-1.5 py-0.5 rounded-md flex items-center gap-1 transition cursor-pointer w-full text-left"
+                    className="text-amber-800 font-bold bg-amber-100 hover:bg-amber-200 px-1.5 py-0.5 rounded-lg flex items-center justify-between gap-1 transition cursor-pointer w-full text-left border border-amber-200"
                     title="未承認の休暇・打刻修正申請を確認・承認します"
                   >
                     <span>⚠️ 未承認申請 {pendingLeaveRequests.length}件</span>
-                    <span className="underline ml-auto">確認 ➔</span>
+                    <span className="underline ml-auto text-[9px]">確認 ➔</span>
                   </button>
-                ) : (
+                ) : null}
+
+                {attendanceErrors.length === 0 && pendingLeaveRequests.length === 0 && (
                   <p className="text-slate-500">
                     {!attendanceClosingInfo.isClosed 
-                      ? '打刻漏れ確認・全社確定' 
+                      ? '🎉 打刻漏れゼロ！勤怠正常' 
                       : `${attendanceClosingInfo.closedAt ? new Date(attendanceClosingInfo.closedAt).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''} 済`
                     }
                   </p>
@@ -2801,12 +2888,12 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 <span className="text-[9px] bg-slate-200 group-hover:bg-slate-300 text-slate-700 font-bold px-1.5 py-0.2 rounded-full">確認 ↓</span>
               </div>
               <div className={`font-bold flex items-center gap-1 ${isMonthCalculated && publishedCount === 0 ? 'text-indigo-950 font-black' : 'text-slate-800'}`}>
-                <span>✏️ 明細確認・出勤簿修正</span>
+                <span>📋 給与一覧の確認・手当調整</span>
               </div>
-              <p className="text-[10px] text-slate-500 mt-1">下の表で出勤簿の打刻修正や手当の個別調整</p>
+              <p className="text-[10px] text-slate-500 mt-1">支給控除・手取りの最終確認とインセンティブ等の手当調整</p>
             </div>
             <div className="mt-2 text-[10px] text-slate-600 font-bold flex items-center gap-0.5">
-              <span>明細一覧表を見る ↓</span>
+              <span>給与一覧表を見る ↓</span>
             </div>
           </button>
 
@@ -3206,11 +3293,11 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             </div>
             <h3 className="text-lg font-black text-slate-800 tracking-tight">
               {!attendanceClosingInfo.isClosed
-                ? '【STEP 1】当月の勤怠実績を確定・ロック（全社締め）'
+                ? '【STEP 1】打刻漏れ・申請を確認し、勤怠を締め確定（全社ロック）'
                 : !isMonthCalculated 
-                ? '【STEP 2】確定したタイムカード打刻から全員の給与を一括自動計算'
+                ? '【STEP 2】確定した勤怠データから全員の給与を一括自動計算'
                 : (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
-                ? '【STEP 3】金額・控除を確認し、全従業員の明細を一括確定（Web公開）'
+                ? '【STEP 3】給与一覧表で金額・手当を確認し、全従業員の明細を一括確定（Web公開）'
                 : '【STEP 4】Web給与明細の発行通知（LINE一括送信）＆ 振込CSV'
               }
             </h3>
@@ -6104,7 +6191,111 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         </div>
       )}
 
-      {/* 📋 クリップボードコピー完了トースト */}
+      {/* 🚨 打刻エラー・漏れ 確認＆即時修正モーダル（給与画面内完結） */}
+      {isAttendanceErrorsModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-[60] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                  🚨
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base">
+                    打刻漏れ・要確認一覧（当月対象: {attendanceErrors.length}件）
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    出勤したまま退勤打刻がない等の不備です。修正してから給与計算を行うことで、正確な残業代や手取りが算出されます。
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAttendanceErrorsModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* エラー一覧 */}
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {attendanceErrors.length === 0 ? (
+                <div className="py-12 text-center text-slate-400">
+                  <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-400 mb-2" />
+                  <p className="font-bold text-slate-600 text-sm">打刻漏れはありません</p>
+                  <p className="text-xs text-slate-400 mt-1">全員の出退勤打刻が揃っています。安心して勤怠締めを行えます。</p>
+                </div>
+              ) : (
+                attendanceErrors.map((err, idx) => (
+                  <div key={err.id || `${err.userId}-${err.date}-${idx}`} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-slate-800 text-sm">{err.userName}</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                          {err.errorType}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-600 flex items-center gap-2">
+                        <span className="font-mono font-bold">{err.date} ({err.dayOfWeekStr})</span>
+                        <span className="text-slate-300">|</span>
+                        <span>出勤: <strong className="font-mono text-slate-800">{err.checkIn || '未打刻'}</strong></span>
+                        <span className="text-slate-300">/</span>
+                        <span>退勤: <strong className="font-mono text-rose-600">{err.checkOut || '未退勤 (漏れ)'}</strong></span>
+                      </div>
+                      {err.note && (
+                        <p className="text-xs text-slate-500 bg-white p-2 rounded-xl border border-slate-200/60 mt-1">
+                          {err.note}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAttendanceErrorsModalOpen(false);
+                          setAttEditModal({
+                            isOpen: true,
+                            userId: err.userId,
+                            userName: err.userName,
+                            date: err.date,
+                            dayOfWeekStr: err.dayOfWeekStr,
+                            recordId: err.id || null,
+                            checkIn: err.checkIn || '09:00',
+                            checkOut: err.checkOut || '18:00',
+                            breakMinutes: err.breakMinutes || 60,
+                            note: err.note || '管理者による打刻漏れ修正'
+                          });
+                        }}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-xs transition text-xs flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>打刻を入力・修正 ➔</span>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* フッター */}
+            <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+              <span className="text-[11px] text-slate-400">
+                ※ 修正を保存すると出勤簿と勤怠集計が即座に最新化されます。
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsAttendanceErrorsModalOpen(false)}
+                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl transition cursor-pointer text-xs"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {copyToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 border border-slate-700 animate-in slide-in-from-bottom-5 duration-200">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
