@@ -1073,6 +1073,8 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
       '総支給月給(円)', '直近昇給日', '直近昇給額(円)', '直近昇給率(%)', '直近昇給種別'
     ];
 
+    const escapeCsv = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+
     const rows = filteredEmployees.map(emp => {
       const p = payrollProfiles[emp.id];
       const base = p?.base_salary || 0;
@@ -1089,7 +1091,7 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
         emp.id,
         emp.name,
         emp.department || '-',
-        emp.role || '一般',
+        emp.role || '-',
         emp.employment_type === 'part-time' ? 'パート' : '正社員',
         base,
         pos,
@@ -1106,12 +1108,16 @@ export const SalaryLedgerDashboard: React.FC<SalaryLedgerDashboardProps> = ({ te
       ];
     });
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csvContent = [headers.map(escapeCsv).join(','), ...rows.map(r => r.map(escapeCsv).join(','))].join('\r\n');
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
+    link.href = url;
     link.download = `全社給与一覧台帳_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   if (loading) {

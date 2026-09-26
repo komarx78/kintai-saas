@@ -242,9 +242,9 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
 
           return {
             user_id: u.id,
-            user_name: u.name || '従業員',
-            department: profile.department || u.department || '一般部門',
-            position_name: profile.position_name || '一般',
+            user_name: u.name || '',
+            department: profile.department || u.department || '',
+            position_name: profile.position_name || '',
             base_salary: baseSalary,
             multiplier: mult,
             adjustment_amount: 0,
@@ -370,9 +370,9 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
 
               return {
                 user_id: u.id,
-                user_name: u.name || '従業員',
-                department: profile.department || u.department || '一般部門',
-                position_name: profile.position_name || '一般',
+                user_name: u.name || '',
+                department: profile.department || u.department || '',
+                position_name: profile.position_name || '',
                 base_salary: baseSalary,
                 multiplier: mult,
                 adjustment_amount: 0,

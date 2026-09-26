@@ -126,8 +126,8 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
 
             setUserProfile({
               birth_date: obData?.birth_date || '',
-              address: obData?.address || '滋賀県大津市',
-              join_date: obData?.join_date || uData?.join_date || '2024-04-01',
+              address: obData?.address || '',
+              join_date: obData?.join_date || uData?.join_date || '',
               retirement_date: obData?.retirement_date || uData?.retirement_date,
               is_retired: uData?.status === 'retired' || !!obData?.retirement_date,
               my_number: obData?.my_number || '',
@@ -138,8 +138,8 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
               account_holder: obData?.account_holder || pyData?.account_holder || userName || '',
               dependents_count: obData?.dependents_count || pyData?.dependents_count || 0,
               base_salary: pyData?.base_salary || myLocalPay?.base_salary || obData?.base_salary || 0,
-              position_name: obData?.position_name || '一般社員',
-              department: obData?.department || uData?.department || '本社営業部'
+              position_name: obData?.position_name || '',
+              department: obData?.department || uData?.department || ''
             });
           } catch (pErr) {
             console.warn('Profile fetch error:', pErr);
