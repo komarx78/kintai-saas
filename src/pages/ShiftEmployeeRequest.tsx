@@ -99,12 +99,18 @@ const ShiftEmployeeRequest: React.FC = () => {
       const startDate = format(currentMonthStart, 'yyyy-MM-dd');
       const endDate = format(endOfMonth(currentMonthStart), 'yyyy-MM-dd');
 
-      const { data, error } = await supabase
+      let reqQuery = supabase
         .from('advanced_shift_requests')
         .select('*')
         .eq('user_id', user.id)
         .gte('target_date', startDate)
         .lte('target_date', endDate);
+
+      if (tenantIdData) {
+        reqQuery = reqQuery.eq('tenant_id', tenantIdData);
+      }
+
+      const { data, error } = await reqQuery;
 
       if (error) throw error;
 
@@ -124,13 +130,19 @@ const ShiftEmployeeRequest: React.FC = () => {
         setRequests(updatedReqs);
       }
 
-      const { data: confirmedData, error: confirmedError } = await supabase
+      let confirmedQuery = supabase
         .from('advanced_shifts')
         .select('*')
         .eq('user_id', user.id)
         .eq('status', 'confirmed')
         .gte('target_date', startDate)
         .lte('target_date', endDate);
+
+      if (tenantIdData) {
+        confirmedQuery = confirmedQuery.eq('tenant_id', tenantIdData);
+      }
+
+      const { data: confirmedData, error: confirmedError } = await confirmedQuery;
 
       if (!confirmedError && confirmedData) {
         setConfirmedShifts(
@@ -205,6 +217,7 @@ const ShiftEmployeeRequest: React.FC = () => {
       await supabase
         .from('advanced_shift_requests')
         .delete()
+        .eq('tenant_id', tenantIdData)
         .eq('user_id', user.id)
         .gte('target_date', startDate)
         .lte('target_date', endDate);

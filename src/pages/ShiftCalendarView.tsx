@@ -614,7 +614,7 @@ const ShiftCalendarView: React.FC = () => {
             if (retryError) throw retryError;
           }
 
-          const { error: deleteError } = await supabase.from('advanced_shift_requests').delete().eq('id', modalData.id);
+          const { error: deleteError } = await supabase.from('advanced_shift_requests').delete().eq('id', modalData.id).eq('tenant_id', tenantIdData);
           if (deleteError) throw deleteError;
         } else {
           try {
@@ -625,7 +625,7 @@ const ShiftCalendarView: React.FC = () => {
               role: modalData.role,
               store_name: targetStore,
               status: modalData.status || 'confirmed'
-            }).eq('id', modalData.id);
+            }).eq('id', modalData.id).eq('tenant_id', tenantIdData);
             if (error) throw error;
           } catch (colErr) {
             const { error } = await supabase.from('advanced_shifts').update({
@@ -634,7 +634,7 @@ const ShiftCalendarView: React.FC = () => {
               end_time: modalData.end_time,
               role: modalData.role,
               status: modalData.status || 'confirmed'
-            }).eq('id', modalData.id);
+            }).eq('id', modalData.id).eq('tenant_id', tenantIdData);
             if (error) throw error;
           }
         }
@@ -678,10 +678,15 @@ const ShiftCalendarView: React.FC = () => {
   const handleDeleteShift = async (id: string, status?: string) => {
     if (!window.confirm('このシフト（希望）を削除しますか？')) return;
     try {
+      const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
       if (status === 'request') {
-        await supabase.from('advanced_shift_requests').delete().eq('id', id);
+        let q = supabase.from('advanced_shift_requests').delete().eq('id', id);
+        if (tenantIdData) q = q.eq('tenant_id', tenantIdData);
+        await q;
       } else {
-        await supabase.from('advanced_shifts').delete().eq('id', id);
+        let q = supabase.from('advanced_shifts').delete().eq('id', id);
+        if (tenantIdData) q = q.eq('tenant_id', tenantIdData);
+        await q;
       }
       setIsModalOpen(false);
       fetchSettingsAndData();
@@ -2937,7 +2942,10 @@ const ShiftCalendarView: React.FC = () => {
                     onClick={async () => {
                       if (!modalData.id) return;
                       try {
-                        const { error } = await supabase.from('advanced_shifts').update({ status: 'draft' }).eq('id', modalData.id);
+                        const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
+                        let q = supabase.from('advanced_shifts').update({ status: 'draft' }).eq('id', modalData.id);
+                        if (tenantIdData) q = q.eq('tenant_id', tenantIdData);
+                        const { error } = await q;
                         if (error) throw error;
                         setIsModalOpen(false);
                         fetchSettingsAndData();
