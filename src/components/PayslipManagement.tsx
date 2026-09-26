@@ -11,6 +11,12 @@ import {
 } from 'lucide-react';
 import { OfficialPayslipDoc } from './OfficialPayslipDoc';
 import { BonusPaymentReportModal } from './BonusPaymentReportModal';
+import { MonthlyRevisionReportModal } from './MonthlyRevisionReportModal';
+import { 
+  detectMonthlyRevisionCandidates, 
+  type MonthlyRevisionCandidate 
+} from '../lib/monthlyRevisionEngine';
+import { MonthlyRevisionDocMasterInspector } from './MonthlyRevisionDocMasterInspector';
 import { 
   calculatePayroll, 
   type EmployeePayrollProfile, 
@@ -133,6 +139,10 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [bonusReportModalOpen, setBonusReportModalOpen] = useState(false);
+  const [monthlyRevisionModalOpen, setMonthlyRevisionModalOpen] = useState(false);
+  const [showMonthlyRevisionInspectorModal, setShowMonthlyRevisionInspectorModal] = useState(false);
+  const [monthlyRevisionEligibleCandidates, setMonthlyRevisionEligibleCandidates] = useState<MonthlyRevisionCandidate[]>([]);
+  const [allRecentPayslips, setAllRecentPayslips] = useState<Payslip[]>([]);
 
   const [editModal, setEditModal] = useState<{
     isOpen: boolean;
@@ -1006,6 +1016,33 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       });
 
       setPayslips(finalPayslips);
+
+      // 過去確定給与明細から随時改定（月変）自動判定を実行
+      try {
+        const { data: recentSlips } = await supabase
+          .from('payslips')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .order('year_month', { ascending: false })
+          .limit(300);
+
+        const slipsForDetection: Payslip[] = (recentSlips && recentSlips.length > 0)
+          ? recentSlips
+          : finalPayslips;
+
+        setAllRecentPayslips(slipsForDetection);
+
+        const detected = detectMonthlyRevisionCandidates({
+          revisionYearMonth: currentYearMonth,
+          employees: usersList,
+          payrollProfiles: profileMap,
+          allPayslips: slipsForDetection
+        });
+        const eligible = detected.filter(c => c.isEligible);
+        setMonthlyRevisionEligibleCandidates(eligible);
+      } catch (mrErr) {
+        console.warn('Monthly revision detection error:', mrErr);
+      }
     } catch (e) {
       console.error('Error fetching payslips:', e);
     } finally {
@@ -2554,6 +2591,21 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
                   <button
                     type="button"
+                    onClick={() => setMonthlyRevisionModalOpen(true)}
+                    className="text-[11px] bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-black px-3 py-1.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                    title="日本年金機構公式様式コード2221に準拠した被保険者報酬月額変更届（随時改定）を作成・A4印刷"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    📋 月額変更届（様式2221）
+                    {monthlyRevisionEligibleCandidates.length > 0 && (
+                      <span className="bg-amber-400 text-slate-900 text-[10px] font-black px-1.5 py-0.2 rounded-full ml-0.5">
+                        {monthlyRevisionEligibleCandidates.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setSettingsModalOpen(true)}
                     className="text-[11px] bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
                   >
@@ -2611,6 +2663,45 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         return null;
       })()}
 
+      {/* 📢 社保 随時改定（月変）検知アラートバナー */}
+      {monthlyRevisionEligibleCandidates.length > 0 && (
+        <div className="bg-gradient-to-r from-purple-950 via-indigo-900 to-slate-900 border-2 border-purple-400/50 rounded-3xl p-5 shadow-xl text-white flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in duration-300">
+          <div className="flex items-start gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-lg text-2xl font-black">
+              📢
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="bg-purple-400 text-purple-950 font-black text-xs px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  社保 随時改定アラート
+                </span>
+                <h4 className="font-black text-base text-white">
+                  {currentYearMonth} 改定：月額変更届（月変）の対象候補が {monthlyRevisionEligibleCandidates.length} 名 検出されました！
+                </h4>
+              </div>
+              <p className="text-xs text-purple-200 mt-1 leading-relaxed">
+                基本給などの固定的賃金変動から3ヶ月間の給与実績により、標準報酬月額が2等級以上変動する社員がいます。日本年金機構公式様式コード2221（月額変更届）の届出を行ってください。
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {monthlyRevisionEligibleCandidates.map(c => (
+                  <span key={c.userId} className="text-[11px] bg-purple-900/80 border border-purple-400/40 text-purple-200 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1">
+                    👤 {c.userName} ({c.changeType} {c.healthGradeDiff > 0 ? `+${c.healthGradeDiff}` : c.healthGradeDiff}等級差)
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setMonthlyRevisionModalOpen(true)}
+            className="shrink-0 px-5 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 active:scale-95 text-white font-black text-xs sm:text-sm rounded-2xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>📋 月額変更届（様式2221）を作成・印刷</span>
+          </button>
+        </div>
+      )}
 
       {/* 📢 未計算月ガイダンスバナー */}
       {!isMonthCalculated && (
@@ -5279,6 +5370,53 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           }
         }}
       />
+
+      {/* 📋 日本年金機構公式 被保険者報酬月額変更届（様式コード2221）モーダル */}
+      <MonthlyRevisionReportModal
+        isOpen={monthlyRevisionModalOpen}
+        onClose={() => setMonthlyRevisionModalOpen(false)}
+        tenantId={tenantId || ''}
+        tenantInfo={tenantInfo}
+        employees={employees}
+        payrollProfiles={payrollProfiles}
+        payslips={allRecentPayslips.length > 0 ? allRecentPayslips : payslips}
+        initialYearMonth={currentYearMonth}
+        onOpenInspector={() => setShowMonthlyRevisionInspectorModal(true)}
+      />
+
+      {/* 🛠️ 被保険者報酬月額変更届（様式2221）印字座標インスペクターモーダル */}
+      {showMonthlyRevisionInspectorModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-7xl h-[95vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🛠️</span>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    日本年金機構 被保険者報酬月額変更届（コード2221用紙）印字座標マスタ設定
+                    <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full font-mono">
+                      FORM-2221-COORDINATES
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    原本PDFの上に各項目の位置をミリ単位（0.1%刻み）で精密調整し、会社全社共通マスタとしてDB永続化します。
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMonthlyRevisionInspectorModal(false)}
+                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1"
+              >
+                ✕ 閉じる
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-950/50">
+              <MonthlyRevisionDocMasterInspector />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 📋 スタッフ給与明細 LINE手動送信用テキスト案内モーダル */}
       {manualShareModal.isOpen && (

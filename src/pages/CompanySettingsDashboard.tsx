@@ -8,6 +8,7 @@ import { OrgChartPrintModal } from '../components/OrgChartPrintModal';
 import { OfficialLaborContractDoc } from '../components/OfficialLaborContractDoc';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { BonusDocMasterInspector } from '../components/BonusDocMasterInspector';
+import { MonthlyRevisionDocMasterInspector } from '../components/MonthlyRevisionDocMasterInspector';
 import { OfficialReminderSettingsModal } from '../components/OfficialReminderSettingsModal';
 import { StartupGuideCard } from '../components/StartupGuideCard';
 import { LineConfigModal } from '../components/LineConfigModal';
@@ -594,6 +595,7 @@ export default function CompanySettingsDashboard() {
   const [aiNotesInput, setAiNotesInput] = useState('');
   const [aiGeneratedResult, setAiGeneratedResult] = useState<Partial<LaborContractTemplate> | null>(null);
   const [showBonusInspectorModal, setShowBonusInspectorModal] = useState(false);
+  const [showMonthlyRevisionInspectorModal, setShowMonthlyRevisionInspectorModal] = useState(false);
   const [aiIsGenerating, setAiIsGenerating] = useState(false);
 
   // 入社手続きワークフローステップState
@@ -5746,6 +5748,36 @@ export default function CompanySettingsDashboard() {
               </button>
             </div>
 
+            {/* 日本年金機構 被保険者報酬月額変更届（コード2221）印字座標マスタ */}
+            <div className="p-4 bg-purple-50/60 rounded-2xl border border-purple-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-bold text-slate-800 text-sm">
+                      日本年金機構 被保険者報酬月額変更届（コード2221用紙）印字座標マスタ
+                    </h4>
+                    <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold border border-purple-200">
+                      最高管理者専管
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    日本年金機構の配布PDF原本用紙（様式コード2221）の上に印字する全項目の座標・文字サイズ・マス目ピッチを、画面上の原本プレビューでミリ単位・ピクセル単位で微調整・全社一括保存できます。
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowMonthlyRevisionInspectorModal(true)}
+                className="shrink-0 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                <span>🛠️ 印字座標インスペクター</span>
+              </button>
+            </div>
+
             {renderSaveFooter()}
           </div>
         )}
@@ -7806,6 +7838,40 @@ export default function CompanySettingsDashboard() {
             </div>
             <div className="flex-1 overflow-y-auto p-4 bg-slate-950/50">
               <BonusDocMasterInspector />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🛠️ 日本年金機構 被保険者報酬月額変更届（コード2221用紙）印字座標インスペクターモーダル */}
+      {showMonthlyRevisionInspectorModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-7xl h-[95vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🛠️</span>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    日本年金機構 被保険者報酬月額変更届（コード2221用紙）印字座標マスタ設定
+                    <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full font-mono">
+                      FORM-2221-COORDINATES
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    原本PDFの上に各項目の位置をミリ単位（0.1%刻み）で精密調整し、会社全社共通マスタとしてDB永続化します。
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMonthlyRevisionInspectorModal(false)}
+                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1"
+              >
+                ✕ 閉じる
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-950/50">
+              <MonthlyRevisionDocMasterInspector />
             </div>
           </div>
         </div>
