@@ -533,11 +533,9 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC<{ tenantId?: s
                 // 郵便番号項目（上3桁・下4桁）のプレビュー表示値
                 let displayVal = field.example;
                 if (field.id === 'officeZipCode_first' || field.id === 'zipCode_first_1') {
-                  displayVal = String(displayVal || '520').replace(/[^0-9]/g, '').slice(0, 3) || '520';
-                } else if (field.id === 'officeZipCode_last') {
-                  displayVal = String(displayVal || '0000').replace(/[^0-9]/g, '').slice(0, 4) || '0000';
-                } else if (field.id === 'zipCode_last_1') {
-                  displayVal = String(displayVal || '0001').replace(/[^0-9]/g, '').slice(0, 4) || '0001';
+                  displayVal = String(displayVal || '').replace(/[^0-9]/g, '').slice(0, 3);
+                } else if (field.id === 'officeZipCode_last' || field.id === 'zipCode_last_1') {
+                  displayVal = String(displayVal || '').replace(/[^0-9]/g, '').slice(0, 4);
                 } else if (field.id === 'officeZipCode' || field.id === 'zipCode_1') {
                   displayVal = String(displayVal || '').replace(/[^0-9]/g, '');
                 }

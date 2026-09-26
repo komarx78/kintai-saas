@@ -60,9 +60,9 @@ export interface OfficialHealthPensionAcquisitionDocProps {
 
 // 和暦変換ヘルパー（日本年金機構元号コード: 1明治, 3大正, 5昭和, 7平成, 9令和）
 function parseWarekiEraCode(dateStr?: string): { eraCode: string; year2: string; month2: string; day2: string } {
-  if (!dateStr) return { eraCode: '9', year2: '08', month2: '04', day2: '01' };
+  if (!dateStr) return { eraCode: '', year2: '', month2: '', day2: '' };
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return { eraCode: '9', year2: '08', month2: '04', day2: '01' };
+  if (isNaN(d.getTime())) return { eraCode: '', year2: '', month2: '', day2: '' };
   const y = d.getFullYear();
   const mNum = d.getMonth() + 1;
   const dNum = d.getDate();
@@ -91,8 +91,8 @@ function parseWarekiEraCode(dateStr?: string): { eraCode: string; year2: string;
 
 export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPensionAcquisitionDocProps> = ({
   companyInfo,
-  officeSymbol = '01-イロ',
-  officeNumber = '12345',
+  officeSymbol = '',
+  officeNumber = '',
   employees,
   selectedEmployeeId,
   onSelectEmployee,
@@ -147,8 +147,8 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
 
     // 事業所整理記号の分解
     const parts = (officeSymbol || '').split('-');
-    const symCode = parts[0] || '01';
-    const symKana = parts[1] || 'イロ';
+    const symCode = parts[0] || '';
+    const symKana = parts[1] || '';
 
     // マイナンバーまたは基礎年金番号
     const cleanMyNumber = (emp.my_number || '').replace(/[^0-9]/g, '');
@@ -191,7 +191,7 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
       officeSymbolCode: symCode,
       officeSymbolKana: symKana,
       officeNumber: officeNumber || '',
-      officeZipCode: (companyInfo.zip_code || '5200000').replace(/[^0-9]/g, ''),
+      officeZipCode: (companyInfo.zip_code || '').replace(/[^0-9]/g, ''),
       officeAddress: companyInfo.address || '',
       officeName: companyInfo.name || '',
       employerName: companyInfo.representative_name || '',
@@ -221,7 +221,7 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
       goodsRemuneration_1: goodsVal ? String(goodsVal) : '',
       totalRemuneration_1: totalVal ? String(totalVal) : '',
       remarks_1: '',
-      zipCode_1: (emp.zip_code || '5200001').replace(/[^0-9]/g, ''),
+      zipCode_1: (emp.zip_code || '').replace(/[^0-9]/g, ''),
       addressKana_1: emp.address_kana || '',
       address_1: emp.address || '',
       certIssue_1: ''

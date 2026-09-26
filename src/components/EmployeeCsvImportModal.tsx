@@ -75,12 +75,14 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
 
   // 📥 1. ひな形CSVのダウンロード（Windows Excel対応 BOM付きUTF-8）
   const handleDownloadTemplate = () => {
+    const sampleDept1 = departments[0]?.name || '営業部';
+    const sampleDept2 = departments[1]?.name || departments[0]?.name || '店舗運営部';
     const sampleRows = [
       [
         '山田 太郎',
         'ヤマダ タロウ',
         'yamada.taro@example.com',
-        departments[0]?.name || '営業部',
+        sampleDept1,
         '', // 本部のため店舗なし
         '主任',
         '正社員',
@@ -99,7 +101,7 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
         '佐藤 花子',
         'サトウ ハナコ',
         'sato.hanako@example.com',
-        '店舗運営部',
+        sampleDept2,
         '新宿店', // 店舗運営部配下の店舗
         'ホール主任',
         'パート・アルバイト',

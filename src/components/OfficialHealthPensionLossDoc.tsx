@@ -46,9 +46,9 @@ interface OfficialHealthPensionLossDocProps {
 
 // 西暦から和暦への安全変換関数（日本年金機構公式元号コード: 1明治, 3大正, 5昭和, 7平成, 9令和）
 function toWareki(dateStr?: string): { eraCode: string; eraName: string; year2: string; month2: string; day2: string } {
-  if (!dateStr) return { eraCode: '9', eraName: '令和', year2: '', month2: '', day2: '' };
+  if (!dateStr) return { eraCode: '', eraName: '', year2: '', month2: '', day2: '' };
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return { eraCode: '9', eraName: '令和', year2: '', month2: '', day2: '' };
+  if (isNaN(d.getTime())) return { eraCode: '', eraName: '', year2: '', month2: '', day2: '' };
 
   const y = d.getFullYear();
   const mNum = d.getMonth() + 1;

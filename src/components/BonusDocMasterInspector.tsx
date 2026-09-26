@@ -1633,8 +1633,8 @@ export const BonusDocMasterInspector: React.FC<BonusDocMasterInspectorProps> = (
                       insuranceNumber: nextNum,
                       name: '新規 従業員',
                       nameKana: 'シンキ ジュウギョウイン',
-                      birthDate: '1990-01-01',
-                      currencyAmount: 300000,
+                      birthDate: '',
+                      currencyAmount: 0,
                       goodsAmount: 0,
                       isOver70: false
                     }
