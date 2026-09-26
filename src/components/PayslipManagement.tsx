@@ -173,6 +173,25 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     selectedUserId: ''
   });
 
+  // 🔒 月次勤怠締め確定State（勤怠管理とSSOTリアルタイム連動）
+  const [attendanceClosingInfo, setAttendanceClosingInfo] = useState<{
+    isClosed: boolean;
+    closedAt: string | null;
+    closedByName: string | null;
+    notes: string;
+  }>({
+    isClosed: false,
+    closedAt: null,
+    closedByName: null,
+    notes: ''
+  });
+  const [isProcessingAttendanceClosing, setIsProcessingAttendanceClosing] = useState(false);
+
+  // 📋 未承認の休暇・打刻修正申請State
+  const [pendingLeaveRequests, setPendingLeaveRequests] = useState<any[]>([]);
+  const [isPendingRequestsModalOpen, setIsPendingRequestsModalOpen] = useState(false);
+  const [isProcessingApproval, setIsProcessingApproval] = useState(false);
+
   // 📅 勤怠出勤簿・タイムカード詳細モーダルState
   const [attendanceSheetModal, setAttendanceSheetModal] = useState<{
     isOpen: boolean;
@@ -852,6 +871,52 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         console.warn('shifts fetch error:', sErr);
       }
 
+      // 🔒 勤怠締めステータス取得 (attendance_monthly_closings)
+      let closeInfo = { isClosed: false, closedAt: null as string | null, closedByName: null as string | null, notes: '' };
+      const ymStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+      try {
+        const { data: cData } = await supabase
+          .from('attendance_monthly_closings')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .eq('year_month', ymStr)
+          .maybeSingle();
+
+        if (cData && cData.status === 'closed') {
+          const closedUser = usersList.find(u => u.id === cData.closed_by);
+          closeInfo = {
+            isClosed: true,
+            closedAt: cData.closed_at,
+            closedByName: closedUser?.name || '全社管理者',
+            notes: cData.notes || ''
+          };
+          localStorage.setItem(`attendance_closing_${tenantId}_${ymStr}`, JSON.stringify(closeInfo));
+        } else if (cData && cData.status === 'open') {
+          localStorage.removeItem(`attendance_closing_${tenantId}_${ymStr}`);
+        } else {
+          const raw = localStorage.getItem(`attendance_closing_${tenantId}_${ymStr}`);
+          if (raw) closeInfo = JSON.parse(raw);
+        }
+      } catch (cErr) {
+        console.warn('attendance_monthly_closings fetch error:', cErr);
+      }
+      setAttendanceClosingInfo(closeInfo);
+
+      // 📋 当月対象の未承認申請取得 (leave_requests: status === '申請中' & type !== 'シフト希望')
+      try {
+        const { data: pReqs } = await supabase
+          .from('leave_requests')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .eq('status', '申請中')
+          .neq('type', 'シフト希望')
+          .gte('start_date', monthStartDate)
+          .lte('start_date', monthEndDate);
+        setPendingLeaveRequests(pReqs || []);
+      } catch (pErr) {
+        console.warn('pending leave requests fetch error:', pErr);
+      }
+
       // 6. 各従業員の給与明細を大元労務マスタ（SSOT）に基づいて完全最新化
       const prefRateDataLatest = getPrefectureRate(activePrefCode);
       const latestPayrollSettings: any = {
@@ -1347,6 +1412,227 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       alert('給与自動計算中にエラーが発生しました: ' + err.message);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // 🔒 給与画面からの月次勤怠締め確定ロック実行
+  const handleCloseAttendance = async () => {
+    if (!tenantId) return;
+    const yearMonth = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+
+    if (pendingLeaveRequests.length > 0) {
+      const proceed = confirm(
+        `⚠️ 未承認の申請（有給休暇・打刻修正等）が ${pendingLeaveRequests.length} 件残っています。\n\n` +
+        `未承認のまま勤怠締めを実行すると、有給手当や残業時間の計算に影響する可能性があります。\n\n` +
+        `「キャンセル」を押すと未承認申請の一覧を確認・承認できます。\nこのまま締め確定ロックを実行しますか？`
+      );
+      if (!proceed) {
+        setIsPendingRequestsModalOpen(true);
+        return;
+      }
+    } else {
+      if (!confirm(`【${yearMonth}度】の勤怠締め処理（確定ロック）を実行しますか？\n\n・確定後は従業員の打刻修正や申請がロックされます。\n・確定した勤怠実績データをもとに、給与の一括自動計算へ安全に進めます。`)) {
+        return;
+      }
+    }
+
+    setIsProcessingAttendanceClosing(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const closedAt = new Date().toISOString();
+      const currentUserName = employees.find(u => u.id === user?.id)?.name || '全社管理者';
+
+      const payload = {
+        tenant_id: tenantId,
+        year_month: yearMonth,
+        status: 'closed',
+        closed_at: closedAt,
+        closed_by: user?.id || null,
+        notes: `${yearMonth} 給与計算画面より勤怠締め確定実行`
+      };
+
+      try {
+        await supabase
+          .from('attendance_monthly_closings')
+          .upsert(payload, { onConflict: 'tenant_id,year_month' });
+      } catch (dbErr) {
+        console.warn('attendance_monthly_closings upsert fallback:', dbErr);
+      }
+
+      const info = {
+        isClosed: true,
+        closedAt,
+        closedByName: currentUserName,
+        notes: payload.notes
+      };
+      setAttendanceClosingInfo(info);
+      localStorage.setItem(`attendance_closing_${tenantId}_${yearMonth}`, JSON.stringify(info));
+
+      alert(`🔒 【${yearMonth}度】の勤怠締め確定ロックを完了しました！\n\n続けて「⚡ 勤怠から一括自動計算」を実行して給与を試算してください。`);
+      await fetchData();
+    } catch (err: any) {
+      console.error('Close attendance error:', err);
+      alert('勤怠締め処理に失敗しました: ' + err.message);
+    } finally {
+      setIsProcessingAttendanceClosing(false);
+    }
+  };
+
+  // 🔓 給与画面からの月次勤怠締めロック解除
+  const handleReopenAttendance = async () => {
+    if (!tenantId) return;
+    const yearMonth = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+
+    if (!confirm(`【${yearMonth}度】の勤怠締めロックを解除しますか？\n\n・解除すると、再度打刻修正や申請の受付・編集が可能になります。`)) {
+      return;
+    }
+
+    setIsProcessingAttendanceClosing(true);
+    try {
+      try {
+        await supabase
+          .from('attendance_monthly_closings')
+          .update({ status: 'open', notes: `${yearMonth} 給与計算画面より勤怠締め解除` })
+          .eq('tenant_id', tenantId)
+          .eq('year_month', yearMonth);
+      } catch (dbErr) {
+        console.warn('attendance_monthly_closings reopen fallback:', dbErr);
+      }
+
+      setAttendanceClosingInfo({ isClosed: false, closedAt: null, closedByName: null, notes: '' });
+      localStorage.removeItem(`attendance_closing_${tenantId}_${yearMonth}`);
+
+      alert(`🔓 【${yearMonth}度】の勤怠締めロックを解除しました。\n打刻修正や申請承認を行った後は、再度締め確定を行ってください。`);
+      await fetchData();
+    } catch (err: any) {
+      alert('締め解除に失敗しました: ' + err.message);
+    } finally {
+      setIsProcessingAttendanceClosing(false);
+    }
+  };
+
+  // 📋 未承認申請の承認処理
+  const handleApprovePendingRequest = async (req: any) => {
+    setIsProcessingApproval(true);
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .update({ status: '承認' })
+        .eq('id', req.id)
+        .eq('tenant_id', tenantId);
+
+      if (error) throw error;
+
+      // 打刻修正申請の場合、attendance_records に自動反映
+      if (req.type === '打刻修正' && req.start_date) {
+        const reasonText = req.reason || '';
+        const punchTypeMatch = reasonText.match(/【修正区分:\s*([^】]+)】/);
+        const punchTimeMatch = reasonText.match(/【修正時刻:\s*([^】]+)】/);
+        const breakMatch = reasonText.match(/【休憩時間:\s*(\d+)分】/);
+
+        const pType = punchTypeMatch ? punchTypeMatch[1].trim() : '';
+        const pTime = punchTimeMatch ? punchTimeMatch[1].trim() : '';
+        const breakMins = breakMatch ? parseInt(breakMatch[1], 10) : undefined;
+
+        const updateData: any = {};
+        if (pType.includes('出勤')) updateData.check_in_time = pTime;
+        if (pType.includes('退勤')) updateData.check_out_time = pTime;
+        if (breakMins !== undefined) updateData.break_minutes = breakMins;
+
+        if (Object.keys(updateData).length > 0) {
+          await supabase
+            .from('attendance_records')
+            .upsert({
+              tenant_id: tenantId,
+              user_id: req.user_id,
+              date: req.start_date,
+              ...updateData
+            }, { onConflict: 'tenant_id,user_id,date' });
+        }
+      }
+
+      setPendingLeaveRequests(prev => prev.filter(r => r.id !== req.id));
+      alert(`🎉 ${req.user_name || '従業員'}さんの申請（${req.type}）を承認しました！`);
+      await fetchData();
+    } catch (e: any) {
+      alert('承認処理に失敗しました: ' + e.message);
+    } finally {
+      setIsProcessingApproval(false);
+    }
+  };
+
+  // 📋 未承認申請の却下処理
+  const handleRejectPendingRequest = async (req: any) => {
+    if (!confirm(`${req.user_name || '従業員'}さんの申請（${req.type}）を却下しますか？`)) return;
+    setIsProcessingApproval(true);
+    try {
+      const { error } = await supabase
+        .from('leave_requests')
+        .update({ status: '却下' })
+        .eq('id', req.id)
+        .eq('tenant_id', tenantId);
+
+      if (error) throw error;
+      setPendingLeaveRequests(prev => prev.filter(r => r.id !== req.id));
+      alert(`申請（${req.type}）を却下しました。`);
+      await fetchData();
+    } catch (e: any) {
+      alert('却下処理に失敗しました: ' + e.message);
+    } finally {
+      setIsProcessingApproval(false);
+    }
+  };
+
+  // 📋 未承認申請の一括承認処理
+  const handleApproveAllPendingRequests = async () => {
+    if (pendingLeaveRequests.length === 0) return;
+    if (!confirm(`未承認の申請 ${pendingLeaveRequests.length} 件をすべて一括承認しますか？`)) return;
+
+    setIsProcessingApproval(true);
+    try {
+      for (const req of pendingLeaveRequests) {
+        await supabase
+          .from('leave_requests')
+          .update({ status: '承認' })
+          .eq('id', req.id)
+          .eq('tenant_id', tenantId);
+
+        if (req.type === '打刻修正' && req.start_date) {
+          const reasonText = req.reason || '';
+          const punchTypeMatch = reasonText.match(/【修正区分:\s*([^】]+)】/);
+          const punchTimeMatch = reasonText.match(/【修正時刻:\s*([^】]+)】/);
+          const breakMatch = reasonText.match(/【休憩時間:\s*(\d+)分】/);
+
+          const pType = punchTypeMatch ? punchTypeMatch[1].trim() : '';
+          const pTime = punchTimeMatch ? punchTimeMatch[1].trim() : '';
+          const breakMins = breakMatch ? parseInt(breakMatch[1], 10) : undefined;
+
+          const updateData: any = {};
+          if (pType.includes('出勤')) updateData.check_in_time = pTime;
+          if (pType.includes('退勤')) updateData.check_out_time = pTime;
+          if (breakMins !== undefined) updateData.break_minutes = breakMins;
+
+          if (Object.keys(updateData).length > 0) {
+            await supabase
+              .from('attendance_records')
+              .upsert({
+                tenant_id: tenantId,
+                user_id: req.user_id,
+                date: req.start_date,
+                ...updateData
+              }, { onConflict: 'tenant_id,user_id,date' });
+          }
+        }
+      }
+
+      setPendingLeaveRequests([]);
+      setIsPendingRequestsModalOpen(false);
+      alert('🎉 すべての未承認申請を一括承認しました！');
+      await fetchData();
+    } catch (e: any) {
+      alert('一括承認中にエラーが発生しました: ' + e.message);
+    } finally {
+      setIsProcessingApproval(false);
     }
   };
 
@@ -2374,10 +2660,12 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-2xl border border-slate-200/80 shrink-0">
             <span className="text-xs font-bold text-slate-500">次の一手:</span>
             <span className="text-xs sm:text-sm font-black text-emerald-800 bg-white px-3 py-1.5 rounded-xl border border-emerald-200 shadow-2xs">
-              {!isMonthCalculated
-                ? '👉 下の「⚡ 勤怠から一括自動計算」を押す'
+              {!attendanceClosingInfo.isClosed
+                ? '👉 STEP 1「🔒 勤怠を一括締め確定」を押す'
+                : !isMonthCalculated
+                ? '👉 STEP 2「⚡ 勤怠から一括自動計算」を押す'
                 : (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
-                ? '👉 金額確認後「✅ 全員を一括確定する」を押す'
+                ? '👉 STEP 3 金額確認後「✅ 全員を一括確定する」を押す'
                 : '👉 「🟢 LINE一括通知」または「振込CSV出力」'}
             </span>
           </div>
@@ -2385,29 +2673,92 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
         {/* 5ステップ業務ナビゲーションカード */}
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5 text-xs">
-          {/* STEP 1 */}
-          <button
-            onClick={() => {
-              const ym = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
-              navigate(tenantId ? `/kintai/admin?tab=attendance&month=${ym}&tenant_id=${tenantId}` : `/kintai/admin?tab=attendance&month=${ym}`);
-            }}
-            className="p-3 rounded-2xl border bg-slate-50/80 hover:bg-blue-50/70 border-slate-200 hover:border-blue-300 flex flex-col justify-between text-left cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99] transition-all group"
-            title="当月の勤怠管理（出勤簿）画面を開き、打刻漏れや残業申請を確認・修正します"
+          {/* STEP 1：勤怠の確認・締め（給与画面内完結型コントロール） */}
+          <div
+            className={`p-3 rounded-2xl border flex flex-col justify-between text-left transition-all ${
+              !attendanceClosingInfo.isClosed
+                ? 'bg-amber-50/70 border-amber-300 ring-2 ring-amber-200/60 shadow-xs'
+                : 'bg-emerald-50/50 border-emerald-200 hover:border-emerald-300'
+            }`}
           >
             <div>
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="font-black text-slate-400 group-hover:text-blue-600 text-[10px]">STEP 1（締め日）</span>
-                <span className="text-[9px] bg-slate-200 group-hover:bg-blue-200 text-slate-600 group-hover:text-blue-800 font-bold px-1.5 py-0.2 rounded-full">開く ↗</span>
+              <div className="flex items-center justify-between mb-1">
+                <span className={`font-black text-[10px] ${!attendanceClosingInfo.isClosed ? 'text-amber-800' : 'text-emerald-700'}`}>
+                  STEP 1（締め日）
+                </span>
+                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${
+                  !attendanceClosingInfo.isClosed
+                    ? 'bg-amber-200 text-amber-900 animate-pulse'
+                    : 'bg-emerald-100 text-emerald-800'
+                }`}>
+                  {!attendanceClosingInfo.isClosed ? '⏳ 未締め' : '🔒 確定済'}
+                </span>
               </div>
-              <div className="font-bold text-slate-800 group-hover:text-blue-900 flex items-center gap-1">
-                <span>⏰ 勤怠の確認・締め</span>
+              <div className="font-bold text-slate-800 flex items-center gap-1">
+                <span>{!attendanceClosingInfo.isClosed ? '⏰ 勤怠の確認・締め' : '✅ 勤怠締め完了'}</span>
               </div>
-              <p className="text-[10px] text-slate-500 group-hover:text-slate-700 mt-1">打刻漏れ確認・全社締め</p>
+              <div className="mt-1 text-[10px] space-y-0.5">
+                {pendingLeaveRequests.length > 0 ? (
+                  <button
+                    onClick={() => setIsPendingRequestsModalOpen(true)}
+                    className="text-amber-800 font-bold bg-amber-100 hover:bg-amber-200 px-1.5 py-0.5 rounded-md flex items-center gap-1 transition cursor-pointer w-full text-left"
+                    title="未承認の休暇・打刻修正申請を確認・承認します"
+                  >
+                    <span>⚠️ 未承認申請 {pendingLeaveRequests.length}件</span>
+                    <span className="underline ml-auto">確認 ➔</span>
+                  </button>
+                ) : (
+                  <p className="text-slate-500">
+                    {!attendanceClosingInfo.isClosed 
+                      ? '打刻漏れ確認・全社確定' 
+                      : `${attendanceClosingInfo.closedAt ? new Date(attendanceClosingInfo.closedAt).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''} 済`
+                    }
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="mt-2 text-[10px] text-blue-600 font-bold flex items-center gap-0.5">
-              <span>全社出勤簿を開く ↗</span>
+
+            <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex flex-col gap-1">
+              {!attendanceClosingInfo.isClosed ? (
+                <button
+                  onClick={handleCloseAttendance}
+                  disabled={isProcessingAttendanceClosing}
+                  className="w-full bg-[#9A6B2F] hover:bg-[#7D5624] text-white font-bold text-[11px] py-1.5 px-2 rounded-xl transition shadow-xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                  title="勤怠実績を確定ロックして給与計算へ引き渡します"
+                >
+                  {isProcessingAttendanceClosing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                  <span>🔒 勤怠を一括締め確定</span>
+                </button>
+              ) : (
+                <div className="flex items-center justify-between text-[10px] pt-0.5">
+                  <span className="text-emerald-700 font-bold flex items-center gap-0.5">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    ロック中
+                  </span>
+                  <button
+                    onClick={handleReopenAttendance}
+                    disabled={isProcessingAttendanceClosing}
+                    className="text-slate-500 hover:text-rose-600 underline font-medium cursor-pointer transition"
+                    title="打刻修正や申請変更が必要な場合にロックを解除します"
+                  >
+                    🔓 解除
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-[9px] text-slate-400 pt-0.5">
+                <button
+                  onClick={() => {
+                    const ym = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+                    navigate(tenantId ? `/kintai/admin?tab=attendance&month=${ym}&tenant_id=${tenantId}` : `/kintai/admin?tab=attendance&month=${ym}`);
+                  }}
+                  className="hover:text-blue-600 underline cursor-pointer"
+                  title="出勤簿画面を別タブで確認します"
+                >
+                  出勤簿一覧 ↗
+                </button>
+              </div>
             </div>
-          </button>
+          </div>
 
           {/* STEP 2 */}
           <button
@@ -2835,22 +3186,28 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <span className={`text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1.5 transition ${
-                !isMonthCalculated 
+                !attendanceClosingInfo.isClosed
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                  : !isMonthCalculated 
                   ? 'bg-[#FDF6ED] text-[#9A6B2F] border border-[#F2DEBF]'
                   : (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
                   ? 'bg-[#F0F5FA] text-[#3E6B89] border border-[#D1E1EC]'
                   : 'bg-[#EFF7F4] text-[#2B735A] border border-[#CDE5DC]'
               }`}>
-                {!isMonthCalculated 
-                  ? '👣 ステップ 1 / 3：勤怠計算待ち'
+                {!attendanceClosingInfo.isClosed
+                  ? '👣 ステップ 1 / 4：勤怠締め待ち'
+                  : !isMonthCalculated 
+                  ? '👣 ステップ 2 / 4：勤怠計算待ち'
                   : (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
-                  ? `👣 ステップ 2 / 3：内容確認・確定待ち（確定済: ${publishedCount}/${employees.length}名）`
-                  : '🎉 ステップ 3 / 3：全員確定完了（LINE通知・振込可能）'
+                  ? `👣 ステップ 3 / 4：内容確認・確定待ち（確定済: ${publishedCount}/${employees.length}名）`
+                  : '🎉 ステップ 4 / 4：全員確定完了（LINE通知・振込可能）'
                 }
               </span>
               <span className="text-xs text-slate-400 font-medium hidden sm:inline">
-                {!isMonthCalculated 
-                  ? '※打刻データから当月の給与を一括試算してください'
+                {!attendanceClosingInfo.isClosed
+                  ? '※打刻漏れや申請を確認し、勤怠を締め確定してください'
+                  : !isMonthCalculated 
+                  ? '※確定した勤怠データから当月の給与を一括試算してください'
                   : (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
                   ? '※金額を確認し、「全員の給与を一括確定」を押してください'
                   : '※全員の給与が確定しました。スタッフへLINE一括通知できます'
@@ -2858,19 +3215,43 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               </span>
             </div>
             <h3 className="text-lg font-black text-slate-800 tracking-tight">
-              {!isMonthCalculated 
-                ? '【STEP 1】タイムカード打刻から当月の給与を一括自動計算'
+              {!attendanceClosingInfo.isClosed
+                ? '【STEP 1】当月の勤怠実績を確定・ロック（全社締め）'
+                : !isMonthCalculated 
+                ? '【STEP 2】確定したタイムカード打刻から全員の給与を一括自動計算'
                 : (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
-                ? '【STEP 2】金額・控除を確認し、全従業員の明細を一括確定（Web公開）'
-                : '【STEP 3】Web給与明細の発行通知（LINE一括送信）＆ 振込CSV'
+                ? '【STEP 3】金額・控除を確認し、全従業員の明細を一括確定（Web公開）'
+                : '【STEP 4】Web給与明細の発行通知（LINE一括送信）＆ 振込CSV'
               }
             </h3>
           </div>
 
           {/* 今押すべき主役ボタン（1つだけ強調表示・上質くすみマット調） */}
           <div className="flex items-center gap-2 flex-wrap">
-            {!isMonthCalculated ? (
-              // 🌟 STEP 1 主役ボタン（上質なスモーキーチャコール）
+            {!attendanceClosingInfo.isClosed ? (
+              // 🌟 STEP 1 主役ボタン群（勤怠締め確定 ＆ 先行試算）
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={handleCloseAttendance}
+                  disabled={isProcessingAttendanceClosing}
+                  className="bg-[#9A6B2F] hover:bg-[#7D5624] text-white font-bold text-sm px-6 py-3 rounded-2xl transition shadow-md flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
+                  title="当月の勤怠実績を確定ロックして給与計算へ引き渡します"
+                >
+                  {isProcessingAttendanceClosing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5 text-amber-200" />}
+                  <span className="text-base font-bold">🔒 勤怠を一括締め確定する</span>
+                </button>
+                <button
+                  onClick={handleAutoGenerateFromAttendance}
+                  disabled={isSaving || employees.length === 0}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm px-4 py-3 rounded-2xl transition border border-slate-300 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="勤怠締めを行わずに、現在の打刻データで給与を試算します"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-600" />
+                  <span>⚡ 締めずに試算実行</span>
+                </button>
+              </div>
+            ) : !isMonthCalculated ? (
+              // 🌟 STEP 2 主役ボタン（上質なスモーキーチャコール）
               <button
                 onClick={handleAutoGenerateFromAttendance}
                 disabled={isSaving || employees.length === 0}
@@ -5614,6 +5995,127 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 type="button"
                 onClick={() => setManualShareModal(prev => ({ ...prev, isOpen: false }))}
                 className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl transition cursor-pointer text-xs"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📋 未承認申請 確認・承認モーダル（給与画面内完結） */}
+      {isPendingRequestsModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-[60] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 my-8">
+            {/* ヘッダー */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                  ⚠️
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-base">
+                    未承認の申請一覧（当月対象: {pendingLeaveRequests.length}件）
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    有給休暇や打刻修正の未承認申請です。承認すると出勤簿や給与へ自動反映されます。
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPendingRequestsModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 申請一覧 */}
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {pendingLeaveRequests.length === 0 ? (
+                <div className="py-12 text-center text-slate-400">
+                  <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-400 mb-2" />
+                  <p className="font-bold text-slate-600 text-sm">未承認の申請はありません</p>
+                  <p className="text-xs text-slate-400 mt-1">すべての申請が処理済みです。安心して勤怠締めを行えます。</p>
+                </div>
+              ) : (
+                pendingLeaveRequests.map(req => {
+                  const emp = employees.find(e => e.id === req.user_id);
+                  const applicantName = req.user_name || emp?.name || '従業員';
+
+                  return (
+                    <div key={req.id} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-slate-800 text-sm">{applicantName}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            req.type === '有給休暇' 
+                              ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+                              : req.type === '打刻修正' 
+                              ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                              : 'bg-slate-200 text-slate-700'
+                          }`}>
+                            {req.type || '申請'}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-600">
+                          <span className="font-mono font-bold">{req.start_date}</span>
+                          {req.end_date && req.end_date !== req.start_date && (
+                            <span> 〜 <span className="font-mono font-bold">{req.end_date}</span></span>
+                          )}
+                        </div>
+                        {req.reason && (
+                          <p className="text-xs text-slate-500 bg-white p-2 rounded-xl border border-slate-200/60 mt-1">
+                            {req.reason}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleRejectPendingRequest(req)}
+                          disabled={isProcessingApproval}
+                          className="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 hover:border-rose-200 font-bold rounded-xl transition text-xs cursor-pointer disabled:opacity-50"
+                        >
+                          却下
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleApprovePendingRequest(req)}
+                          disabled={isProcessingApproval}
+                          className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition text-xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        >
+                          {isProcessingApproval ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                          <span>承認する</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* フッター */}
+            <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+              <div>
+                {pendingLeaveRequests.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleApproveAllPendingRequests}
+                    disabled={isProcessingApproval}
+                    className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-xl transition text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isProcessingApproval ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                    <span>全件を一括承認する</span>
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPendingRequestsModalOpen(false)}
+                className="px-5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl transition cursor-pointer text-xs"
               >
                 閉じる
               </button>
