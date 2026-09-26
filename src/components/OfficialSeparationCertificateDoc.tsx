@@ -43,7 +43,7 @@ export interface OfficialSeparationCertificateDocProps {
 
 // 和暦変換ユーティリティ
 function toWareki(dateStr?: string): string {
-  if (!dateStr) return '未定';
+  if (!dateStr) return '—';
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   const y = d.getFullYear();
@@ -758,14 +758,14 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
                 </div>
                 <div className="mt-2 pl-6 space-y-0.5">
                   <div className="text-[11px] text-slate-500 font-bold">
-                    フリガナ: {currentEmployee.name_kana || 'コマイ シュウイチロウ'}
+                    フリガナ: {currentEmployee.name_kana || '—'}
                   </div>
                   <div className="text-base font-black text-slate-900">
                     {currentEmployee.name}
                   </div>
                   <div className="text-[10px] text-slate-500 flex gap-4 mt-1">
-                    <span>生年月日: {toWareki(currentEmployee.birth_date || '1990-01-01')}</span>
-                    <span>性別: {currentEmployee.gender || '男'}</span>
+                    <span>生年月日: {currentEmployee.birth_date ? toWareki(currentEmployee.birth_date) : '—'}</span>
+                    <span>性別: {currentEmployee.gender ? (currentEmployee.gender === 'female' || currentEmployee.gender === '女' ? '女' : '男') : '—'}</span>
                   </div>
                 </div>
               </div>

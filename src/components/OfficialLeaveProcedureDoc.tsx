@@ -134,7 +134,7 @@ export const OfficialLeaveProcedureDoc: React.FC<OfficialLeaveProcedureDocProps>
           >
             {employees.map(emp => (
               <option key={emp.id} value={emp.id}>
-                {emp.name} ({emp.department || '一般'})
+                {emp.name}{emp.department ? ` (${emp.department})` : ''}
               </option>
             ))}
           </select>

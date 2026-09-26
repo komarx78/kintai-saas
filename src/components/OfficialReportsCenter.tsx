@@ -1672,7 +1672,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                 const targetMonthKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
                 const deptMap = new Map<string, EmployeeItem[]>();
                 activeEmps.forEach(e => {
-                  const d = e.department || '本社営業部';
+                  const d = e.department || '（未配属・共通）';
                   if (!deptMap.has(d)) deptMap.set(d, []);
                   deptMap.get(d)!.push(e);
                 });
