@@ -374,7 +374,10 @@ export async function sendStaffPayslipLineMessages(
  */
 export function getStoreLineQrCodeUrl(tenantId: string, storeName: string): string {
   // 公式LINEアカウント友だち追加URL または招待リンク
-  const addFriendUrl = `https://lin.ee/rakumaru_demo?tenant=${encodeURIComponent(tenantId)}&store=${encodeURIComponent(storeName)}`;
+  const config = getTenantLineConfig(tenantId);
+  const addFriendUrl = (config.mode === 'own_official' && config.ownAddFriendUrl)
+    ? config.ownAddFriendUrl
+    : `https://lin.ee/rakumaru_demo?tenant=${encodeURIComponent(tenantId || '')}&store=${encodeURIComponent(storeName || '')}`;
   return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(addFriendUrl)}`;
 }
 

@@ -67,6 +67,8 @@ export const SystemSupportHub: React.FC<SystemSupportHubProps> = ({
     setReleases(rList);
   };
 
+  const displayTenantName = (tenantName && tenantName.trim()) ? tenantName.trim() : '自社';
+
   // 🤖 AIへの操作質問送信
   const handleAskAI = async (queryText?: string) => {
     const query = queryText || aiQuery;
@@ -97,7 +99,7 @@ export const SystemSupportHub: React.FC<SystemSupportHubProps> = ({
     try {
       await submitSystemSuggestion({
         tenant_id: tenantId,
-        tenant_name: tenantName,
+        tenant_name: displayTenantName,
         user_id: userId,
         user_name: userName,
         category: suggestionCategory,
@@ -409,7 +411,7 @@ export const SystemSupportHub: React.FC<SystemSupportHubProps> = ({
               <div className="flex items-center gap-4 text-xs bg-white p-3.5 rounded-2xl border border-slate-200">
                 <div className="flex items-center gap-1.5 text-slate-600">
                   <Building2 className="w-4 h-4 text-indigo-600" />
-                  所属企業: <strong className="text-slate-800">{tenantName}</strong>
+                  所属企業: <strong className="text-slate-800">{displayTenantName}</strong>
                 </div>
                 <div className="h-4 w-px bg-slate-200" />
                 <div className="flex items-center gap-1.5 text-slate-600">

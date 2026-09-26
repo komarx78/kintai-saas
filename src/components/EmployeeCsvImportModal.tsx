@@ -565,7 +565,7 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
           user_id: userId,
           status: 'active',
           name_kana: item.nameKana || null,
-          birth_date: item.birthDate || '1995-04-01',
+          birth_date: item.birthDate || null,
           postal_code: item.postalCode || null,
           address: item.address || null,
           phone: item.phoneNumber || null,
@@ -594,7 +594,7 @@ export const EmployeeCsvImportModal: React.FC<EmployeeCsvImportModalProps> = ({
           tenant_id: tenantId,
           user_id: userId,
           hire_date: item.joinDate,
-          default_role: item.department || 'ホール',
+          default_role: item.department || '一般',
           base_wage: item.salaryType === 'hourly' ? item.hourlyWage : (item.baseSalary ? Math.round(item.baseSalary / 160) : 0),
           max_hours_per_week: item.employmentType.includes('パート') ? 25 : 40,
           priority_score: 3

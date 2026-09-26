@@ -30,7 +30,10 @@ interface SocialRateRecord {
 }
 
 export const SocialInsuranceMasterManager: React.FC = () => {
-  const [selectedYear, setSelectedYear] = useState<number>(2024);
+  const [selectedYear, setSelectedYear] = useState<number>(() => {
+    const cur = new Date().getFullYear();
+    return [2024, 2025, 2026, 2027, 2028].includes(cur) ? cur : 2026;
+  });
   const [rates, setRates] = useState<SocialRateRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -421,7 +424,7 @@ export const SocialInsuranceMasterManager: React.FC = () => {
         {/* 年度切り替え ＆ 保存ボタン */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center bg-slate-100 rounded-2xl p-1 border border-slate-200">
-            {[2024, 2025, 2026, 2027].map(year => (
+            {[2024, 2025, 2026, 2027, 2028].map(year => (
               <button
                 key={year}
                 onClick={() => setSelectedYear(year)}
