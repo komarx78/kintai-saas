@@ -85,12 +85,15 @@ const UserDashboard = () => {
 
         // 今日の打刻データを取得
         const today = new Date().toLocaleDateString('en-CA');
-        const { data: record } = await supabase
+        let recordQuery = supabase
           .from('attendance_records')
           .select('*')
           .eq('user_id', authUser.id)
-          .eq('date', today)
-          .maybeSingle();
+          .eq('date', today);
+        if (profile?.tenant_id) {
+          recordQuery = recordQuery.eq('tenant_id', profile.tenant_id);
+        }
+        const { data: record } = await recordQuery.maybeSingle();
           
         if (record) {
           setCurrentRecord(record);
@@ -200,13 +203,17 @@ const UserDashboard = () => {
         const start = `${y}-${m.toString().padStart(2, '0')}-01`;
         const end = `${y}-${m.toString().padStart(2, '0')}-${lastDay.toString().padStart(2, '0')}`;
         
-        const { data } = await supabase
+        let attQuery = supabase
           .from('attendance_records')
           .select('*')
           .eq('user_id', user.id)
           .gte('date', start)
           .lte('date', end)
           .order('date', { ascending: false });
+        if (user.tenant_id) {
+          attQuery = attQuery.eq('tenant_id', user.tenant_id);
+        }
+        const { data } = await attQuery;
           
         if (data) setMonthlyRecords(data);
       };
@@ -221,11 +228,15 @@ const UserDashboard = () => {
         const periodEnd = statutory.obligationPeriodEnd;
 
         // 当該ユーザーの全承認済み有休申請を取得（全休・半休・単日・期間申請を完全網羅）
-        const { data } = await supabase
+        let leaveQuery = supabase
           .from('leave_requests')
           .select('*')
           .eq('user_id', user.id)
           .eq('status', '承認');
+        if (user.tenant_id) {
+          leaveQuery = leaveQuery.eq('tenant_id', user.tenant_id);
+        }
+        const { data } = await leaveQuery;
         
         if (data) {
           const days = calculateUsedPaidLeaveDaysInPeriod(data, periodStart, periodEnd);
@@ -278,13 +289,17 @@ const UserDashboard = () => {
       const endOfMonthStr = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
 
       // 1-1. 新シフト管理テーブル（advanced_shifts）から確定シフトを取得
-      const { data: advShifts } = await supabase
+      let advShiftsQuery = supabase
         .from('advanced_shifts')
         .select('*')
         .eq('user_id', user.id)
         .eq('status', 'confirmed')
         .gte('target_date', startOfMonthStr)
         .lte('target_date', endOfMonthStr);
+      if (user.tenant_id) {
+        advShiftsQuery = advShiftsQuery.eq('tenant_id', user.tenant_id);
+      }
+      const { data: advShifts } = await advShiftsQuery;
 
       const formattedAdvShifts = (advShifts || []).map((s: any) => ({
         id: s.id,
@@ -299,18 +314,22 @@ const UserDashboard = () => {
       }));
 
       // 1-2. 旧確定シフトテーブル（shifts）の取得
-      const { data: shiftList } = await supabase
+      let shiftListQuery = supabase
         .from('shifts')
         .select('*')
         .eq('user_id', user.id)
         .gte('work_date', startOfMonthStr)
         .lte('work_date', endOfMonthStr);
+      if (user.tenant_id) {
+        shiftListQuery = shiftListQuery.eq('tenant_id', user.tenant_id);
+      }
+      const { data: shiftList } = await shiftListQuery;
 
       // 新シフト（advanced_shifts）を最優先にして統合
       let finalShifts = [...formattedAdvShifts, ...(shiftList || [])];
 
       // 2. 承認済みのシフト希望申請（leave_requests）からも確定シフトを自動復元！
-      const { data: approvedReq } = await supabase
+      let approvedReqQuery = supabase
         .from('leave_requests')
         .select('*')
         .eq('user_id', user.id)
@@ -319,8 +338,11 @@ const UserDashboard = () => {
         .gte('start_date', startOfMonthStr)
         .lte('start_date', endOfMonthStr)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+      if (user.tenant_id) {
+        approvedReqQuery = approvedReqQuery.eq('tenant_id', user.tenant_id);
+      }
+      const { data: approvedReq } = await approvedReqQuery.maybeSingle();
 
       if (approvedReq && approvedReq.reason) {
         const match = approvedReq.reason.match(/【シフトデータ:\s*(\[.+\])】/s);
@@ -350,12 +372,16 @@ const UserDashboard = () => {
       if (tS) setTodayShift(tS);
 
       // 3-1. 新シフト管理の希望テーブル（advanced_shift_requests）から復元
-      const { data: advReqData } = await supabase
+      let advReqQuery = supabase
         .from('advanced_shift_requests')
         .select('*')
         .eq('user_id', user.id)
         .gte('target_date', startOfMonthStr)
         .lte('target_date', endOfMonthStr);
+      if (user.tenant_id) {
+        advReqQuery = advReqQuery.eq('tenant_id', user.tenant_id);
+      }
+      const { data: advReqData } = await advReqQuery;
 
       const restoredMap: Record<string, { type: 'working' | 'off'; startTime: string; endTime: string }> = {};
 
@@ -370,7 +396,7 @@ const UserDashboard = () => {
       }
 
       // 3-2. 提出中（申請中）のシフト希望申請（leave_requests）があれば自動復元
-      const { data: reqData } = await supabase
+      let reqDataQuery = supabase
         .from('leave_requests')
         .select('*')
         .eq('user_id', user.id)
@@ -379,8 +405,11 @@ const UserDashboard = () => {
         .gte('start_date', startOfMonthStr)
         .lte('start_date', endOfMonthStr)
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+      if (user.tenant_id) {
+        reqDataQuery = reqDataQuery.eq('tenant_id', user.tenant_id);
+      }
+      const { data: reqData } = await reqDataQuery.maybeSingle();
 
       if (reqData && reqData.reason) {
         const match = reqData.reason.match(/【シフトデータ:\s*(\[.+\])】/s);
@@ -506,11 +535,15 @@ const UserDashboard = () => {
     if (!confirm(`この「${reqType}」申請を取り下げて取消しますか？`)) return;
 
     try {
-      const { error } = await supabase
+      let cancelQuery = supabase
         .from('leave_requests')
         .delete()
         .eq('id', requestId)
         .eq('user_id', user.id);
+      if (user.tenant_id) {
+        cancelQuery = cancelQuery.eq('tenant_id', user.tenant_id);
+      }
+      const { error } = await cancelQuery;
 
       if (error) throw error;
 
@@ -526,12 +559,16 @@ const UserDashboard = () => {
 
   const fetchMyRequests = async () => {
     if (!user) return;
-    const { data } = await supabase
+    let reqQuery = supabase
       .from('leave_requests')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(6);
+    if (user.tenant_id) {
+      reqQuery = reqQuery.eq('tenant_id', user.tenant_id);
+    }
+    const { data } = await reqQuery;
     if (data) setMyRecentRequests(data);
   };
 
@@ -999,11 +1036,15 @@ const UserDashboard = () => {
 
     setIsPunching(true);
     try {
-      const { error } = await supabase
+      let delQuery = supabase
         .from('attendance_records')
         .delete()
         .eq('id', currentRecord.id)
         .eq('user_id', user.id);
+      if (user.tenant_id) {
+        delQuery = delQuery.eq('tenant_id', user.tenant_id);
+      }
+      const { error } = await delQuery;
 
       if (error) throw error;
 
@@ -1024,11 +1065,15 @@ const UserDashboard = () => {
 
     setIsPunching(true);
     try {
-      const { error } = await supabase
+      let delQuery = supabase
         .from('attendance_records')
         .delete()
         .eq('id', currentRecord.id)
         .eq('user_id', user.id);
+      if (user.tenant_id) {
+        delQuery = delQuery.eq('tenant_id', user.tenant_id);
+      }
+      const { error } = await delQuery;
 
       if (error) throw error;
 
@@ -2280,13 +2325,24 @@ const UserDashboard = () => {
                             const lastDay = new Date(yNum, mNum, 0).getDate();
                             const startOfMonthStr = `${y}-${m}-01`;
                             const endOfMonthStr = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
-                            await supabase
+                            let deleteReqQuery = supabase
                               .from('leave_requests')
                               .delete()
                               .eq('user_id', user!.id)
                               .eq('type', 'シフト希望')
                               .gte('start_date', startOfMonthStr)
                               .lte('start_date', endOfMonthStr);
+                            if (user?.tenant_id) {
+                              deleteReqQuery = deleteReqQuery.eq('tenant_id', user.tenant_id);
+                              await supabase
+                                .from('advanced_shift_requests')
+                                .delete()
+                                .eq('tenant_id', user.tenant_id)
+                                .eq('user_id', user.id)
+                                .gte('target_date', startOfMonthStr)
+                                .lte('target_date', endOfMonthStr);
+                            }
+                            await deleteReqQuery;
                             setShiftRequestsMap({});
                             alert('シフト希望を取り下げました。');
                             fetchMyRequests();
