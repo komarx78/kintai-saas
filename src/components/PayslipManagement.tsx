@@ -3073,21 +3073,22 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               <h3 className="font-black text-slate-800 text-base">
                 {currentYearMonth}度 給与明細一覧
               </h3>
-              <span className="text-xs text-slate-400 font-bold ml-1">（全{payslips.length}名）</span>
+              <span className="text-xs text-slate-400 font-bold">（全{payslips.length}名）</span>
+            </div>
+
+            {/* 📊 全社合計クイックサマリー（流し見・検算用） */}
+            <div className="hidden xl:flex items-center gap-2.5 text-xs bg-slate-50 border border-slate-200/80 px-3.5 py-1.5 rounded-xl font-medium">
+              <span className="text-slate-400 font-bold">全社計:</span>
+              <span className="text-slate-600">総支給 <strong className="font-mono text-slate-900 font-bold">¥{totalGrossEarnings.toLocaleString()}</strong></span>
+              <span className="text-slate-300">|</span>
+              <span className="text-slate-600">控除 <strong className="font-mono text-rose-600 font-bold">-¥{totalDeductionSum.toLocaleString()}</strong></span>
+              <span className="text-slate-300">|</span>
+              <span className="text-slate-600">差引振込手取り <strong className="font-mono text-indigo-700 font-black">¥{totalNetSalarySum.toLocaleString()}</strong></span>
             </div>
           </div>
 
           {/* 表示形式切り替えタブ */}
           <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
-            <button
-              onClick={() => setViewMode('card')}
-              className={`text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
-                viewMode === 'card' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              📑 全詳細カード一覧（標準・常時全開）
-            </button>
             <button
               onClick={() => setViewMode('table')}
               className={`text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
@@ -3095,7 +3096,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               }`}
             >
               <List className="w-3.5 h-3.5" />
-              📋 コンパクト表
+              <span>📋 スプレッドシート表（推奨）</span>
+            </button>
+            <button
+              onClick={() => setViewMode('card')}
+              className={`text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'card' ? 'bg-white text-indigo-700 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>📑 全開カード一覧</span>
             </button>
           </div>
         </div>
@@ -3542,18 +3552,19 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[960px]">
+            <table className="w-full text-left border-collapse min-w-[1050px]">
               <thead>
-                <tr className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                  <th className="py-3 px-4">従業員名</th>
-                  <th className="py-3 px-3">給与形態</th>
-                  <th className="py-3 px-3 text-right">📅 出勤/総労働</th>
-                  <th className="py-3 px-3 text-right">⏰ 残業・時間外</th>
-                  <th className="py-3 px-3 text-right">💰 総支給額</th>
-                  <th className="py-3 px-3 text-right">📉 控除合計</th>
-                  <th className="py-3 px-4 text-right">🎁 手取り支給額</th>
-                  <th className="py-3 px-3 text-center">状態</th>
-                  <th className="py-3 px-4 text-center">内訳 / 操作</th>
+                <tr className="bg-slate-50/90 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                  <th className="py-2.5 px-4 w-[200px]">従業員名</th>
+                  <th className="py-2.5 px-2.5 text-center w-[70px]">形態</th>
+                  <th className="py-2.5 px-3 text-right w-[110px]">📅 出勤/残業</th>
+                  <th className="py-2.5 px-3 text-right w-[100px]">基本給</th>
+                  <th className="py-2.5 px-3 text-right w-[95px]">各種手当</th>
+                  <th className="py-2.5 px-3.5 text-right w-[115px] bg-slate-100/40">💰 総支給額</th>
+                  <th className="py-2.5 px-3.5 text-right w-[105px]">📉 控除合計</th>
+                  <th className="py-2.5 px-4 text-right w-[125px] bg-indigo-50/30">🎁 差引手取り額</th>
+                  <th className="py-2.5 px-2.5 text-center w-[75px]">状態</th>
+                  <th className="py-2.5 px-3 text-center w-[120px]">内訳 / 操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
@@ -3561,185 +3572,149 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                   const prof = payrollProfiles[slip.user_id];
                   const isHourly = prof?.salary_type === 'hourly' || slip.salary_type === 'hourly';
                   const isExpanded = expandedUserId === slip.user_id;
+                  const allowances = Math.max(0, (slip.total_earnings || 0) - (slip.base_salary || 0));
 
                   return (
                     <React.Fragment key={slip.user_id}>
                       <tr 
-                        className={`hover:bg-indigo-50/40 transition cursor-pointer ${isExpanded ? 'bg-indigo-50/30' : ''}`}
+                        className={`transition cursor-pointer group ${
+                          isExpanded 
+                            ? 'bg-indigo-50/40 border-l-4 border-l-indigo-600' 
+                            : 'hover:bg-indigo-50/30 even:bg-slate-50/40'
+                        }`}
                         onClick={() => setExpandedUserId(isExpanded ? null : slip.user_id)}
                       >
-                        <td className="py-3.5 px-4 font-bold text-slate-800">
+                        {/* 1. 従業員名（シングルライン・スマート警告） */}
+                        <td className="py-2.5 px-4 font-bold text-slate-800">
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-xs">
+                            <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 font-black flex items-center justify-center text-[11px] shrink-0 border border-indigo-100">
                               {(slip.user?.name || '員').substring(0, 1)}
                             </div>
-                            <div>
-                              <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                                {slip.user?.name || '従業員'}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setExpandedUserId(isExpanded ? null : slip.user_id);
-                                  }}
-                                  className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-normal transition flex items-center gap-0.5"
-                                  title="勤怠・給与の内訳を展開"
-                                >
-                                  {isExpanded ? <ChevronUp className="w-3 h-3 text-indigo-600" /> : <ChevronDown className="w-3 h-3" />}
-                                  内訳
-                                </button>
-                                {slip.user?.join_date && slip.user.join_date.startsWith(currentYearMonth) && (
-                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200">
-                                    {slip.user.join_date.substring(5)}入社
-                                  </span>
-                                )}
-                                {lineLinkMap[slip.user_id] || slip.user?.contact_line_id ? (
-                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200" title="LINE公式連携済">
-                                    LINE済
-                                  </span>
-                                ) : (
-                                  <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-100 text-slate-400" title="LINE未連携">
-                                    未連携
-                                  </span>
-                                )}
-                              </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setProfileModal({ isOpen: true, user: slip.user, profile: prof || getInitialProfile(tenantId || '', slip.user_id) });
-                                }}
-                                className="text-[10px] text-indigo-600 hover:underline flex items-center gap-0.5 cursor-pointer mt-0.5"
-                              >
-                                <UserCheck className="w-2.5 h-2.5" />
-                                給与マスタ設定
-                              </button>
-                            </div>
+                            <span className="font-bold text-slate-900 group-hover:text-indigo-600 transition truncate max-w-[110px]">
+                              {slip.user?.name || '従業員'}
+                            </span>
+                            {/* 🚨 異常値・状況スマートバッジ */}
+                            {slip.work_days === 0 && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0" title="出勤0日（未打刻）">
+                                未打刻
+                              </span>
+                            )}
+                            {slip.absence_deduction && slip.absence_deduction > 0 ? (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200 shrink-0" title="欠勤控除あり">
+                                欠控
+                              </span>
+                            ) : null}
+                            {slip.user?.join_date && slip.user.join_date.startsWith(currentYearMonth) && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200 shrink-0">
+                                入社
+                              </span>
+                            )}
                           </div>
                         </td>
 
-                        <td className="py-3.5 px-3">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                        {/* 2. 給与形態 */}
+                        <td className="py-2.5 px-2.5 text-center">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${
                             isHourly ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'
                           }`}>
-                            {isHourly ? '時給制' : '月給制'}
+                            {isHourly ? '時給' : '月給'}
                           </span>
                         </td>
 
-                        <td className="py-3.5 px-3 text-right font-medium text-slate-700">
-                          <div className={`font-bold ${slip.work_days > 0 ? 'text-slate-800' : 'text-slate-400'}`}>
-                            {slip.work_days > 0 ? `${slip.work_days}日 出勤` : '出勤 0日 (未打刻)'}
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-mono">総労働 {slip.actual_hours}h</div>
+                        {/* 3. 出勤 / 残業 */}
+                        <td className="py-2.5 px-3 text-right font-mono tabular-nums text-xs">
+                          {slip.work_days > 0 ? (
+                            <span className="text-slate-700 font-medium">
+                              {slip.work_days}日
+                              {slip.overtime_hours > 0 && (
+                                <span className="text-rose-600 font-bold ml-1 text-[11px]">
+                                  ({slip.overtime_hours}h)
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-amber-600 font-bold text-[11px]">0日</span>
+                          )}
                         </td>
 
-                        <td className="py-3.5 px-3 text-right font-medium text-slate-700">
-                          <div className="flex flex-col items-end gap-0.5">
-                            {slip.overtime_hours > 0 ? (
-                              <span className="bg-rose-50 text-rose-700 font-black px-2 py-0.5 rounded text-[11px] border border-rose-200">
-                                残業 {slip.overtime_hours}h
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 text-[11px]">残業なし</span>
-                            )}
-                            <div className="flex items-center gap-1 text-[10px] text-slate-400">
-                              {slip.midnight_hours && slip.midnight_hours > 0 ? (
-                                <span className="text-purple-600 font-bold">🌙深夜 {slip.midnight_hours}h</span>
-                              ) : null}
-                              {slip.paid_leave_days && slip.paid_leave_days > 0 ? (
-                                <span className="text-emerald-600 font-bold">🏖️有給 {slip.paid_leave_days}日</span>
-                              ) : null}
-                            </div>
-                          </div>
+                        {/* 4. 基本給 */}
+                        <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-700 text-xs">
+                          ¥{(slip.base_salary || 0).toLocaleString()}
                         </td>
 
-                        <td className="py-3.5 px-3 text-right">
-                          <div className="font-bold text-slate-800">¥{(slip.total_earnings || 0).toLocaleString()}</div>
-                          <div className="text-[10px] text-slate-400">
-                            基本 ¥{(slip.base_salary || 0).toLocaleString()}
-                            {slip.absence_deduction && slip.absence_deduction > 0 ? (
-                              <span className="text-rose-600 font-bold ml-1">(欠控 -¥{slip.absence_deduction.toLocaleString()})</span>
-                            ) : null}
-                          </div>
+                        {/* 5. 各種手当 */}
+                        <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-600 text-xs">
+                          {allowances > 0 ? `¥${allowances.toLocaleString()}` : <span className="text-slate-300">-</span>}
                         </td>
 
-                        <td className="py-3.5 px-3 text-right font-medium text-rose-600">
-                          <div className="font-bold">-¥{(slip.total_deductions || 0).toLocaleString()}</div>
-                          <div className="text-[10px] text-slate-400">
-                            社保 ¥{((slip.health_insurance || 0) + (slip.nursing_insurance || 0) + (slip.pension_insurance || 0) + (slip.employment_insurance || 0)).toLocaleString()}
-                          </div>
+                        {/* 6. 総支給額 */}
+                        <td className="py-2.5 px-3.5 text-right font-mono tabular-nums font-bold text-slate-900 text-xs bg-slate-100/30">
+                          ¥{(slip.total_earnings || 0).toLocaleString()}
                         </td>
 
-                        <td className="py-3.5 px-4 text-right">
-                          <span className="font-black text-sm text-indigo-600">
-                            ¥{(slip.net_salary || 0).toLocaleString()}
-                          </span>
+                        {/* 7. 控除合計 */}
+                        <td className="py-2.5 px-3.5 text-right font-mono tabular-nums font-bold text-rose-600 text-xs">
+                          -¥{(slip.total_deductions || 0).toLocaleString()}
                         </td>
 
-                        <td className="py-3.5 px-3 text-center">
+                        {/* 8. 差引手取り額 */}
+                        <td className="py-2.5 px-4 text-right font-mono tabular-nums font-black text-sm text-indigo-700 bg-indigo-50/20">
+                          ¥{(slip.net_salary || 0).toLocaleString()}
+                        </td>
+
+                        {/* 9. 状態 */}
+                        <td className="py-2.5 px-2.5 text-center">
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleTogglePublishSingle(slip);
                             }}
-                            className={`text-[10px] font-bold px-2.5 py-1 rounded-full border flex items-center justify-center gap-1 w-fit mx-auto cursor-pointer transition ${
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition cursor-pointer flex items-center justify-center gap-0.5 mx-auto ${
                               slip.status === 'published'
-                                ? 'bg-emerald-50 hover:bg-rose-50 text-emerald-700 hover:text-rose-700 border-emerald-200 hover:border-rose-200'
-                                : 'bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border-slate-200 hover:border-emerald-200'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700'
+                                : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700'
                             }`}
-                            title={slip.status === 'published' ? 'クリックして下書きに戻す' : 'クリックして確定公開する'}
+                            title={slip.status === 'published' ? '下書きに戻す' : '確定公開する'}
                           >
                             {slip.status === 'published' ? <Lock className="w-2.5 h-2.5" /> : <Unlock className="w-2.5 h-2.5" />}
-                            {slip.status === 'published' ? '確定公開済' : !isMonthCalculated ? '勤怠未計算' : '下書き'}
+                            <span>{slip.status === 'published' ? '確定' : '下書き'}</span>
                           </button>
                         </td>
 
-                        <td className="py-3.5 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        {/* 10. 内訳・アクション */}
+                        <td className="py-2.5 px-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                             <button
-                              onClick={() => handleTogglePublishSingle(slip)}
-                              className={`p-1.5 rounded-lg transition cursor-pointer ${
-                                slip.status === 'published'
-                                  ? 'text-emerald-600 hover:bg-rose-50 hover:text-rose-600'
-                                  : 'text-indigo-600 hover:bg-indigo-50'
+                              type="button"
+                              onClick={() => setExpandedUserId(isExpanded ? null : slip.user_id)}
+                              className={`text-[11px] font-bold px-2 py-1 rounded-lg transition flex items-center gap-0.5 cursor-pointer ${
+                                isExpanded
+                                  ? 'bg-indigo-600 text-white shadow-2xs'
+                                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60'
                               }`}
-                              title={slip.status === 'published' ? '下書きに戻す' : '確定公開する'}
+                              title="勤怠・手当・控除の全内訳を展開"
                             >
-                              {slip.status === 'published' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                              <span>内訳</span>
+                              {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                             </button>
+
                             <button
-                              onClick={() => handleRecalculateSingle(slip.user_id)}
-                              disabled={isSaving}
-                              className="p-1.5 text-emerald-600 hover:text-white hover:bg-emerald-600 rounded-lg transition cursor-pointer disabled:opacity-50"
-                              title="大元マスタの最新情報（標準報酬月額・住民税特別徴収・扶養控除数）で再計算"
-                            >
-                              <RotateCcw className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleOpenAttendanceSheet(slip)}
-                              className="p-1.5 text-blue-600 hover:text-white hover:bg-blue-600 rounded-lg transition cursor-pointer"
-                              title="当月の出勤簿を開き、日別打刻漏れの修正や時間をその場で直せます（給与自動再計算）"
-                            >
-                              <Calendar className="w-4 h-4" />
-                            </button>
-                            <button
+                              type="button"
                               onClick={() => setPreviewModal({ isOpen: true, payslip: slip })}
-                              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                              title="A4明細プレビュー・印刷"
+                              className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition cursor-pointer"
+                              title="明細書プレビュー・印刷"
                             >
-                              <Printer className="w-4 h-4" />
+                              <Printer className="w-3.5 h-3.5" />
                             </button>
+
                             <button
+                              type="button"
                               onClick={() => setEditModal({ isOpen: true, data: slip })}
-                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                              title="金額の微調整・編集"
+                              className="p-1 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded-md transition cursor-pointer"
+                              title="金額の個別微調整"
                             >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleCopyIndividualPayslipLineText(slip)}
-                              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
-                              title="LINE送信用テキストをコピー（手動送信用）"
-                            >
-                              <Copy className="w-4 h-4" />
+                              <Edit3 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </td>
@@ -3748,16 +3723,61 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                       {/* 📋 行展開: 勤怠・支給・控除の超詳細アコーディオン */}
                       {isExpanded && (
                         <tr className="bg-slate-50/90 border-b border-slate-200">
-                          <td colSpan={9} className="p-4 sm:p-5">
+                          <td colSpan={10} className="p-4 sm:p-5">
                             <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
-                              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                                <div className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                                <div className="flex items-center gap-2">
                                   <Clock className="w-4 h-4 text-indigo-600" />
-                                  【{slip.user?.name || '従業員'}】の当月 勤怠実績 ＆ 給与控除・手取り計算明細
+                                  <span className="text-xs font-black text-slate-800">
+                                    【{slip.user?.name || '従業員'}】の当月 勤怠実績 ＆ 給与控除・手取り計算明細
+                                  </span>
+                                  <span className="text-[11px] text-slate-400">
+                                    （支給日: {slip.payment_date || `${currentYearMonth}-25`}）
+                                  </span>
                                 </div>
-                                <span className="text-[11px] text-slate-400">
-                                  支給日: {slip.payment_date || `${currentYearMonth}-25`}
-                                </span>
+
+                                {/* 展開時アクションバー */}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => setProfileModal({ isOpen: true, user: slip.user, profile: prof || getInitialProfile(tenantId || '', slip.user_id) })}
+                                    className="text-xs font-bold text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 border border-slate-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                  >
+                                    <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
+                                    <span>給与マスタ設定</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenAttendanceSheet(slip)}
+                                    className="text-xs font-bold text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                    title="当月の日別出勤簿を開き、打刻漏れの修正や時間をその場で直せます（給与自動再計算）"
+                                  >
+                                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                                    <span>出勤簿（打刻修正）</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRecalculateSingle(slip.user_id)}
+                                    disabled={isSaving}
+                                    className="text-xs font-bold text-emerald-700 hover:text-white bg-emerald-50 hover:bg-emerald-600 border border-emerald-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50"
+                                    title="大元マスタの最新情報で再計算"
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5 text-emerald-600 group-hover:text-white" />
+                                    <span>🔄 再計算</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyIndividualPayslipLineText(slip)}
+                                    className="text-xs font-bold text-emerald-700 hover:text-white bg-emerald-50 hover:bg-emerald-600 border border-emerald-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                    title="LINE送信用文面をコピー"
+                                  >
+                                    <Copy className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>LINE文面コピー</span>
+                                  </button>
+                                </div>
                               </div>
 
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
