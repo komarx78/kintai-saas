@@ -518,6 +518,72 @@ export function runPayrollEngineTests(): { success: boolean; results: string[] }
     }
   }
 
+  // ==========================================
+  // テスト15: 労基法第37条第5項・施行規則第21条準拠 特別手当（special_allowance）の割増基礎算入および総支給反映
+  // ==========================================
+  {
+    const profileWithSpecial: EmployeePayrollProfile = {
+      tenant_id: 'test-tenant',
+      user_id: 'emp-special',
+      salary_type: 'monthly',
+      base_salary: 300000,
+      hourly_wage: 0,
+      position_allowance: 20000,
+      qualification_allowance: 10000,
+      housing_allowance: 0,
+      family_allowance: 0,
+      special_allowance: 30000, // 特別手当30,000円
+      commuting_type: 'none',
+      commuting_allowance: 0,
+      commuting_taxable: false,
+      fixed_overtime_hours: 0,
+      fixed_overtime_allowance: 0,
+      dependents_count: 0,
+      birth_date: '1995-05-15',
+      health_insurance_enabled: true,
+      health_standard_monthly_remuneration: 360000,
+      pension_insurance_enabled: true,
+      pension_standard_monthly_remuneration: 360000,
+      employment_insurance_enabled: true,
+      resident_tax_monthly: 0,
+      tax_bracket: 'kou'
+    };
+
+    const attWithOvertime: AttendanceSummary = {
+      work_days: 20,
+      actual_hours: 170,
+      overtime_hours: 10, // 残業10時間
+      midnight_hours: 0,
+      holiday_hours: 0,
+      paid_leave_days: 0,
+      absence_days: 0,
+      late_early_hours: 0
+    };
+
+    // 基礎賃金: 基本給(300,000) + 役職(20,000) + 資格(10,000) + 特別(30,000) = 360,000円
+    // 時間単価: 360,000 / 160h = 2,250円/h
+    // 残業代: 10h * 1.25 * 2,250円 = 28,125円
+    // 総支給額: 360,000 + 28,125 = 388,125円
+    const payroll = calculatePayroll(profileWithSpecial, attWithOvertime, {
+      closing_day: 'end_of_month',
+      payment_month: 'current',
+      payment_day: '25',
+      prefecture_code: '13',
+      rounding_method: 'floor',
+      year_month: '2026-04'
+    });
+
+    if (
+      payroll.special_allowance === 30000 &&
+      payroll.overtime_allowance === 28125 &&
+      payroll.total_earnings === 388125
+    ) {
+      results.push('✅ テスト15 パス: 特別手当（special_allowance）の割増基礎算入（労基法第37条第5項・則21条）および総支給加算が1円単位で完全正確');
+    } else {
+      results.push(`❌ テスト15 失敗: 特別手当反映不整合 (special:${payroll.special_allowance}, overtime:${payroll.overtime_allowance}, total:${payroll.total_earnings})`);
+    }
+  }
+
   const allPassed = results.every(r => r.startsWith('✅'));
 
   return { success: allPassed, results };

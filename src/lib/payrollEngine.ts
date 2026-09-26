@@ -260,8 +260,12 @@ export function calculatePayroll(
     // 【月給制】
     baseSalary = profile.base_salary || 0;
     // 1時間あたり基礎賃金（所定労働時間 160h 想定）
+    // 労基法第37条第5項・施行規則第21条（除外手当7種限定列挙）準拠: 役職手当、資格・職能手当、特別手当を算入
     const monthlyStandardHours = 160;
-    const baseForOvertime = baseSalary + (profile.position_allowance || 0) + (profile.qualification_allowance || 0);
+    const baseForOvertime = baseSalary + 
+      (profile.position_allowance || 0) + 
+      (profile.qualification_allowance || 0) + 
+      (profile.special_allowance || 0);
     const hourlyFromMonthly = baseForOvertime / monthlyStandardHours;
 
     // 法定残業手当（60h以内 1.25倍、60h超 1.50倍）
@@ -337,7 +341,7 @@ export function calculatePayroll(
     commutingAllowance = (attendance.work_days || 0) > 0 ? (profile.commuting_allowance || 0) : 0;
   }
 
-  const specialAllowance = 0;
+  const specialAllowance = profile.special_allowance || 0;
 
   // 総支給額 (総額)
   const totalEarnings = Math.max(0, 
@@ -355,7 +359,7 @@ export function calculatePayroll(
     lateEarlyDeduction
   );
 
-  // 🛡️ 固定的賃金（基本給＋役職＋資格＋住宅＋家族＋固定残業＋固定通勤手当）
+  // 🛡️ 固定的賃金（基本給＋役職＋資格＋住宅＋家族＋特別手当＋固定残業＋固定通勤手当）
   // 法定労務SSOT原則: 標準報酬月額は「固定的給与」に基づき定時決定・資格取得決定され1年間固定される。
   // 万が一マスタで標準報酬月額が未設定の場合でも、当月の残業手当（非固定的手当）の波で社保料が毎月変動するのを物理遮断する！
   const standardContractBaseSalary = profile.salary_type === 'hourly'
@@ -368,6 +372,7 @@ export function calculatePayroll(
     qualificationAllowance +
     housingAllowance +
     familyAllowance +
+    specialAllowance +
     (profile.fixed_overtime_allowance || 0) +
     (profile.commuting_allowance || 0)
   );
