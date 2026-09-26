@@ -93,7 +93,9 @@ const Login = () => {
 
         // 🌟 もしセッションが即座に発行された場合（メール確認不要設定、または自動認証）
         if (signUpData.session) {
-          navigate('/portal');
+          const searchParams = new URLSearchParams(window.location.search);
+          const urlTid = searchParams.get('tenant_id');
+          navigate(urlTid ? `/portal?tenant_id=${urlTid}` : '/portal');
           return;
         }
 
@@ -137,7 +139,9 @@ const Login = () => {
               const { data: healData, error: healError } = await supabase.rpc('self_heal_user');
               if (!healError && healData && healData.success) {
                 console.log('User account successfully self-healed:', healData);
-                navigate('/portal');
+                const searchParams = new URLSearchParams(window.location.search);
+                const urlTid = searchParams.get('tenant_id');
+                navigate(urlTid ? `/portal?tenant_id=${urlTid}` : '/portal');
                 return;
               }
             } catch (healErr) {
@@ -150,8 +154,10 @@ const Login = () => {
             return;
           }
 
-          // 管理者も一般ユーザーも、まずは総合ポータルへ遷移する
-          navigate('/portal');
+          // 🏛️ 憲法9条遵守：管理者も一般ユーザーも、所属tenant_idをURLに100%バインドして総合ポータルへ遷移する
+          const searchParams = new URLSearchParams(window.location.search);
+          const targetTenantId = userRecord?.tenant_id || searchParams.get('tenant_id');
+          navigate(targetTenantId ? `/portal?tenant_id=${targetTenantId}` : '/portal');
         }
       }
     } catch (err: any) {
