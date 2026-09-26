@@ -73,8 +73,8 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
   const birthParsed = parseEraDate(data.birthDate);
   const retireParsed = parseEraDate(data.retirementDate);
 
-  // 金額フォーマット
-  const fmt = (n?: number) => (n !== undefined && n !== null && n > 0 ? n.toLocaleString() : '');
+  // 金額フォーマット（0円の場合は'0'、未定義・nullの場合は空文字）
+  const fmt = (n?: number) => (n !== undefined && n !== null ? n.toLocaleString() : '');
 
   return (
     <div className="bg-white text-black font-sans p-4 sm:p-6 max-w-[840px] mx-auto select-text print:p-0 print:m-0 print:max-w-none text-[10px] leading-tight border border-slate-300 shadow-sm print:shadow-none print:border-none">
@@ -171,7 +171,7 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
               <span className="text-[7px] text-slate-400 font-mono">E01</span>
             </div>
             <div className="col-span-10 border-b border-black p-1 font-medium truncate">
-              {data.recipientAddress || '滋賀県大津市'}
+              {data.recipientAddress || ''}
             </div>
 
             {/* フリガナ / 受給者番号 */}
@@ -250,16 +250,16 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
               <tr className="font-mono text-[10px] font-bold h-7">
                 <td className="p-1 border-r border-black font-sans font-normal text-[9px]">給与・賞与</td>
                 <td className="p-1 border-r border-black text-right pr-2">
-                  {fmt(data.totalPayment) || '3,600,000'}
+                  {fmt(data.totalPayment)}
                 </td>
                 <td className="p-1 border-r border-black text-right pr-2">
-                  {fmt(data.deductionAfterPayment) || '2,440,000'}
+                  {fmt(data.deductionAfterPayment)}
                 </td>
                 <td className="p-1 border-r border-black text-right pr-2">
-                  {fmt(data.totalIncomeDeduction) || '1,011,000'}
+                  {fmt(data.totalIncomeDeduction)}
                 </td>
                 <td className="p-1 text-right pr-2 font-black text-xs">
-                  {fmt(data.withholdingTaxAmount) || '73,200'}
+                  {fmt(data.withholdingTaxAmount)}
                 </td>
               </tr>
             </tbody>
@@ -357,7 +357,7 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
               <tr className="font-mono text-[9.5px] font-bold h-6">
                 <td className="border-r border-black"></td>
                 <td className="border-r border-black text-right pr-2">
-                  {fmt(data.socialInsuranceAmount) || '531,000'}
+                  {fmt(data.socialInsuranceAmount)}
                 </td>
                 <td className="border-r border-black text-right pr-2">
                   {fmt(data.lifeInsuranceDeduction) || ''}

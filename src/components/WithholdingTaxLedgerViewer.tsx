@@ -513,10 +513,18 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
     };
   }, [salaryTotal, bonusTotal, currentEmployee]);
 
-  // CSVダウンロード
+  // CSVダウンロード（RFC 4180準拠エスケープ ＆ Excel文字化け防止BOM付与）
   const handleDownloadCsv = () => {
     if (!currentEmployee) return;
-    const headers = ['月', '支給月日', '総支給金額', '社会保険料等控除額', '社保控除後給与等の金額', '扶養親族等の数', '算出税額', '年末調整過不足税額', '差引徴収税額'];
+    const escapeCsv = (val: any) => {
+      const s = String(val ?? '');
+      if (s.includes('"') || s.includes(',') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return `"${s}"`;
+    };
+
+    const headers = ['月', '支給月日', '総支給金額', '社会保険料等控除額', '社保控除後給与等の金額', '扶養親族等の数', '算出税額', '年末調整過不足税額', '差引徴収税額'].map(escapeCsv);
     const rows = monthlySalaryRows.map(r => [
       `${r.month}月`,
       r.payDate,
@@ -527,7 +535,7 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
       r.tax,
       r.adjustment,
       r.netTax
-    ]);
+    ].map(escapeCsv));
     rows.push([
       '計',
       '',
@@ -538,14 +546,16 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
       salaryTotal.tax,
       salaryTotal.adjustment,
       salaryTotal.netTax
-    ]);
+    ].map(escapeCsv));
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
+    const objectUrl = URL.createObjectURL(blob);
+    link.href = objectUrl;
     link.download = `源泉徴収簿_令和${reiwaYear}年_${currentEmployee.name}.csv`;
     link.click();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   };
 
   return (

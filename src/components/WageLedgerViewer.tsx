@@ -436,22 +436,32 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
     ];
   }, []);
 
-  // CSVダウンロード
+  // CSVダウンロード（RFC 4180準拠エスケープ ＆ Excel文字化け防止BOM付与）
   const handleDownloadCsv = () => {
     if (!currentEmployee) return;
-    const headers = ['項目名', ...monthlyDataList.map(m => m.label), '年間合計'];
+    const escapeCsv = (val: any) => {
+      const s = String(val ?? '');
+      if (s.includes('"') || s.includes(',') || s.includes('\n') || s.includes('\r')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return `"${s}"`;
+    };
+
+    const headers = ['項目名', ...monthlyDataList.map(m => m.label), '年間合計'].map(escapeCsv);
     const rows = tableRows.map(row => {
       const vals = monthlyDataList.map(m => (m as any)[row.id]);
       const tot = (annualTotal as any)[row.id];
-      return [row.name, ...vals, tot];
+      return [row.name, ...vals, tot].map(escapeCsv);
     });
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
+    const objectUrl = URL.createObjectURL(blob);
+    link.href = objectUrl;
     link.download = `賃金台帳_${selectedYear}年_${currentEmployee.name}.csv`;
     link.click();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   };
 
   return (

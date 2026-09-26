@@ -47,9 +47,10 @@ export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip,
 
   // 年月・支給日の和暦・西暦フォーマット
   const getFormattedDates = () => {
-    let year = 2026;
-    let month = 7;
-    let payDate = payslip.payment_date || '2026-07-31';
+    const now = new Date();
+    let year = now.getFullYear();
+    let month = now.getMonth() + 1;
+    let payDate = payslip.payment_date || '';
 
     if (payslip.year_month && payslip.year_month.includes('-')) {
       const parts = payslip.year_month.split('-');
@@ -57,14 +58,16 @@ export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip,
       month = parseInt(parts[1], 10);
     } else if (payslip.payment_date) {
       const d = new Date(payslip.payment_date);
-      year = d.getFullYear();
-      month = d.getMonth() + 1;
+      if (!isNaN(d.getTime())) {
+        year = d.getFullYear();
+        month = d.getMonth() + 1;
+      }
     }
 
     const reiwaYear = (year - 2018).toString().padStart(2, '0');
     const monthStr = month.toString().padStart(2, '0');
     
-    let payFormatted = `${year} (令和${reiwaYear}) 年${monthStr}月31日`;
+    let payFormatted = `${year} (令和${reiwaYear}) 年${monthStr}月`;
     if (payDate) {
       const pD = new Date(payDate);
       if (!isNaN(pD.getTime())) {
@@ -155,17 +158,25 @@ export const OfficialPayslipDoc: React.FC<OfficialPayslipDocProps> = ({ payslip,
   if (payslip.resident_tax && payslip.resident_tax > 0) deductionsList.push({ label: '住民税', amount: payslip.resident_tax });
   if (payslip.other_deductions && payslip.other_deductions > 0) deductionsList.push({ label: 'その他控除', amount: payslip.other_deductions });
 
+  const totalEarnings = payslip.total_earnings !== undefined && payslip.total_earnings !== null
+    ? Number(payslip.total_earnings)
+    : earningsList.reduce((sum, item) => sum + item.amount, 0);
+  const totalDeductions = payslip.total_deductions !== undefined && payslip.total_deductions !== null
+    ? Number(payslip.total_deductions)
+    : deductionsList.reduce((sum, item) => sum + item.amount, 0);
+  const netSalary = payslip.net_salary !== undefined && payslip.net_salary !== null
+    ? Number(payslip.net_salary)
+    : (totalEarnings - totalDeductions);
+
   // 4. 振込・支払項目
   const paymentList: { label: string; amount: number }[] = [];
-  const transferAmt = payslip.transfer_amount || payslip.net_salary || 97534;
+  const transferAmt = payslip.transfer_amount !== undefined && payslip.transfer_amount !== null
+    ? Number(payslip.transfer_amount)
+    : netSalary;
   paymentList.push({ label: '銀行振込支給額', amount: transferAmt });
   if (payslip.cash_amount && payslip.cash_amount > 0) {
     paymentList.push({ label: '現金支給額', amount: payslip.cash_amount });
   }
-
-  const totalEarnings = payslip.total_earnings || earningsList.reduce((sum, item) => sum + item.amount, 0);
-  const totalDeductions = payslip.total_deductions || deductionsList.reduce((sum, item) => sum + item.amount, 0);
-  const netSalary = payslip.net_salary || (totalEarnings - totalDeductions);
 
   return (
     <div className="bg-white p-6 sm:p-10 max-w-5xl mx-auto text-slate-800 font-sans leading-normal select-text print:p-4 print:m-0 print:max-w-none shadow-sm rounded-2xl border border-slate-200">
