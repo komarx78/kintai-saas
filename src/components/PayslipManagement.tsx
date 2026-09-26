@@ -2663,29 +2663,32 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         return null;
       })()}
 
-      {/* 📢 社保 随時改定（月変）検知アラートバナー */}
-      {monthlyRevisionEligibleCandidates.length > 0 && (
-        <div className="bg-gradient-to-r from-purple-950 via-indigo-900 to-slate-900 border-2 border-purple-400/50 rounded-3xl p-5 shadow-xl text-white flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in duration-300">
+      {/* 📢 社保 随時改定（月変）常設モニタリングバー */}
+      {monthlyRevisionEligibleCandidates.length > 0 ? (
+        <div className="bg-gradient-to-r from-purple-50 via-indigo-50/60 to-purple-50/40 border-2 border-purple-300 rounded-3xl p-5 shadow-xs transition flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-lg text-2xl font-black">
-              📢
+            <div className="w-11 h-11 rounded-2xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs text-xl font-black">
+              📋
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="bg-purple-400 text-purple-950 font-black text-xs px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                  社保 随時改定アラート
+                <span className="bg-purple-600 text-white font-black text-xs px-2.5 py-0.5 rounded-full shadow-2xs">
+                  要手続き
                 </span>
-                <h4 className="font-black text-base text-white">
-                  {currentYearMonth} 改定：月額変更届（月変）の対象候補が {monthlyRevisionEligibleCandidates.length} 名 検出されました！
+                <h4 className="font-black text-base text-purple-950">
+                  {currentYearMonth} 改定：月額変更届（月変）の対象候補が {monthlyRevisionEligibleCandidates.length} 名 検出されました
                 </h4>
               </div>
-              <p className="text-xs text-purple-200 mt-1 leading-relaxed">
+              <p className="text-xs text-purple-800/90 mt-1 leading-relaxed">
                 基本給などの固定的賃金変動から3ヶ月間の給与実績により、標準報酬月額が2等級以上変動する社員がいます。日本年金機構公式様式コード2221（月額変更届）の届出を行ってください。
               </p>
-              <div className="flex flex-wrap gap-2 mt-2">
+              <div className="flex flex-wrap gap-2 mt-2.5">
                 {monthlyRevisionEligibleCandidates.map(c => (
-                  <span key={c.userId} className="text-[11px] bg-purple-900/80 border border-purple-400/40 text-purple-200 px-2 py-0.5 rounded-lg font-bold flex items-center gap-1">
-                    👤 {c.userName} ({c.changeType} {c.healthGradeDiff > 0 ? `+${c.healthGradeDiff}` : c.healthGradeDiff}等級差)
+                  <span key={c.userId} className="text-xs bg-white/95 border border-purple-200 text-purple-900 px-2.5 py-1 rounded-xl font-bold shadow-2xs flex items-center gap-1.5">
+                    👤 {c.userName}
+                    <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded font-black">
+                      {c.changeType} {c.healthGradeDiff > 0 ? `+${c.healthGradeDiff}` : c.healthGradeDiff}等級差
+                    </span>
                   </span>
                 ))}
               </div>
@@ -2695,10 +2698,37 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           <button
             type="button"
             onClick={() => setMonthlyRevisionModalOpen(true)}
-            className="shrink-0 px-5 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 active:scale-95 text-white font-black text-xs sm:text-sm rounded-2xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+            className="shrink-0 px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 active:scale-95 text-white font-black text-xs sm:text-sm rounded-2xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
           >
             <FileSpreadsheet className="w-4 h-4" />
             <span>📋 月額変更届（様式2221）を作成・印刷</span>
+          </button>
+        </div>
+      ) : (
+        <div className="bg-slate-50/90 hover:bg-slate-100/70 border border-slate-200/80 rounded-2xl px-4 py-2.5 shadow-2xs transition flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 text-sm">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full text-[10px] border border-emerald-200">
+                月変チェック
+              </span>
+              <span className="font-bold text-slate-700">
+                {currentYearMonth} 改定：月変（随時改定）の該当者はいません
+              </span>
+              <span className="text-slate-400 text-[11px] hidden md:inline">
+                （固定的賃金変動に伴う2等級以上の差分なし・届出不要）
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMonthlyRevisionModalOpen(true)}
+            className="text-xs font-bold text-slate-500 hover:text-purple-600 bg-white hover:bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs transition flex items-center gap-1.5 self-end sm:self-auto cursor-pointer"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-slate-400" />
+            <span>月変の詳細・履歴を確認</span>
           </button>
         </div>
       )}
