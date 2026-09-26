@@ -1815,7 +1815,7 @@ export default function EmployeeOnboardingWelcome() {
                   <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-700 text-[10px] space-y-1">
                     <div className="text-slate-400">【計算対象の住所区間】</div>
                     <div className="text-slate-300">🏡 出発地: <span className="font-bold text-white">{basicData.address || '（Step 1 の現住所）'}</span></div>
-                    <div className="text-slate-300">🏢 到着地: <span className="font-bold text-white">{tenantInfo?.address || '東京都千代田区大手町 1-2-3'}（会社所在地）</span></div>
+                    <div className="text-slate-300">🏢 到着地: <span className="font-bold text-white">{tenantInfo?.address || '（会社所在地未設定：管理者へご確認ください）'}</span></div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">

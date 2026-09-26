@@ -296,23 +296,25 @@ ${tenantId || '（エラー：コード取得失敗）'}
   const [isRulesPrintModalOpen, setIsRulesPrintModalOpen] = useState(false);
   const [submitDocInfo, setSubmitDocInfo] = useState({
     companyName: '',
-    companyAddress: '東京都千代田区〇〇 1-2-3',
-    representativeName: '代表取締役 〇〇 〇〇',
-    inspectionOffice: '中央労働基準監督署長',
+    companyAddress: '',
+    representativeName: '',
+    inspectionOffice: '',
     submitDate: new Date().toISOString().split('T')[0],
-    workerRepName: '従業員代表 〇〇 〇〇',
+    workerRepName: '',
     workerRepSelectMethod: '全従業員の過半数の信任投票・挙手による選任',
     effectiveDate: new Date().toISOString().split('T')[0]
   });
 
   useEffect(() => {
-    if (tenantName) {
+    if (tenantName || tenantInfo) {
       setSubmitDocInfo(prev => ({
         ...prev,
-        companyName: prev.companyName || tenantName
+        companyName: prev.companyName || tenantName || tenantInfo?.name || '',
+        companyAddress: prev.companyAddress || tenantInfo?.address || '',
+        representativeName: prev.representativeName || tenantInfo?.representative_name || ''
       }));
     }
-  }, [tenantName]);
+  }, [tenantName, tenantInfo]);
 
   // Holiday States
   const [holidays, setHolidays] = useState<Set<string>>(new Set());
@@ -2271,7 +2273,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
                       type="text"
                       value={submitDocInfo.companyName}
                       onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, companyName: e.target.value })}
-                      placeholder="例: 株式会社〇〇"
+                      placeholder="例: 株式会社サンプル"
                       className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
@@ -2281,7 +2283,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
                       type="text"
                       value={submitDocInfo.companyAddress}
                       onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, companyAddress: e.target.value })}
-                      placeholder="例: 東京都千代田区〇〇 1-2-3"
+                      placeholder="例: 東京都千代田区霞が関 1-1-1"
                       className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
@@ -2301,7 +2303,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
                       type="text"
                       value={submitDocInfo.inspectionOffice}
                       onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, inspectionOffice: e.target.value })}
-                      placeholder="例: 中央労働基準監督署長"
+                      placeholder="例: 労働基準監督署長"
                       className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
@@ -2340,75 +2342,6 @@ ${tenantId || '（エラー：コード取得失敗）'}
                 </div>
               </div>
 
-              {/* 届出書類の情報入力フォーム（印刷時は非表示） */}
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm print:hidden">
-                <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <Settings className="w-4 h-4 text-blue-600" />
-                  届出書類の記載情報（差し替え設定）
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">事業場名称（会社名）</label>
-                    <input
-                      type="text"
-                      value={submitDocInfo.companyName}
-                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, companyName: e.target.value })}
-                      placeholder="例: 株式会社〇〇"
-                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">事業場所在地</label>
-                    <input
-                      type="text"
-                      value={submitDocInfo.companyAddress}
-                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, companyAddress: e.target.value })}
-                      placeholder="例: 東京都千代田区〇〇 1-2-3"
-                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">使用者職氏名（代表者）</label>
-                    <input
-                      type="text"
-                      value={submitDocInfo.representativeName}
-                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, representativeName: e.target.value })}
-                      placeholder="例: 代表取締役 山田 太郎"
-                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">所轄労働基準監督署</label>
-                    <input
-                      type="text"
-                      value={submitDocInfo.inspectionOffice}
-                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, inspectionOffice: e.target.value })}
-                      placeholder="例: 中央労働基準監督署長"
-                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">届出年月日</label>
-                    <input
-                      type="date"
-                      value={submitDocInfo.submitDate}
-                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, submitDate: e.target.value })}
-                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">労働者代表 氏名</label>
-                    <input
-                      type="text"
-                      value={submitDocInfo.workerRepName}
-                      onChange={(e) => setSubmitDocInfo({ ...submitDocInfo, workerRepName: e.target.value })}
-                      placeholder="例: 従業員代表 佐藤 次郎"
-                      className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
               {/* 印刷プレビュー用紙（各A4シート独立表示） */}
               <div id="rules-print-area" className="max-w-4xl mx-auto space-y-8 print:space-y-0 text-slate-900 font-serif leading-relaxed">
                 
@@ -2432,9 +2365,9 @@ ${tenantId || '（エラー：コード取得失敗）'}
                       </div>
                       <div className="text-right space-y-1.5 text-xs">
                         <div>届出年月日：令和 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getFullYear() - 2018 : '　'} 年 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getMonth() + 1 : '　'} 月 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getDate() : '　'} 日</div>
-                        <div>事業場名称：<strong>{submitDocInfo.companyName || '株式会社〇〇'}</strong></div>
-                        <div>事業場所在地：{submitDocInfo.companyAddress || '東京都千代田区〇〇 1-2-3'}</div>
-                        <div className="pt-2">使用者職氏名：<strong>{submitDocInfo.representativeName || '代表取締役 〇〇 〇〇'}</strong>　　　印</div>
+                        <div>事業場名称：<strong>{submitDocInfo.companyName || '—'}</strong></div>
+                        <div>事業場所在地：{submitDocInfo.companyAddress || '—'}</div>
+                        <div className="pt-2">使用者職氏名：<strong>{submitDocInfo.representativeName || '—'}</strong>　　　印</div>
                       </div>
                     </div>
 
@@ -2470,11 +2403,11 @@ ${tenantId || '（エラー：コード取得失敗）'}
 
                     <div className="flex justify-between items-start text-sm pt-6">
                       <div className="font-bold underline underline-offset-4 text-base">
-                        {submitDocInfo.representativeName || '代表取締役 〇〇 〇〇'}　殿
+                        {submitDocInfo.representativeName || '—'}　殿
                       </div>
                       <div className="text-right space-y-1.5 text-xs">
                         <div>提出年月日：令和 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getFullYear() - 2018 : '　'} 年 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getMonth() + 1 : '　'} 月 {submitDocInfo.submitDate ? new Date(submitDocInfo.submitDate).getDate() : '　'} 日</div>
-                        <div>労働者代表氏名：<strong>{submitDocInfo.workerRepName || '従業員代表 〇〇 〇〇'}</strong>　　　印</div>
+                        <div>労働者代表氏名：<strong>{submitDocInfo.workerRepName || '—'}</strong>　　　印</div>
                         <div className="text-[11px] text-slate-600">（選任方法：{submitDocInfo.workerRepSelectMethod}）</div>
                       </div>
                     </div>

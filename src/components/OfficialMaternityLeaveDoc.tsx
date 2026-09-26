@@ -304,7 +304,7 @@ export const OfficialMaternityLeaveDoc: React.FC<OfficialMaternityLeaveDocProps>
               </div>
               <div className="flex items-center justify-between pt-1">
                 <span className="text-slate-600 font-bold">確認者：</span>
-                <span className="font-bold text-slate-900">{companyInfo.representative_name || '代表取締役'}</span>
+                <span className="font-bold text-slate-900">{companyInfo.representative_name || '—'}</span>
               </div>
               <div className="text-right text-[10px] text-slate-500 mt-1">
                 {companyInfo.name}
@@ -485,7 +485,7 @@ export const OfficialMaternityLeaveDoc: React.FC<OfficialMaternityLeaveDocProps>
               </div>
               <div className="flex items-center justify-between pt-1">
                 <span className="text-slate-600 font-bold">確認者：</span>
-                <span className="font-bold text-slate-900">{companyInfo.representative_name || '代表取締役'}</span>
+                <span className="font-bold text-slate-900">{companyInfo.representative_name || '—'}</span>
               </div>
               <div className="text-right text-[10px] text-slate-500 mt-1">
                 {companyInfo.name}
