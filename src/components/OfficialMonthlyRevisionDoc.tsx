@@ -59,46 +59,46 @@ export interface MonthlyRevisionDocProps {
 export const formatNenkinBirthDate = (birthDateStr?: string): string => {
   if (!birthDateStr) return '';
   const parts = birthDateStr.split('-');
-  if (parts.length !== 3) return birthDateStr;
+  if (parts.length < 3) return birthDateStr;
   const y = parseInt(parts[0], 10);
-  const m = parseInt(parts[1], 10);
-  const d = parseInt(parts[2], 10);
-  if (isNaN(y) || isNaN(m) || isNaN(d)) return birthDateStr;
+  const m = String(parseInt(parts[1], 10)).padStart(2, '0');
+  const d = String(parseInt(parts[2], 10)).padStart(2, '0');
 
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const mmdd = `${pad(m)}${pad(d)}`;
+  let eraCode = '9';
+  let eraYear = 1;
 
   if (y >= 2019) {
-    const eraY = y - 2018;
-    return `9-${pad(eraY)}${mmdd}`;
+    eraCode = '9';
+    eraYear = y - 2018;
   } else if (y >= 1989) {
-    const eraY = y - 1988;
-    return `7-${pad(eraY)}${mmdd}`;
+    eraCode = '7';
+    eraYear = y - 1988;
   } else if (y >= 1926) {
-    const eraY = y - 1925;
-    return `5-${pad(eraY)}${mmdd}`;
+    eraCode = '5';
+    eraYear = y - 1925;
   } else if (y >= 1912) {
-    const eraY = y - 1911;
-    return `3-${pad(eraY)}${mmdd}`;
+    eraCode = '3';
+    eraYear = y - 1911;
   } else {
-    const eraY = y - 1867;
-    return `1-${pad(eraY)}${mmdd}`;
+    eraCode = '1';
+    eraYear = y - 1867;
   }
+
+  const eraYearStr = String(eraYear).padStart(2, '0');
+  return `${eraCode}-${eraYearStr}${m}${d}`;
 };
 
 /**
- * 西暦年月を年金機構公式の和暦年月表記（例: '08年09月'）に変換
+ * 年月（YYYY-MM）を年金機構和暦形式（元号年-月）に変換
  */
-export const formatNenkinYearMonth = (ymStr?: string): string => {
+export const formatNenkinYM = (ymStr?: string): string => {
   if (!ymStr) return '';
   const parts = ymStr.split('-');
   if (parts.length < 2) return ymStr;
   const y = parseInt(parts[0], 10);
-  const m = parseInt(parts[1], 10);
-  if (isNaN(y) || isNaN(m)) return ymStr;
-
-  const eraY = y >= 2019 ? y - 2018 : y >= 1989 ? y - 1988 : y - 1925;
-  return `${String(eraY).padStart(2, '0')}年${String(m).padStart(2, '0')}月`;
+  const m = String(parseInt(parts[1], 10)).padStart(2, '0');
+  const eraY = y >= 2019 ? y - 2018 : y - 1988;
+  return `${eraY}-${m}`;
 };
 
 export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
@@ -109,32 +109,34 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
   onClose,
   onOpenInspector
 }) => {
+  // 表示モード切替: 'exact_pdf' (添付原本下敷き印字) | 'print_only' (専用OCR用紙・文字のみ印字)
+  const [renderMode, setRenderMode] = useState<'exact_pdf' | 'print_only'>('exact_pdf');
+
+  // 印字座標ステート
   const [coords, setCoords] = useState<MonthlyRevisionDocFieldConfig[]>(() => {
     return customCoords || loadMonthlyRevisionDocCoordinates(tenantId);
   });
 
-  const [bgMode, setBgMode] = useState<'with_form' | 'print_only'>('with_form');
-
   useEffect(() => {
     if (customCoords) {
       setCoords(customCoords);
+      return;
     }
-  }, [customCoords]);
-
-  useEffect(() => {
-    const handleUpdate = (e: any) => {
-      if (e.detail?.fields) {
-        setCoords(e.detail.fields);
-      }
+    const updateHandler = (e: any) => {
+      if (e.detail) setCoords(e.detail);
     };
-    window.addEventListener(MONTHLY_REVISION_COORDS_UPDATE_EVENT, handleUpdate);
+    window.addEventListener(MONTHLY_REVISION_COORDS_UPDATE_EVENT, updateHandler);
+
     fetchMonthlyRevisionDocCoordinatesFromDb(tenantId).then(dbCoords => {
-      if (dbCoords && !customCoords) {
+      if (dbCoords && dbCoords.length > 0) {
         setCoords(dbCoords);
       }
     });
-    return () => window.removeEventListener(MONTHLY_REVISION_COORDS_UPDATE_EVENT, handleUpdate);
-  }, [tenantId, customCoords]);
+
+    return () => {
+      window.removeEventListener(MONTHLY_REVISION_COORDS_UPDATE_EVENT, updateHandler);
+    };
+  }, [customCoords, tenantId]);
 
   const fieldMap = useMemo(() => {
     const map = new Map<string, MonthlyRevisionDocFieldConfig>();
@@ -142,8 +144,19 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
     return map;
   }, [coords]);
 
-  const rowBaseTop = fieldMap.get('rowBaseTop')?.y ?? 31.8;
-  const rowPitchY = fieldMap.get('rowPitchY')?.y ?? 12.60;
+  const getF = (id: string, defX: number, defY: number, defSize: number, defWidth?: number) => {
+    const item = fieldMap.get(id);
+    return {
+      x: item?.x !== undefined ? item.x : defX,
+      y: item?.y !== undefined ? item.y : defY,
+      fontSize: item?.fontSize !== undefined ? item.fontSize : defSize,
+      pitch: item?.pitch,
+      width: item?.width !== undefined ? item.width : defWidth
+    };
+  };
+
+  const rowBaseTop = fieldMap.get('rowBaseTop')?.y ?? 31.6;
+  const rowPitchY = fieldMap.get('rowPitchY')?.y ?? 11.93;
 
   // 1ページあたり5名でチャンク分割
   const pageChunks = useMemo(() => {
@@ -184,49 +197,65 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
     return { symbolDigits: digits, symbolKana: kana };
   }, [data.officeSymbol, data.officeCityCode, data.officeSymbolKana]);
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const fSubY = getF('subDateY', 14.5, 5.7, 11, 3.5);
+  const fSubM = getF('subDateM', 19.5, 5.7, 11, 3.5);
+  const fSubD = getF('subDateD', 24.2, 5.7, 11, 3.5);
+
+  const fDigits = getF('symbolDigits', 14.8, 8.4, 13, 9.8);
+  const fKana = getF('symbolKana', 26.6, 8.4, 12.5, 9.8);
+
+  const fZip = getF('companyZip', 12.0, 11.2, 9.5, 15.0);
+  const fAddress = getF('companyAddress', 12.0, 13.0, 9.0, 36.0);
+  const fName = getF('companyName', 12.0, 16.5, 10.5, 36.0);
+  const fOwner = getF('companyOwnerName', 12.0, 19.2, 10.5, 36.0);
+  const fPhone = getF('companyPhone', 13.0, 21.8, 9.5, 22.0);
+  const fSharoushi = getF('sharoushiName', 54.0, 19.5, 9.5, 38.0);
+
+  const digitChars = symbolDigits ? symbolDigits.split('').slice(0, 4) : [];
+  while (digitChars.length < 4) digitChars.push('');
+  const kanaChars = symbolKana ? symbolKana.split('').slice(0, 4) : [];
+  while (kanaChars.length < 4) kanaChars.push('');
 
   return (
     <div className="bg-slate-900/80 backdrop-blur-sm min-h-screen py-8 px-4 flex flex-col items-center">
       {/* 画面上部コントロールバー（印刷時は非表示） */}
       <div className="max-w-4xl w-full bg-white rounded-2xl p-4 mb-6 shadow-xl border border-slate-200 flex flex-wrap items-center justify-between gap-4 print:hidden">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black shadow-md">
+          <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center font-black shadow-md">
             📄
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h2 className="font-black text-slate-800 text-base">被保険者報酬月額変更届（様式コード 2221）</h2>
-              <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">
-                日本年金機構公式様式
+              <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded-full font-mono">
+                FORM-2221-EXACT-PDF
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              対象被保険者: {data.employees.length}名 ｜ 全 {pageChunks.length} ページ（5名/頁）
+              日本年金機構公式届出用紙 原本下敷き印字 ｜ 対象被保険者: {data.employees.length}名 ｜ 全 {pageChunks.length} ページ
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* 背景モード切替 */}
-          <div className="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200 text-xs">
+          {/* 表示・印刷モード切替 */}
+          <div className="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200 text-xs font-bold">
             <button
-              onClick={() => setBgMode('with_form')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
-                bgMode === 'with_form' ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+              onClick={() => setRenderMode('exact_pdf')}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                renderMode === 'exact_pdf' ? 'bg-purple-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              用紙枠線あり（白紙印刷用）
+              <span>🖼️ 日本年金機構 原本PDF完全一致（原本下敷き）</span>
+              <span className="text-[9px] bg-purple-400 text-white px-1.5 py-0.2 rounded font-mono">推奨</span>
             </button>
             <button
-              onClick={() => setBgMode('print_only')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
-                bgMode === 'print_only' ? 'bg-white text-indigo-600 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+              onClick={() => setRenderMode('print_only')}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                renderMode === 'print_only' ? 'bg-purple-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              文字のみ（専用OCR用紙用）
+              <span>📄 文字のみ（年金事務所OCR専用用紙用）</span>
             </button>
           </div>
 
@@ -235,14 +264,14 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
               onClick={onOpenInspector}
               className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer border border-slate-300 shadow-2xs"
             >
-              <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+              <Sliders className="w-3.5 h-3.5 text-purple-600" />
               <span>印字座標を微調整</span>
             </button>
           )}
 
           <button
-            onClick={handlePrint}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md flex items-center gap-1.5 cursor-pointer"
+            onClick={() => window.print()}
+            className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-md flex items-center gap-1.5 cursor-pointer"
           >
             <Printer className="w-4 h-4" />
             <span>A4印刷 / PDF保存</span>
@@ -265,274 +294,250 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
         {pageChunks.map((chunk, pageIndex) => (
           <div
             key={pageIndex}
-            className="relative bg-white shadow-2xl print:shadow-none print:m-0 overflow-hidden text-slate-900 select-none page-break-after-always"
+            className="official-monthly-revision-page relative bg-white shadow-2xl print:shadow-none print:m-0 overflow-hidden text-slate-900 select-none page-break-after-always"
             style={{
               width: '210mm',
               height: '297mm',
+              aspectRatio: '2480 / 3508',
+              containerType: 'inline-size',
+              position: 'relative',
               boxSizing: 'border-box'
             }}
           >
-            {/* 📜 原本枠線・見出しレイアウト（bgMode === 'with_form' のみ表示） */}
-            {bgMode === 'with_form' && (
-              <div className="absolute inset-0 p-[8mm] pointer-events-none text-slate-800 font-sans">
-                {/* 最上部：様式コード ＆ タイトル */}
-                <div className="flex items-start justify-between border-b-2 border-slate-900 pb-2">
-                  <div className="border border-slate-900 px-2 py-0.5 text-center">
-                    <div className="text-[8px] font-bold">様式コード</div>
-                    <div className="text-sm font-mono font-black tracking-widest">2 2 2 1</div>
-                  </div>
-
-                  <div className="text-center flex-1 mx-4">
-                    <div className="text-[10px] font-bold tracking-wider">健康保険 厚生年金保険</div>
-                    <h1 className="text-xl font-black tracking-wider">被保険者報酬月額変更届</h1>
-                    <div className="text-[9px] font-bold text-slate-600 mt-0.5">
-                      (兼) 厚生年金保険 70歳以上被用者月額変更届
-                    </div>
-                  </div>
-
-                  <div className="border border-slate-900 w-24 h-16 flex flex-col justify-between p-1 text-center">
-                    <div className="text-[9px] font-bold text-slate-500">受付印</div>
-                  </div>
-                </div>
-
-                {/* 提出者記入欄 */}
-                <div className="mt-2 grid grid-cols-12 border border-slate-900 text-[10px]">
-                  <div className="col-span-1 bg-slate-100 border-r border-slate-900 flex items-center justify-center p-1 font-black text-center text-[10px] leading-tight">
-                    提出者<br/>記入欄
-                  </div>
-
-                  <div className="col-span-7 p-2 space-y-2 border-r border-slate-900">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold">事業所整理記号:</span>
-                      <div className="flex items-center gap-1 font-mono font-bold text-sm">
-                        <span className="border border-slate-700 px-2 py-0.5 rounded-sm">____</span>
-                        <span>-</span>
-                        <span className="border border-slate-700 px-2 py-0.5 rounded-sm">____</span>
-                      </div>
-                    </div>
-                    <div className="text-[10px] leading-tight space-y-1">
-                      <div><span className="text-slate-500 font-bold">所在地: </span></div>
-                      <div><span className="text-slate-500 font-bold">名　称: </span></div>
-                      <div><span className="text-slate-500 font-bold">事業主: </span></div>
-                      <div><span className="text-slate-500 font-bold">電　話: </span></div>
-                    </div>
-                  </div>
-
-                  <div className="col-span-4 p-2 flex flex-col justify-between">
-                    <div className="text-[9px] text-slate-500 font-bold">社会保険労務士記載欄</div>
-                    <div className="border-t border-dashed border-slate-300 pt-1 text-[9px] text-slate-400 text-center">
-                      氏名等
-                    </div>
-                  </div>
-                </div>
-
-                {/* 項目名ヘッダーバー */}
-                <div className="mt-2 border border-slate-900 bg-slate-100 text-[9px] font-bold p-1 text-center flex items-center justify-between">
-                  <span>① 整理番号 ｜ ② 氏名 ｜ ③ 生年月日 ｜ ④ 改定年月 ｜ ⑰ 個人番号（70歳以上）</span>
-                  <span>⑤ 従前標準報酬 ｜ ⑥ 従前改定月 ｜ ⑦ 昇降給 ｜ ⑧ 遡及支払額 ｜ ⑱ 備考</span>
-                  <span>⑨ 支給月 ｜ ⑩ 基礎日数 ｜ ⑪ 通貨 ｜ ⑫ 現物 ｜ ⑬ 合計 ｜ ⑭ 総計 ｜ ⑮ 平均額</span>
-                </div>
-
-                {/* 5行分の枠線プレースホルダー */}
-                <div className="mt-1 space-y-1">
-                  {[0, 1, 2, 3, 4].map(idx => (
-                    <div key={idx} className="border border-slate-900 h-[33mm] relative p-1.5 flex flex-col justify-between text-[9px]">
-                      <div className="flex items-center justify-between border-b border-slate-200 pb-1">
-                        <span className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs">{idx + 1}</span>
-                        <div className="flex-1 grid grid-cols-5 gap-2 px-2 text-slate-400">
-                          <span>① 被保険者整理番号</span>
-                          <span>② 被保険者氏名</span>
-                          <span>③ 生年月日</span>
-                          <span>④ 改定年月</span>
-                          <span>⑰ 個人番号</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-5 gap-2 py-1 text-slate-400 border-b border-slate-200">
-                        <span>⑤ 従前標準報酬 (健 / 厚)</span>
-                        <span>⑥ 従前改定月</span>
-                        <span>⑦ 昇降給</span>
-                        <span>⑧ 遡及支払額</span>
-                        <span>⑱ 備考</span>
-                      </div>
-                      <div className="grid grid-cols-6 gap-1 pt-1 text-slate-400 text-[8px]">
-                        <span>支給月</span>
-                        <span>基礎日数</span>
-                        <span>通貨による額</span>
-                        <span>現物による額</span>
-                        <span>合計(⑪+⑫)</span>
-                        <span>総計・平均額</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 脚注 */}
-                <div className="mt-2 text-[8px] text-slate-500 flex items-center justify-between">
-                  <span>※ ⑨支給月とは、給与の対象となった計算月ではなく実際に給与の支払いを行った月となります。</span>
-                  <span>ページ {pageIndex + 1} / {pageChunks.length}</span>
-                </div>
-              </div>
+            {/* 📄 日本年金機構原本用紙（下敷き原本：添付PDFそのものを100%確実に表示） */}
+            {renderMode === 'exact_pdf' && (
+              <img
+                src="/nenkin_monthly_revision_template_page1.png"
+                alt="日本年金機構公式届出用紙（コード2221）"
+                className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none z-0 print:w-full print:h-full"
+                draggable={false}
+              />
             )}
 
-            {/* 🎯 精密座標によるデータ直接印字オーバーレイ */}
-            <div className="absolute inset-0 pointer-events-none">
+            {/* ══════════════════════════════════════════════════════════════════════ */}
+            {/* 🔤 印字オーバーレイレイヤー（原本PDFのマス目・枠内にピタッと印字） */}
+            {/* ══════════════════════════════════════════════════════════════════════ */}
+            <div className="absolute inset-0 z-10 pointer-events-none text-slate-900">
               {/* 提出年月日 */}
-              <div 
+              <div
                 className="absolute font-mono font-bold text-center"
                 style={{
-                  left: `${fieldMap.get('subDateY')?.x ?? 17.5}%`,
-                  top: `${fieldMap.get('subDateY')?.y ?? 7.0}%`,
-                  fontSize: `${fieldMap.get('subDateY')?.fontSize ?? 11}pt`,
-                  width: `${fieldMap.get('subDateY')?.width ?? 3.5}%`
+                  top: `${fSubY.y}%`,
+                  left: `${fSubY.x}%`,
+                  width: `${fSubY.width || 3.5}%`,
+                  fontSize: `${(fSubY.fontSize || 11) * 0.115}cqi`
                 }}
               >
                 {subDate.y}
               </div>
-              <div 
+              <div
                 className="absolute font-mono font-bold text-center"
                 style={{
-                  left: `${fieldMap.get('subDateM')?.x ?? 21.8}%`,
-                  top: `${fieldMap.get('subDateM')?.y ?? 7.0}%`,
-                  fontSize: `${fieldMap.get('subDateM')?.fontSize ?? 11}pt`,
-                  width: `${fieldMap.get('subDateM')?.width ?? 3.5}%`
+                  top: `${fSubM.y}%`,
+                  left: `${fSubM.x}%`,
+                  width: `${fSubM.width || 3.5}%`,
+                  fontSize: `${(fSubM.fontSize || 11) * 0.115}cqi`
                 }}
               >
                 {subDate.m}
               </div>
-              <div 
+              <div
                 className="absolute font-mono font-bold text-center"
                 style={{
-                  left: `${fieldMap.get('subDateD')?.x ?? 26.0}%`,
-                  top: `${fieldMap.get('subDateD')?.y ?? 7.0}%`,
-                  fontSize: `${fieldMap.get('subDateD')?.fontSize ?? 11}pt`,
-                  width: `${fieldMap.get('subDateD')?.width ?? 3.5}%`
+                  top: `${fSubD.y}%`,
+                  left: `${fSubD.x}%`,
+                  width: `${fSubD.width || 3.5}%`,
+                  fontSize: `${(fSubD.fontSize || 11) * 0.115}cqi`
                 }}
               >
                 {subDate.d}
               </div>
 
-              {/* 事業所整理記号 */}
-              <div 
-                className="absolute font-mono font-bold text-center tracking-widest"
+              {/* 事業所整理記号（左4マス数字、右4マスカタカナ） */}
+              <div
+                className="absolute flex items-center justify-between"
                 style={{
-                  left: `${fieldMap.get('symbolDigits')?.x ?? 15.0}%`,
-                  top: `${fieldMap.get('symbolDigits')?.y ?? 8.8}%`,
-                  fontSize: `${fieldMap.get('symbolDigits')?.fontSize ?? 13}pt`,
-                  width: `${fieldMap.get('symbolDigits')?.width ?? 9.8}%`
+                  top: `${fDigits.y}%`,
+                  left: `${fDigits.x}%`,
+                  width: `${fDigits.width || 9.8}%`
                 }}
               >
-                {symbolDigits}
-              </div>
-              <div 
-                className="absolute font-bold text-center tracking-widest"
-                style={{
-                  left: `${fieldMap.get('symbolKana')?.x ?? 27.2}%`,
-                  top: `${fieldMap.get('symbolKana')?.y ?? 8.8}%`,
-                  fontSize: `${fieldMap.get('symbolKana')?.fontSize ?? 12.5}pt`,
-                  width: `${fieldMap.get('symbolKana')?.width ?? 9.8}%`
-                }}
-              >
-                {symbolKana}
+                {digitChars.map((ch, idx) => (
+                  <span
+                    key={`d-${idx}`}
+                    className="font-mono font-bold text-center inline-block"
+                    style={{
+                      width: `${fDigits.pitch || 2.30}%`,
+                      fontSize: `${(fDigits.fontSize || 13) * 0.115}cqi`
+                    }}
+                  >
+                    {ch}
+                  </span>
+                ))}
               </div>
 
-              {/* 所在地・名称・代表者・電話 */}
-              <div 
-                className="absolute truncate"
+              <div
+                className="absolute flex items-center justify-between"
                 style={{
-                  left: `${fieldMap.get('companyAddress')?.x ?? 14.5}%`,
-                  top: `${fieldMap.get('companyAddress')?.y ?? 14.0}%`,
-                  fontSize: `${fieldMap.get('companyAddress')?.fontSize ?? 9}pt`,
-                  width: `${fieldMap.get('companyAddress')?.width ?? 33}%`
+                  top: `${fKana.y}%`,
+                  left: `${fKana.x}%`,
+                  width: `${fKana.width || 9.8}%`
                 }}
               >
-                {data.companyZip && <span className="mr-1.5 font-mono">〒{data.companyZip}</span>}
+                {kanaChars.map((ch, idx) => (
+                  <span
+                    key={`k-${idx}`}
+                    className="font-bold text-center inline-block"
+                    style={{
+                      width: `${fKana.pitch || 2.30}%`,
+                      fontSize: `${(fKana.fontSize || 12.5) * 0.115}cqi`
+                    }}
+                  >
+                    {ch}
+                  </span>
+                ))}
+              </div>
+
+              {/* 事業所所在地・名称・事業主氏名・電話 */}
+              {data.companyZip && (
+                <div
+                  className="absolute font-mono text-xs font-medium"
+                  style={{
+                    top: `${fZip.y}%`,
+                    left: `${fZip.x}%`,
+                    fontSize: `${(fZip.fontSize || 9.5) * 0.115}cqi`
+                  }}
+                >
+                  〒{data.companyZip}
+                </div>
+              )}
+              <div
+                className="absolute text-xs leading-tight font-medium truncate"
+                style={{
+                  top: `${fAddress.y}%`,
+                  left: `${fAddress.x}%`,
+                  width: `${fAddress.width || 36.0}%`,
+                  fontSize: `${(fAddress.fontSize || 9.0) * 0.115}cqi`
+                }}
+              >
                 {data.companyAddress}
               </div>
-              <div 
-                className="absolute font-bold truncate"
+              <div
+                className="absolute text-xs font-bold truncate"
                 style={{
-                  left: `${fieldMap.get('companyName')?.x ?? 14.5}%`,
-                  top: `${fieldMap.get('companyName')?.y ?? 18.2}%`,
-                  fontSize: `${fieldMap.get('companyName')?.fontSize ?? 10.5}pt`,
-                  width: `${fieldMap.get('companyName')?.width ?? 33}%`
+                  top: `${fName.y}%`,
+                  left: `${fName.x}%`,
+                  width: `${fName.width || 36.0}%`,
+                  fontSize: `${(fName.fontSize || 10.5) * 0.115}cqi`
                 }}
               >
                 {data.companyName}
               </div>
-              <div 
-                className="absolute truncate"
+              <div
+                className="absolute text-xs font-bold truncate"
                 style={{
-                  left: `${fieldMap.get('companyOwnerName')?.x ?? 14.5}%`,
-                  top: `${fieldMap.get('companyOwnerName')?.y ?? 21.6}%`,
-                  fontSize: `${fieldMap.get('companyOwnerName')?.fontSize ?? 10.5}pt`,
-                  width: `${fieldMap.get('companyOwnerName')?.width ?? 33}%`
+                  top: `${fOwner.y}%`,
+                  left: `${fOwner.x}%`,
+                  width: `${fOwner.width || 36.0}%`,
+                  fontSize: `${(fOwner.fontSize || 10.5) * 0.115}cqi`
                 }}
               >
                 {data.companyOwnerName}
               </div>
-              <div 
-                className="absolute font-mono truncate"
+              <div
+                className="absolute font-mono text-xs"
                 style={{
-                  left: `${fieldMap.get('companyPhone')?.x ?? 18.0}%`,
-                  top: `${fieldMap.get('companyPhone')?.y ?? 23.6}%`,
-                  fontSize: `${fieldMap.get('companyPhone')?.fontSize ?? 9.5}pt`,
-                  width: `${fieldMap.get('companyPhone')?.width ?? 25}%`
+                  top: `${fPhone.y}%`,
+                  left: `${fPhone.x}%`,
+                  width: `${fPhone.width || 22.0}%`,
+                  fontSize: `${(fPhone.fontSize || 9.5) * 0.115}cqi`
                 }}
               >
                 {data.companyPhone}
               </div>
-              <div 
-                className="absolute truncate"
-                style={{
-                  left: `${fieldMap.get('sharoushiName')?.x ?? 54.0}%`,
-                  top: `${fieldMap.get('sharoushiName')?.y ?? 20.5}%`,
-                  fontSize: `${fieldMap.get('sharoushiName')?.fontSize ?? 10}pt`,
-                  width: `${fieldMap.get('sharoushiName')?.width ?? 38}%`
-                }}
-              >
-                {data.sharoushiName}
-              </div>
 
-              {/* ── 5名分の各行印字 ── */}
+              {/* 社会保険労務士記載欄 */}
+              {data.sharoushiName && (
+                <div
+                  className="absolute text-xs font-medium truncate"
+                  style={{
+                    top: `${fSharoushi.y}%`,
+                    left: `${fSharoushi.x}%`,
+                    width: `${fSharoushi.width || 38.0}%`,
+                    fontSize: `${(fSharoushi.fontSize || 9.5) * 0.115}cqi`
+                  }}
+                >
+                  {data.sharoushiName}
+                </div>
+              )}
+
+              {/* ══════════════════════════════════════════════════════════════════════ */}
+              {/* 👥 従業員データ 行レンダリング（1行〜5行） */}
+              {/* ══════════════════════════════════════════════════════════════════════ */}
               {chunk.map((emp, rowIdx) => {
-                const rowTopY = rowBaseTop + rowIdx * rowPitchY;
+                const rowTop = rowBaseTop + rowIdx * rowPitchY;
+                const m1 = emp.month1 || { ym: '', monthNum: 0, days: 0, cash: 0, inKind: 0, total: 0 };
+                const m2 = emp.month2 || { ym: '', monthNum: 0, days: 0, cash: 0, inKind: 0, total: 0 };
+                const m3 = emp.month3 || { ym: '', monthNum: 0, days: 0, cash: 0, inKind: 0, total: 0 };
+
+                // 個人番号12桁の分解
+                const myNumChars = emp.myNumber ? emp.myNumber.replace(/-/g, '').slice(0, 12).split('') : [];
+                while (myNumChars.length < 12) myNumChars.push('');
+
+                const fEmpNum = getF('empInsuranceNumber', 9.8, 0.6, 11, 11.0);
+                const fEmpNm = getF('empName', 21.6, 0.6, 11, 22.0);
+                const fEmpBth = getF('empBirth', 44.2, 0.6, 10.5, 18.0);
+                const fEmpRevYM = getF('empRevisionYearMonth', 63.0, 0.6, 10.5, 9.5);
+                const fEmpMyNo = getF('empMyNumber', 73.6, 0.6, 10, 21.0);
+
+                const fCurH = getF('empCurrentHealthStandard', 9.8, 2.8, 10.5, 10.5);
+                const fCurP = getF('empCurrentPensionStandard', 21.0, 2.8, 10.5, 10.5);
+                const fPrevYM = getF('empPreviousRevisionYM', 32.5, 2.8, 9.5, 11.0);
+                const fChange = getF('empWageChangeType', 44.5, 2.8, 9.5, 12.0);
+                const fRetro = getF('empRetroactiveAmount', 57.2, 2.8, 9.5, 15.5);
+                const fRem = getF('empRemarks', 73.6, 2.8, 8.5, 21.0);
+
+                // 千円単位換算（例: 300,000円 -> 300千円）
+                const healthInThousands = Math.round((emp.currentHealthStandard || 0) / 1000);
+                const pensionInThousands = Math.round((emp.currentPensionStandard || 0) / 1000);
 
                 return (
                   <React.Fragment key={emp.id || rowIdx}>
+                    {/* ── 1段目 ── */}
                     {/* ① 被保険者整理番号 */}
                     <div
                       className="absolute font-mono font-bold text-center"
                       style={{
-                        left: `${fieldMap.get('empInsuranceNumber')?.x ?? 9.8}%`,
-                        top: `${rowTopY + (fieldMap.get('empInsuranceNumber')?.y ?? 1.2)}%`,
-                        fontSize: `${fieldMap.get('empInsuranceNumber')?.fontSize ?? 10.5}pt`,
-                        width: `${fieldMap.get('empInsuranceNumber')?.width ?? 11.5}%`
+                        top: `${rowTop + fEmpNum.y}%`,
+                        left: `${fEmpNum.x}%`,
+                        width: `${fEmpNum.width || 11.0}%`,
+                        fontSize: `${(fEmpNum.fontSize || 11) * 0.115}cqi`
                       }}
                     >
-                      {emp.insuranceNumber || emp.id.substring(0, 4)}
+                      {emp.insuranceNumber}
                     </div>
 
                     {/* ② 被保険者氏名 */}
                     <div
                       className="absolute font-bold truncate"
                       style={{
-                        left: `${fieldMap.get('empName')?.x ?? 23.0}%`,
-                        top: `${rowTopY + (fieldMap.get('empName')?.y ?? 1.0)}%`,
-                        fontSize: `${fieldMap.get('empName')?.fontSize ?? 11.0}pt`,
-                        width: `${fieldMap.get('empName')?.width ?? 23.0}%`
+                        top: `${rowTop + fEmpNm.y}%`,
+                        left: `${fEmpNm.x}%`,
+                        width: `${fEmpNm.width || 22.0}%`,
+                        fontSize: `${(fEmpNm.fontSize || 11) * 0.115}cqi`
                       }}
                     >
                       {emp.name}
                     </div>
 
-                    {/* ③ 生年月日 */}
+                    {/* ③ 生年月日（元号形式: 5-630503 等） */}
                     <div
                       className="absolute font-mono font-bold text-center tracking-wider"
                       style={{
-                        left: `${fieldMap.get('empBirth')?.x ?? 47.8}%`,
-                        top: `${rowTopY + (fieldMap.get('empBirth')?.y ?? 1.2)}%`,
-                        fontSize: `${fieldMap.get('empBirth')?.fontSize ?? 10.5}pt`,
-                        width: `${fieldMap.get('empBirth')?.width ?? 14.5}%`
+                        top: `${rowTop + fEmpBth.y}%`,
+                        left: `${fEmpBth.x}%`,
+                        width: `${fEmpBth.width || 18.0}%`,
+                        fontSize: `${(fEmpBth.fontSize || 10.5) * 0.115}cqi`
                       }}
                     >
                       {formatNenkinBirthDate(emp.birthDate)}
@@ -542,309 +547,326 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                     <div
                       className="absolute font-mono font-bold text-center"
                       style={{
-                        left: `${fieldMap.get('empRevisionYearMonth')?.x ?? 64.0}%`,
-                        top: `${rowTopY + (fieldMap.get('empRevisionYearMonth')?.y ?? 1.2)}%`,
-                        fontSize: `${fieldMap.get('empRevisionYearMonth')?.fontSize ?? 10.5}pt`,
-                        width: `${fieldMap.get('empRevisionYearMonth')?.width ?? 8.5}%`
+                        top: `${rowTop + fEmpRevYM.y}%`,
+                        left: `${fEmpRevYM.x}%`,
+                        width: `${fEmpRevYM.width || 9.5}%`,
+                        fontSize: `${(fEmpRevYM.fontSize || 10.5) * 0.115}cqi`
                       }}
                     >
-                      {formatNenkinYearMonth(emp.revisionYearMonth)}
+                      {formatNenkinYM(emp.revisionYearMonth)}
                     </div>
 
-                    {/* ⑰ 個人番号（70歳以上被用者） */}
-                    <div
-                      className="absolute font-mono font-bold text-center tracking-widest"
-                      style={{
-                        left: `${fieldMap.get('empMyNumber')?.x ?? 74.0}%`,
-                        top: `${rowTopY + (fieldMap.get('empMyNumber')?.y ?? 1.2)}%`,
-                        fontSize: `${fieldMap.get('empMyNumber')?.fontSize ?? 10.0}pt`,
-                        width: `${fieldMap.get('empMyNumber')?.width ?? 20.0}%`
-                      }}
-                    >
-                      {emp.isOver70 ? (emp.myNumber || '') : ''}
-                    </div>
+                    {/* ⑰ 個人番号（70歳以上被用者・12マス） */}
+                    {emp.isOver70 && (
+                      <div
+                        className="absolute flex items-center justify-between"
+                        style={{
+                          top: `${rowTop + fEmpMyNo.y}%`,
+                          left: `${fEmpMyNo.x}%`,
+                          width: `${fEmpMyNo.width || 21.0}%`
+                        }}
+                      >
+                        {myNumChars.map((ch, idx) => (
+                          <span
+                            key={`myn-${idx}`}
+                            className="font-mono font-bold text-center inline-block"
+                            style={{
+                              width: `${fEmpMyNo.pitch || 1.65}%`,
+                              fontSize: `${(fEmpMyNo.fontSize || 10) * 0.115}cqi`
+                            }}
+                          >
+                            {ch}
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
-                    {/* ⑤ 従前の標準報酬月額（健保 / 厚年・千円単位） */}
+                    {/* ── 2段目 ── */}
+                    {/* ⑤ 従前の標準報酬（健康保険・千円） */}
                     <div
                       className="absolute font-mono font-bold text-right"
                       style={{
-                        left: `${fieldMap.get('empCurrentHealthStandard')?.x ?? 10.5}%`,
-                        top: `${rowTopY + (fieldMap.get('empCurrentHealthStandard')?.y ?? 3.8)}%`,
-                        fontSize: `${fieldMap.get('empCurrentHealthStandard')?.fontSize ?? 10.5}pt`,
-                        width: `${fieldMap.get('empCurrentHealthStandard')?.width ?? 9.0}%`
+                        top: `${rowTop + fCurH.y}%`,
+                        left: `${fCurH.x}%`,
+                        width: `${fCurH.width || 10.5}%`,
+                        fontSize: `${(fCurH.fontSize || 10.5) * 0.115}cqi`
                       }}
                     >
-                      {Math.round(emp.currentHealthStandard / 1000).toLocaleString()}
+                      {healthInThousands.toLocaleString()}
                     </div>
+
+                    {/* ⑤ 従前の標準報酬（厚生年金・千円） */}
                     <div
                       className="absolute font-mono font-bold text-right"
                       style={{
-                        left: `${fieldMap.get('empCurrentPensionStandard')?.x ?? 21.2}%`,
-                        top: `${rowTopY + (fieldMap.get('empCurrentPensionStandard')?.y ?? 3.8)}%`,
-                        fontSize: `${fieldMap.get('empCurrentPensionStandard')?.fontSize ?? 10.5}pt`,
-                        width: `${fieldMap.get('empCurrentPensionStandard')?.width ?? 9.0}%`
+                        top: `${rowTop + fCurP.y}%`,
+                        left: `${fCurP.x}%`,
+                        width: `${fCurP.width || 10.5}%`,
+                        fontSize: `${(fCurP.fontSize || 10.5) * 0.115}cqi`
                       }}
                     >
-                      {Math.round(emp.currentPensionStandard / 1000).toLocaleString()}
+                      {pensionInThousands.toLocaleString()}
                     </div>
 
-                    {/* ⑥ 従前改定年月 */}
+                    {/* ⑥ 従前改定月 */}
                     <div
                       className="absolute font-mono text-center text-xs"
                       style={{
-                        left: `${fieldMap.get('empPreviousRevisionYM')?.x ?? 32.5}%`,
-                        top: `${rowTopY + (fieldMap.get('empPreviousRevisionYM')?.y ?? 3.8)}%`,
-                        fontSize: `${fieldMap.get('empPreviousRevisionYM')?.fontSize ?? 10.0}pt`,
-                        width: `${fieldMap.get('empPreviousRevisionYM')?.width ?? 12.0}%`
+                        top: `${rowTop + fPrevYM.y}%`,
+                        left: `${fPrevYM.x}%`,
+                        width: `${fPrevYM.width || 11.0}%`,
+                        fontSize: `${(fPrevYM.fontSize || 9.5) * 0.115}cqi`
                       }}
                     >
-                      {formatNenkinYearMonth(emp.previousRevisionYM)}
+                      {formatNenkinYM(emp.previousRevisionYM)}
                     </div>
 
-                    {/* ⑦ 昇(降)給 */}
+                    {/* ⑦ 昇(降)給（区分 ＆ 年月） */}
                     <div
                       className="absolute font-bold text-center text-xs"
                       style={{
-                        left: `${fieldMap.get('empWageChangeType')?.x ?? 46.5}%`,
-                        top: `${rowTopY + (fieldMap.get('empWageChangeType')?.y ?? 3.8)}%`,
-                        fontSize: `${fieldMap.get('empWageChangeType')?.fontSize ?? 10.0}pt`,
-                        width: `${fieldMap.get('empWageChangeType')?.width ?? 15.0}%`
+                        top: `${rowTop + fChange.y}%`,
+                        left: `${fChange.x}%`,
+                        width: `${fChange.width || 12.0}%`,
+                        fontSize: `${(fChange.fontSize || 9.5) * 0.115}cqi`
                       }}
                     >
-                      {emp.wageChangeType} {emp.wageChangeYM ? formatNenkinYearMonth(emp.wageChangeYM) : ''}
+                      {emp.wageChangeType} {formatNenkinYM(emp.wageChangeYM)}
                     </div>
 
                     {/* ⑧ 遡及支払額 */}
                     <div
                       className="absolute font-mono text-right text-xs"
                       style={{
-                        left: `${fieldMap.get('empRetroactiveAmount')?.x ?? 63.5}%`,
-                        top: `${rowTopY + (fieldMap.get('empRetroactiveAmount')?.y ?? 3.8)}%`,
-                        fontSize: `${fieldMap.get('empRetroactiveAmount')?.fontSize ?? 9.5}pt`,
-                        width: `${fieldMap.get('empRetroactiveAmount')?.width ?? 9.0}%`
+                        top: `${rowTop + fRetro.y}%`,
+                        left: `${fRetro.x}%`,
+                        width: `${fRetro.width || 15.5}%`,
+                        fontSize: `${(fRetro.fontSize || 9.5) * 0.115}cqi`
                       }}
                     >
-                      {emp.retroactiveAmount ? emp.retroactiveAmount.toLocaleString() : ''}
+                      {(emp.retroactiveAmount || 0) > 0 ? emp.retroactiveAmount?.toLocaleString() : ''}
                     </div>
 
                     {/* ⑱ 備考 */}
                     <div
                       className="absolute text-xs truncate"
                       style={{
-                        left: `${fieldMap.get('empRemarks')?.x ?? 74.0}%`,
-                        top: `${rowTopY + (fieldMap.get('empRemarks')?.y ?? 3.8)}%`,
-                        fontSize: `${fieldMap.get('empRemarks')?.fontSize ?? 9.0}pt`,
-                        width: `${fieldMap.get('empRemarks')?.width ?? 20.0}%`
+                        top: `${rowTop + fRem.y}%`,
+                        left: `${fRem.x}%`,
+                        width: `${fRem.width || 21.0}%`,
+                        fontSize: `${(fRem.fontSize || 8.5) * 0.115}cqi`
                       }}
                     >
-                      {emp.remarks || (emp.isShortTimeWorker ? '短時間労働者' : '基本給改定のため')}
+                      {emp.remarks || (emp.isShortTimeWorker ? '3.短時間労働者' : '4.昇給・降給の理由')}
                     </div>
 
-                    {/* ── 3ヶ月各月の給与実績テーブル ── */}
-                    {/* 月1 */}
+                    {/* ── 3段目：3ヶ月支給実績 ── */}
+                    {/* 1ヶ月目 */}
                     <div
                       className="absolute font-mono text-center"
                       style={{
-                        left: `${fieldMap.get('m1Month')?.x ?? 10.0}%`,
-                        top: `${rowTopY + (fieldMap.get('m1Month')?.y ?? 6.2)}%`,
-                        fontSize: `${fieldMap.get('m1Month')?.fontSize ?? 10.0}pt`,
-                        width: `${fieldMap.get('m1Month')?.width ?? 4.5}%`
+                        top: `${rowTop + 5.6}%`,
+                        left: '9.5%',
+                        width: '4.0%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month1.monthNum}月
+                      {m1.monthNum || ''}
                     </div>
                     <div
                       className="absolute font-mono text-center"
                       style={{
-                        left: `${fieldMap.get('m1Days')?.x ?? 16.5}%`,
-                        top: `${rowTopY + (fieldMap.get('m1Days')?.y ?? 6.2)}%`,
-                        fontSize: `${fieldMap.get('m1Days')?.fontSize ?? 10.0}pt`,
-                        width: `${fieldMap.get('m1Days')?.width ?? 5.0}%`
+                        top: `${rowTop + 5.6}%`,
+                        left: '14.0%',
+                        width: '7.0%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month1.days}日
+                      {m1.days || ''}
                     </div>
                     <div
                       className="absolute font-mono text-right"
                       style={{
-                        left: `${fieldMap.get('m1Cash')?.x ?? 23.0}%`,
-                        top: `${rowTopY + (fieldMap.get('m1Cash')?.y ?? 6.2)}%`,
-                        fontSize: `${fieldMap.get('m1Cash')?.fontSize ?? 9.5}pt`,
-                        width: `${fieldMap.get('m1Cash')?.width ?? 9.5}%`
+                        top: `${rowTop + 5.6}%`,
+                        left: '21.5%',
+                        width: '10.5%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month1.cash.toLocaleString()}
+                      {m1.cash ? m1.cash.toLocaleString() : ''}
                     </div>
                     <div
                       className="absolute font-mono text-right"
                       style={{
-                        left: `${fieldMap.get('m1InKind')?.x ?? 33.5}%`,
-                        top: `${rowTopY + (fieldMap.get('m1InKind')?.y ?? 6.2)}%`,
-                        fontSize: `${fieldMap.get('m1InKind')?.fontSize ?? 9.5}pt`,
-                        width: `${fieldMap.get('m1InKind')?.width ?? 7.5}%`
+                        top: `${rowTop + 5.6}%`,
+                        left: '32.5%',
+                        width: '10.5%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month1.inKind > 0 ? emp.month1.inKind.toLocaleString() : '0'}
+                      {m1.inKind ? m1.inKind.toLocaleString() : ''}
                     </div>
                     <div
                       className="absolute font-mono font-bold text-right"
                       style={{
-                        left: `${fieldMap.get('m1Total')?.x ?? 42.0}%`,
-                        top: `${rowTopY + (fieldMap.get('m1Total')?.y ?? 6.2)}%`,
-                        fontSize: `${fieldMap.get('m1Total')?.fontSize ?? 9.5}pt`,
-                        width: `${fieldMap.get('m1Total')?.width ?? 10.5}%`
+                        top: `${rowTop + 5.6}%`,
+                        left: '43.5%',
+                        width: '13.0%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month1.total.toLocaleString()}
+                      {m1.total ? m1.total.toLocaleString() : ''}
                     </div>
 
-                    {/* 月2 */}
+                    {/* 2ヶ月目 */}
                     <div
                       className="absolute font-mono text-center"
                       style={{
-                        left: `${fieldMap.get('m2Month')?.x ?? 10.0}%`,
-                        top: `${rowTopY + (fieldMap.get('m2Month')?.y ?? 8.2)}%`,
-                        fontSize: `${fieldMap.get('m2Month')?.fontSize ?? 10.0}pt`,
-                        width: `${fieldMap.get('m2Month')?.width ?? 4.5}%`
+                        top: `${rowTop + 7.7}%`,
+                        left: '9.5%',
+                        width: '4.0%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month2.monthNum}月
+                      {m2.monthNum || ''}
                     </div>
                     <div
                       className="absolute font-mono text-center"
                       style={{
-                        left: `${fieldMap.get('m2Days')?.x ?? 16.5}%`,
-                        top: `${rowTopY + (fieldMap.get('m2Days')?.y ?? 8.2)}%`,
-                        fontSize: `${fieldMap.get('m2Days')?.fontSize ?? 10.0}pt`,
-                        width: `${fieldMap.get('m2Days')?.width ?? 5.0}%`
+                        top: `${rowTop + 7.7}%`,
+                        left: '14.0%',
+                        width: '7.0%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month2.days}日
+                      {m2.days || ''}
                     </div>
                     <div
                       className="absolute font-mono text-right"
                       style={{
-                        left: `${fieldMap.get('m2Cash')?.x ?? 23.0}%`,
-                        top: `${rowTopY + (fieldMap.get('m2Cash')?.y ?? 8.2)}%`,
-                        fontSize: `${fieldMap.get('m2Cash')?.fontSize ?? 9.5}pt`,
-                        width: `${fieldMap.get('m2Cash')?.width ?? 9.5}%`
+                        top: `${rowTop + 7.7}%`,
+                        left: '21.5%',
+                        width: '10.5%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month2.cash.toLocaleString()}
+                      {m2.cash ? m2.cash.toLocaleString() : ''}
                     </div>
                     <div
                       className="absolute font-mono text-right"
                       style={{
-                        left: `${fieldMap.get('m2InKind')?.x ?? 33.5}%`,
-                        top: `${rowTopY + (fieldMap.get('m2InKind')?.y ?? 8.2)}%`,
-                        fontSize: `${fieldMap.get('m2InKind')?.fontSize ?? 9.5}pt`,
-                        width: `${fieldMap.get('m2InKind')?.width ?? 7.5}%`
+                        top: `${rowTop + 7.7}%`,
+                        left: '32.5%',
+                        width: '10.5%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month2.inKind > 0 ? emp.month2.inKind.toLocaleString() : '0'}
+                      {m2.inKind ? m2.inKind.toLocaleString() : ''}
                     </div>
                     <div
                       className="absolute font-mono font-bold text-right"
                       style={{
-                        left: `${fieldMap.get('m2Total')?.x ?? 42.0}%`,
-                        top: `${rowTopY + (fieldMap.get('m2Total')?.y ?? 8.2)}%`,
-                        fontSize: `${fieldMap.get('m2Total')?.fontSize ?? 9.5}pt`,
-                        width: `${fieldMap.get('m2Total')?.width ?? 10.5}%`
+                        top: `${rowTop + 7.7}%`,
+                        left: '43.5%',
+                        width: '13.0%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month2.total.toLocaleString()}
+                      {m2.total ? m2.total.toLocaleString() : ''}
                     </div>
 
-                    {/* 月3 */}
+                    {/* 3ヶ月目 */}
                     <div
                       className="absolute font-mono text-center"
                       style={{
-                        left: `${fieldMap.get('m3Month')?.x ?? 10.0}%`,
-                        top: `${rowTopY + (fieldMap.get('m3Month')?.y ?? 10.2)}%`,
-                        fontSize: `${fieldMap.get('m3Month')?.fontSize ?? 10.0}pt`,
-                        width: `${fieldMap.get('m3Month')?.width ?? 4.5}%`
+                        top: `${rowTop + 9.8}%`,
+                        left: '9.5%',
+                        width: '4.0%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month3.monthNum}月
+                      {m3.monthNum || ''}
                     </div>
                     <div
                       className="absolute font-mono text-center"
                       style={{
-                        left: `${fieldMap.get('m3Days')?.x ?? 16.5}%`,
-                        top: `${rowTopY + (fieldMap.get('m3Days')?.y ?? 10.2)}%`,
-                        fontSize: `${fieldMap.get('m3Days')?.fontSize ?? 10.0}pt`,
-                        width: `${fieldMap.get('m3Days')?.width ?? 5.0}%`
+                        top: `${rowTop + 9.8}%`,
+                        left: '14.0%',
+                        width: '7.0%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month3.days}日
+                      {m3.days || ''}
                     </div>
                     <div
                       className="absolute font-mono text-right"
                       style={{
-                        left: `${fieldMap.get('m3Cash')?.x ?? 23.0}%`,
-                        top: `${rowTopY + (fieldMap.get('m3Cash')?.y ?? 10.2)}%`,
-                        fontSize: `${fieldMap.get('m3Cash')?.fontSize ?? 9.5}pt`,
-                        width: `${fieldMap.get('m3Cash')?.width ?? 9.5}%`
+                        top: `${rowTop + 9.8}%`,
+                        left: '21.5%',
+                        width: '10.5%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month3.cash.toLocaleString()}
+                      {m3.cash ? m3.cash.toLocaleString() : ''}
                     </div>
                     <div
                       className="absolute font-mono text-right"
                       style={{
-                        left: `${fieldMap.get('m3InKind')?.x ?? 33.5}%`,
-                        top: `${rowTopY + (fieldMap.get('m3InKind')?.y ?? 10.2)}%`,
-                        fontSize: `${fieldMap.get('m3InKind')?.fontSize ?? 9.5}pt`,
-                        width: `${fieldMap.get('m3InKind')?.width ?? 7.5}%`
+                        top: `${rowTop + 9.8}%`,
+                        left: '32.5%',
+                        width: '10.5%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month3.inKind > 0 ? emp.month3.inKind.toLocaleString() : '0'}
+                      {m3.inKind ? m3.inKind.toLocaleString() : ''}
                     </div>
                     <div
                       className="absolute font-mono font-bold text-right"
                       style={{
-                        left: `${fieldMap.get('m3Total')?.x ?? 42.0}%`,
-                        top: `${rowTopY + (fieldMap.get('m3Total')?.y ?? 10.2)}%`,
-                        fontSize: `${fieldMap.get('m3Total')?.fontSize ?? 9.5}pt`,
-                        width: `${fieldMap.get('m3Total')?.width ?? 10.5}%`
+                        top: `${rowTop + 9.8}%`,
+                        left: '43.5%',
+                        width: '13.0%',
+                        fontSize: '1.05cqi'
                       }}
                     >
-                      {emp.month3.total.toLocaleString()}
+                      {m3.total ? m3.total.toLocaleString() : ''}
                     </div>
 
-                    {/* ⑭ 総計 ＆ ⑮ 平均額 */}
+                    {/* 総計・平均額・修正平均額 */}
                     <div
                       className="absolute font-mono font-bold text-right"
                       style={{
-                        left: `${fieldMap.get('empTotalWage')?.x ?? 58.0}%`,
-                        top: `${rowTopY + (fieldMap.get('empTotalWage')?.y ?? 6.8)}%`,
-                        fontSize: `${fieldMap.get('empTotalWage')?.fontSize ?? 10.0}pt`,
-                        width: `${fieldMap.get('empTotalWage')?.width ?? 13.0}%`
+                        top: `${rowTop + 5.6}%`,
+                        left: '57.2%',
+                        width: '15.5%',
+                        fontSize: '1.15cqi'
                       }}
                     >
-                      {emp.totalWage.toLocaleString()}
+                      {emp.totalWage ? emp.totalWage.toLocaleString() : ''}
                     </div>
                     <div
                       className="absolute font-mono font-black text-right"
                       style={{
-                        left: `${fieldMap.get('empAverageWage')?.x ?? 58.0}%`,
-                        top: `${rowTopY + (fieldMap.get('empAverageWage')?.y ?? 9.2)}%`,
-                        fontSize: `${fieldMap.get('empAverageWage')?.fontSize ?? 10.5}pt`,
-                        width: `${fieldMap.get('empAverageWage')?.width ?? 13.0}%`
+                        top: `${rowTop + 7.7}%`,
+                        left: '57.2%',
+                        width: '15.5%',
+                        fontSize: '1.20cqi'
                       }}
                     >
-                      {emp.averageWage.toLocaleString()}
+                      {emp.averageWage ? emp.averageWage.toLocaleString() : ''}
                     </div>
                     <div
                       className="absolute font-mono text-right"
                       style={{
-                        left: `${fieldMap.get('empModifiedAverage')?.x ?? 58.0}%`,
-                        top: `${rowTopY + (fieldMap.get('empModifiedAverage')?.y ?? 11.2)}%`,
-                        fontSize: `${fieldMap.get('empModifiedAverage')?.fontSize ?? 9.5}pt`,
-                        width: `${fieldMap.get('empModifiedAverage')?.width ?? 13.0}%`
+                        top: `${rowTop + 9.8}%`,
+                        left: '57.2%',
+                        width: '15.5%',
+                        fontSize: '1.15cqi'
                       }}
                     >
-                      {emp.modifiedAverageWage ? emp.modifiedAverageWage.toLocaleString() : ''}
+                      {(emp.modifiedAverageWage && emp.modifiedAverageWage !== emp.averageWage)
+                        ? emp.modifiedAverageWage.toLocaleString()
+                        : ''}
                     </div>
                   </React.Fragment>
                 );
@@ -853,6 +875,33 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
           </div>
         ))}
       </div>
+
+      {/* 印刷用スタイル */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0;
+          }
+          body {
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .official-monthly-revision-page {
+            width: 210mm !important;
+            height: 297mm !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            page-break-after: always !important;
+            position: relative !important;
+          }
+          .official-monthly-revision-page img {
+            display: ${renderMode === 'exact_pdf' ? 'block' : 'none'} !important;
+            visibility: visible !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };

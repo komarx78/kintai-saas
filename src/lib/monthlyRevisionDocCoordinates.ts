@@ -29,8 +29,8 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     id: 'subDateY',
     name: '提出年（和暦数字）',
     section: 'submission',
-    x: 17.5,
-    y: 7.0,
+    x: 14.5,
+    y: 5.7,
     fontSize: 11,
     width: 3.5,
     example: '8',
@@ -40,8 +40,8 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     id: 'subDateM',
     name: '提出月（数字）',
     section: 'submission',
-    x: 21.8,
-    y: 7.0,
+    x: 19.5,
+    y: 5.7,
     fontSize: 11,
     width: 3.5,
     example: '9',
@@ -51,8 +51,8 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     id: 'subDateD',
     name: '提出日（数字）',
     section: 'submission',
-    x: 26.0,
-    y: 7.0,
+    x: 24.2,
+    y: 5.7,
     fontSize: 11,
     width: 3.5,
     example: '15',
@@ -66,10 +66,10 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     id: 'symbolDigits',
     name: '事業所整理記号（数字4マス）',
     section: 'office',
-    x: 15.0,
-    y: 8.8,
+    x: 14.8,
+    y: 8.4,
     fontSize: 13,
-    pitch: 2.35,
+    pitch: 2.30,
     width: 9.8,
     example: '2501',
     description: '整理記号左側4マス（数字・各マス中央揃え）'
@@ -78,10 +78,10 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     id: 'symbolKana',
     name: '事業所整理記号（カタカナ4マス）',
     section: 'office',
-    x: 27.2,
-    y: 8.8,
+    x: 26.6,
+    y: 8.4,
     fontSize: 12.5,
-    pitch: 2.35,
+    pitch: 2.30,
     width: 9.8,
     example: 'カア',
     description: '整理記号右側4マス（カタカナ・ハイフンの右）'
@@ -90,8 +90,8 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     id: 'companyZip',
     name: '事業所郵便番号',
     section: 'office',
-    x: 14.5,
-    y: 12.2,
+    x: 12.0,
+    y: 11.2,
     fontSize: 9.5,
     width: 15.0,
     example: '520-0043',
@@ -101,10 +101,10 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     id: 'companyAddress',
     name: '事業所所在地（住所）',
     section: 'office',
-    x: 14.5,
-    y: 14.0,
+    x: 12.0,
+    y: 13.0,
     fontSize: 9.0,
-    width: 33.0,
+    width: 36.0,
     example: '滋賀県大津市中央1-2-3 サンプルビル4F',
     description: '事業所所在地欄'
   },
@@ -112,33 +112,33 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     id: 'companyName',
     name: '事業所名称（会社名）',
     section: 'office',
-    x: 14.5,
-    y: 18.2,
+    x: 12.0,
+    y: 16.5,
     fontSize: 10.5,
-    width: 33.0,
+    width: 36.0,
     example: '株式会社サンプル商事',
     description: '事業所名称欄'
   },
   {
     id: 'companyOwnerName',
-    name: '事業主氏名（代表者）',
+    name: '事業主氏名（代表者名）',
     section: 'office',
-    x: 14.5,
-    y: 21.6,
+    x: 12.0,
+    y: 19.2,
     fontSize: 10.5,
-    width: 33.0,
+    width: 36.0,
     example: '代表取締役 山田 太郎',
     description: '事業主氏名欄'
   },
   {
     id: 'companyPhone',
-    name: '電話番号',
+    name: '事業所電話番号',
     section: 'office',
-    x: 18.0,
-    y: 23.6,
+    x: 13.0,
+    y: 21.8,
     fontSize: 9.5,
-    width: 25.0,
-    example: '077 ( 512 ) 3456',
+    width: 22.0,
+    example: '077-512-3456',
     description: '電話番号欄'
   },
   {
@@ -146,502 +146,455 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     name: '社会保険労務士記載欄',
     section: 'office',
     x: 54.0,
-    y: 20.5,
-    fontSize: 10.0,
+    y: 19.5,
+    fontSize: 9.5,
     width: 38.0,
-    example: '社会保険労務士法人 サンプル労務オフィス',
-    description: '社会保険労務士記載欄'
+    example: '社会保険労務士 鈴木 一郎 印',
+    description: '社会保険労務士記載欄（右側）'
   },
 
   // ══════════════════════════════════════════════════════════════════════
-  // ③ 被保険者行テンプレート（行1〜行5）
+  // ③ 従業員 行共通マスター（1行の基本座標と次行へのピッチ）
   // ══════════════════════════════════════════════════════════════════════
   {
     id: 'rowBaseTop',
-    name: '【行基準】1行目の上端Y座標',
+    name: '1行目 基準Y座標 (%)',
     section: 'row_template',
     x: 0,
-    y: 31.8,
+    y: 31.6,
     fontSize: 0,
-    example: '31.8%',
-    description: '被保険者行1の開始Y位置（%）'
+    example: '31.6',
+    description: '1行目上端の全体Y座標パーセント'
   },
   {
     id: 'rowPitchY',
-    name: '【行基準】1行あたりの高さピッチ',
+    name: '行間ピッチY (%)',
     section: 'row_template',
     x: 0,
-    y: 12.60,
+    y: 11.93,
     fontSize: 0,
-    example: '12.60%',
-    description: '次の被保険者行までの垂直間隔（%）'
+    example: '11.93',
+    description: '次行（2行目、3行目...）までの縦方向の幅'
   },
 
-  // ── 行上段（段1） ──────────────────────────────
+  // ── 行内 1段目（氏名・番号等） ──
   {
     id: 'empInsuranceNumber',
     name: '① 被保険者整理番号',
     section: 'row_template',
     x: 9.8,
-    y: 1.2,
-    fontSize: 10.5,
-    width: 11.5,
-    example: '1234',
-    description: '① 被保険者整理番号（右詰め）'
+    y: 0.6,
+    fontSize: 11,
+    width: 11.0,
+    example: '101',
+    description: '1段目：被保険者整理番号（中央揃え）'
   },
   {
     id: 'empName',
     name: '② 被保険者氏名',
     section: 'row_template',
-    x: 23.0,
-    y: 1.0,
-    fontSize: 11.0,
-    width: 23.0,
-    example: '山田 太郎',
-    description: '② 被保険者氏名'
+    x: 21.6,
+    y: 0.6,
+    fontSize: 11,
+    width: 22.0,
+    example: '駒井 修一郎',
+    description: '1段目：氏名（左寄せ/中央）'
   },
   {
     id: 'empBirth',
-    name: '③ 生年月日（元号+6桁）',
+    name: '③ 生年月日（年金機構元号コード形式）',
     section: 'row_template',
-    x: 47.8,
-    y: 1.2,
+    x: 44.2,
+    y: 0.6,
     fontSize: 10.5,
-    pitch: 1.7,
-    width: 14.5,
-    example: '7-010520',
-    description: '③ 生年月日（例: 7-010520）'
+    width: 18.0,
+    example: '5-630503',
+    description: '1段目：生年月日（5:昭和 7:平成 9:令和 - YYMMDD）'
   },
   {
     id: 'empRevisionYearMonth',
-    name: '④ 改定年月（和暦YY-MM）',
+    name: '④ 改定年月',
     section: 'row_template',
-    x: 64.0,
-    y: 1.2,
+    x: 63.0,
+    y: 0.6,
     fontSize: 10.5,
-    width: 8.5,
-    example: '08 - 09',
-    description: '④ 改定年月（例: 08年 09月）'
+    width: 9.5,
+    example: '8-09',
+    description: '1段目：改定年月（元号年-月）'
   },
   {
     id: 'empMyNumber',
-    name: '⑰ 個人番号［基礎年金番号］（70歳以上のみ）',
+    name: '⑰ 個人番号（70歳以上のみ・12マス）',
     section: 'row_template',
-    x: 74.0,
-    y: 1.2,
-    fontSize: 10.0,
-    pitch: 1.9,
-    width: 20.0,
+    x: 73.6,
+    y: 0.6,
+    fontSize: 10,
+    pitch: 1.65,
+    width: 21.0,
     example: '123456789012',
-    description: '⑰ 個人番号（70歳以上被用者のみ印字）'
+    description: '1段目：個人番号12桁マス目'
   },
 
-  // ── 行中段（段2） ──────────────────────────────
+  // ── 行内 2段目（従前標準報酬・改定理由等） ──
   {
     id: 'empCurrentHealthStandard',
-    name: '⑤ 従前標準報酬（健保・千円）',
+    name: '⑤ 従前標準報酬（健康保険・千円）',
     section: 'row_template',
-    x: 10.5,
-    y: 3.8,
+    x: 9.8,
+    y: 2.8,
     fontSize: 10.5,
-    width: 9.0,
+    width: 10.5,
     example: '300',
-    description: '⑤ 従前の標準報酬月額（健康保険・千円単位）'
+    description: '2段目：従前健康保険標準報酬（千円単位・右寄せ）'
   },
   {
     id: 'empCurrentPensionStandard',
-    name: '⑤ 従前標準報酬（厚年・千円）',
+    name: '⑤ 従前標準報酬（厚生年金・千円）',
     section: 'row_template',
-    x: 21.2,
-    y: 3.8,
+    x: 21.0,
+    y: 2.8,
     fontSize: 10.5,
-    width: 9.0,
+    width: 10.5,
     example: '300',
-    description: '⑤ 従前の標準報酬月額（厚生年金・千円単位）'
+    description: '2段目：従前厚生年金標準報酬（千円単位・右寄せ）'
   },
   {
     id: 'empPreviousRevisionYM',
-    name: '⑥ 従前改定年月',
+    name: '⑥ 従前改定月',
     section: 'row_template',
     x: 32.5,
-    y: 3.8,
-    fontSize: 10.0,
-    width: 12.0,
-    example: '07年09月',
-    description: '⑥ 従前の標準報酬月額が適用された年月'
+    y: 2.8,
+    fontSize: 9.5,
+    width: 11.0,
+    example: '7-09',
+    description: '2段目：従前の改定月'
   },
   {
     id: 'empWageChangeType',
     name: '⑦ 昇(降)給（区分・年月）',
     section: 'row_template',
-    x: 46.5,
-    y: 3.8,
-    fontSize: 10.0,
-    width: 15.0,
-    example: '1.昇給 08年06月',
-    description: '⑦ 昇(降)給の区分および支払年月'
+    x: 44.5,
+    y: 2.8,
+    fontSize: 9.5,
+    width: 12.0,
+    example: '1.昇給 8-06',
+    description: '2段目：昇降給区分および変動年月'
   },
   {
     id: 'empRetroactiveAmount',
     name: '⑧ 遡及支払額',
     section: 'row_template',
-    x: 63.5,
-    y: 3.8,
+    x: 57.2,
+    y: 2.8,
     fontSize: 9.5,
-    width: 9.0,
-    example: '',
-    description: '⑧ 遡及分の支払があった月と差額'
+    width: 15.5,
+    example: '0',
+    description: '2段目：遡及支払額（右寄せ）'
   },
   {
     id: 'empRemarks',
     name: '⑱ 備考欄',
     section: 'row_template',
-    x: 74.0,
-    y: 3.8,
-    fontSize: 9.0,
-    width: 20.0,
-    example: '基本給改定のため',
-    description: '⑱ 備考（昇給理由・短時間労働者等）'
+    x: 73.6,
+    y: 2.8,
+    fontSize: 8.5,
+    width: 21.0,
+    example: '4.昇給・降給の理由（基本給昇給）',
+    description: '2段目：備考欄'
   },
 
-  // ── 行下段（段3：3ヶ月給与実績テーブル） ────────
-  // 月1
+  // ── 行内 3段目（3ヶ月支給実績・小行1〜3） ──
   {
     id: 'm1Month',
-    name: '⑨ 月1 支給月',
+    name: '⑨ 1ヶ月目 支給月',
     section: 'row_template',
-    x: 10.0,
-    y: 6.2,
-    fontSize: 10.0,
-    width: 4.5,
-    example: '6月',
-    description: '変動後1ヶ月目の支給月'
+    x: 9.5,
+    y: 5.6,
+    fontSize: 9.5,
+    width: 4.0,
+    example: '6',
+    description: '1ヶ月目：支給月'
   },
   {
     id: 'm1Days',
-    name: '⑩ 月1 基礎日数',
+    name: '⑩ 1ヶ月目 基礎日数',
     section: 'row_template',
-    x: 16.5,
-    y: 6.2,
-    fontSize: 10.0,
-    width: 5.0,
-    example: '21日',
-    description: '変動後1ヶ月目の支払基礎日数'
+    x: 14.0,
+    y: 5.6,
+    fontSize: 9.5,
+    width: 7.0,
+    example: '21',
+    description: '1ヶ月目：支払基礎日数'
   },
   {
     id: 'm1Cash',
-    name: '⑪ 月1 通貨額',
+    name: '⑪ 1ヶ月目 通貨による額',
     section: 'row_template',
-    x: 23.0,
-    y: 6.2,
+    x: 21.5,
+    y: 5.6,
     fontSize: 9.5,
-    width: 9.5,
-    example: '350,000',
-    description: '変動後1ヶ月目の通貨による額'
+    width: 10.5,
+    example: '360,000',
+    description: '1ヶ月目：通貨によるものの額'
   },
   {
     id: 'm1InKind',
-    name: '⑫ 月1 現物額',
+    name: '⑫ 1ヶ月目 現物による額',
     section: 'row_template',
-    x: 33.5,
-    y: 6.2,
+    x: 32.5,
+    y: 5.6,
     fontSize: 9.5,
-    width: 7.5,
+    width: 10.5,
     example: '0',
-    description: '変動後1ヶ月目の現物による額'
+    description: '1ヶ月目：現物によるものの額'
   },
   {
     id: 'm1Total',
-    name: '⑬ 月1 合計額',
+    name: '⑬ 1ヶ月目 合計額',
     section: 'row_template',
-    x: 42.0,
-    y: 6.2,
+    x: 43.5,
+    y: 5.6,
     fontSize: 9.5,
-    width: 10.5,
-    example: '350,000',
-    description: '変動後1ヶ月目の合計（⑪+⑫）'
+    width: 13.0,
+    example: '360,000',
+    description: '1ヶ月目：合計(⑪+⑫)'
   },
 
-  // 月2
   {
     id: 'm2Month',
-    name: '⑨ 月2 支給月',
+    name: '⑨ 2ヶ月目 支給月',
     section: 'row_template',
-    x: 10.0,
-    y: 8.2,
-    fontSize: 10.0,
-    width: 4.5,
-    example: '7月',
-    description: '変動後2ヶ月目の支給月'
+    x: 9.5,
+    y: 7.7,
+    fontSize: 9.5,
+    width: 4.0,
+    example: '7',
+    description: '2ヶ月目：支給月'
   },
   {
     id: 'm2Days',
-    name: '⑩ 月2 基礎日数',
+    name: '⑩ 2ヶ月目 基礎日数',
     section: 'row_template',
-    x: 16.5,
-    y: 8.2,
-    fontSize: 10.0,
-    width: 5.0,
-    example: '22日',
-    description: '変動後2ヶ月目の支払基礎日数'
+    x: 14.0,
+    y: 7.7,
+    fontSize: 9.5,
+    width: 7.0,
+    example: '22',
+    description: '2ヶ月目：支払基礎日数'
   },
   {
     id: 'm2Cash',
-    name: '⑪ 月2 通貨額',
+    name: '⑪ 2ヶ月目 通貨による額',
     section: 'row_template',
-    x: 23.0,
-    y: 8.2,
+    x: 21.5,
+    y: 7.7,
     fontSize: 9.5,
-    width: 9.5,
+    width: 10.5,
     example: '360,000',
-    description: '変動後2ヶ月目の通貨による額'
+    description: '2ヶ月目：通貨によるものの額'
   },
   {
     id: 'm2InKind',
-    name: '⑫ 月2 現物額',
+    name: '⑫ 2ヶ月目 現物による額',
     section: 'row_template',
-    x: 33.5,
-    y: 8.2,
+    x: 32.5,
+    y: 7.7,
     fontSize: 9.5,
-    width: 7.5,
+    width: 10.5,
     example: '0',
-    description: '変動後2ヶ月目の現物による額'
+    description: '2ヶ月目：現物によるものの額'
   },
   {
     id: 'm2Total',
-    name: '⑬ 月2 合計額',
+    name: '⑬ 2ヶ月目 合計額',
     section: 'row_template',
-    x: 42.0,
-    y: 8.2,
+    x: 43.5,
+    y: 7.7,
     fontSize: 9.5,
-    width: 10.5,
+    width: 13.0,
     example: '360,000',
-    description: '変動後2ヶ月目の合計（⑪+⑫）'
+    description: '2ヶ月目：合計(⑪+⑫)'
   },
 
-  // 月3
   {
     id: 'm3Month',
-    name: '⑨ 月3 支給月',
+    name: '⑨ 3ヶ月目 支給月',
     section: 'row_template',
-    x: 10.0,
-    y: 10.2,
-    fontSize: 10.0,
-    width: 4.5,
-    example: '8月',
-    description: '変動後3ヶ月目の支給月'
+    x: 9.5,
+    y: 9.8,
+    fontSize: 9.5,
+    width: 4.0,
+    example: '8',
+    description: '3ヶ月目：支給月'
   },
   {
     id: 'm3Days',
-    name: '⑩ 月3 基礎日数',
+    name: '⑩ 3ヶ月目 基礎日数',
     section: 'row_template',
-    x: 16.5,
-    y: 10.2,
-    fontSize: 10.0,
-    width: 5.0,
-    example: '20日',
-    description: '変動後3ヶ月目の支払基礎日数'
+    x: 14.0,
+    y: 9.8,
+    fontSize: 9.5,
+    width: 7.0,
+    example: '20',
+    description: '3ヶ月目：支払基礎日数'
   },
   {
     id: 'm3Cash',
-    name: '⑪ 月3 通貨額',
+    name: '⑪ 3ヶ月目 通貨による額',
     section: 'row_template',
-    x: 23.0,
-    y: 10.2,
+    x: 21.5,
+    y: 9.8,
     fontSize: 9.5,
-    width: 9.5,
-    example: '355,000',
-    description: '変動後3ヶ月目の通貨による額'
+    width: 10.5,
+    example: '360,000',
+    description: '3ヶ月目：通貨によるものの額'
   },
   {
     id: 'm3InKind',
-    name: '⑫ 月3 現物額',
+    name: '⑫ 3ヶ月目 現物による額',
     section: 'row_template',
-    x: 33.5,
-    y: 10.2,
+    x: 32.5,
+    y: 9.8,
     fontSize: 9.5,
-    width: 7.5,
+    width: 10.5,
     example: '0',
-    description: '変動後3ヶ月目の現物による額'
+    description: '3ヶ月目：現物によるものの額'
   },
   {
     id: 'm3Total',
-    name: '⑬ 月3 合計額',
+    name: '⑬ 3ヶ月目 合計額',
     section: 'row_template',
-    x: 42.0,
-    y: 10.2,
+    x: 43.5,
+    y: 9.8,
     fontSize: 9.5,
-    width: 10.5,
-    example: '355,000',
-    description: '変動後3ヶ月目の合計（⑪+⑫）'
+    width: 13.0,
+    example: '360,000',
+    description: '3ヶ月目：合計(⑪+⑫)'
   },
 
-  // 3ヶ月総計・平均
+  // ── 3ヶ月総計・平均額・修正平均額 ──
   {
     id: 'empTotalWage',
-    name: '⑭ 総計（3ヶ月合計）',
+    name: '⑭ 3ヶ月総計',
     section: 'row_template',
-    x: 58.0,
-    y: 6.8,
-    fontSize: 10.0,
-    width: 13.0,
-    example: '1,065,000',
-    description: '⑭ 3ヶ月間の合計額の総和'
+    x: 57.2,
+    y: 5.6,
+    fontSize: 10.5,
+    width: 15.5,
+    example: '1,080,000',
+    description: '3ヶ月間の合計額の総計'
   },
   {
     id: 'empAverageWage',
-    name: '⑮ 平均額（総計 ÷ 3）',
+    name: '⑮ 3ヶ月平均額',
     section: 'row_template',
-    x: 58.0,
-    y: 9.2,
-    fontSize: 10.5,
-    width: 13.0,
-    example: '355,000',
-    description: '⑮ 総計を3で除した平均額（1円未満切捨）'
+    x: 57.2,
+    y: 7.7,
+    fontSize: 11,
+    width: 15.5,
+    example: '360,000',
+    description: '3ヶ月総計÷3（1円未満切捨）'
   },
   {
     id: 'empModifiedAverage',
     name: '⑯ 修正平均額',
     section: 'row_template',
-    x: 58.0,
-    y: 11.2,
-    fontSize: 9.5,
-    width: 13.0,
-    example: '',
-    description: '⑯ 遡及差額等を除外した修正平均額'
+    x: 57.2,
+    y: 9.8,
+    fontSize: 10.5,
+    width: 15.5,
+    example: '360,000',
+    description: '遡及差額等の補正後平均額'
   }
 ];
 
-// ローカルストレージキー
-export const MONTHLY_REVISION_COORDS_STORAGE_KEY = 'monthly_revision_doc_coordinates_custom';
-
-export function getMonthlyRevisionStorageKey(tenantId?: string): string {
-  return tenantId ? `${MONTHLY_REVISION_COORDS_STORAGE_KEY}_${tenantId}` : MONTHLY_REVISION_COORDS_STORAGE_KEY;
-}
-
-export function loadMonthlyRevisionDocCoordinates(tenantId?: string): MonthlyRevisionDocFieldConfig[] {
-  try {
-    const raw = localStorage.getItem(getMonthlyRevisionStorageKey(tenantId));
-    if (raw) {
-      const parsed = JSON.parse(raw);
+export const loadMonthlyRevisionDocCoordinates = (tenantId?: string): MonthlyRevisionDocFieldConfig[] => {
+  const tKey = tenantId ? `monthly_revision_coords_${tenantId}` : 'monthly_revision_coords_default';
+  const saved = localStorage.getItem(tKey);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return mergeWithDefaultRevisionFields(parsed);
+        return DEFAULT_MONTHLY_REVISION_FIELDS.map(df => {
+          const matched = parsed.find((p: any) => p.id === df.id);
+          return matched ? { ...df, ...matched } : df;
+        });
       }
+    } catch (e) {
+      console.error('Failed to parse local monthly revision coordinates:', e);
     }
-  } catch (e) {
-    console.warn('Failed to load monthly revision doc coordinates from localStorage:', e);
   }
-  return DEFAULT_MONTHLY_REVISION_FIELDS;
-}
-
-export function saveMonthlyRevisionDocCoordinates(fields: MonthlyRevisionDocFieldConfig[], tenantId?: string): void {
-  try {
-    localStorage.setItem(getMonthlyRevisionStorageKey(tenantId), JSON.stringify(fields));
-    broadcastMonthlyRevisionDocCoordinates(fields, tenantId);
-  } catch (e) {
-    console.warn('Failed to save monthly revision doc coordinates to localStorage:', e);
-  }
-}
-
-export function resetMonthlyRevisionDocCoordinates(tenantId?: string): MonthlyRevisionDocFieldConfig[] {
-  try {
-    localStorage.removeItem(getMonthlyRevisionStorageKey(tenantId));
-    broadcastMonthlyRevisionDocCoordinates(DEFAULT_MONTHLY_REVISION_FIELDS, tenantId);
-  } catch (e) {
-    console.warn('Failed to reset monthly revision doc coordinates in localStorage:', e);
-  }
-  return DEFAULT_MONTHLY_REVISION_FIELDS;
-}
-
-export function broadcastMonthlyRevisionDocCoordinates(fields: MonthlyRevisionDocFieldConfig[], tenantId?: string): void {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(MONTHLY_REVISION_COORDS_UPDATE_EVENT, { 
-      detail: { fields, tenantId } 
-    }));
-  }
-}
-
-export function mergeWithDefaultRevisionFields(saved: MonthlyRevisionDocFieldConfig[]): MonthlyRevisionDocFieldConfig[] {
-  const map = new Map<string, MonthlyRevisionDocFieldConfig>();
-  saved.forEach(f => map.set(f.id, f));
-
-  return DEFAULT_MONTHLY_REVISION_FIELDS.map(def => {
-    const found = map.get(def.id);
-    if (!found) return def;
-    return {
-      ...def,
-      ...found,
-      section: def.section
-    };
-  });
-}
-
-// DBから最新座標を取得し、localStorageを更新して返す
-export const fetchMonthlyRevisionDocCoordinatesFromDb = async (tenantId?: string): Promise<MonthlyRevisionDocFieldConfig[]> => {
-  try {
-    let saved: any = null;
-    if (tenantId) {
-      const { data: tenantData } = await supabase
-        .from('tenants')
-        .select('monthly_revision_doc_coordinates')
-        .eq('id', tenantId)
-        .maybeSingle();
-      if (tenantData?.monthly_revision_doc_coordinates && Array.isArray(tenantData.monthly_revision_doc_coordinates)) {
-        saved = tenantData.monthly_revision_doc_coordinates;
-      }
-    }
-    if (!saved) {
-      const { data } = await supabase.from('system_settings').select('monthly_revision_doc_coordinates').limit(1).maybeSingle();
-      saved = data?.monthly_revision_doc_coordinates;
-    }
-
-    if (saved && Array.isArray(saved) && saved.length > 0) {
-      const merged = mergeWithDefaultRevisionFields(saved);
-      broadcastMonthlyRevisionDocCoordinates(merged, tenantId);
-      return merged;
-    }
-  } catch (err) {
-    console.warn('DBから月額変更届座標の取得をスキップ（ローカル値を使用）:', err);
-  }
-  return loadMonthlyRevisionDocCoordinates(tenantId);
+  return [...DEFAULT_MONTHLY_REVISION_FIELDS];
 };
 
-// Supabase DB への保存
-export async function saveMonthlyRevisionDocCoordinatesToDb(fields: MonthlyRevisionDocFieldConfig[], tenantId?: string): Promise<boolean> {
+export const saveMonthlyRevisionDocCoordinates = (
+  fields: MonthlyRevisionDocFieldConfig[],
+  tenantId?: string
+): void => {
+  const tKey = tenantId ? `monthly_revision_coords_${tenantId}` : 'monthly_revision_coords_default';
+  localStorage.setItem(tKey, JSON.stringify(fields));
+  window.dispatchEvent(new CustomEvent(MONTHLY_REVISION_COORDS_UPDATE_EVENT, { detail: fields }));
+};
+
+export const resetMonthlyRevisionDocCoordinates = (tenantId?: string): MonthlyRevisionDocFieldConfig[] => {
+  const tKey = tenantId ? `monthly_revision_coords_${tenantId}` : 'monthly_revision_coords_default';
+  localStorage.removeItem(tKey);
+  window.dispatchEvent(new CustomEvent(MONTHLY_REVISION_COORDS_UPDATE_EVENT, { detail: DEFAULT_MONTHLY_REVISION_FIELDS }));
+  return [...DEFAULT_MONTHLY_REVISION_FIELDS];
+};
+
+export const fetchMonthlyRevisionDocCoordinatesFromDb = async (
+  tenantId?: string
+): Promise<MonthlyRevisionDocFieldConfig[] | null> => {
+  if (!tenantId) return null;
   try {
-    saveMonthlyRevisionDocCoordinates(fields, tenantId);
-
-    if (tenantId) {
-      const res = await supabase
-        .from('tenants')
-        .update({ monthly_revision_doc_coordinates: fields })
-        .eq('id', tenantId);
-      if (res.error) {
-        console.warn('Could not update tenant monthly_revision_doc_coordinates:', res.error);
-        return false;
-      }
-      return true;
-    }
-
-    const { data: current } = await supabase
-      .from('system_settings')
-      .select('id')
-      .limit(1)
+    const { data, error } = await supabase
+      .from('company_settings')
+      .select('monthly_revision_doc_coordinates')
+      .eq('tenant_id', tenantId)
       .maybeSingle();
 
-    if (current && current.id) {
-      const res = await supabase
-        .from('system_settings')
-        .update({ 
-          monthly_revision_doc_coordinates: fields,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', current.id);
-      if (res.error) console.warn('Could not update system_settings:', res.error);
+    if (!error && data?.monthly_revision_doc_coordinates) {
+      const raw = data.monthly_revision_doc_coordinates;
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const merged = DEFAULT_MONTHLY_REVISION_FIELDS.map(df => {
+          const matched = parsed.find((p: any) => p.id === df.id);
+          return matched ? { ...df, ...matched } : df;
+        });
+        saveMonthlyRevisionDocCoordinates(merged, tenantId);
+        return merged;
+      }
+    }
+  } catch (e) {
+    console.warn('DB fetch error for monthly revision coordinates:', e);
+  }
+  return null;
+};
+
+export const saveMonthlyRevisionDocCoordinatesToDb = async (
+  fields: MonthlyRevisionDocFieldConfig[],
+  tenantId?: string
+): Promise<boolean> => {
+  saveMonthlyRevisionDocCoordinates(fields, tenantId);
+  if (!tenantId) return true;
+
+  try {
+    const { error } = await supabase
+      .from('company_settings')
+      .upsert({
+        tenant_id: tenantId,
+        monthly_revision_doc_coordinates: fields,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'tenant_id' });
+
+    if (error) {
+      console.warn('DB save warning for monthly revision coordinates:', error);
+      return false;
     }
     return true;
-  } catch (err) {
-    console.error('Error saving monthly revision doc coordinates to DB:', err);
+  } catch (e) {
+    console.error('DB save error for monthly revision coordinates:', e);
     return false;
   }
-}
+};
