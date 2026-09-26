@@ -292,10 +292,13 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
   // 申請の承認処理（打刻修正はattendance_recordsにも自動反映）
   const handleApproveRequest = async (req: any) => {
     try {
-      const { error } = await supabase
+      const activeTenantId = req.tenant_id || tenantId;
+      const query = supabase
         .from('leave_requests')
         .update({ status: '承認' })
         .eq('id', req.id);
+      if (activeTenantId) query.eq('tenant_id', activeTenantId);
+      const { error } = await query;
 
       if (error) throw error;
 
@@ -308,7 +311,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
             const upsertRows = shiftArr.map((item: any) => {
               const isHoli = Boolean(item.isHoliday);
               return {
-                tenant_id: req.tenant_id || tenantId,
+                tenant_id: activeTenantId,
                 user_id: req.user_id,
                 work_date: item.date,
                 start_time: isHoli ? '00:00:00' : (item.startTime || '09:00:00'),
@@ -347,7 +350,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           const { data: existRec } = await supabase
             .from('attendance_records')
             .select('*')
-            .eq('tenant_id', req.tenant_id || tenantId)
+            .eq('tenant_id', activeTenantId)
             .eq('user_id', req.user_id)
             .eq('date', targetDate)
             .maybeSingle();
@@ -360,10 +363,12 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
               updatePayload.status = '退勤済';
             }
             if (parsedBreak !== null) updatePayload.break_minutes = parsedBreak;
-            await supabase
+            const attQuery = supabase
               .from('attendance_records')
               .update(updatePayload)
               .eq('id', existRec.id);
+            if (activeTenantId) attQuery.eq('tenant_id', activeTenantId);
+            await attQuery;
           } else {
             const insertPayload: any = {
               tenant_id: req.tenant_id || tenantId,
@@ -395,10 +400,13 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
   const handleRejectRequest = async (req: any) => {
     if (!confirm('この申請を却下しますか？')) return;
     try {
-      const { error } = await supabase
+      const activeTenantId = req.tenant_id || tenantId;
+      const query = supabase
         .from('leave_requests')
         .update({ status: '却下' })
         .eq('id', req.id);
+      if (activeTenantId) query.eq('tenant_id', activeTenantId);
+      const { error } = await query;
 
       if (error) throw error;
 
@@ -420,10 +428,13 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     setIsBulkApproving(true);
     try {
       for (const req of pendingList) {
-        await supabase
+        const activeTenantId = req.tenant_id || tenantId;
+        const query = supabase
           .from('leave_requests')
           .update({ status: '承認' })
           .eq('id', req.id);
+        if (activeTenantId) query.eq('tenant_id', activeTenantId);
+        await query;
 
         if (req.type === '打刻修正' && req.start_date) {
           const reasonText = req.reason || '';
@@ -440,7 +451,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
             const { data: existRec } = await supabase
               .from('attendance_records')
               .select('*')
-              .eq('tenant_id', req.tenant_id || tenantId)
+              .eq('tenant_id', activeTenantId)
               .eq('user_id', req.user_id)
               .eq('date', targetDate)
               .maybeSingle();
@@ -453,7 +464,9 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                 updatePayload.status = '退勤済';
               }
               if (parsedBreak !== null) updatePayload.break_minutes = parsedBreak;
-              await supabase.from('attendance_records').update(updatePayload).eq('id', existRec.id);
+              const attQuery = supabase.from('attendance_records').update(updatePayload).eq('id', existRec.id);
+              if (activeTenantId) attQuery.eq('tenant_id', activeTenantId);
+              await attQuery;
             } else {
               const insertPayload: any = {
                 tenant_id: req.tenant_id || tenantId,
@@ -759,7 +772,8 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
             status: editModal.status,
             note: editModal.note || null
           })
-          .eq('id', editModal.recordId);
+          .eq('id', editModal.recordId)
+          .eq('tenant_id', tenantId);
         if (error) throw error;
       } else {
         // 新規登録
