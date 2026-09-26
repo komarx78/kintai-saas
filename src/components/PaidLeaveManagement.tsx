@@ -333,6 +333,20 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
   const handleSubmitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId) return;
+
+    if (!requestForm.user_id) {
+      alert('対象従業員を選択してください。');
+      return;
+    }
+    if (!requestForm.start_date || !requestForm.end_date) {
+      alert('開始日と終了日を正しく入力してください。');
+      return;
+    }
+    if (requestForm.start_date > requestForm.end_date) {
+      alert('開始日は終了日以前の日付を指定してください。');
+      return;
+    }
+
     try {
       const { error } = await supabase.from('leave_requests').insert([{
         tenant_id: tenantId,
@@ -361,9 +375,11 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
     e.preventDefault();
     if (!editingUser) return;
     try {
+      const carryover = Math.max(0, Number(editingUser.paid_leave_carryover) || 0);
+      const balance = Math.max(0, Number(editingUser.paid_leave_balance) || 0);
       const query = supabase.from('users').update({
-        paid_leave_carryover: Number(editingUser.paid_leave_carryover) || 0,
-        paid_leave_balance: Number(editingUser.paid_leave_balance) || 0,
+        paid_leave_carryover: carryover,
+        paid_leave_balance: balance,
         join_date: editingUser.join_date || null,
         employment_type: editingUser.empType === 'パート' ? 'part-time' : 'full-time',
         weekly_working_days: Number(editingUser.weekly_working_days) || 5
@@ -397,7 +413,8 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
     const headers = [
       '従業員ID', '従業員名', '雇用形態', '契約週日数', '有給算定方式', '年間実労働換算日数', '入社日', '勤続期間',
       '前年度繰越(日)', '今年度付与(日)', '総付与日数(日)', '当期消化日数(日)', '現在残日数(日)',
-      '次回付与予定日', '次回付与予定日数(日)', '年5日取得義務対象', '年5日義務達成状況'
+      '次回付与予定日', '次回付与予定日数(日)', '年5日取得義務対象', '年5日義務達成状況',
+      '義務算定期間開始日', '義務算定期間終了日'
     ];
 
     const rows = analyzedUsers.map(w => [
@@ -406,7 +423,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
       w.isDispatch ? '派遣 (対象外)' : w.empType,
       w.isDispatch ? '-' : `${w.weeklyDays}日`,
       w.isDispatch ? '-' : (w.statutory.calcMode === 'actual_worked' ? '打刻実績逆算' : '契約週日数固定'),
-      w.isDispatch ? '-' : (w.statutory.calcMode === 'actual_worked' ? `${w.statutory.actualWorkedDaysAnnual}日(週${w.statutory.effectiveWeeklyDays}日相当)` : '-'),
+      w.isDispatch ? '-' : (w.statutory.calcMode === 'actual_worked' ? `${w.statutory.actualWorkedDaysAnnual || 0}日(週${w.statutory.effectiveWeeklyDays || 0}日相当)` : '-'),
       w.join_date || '-',
       w.statutory.serviceText,
       w.isDispatch ? '0' : String(w.carryover),
@@ -417,7 +434,9 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
       w.statutory.nextGrantDate || '-',
       String(w.statutory.nextGrantDays || 0),
       w.isObligated ? '対象' : '対象外',
-      w.isObligated ? (w.isObligationSatisfied ? '達成' : `未達成(あと${w.daysNeededForObligation}日)`) : '-'
+      w.isObligated ? (w.isObligationSatisfied ? '達成' : `未達成(あと${w.daysNeededForObligation}日)`) : '-',
+      w.statutory.obligationPeriodStart || '-',
+      w.statutory.obligationPeriodEnd || '-'
     ]);
 
     const csvContent = [headers, ...rows].map(row => 

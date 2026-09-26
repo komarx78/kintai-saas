@@ -31,12 +31,12 @@ export default function EmployeeMaternityApplication() {
 
   // 会社・テナント情報
   const [tenantId, setTenantId] = useState<string>(tenantIdParam);
-  const [companyName, setCompanyName] = useState<string>('会社名');
+  const [companyName, setCompanyName] = useState<string>('');
 
   // 社員情報
   const [userId, setUserId] = useState<string>(userIdParam);
   const [employeeName, setEmployeeName] = useState<string>(nameParam);
-  const [employeeResidentTax, setEmployeeResidentTax] = useState<number>(15000);
+  const [employeeResidentTax, setEmployeeResidentTax] = useState<number>(0);
   const [residentTaxDetails, setResidentTaxDetails] = useState<Record<string, number>>({});
 
   // 入力ステップ (1: 予定日・期間, 2: 連絡先・子情報, 3: 書類添付, 4: 精算希望・確認)
@@ -428,7 +428,7 @@ export default function EmployeeMaternityApplication() {
                 産前産後・育児休業 取得申請
               </h1>
               <p className="text-[10px] text-slate-400">
-                {companyName} 労務手続きステーション
+                {companyName ? `${companyName} ` : ''}労務手続きステーション
               </p>
             </div>
           </div>
