@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import { 
   loadBonusDocCoordinates, 
   fetchBonusDocCoordinatesFromDb, 
@@ -47,6 +48,7 @@ export interface BonusPaymentReportDocProps {
   };
   canEditCoordinates?: boolean; // 会社管理者・マスタ設定画面からのみ編集許可（軍律第23条 権限分離）
   customCoords?: BonusDocFieldConfig[]; // 🎯 座標インスペクターからのリアルタイム最新座標（親から渡された場合は最優先で即時反映）
+  tenantId?: string;
 }
 
 /**
@@ -769,8 +771,42 @@ const ExactPdfPageRenderer: React.FC<{
 export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps> = ({ 
   data, 
   canEditCoordinates = false,
-  customCoords
+  customCoords,
+  tenantId
 }) => {
+  // テナントID自動解決
+  const [resolvedTenantId, setResolvedTenantId] = useState<string>(tenantId || '');
+
+  useEffect(() => {
+    if (tenantId) {
+      setResolvedTenantId(tenantId);
+      return;
+    }
+    const resolveTenant = async () => {
+      try {
+        const { data: rpcTenant } = await supabase.rpc('get_user_tenant_id');
+        if (rpcTenant) {
+          setResolvedTenantId(rpcTenant);
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile?.tenant_id) {
+            setResolvedTenantId(profile.tenant_id);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve tenant in OfficialBonusPaymentReportDoc:', e);
+      }
+    };
+    resolveTenant();
+  }, [tenantId]);
+
   const commonDateParsed = parseDateElements(data.commonPaymentDate);
   const submissionDateParsed = parseDateElements(data.submissionDate || new Date().toISOString().split('T')[0]);
 
@@ -807,17 +843,17 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
   const [showInspectorModal, setShowInspectorModal] = useState(false);
 
   // 🎯 マスタ印字座標State（インスペクターやDBとのリアルタイム同期）
-  const [fieldsList, setFieldsList] = useState<BonusDocFieldConfig[]>(() => customCoords || loadBonusDocCoordinates());
+  const [fieldsList, setFieldsList] = useState<BonusDocFieldConfig[]>(() => customCoords || loadBonusDocCoordinates(tenantId));
 
-  // 初回DB（Supabase system_settings）からの読み込み（親からcustomCoordsが渡されていない場合のみ）
+  // 初回DB（Supabase tenants または system_settings）からの読み込み（親からcustomCoordsが渡されていない場合のみ）
   useEffect(() => {
     if (customCoords) return;
-    fetchBonusDocCoordinatesFromDb().then(latest => {
+    fetchBonusDocCoordinatesFromDb(resolvedTenantId).then(latest => {
       if (latest && latest.length > 0) {
         setFieldsList(latest);
       }
     });
-  }, [customCoords]);
+  }, [customCoords, resolvedTenantId]);
 
   // リアルタイム更新イベント（同一タブ内）および storage イベント（別タブ）を監視
   useEffect(() => {
@@ -932,7 +968,7 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 bg-slate-950/50">
-              <BonusDocMasterInspector />
+              <BonusDocMasterInspector tenantId={resolvedTenantId} />
             </div>
           </div>
         </div>

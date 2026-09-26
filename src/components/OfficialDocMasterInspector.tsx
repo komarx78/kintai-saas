@@ -127,15 +127,15 @@ export const OfficialDocMasterInspector: React.FC<OfficialDocMasterInspectorProp
       {activeDoc === 'spouse_deduction' ? (
         <SpouseDocMasterInspector tenantId={tenantId} />
       ) : activeDoc === 'employment_loss' ? (
-        <EmploymentLossDocMasterInspector />
+        <EmploymentLossDocMasterInspector tenantId={tenantId} />
       ) : activeDoc === 'employment_acquisition' ? (
-        <EmploymentAcquisitionDocMasterInspector />
+        <EmploymentAcquisitionDocMasterInspector tenantId={tenantId} />
       ) : activeDoc === 'health_pension_acquisition' ? (
-        <HealthPensionAcquisitionDocMasterInspector />
+        <HealthPensionAcquisitionDocMasterInspector tenantId={tenantId} />
       ) : activeDoc === 'health_pension_loss' ? (
-        <HealthPensionLossDocMasterInspector />
+        <HealthPensionLossDocMasterInspector tenantId={tenantId} />
       ) : activeDoc === 'bonus_report' ? (
-        <BonusDocMasterInspector />
+        <BonusDocMasterInspector tenantId={tenantId} />
       ) : (
         <TaxDocMasterInspector tenantId={tenantId} />
       )}

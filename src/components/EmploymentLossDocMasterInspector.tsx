@@ -5,8 +5,8 @@ import {
   Sliders, Eye, Sparkles
 } from 'lucide-react';
 import { 
-  DEFAULT_EMPLOYMENT_LOSS_FIELDS,
   loadEmploymentLossCoordinates,
+  resetEmploymentLossCoordinates,
   saveEmploymentLossCoordinates,
   saveEmploymentLossCoordinatesToDb,
   fetchEmploymentLossCoordinatesFromDb,
@@ -16,13 +16,50 @@ import {
 import { supabase } from '../lib/supabase';
 import { OfficialEmploymentLossDoc } from './OfficialEmploymentLossDoc';
 
-export const EmploymentLossDocMasterInspector: React.FC = () => {
+interface EmploymentLossDocMasterInspectorProps {
+  tenantId?: string;
+}
+
+export const EmploymentLossDocMasterInspector: React.FC<EmploymentLossDocMasterInspectorProps> = ({ tenantId }) => {
   // モード: 'inspector' (座標微調整) | 'input_preview' (実際の直接入力プレビュー)
   const [activeTab, setActiveTab] = useState<'inspector' | 'input_preview'>('inspector');
 
+  // テナントID自動解決
+  const [resolvedTenantId, setResolvedTenantId] = useState<string>(tenantId || '');
+
+  useEffect(() => {
+    if (tenantId) {
+      setResolvedTenantId(tenantId);
+      return;
+    }
+    const resolveTenant = async () => {
+      try {
+        const { data: rpcTenant } = await supabase.rpc('get_user_tenant_id');
+        if (rpcTenant) {
+          setResolvedTenantId(rpcTenant);
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile?.tenant_id) {
+            setResolvedTenantId(profile.tenant_id);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve tenant in EmploymentLossDocMasterInspector:', e);
+      }
+    };
+    resolveTenant();
+  }, [tenantId]);
+
   // インスペクター用State
   const [fields, setFields] = useState<EmploymentLossFieldConfig[]>(() => 
-    loadEmploymentLossCoordinates().filter(f => f.id !== 'docTypeNumber')
+    loadEmploymentLossCoordinates(tenantId).filter(f => f.id !== 'docTypeNumber')
   );
   const [selectedSection, setSelectedSection] = useState<'header' | 'employee_basic' | 'loss_detail' | 'lower_table' | 'office'>('header');
   const [selectedFieldId, setSelectedFieldId] = useState<string>('myNumber');
@@ -44,6 +81,22 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
   useEffect(() => {
     const fetchCompany = async () => {
       try {
+        const tId = resolvedTenantId;
+        if (tId) {
+          const { data: tData } = await supabase.from('tenants').select('*').eq('id', tId).maybeSingle();
+          if (tData) {
+            setCompanyInfo({
+              name: tData.name || '自社事業所',
+              address: tData.address || '',
+              representative_name: tData.representative_name || '',
+              phone_number: tData.phone_number || '',
+              corporate_number: tData.corporate_number || '',
+              company_seal_url: tData.company_seal_url || ''
+            });
+            setOfficeNumber(tData.employment_insurance_office_number || '');
+            return;
+          }
+        }
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
@@ -67,19 +120,19 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
       }
     };
     fetchCompany();
-  }, []);
+  }, [resolvedTenantId]);
 
-  // マウント時にDBから全社共有座標を取得
+  // マウント時およびテナント確定時にDBから全社共有座標を取得
   useEffect(() => {
     let isCancelled = false;
-    fetchEmploymentLossCoordinatesFromDb().then(dbCoords => {
+    fetchEmploymentLossCoordinatesFromDb(resolvedTenantId).then(dbCoords => {
       if (!isCancelled && dbCoords && dbCoords.length > 0) {
         const cleaned = dbCoords.filter(f => f.id !== 'docTypeNumber');
         setFields(cleaned);
       }
     });
     return () => { isCancelled = true; };
-  }, []);
+  }, [resolvedTenantId]);
 
   // 原本背景画像
   const [bgPdfImg, setBgPdfImg] = useState<string | null>(null);
@@ -252,9 +305,9 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
   // 保存（ローカルおよびDB）
   const handleSave = async () => {
     setIsSaving(true);
-    saveEmploymentLossCoordinates(fields);
+    saveEmploymentLossCoordinates(fields, resolvedTenantId);
     broadcastEmploymentLossCoordinates(fields);
-    await saveEmploymentLossCoordinatesToDb(fields);
+    await saveEmploymentLossCoordinatesToDb(fields, resolvedTenantId);
     setIsSaving(false);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
@@ -263,9 +316,9 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
   // 初期値リセット
   const handleReset = () => {
     if (confirm('座標設定を初期値（黄金比率デフォルト値）にリセットしますか？')) {
-      setFields(DEFAULT_EMPLOYMENT_LOSS_FIELDS);
-      saveEmploymentLossCoordinates(DEFAULT_EMPLOYMENT_LOSS_FIELDS);
-      broadcastEmploymentLossCoordinates(DEFAULT_EMPLOYMENT_LOSS_FIELDS);
+      const resetFields = resetEmploymentLossCoordinates(resolvedTenantId);
+      setFields(resetFields);
+      broadcastEmploymentLossCoordinates(resetFields);
     }
   };
 
@@ -318,6 +371,7 @@ export const EmploymentLossDocMasterInspector: React.FC = () => {
       {/* 1. 直接入力プレビューモード */}
       {activeTab === 'input_preview' && (
         <OfficialEmploymentLossDoc
+          tenantId={resolvedTenantId}
           customCoords={fields}
           companyInfo={companyInfo}
           officeNumber={officeNumber || '－'}

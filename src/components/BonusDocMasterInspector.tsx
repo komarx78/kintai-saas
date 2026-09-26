@@ -10,10 +10,11 @@ import {
 } from 'lucide-react';
 
 import { 
-  DEFAULT_BONUS_FIELDS, 
   loadBonusDocCoordinates, 
+  resetBonusDocCoordinates,
   broadcastBonusDocCoordinates,
   fetchBonusDocCoordinatesFromDb,
+  saveBonusDocCoordinatesToDb,
   type BonusDocFieldConfig 
 } from '../lib/bonusDocCoordinates';
 import { 
@@ -21,9 +22,46 @@ import {
   type BonusReportEmployee 
 } from './OfficialBonusPaymentReportDoc';
 
-export const BonusDocMasterInspector: React.FC = () => {
+interface BonusDocMasterInspectorProps {
+  tenantId?: string;
+}
+
+export const BonusDocMasterInspector: React.FC<BonusDocMasterInspectorProps> = ({ tenantId }) => {
   // 🧭 モード切替: 'inspector' (精密座標インスペクター) | 'input_preview' (全社実動 直接入力 ＆ A4印刷画面)
   const [activeMode, setActiveMode] = useState<'inspector' | 'input_preview'>('inspector');
+
+  // テナントID自動解決
+  const [resolvedTenantId, setResolvedTenantId] = useState<string>(tenantId || '');
+
+  useEffect(() => {
+    if (tenantId) {
+      setResolvedTenantId(tenantId);
+      return;
+    }
+    const resolveTenant = async () => {
+      try {
+        const { data: rpcTenant } = await supabase.rpc('get_user_tenant_id');
+        if (rpcTenant) {
+          setResolvedTenantId(rpcTenant);
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile?.tenant_id) {
+            setResolvedTenantId(profile.tenant_id);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve tenant in BonusDocMasterInspector:', e);
+      }
+    };
+    resolveTenant();
+  }, [tenantId]);
 
   // 📝 直接入力用State
   const [submissionDate, setSubmissionDate] = useState(new Date().toISOString().split('T')[0]);
@@ -93,16 +131,37 @@ export const BonusDocMasterInspector: React.FC = () => {
   const previewContainerRef = useRef<HTMLDivElement | null>(null);
 
   // 項目別マスタ座標State
-  const [fields, setFields] = useState<BonusDocFieldConfig[]>(() => loadBonusDocCoordinates());
+  const [fields, setFields] = useState<BonusDocFieldConfig[]>(() => loadBonusDocCoordinates(tenantId));
 
-  // 初回DBからの読み込み
+  // DBからの読み込み & テナント会社情報のロード
   useEffect(() => {
+    let isCancelled = false;
     const fetchMaster = async () => {
       try {
-        const latest = await fetchBonusDocCoordinatesFromDb();
-        setFields(latest);
+        const latest = await fetchBonusDocCoordinatesFromDb(resolvedTenantId);
+        if (!isCancelled && latest && latest.length > 0) {
+          setFields(latest);
+        }
 
         // 🏢 テナント情報から動的会社情報をロード（他社テナントへの配慮・憲法3/4）
+        const tId = resolvedTenantId;
+        if (tId) {
+          const { data: tData } = await supabase.from('tenants').select('*').eq('id', tId).maybeSingle();
+          if (tData) {
+            if (tData.name) setCompanyName(tData.name);
+            if (tData.address) setCompanyAddress(tData.address);
+            if (tData.representative_name) setCompanyOwnerName(tData.representative_name);
+            if (tData.phone_number) setCompanyPhone(tData.phone_number);
+
+            const sym = tData.shakai_hoken_settings?.office_symbol || '';
+            if (sym && sym.includes('-')) {
+              const parts = sym.split('-');
+              if (parts[0]) setOfficeCityCode(parts[0]);
+              if (parts[1]) setOfficeSymbolKana(parts[1]);
+            }
+            return;
+          }
+        }
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
@@ -128,7 +187,8 @@ export const BonusDocMasterInspector: React.FC = () => {
       }
     };
     fetchMaster();
-  }, []);
+    return () => { isCancelled = true; };
+  }, [resolvedTenantId]);
 
   // 項目値の更新（変更のたびにリアルタイムで帳票へブロードキャスト）
   const updateField = useCallback((id: string, key: keyof BonusDocFieldConfig, value: any) => {
@@ -280,37 +340,9 @@ export const BonusDocMasterInspector: React.FC = () => {
 
   const handleSaveMaster = async () => {
     setIsSaving(true);
-    // ユーザー調整座標の不可侵保護（憲法第17条）
-    broadcastBonusDocCoordinates(fields);
-
     try {
-      const { data: current, error: fetchErr } = await supabase
-        .from('system_settings')
-        .select('id')
-        .limit(1)
-        .maybeSingle();
-
-      let dbSuccess = false;
-      if (!fetchErr && current && current.id) {
-        const { error: updErr } = await supabase
-          .from('system_settings')
-          .update({ 
-            bonus_doc_coordinates: fields, 
-            updated_at: new Date().toISOString() 
-          })
-          .eq('id', current.id);
-        if (!updErr) dbSuccess = true;
-      } else {
-        const { error: insErr } = await supabase
-          .from('system_settings')
-          .insert([{ 
-            bonus_doc_coordinates: fields, 
-            updated_at: new Date().toISOString() 
-          }]);
-        if (!insErr) dbSuccess = true;
-      }
-
-      if (dbSuccess) {
+      const ok = await saveBonusDocCoordinatesToDb(fields, resolvedTenantId);
+      if (ok) {
         setSaveStatus('db_saved');
         setSavedSuccess(true);
       } else {
@@ -337,8 +369,9 @@ export const BonusDocMasterInspector: React.FC = () => {
   // 黄金比率初期化リセット
   const handleResetDefaults = () => {
     if (confirm('賞与支払届のすべての項目の座標・文字サイズを黄金比率マスター初期値にリセットしますか？')) {
-      setFields(DEFAULT_BONUS_FIELDS);
-      broadcastBonusDocCoordinates(DEFAULT_BONUS_FIELDS);
+      const resetFields = resetBonusDocCoordinates(resolvedTenantId);
+      setFields(resetFields);
+      broadcastBonusDocCoordinates(resetFields, resolvedTenantId);
     }
   };
 
@@ -1704,6 +1737,7 @@ export const BonusDocMasterInspector: React.FC = () => {
         <div className="col-span-12 lg:col-span-8">
           <div className="bg-slate-200/80 p-4 sm:p-6 rounded-3xl border border-slate-300 shadow-inner overflow-x-auto">
             <OfficialBonusPaymentReportDoc
+              tenantId={resolvedTenantId}
               data={{
                 submissionDate,
                 officeSymbol,

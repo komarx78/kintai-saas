@@ -5,23 +5,60 @@ import {
   Sliders, Eye, Sparkles
 } from 'lucide-react';
 import { 
-  DEFAULT_EMPLOYMENT_ACQ_FIELDS,
   loadEmploymentAcqCoordinates,
   fetchEmploymentAcqCoordinatesFromDb,
   saveEmploymentAcqCoordinates,
   saveEmploymentAcqCoordinatesToDb,
+  resetEmploymentAcqCoordinates,
   broadcastEmploymentAcqCoordinates,
   type EmploymentAcqFieldConfig
 } from '../lib/employmentAcquisitionDocCoordinates';
 import { supabase } from '../lib/supabase';
 import { OfficialEmploymentAcquisitionDoc } from './OfficialEmploymentAcquisitionDoc';
 
-export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
+interface EmploymentAcquisitionDocMasterInspectorProps {
+  tenantId?: string;
+}
+
+export const EmploymentAcquisitionDocMasterInspector: React.FC<EmploymentAcquisitionDocMasterInspectorProps> = ({ tenantId }) => {
   // モード: 'inspector' (座標微調整) | 'input_preview' (実際の直接入力プレビュー)
   const [activeTab, setActiveTab] = useState<'inspector' | 'input_preview'>('inspector');
 
+  // テナントID自動解決
+  const [resolvedTenantId, setResolvedTenantId] = useState<string>(tenantId || '');
+
+  useEffect(() => {
+    if (tenantId) {
+      setResolvedTenantId(tenantId);
+      return;
+    }
+    const resolveTenant = async () => {
+      try {
+        const { data: rpcTenant } = await supabase.rpc('get_user_tenant_id');
+        if (rpcTenant) {
+          setResolvedTenantId(rpcTenant);
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile?.tenant_id) {
+            setResolvedTenantId(profile.tenant_id);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve tenant in EmploymentAcquisitionDocMasterInspector:', e);
+      }
+    };
+    resolveTenant();
+  }, [tenantId]);
+
   // インスペクター用State
-  const [fields, setFields] = useState<EmploymentAcqFieldConfig[]>(() => loadEmploymentAcqCoordinates());
+  const [fields, setFields] = useState<EmploymentAcqFieldConfig[]>(() => loadEmploymentAcqCoordinates(tenantId));
   const [selectedSection, setSelectedSection] = useState<'header' | 'employee_basic' | 'employment_condition' | 'contract' | 'office'>('header');
   const [selectedFieldId, setSelectedFieldId] = useState<string>('myNumber');
   const [isSaving, setIsSaving] = useState(false);
@@ -42,6 +79,22 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
   useEffect(() => {
     const fetchCompany = async () => {
       try {
+        const tId = resolvedTenantId;
+        if (tId) {
+          const { data: tData } = await supabase.from('tenants').select('*').eq('id', tId).maybeSingle();
+          if (tData) {
+            setCompanyInfo({
+              name: tData.name || '自社事業所',
+              address: tData.address || '',
+              representative_name: tData.representative_name || '',
+              phone_number: tData.phone_number || '',
+              corporate_number: tData.corporate_number || '',
+              company_seal_url: tData.company_seal_url || ''
+            });
+            setOfficeNumber(tData.employment_insurance_office_number || '');
+            return;
+          }
+        }
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
@@ -65,7 +118,18 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
       }
     };
     fetchCompany();
-  }, []);
+  }, [resolvedTenantId]);
+
+  // マウント時およびテナント確定時にDBから全社共有座標を取得
+  useEffect(() => {
+    let isCancelled = false;
+    fetchEmploymentAcqCoordinatesFromDb(resolvedTenantId).then(dbCoords => {
+      if (!isCancelled && dbCoords && dbCoords.length > 0) {
+        setFields(dbCoords);
+      }
+    });
+    return () => { isCancelled = true; };
+  }, [resolvedTenantId]);
 
   // 原本背景画像
   const [bgPdfImg, setBgPdfImg] = useState<string | null>(null);
@@ -249,9 +313,9 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
   // 保存（ローカルおよびDB）
   const handleSave = async () => {
     setIsSaving(true);
-    saveEmploymentAcqCoordinates(fields);
+    saveEmploymentAcqCoordinates(fields, resolvedTenantId);
     broadcastEmploymentAcqCoordinates(fields);
-    await saveEmploymentAcqCoordinatesToDb(fields);
+    await saveEmploymentAcqCoordinatesToDb(fields, resolvedTenantId);
     setIsSaving(false);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
@@ -260,9 +324,9 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
   // 初期値リセット
   const handleReset = () => {
     if (confirm('座標設定を初期値（黄金比率デフォルト値）にリセットしますか？')) {
-      setFields(DEFAULT_EMPLOYMENT_ACQ_FIELDS);
-      saveEmploymentAcqCoordinates(DEFAULT_EMPLOYMENT_ACQ_FIELDS);
-      broadcastEmploymentAcqCoordinates(DEFAULT_EMPLOYMENT_ACQ_FIELDS);
+      const resetFields = resetEmploymentAcqCoordinates(resolvedTenantId);
+      setFields(resetFields);
+      broadcastEmploymentAcqCoordinates(resetFields);
     }
   };
 
@@ -315,6 +379,7 @@ export const EmploymentAcquisitionDocMasterInspector: React.FC = () => {
       {/* 1. 直接入力プレビューモード */}
       {activeTab === 'input_preview' && (
         <OfficialEmploymentAcquisitionDoc
+          tenantId={resolvedTenantId}
           customCoords={fields}
           companyInfo={companyInfo}
           officeNumber={officeNumber || '－'}

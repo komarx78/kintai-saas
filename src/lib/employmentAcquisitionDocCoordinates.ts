@@ -427,9 +427,10 @@ export const DEFAULT_EMPLOYMENT_ACQ_FIELDS: EmploymentAcqFieldConfig[] = [
 const STORAGE_KEY = 'employment_acq_doc_coords_v7';
 
 // 座標設定の読み込み
-export function loadEmploymentAcqCoordinates(): EmploymentAcqFieldConfig[] {
+export function loadEmploymentAcqCoordinates(tenantId?: string): EmploymentAcqFieldConfig[] {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const key = tenantId ? `${STORAGE_KEY}_${tenantId}` : STORAGE_KEY;
+    const saved = localStorage.getItem(key) || (!tenantId ? localStorage.getItem(STORAGE_KEY) : null);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
@@ -458,13 +459,23 @@ export function loadEmploymentAcqCoordinates(): EmploymentAcqFieldConfig[] {
 }
 
 // 座標設定の保存
-export function saveEmploymentAcqCoordinates(fields: EmploymentAcqFieldConfig[]) {
+export function saveEmploymentAcqCoordinates(fields: EmploymentAcqFieldConfig[], tenantId?: string) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(fields));
+    const key = tenantId ? `${STORAGE_KEY}_${tenantId}` : STORAGE_KEY;
+    localStorage.setItem(key, JSON.stringify(fields));
     broadcastEmploymentAcqCoordinates(fields);
   } catch (err) {
     console.error('Failed to save employment acq coordinates:', err);
   }
+}
+
+// 座標初期化リセット
+export function resetEmploymentAcqCoordinates(tenantId?: string): EmploymentAcqFieldConfig[] {
+  try {
+    const key = tenantId ? `${STORAGE_KEY}_${tenantId}` : STORAGE_KEY;
+    localStorage.removeItem(key);
+  } catch (err) {}
+  return DEFAULT_EMPLOYMENT_ACQ_FIELDS;
 }
 
 // リアルタイム反映イベント送信
@@ -472,20 +483,33 @@ export function broadcastEmploymentAcqCoordinates(fields: EmploymentAcqFieldConf
   window.dispatchEvent(new CustomEvent(EMPLOYMENT_ACQ_COORDS_UPDATE_EVENT, { detail: fields }));
 }
 
-// Supabase DB からの読み込み
-export async function fetchEmploymentAcqCoordinatesFromDb(): Promise<EmploymentAcqFieldConfig[]> {
+// Supabase DB からの読み込み（テナント分離対応）
+export async function fetchEmploymentAcqCoordinatesFromDb(tenantId?: string): Promise<EmploymentAcqFieldConfig[]> {
   try {
-    const { data, error } = await supabase
-      .from('system_settings')
-      .select('employment_acq_doc_coordinates')
-      .limit(1)
-      .maybeSingle();
+    let saved: any = null;
+    if (tenantId) {
+      const { data: tenantData } = await supabase
+        .from('tenants')
+        .select('employment_acq_doc_coordinates')
+        .eq('id', tenantId)
+        .maybeSingle();
+      if (tenantData?.employment_acq_doc_coordinates && Array.isArray(tenantData.employment_acq_doc_coordinates)) {
+        saved = tenantData.employment_acq_doc_coordinates;
+      }
+    }
+    if (!saved) {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('employment_acq_doc_coordinates')
+        .limit(1)
+        .maybeSingle();
 
-    if (error) {
-      console.warn('DB fetch warning:', error);
+      if (error) {
+        console.warn('DB fetch warning:', error);
+      }
+      saved = data?.employment_acq_doc_coordinates;
     }
 
-    const saved = data?.employment_acq_doc_coordinates;
     if (saved && Array.isArray(saved) && saved.length > 0) {
       const map = new Map(saved.map((f: any) => [f.id, f]));
       const merged = DEFAULT_EMPLOYMENT_ACQ_FIELDS.map(def => {
@@ -503,19 +527,31 @@ export async function fetchEmploymentAcqCoordinatesFromDb(): Promise<EmploymentA
         }
         return def;
       });
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      saveEmploymentAcqCoordinates(merged, tenantId);
       return merged;
     }
   } catch (err) {
     console.warn('DB fetch failed, fallback to local:', err);
   }
-  return loadEmploymentAcqCoordinates();
+  return loadEmploymentAcqCoordinates(tenantId);
 }
 
-// Supabase DB への保存（UUID完全整合・レコード自動判定）
-export async function saveEmploymentAcqCoordinatesToDb(fields: EmploymentAcqFieldConfig[]): Promise<boolean> {
+// Supabase DB への保存（UUID完全整合・レコード自動判定・テナント分離対応）
+export async function saveEmploymentAcqCoordinatesToDb(fields: EmploymentAcqFieldConfig[], tenantId?: string): Promise<boolean> {
   try {
-    saveEmploymentAcqCoordinates(fields);
+    saveEmploymentAcqCoordinates(fields, tenantId);
+
+    if (tenantId) {
+      const res = await supabase
+        .from('tenants')
+        .update({ employment_acq_doc_coordinates: fields })
+        .eq('id', tenantId);
+      if (res.error) {
+        console.warn('Could not update tenant employment_acq_doc_coordinates:', res.error);
+        return false;
+      }
+      return true;
+    }
 
     // 既存レコードを取得
     const { data: current } = await supabase

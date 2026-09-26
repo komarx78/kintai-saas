@@ -101,24 +101,27 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
   hideHeader = false,
   tenantId
 }) => {
+  // テナントIDの自動解決（Props優先、URLクエリパラメータフォールバック）
+  const resolvedTenantId = tenantId || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tenant_id') || undefined : undefined);
+
   // 対象従業員
   const currentEmpId = selectedEmployeeId || employees[0]?.id || '';
   const currentEmployee = employees.find(e => e.id === currentEmpId) || employees[0];
 
   // リアルタイム座標設定State
-  const [coords, setCoords] = useState<HealthPensionAcqFieldConfig[]>(() => customCoords || loadHealthPensionAcqCoordinates());
+  const [coords, setCoords] = useState<HealthPensionAcqFieldConfig[]>(() => customCoords || loadHealthPensionAcqCoordinates(resolvedTenantId));
 
   // マウント時にDBから最新座標を取得
   useEffect(() => {
     if (customCoords) return;
     let isCancelled = false;
-    fetchHealthPensionAcqCoordinatesFromDb().then(dbCoords => {
+    fetchHealthPensionAcqCoordinatesFromDb(resolvedTenantId).then(dbCoords => {
       if (!isCancelled && dbCoords && dbCoords.length > 0) {
         setCoords(dbCoords);
       }
     });
     return () => { isCancelled = true; };
-  }, [customCoords, tenantId]);
+  }, [customCoords, resolvedTenantId]);
 
   // 印刷モード: 'full' (原本PDF枠ごと印刷) | 'text_only' (OCR用紙への文字だけ印字)
   const [printMode, setPrintMode] = useState<'full' | 'text_only'>('full');
@@ -261,11 +264,11 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
       const finalX = Math.round(x * precision) / precision;
       const finalY = Math.round(y * precision) / precision;
       const updated = prev.map(f => f.id === id ? { ...f, x: finalX, y: finalY } : f);
-      saveHealthPensionAcqCoordinates(updated);
-      broadcastHealthPensionAcqCoordinates(updated);
+      saveHealthPensionAcqCoordinates(updated, resolvedTenantId);
+      broadcastHealthPensionAcqCoordinates(updated, resolvedTenantId);
       return updated;
     });
-  }, []);
+  }, [resolvedTenantId]);
 
   const handleStartDrag = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -296,7 +299,7 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
       if (draggingFieldId) {
         setDraggingFieldId(null);
         dragStartRef.current = null;
-        saveHealthPensionAcqCoordinatesToDb(coords);
+        saveHealthPensionAcqCoordinatesToDb(coords, resolvedTenantId);
       }
     };
 
@@ -308,7 +311,7 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggingFieldId, coords, updateFieldCoord]);
+  }, [draggingFieldId, coords, updateFieldCoord, resolvedTenantId]);
 
   // PDF.js による原本背景レンダリング
   useEffect(() => {

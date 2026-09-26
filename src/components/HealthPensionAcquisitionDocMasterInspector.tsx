@@ -16,12 +16,15 @@ import {
 import { supabase } from '../lib/supabase';
 import { OfficialHealthPensionAcquisitionDoc, type HealthPensionAcquisitionEmployee } from './OfficialHealthPensionAcquisitionDoc';
 
-export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
+export const HealthPensionAcquisitionDocMasterInspector: React.FC<{ tenantId?: string }> = ({ tenantId }) => {
+  // テナントIDの自動解決（Props優先、URLクエリパラメータフォールバック）
+  const resolvedTenantId = tenantId || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tenant_id') || undefined : undefined);
+
   // モード: 'inspector' (座標微調整) | 'input_preview' (実際の直接入力プレビュー)
   const [activeTab, setActiveTab] = useState<'inspector' | 'input_preview'>('inspector');
 
   // インスペクター用State
-  const [fields, setFields] = useState<HealthPensionAcqFieldConfig[]>(() => loadHealthPensionAcqCoordinates());
+  const [fields, setFields] = useState<HealthPensionAcqFieldConfig[]>(() => loadHealthPensionAcqCoordinates(resolvedTenantId));
   const [selectedSection, setSelectedSection] = useState<'header' | 'office' | 'insured_person_1'>('insured_person_1');
   const [selectedFieldId, setSelectedFieldId] = useState<string>('myNumberOrPension_1');
   const [isSaving, setIsSaving] = useState(false);
@@ -93,13 +96,13 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
   // ☁️ マウント時にDBから最新の公的印字座標を取得（他PCとの完全同期保証）
   useEffect(() => {
     let isCancelled = false;
-    fetchHealthPensionAcqCoordinatesFromDb().then(dbCoords => {
+    fetchHealthPensionAcqCoordinatesFromDb(resolvedTenantId).then(dbCoords => {
       if (!isCancelled && dbCoords && dbCoords.length > 0) {
         setFields(dbCoords);
       }
     });
     return () => { isCancelled = true; };
-  }, []);
+  }, [resolvedTenantId]);
 
   // 選択中項目
   const selectedField = fields.find(f => f.id === selectedFieldId);
@@ -114,11 +117,11 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
         finalVal = Math.round(value * precision) / precision;
       }
       const updated = prev.map(f => f.id === id ? { ...f, [key]: finalVal } : f);
-      saveHealthPensionAcqCoordinates(updated);
-      broadcastHealthPensionAcqCoordinates(updated);
+      saveHealthPensionAcqCoordinates(updated, resolvedTenantId);
+      broadcastHealthPensionAcqCoordinates(updated, resolvedTenantId);
       return updated;
     });
-  }, []);
+  }, [resolvedTenantId]);
 
   // 矢印キー微調整
   const nudgeField = useCallback((id: string, deltaX: number, deltaY: number) => {
@@ -129,17 +132,17 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
     const nextY = Math.max(0, Math.min(100, Math.round((f.y + deltaY) * precision) / precision));
     setFields(prev => {
       const updated = prev.map(item => item.id === id ? { ...item, x: nextX, y: nextY } : item);
-      saveHealthPensionAcqCoordinates(updated);
-      broadcastHealthPensionAcqCoordinates(updated);
+      saveHealthPensionAcqCoordinates(updated, resolvedTenantId);
+      broadcastHealthPensionAcqCoordinates(updated, resolvedTenantId);
       return updated;
     });
-  }, [fields]);
+  }, [fields, resolvedTenantId]);
 
   // DB保存
   const handleSaveToDb = async () => {
     setIsSaving(true);
     try {
-      const ok = await saveHealthPensionAcqCoordinatesToDb(fields);
+      const ok = await saveHealthPensionAcqCoordinatesToDb(fields, resolvedTenantId);
       if (ok) {
         setSavedSuccess(true);
         setTimeout(() => setSavedSuccess(false), 3000);
@@ -158,9 +161,9 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
   const handleResetToDefault = () => {
     if (confirm('座標設定を公式原本規定の初期設定にリセットしますか？')) {
       setFields(DEFAULT_HEALTH_PENSION_ACQ_FIELDS);
-      saveHealthPensionAcqCoordinates(DEFAULT_HEALTH_PENSION_ACQ_FIELDS);
-      broadcastHealthPensionAcqCoordinates(DEFAULT_HEALTH_PENSION_ACQ_FIELDS);
-      saveHealthPensionAcqCoordinatesToDb(DEFAULT_HEALTH_PENSION_ACQ_FIELDS);
+      saveHealthPensionAcqCoordinates(DEFAULT_HEALTH_PENSION_ACQ_FIELDS, resolvedTenantId);
+      broadcastHealthPensionAcqCoordinates(DEFAULT_HEALTH_PENSION_ACQ_FIELDS, resolvedTenantId);
+      saveHealthPensionAcqCoordinatesToDb(DEFAULT_HEALTH_PENSION_ACQ_FIELDS, resolvedTenantId);
       alert('初期値にリセットしました。');
     }
   };
@@ -195,8 +198,8 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
 
       setFields(prev => {
         const updated = prev.map(f => f.id === draggingFieldId ? { ...f, x: newX, y: newY } : f);
-        saveHealthPensionAcqCoordinates(updated);
-        broadcastHealthPensionAcqCoordinates(updated);
+        saveHealthPensionAcqCoordinates(updated, resolvedTenantId);
+        broadcastHealthPensionAcqCoordinates(updated, resolvedTenantId);
         return updated;
       });
     };
@@ -216,7 +219,7 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggingFieldId]);
+  }, [draggingFieldId, resolvedTenantId]);
 
   // モック従業員データ（直接入力プレビュー用）
   const mockEmployees: HealthPensionAcquisitionEmployee[] = [
@@ -281,21 +284,25 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
   useEffect(() => {
     const fetchCompany = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
-          if (userData?.tenant_id) {
-            const { data: tData } = await supabase.from('tenants').select('*').eq('id', userData.tenant_id).maybeSingle();
-            if (tData) {
-              setCompanyInfo({
-                name: tData.name || '自社事業所',
-                address: tData.address || '',
-                representative_name: tData.representative_name || '',
-                phone_number: tData.phone_number || '',
-                corporate_number: tData.corporate_number || '',
-                zip_code: tData.zip_code || ''
-              });
-            }
+        let targetTenantId = resolvedTenantId;
+        if (!targetTenantId) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
+            targetTenantId = userData?.tenant_id;
+          }
+        }
+        if (targetTenantId) {
+          const { data: tData } = await supabase.from('tenants').select('*').eq('id', targetTenantId).maybeSingle();
+          if (tData) {
+            setCompanyInfo({
+              name: tData.name || '自社事業所',
+              address: tData.address || '',
+              representative_name: tData.representative_name || '',
+              phone_number: tData.phone_number || '',
+              corporate_number: tData.corporate_number || '',
+              zip_code: tData.zip_code || ''
+            });
           }
         }
       } catch (e) {
@@ -303,7 +310,7 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
       }
     };
     fetchCompany();
-  }, []);
+  }, [resolvedTenantId]);
 
   return (
     <div className="space-y-4 font-sans">
@@ -1006,6 +1013,7 @@ export const HealthPensionAcquisitionDocMasterInspector: React.FC = () => {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {activeTab === 'input_preview' && (
         <OfficialHealthPensionAcquisitionDoc
+          tenantId={resolvedTenantId}
           companyInfo={companyInfo}
           employees={mockEmployees}
           customCoords={fields}

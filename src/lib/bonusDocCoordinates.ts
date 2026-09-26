@@ -333,9 +333,10 @@ export const mergeWithDefaultBonusFields = (customList: any[]): BonusDocFieldCon
 // 設定をローカルストレージから読み込むヘルパー（憲法第17条：ユーザー調整座標の不可侵絶対保証）
 export const BONUS_DOC_COORDINATES_VERSION = 'v6_4cells_pitch_243';
 
-export const loadBonusDocCoordinates = (): BonusDocFieldConfig[] => {
+export const loadBonusDocCoordinates = (tenantId?: string): BonusDocFieldConfig[] => {
   try {
-    const local = localStorage.getItem('bonusDocMasterFields');
+    const key = tenantId ? `bonusDocMasterFields_${tenantId}` : 'bonusDocMasterFields';
+    const local = localStorage.getItem(key) || (!tenantId ? localStorage.getItem('bonusDocMasterFields') : null);
 
     // ユーザー保存データが存在する場合は、絶対にデフォルト値で上書きせず、カスタム値を最優先でマージ保護する
     if (local) {
@@ -347,7 +348,7 @@ export const loadBonusDocCoordinates = (): BonusDocFieldConfig[] => {
 
     // 完全な初回アクセス時のみデフォルト値を配備
     localStorage.setItem('bonusDocMasterVersion', BONUS_DOC_COORDINATES_VERSION);
-    localStorage.setItem('bonusDocMasterFields', JSON.stringify(DEFAULT_BONUS_FIELDS));
+    localStorage.setItem(key, JSON.stringify(DEFAULT_BONUS_FIELDS));
     return DEFAULT_BONUS_FIELDS;
   } catch (e) {
     console.error('Failed to load bonus doc coordinates from localStorage:', e);
@@ -355,10 +356,20 @@ export const loadBonusDocCoordinates = (): BonusDocFieldConfig[] => {
   return DEFAULT_BONUS_FIELDS;
 };
 
-// 座標設定をlocalStorageに保存し、同一タブ・別コンポーネントへリアルタイムイベントを通知する
-export const broadcastBonusDocCoordinates = (fields: BonusDocFieldConfig[]) => {
+// 座標初期化リセット
+export const resetBonusDocCoordinates = (tenantId?: string): BonusDocFieldConfig[] => {
   try {
-    localStorage.setItem('bonusDocMasterFields', JSON.stringify(fields));
+    const key = tenantId ? `bonusDocMasterFields_${tenantId}` : 'bonusDocMasterFields';
+    localStorage.removeItem(key);
+  } catch (e) {}
+  return DEFAULT_BONUS_FIELDS;
+};
+
+// 座標設定をlocalStorageに保存し、同一タブ・別コンポーネントへリアルタイムイベントを通知する
+export const broadcastBonusDocCoordinates = (fields: BonusDocFieldConfig[], tenantId?: string) => {
+  try {
+    const key = tenantId ? `bonusDocMasterFields_${tenantId}` : 'bonusDocMasterFields';
+    localStorage.setItem(key, JSON.stringify(fields));
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent(BONUS_COORDS_UPDATE_EVENT, { detail: fields }));
     }
@@ -367,26 +378,52 @@ export const broadcastBonusDocCoordinates = (fields: BonusDocFieldConfig[]) => {
   }
 };
 
-// DB（Supabase system_settings）から最新座標を取得し、localStorageを更新して返す
-export const fetchBonusDocCoordinatesFromDb = async (): Promise<BonusDocFieldConfig[]> => {
+// DB（Supabase tenants または system_settings）から最新座標を取得し、localStorageを更新して返す
+export const fetchBonusDocCoordinatesFromDb = async (tenantId?: string): Promise<BonusDocFieldConfig[]> => {
   try {
-    const { data } = await supabase.from('system_settings').select('bonus_doc_coordinates').limit(1).maybeSingle();
-    const saved = data?.bonus_doc_coordinates;
+    let saved: any = null;
+    if (tenantId) {
+      const { data: tenantData } = await supabase
+        .from('tenants')
+        .select('bonus_doc_coordinates')
+        .eq('id', tenantId)
+        .maybeSingle();
+      if (tenantData?.bonus_doc_coordinates && Array.isArray(tenantData.bonus_doc_coordinates)) {
+        saved = tenantData.bonus_doc_coordinates;
+      }
+    }
+    if (!saved) {
+      const { data } = await supabase.from('system_settings').select('bonus_doc_coordinates').limit(1).maybeSingle();
+      saved = data?.bonus_doc_coordinates;
+    }
+
     if (saved && Array.isArray(saved) && saved.length > 0) {
       const merged = mergeWithDefaultBonusFields(saved);
-      broadcastBonusDocCoordinates(merged);
+      broadcastBonusDocCoordinates(merged, tenantId);
       return merged;
     }
   } catch (err) {
     console.warn('DBから賞与支払届座標の取得をスキップ（ローカル値を使用）:', err);
   }
-  return loadBonusDocCoordinates();
+  return loadBonusDocCoordinates(tenantId);
 };
 
-// Supabase DB への保存（UUID完全整合・レコード自動判定）
-export async function saveBonusDocCoordinatesToDb(fields: BonusDocFieldConfig[]): Promise<boolean> {
+// Supabase DB への保存（UUID完全整合・レコード自動判定・テナント分離対応）
+export async function saveBonusDocCoordinatesToDb(fields: BonusDocFieldConfig[], tenantId?: string): Promise<boolean> {
   try {
-    broadcastBonusDocCoordinates(fields);
+    broadcastBonusDocCoordinates(fields, tenantId);
+
+    if (tenantId) {
+      const res = await supabase
+        .from('tenants')
+        .update({ bonus_doc_coordinates: fields })
+        .eq('id', tenantId);
+      if (res.error) {
+        console.warn('Could not update tenant bonus_doc_coordinates:', res.error);
+        return false;
+      }
+      return true;
+    }
 
     const { data: current } = await supabase
       .from('system_settings')

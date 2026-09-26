@@ -4,6 +4,7 @@ import {
   CheckCircle2, RotateCcw, ChevronDown, ChevronUp, Sparkles, Check, UserMinus,
   Maximize2, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { 
   loadEmploymentLossCoordinates, 
   saveEmploymentLossCoordinates,
@@ -50,6 +51,7 @@ export interface OfficialEmploymentLossDocProps {
   onBack?: () => void;
   customCoords?: EmploymentLossFieldConfig[];
   hideHeader?: boolean;
+  tenantId?: string;
 }
 
 // 和暦変換ヘルパー（元号コード: 2大正, 3昭和, 4平成, 5令和）
@@ -126,8 +128,42 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
   onSelectEmployee,
   onBack,
   customCoords,
-  hideHeader = false
+  hideHeader = false,
+  tenantId
 }) => {
+  // テナントID自動解決
+  const [resolvedTenantId, setResolvedTenantId] = useState<string>(tenantId || '');
+
+  useEffect(() => {
+    if (tenantId) {
+      setResolvedTenantId(tenantId);
+      return;
+    }
+    const resolveTenant = async () => {
+      try {
+        const { data: rpcTenant } = await supabase.rpc('get_user_tenant_id');
+        if (rpcTenant) {
+          setResolvedTenantId(rpcTenant);
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile?.tenant_id) {
+            setResolvedTenantId(profile.tenant_id);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve tenant in OfficialEmploymentLossDoc:', e);
+      }
+    };
+    resolveTenant();
+  }, [tenantId]);
+
   // 退職者を優先して選択（退職者がいれば先頭の退職者、なければ全従業員の先頭）
   const retiredEmps = employees.filter(e => !!e.retirement_date);
   const defaultEmpId = selectedEmployeeId || (retiredEmps.length > 0 ? retiredEmps[0].id : employees[0]?.id || '');
@@ -135,19 +171,19 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
   const currentEmployee = employees.find(e => e.id === currentEmpId) || employees[0];
 
   // リアルタイム座標設定State
-  const [coords, setCoords] = useState<EmploymentLossFieldConfig[]>(() => customCoords || loadEmploymentLossCoordinates());
+  const [coords, setCoords] = useState<EmploymentLossFieldConfig[]>(() => customCoords || loadEmploymentLossCoordinates(tenantId));
 
-  // マウント時にDBから最新の全社保存座標マスタを取得
+  // マウント時にDBから最新のテナント保存座標マスタを取得
   useEffect(() => {
     if (customCoords) return;
     let isCancelled = false;
-    fetchEmploymentLossCoordinatesFromDb().then(dbCoords => {
+    fetchEmploymentLossCoordinatesFromDb(resolvedTenantId).then(dbCoords => {
       if (!isCancelled && dbCoords && dbCoords.length > 0) {
         setCoords(dbCoords);
       }
     });
     return () => { isCancelled = true; };
-  }, [customCoords]);
+  }, [customCoords, resolvedTenantId]);
 
   useEffect(() => {
     if (customCoords) {
@@ -301,11 +337,11 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
   const updateFieldCoord = useCallback((id: string, x: number, y: number) => {
     setCoords(prev => {
       const updated = prev.map(f => f.id === id ? { ...f, x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) } : f);
-      saveEmploymentLossCoordinates(updated);
+      saveEmploymentLossCoordinates(updated, resolvedTenantId);
       broadcastEmploymentLossCoordinates(updated);
       return updated;
     });
-  }, []);
+  }, [resolvedTenantId]);
 
   // ドラッグ開始
   const handleStartDrag = (id: string, e: React.MouseEvent) => {
@@ -345,7 +381,7 @@ export const OfficialEmploymentLossDoc: React.FC<OfficialEmploymentLossDocProps>
       if (draggingFieldId) {
         setDraggingFieldId(null);
         dragStartRef.current = null;
-        await saveEmploymentLossCoordinatesToDb(coords);
+        await saveEmploymentLossCoordinatesToDb(coords, resolvedTenantId);
       }
     };
 

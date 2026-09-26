@@ -41,6 +41,7 @@ interface OfficialHealthPensionLossDocProps {
   onBack?: () => void;
   hideHeader?: boolean;
   tenantId?: string;
+  customCoords?: HealthPensionLossFieldConfig[];
 }
 
 // 西暦から和暦への安全変換関数（日本年金機構公式元号コード: 1明治, 3大正, 5昭和, 7平成, 9令和）
@@ -96,9 +97,13 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
   onSelectEmployee,
   onBack,
   hideHeader = false,
-  tenantId
+  tenantId,
+  customCoords
 }) => {
-  const [coords, setCoords] = useState<HealthPensionLossFieldConfig[]>(() => loadHealthPensionLossCoordinates());
+  // テナントIDの自動解決（Props優先、URLクエリパラメータフォールバック）
+  const resolvedTenantId = tenantId || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tenant_id') || undefined : undefined);
+
+  const [coords, setCoords] = useState<HealthPensionLossFieldConfig[]>(() => customCoords || loadHealthPensionLossCoordinates(resolvedTenantId));
   const [printMode, setPrintMode] = useState<'full' | 'text_only'>('full');
   const [zoom, setZoom] = useState<number>(100);
   const [isSidePanelOpen, setIsSidePanelOpen] = useState(true);
@@ -116,7 +121,11 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
 
   // 座標設定のリアルタイム同期＆DB同期
   useEffect(() => {
-    fetchHealthPensionLossCoordinatesFromDb().then(dbCoords => {
+    if (customCoords) {
+      setCoords(customCoords);
+      return;
+    }
+    fetchHealthPensionLossCoordinatesFromDb(resolvedTenantId).then(dbCoords => {
       setCoords(dbCoords);
     });
 
@@ -125,7 +134,7 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
     };
     window.addEventListener(HEALTH_PENSION_LOSS_UPDATE_EVENT, handleCoordsUpdate);
     return () => window.removeEventListener(HEALTH_PENSION_LOSS_UPDATE_EVENT, handleCoordsUpdate);
-  }, [tenantId]);
+  }, [customCoords, resolvedTenantId]);
 
   // 大元マスタ（SSOT）から初期値を一括自動計算
   const calculateMasterValues = useCallback((emp: HealthPensionLossEmployee) => {

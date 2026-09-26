@@ -21,7 +21,10 @@ import {
 } from '../lib/healthPensionLossDocCoordinates';
 import { OfficialHealthPensionLossDoc, type HealthPensionLossEmployee } from './OfficialHealthPensionLossDoc';
 
-export const HealthPensionLossDocMasterInspector: React.FC = () => {
+export const HealthPensionLossDocMasterInspector: React.FC<{ tenantId?: string }> = ({ tenantId }) => {
+  // テナントIDの自動解決（Props優先、URLクエリパラメータフォールバック）
+  const resolvedTenantId = tenantId || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tenant_id') || undefined : undefined);
+
   const [activeTab, setActiveTab] = useState<'inspector' | 'input_preview'>('inspector');
 
   // 🏢 テナント動的会社情報State（他社テナントへの配慮・憲法3/4）
@@ -35,7 +38,7 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
   const [officeNumber, setOfficeNumber] = useState('12345');
 
   // インスペクター用State
-  const [fields, setFields] = useState<HealthPensionLossFieldConfig[]>(() => loadHealthPensionLossCoordinates());
+  const [fields, setFields] = useState<HealthPensionLossFieldConfig[]>(() => loadHealthPensionLossCoordinates(resolvedTenantId));
   const [selectedSection, setSelectedSection] = useState<'header' | 'office' | 'insured_person_1'>('insured_person_1');
   const [selectedFieldId, setSelectedFieldId] = useState<string>('myNumberOrPension_1');
   const [isSaving, setIsSaving] = useState(false);
@@ -45,7 +48,7 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
   // マウント時にDBから全社共有座標およびテナント会社情報を取得
   useEffect(() => {
     let isCancelled = false;
-    fetchHealthPensionLossCoordinatesFromDb().then(dbCoords => {
+    fetchHealthPensionLossCoordinatesFromDb(resolvedTenantId).then(dbCoords => {
       if (!isCancelled && dbCoords && dbCoords.length > 0) {
         setFields(dbCoords);
       }
@@ -53,24 +56,28 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
 
     const fetchCompanyData = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
-          if (userData?.tenant_id) {
-            const { data: tData } = await supabase.from('tenants').select('*').eq('id', userData.tenant_id).maybeSingle();
-            if (tData && !isCancelled) {
-              setCompanyInfo({
-                postal_code: tData.postal_code || '5200001',
-                address: tData.address || '',
-                company_name: tData.name || '',
-                representative_name: tData.representative_name || ''
-              });
-              if (tData.shakai_hoken_settings?.office_symbol) {
-                setOfficeSymbol(tData.shakai_hoken_settings.office_symbol);
-              }
-              if (tData.shakai_hoken_settings?.office_number) {
-                setOfficeNumber(tData.shakai_hoken_settings.office_number);
-              }
+        let targetTenantId = resolvedTenantId;
+        if (!targetTenantId) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: userData } = await supabase.from('users').select('tenant_id').eq('id', user.id).maybeSingle();
+            targetTenantId = userData?.tenant_id;
+          }
+        }
+        if (targetTenantId) {
+          const { data: tData } = await supabase.from('tenants').select('*').eq('id', targetTenantId).maybeSingle();
+          if (tData && !isCancelled) {
+            setCompanyInfo({
+              postal_code: tData.postal_code || '5200001',
+              address: tData.address || '',
+              company_name: tData.name || '',
+              representative_name: tData.representative_name || ''
+            });
+            if (tData.shakai_hoken_settings?.office_symbol) {
+              setOfficeSymbol(tData.shakai_hoken_settings.office_symbol);
+            }
+            if (tData.shakai_hoken_settings?.office_number) {
+              setOfficeNumber(tData.shakai_hoken_settings.office_number);
             }
           }
         }
@@ -81,7 +88,7 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
     fetchCompanyData();
 
     return () => { isCancelled = true; };
-  }, []);
+  }, [resolvedTenantId]);
 
   // 原本背景画像
   const [bgPdfImg, setBgPdfImg] = useState<string | null>(null);
@@ -158,11 +165,11 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
         finalVal = Math.round(value * precision) / precision;
       }
       const updated = prev.map(f => f.id === id ? { ...f, [key]: finalVal } : f);
-      saveHealthPensionLossCoordinates(updated);
-      broadcastHealthPensionLossCoordinates(updated);
+      saveHealthPensionLossCoordinates(updated, resolvedTenantId);
+      broadcastHealthPensionLossCoordinates(updated, resolvedTenantId);
       return updated;
     });
-  }, []);
+  }, [resolvedTenantId]);
 
   // 微調整ハンドラー（矢印ボタン用）
   const nudge = useCallback((axis: 'x' | 'y', delta: number) => {
@@ -176,11 +183,11 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
         }
         return f;
       });
-      saveHealthPensionLossCoordinates(updated);
-      broadcastHealthPensionLossCoordinates(updated);
+      saveHealthPensionLossCoordinates(updated, resolvedTenantId);
+      broadcastHealthPensionLossCoordinates(updated, resolvedTenantId);
       return updated;
     });
-  }, [selectedFieldId]);
+  }, [selectedFieldId, resolvedTenantId]);
 
   // キーボード矢印キーでの微調整
   useEffect(() => {
@@ -236,8 +243,8 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
 
       setFields(prev => {
         const updated = prev.map(f => f.id === draggingFieldId ? { ...f, x: nextX, y: nextY } : f);
-        saveHealthPensionLossCoordinates(updated);
-        broadcastHealthPensionLossCoordinates(updated);
+        saveHealthPensionLossCoordinates(updated, resolvedTenantId);
+        broadcastHealthPensionLossCoordinates(updated, resolvedTenantId);
         return updated;
       });
     };
@@ -255,13 +262,13 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggingFieldId, previewZoom]);
+  }, [draggingFieldId, previewZoom, resolvedTenantId]);
 
   // DB保存
   const handleSaveToDb = async () => {
     setIsSaving(true);
     setSavedSuccess(false);
-    const success = await saveHealthPensionLossCoordinatesToDb(fields);
+    const success = await saveHealthPensionLossCoordinatesToDb(fields, resolvedTenantId);
     setIsSaving(false);
     if (success) {
       setSavedSuccess(true);
@@ -273,8 +280,9 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
   const handleResetToDefault = () => {
     if (window.confirm('健康保険・厚生年金保険 被保険者資格喪失届の座標設定をすべて公式初期値にリセットしますか？')) {
       setFields(DEFAULT_HEALTH_PENSION_LOSS_FIELDS);
-      saveHealthPensionLossCoordinates(DEFAULT_HEALTH_PENSION_LOSS_FIELDS);
-      broadcastHealthPensionLossCoordinates(DEFAULT_HEALTH_PENSION_LOSS_FIELDS);
+      saveHealthPensionLossCoordinates(DEFAULT_HEALTH_PENSION_LOSS_FIELDS, resolvedTenantId);
+      broadcastHealthPensionLossCoordinates(DEFAULT_HEALTH_PENSION_LOSS_FIELDS, resolvedTenantId);
+      saveHealthPensionLossCoordinatesToDb(DEFAULT_HEALTH_PENSION_LOSS_FIELDS, resolvedTenantId);
     }
   };
 
@@ -376,6 +384,8 @@ export const HealthPensionLossDocMasterInspector: React.FC = () => {
 
       {activeTab === 'input_preview' ? (
         <OfficialHealthPensionLossDoc
+          tenantId={resolvedTenantId}
+          customCoords={fields}
           companyInfo={companyInfo}
           officeSymbol={officeSymbol}
           officeNumber={officeNumber}

@@ -553,30 +553,39 @@ export const DEFAULT_HEALTH_PENSION_LOSS_FIELDS: HealthPensionLossFieldConfig[] 
   },
 ];
 
+const getStorageKey = (tenantId?: string) => tenantId ? `${HEALTH_PENSION_LOSS_STORAGE_KEY}_${tenantId}` : HEALTH_PENSION_LOSS_STORAGE_KEY;
+
+export function mergeWithDefaultHealthPensionLossFields(customList: any[]): HealthPensionLossFieldConfig[] {
+  if (!Array.isArray(customList) || customList.length === 0) {
+    return DEFAULT_HEALTH_PENSION_LOSS_FIELDS;
+  }
+  return DEFAULT_HEALTH_PENSION_LOSS_FIELDS.map(def => {
+    const custom = customList.find((p: any) => p.id === def.id);
+    if (custom) {
+      return {
+        ...def,
+        x: custom.x !== undefined ? custom.x : def.x,
+        y: custom.y !== undefined ? custom.y : def.y,
+        fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
+        pitch: custom.pitch !== undefined ? custom.pitch : def.pitch,
+        width: custom.width !== undefined ? custom.width : def.width,
+        circleWidth: custom.circleWidth !== undefined ? custom.circleWidth : def.circleWidth,
+        circleHeight: custom.circleHeight !== undefined ? custom.circleHeight : def.circleHeight,
+        disabled: custom.disabled
+      };
+    }
+    return def;
+  });
+}
+
 // 座標をローカルストレージから取得
-export function loadHealthPensionLossCoordinates(): HealthPensionLossFieldConfig[] {
+export function loadHealthPensionLossCoordinates(tenantId?: string): HealthPensionLossFieldConfig[] {
   try {
-    const raw = localStorage.getItem(HEALTH_PENSION_LOSS_STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey(tenantId));
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return DEFAULT_HEALTH_PENSION_LOSS_FIELDS.map(def => {
-          const custom = parsed.find((p: any) => p.id === def.id);
-          if (custom) {
-            return {
-              ...def,
-              x: custom.x !== undefined ? custom.x : def.x,
-              y: custom.y !== undefined ? custom.y : def.y,
-              fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
-              pitch: custom.pitch !== undefined ? custom.pitch : def.pitch,
-              width: custom.width !== undefined ? custom.width : def.width,
-              circleWidth: custom.circleWidth !== undefined ? custom.circleWidth : def.circleWidth,
-              circleHeight: custom.circleHeight !== undefined ? custom.circleHeight : def.circleHeight,
-              disabled: custom.disabled
-            };
-          }
-          return def;
-        });
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return mergeWithDefaultHealthPensionLossFields(parsed);
       }
     }
   } catch (e) {
@@ -585,60 +594,81 @@ export function loadHealthPensionLossCoordinates(): HealthPensionLossFieldConfig
   return DEFAULT_HEALTH_PENSION_LOSS_FIELDS;
 }
 
-// 座標をローカルストレージに保存
-export function saveHealthPensionLossCoordinates(fields: HealthPensionLossFieldConfig[]) {
+// 座標初期化リセット
+export function resetHealthPensionLossCoordinates(tenantId?: string): HealthPensionLossFieldConfig[] {
   try {
-    localStorage.setItem(HEALTH_PENSION_LOSS_STORAGE_KEY, JSON.stringify(fields));
+    localStorage.removeItem(getStorageKey(tenantId));
+  } catch (e) {}
+  return DEFAULT_HEALTH_PENSION_LOSS_FIELDS;
+}
+
+// 座標をローカルストレージに保存
+export function saveHealthPensionLossCoordinates(fields: HealthPensionLossFieldConfig[], tenantId?: string) {
+  try {
+    localStorage.setItem(getStorageKey(tenantId), JSON.stringify(fields));
   } catch (e) {
     console.warn('Error saving health pension loss coordinates to localStorage:', e);
   }
 }
 
 // 変更イベントをブロードキャスト（リアルタイム反映）
-export function broadcastHealthPensionLossCoordinates(fields: HealthPensionLossFieldConfig[]) {
-  window.dispatchEvent(new CustomEvent(HEALTH_PENSION_LOSS_UPDATE_EVENT, { detail: fields }));
+export function broadcastHealthPensionLossCoordinates(fields: HealthPensionLossFieldConfig[], tenantId?: string) {
+  saveHealthPensionLossCoordinates(fields, tenantId);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HEALTH_PENSION_LOSS_UPDATE_EVENT, { detail: fields }));
+  }
 }
 
-// Supabase DB から座標設定を取得
-export async function fetchHealthPensionLossCoordinatesFromDb(): Promise<HealthPensionLossFieldConfig[]> {
+// Supabase DB から座標設定を取得（テナント分離対応）
+export async function fetchHealthPensionLossCoordinatesFromDb(tenantId?: string): Promise<HealthPensionLossFieldConfig[]> {
   try {
-    const { data } = await supabase
-      .from('system_settings')
-      .select('health_pension_loss_doc_coordinates')
-      .limit(1)
-      .maybeSingle();
+    let saved: any = null;
+    if (tenantId) {
+      const { data: tenantData } = await supabase
+        .from('tenants')
+        .select('health_pension_loss_doc_coordinates')
+        .eq('id', tenantId)
+        .maybeSingle();
+      if (tenantData?.health_pension_loss_doc_coordinates && Array.isArray(tenantData.health_pension_loss_doc_coordinates)) {
+        saved = tenantData.health_pension_loss_doc_coordinates;
+      }
+    }
+    if (!saved) {
+      const { data } = await supabase
+        .from('system_settings')
+        .select('health_pension_loss_doc_coordinates')
+        .limit(1)
+        .maybeSingle();
+      saved = data?.health_pension_loss_doc_coordinates;
+    }
 
-    if (data && data.health_pension_loss_doc_coordinates && Array.isArray(data.health_pension_loss_doc_coordinates)) {
-      const merged = DEFAULT_HEALTH_PENSION_LOSS_FIELDS.map(def => {
-        const custom = data.health_pension_loss_doc_coordinates.find((p: any) => p.id === def.id);
-        if (custom) {
-          return {
-            ...def,
-            x: custom.x !== undefined ? custom.x : def.x,
-            y: custom.y !== undefined ? custom.y : def.y,
-            fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
-            pitch: custom.pitch !== undefined ? custom.pitch : def.pitch,
-            width: custom.width !== undefined ? custom.width : def.width,
-            circleWidth: custom.circleWidth !== undefined ? custom.circleWidth : def.circleWidth,
-            circleHeight: custom.circleHeight !== undefined ? custom.circleHeight : def.circleHeight,
-            disabled: custom.disabled
-          };
-        }
-        return def;
-      });
-      localStorage.setItem(HEALTH_PENSION_LOSS_STORAGE_KEY, JSON.stringify(merged));
+    if (saved && Array.isArray(saved) && saved.length > 0) {
+      const merged = mergeWithDefaultHealthPensionLossFields(saved);
+      broadcastHealthPensionLossCoordinates(merged, tenantId);
       return merged;
     }
   } catch (err) {
     console.warn('DB fetch failed, fallback to local:', err);
   }
-  return loadHealthPensionLossCoordinates();
+  return loadHealthPensionLossCoordinates(tenantId);
 }
 
-// Supabase DB への保存
-export async function saveHealthPensionLossCoordinatesToDb(fields: HealthPensionLossFieldConfig[]): Promise<boolean> {
+// Supabase DB への保存（UUID完全整合・レコード自動判定・テナント分離対応）
+export async function saveHealthPensionLossCoordinatesToDb(fields: HealthPensionLossFieldConfig[], tenantId?: string): Promise<boolean> {
   try {
-    saveHealthPensionLossCoordinates(fields);
+    broadcastHealthPensionLossCoordinates(fields, tenantId);
+
+    if (tenantId) {
+      const res = await supabase
+        .from('tenants')
+        .update({ health_pension_loss_doc_coordinates: fields })
+        .eq('id', tenantId);
+      if (res.error) {
+        console.warn('Could not update tenant health_pension_loss_doc_coordinates:', res.error);
+        return false;
+      }
+      return true;
+    }
 
     const { data: current } = await supabase
       .from('system_settings')

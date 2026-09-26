@@ -4,6 +4,7 @@ import {
   CheckCircle2, RotateCcw, ChevronDown, ChevronUp, Sparkles, Check,
   Maximize2, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { 
   loadEmploymentAcqCoordinates, 
   saveEmploymentAcqCoordinates,
@@ -50,6 +51,7 @@ export interface OfficialEmploymentAcquisitionDocProps {
   onBack?: () => void;
   customCoords?: EmploymentAcqFieldConfig[];
   hideHeader?: boolean; // 親コンポーネントでヘッダー描画時の二重ヘッダー抑止フラグ
+  tenantId?: string;
 }
 
 // 和暦変換ヘルパー（元号コード: 1明治, 2大正, 3昭和, 4平成, 5令和）
@@ -91,26 +93,60 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
   onSelectEmployee,
   onBack,
   customCoords,
-  hideHeader = false
+  hideHeader = false,
+  tenantId
 }) => {
+  // テナントID自動解決
+  const [resolvedTenantId, setResolvedTenantId] = useState<string>(tenantId || '');
+
+  useEffect(() => {
+    if (tenantId) {
+      setResolvedTenantId(tenantId);
+      return;
+    }
+    const resolveTenant = async () => {
+      try {
+        const { data: rpcTenant } = await supabase.rpc('get_user_tenant_id');
+        if (rpcTenant) {
+          setResolvedTenantId(rpcTenant);
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile?.tenant_id) {
+            setResolvedTenantId(profile.tenant_id);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve tenant in OfficialEmploymentAcquisitionDoc:', e);
+      }
+    };
+    resolveTenant();
+  }, [tenantId]);
+
   // 対象従業員
   const currentEmpId = selectedEmployeeId || employees[0]?.id || '';
   const currentEmployee = employees.find(e => e.id === currentEmpId) || employees[0];
 
   // リアルタイム座標設定State（親からの指定があれば最優先）
-  const [coords, setCoords] = useState<EmploymentAcqFieldConfig[]>(() => customCoords || loadEmploymentAcqCoordinates());
+  const [coords, setCoords] = useState<EmploymentAcqFieldConfig[]>(() => customCoords || loadEmploymentAcqCoordinates(tenantId));
 
-  // 🌐 マウント時にDBから最新の全社保存座標マスタを非同期取得・強制同期
+  // 🌐 マウント時にDBから最新のテナント保存座標マスタを非同期取得・強制同期
   useEffect(() => {
     if (customCoords) return;
     let isCancelled = false;
-    fetchEmploymentAcqCoordinatesFromDb().then(dbCoords => {
+    fetchEmploymentAcqCoordinatesFromDb(resolvedTenantId).then(dbCoords => {
       if (!isCancelled && dbCoords && dbCoords.length > 0) {
         setCoords(dbCoords);
       }
     });
     return () => { isCancelled = true; };
-  }, [customCoords]);
+  }, [customCoords, resolvedTenantId]);
 
   // 親から渡された customCoords の変更に即時連動（SSOT保証）
   useEffect(() => {
@@ -271,11 +307,11 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
       const finalX = Math.round(x * precision) / precision;
       const finalY = Math.round(y * precision) / precision;
       const updated = prev.map(f => f.id === id ? { ...f, x: finalX, y: finalY } : f);
-      saveEmploymentAcqCoordinates(updated);
+      saveEmploymentAcqCoordinates(updated, resolvedTenantId);
       broadcastEmploymentAcqCoordinates(updated);
       return updated;
     });
-  }, []);
+  }, [resolvedTenantId]);
 
   // 🖱️ ドラッグ開始
   const handleStartDrag = (id: string, e: React.MouseEvent) => {
@@ -316,7 +352,7 @@ export const OfficialEmploymentAcquisitionDoc: React.FC<OfficialEmploymentAcquis
         setDraggingFieldId(null);
         dragStartRef.current = null;
         // DBへも非同期で自動保存
-        await saveEmploymentAcqCoordinatesToDb(coords);
+        await saveEmploymentAcqCoordinatesToDb(coords, resolvedTenantId);
       }
     };
 

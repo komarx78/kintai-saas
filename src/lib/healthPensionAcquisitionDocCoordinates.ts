@@ -765,67 +765,76 @@ export const DEFAULT_HEALTH_PENSION_ACQ_FIELDS: HealthPensionAcqFieldConfig[] = 
 
 const STORAGE_KEY = 'mock_health_pension_acq_doc_coords_v3';
 
+const getStorageKey = (tenantId?: string) => tenantId ? `${STORAGE_KEY}_${tenantId}` : STORAGE_KEY;
+
+export function mergeWithDefaultHealthPensionAcqFields(customList: any[]): HealthPensionAcqFieldConfig[] {
+  if (!Array.isArray(customList) || customList.length === 0) {
+    return DEFAULT_HEALTH_PENSION_ACQ_FIELDS;
+  }
+  return DEFAULT_HEALTH_PENSION_ACQ_FIELDS.map(def => {
+    let custom = customList.find((p: any) => p.id === def.id);
+    // 旧郵便番号ID（officeZipCode, zipCode_1）からの安全マイグレーション
+    if (!custom) {
+      if (def.id === 'officeZipCode_first' || def.id === 'officeZipCode_last') {
+        const old = customList.find((p: any) => p.id === 'officeZipCode');
+        if (old) {
+          custom = {
+            ...def,
+            y: old.y !== undefined ? old.y : def.y,
+            fontSize: old.fontSize !== undefined ? old.fontSize : def.fontSize
+          };
+        }
+      } else if (def.id === 'zipCode_first_1' || def.id === 'zipCode_last_1') {
+        const old = customList.find((p: any) => p.id === 'zipCode_1');
+        if (old) {
+          custom = {
+            ...def,
+            y: old.y !== undefined ? old.y : def.y,
+            fontSize: old.fontSize !== undefined ? old.fontSize : def.fontSize
+          };
+        }
+      }
+    }
+
+    if (custom) {
+      // 異常ピッチ（過去の計算破綻時に入力された5.0%超等）を原本規定値へ安全修復
+      const safePitch = (custom.pitch !== undefined && custom.pitch > 0 && custom.pitch <= 5.0) 
+        ? custom.pitch 
+        : def.pitch;
+
+      const isZipField = def.id === 'officeZipCode_first' || def.id === 'officeZipCode_last' || def.id === 'zipCode_first_1' || def.id === 'zipCode_last_1';
+
+      // 旧 address_1 の初期値（39.5）だった場合は新下段初期値（40.2）へ自動補正
+      let safeY = custom.y !== undefined ? custom.y : def.y;
+      if (def.id === 'address_1' && safeY === 39.5) {
+        safeY = 40.2;
+      }
+
+      return {
+        ...def,
+        x: custom.x !== undefined ? custom.x : def.x,
+        y: safeY,
+        fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
+        pitch: safePitch,
+        width: custom.width !== undefined ? custom.width : def.width,
+        circleWidth: custom.circleWidth !== undefined ? custom.circleWidth : def.circleWidth,
+        circleHeight: custom.circleHeight !== undefined ? custom.circleHeight : def.circleHeight,
+        example: isZipField ? def.example : (custom.example || def.example),
+        disabled: custom.disabled
+      };
+    }
+    return def;
+  });
+}
+
 // ローカルストレージから座標を取得
-export function loadHealthPensionAcqCoordinates(): HealthPensionAcqFieldConfig[] {
+export function loadHealthPensionAcqCoordinates(tenantId?: string): HealthPensionAcqFieldConfig[] {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(getStorageKey(tenantId));
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return DEFAULT_HEALTH_PENSION_ACQ_FIELDS.map(def => {
-          let custom = parsed.find((p: any) => p.id === def.id);
-          // 旧郵便番号ID（officeZipCode, zipCode_1）からの安全マイグレーション
-          if (!custom) {
-            if (def.id === 'officeZipCode_first' || def.id === 'officeZipCode_last') {
-              const old = parsed.find((p: any) => p.id === 'officeZipCode');
-              if (old) {
-                custom = {
-                  ...def,
-                  y: old.y !== undefined ? old.y : def.y,
-                  fontSize: old.fontSize !== undefined ? old.fontSize : def.fontSize
-                };
-              }
-            } else if (def.id === 'zipCode_first_1' || def.id === 'zipCode_last_1') {
-              const old = parsed.find((p: any) => p.id === 'zipCode_1');
-              if (old) {
-                custom = {
-                  ...def,
-                  y: old.y !== undefined ? old.y : def.y,
-                  fontSize: old.fontSize !== undefined ? old.fontSize : def.fontSize
-                };
-              }
-            }
-          }
-
-          if (custom) {
-            // 異常ピッチ（過去の計算破綻時に入力された5.0%超等）を原本規定値へ安全修復
-            const safePitch = (custom.pitch !== undefined && custom.pitch > 0 && custom.pitch <= 5.0) 
-              ? custom.pitch 
-              : def.pitch;
-
-            const isZipField = def.id === 'officeZipCode_first' || def.id === 'officeZipCode_last' || def.id === 'zipCode_first_1' || def.id === 'zipCode_last_1';
-
-            // 旧 address_1 の初期値（39.5）だった場合は新下段初期値（40.2）へ自動補正
-            let safeY = custom.y !== undefined ? custom.y : def.y;
-            if (def.id === 'address_1' && safeY === 39.5) {
-              safeY = 40.2;
-            }
-
-            return {
-              ...def,
-              x: custom.x !== undefined ? custom.x : def.x,
-              y: safeY,
-              fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
-              pitch: safePitch,
-              width: custom.width !== undefined ? custom.width : def.width,
-              circleWidth: custom.circleWidth !== undefined ? custom.circleWidth : def.circleWidth,
-              circleHeight: custom.circleHeight !== undefined ? custom.circleHeight : def.circleHeight,
-              example: isZipField ? def.example : (custom.example || def.example),
-              disabled: custom.disabled
-            };
-          }
-          return def;
-        });
+        return mergeWithDefaultHealthPensionAcqFields(parsed);
       }
     }
   } catch (e) {
@@ -834,96 +843,81 @@ export function loadHealthPensionAcqCoordinates(): HealthPensionAcqFieldConfig[]
   return DEFAULT_HEALTH_PENSION_ACQ_FIELDS;
 }
 
-// 座標をローカルストレージに保存
-export function saveHealthPensionAcqCoordinates(fields: HealthPensionAcqFieldConfig[]) {
+// 座標初期化リセット
+export function resetHealthPensionAcqCoordinates(tenantId?: string): HealthPensionAcqFieldConfig[] {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(fields));
+    localStorage.removeItem(getStorageKey(tenantId));
+  } catch (e) {}
+  return DEFAULT_HEALTH_PENSION_ACQ_FIELDS;
+}
+
+// 座標をローカルストレージに保存
+export function saveHealthPensionAcqCoordinates(fields: HealthPensionAcqFieldConfig[], tenantId?: string) {
+  try {
+    localStorage.setItem(getStorageKey(tenantId), JSON.stringify(fields));
   } catch (e) {
     console.warn('Error saving health pension acq coordinates to localStorage:', e);
   }
 }
 
 // 変更イベントをブロードキャスト（リアルタイム反映）
-export function broadcastHealthPensionAcqCoordinates(fields: HealthPensionAcqFieldConfig[]) {
-  window.dispatchEvent(new CustomEvent(HEALTH_PENSION_ACQ_COORDS_UPDATE_EVENT, { detail: fields }));
+export function broadcastHealthPensionAcqCoordinates(fields: HealthPensionAcqFieldConfig[], tenantId?: string) {
+  saveHealthPensionAcqCoordinates(fields, tenantId);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(HEALTH_PENSION_ACQ_COORDS_UPDATE_EVENT, { detail: fields }));
+  }
 }
 
-// Supabase DB から座標設定を取得
-export async function fetchHealthPensionAcqCoordinatesFromDb(): Promise<HealthPensionAcqFieldConfig[]> {
+// Supabase DB から座標設定を取得（テナント分離対応）
+export async function fetchHealthPensionAcqCoordinatesFromDb(tenantId?: string): Promise<HealthPensionAcqFieldConfig[]> {
   try {
-    const { data } = await supabase
-      .from('system_settings')
-      .select('health_pension_acq_doc_coordinates')
-      .limit(1)
-      .maybeSingle();
+    let saved: any = null;
+    if (tenantId) {
+      const { data: tenantData } = await supabase
+        .from('tenants')
+        .select('health_pension_acq_doc_coordinates')
+        .eq('id', tenantId)
+        .maybeSingle();
+      if (tenantData?.health_pension_acq_doc_coordinates && Array.isArray(tenantData.health_pension_acq_doc_coordinates)) {
+        saved = tenantData.health_pension_acq_doc_coordinates;
+      }
+    }
+    if (!saved) {
+      const { data } = await supabase
+        .from('system_settings')
+        .select('health_pension_acq_doc_coordinates')
+        .limit(1)
+        .maybeSingle();
+      saved = data?.health_pension_acq_doc_coordinates;
+    }
 
-    if (data && data.health_pension_acq_doc_coordinates && Array.isArray(data.health_pension_acq_doc_coordinates) && data.health_pension_acq_doc_coordinates.length > 0) {
-      const merged = DEFAULT_HEALTH_PENSION_ACQ_FIELDS.map(def => {
-        let custom = data.health_pension_acq_doc_coordinates.find((p: any) => p.id === def.id);
-        // 旧郵便番号ID（officeZipCode, zipCode_1）からの安全マイグレーション
-        if (!custom) {
-          if (def.id === 'officeZipCode_first' || def.id === 'officeZipCode_last') {
-            const old = data.health_pension_acq_doc_coordinates.find((p: any) => p.id === 'officeZipCode');
-            if (old) {
-              custom = {
-                ...def,
-                y: old.y !== undefined ? old.y : def.y,
-                fontSize: old.fontSize !== undefined ? old.fontSize : def.fontSize
-              };
-            }
-          } else if (def.id === 'zipCode_first_1' || def.id === 'zipCode_last_1') {
-            const old = data.health_pension_acq_doc_coordinates.find((p: any) => p.id === 'zipCode_1');
-            if (old) {
-              custom = {
-                ...def,
-                y: old.y !== undefined ? old.y : def.y,
-                fontSize: old.fontSize !== undefined ? old.fontSize : def.fontSize
-              };
-            }
-          }
-        }
-
-        if (custom) {
-          const safePitch = (custom.pitch !== undefined && custom.pitch > 0 && custom.pitch <= 5.0) 
-            ? custom.pitch 
-            : def.pitch;
-
-          const isZipField = def.id === 'officeZipCode_first' || def.id === 'officeZipCode_last' || def.id === 'zipCode_first_1' || def.id === 'zipCode_last_1';
-
-          // 旧 address_1 の初期値（39.5）だった場合は新下段初期値（40.2）へ自動補正
-          let safeY = custom.y !== undefined ? custom.y : def.y;
-          if (def.id === 'address_1' && safeY === 39.5) {
-            safeY = 40.2;
-          }
-
-          return {
-            ...def,
-            x: custom.x !== undefined ? custom.x : def.x,
-            y: safeY,
-            fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
-            pitch: safePitch,
-            width: custom.width !== undefined ? custom.width : def.width,
-            circleWidth: custom.circleWidth !== undefined ? custom.circleWidth : def.circleWidth,
-            circleHeight: custom.circleHeight !== undefined ? custom.circleHeight : def.circleHeight,
-            example: isZipField ? def.example : (custom.example || def.example),
-            disabled: custom.disabled
-          };
-        }
-        return def;
-      });
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    if (saved && Array.isArray(saved) && saved.length > 0) {
+      const merged = mergeWithDefaultHealthPensionAcqFields(saved);
+      broadcastHealthPensionAcqCoordinates(merged, tenantId);
       return merged;
     }
   } catch (err) {
     console.warn('DB fetch failed, fallback to local:', err);
   }
-  return loadHealthPensionAcqCoordinates();
+  return loadHealthPensionAcqCoordinates(tenantId);
 }
 
-// Supabase DB への保存
-export async function saveHealthPensionAcqCoordinatesToDb(fields: HealthPensionAcqFieldConfig[]): Promise<boolean> {
+// Supabase DB への保存（UUID完全整合・レコード自動判定・テナント分離対応）
+export async function saveHealthPensionAcqCoordinatesToDb(fields: HealthPensionAcqFieldConfig[], tenantId?: string): Promise<boolean> {
   try {
-    saveHealthPensionAcqCoordinates(fields);
+    broadcastHealthPensionAcqCoordinates(fields, tenantId);
+
+    if (tenantId) {
+      const res = await supabase
+        .from('tenants')
+        .update({ health_pension_acq_doc_coordinates: fields })
+        .eq('id', tenantId);
+      if (res.error) {
+        console.warn('Could not update tenant health_pension_acq_doc_coordinates:', res.error);
+        return false;
+      }
+      return true;
+    }
 
     const { data: current } = await supabase
       .from('system_settings')

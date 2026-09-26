@@ -523,9 +523,10 @@ export const DEFAULT_EMPLOYMENT_LOSS_FIELDS: EmploymentLossFieldConfig[] = [
 const STORAGE_KEY = 'employment_loss_doc_coordinates_custom_v2';
 
 // ローカルストレージからの読み込み（デフォルトフォールバック付き）
-export function loadEmploymentLossCoordinates(): EmploymentLossFieldConfig[] {
+export function loadEmploymentLossCoordinates(tenantId?: string): EmploymentLossFieldConfig[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('employment_loss_doc_coordinates_custom_v1');
+    const key = tenantId ? `${STORAGE_KEY}_${tenantId}` : STORAGE_KEY;
+    const raw = localStorage.getItem(key) || (!tenantId ? localStorage.getItem('employment_loss_doc_coordinates_custom_v1') : null);
     if (!raw) return DEFAULT_EMPLOYMENT_LOSS_FIELDS.filter(f => f.id !== 'docTypeNumber');
     const parsed: Partial<EmploymentLossFieldConfig>[] = JSON.parse(raw);
     const filteredDefaults = DEFAULT_EMPLOYMENT_LOSS_FIELDS.filter(f => f.id !== 'docTypeNumber');
@@ -551,19 +552,21 @@ export function loadEmploymentLossCoordinates(): EmploymentLossFieldConfig[] {
 }
 
 // ローカルストレージへの保存
-export function saveEmploymentLossCoordinates(fields: EmploymentLossFieldConfig[]): void {
+export function saveEmploymentLossCoordinates(fields: EmploymentLossFieldConfig[], tenantId?: string): void {
   try {
     const cleaned = fields.filter(f => f.id !== 'docTypeNumber');
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+    const key = tenantId ? `${STORAGE_KEY}_${tenantId}` : STORAGE_KEY;
+    localStorage.setItem(key, JSON.stringify(cleaned));
   } catch (err) {
     console.error('Failed to save employment loss coords to localStorage:', err);
   }
 }
 
 // 座標リセット（デフォルト初期化）
-export function resetEmploymentLossCoordinates(): EmploymentLossFieldConfig[] {
+export function resetEmploymentLossCoordinates(tenantId?: string): EmploymentLossFieldConfig[] {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    const key = tenantId ? `${STORAGE_KEY}_${tenantId}` : STORAGE_KEY;
+    localStorage.removeItem(key);
   } catch (err) {}
   return DEFAULT_EMPLOYMENT_LOSS_FIELDS.filter(f => f.id !== 'docTypeNumber');
 }
@@ -575,17 +578,31 @@ export function broadcastEmploymentLossCoordinates(fields: EmploymentLossFieldCo
   window.dispatchEvent(ev);
 }
 
-// Supabase DB からの全社同期座標取得
-export async function fetchEmploymentLossCoordinatesFromDb(): Promise<EmploymentLossFieldConfig[]> {
+// Supabase DB からの全社同期またはテナント別座標取得
+export async function fetchEmploymentLossCoordinatesFromDb(tenantId?: string): Promise<EmploymentLossFieldConfig[]> {
   try {
-    const { data } = await supabase
-      .from('system_settings')
-      .select('employment_loss_doc_coordinates')
-      .limit(1)
-      .maybeSingle();
+    let saved: any = null;
+    if (tenantId) {
+      const { data: tenantData } = await supabase
+        .from('tenants')
+        .select('employment_loss_doc_coordinates')
+        .eq('id', tenantId)
+        .maybeSingle();
+      if (tenantData?.employment_loss_doc_coordinates && Array.isArray(tenantData.employment_loss_doc_coordinates)) {
+        saved = tenantData.employment_loss_doc_coordinates;
+      }
+    }
+    if (!saved) {
+      const { data } = await supabase
+        .from('system_settings')
+        .select('employment_loss_doc_coordinates')
+        .limit(1)
+        .maybeSingle();
+      saved = data?.employment_loss_doc_coordinates;
+    }
 
-    if (data && data.employment_loss_doc_coordinates && Array.isArray(data.employment_loss_doc_coordinates)) {
-      const dbFields = (data.employment_loss_doc_coordinates as EmploymentLossFieldConfig[]).filter(f => f.id !== 'docTypeNumber');
+    if (saved && Array.isArray(saved)) {
+      const dbFields = (saved as EmploymentLossFieldConfig[]).filter(f => f.id !== 'docTypeNumber');
       const filteredDefaults = DEFAULT_EMPLOYMENT_LOSS_FIELDS.filter(f => f.id !== 'docTypeNumber');
       const merged = filteredDefaults.map(def => {
         const custom = dbFields.find(p => p.id === def.id);
@@ -602,20 +619,32 @@ export async function fetchEmploymentLossCoordinatesFromDb(): Promise<Employment
         }
         return def;
       }).filter(f => f.id !== 'docTypeNumber');
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      saveEmploymentLossCoordinates(merged, tenantId);
       return merged;
     }
   } catch (err) {
     console.warn('DB fetch failed, fallback to local:', err);
   }
-  return loadEmploymentLossCoordinates();
+  return loadEmploymentLossCoordinates(tenantId);
 }
 
-// Supabase DB への保存（UUID完全整合・レコード自動判定）
-export async function saveEmploymentLossCoordinatesToDb(fields: EmploymentLossFieldConfig[]): Promise<boolean> {
+// Supabase DB への保存（UUID完全整合・レコード自動判定・テナント分離対応）
+export async function saveEmploymentLossCoordinatesToDb(fields: EmploymentLossFieldConfig[], tenantId?: string): Promise<boolean> {
   try {
     const cleaned = fields.filter(f => f.id !== 'docTypeNumber');
-    saveEmploymentLossCoordinates(cleaned);
+    saveEmploymentLossCoordinates(cleaned, tenantId);
+
+    if (tenantId) {
+      const res = await supabase
+        .from('tenants')
+        .update({ employment_loss_doc_coordinates: cleaned })
+        .eq('id', tenantId);
+      if (res.error) {
+        console.warn('Could not update tenant employment_loss_doc_coordinates:', res.error);
+        return false;
+      }
+      return true;
+    }
 
     const { data: current } = await supabase
       .from('system_settings')
@@ -628,7 +657,7 @@ export async function saveEmploymentLossCoordinatesToDb(fields: EmploymentLossFi
       const res = await supabase
         .from('system_settings')
         .update({ 
-          employment_loss_doc_coordinates: fields,
+          employment_loss_doc_coordinates: cleaned,
           updated_at: new Date().toISOString()
         })
         .eq('id', current.id);
@@ -637,7 +666,7 @@ export async function saveEmploymentLossCoordinatesToDb(fields: EmploymentLossFi
       const res = await supabase
         .from('system_settings')
         .insert([{ 
-          employment_loss_doc_coordinates: fields,
+          employment_loss_doc_coordinates: cleaned,
           updated_at: new Date().toISOString()
         }]);
       saveError = res.error;
