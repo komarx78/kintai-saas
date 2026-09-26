@@ -6,7 +6,8 @@ import {
   ZoomIn, ZoomOut, RotateCcw,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
   ChevronsUp, ChevronsDown, ChevronsLeft, ChevronsRight,
-  Sliders, X
+  Sliders, X,
+  AlignLeft, AlignCenter, AlignRight
 } from 'lucide-react';
 
 import { 
@@ -568,56 +569,153 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                 </div>
               </div>
 
-              {/* 文字ピッチ調整（整理番号・個人番号・整理記号等） */}
-              {selectedField.pitch !== undefined && (
-                <div className="bg-slate-900 p-3 rounded-2xl border border-cyan-800/50 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold text-cyan-300">
-                    <span>マス目ピッチ間隔:</span>
-                    <span className="font-mono bg-cyan-950 px-2 py-0.5 rounded border border-cyan-700 text-cyan-200">
-                      {selectedField.pitch.toFixed(2)}%
+              {/* 文字揃え（配置方向：左詰め・センタリング・右詰め） */}
+              <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                  <span>文字配置（揃え方向）:</span>
+                  <span className="font-mono text-purple-300 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-800/50 text-[11px]">
+                    {selectedField.align === 'center' ? '中央揃え (センタリング)' : selectedField.align === 'right' ? '右詰め' : '左詰め'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => updateField(selectedField.id, 'align', 'left')}
+                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      (!selectedField.align || selectedField.align === 'left')
+                        ? 'bg-purple-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <AlignLeft className="w-3.5 h-3.5" />
+                    <span>左詰め</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateField(selectedField.id, 'align', 'center')}
+                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      selectedField.align === 'center'
+                        ? 'bg-purple-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <AlignCenter className="w-3.5 h-3.5" />
+                    <span>センタリング</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateField(selectedField.id, 'align', 'right')}
+                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      selectedField.align === 'right'
+                        ? 'bg-purple-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    <AlignRight className="w-3.5 h-3.5" />
+                    <span>右詰め</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 📏 マス目ピッチ（1マスの幅・文字間隔）調整 */}
+              <div className="bg-slate-900 p-3.5 rounded-2xl border border-cyan-800/60 shadow-md space-y-2.5">
+                <div className="flex items-center justify-between text-xs font-bold text-cyan-300">
+                  <div className="flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>マス目ピッチ（1マスの幅）:</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedField.pitch !== undefined && (
+                      <button
+                        type="button"
+                        onClick={() => updateField(selectedField.id, 'pitch', undefined)}
+                        className="px-2 py-0.5 bg-slate-800 hover:bg-rose-900/60 text-slate-400 hover:text-rose-200 rounded text-[10px] font-bold border border-slate-700 transition cursor-pointer"
+                        title="マス目ピッチ（等幅割り付け）を解除し、自然な文字並びに戻す"
+                      >
+                        ピッチ解除
+                      </button>
+                    )}
+                    <span className="font-mono bg-cyan-950 px-2 py-0.5 rounded border border-cyan-700 text-cyan-200 text-xs font-bold">
+                      {selectedField.pitch ? `${selectedField.pitch.toFixed(2)}%` : '通常印字（ピッチなし）'}
                     </span>
                   </div>
+                </div>
+
+                <div className="flex items-center gap-2">
                   <input
                     type="range"
-                    min="1.00"
+                    min="0.50"
                     max="5.00"
                     step="0.01"
-                    value={selectedField.pitch}
-                    onChange={e => updateField(selectedField.id, 'pitch', parseFloat(e.target.value) || 2.3)}
-                    className="w-full accent-cyan-400 cursor-pointer"
+                    value={selectedField.pitch || 2.00}
+                    onChange={e => updateField(selectedField.id, 'pitch', parseFloat(e.target.value) || 2.0)}
+                    className="w-full accent-cyan-400 cursor-pointer h-2 bg-slate-950 rounded-lg"
                   />
-                  <div className="flex justify-between gap-1 text-[10px]">
-                    <button
-                      type="button"
-                      onClick={() => updateField(selectedField.id, 'pitch', Math.max(0.5, (selectedField.pitch || 2.3) - 0.05))}
-                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300"
-                    >
-                      -0.05
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateField(selectedField.id, 'pitch', Math.max(0.5, (selectedField.pitch || 2.3) - 0.01))}
-                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300"
-                    >
-                      -0.01
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateField(selectedField.id, 'pitch', Math.min(5.0, (selectedField.pitch || 2.3) + 0.01))}
-                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300"
-                    >
-                      +0.01
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateField(selectedField.id, 'pitch', Math.min(5.0, (selectedField.pitch || 2.3) + 0.05))}
-                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300"
-                    >
-                      +0.05
-                    </button>
-                  </div>
                 </div>
-              )}
+
+                <div className="flex items-center justify-between gap-1 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = selectedField.pitch || 2.0;
+                      updateField(selectedField.id, 'pitch', Math.max(0.5, Math.round((cur - 0.05) * 100) / 100));
+                    }}
+                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 border border-slate-700 rounded-lg text-[10px] font-bold cursor-pointer"
+                    title="-0.05% 狭くする"
+                  >
+                    -0.05
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = selectedField.pitch || 2.0;
+                      updateField(selectedField.id, 'pitch', Math.max(0.5, Math.round((cur - 0.01) * 100) / 100));
+                    }}
+                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 border border-slate-700 rounded-lg text-[10px] font-bold cursor-pointer"
+                    title="-0.01% 狭くする"
+                  >
+                    -0.01
+                  </button>
+
+                  {/* 数値直接入力 */}
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.5"
+                    max="6.0"
+                    value={selectedField.pitch || ''}
+                    placeholder="ピッチなし"
+                    onChange={e => {
+                      const val = parseFloat(e.target.value);
+                      updateField(selectedField.id, 'pitch', isNaN(val) ? undefined : val);
+                    }}
+                    className="w-20 bg-slate-950 border border-slate-700 rounded-lg p-1 text-center font-mono font-bold text-xs text-cyan-300"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = selectedField.pitch || 2.0;
+                      updateField(selectedField.id, 'pitch', Math.min(6.0, Math.round((cur + 0.01) * 100) / 100));
+                    }}
+                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 border border-slate-700 rounded-lg text-[10px] font-bold cursor-pointer"
+                    title="+0.01% 広くする"
+                  >
+                    +0.01
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = selectedField.pitch || 2.0;
+                      updateField(selectedField.id, 'pitch', Math.min(6.0, Math.round((cur + 0.05) * 100) / 100));
+                    }}
+                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 border border-slate-700 rounded-lg text-[10px] font-bold cursor-pointer"
+                    title="+0.05% 広くする"
+                  >
+                    +0.05
+                  </button>
+                </div>
+              </div>
 
               <div className="text-[10px] text-slate-400 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 leading-relaxed">
                 💡 <strong>ワンポイント:</strong> PCの矢印キー（↑ ↓ ← →）で選択項目を直接移動できます（Shift+矢印で大きく移動）。
@@ -680,6 +778,8 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                 if (f.id === 'symbolDigits') {
                   const digitPitch = f.pitch || 2.30;
                   const containerWidth = f.width || (digitPitch * 4);
+                  const alignVal = f.align || 'left';
+                  const justifyContent = alignVal === 'right' ? 'flex-end' : alignVal === 'center' ? 'center' : 'flex-start';
                   return (
                     <div
                       key={f.id}
@@ -697,6 +797,7 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                         height: '2.5%',
                         display: 'flex',
                         alignItems: 'center',
+                        justifyContent,
                         cursor: isDraggingThis ? 'grabbing' : 'grab',
                         pointerEvents: 'auto',
                         userSelect: 'none'
@@ -726,6 +827,8 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                 if (f.id === 'symbolKana') {
                   const kanaPitch = f.pitch || 2.30;
                   const containerWidth = f.width || (kanaPitch * 4);
+                  const alignVal = f.align || 'left';
+                  const justifyContent = alignVal === 'right' ? 'flex-end' : alignVal === 'center' ? 'center' : 'flex-start';
                   return (
                     <div
                       key={f.id}
@@ -743,6 +846,7 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                         height: '2.5%',
                         display: 'flex',
                         alignItems: 'center',
+                        justifyContent,
                         cursor: isDraggingThis ? 'grabbing' : 'grab',
                         pointerEvents: 'auto',
                         userSelect: 'none'
@@ -769,6 +873,13 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                   );
                 }
 
+                const pitchVal = f.pitch || 0;
+                const alignVal = f.align || 'left';
+                const justifyContent = alignVal === 'right' ? 'flex-end' : alignVal === 'center' ? 'center' : 'flex-start';
+                const displayStr = ['companyZip', 'companyZipFirst', 'companyZipLast'].includes(f.id)
+                  ? (f.example || '').replace(/[^0-9]/g, '')
+                  : (f.example || '');
+
                 return (
                   <div
                     key={f.id}
@@ -782,14 +893,18 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                       position: 'absolute',
                       left: `${f.x}%`,
                       top: `${f.y}%`,
-                      width: f.width ? `${f.width}%` : 'auto',
+                      width: f.width ? `${f.width}%` : (pitchVal > 0 ? 'max-content' : 'auto'),
                       fontSize: `${f.fontSize * 0.115}cqi`,
                       fontWeight: 'bold',
                       cursor: isDraggingThis ? 'grabbing' : 'grab',
                       userSelect: 'none',
                       whiteSpace: 'nowrap',
                       pointerEvents: 'auto',
-                      lineHeight: 1
+                      lineHeight: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent,
+                      textAlign: alignVal
                     }}
                     className={`px-1 py-0.5 rounded transition-all ${
                       isSelected
@@ -798,9 +913,29 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                     }`}
                     title={`${f.name} (クリックして選択・ドラッグまたは十字キーで移動)`}
                   >
-                    {['companyZip', 'companyZipFirst', 'companyZipLast'].includes(f.id)
-                      ? (f.example || '').replace(/[^0-9]/g, '')
-                      : f.example}
+                    {pitchVal > 0 ? (
+                      <div className="flex items-center pointer-events-none" style={{ justifyContent }}>
+                        {displayStr.split('').map((char, cIdx) => (
+                          <span
+                            key={cIdx}
+                            style={{
+                              display: 'inline-block',
+                              width: `${pitchVal}cqi`,
+                              fontSize: `${f.fontSize * 0.115}cqi`,
+                              fontWeight: 900,
+                              textAlign: 'center',
+                              fontFamily: 'monospace',
+                              lineHeight: 1,
+                              flexShrink: 0
+                            }}
+                          >
+                            {char}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span style={{ width: f.width ? '100%' : 'auto', textAlign: alignVal }}>{displayStr}</span>
+                    )}
                   </div>
                 );
               })}
@@ -815,6 +950,22 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                     {rowFields.map(rf => {
                       const isSelected = selectedFieldId === rf.id;
                       const isDraggingThis = draggingFieldId === rf.id && rowIdx === 0;
+                      const rfPitch = rf.pitch || 0;
+                      const rfAlign = rf.align || (
+                        (rf.id === 'empCurrentHealthStandard' || rf.id === 'empCurrentPensionStandard' || rf.id === 'empRetroactiveAmount')
+                          ? 'right'
+                          : (rf.id === 'empInsuranceNumber' || rf.id === 'empBirth' || rf.id === 'empRevisionYearMonth' || rf.id === 'empPreviousRevisionYM' || rf.id === 'empWageChangeType')
+                            ? 'center'
+                            : 'left'
+                      );
+                      const justifyContent = rfAlign === 'right' ? 'flex-end' : rfAlign === 'center' ? 'center' : 'flex-start';
+
+                      let textVal = rf.example || '';
+                      if (rf.id === 'empInsuranceNumber') {
+                        textVal = rowIdx === 0 ? '1' : '2';
+                      } else if (rf.id === 'empName') {
+                        textVal = rowIdx === 0 ? '山田 太郎' : '佐藤 花子';
+                      }
 
                       return (
                         <div
@@ -831,7 +982,7 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                             position: 'absolute',
                             left: `${rf.x}%`,
                             top: `${currRowTop + rf.y}%`,
-                            width: rf.width ? `${rf.width}%` : 'auto',
+                            width: rf.width ? `${rf.width}%` : (rfPitch > 0 ? 'max-content' : 'auto'),
                             fontSize: `${rf.fontSize * 0.115}cqi`,
                             fontWeight: 'bold',
                             cursor: rowIdx === 0 ? (isDraggingThis ? 'grabbing' : 'grab') : 'pointer',
@@ -839,7 +990,11 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                             whiteSpace: 'nowrap',
                             pointerEvents: 'auto',
                             lineHeight: 1,
-                            opacity: rowIdx === 1 ? 0.5 : 1
+                            opacity: rowIdx === 1 ? 0.5 : 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent,
+                            textAlign: rfAlign
                           }}
                           className={`px-1 py-0.5 rounded transition-all ${
                             isSelected
@@ -848,7 +1003,29 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                           }`}
                           title={`${rf.name} (クリックして選択・ドラッグまたは十字キーで移動)`}
                         >
-                          {rf.example}
+                          {rfPitch > 0 ? (
+                            <div className="flex items-center pointer-events-none" style={{ justifyContent }}>
+                              {String(textVal).split('').map((char, cIdx) => (
+                                <span
+                                  key={cIdx}
+                                  style={{
+                                    display: 'inline-block',
+                                    width: `${rfPitch}cqi`,
+                                    fontSize: `${rf.fontSize * 0.115}cqi`,
+                                    fontWeight: 900,
+                                    textAlign: 'center',
+                                    fontFamily: 'monospace',
+                                    lineHeight: 1,
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  {char}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span style={{ width: rf.width ? '100%' : 'auto', textAlign: rfAlign }}>{textVal}</span>
+                          )}
                         </div>
                       );
                     })}

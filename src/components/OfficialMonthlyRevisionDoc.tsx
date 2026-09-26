@@ -144,14 +144,23 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
     return map;
   }, [coords]);
 
-  const getF = (id: string, defX: number, defY: number, defSize: number, defWidth?: number) => {
+  const getF = (
+    id: string,
+    defX: number,
+    defY: number,
+    defSize: number,
+    defWidth?: number,
+    defAlign: 'left' | 'center' | 'right' = 'left',
+    defPitch?: number
+  ) => {
     const item = fieldMap.get(id);
     return {
       x: item?.x !== undefined ? item.x : defX,
       y: item?.y !== undefined ? item.y : defY,
       fontSize: item?.fontSize !== undefined ? item.fontSize : defSize,
-      pitch: item?.pitch,
-      width: item?.width !== undefined ? item.width : defWidth
+      pitch: item?.pitch !== undefined ? item.pitch : defPitch,
+      width: item?.width !== undefined ? item.width : defWidth,
+      align: item?.align || defAlign
     };
   };
 
@@ -197,20 +206,20 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
     return { symbolDigits: digits, symbolKana: kana };
   }, [data.officeSymbol, data.officeCityCode, data.officeSymbolKana]);
 
-  const fSubY = getF('subDateY', 14.5, 5.7, 11, 3.5);
-  const fSubM = getF('subDateM', 19.5, 5.7, 11, 3.5);
-  const fSubD = getF('subDateD', 24.2, 5.7, 11, 3.5);
+  const fSubY = getF('subDateY', 14.5, 5.7, 11, 3.5, 'center');
+  const fSubM = getF('subDateM', 19.5, 5.7, 11, 3.5, 'center');
+  const fSubD = getF('subDateD', 24.2, 5.7, 11, 3.5, 'center');
 
-  const fDigits = getF('symbolDigits', 14.8, 8.4, 13, 9.8);
-  const fKana = getF('symbolKana', 26.6, 8.4, 12.5, 9.8);
+  const fDigits = getF('symbolDigits', 14.8, 8.4, 13, 9.8, 'left', 2.30);
+  const fKana = getF('symbolKana', 26.6, 8.4, 12.5, 9.8, 'left', 2.30);
 
-  const fZipFirst = getF('companyZipFirst', 17.5, 11.8, 11.0, 4.0);
-  const fZipLast = getF('companyZipLast', 23.2, 11.8, 11.0, 5.5);
-  const fAddress = getF('companyAddress', 12.0, 13.0, 9.0, 36.0);
-  const fName = getF('companyName', 12.0, 16.5, 10.5, 36.0);
-  const fOwner = getF('companyOwnerName', 12.0, 19.2, 10.5, 36.0);
-  const fPhone = getF('companyPhone', 13.0, 21.8, 9.5, 22.0);
-  const fSharoushi = getF('sharoushiName', 54.0, 19.5, 9.5, 38.0);
+  const fZipFirst = getF('companyZipFirst', 17.5, 11.8, 11.0, 4.0, 'center');
+  const fZipLast = getF('companyZipLast', 23.2, 11.8, 11.0, 5.5, 'center');
+  const fAddress = getF('companyAddress', 12.0, 13.0, 9.0, 36.0, 'left');
+  const fName = getF('companyName', 12.0, 16.5, 10.5, 36.0, 'left');
+  const fOwner = getF('companyOwnerName', 12.0, 19.2, 10.5, 36.0, 'left');
+  const fPhone = getF('companyPhone', 13.0, 21.8, 9.5, 22.0, 'left');
+  const fSharoushi = getF('sharoushiName', 54.0, 19.5, 9.5, 38.0, 'left');
 
   const digitChars = symbolDigits ? symbolDigits.split('').slice(0, 4) : [];
   while (digitChars.length < 4) digitChars.push('');
@@ -221,6 +230,128 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
   const cleanZip = (data.companyZip || '').replace(/[^0-9]/g, '');
   const zipFirst = cleanZip.slice(0, 3);
   const zipLast = cleanZip.slice(3, 7);
+
+  // フィールド描画共通ヘルパー（文字揃え align ＆ マス目ピッチ pitch 対応）
+  const renderField = (
+    text: string | number | undefined,
+    f: { x: number; y: number; fontSize: number; pitch?: number; width?: number; align: 'left' | 'center' | 'right' },
+    extraClass: string = ''
+  ) => {
+    if (text === undefined || text === null || text === '') return null;
+    const str = String(text);
+    const pitchVal = f.pitch || 0;
+    const alignVal = f.align || 'left';
+    const justifyContent = alignVal === 'right' ? 'flex-end' : alignVal === 'center' ? 'center' : 'flex-start';
+
+    if (pitchVal > 0) {
+      const chars = str.split('');
+      return (
+        <div
+          className={`absolute flex items-center ${extraClass}`}
+          style={{
+            top: `${f.y}%`,
+            left: `${f.x}%`,
+            width: f.width ? `${f.width}%` : 'max-content',
+            justifyContent
+          }}
+        >
+          <div className="flex items-center" style={{ justifyContent }}>
+            {chars.map((ch, idx) => (
+              <span
+                key={idx}
+                className="inline-block text-center font-mono font-bold shrink-0"
+                style={{
+                  width: `${pitchVal}cqi`,
+                  fontSize: `${f.fontSize * 0.115}cqi`,
+                  lineHeight: 1
+                }}
+              >
+                {ch}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className={`absolute flex items-center ${extraClass}`}
+        style={{
+          top: `${f.y}%`,
+          left: `${f.x}%`,
+          width: f.width ? `${f.width}%` : 'auto',
+          fontSize: `${f.fontSize * 0.115}cqi`,
+          justifyContent,
+          textAlign: alignVal,
+          lineHeight: 1
+        }}
+      >
+        <span style={{ width: f.width ? '100%' : 'auto', textAlign: alignVal }}>{str}</span>
+      </div>
+    );
+  };
+
+  const renderRowField = (
+    text: string | number | undefined,
+    f: { x: number; y: number; fontSize: number; pitch?: number; width?: number; align: 'left' | 'center' | 'right' },
+    rowTop: number,
+    extraClass: string = ''
+  ) => {
+    if (text === undefined || text === null || text === '') return null;
+    const str = String(text);
+    const pitchVal = f.pitch || 0;
+    const alignVal = f.align || 'left';
+    const justifyContent = alignVal === 'right' ? 'flex-end' : alignVal === 'center' ? 'center' : 'flex-start';
+
+    if (pitchVal > 0) {
+      const chars = str.split('');
+      return (
+        <div
+          className={`absolute flex items-center ${extraClass}`}
+          style={{
+            top: `${rowTop + f.y}%`,
+            left: `${f.x}%`,
+            width: f.width ? `${f.width}%` : 'max-content',
+            justifyContent
+          }}
+        >
+          <div className="flex items-center" style={{ justifyContent }}>
+            {chars.map((ch, idx) => (
+              <span
+                key={idx}
+                className="inline-block text-center font-mono font-bold shrink-0"
+                style={{
+                  width: `${pitchVal}cqi`,
+                  fontSize: `${f.fontSize * 0.115}cqi`,
+                  lineHeight: 1
+                }}
+              >
+                {ch}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className={`absolute flex items-center ${extraClass}`}
+        style={{
+          top: `${rowTop + f.y}%`,
+          left: `${f.x}%`,
+          width: f.width ? `${f.width}%` : 'auto',
+          fontSize: `${f.fontSize * 0.115}cqi`,
+          justifyContent,
+          textAlign: alignVal,
+          lineHeight: 1
+        }}
+      >
+        <span style={{ width: f.width ? '100%' : 'auto', textAlign: alignVal }}>{str}</span>
+      </div>
+    );
+  };
 
   return (
     <div className="bg-slate-900/80 backdrop-blur-sm min-h-screen py-8 px-4 flex flex-col items-center">
@@ -325,55 +456,26 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
             {/* ══════════════════════════════════════════════════════════════════════ */}
             <div className="absolute inset-0 z-10 pointer-events-none text-slate-900">
               {/* 提出年月日 */}
-              <div
-                className="absolute font-mono font-bold text-center"
-                style={{
-                  top: `${fSubY.y}%`,
-                  left: `${fSubY.x}%`,
-                  width: `${fSubY.width || 3.5}%`,
-                  fontSize: `${(fSubY.fontSize || 11) * 0.115}cqi`
-                }}
-              >
-                {subDate.y}
-              </div>
-              <div
-                className="absolute font-mono font-bold text-center"
-                style={{
-                  top: `${fSubM.y}%`,
-                  left: `${fSubM.x}%`,
-                  width: `${fSubM.width || 3.5}%`,
-                  fontSize: `${(fSubM.fontSize || 11) * 0.115}cqi`
-                }}
-              >
-                {subDate.m}
-              </div>
-              <div
-                className="absolute font-mono font-bold text-center"
-                style={{
-                  top: `${fSubD.y}%`,
-                  left: `${fSubD.x}%`,
-                  width: `${fSubD.width || 3.5}%`,
-                  fontSize: `${(fSubD.fontSize || 11) * 0.115}cqi`
-                }}
-              >
-                {subDate.d}
-              </div>
+              {renderField(subDate.y, fSubY, 'font-mono font-bold')}
+              {renderField(subDate.m, fSubM, 'font-mono font-bold')}
+              {renderField(subDate.d, fSubD, 'font-mono font-bold')}
 
               {/* 事業所整理記号（左4マス数字、右4マスカタカナ） */}
               <div
-                className="absolute flex items-center justify-between"
+                className="absolute flex items-center"
                 style={{
                   top: `${fDigits.y}%`,
                   left: `${fDigits.x}%`,
-                  width: `${fDigits.width || 9.8}%`
+                  width: `${fDigits.width || 9.8}%`,
+                  justifyContent: fDigits.align === 'right' ? 'flex-end' : fDigits.align === 'center' ? 'center' : 'flex-start'
                 }}
               >
                 {digitChars.map((ch, idx) => (
                   <span
                     key={`d-${idx}`}
-                    className="font-mono font-bold text-center inline-block"
+                    className="font-mono font-bold text-center inline-block shrink-0"
                     style={{
-                      width: `${fDigits.pitch || 2.30}%`,
+                      width: `${(fDigits.pitch || 2.30)}cqi`,
                       fontSize: `${(fDigits.fontSize || 13) * 0.115}cqi`
                     }}
                   >
@@ -383,19 +485,20 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
               </div>
 
               <div
-                className="absolute flex items-center justify-between"
+                className="absolute flex items-center"
                 style={{
                   top: `${fKana.y}%`,
                   left: `${fKana.x}%`,
-                  width: `${fKana.width || 9.8}%`
+                  width: `${fKana.width || 9.8}%`,
+                  justifyContent: fKana.align === 'right' ? 'flex-end' : fKana.align === 'center' ? 'center' : 'flex-start'
                 }}
               >
                 {kanaChars.map((ch, idx) => (
                   <span
                     key={`k-${idx}`}
-                    className="font-bold text-center inline-block"
+                    className="font-bold text-center inline-block shrink-0"
                     style={{
-                      width: `${fKana.pitch || 2.30}%`,
+                      width: `${(fKana.pitch || 2.30)}cqi`,
                       fontSize: `${(fKana.fontSize || 12.5) * 0.115}cqi`
                     }}
                   >
@@ -404,94 +507,16 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                 ))}
               </div>
 
-              {/* 事業所郵便番号（上3桁・〒の直後） */}
-              {zipFirst && (
-                <div
-                  className="absolute font-mono font-bold tracking-widest text-center"
-                  style={{
-                    top: `${fZipFirst.y}%`,
-                    left: `${fZipFirst.x}%`,
-                    width: `${fZipFirst.width || 4.0}%`,
-                    fontSize: `${(fZipFirst.fontSize || 11.0) * 0.115}cqi`
-                  }}
-                >
-                  {zipFirst}
-                </div>
-              )}
+              {/* 事業所郵便番号（上3桁・下4桁） */}
+              {renderField(zipFirst, fZipFirst, 'font-mono font-bold tracking-widest')}
+              {renderField(zipLast, fZipLast, 'font-mono font-bold tracking-widest')}
 
-              {/* 事業所郵便番号（下4桁・ハイフンの直後） */}
-              {zipLast && (
-                <div
-                  className="absolute font-mono font-bold tracking-widest text-center"
-                  style={{
-                    top: `${fZipLast.y}%`,
-                    left: `${fZipLast.x}%`,
-                    width: `${fZipLast.width || 5.5}%`,
-                    fontSize: `${(fZipLast.fontSize || 11.0) * 0.115}cqi`
-                  }}
-                >
-                  {zipLast}
-                </div>
-              )}
-              <div
-                className="absolute text-xs leading-tight font-medium truncate"
-                style={{
-                  top: `${fAddress.y}%`,
-                  left: `${fAddress.x}%`,
-                  width: `${fAddress.width || 36.0}%`,
-                  fontSize: `${(fAddress.fontSize || 9.0) * 0.115}cqi`
-                }}
-              >
-                {data.companyAddress}
-              </div>
-              <div
-                className="absolute text-xs font-bold truncate"
-                style={{
-                  top: `${fName.y}%`,
-                  left: `${fName.x}%`,
-                  width: `${fName.width || 36.0}%`,
-                  fontSize: `${(fName.fontSize || 10.5) * 0.115}cqi`
-                }}
-              >
-                {data.companyName}
-              </div>
-              <div
-                className="absolute text-xs font-bold truncate"
-                style={{
-                  top: `${fOwner.y}%`,
-                  left: `${fOwner.x}%`,
-                  width: `${fOwner.width || 36.0}%`,
-                  fontSize: `${(fOwner.fontSize || 10.5) * 0.115}cqi`
-                }}
-              >
-                {data.companyOwnerName}
-              </div>
-              <div
-                className="absolute font-mono text-xs"
-                style={{
-                  top: `${fPhone.y}%`,
-                  left: `${fPhone.x}%`,
-                  width: `${fPhone.width || 22.0}%`,
-                  fontSize: `${(fPhone.fontSize || 9.5) * 0.115}cqi`
-                }}
-              >
-                {data.companyPhone}
-              </div>
-
-              {/* 社会保険労務士記載欄 */}
-              {data.sharoushiName && (
-                <div
-                  className="absolute text-xs font-medium truncate"
-                  style={{
-                    top: `${fSharoushi.y}%`,
-                    left: `${fSharoushi.x}%`,
-                    width: `${fSharoushi.width || 38.0}%`,
-                    fontSize: `${(fSharoushi.fontSize || 9.5) * 0.115}cqi`
-                  }}
-                >
-                  {data.sharoushiName}
-                </div>
-              )}
+              {/* 所在地・名称・事業主氏名・電話番号・社労士 */}
+              {renderField(data.companyAddress, fAddress, 'text-xs leading-tight font-medium truncate')}
+              {renderField(data.companyName, fName, 'text-xs font-bold truncate')}
+              {renderField(data.companyOwnerName, fOwner, 'text-xs font-bold truncate')}
+              {renderField(data.companyPhone, fPhone, 'font-mono text-xs')}
+              {data.sharoushiName && renderField(data.sharoushiName, fSharoushi, 'text-xs font-medium truncate')}
 
               {/* ══════════════════════════════════════════════════════════════════════ */}
               {/* 👥 従業員データ 行レンダリング（1行〜5行） */}
@@ -506,18 +531,18 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                 const myNumChars = emp.myNumber ? emp.myNumber.replace(/-/g, '').slice(0, 12).split('') : [];
                 while (myNumChars.length < 12) myNumChars.push('');
 
-                const fEmpNum = getF('empInsuranceNumber', 9.8, 0.6, 11, 11.0);
-                const fEmpNm = getF('empName', 21.6, 0.6, 11, 22.0);
-                const fEmpBth = getF('empBirth', 44.2, 0.6, 10.5, 18.0);
-                const fEmpRevYM = getF('empRevisionYearMonth', 63.0, 0.6, 10.5, 9.5);
-                const fEmpMyNo = getF('empMyNumber', 73.6, 0.6, 10, 21.0);
+                const fEmpNum = getF('empInsuranceNumber', 9.8, 0.6, 11, 11.0, 'center');
+                const fEmpNm = getF('empName', 21.6, 0.6, 11, 22.0, 'left');
+                const fEmpBth = getF('empBirth', 44.2, 0.6, 10.5, 18.0, 'center');
+                const fEmpRevYM = getF('empRevisionYearMonth', 63.0, 0.6, 10.5, 9.5, 'center');
+                const fEmpMyNo = getF('empMyNumber', 73.6, 0.6, 10, 21.0, 'left', 1.65);
 
-                const fCurH = getF('empCurrentHealthStandard', 9.8, 2.8, 10.5, 10.5);
-                const fCurP = getF('empCurrentPensionStandard', 21.0, 2.8, 10.5, 10.5);
-                const fPrevYM = getF('empPreviousRevisionYM', 32.5, 2.8, 9.5, 11.0);
-                const fChange = getF('empWageChangeType', 44.5, 2.8, 9.5, 12.0);
-                const fRetro = getF('empRetroactiveAmount', 57.2, 2.8, 9.5, 15.5);
-                const fRem = getF('empRemarks', 73.6, 2.8, 8.5, 21.0);
+                const fCurH = getF('empCurrentHealthStandard', 9.8, 2.8, 10.5, 10.5, 'right');
+                const fCurP = getF('empCurrentPensionStandard', 21.0, 2.8, 10.5, 10.5, 'right');
+                const fPrevYM = getF('empPreviousRevisionYM', 32.5, 2.8, 9.5, 11.0, 'center');
+                const fChange = getF('empWageChangeType', 44.5, 2.8, 9.5, 12.0, 'center');
+                const fRetro = getF('empRetroactiveAmount', 57.2, 2.8, 9.5, 15.5, 'right');
+                const fRem = getF('empRemarks', 73.6, 2.8, 8.5, 21.0, 'left');
 
                 // 千円単位換算（例: 300,000円 -> 300千円）
                 const healthInThousands = Math.round((emp.currentHealthStandard || 0) / 1000);
@@ -527,73 +552,34 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                   <React.Fragment key={emp.id || rowIdx}>
                     {/* ── 1段目 ── */}
                     {/* ① 被保険者整理番号 */}
-                    <div
-                      className="absolute font-mono font-bold text-center"
-                      style={{
-                        top: `${rowTop + fEmpNum.y}%`,
-                        left: `${fEmpNum.x}%`,
-                        width: `${fEmpNum.width || 11.0}%`,
-                        fontSize: `${(fEmpNum.fontSize || 11) * 0.115}cqi`
-                      }}
-                    >
-                      {emp.insuranceNumber}
-                    </div>
+                    {renderRowField(emp.insuranceNumber, fEmpNum, rowTop, 'font-mono font-bold')}
 
                     {/* ② 被保険者氏名 */}
-                    <div
-                      className="absolute font-bold truncate"
-                      style={{
-                        top: `${rowTop + fEmpNm.y}%`,
-                        left: `${fEmpNm.x}%`,
-                        width: `${fEmpNm.width || 22.0}%`,
-                        fontSize: `${(fEmpNm.fontSize || 11) * 0.115}cqi`
-                      }}
-                    >
-                      {emp.name}
-                    </div>
+                    {renderRowField(emp.name, fEmpNm, rowTop, 'font-bold truncate')}
 
                     {/* ③ 生年月日（元号形式: 5-630503 等） */}
-                    <div
-                      className="absolute font-mono font-bold text-center tracking-wider"
-                      style={{
-                        top: `${rowTop + fEmpBth.y}%`,
-                        left: `${fEmpBth.x}%`,
-                        width: `${fEmpBth.width || 18.0}%`,
-                        fontSize: `${(fEmpBth.fontSize || 10.5) * 0.115}cqi`
-                      }}
-                    >
-                      {formatNenkinBirthDate(emp.birthDate)}
-                    </div>
+                    {renderRowField(formatNenkinBirthDate(emp.birthDate), fEmpBth, rowTop, 'font-mono font-bold tracking-wider')}
 
                     {/* ④ 改定年月 */}
-                    <div
-                      className="absolute font-mono font-bold text-center"
-                      style={{
-                        top: `${rowTop + fEmpRevYM.y}%`,
-                        left: `${fEmpRevYM.x}%`,
-                        width: `${fEmpRevYM.width || 9.5}%`,
-                        fontSize: `${(fEmpRevYM.fontSize || 10.5) * 0.115}cqi`
-                      }}
-                    >
-                      {formatNenkinYM(emp.revisionYearMonth)}
-                    </div>
+                    {renderRowField(formatNenkinYM(emp.revisionYearMonth), fEmpRevYM, rowTop, 'font-mono font-bold')}
 
                     {/* ⑰ 個人番号（70歳以上被用者・12マス） */}
                     {emp.isOver70 && (
                       <div
-                        className="absolute flex items-center justify-between"
+                        className="absolute flex items-center"
                         style={{
                           top: `${rowTop + fEmpMyNo.y}%`,
                           left: `${fEmpMyNo.x}%`,
-                          width: `${fEmpMyNo.width || 21.0}%`
+                          width: `${fEmpMyNo.width || 21.0}%`,
+                          justifyContent: fEmpMyNo.align === 'right' ? 'flex-end' : fEmpMyNo.align === 'center' ? 'center' : 'flex-start'
                         }}
                       >
                         {myNumChars.map((ch, idx) => (
                           <span
                             key={`myn-${idx}`}
-                            className="font-mono font-bold text-center inline-block"
+                            className="font-mono font-bold text-center inline-block shrink-0"
                             style={{
-                              width: `${fEmpMyNo.pitch || 1.65}%`,
+                              width: `${(fEmpMyNo.pitch || 1.65)}cqi`,
                               fontSize: `${(fEmpMyNo.fontSize || 10) * 0.115}cqi`
                             }}
                           >
@@ -605,82 +591,22 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
 
                     {/* ── 2段目 ── */}
                     {/* ⑤ 従前の標準報酬（健康保険・千円） */}
-                    <div
-                      className="absolute font-mono font-bold text-right"
-                      style={{
-                        top: `${rowTop + fCurH.y}%`,
-                        left: `${fCurH.x}%`,
-                        width: `${fCurH.width || 10.5}%`,
-                        fontSize: `${(fCurH.fontSize || 10.5) * 0.115}cqi`
-                      }}
-                    >
-                      {healthInThousands.toLocaleString()}
-                    </div>
+                    {renderRowField(healthInThousands ? healthInThousands.toLocaleString() : '', fCurH, rowTop, 'font-mono font-bold')}
 
                     {/* ⑤ 従前の標準報酬（厚生年金・千円） */}
-                    <div
-                      className="absolute font-mono font-bold text-right"
-                      style={{
-                        top: `${rowTop + fCurP.y}%`,
-                        left: `${fCurP.x}%`,
-                        width: `${fCurP.width || 10.5}%`,
-                        fontSize: `${(fCurP.fontSize || 10.5) * 0.115}cqi`
-                      }}
-                    >
-                      {pensionInThousands.toLocaleString()}
-                    </div>
+                    {renderRowField(pensionInThousands ? pensionInThousands.toLocaleString() : '', fCurP, rowTop, 'font-mono font-bold')}
 
                     {/* ⑥ 従前改定月 */}
-                    <div
-                      className="absolute font-mono text-center text-xs"
-                      style={{
-                        top: `${rowTop + fPrevYM.y}%`,
-                        left: `${fPrevYM.x}%`,
-                        width: `${fPrevYM.width || 11.0}%`,
-                        fontSize: `${(fPrevYM.fontSize || 9.5) * 0.115}cqi`
-                      }}
-                    >
-                      {formatNenkinYM(emp.previousRevisionYM)}
-                    </div>
+                    {renderRowField(formatNenkinYM(emp.previousRevisionYM), fPrevYM, rowTop, 'font-mono text-xs')}
 
                     {/* ⑦ 昇(降)給（区分 ＆ 年月） */}
-                    <div
-                      className="absolute font-bold text-center text-xs"
-                      style={{
-                        top: `${rowTop + fChange.y}%`,
-                        left: `${fChange.x}%`,
-                        width: `${fChange.width || 12.0}%`,
-                        fontSize: `${(fChange.fontSize || 9.5) * 0.115}cqi`
-                      }}
-                    >
-                      {emp.wageChangeType} {formatNenkinYM(emp.wageChangeYM)}
-                    </div>
+                    {renderRowField(`${emp.wageChangeType || ''} ${formatNenkinYM(emp.wageChangeYM)}`.trim(), fChange, rowTop, 'font-bold text-xs')}
 
                     {/* ⑧ 遡及支払額 */}
-                    <div
-                      className="absolute font-mono text-right text-xs"
-                      style={{
-                        top: `${rowTop + fRetro.y}%`,
-                        left: `${fRetro.x}%`,
-                        width: `${fRetro.width || 15.5}%`,
-                        fontSize: `${(fRetro.fontSize || 9.5) * 0.115}cqi`
-                      }}
-                    >
-                      {(emp.retroactiveAmount || 0) > 0 ? emp.retroactiveAmount?.toLocaleString() : ''}
-                    </div>
+                    {renderRowField((emp.retroactiveAmount || 0) > 0 ? emp.retroactiveAmount?.toLocaleString() : '', fRetro, rowTop, 'font-mono text-xs')}
 
                     {/* ⑱ 備考 */}
-                    <div
-                      className="absolute text-xs truncate"
-                      style={{
-                        top: `${rowTop + fRem.y}%`,
-                        left: `${fRem.x}%`,
-                        width: `${fRem.width || 21.0}%`,
-                        fontSize: `${(fRem.fontSize || 8.5) * 0.115}cqi`
-                      }}
-                    >
-                      {emp.remarks || (emp.isShortTimeWorker ? '3.短時間労働者' : '4.昇給・降給の理由')}
-                    </div>
+                    {renderRowField(emp.remarks || (emp.isShortTimeWorker ? '3.短時間労働者' : '4.昇給・降給の理由'), fRem, rowTop, 'text-xs truncate')}
 
                     {/* ── 3段目：3ヶ月支給実績 ── */}
                     {/* 1ヶ月目 */}

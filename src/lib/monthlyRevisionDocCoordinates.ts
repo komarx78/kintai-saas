@@ -15,6 +15,7 @@ export interface MonthlyRevisionDocFieldConfig {
   fontSize: number; // pt 相当（6〜24）
   pitch?: number; // % または gap (マス目・数字間隔)
   width?: number; // % (表示枠の幅)
+  align?: 'left' | 'center' | 'right'; // 文字揃え（左詰め・中央揃え・右詰め）
   example: string;
   description: string;
   disabled?: boolean;
@@ -553,6 +554,7 @@ export function mergeWithDefaultMonthlyRevisionFields(
         fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
         pitch: custom.pitch !== undefined ? custom.pitch : def.pitch,
         width: custom.width !== undefined ? custom.width : def.width,
+        align: custom.align || def.align || 'left',
         example: def.example,
         disabled: custom.disabled
       };
