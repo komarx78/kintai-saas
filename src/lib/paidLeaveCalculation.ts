@@ -222,15 +222,31 @@ export function calculateUsedPaidLeaveDaysInPeriod(
     if (periodStart && endStr < periodStart) return;
     if (periodEnd && startStr > periodEnd) return;
 
-    if (typeStr.includes('半休')) {
+    if (typeof req.days === 'number' && req.days > 0) {
+      used += req.days;
+    } else if (typeof req.requested_days === 'number' && req.requested_days > 0) {
+      used += req.requested_days;
+    } else if (typeStr.includes('半休')) {
       used += 0.5;
+    } else if (typeStr.includes('時間') && typeof req.hours === 'number' && req.hours > 0) {
+      // 時間単位年休（労基法第39条第4項）: 1日8時間換算
+      used += Math.round((req.hours / 8) * 100) / 100;
     } else {
       const s = new Date(startStr);
       const e = new Date(endStr);
       if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
-        const diffTime = e.getTime() - s.getTime();
-        const days = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1);
-        used += days;
+        // 🎌 労基法第39条・昭27.7.25基収2647号準拠：所定労働日のみに有休が成立するため、期間内の土日を除外して実日数を正確にカウント
+        let businessDays = 0;
+        const cur = new Date(s);
+        while (cur <= e) {
+          const dayOfWeek = cur.getDay();
+          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            businessDays += 1;
+          }
+          cur.setDate(cur.getDate() + 1);
+        }
+        // 週末のみ指定された等の特異ケースでも最低1日（申請が存在するため）
+        used += Math.max(1, businessDays);
       } else {
         used += 1.0;
       }
