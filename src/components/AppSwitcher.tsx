@@ -5,12 +5,27 @@ import { useNavigate } from 'react-router-dom';
 type AppSwitcherProps = {
   currentApp: 'kintai' | 'shift' | 'payroll' | 'onboarding' | 'portal' | 'support';
   role: 'admin' | 'user';
+  tenantId?: string | null;
 };
 
-export default function AppSwitcher({ currentApp, role }: AppSwitcherProps) {
+export default function AppSwitcher({ currentApp, role, tenantId }: AppSwitcherProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  // 🏛️ 憲法9条遵守：テナントIDの自動解決（Props優先 ➔ URLクエリパラメータフォールバック）
+  const resolvedTenantId = tenantId || (typeof window !== 'undefined' 
+    ? new URLSearchParams(window.location.search).get('tenant_id') || undefined
+    : undefined);
+
+  const navigateWithTenant = (path: string) => {
+    if (resolvedTenantId && !path.includes('tenant_id=')) {
+      const separator = path.includes('?') ? '&' : '?';
+      navigate(`${path}${separator}tenant_id=${resolvedTenantId}`);
+    } else {
+      navigate(path);
+    }
+  };
 
   // クリックでドロップダウンを閉じる
   useEffect(() => {
@@ -115,7 +130,7 @@ export default function AppSwitcher({ currentApp, role }: AppSwitcherProps) {
                   key={app.id}
                   onClick={() => {
                     setIsOpen(false);
-                    navigate(app.path);
+                    navigateWithTenant(app.path);
                   }}
                   className={`w-full flex items-start text-left p-3 rounded-lg transition-colors ${
                     isActive ? 'bg-blue-50 cursor-default' : 'hover:bg-gray-50 cursor-pointer'
