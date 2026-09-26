@@ -1178,6 +1178,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
               selectedEmployeeId={selectedEmployeeId === 'all' ? (employees[0]?.id || '') : selectedEmployeeId}
               onSelectEmployee={(id) => setSelectedEmployeeId(id)}
               onBack={() => setSelectedDocType(null)}
+              tenantId={tenantId}
             />
           </div>
         </div>

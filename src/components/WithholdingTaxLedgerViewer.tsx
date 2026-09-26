@@ -49,7 +49,7 @@ interface CompanyInfo {
 }
 
 interface WithholdingTaxLedgerViewerProps {
-  tenantId: string;
+  tenantId?: string;
   employees: EmployeeItem[];
   companyInfo: CompanyInfo;
   initialYear?: number;
@@ -120,10 +120,41 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
   );
 
   // 🛡️ 実DB（payslipsテーブル）からの確定給与データ一括取得（SSOT原則・憲法14条）
+  const [resolvedTenantId, setResolvedTenantId] = useState<string>(tenantId || '');
   const [dbPayslips, setDbPayslips] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!tenantId) return;
+    if (tenantId) {
+      setResolvedTenantId(tenantId);
+      return;
+    }
+    const resolveTenant = async () => {
+      try {
+        const { data: rpcTenant } = await supabase.rpc('get_user_tenant_id');
+        if (rpcTenant) {
+          setResolvedTenantId(rpcTenant);
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile?.tenant_id) {
+            setResolvedTenantId(profile.tenant_id);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve tenant in WithholdingTaxLedgerViewer:', e);
+      }
+    };
+    resolveTenant();
+  }, [tenantId]);
+
+  useEffect(() => {
+    if (!resolvedTenantId) return;
     const fetchPayslips = async () => {
       try {
         const startYM = `${selectedYear}-01`;
@@ -131,7 +162,7 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
         const { data, error } = await supabase
           .from('payslips')
           .select('*')
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', resolvedTenantId)
           .gte('year_month', startYM)
           .lte('year_month', endYM);
         if (!error && data) {
@@ -142,7 +173,7 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
       }
     };
     fetchPayslips();
-  }, [tenantId, selectedYear]);
+  }, [resolvedTenantId, selectedYear]);
 
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
   const [contractFilter, setContractFilter] = useState<string>('ALL');
@@ -152,8 +183,8 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
   // 会社印鑑画像の取得（tenantId連動・他社混入完全防止）
   const companySealImg = useMemo(() => {
     if (typeof window === 'undefined') return '';
-    return (tenantId ? localStorage.getItem(`company_seal_image_${tenantId}`) : null) || '';
-  }, [tenantId]);
+    return (resolvedTenantId ? localStorage.getItem(`company_seal_image_${resolvedTenantId}`) : null) || '';
+  }, [resolvedTenantId]);
 
   // 部署一覧
   const departments = useMemo(() => {
@@ -227,8 +258,8 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
 
       if (!actualPayslip) {
         try {
-          if (tenantId) {
-            const raw = localStorage.getItem(`saved_payslips_${tenantId}_${targetYM}`);
+          if (resolvedTenantId) {
+            const raw = localStorage.getItem(`saved_payslips_${resolvedTenantId}_${targetYM}`);
             if (raw) {
               const list = JSON.parse(raw);
               if (Array.isArray(list)) {
@@ -284,7 +315,7 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
         hasActual: true
       };
     });
-  }, [currentEmployee, selectedYear, tenantId, dbPayslips]);
+  }, [currentEmployee, selectedYear, resolvedTenantId, dbPayslips]);
 
   // 給与合計 ①〜③
   const salaryTotal = useMemo(() => {
@@ -304,7 +335,7 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
 
   // 🛡️ 実確定賞与データ（SSOT原則・憲法14条）
   const bonusRows = useMemo(() => {
-    if (!currentEmployee || !tenantId) {
+    if (!currentEmployee || !resolvedTenantId) {
       return [
         { id: 1, date: '', gross: 0, social: 0, afterSocial: 0, deps: '', rate: '', tax: 0, hasActual: false },
         { id: 2, date: '', gross: 0, social: 0, afterSocial: 0, deps: '', rate: '', tax: 0, hasActual: false },
@@ -314,7 +345,7 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
 
     let userBonuses: any[] = [];
     try {
-      const mfRaw = localStorage.getItem(`mf_bonus_campaigns_${tenantId}`);
+      const mfRaw = localStorage.getItem(`mf_bonus_campaigns_${resolvedTenantId}`);
       if (mfRaw) {
         const camps = JSON.parse(mfRaw);
         if (Array.isArray(camps)) {
@@ -383,7 +414,7 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
         hasActual: true
       };
     });
-  }, [currentEmployee, tenantId, selectedYear]);
+  }, [currentEmployee, resolvedTenantId, selectedYear]);
 
   // 賞与合計 ④〜⑥（実データからの自動集計）
   const bonusTotal = useMemo(() => {

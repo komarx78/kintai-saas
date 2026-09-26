@@ -40,6 +40,7 @@ interface OfficialHealthPensionLossDocProps {
   onSelectEmployee?: (id: string) => void;
   onBack?: () => void;
   hideHeader?: boolean;
+  tenantId?: string;
 }
 
 // 西暦から和暦への安全変換関数（日本年金機構公式元号コード: 1明治, 3大正, 5昭和, 7平成, 9令和）
@@ -94,7 +95,8 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
   selectedEmployeeId,
   onSelectEmployee,
   onBack,
-  hideHeader = false
+  hideHeader = false,
+  tenantId
 }) => {
   const [coords, setCoords] = useState<HealthPensionLossFieldConfig[]>(() => loadHealthPensionLossCoordinates());
   const [printMode, setPrintMode] = useState<'full' | 'text_only'>('full');
@@ -123,7 +125,7 @@ export const OfficialHealthPensionLossDoc: React.FC<OfficialHealthPensionLossDoc
     };
     window.addEventListener(HEALTH_PENSION_LOSS_UPDATE_EVENT, handleCoordsUpdate);
     return () => window.removeEventListener(HEALTH_PENSION_LOSS_UPDATE_EVENT, handleCoordsUpdate);
-  }, []);
+  }, [tenantId]);
 
   // 大元マスタ（SSOT）から初期値を一括自動計算
   const calculateMasterValues = useCallback((emp: HealthPensionLossEmployee) => {

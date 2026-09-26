@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 import { ArrowLeft } from 'lucide-react';
 import { OfficialHealthPensionAcquisitionDoc } from './OfficialHealthPensionAcquisitionDoc';
 import { OfficialHealthPensionLossDoc } from './OfficialHealthPensionLossDoc';
@@ -45,6 +46,7 @@ export interface OfficialSocialInsuranceDocProps {
   selectedEmployeeId: string;
   onSelectEmployee: (id: string) => void;
   onBack: () => void;
+  tenantId?: string;
 }
 
 export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProps> = ({
@@ -55,9 +57,41 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
   employees,
   selectedEmployeeId,
   onSelectEmployee,
-  onBack
+  onBack,
+  tenantId
 }) => {
   const [docType, setDocType] = useState<'acquisition' | 'loss'>(initialType);
+  const [resolvedTenantId, setResolvedTenantId] = useState<string>(tenantId || '');
+
+  useEffect(() => {
+    if (tenantId) {
+      setResolvedTenantId(tenantId);
+      return;
+    }
+    const resolveTenant = async () => {
+      try {
+        const { data: rpcTenant } = await supabase.rpc('get_user_tenant_id');
+        if (rpcTenant) {
+          setResolvedTenantId(rpcTenant);
+          return;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile?.tenant_id) {
+            setResolvedTenantId(profile.tenant_id);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve tenant in OfficialSocialInsuranceDoc:', e);
+      }
+    };
+    resolveTenant();
+  }, [tenantId]);
   const currentEmployee = employees.find(e => e.id === selectedEmployeeId) || employees[0];
 
   if (!currentEmployee) {
@@ -133,6 +167,7 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
           onSelectEmployee={onSelectEmployee}
           onBack={onBack}
           hideHeader={false}
+          tenantId={resolvedTenantId}
         />
       ) : (
         <OfficialHealthPensionLossDoc
@@ -144,6 +179,7 @@ export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProp
           onSelectEmployee={onSelectEmployee}
           onBack={onBack}
           hideHeader={false}
+          tenantId={resolvedTenantId}
         />
       )}
     </div>

@@ -55,6 +55,7 @@ export interface OfficialHealthPensionAcquisitionDocProps {
   onBack?: () => void;
   customCoords?: HealthPensionAcqFieldConfig[];
   hideHeader?: boolean;
+  tenantId?: string;
 }
 
 // 和暦変換ヘルパー（日本年金機構元号コード: 1明治, 3大正, 5昭和, 7平成, 9令和）
@@ -97,7 +98,8 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
   onSelectEmployee,
   onBack,
   customCoords,
-  hideHeader = false
+  hideHeader = false,
+  tenantId
 }) => {
   // 対象従業員
   const currentEmpId = selectedEmployeeId || employees[0]?.id || '';
@@ -116,7 +118,7 @@ export const OfficialHealthPensionAcquisitionDoc: React.FC<OfficialHealthPension
       }
     });
     return () => { isCancelled = true; };
-  }, [customCoords]);
+  }, [customCoords, tenantId]);
 
   // 印刷モード: 'full' (原本PDF枠ごと印刷) | 'text_only' (OCR用紙への文字だけ印字)
   const [printMode, setPrintMode] = useState<'full' | 'text_only'>('full');
