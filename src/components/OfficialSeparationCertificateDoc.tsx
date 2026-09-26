@@ -303,11 +303,16 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
       } else if (actualPayslip) {
         // 🛡️ 実DB確定レコードからの厳格マッピング（給与形態別の基礎日数算定）
         const workDays = Number(actualPayslip.work_days || 0);
+        const actualHours = Number(actualPayslip.actual_hours || 0);
 
         if (salaryType === 'hourly' || salaryType === 'daily') {
           // 時給・日給制: 実出勤日数を基礎日数とする（出勤がなければ0）
           periodBaseDays = workDays > 0 ? workDays : 0;
           payBaseDays = workDays > 0 ? workDays : 0;
+          // 🛡️ 雇用保険法改正（令和2年8月1日施行）: 賃金支払基礎日数11日未満でも労働時間80時間以上であれば被保険者期間算入
+          if (workDays < 11 && actualHours >= 80) {
+            note = note ? `${note} (実働${actualHours}h・80h基準充足)` : `実働${actualHours}h(80h基準充足)`;
+          }
         } else {
           // 月給制（完全月給または日給月給）
           // 欠勤日数があれば控除、なければ暦日数
@@ -339,17 +344,13 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
           wageA = totalEarn;
         }
       } else {
-        // 確定給与データ未登録の月（推計8%を捏造せず、基本給のみを計上し備考に未確定を明示）
-        if (salaryType === 'hourly' || salaryType === 'daily') {
-          periodBaseDays = 20;
-          payBaseDays = 20;
-        } else {
-          periodBaseDays = periodDays;
-          payBaseDays = payPeriodDays;
-        }
-        wageA = monthlyBaseWage;
+        // 🛡️ 憲法14条・雇用保険法厳格準拠:
+        // 確定給与データが存在しない月は、推測・シミュレーションで数字を捏造せず、厳格に0（実績なし）とする
+        periodBaseDays = 0;
+        payBaseDays = 0;
+        wageA = 0;
         wageB = 0;
-        if (!note) note = '未確定（基本給のみ）';
+        if (!note) note = '未確定・実績なし';
       }
 
       const wageTotal = wageA + wageB;
@@ -373,7 +374,9 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
         wageB,
         wageTotal,
         // ⑬ 備考
-        note
+        note,
+        actualHours: actualPayslip ? Number(actualPayslip.actual_hours || 0) : 0,
+        hasRecord: Boolean(actualPayslip)
       });
     }
 
@@ -387,10 +390,15 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
   const totalWageAll = useMemo(() => wageRows.reduce((sum, r) => sum + r.wageTotal, 0), [wageRows]);
   const totalDays = useMemo(() => wageRows.reduce((sum, r) => sum + r.payBaseDays, 0), [wageRows]);
 
-  // 直近6ヶ月間 小計（雇用保険法第17条: 賃金支払基礎日数11日以上または80時間以上ある月を直近から6ヶ月採用）
+  // 直近6ヶ月間 小計（雇用保険法第17条: 賃金支払基礎日数11日以上または実労働時間80時間以上ある確定月を直近から最大6ヶ月採用）
   const eligible6Rows = useMemo(() => {
-    const valid = wageRows.filter(r => r.payBaseDays >= 11);
-    return valid.length >= 6 ? valid.slice(0, 6) : wageRows.slice(0, 6);
+    const valid = wageRows.filter(r => r.hasRecord && (r.payBaseDays >= 11 || r.actualHours >= 80));
+    if (valid.length >= 6) {
+      return valid.slice(0, 6);
+    }
+    // 11日以上/80h以上が6ヶ月未満の場合、実績確定レコードがある月を直近から優先採用（未確定・実績なし月は除外）
+    const recorded = wageRows.filter(r => r.hasRecord && r.wageTotal > 0);
+    return recorded.slice(0, 6);
   }, [wageRows]);
 
   const recent6Rows = eligible6Rows;
@@ -400,18 +408,19 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
   const recent6Days = useMemo(() => recent6Rows.reduce((sum, r) => sum + r.payBaseDays, 0), [recent6Rows]);
   
   // 賃金日額: 雇用保険法第17条に基づき算定
-  // 原則: 直近6ヶ月間の賃金総額 ÷ 180日
+  // 原則: 直近6ヶ月間の賃金総額 ÷ 180日（対象月数が6ヶ月未満の場合は 月数 × 30日）
   // 日給・時給制の最低保障額（法第17条第2項）: 直近6ヶ月間の賃金総額 ÷ 実労働日数 × 70%
   const dailyWageRate = useMemo(() => {
-    if (recent6WageTotal === 0) return 0;
-    const standardDaily = Math.round(recent6WageTotal / 180);
+    if (recent6WageTotal === 0 || recent6Rows.length === 0) return 0;
+    const effectiveDays = recent6Rows.length === 6 ? 180 : Math.max(1, recent6Rows.length * 30);
+    const standardDaily = Math.round(recent6WageTotal / effectiveDays);
     const salaryType = currentEmployee?.salary_type || 'monthly';
     if (salaryType === 'hourly' || salaryType === 'daily') {
       const minGuarantee = recent6Days > 0 ? Math.round((recent6WageTotal / recent6Days) * 0.7) : 0;
       return Math.max(standardDaily, minGuarantee);
     }
     return standardDaily;
-  }, [recent6WageTotal, recent6Days, currentEmployee?.salary_type]);
+  }, [recent6WageTotal, recent6Days, recent6Rows, currentEmployee?.salary_type]);
 
   // 全14項目のうちチェック済みの件数
   const totalKeyFields = 14;
