@@ -1665,101 +1665,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     }
   };
 
-  // 🪄 テスト用勤怠打刻・有給データの一括投入 ＆ 給与即時自動計算
-  const handleSeedDummyAttendanceAndCalculate = async () => {
-    if (!tenantId || employees.length === 0) return;
-    if (!confirm(`【${currentMonth.getFullYear()}年${currentMonth.getMonth() + 1}月度】のテスト用勤怠打刻データ（平日9:00〜18:00、残業・深夜・有給含む）を一括生成し、即座に給与を自動計算します。よろしいですか？`)) return;
 
-    setIsSaving(true);
-    try {
-      const year = currentMonth.getFullYear();
-      const month = currentMonth.getMonth() + 1;
-      const daysInMonth = new Date(year, month, 0).getDate();
-
-      const attendanceRecordsToInsert: any[] = [];
-      const dummyRequestsToInsert: any[] = [];
-
-      for (const emp of employees) {
-        let workedDaysCount = 0;
-
-        for (let d = 1; d <= daysInMonth; d++) {
-          const dateObj = new Date(year, month - 1, d);
-          const dayOfWeek = dateObj.getDay();
-          const dateStr = `${year}-${month.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
-
-          // 土日は除外（平日のみ）
-          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-            workedDaysCount++;
-
-            // 15日は有給休暇テスト
-            if (d === 15) {
-              dummyRequestsToInsert.push({
-                tenant_id: tenantId,
-                user_id: emp.id,
-                type: '有給休暇（全休）',
-                start_date: dateStr,
-                end_date: dateStr,
-                status: '承認',
-                reason: 'テスト有給申請'
-              });
-              continue;
-            }
-
-            // 通常の打刻データ（時々残業・深夜あり）
-            const hasOvertime = workedDaysCount % 4 === 0;
-            const hasMidnight = workedDaysCount % 7 === 0;
-
-            const checkIn = '09:00';
-            let checkOut = '18:00';
-            if (hasOvertime) checkOut = '20:00'; // 2h残業
-            if (hasMidnight) checkOut = '23:00'; // 4h残業 + 1h深夜
-
-            attendanceRecordsToInsert.push({
-              tenant_id: tenantId,
-              user_id: emp.id,
-              date: dateStr,
-              check_in_time: checkIn,
-              check_out_time: checkOut,
-              status: '退勤済',
-              note: 'テスト自動生成打刻'
-            });
-          }
-        }
-      }
-
-      // 既存データを一度クリアして再投入
-      const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
-
-      await supabase
-        .from('attendance_records')
-        .delete()
-        .eq('tenant_id', tenantId)
-        .gte('date', startDate)
-        .lte('date', endDate);
-
-      if (attendanceRecordsToInsert.length > 0) {
-        await supabase
-          .from('attendance_records')
-          .insert(attendanceRecordsToInsert);
-      }
-
-      if (dummyRequestsToInsert.length > 0) {
-        await supabase
-          .from('leave_requests')
-          .insert(dummyRequestsToInsert);
-      }
-
-      // 直ちに給与自動計算を実行！
-      await handleAutoGenerateFromAttendance();
-      alert('🪄 テスト用勤怠打刻データ（出勤・残業・深夜・有給）を投入し、全員分の給与計算（社保・所得税・手取り）が完了しました！');
-    } catch (err: any) {
-      console.error('Seed attendance error:', err);
-      alert('テスト勤怠データ投入エラー: ' + err.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   // 一括確定（Web公開）
   const handlePublishAll = async () => {
@@ -2459,10 +2365,10 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               <div className="font-bold text-slate-800 group-hover:text-blue-900 flex items-center gap-1">
                 <span>⏰ 勤怠の確認・締め</span>
               </div>
-              <p className="text-[10px] text-slate-500 group-hover:text-slate-700 mt-1">打刻漏れや残業・有給申請の承認を完了</p>
+              <p className="text-[10px] text-slate-500 group-hover:text-slate-700 mt-1">打刻漏れ確認・全社締め</p>
             </div>
             <div className="mt-2 text-[10px] text-blue-600 font-bold flex items-center gap-0.5">
-              <span>勤怠出勤簿へ直行 ➔</span>
+              <span>全社出勤簿を開く ↗</span>
             </div>
           </button>
 
@@ -2517,9 +2423,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 <span className="text-[9px] bg-slate-200 group-hover:bg-slate-300 text-slate-700 font-bold px-1.5 py-0.2 rounded-full">確認 ↓</span>
               </div>
               <div className={`font-bold flex items-center gap-1 ${isMonthCalculated && publishedCount === 0 ? 'text-indigo-950 font-black' : 'text-slate-800'}`}>
-                <span>✏️ 明細確認・微調整</span>
+                <span>✏️ 明細確認・出勤簿修正</span>
               </div>
-              <p className="text-[10px] text-slate-500 mt-1">手当・歩合・特別控除の個別手動調整</p>
+              <p className="text-[10px] text-slate-500 mt-1">下の表で出勤簿の打刻修正や手当の個別調整</p>
             </div>
             <div className="mt-2 text-[10px] text-slate-600 font-bold flex items-center gap-0.5">
               <span>明細一覧表を見る ↓</span>
@@ -2853,24 +2759,13 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 <span className="text-base font-bold">⚡ 勤怠から一括自動計算を実行</span>
               </button>
             ) : (publishedCount < employees.length || payslips.some(p => p.status !== 'published')) ? (
-              // 🌟 STEP 2/3 アクション群（一括確定 ＋ 救済ボタン：最新勤怠から再計算 ＆ 勤怠へ戻る）
+              // 🌟 STEP 2/3 アクション群（一括確定 ＆ 最新勤怠から一括再計算）
               <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={() => {
-                    const ym = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
-                    navigate(tenantId ? `/kintai/admin?tab=attendance&month=${ym}&tenant_id=${tenantId}` : `/kintai/admin?tab=attendance&month=${ym}`);
-                  }}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm px-4 py-3 rounded-2xl transition border border-slate-300 flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  title="タイムカードの打刻漏れや残業申請を修正するため、当月の勤怠出勤簿画面へ直行します"
-                >
-                  <Clock className="w-4 h-4 text-blue-600" />
-                  <span>⏰ 勤怠修正へ戻る</span>
-                </button>
                 <button
                   onClick={handleAutoGenerateFromAttendance}
                   disabled={isSaving || employees.length === 0}
                   className="bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs sm:text-sm px-4 py-3 rounded-2xl transition border border-sky-300 flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
-                  title="勤怠管理で打刻を修正した後、このボタンを押せば最新の勤務時間で給与を一括再計算します"
+                  title="下の出勤簿で打刻を修正した後、このボタンを押せば全員の給与を最新データで一括再計算します"
                 >
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4 text-sky-600" />}
                   <span>🔄 最新勤怠から再計算</span>
@@ -2970,16 +2865,6 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               </button>
             )}
 
-            {/* 動作確認用デモ勤怠（検証用） */}
-            <button
-              onClick={handleSeedDummyAttendanceAndCalculate}
-              disabled={isSaving || employees.length === 0}
-              className="bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 font-medium text-xs px-2.5 py-2 rounded-xl transition border border-dashed border-slate-200 flex items-center gap-1 cursor-pointer disabled:opacity-50"
-              title="ワンクリックで当月の平日打刻・有給データを生成し、給与を即座に自動試算します（動作確認用）"
-            >
-              <Sparkles className="w-3 h-3 text-slate-400" />
-              <span>🧪 デモ勤怠投入</span>
-            </button>
           </div>
 
           {/* 右端：LINEプラン状況 ＆ 会社給与設定 */}
@@ -3029,28 +2914,28 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
                 <div className="font-bold text-slate-800 flex items-center gap-1.5 mb-1">
                   <span className="text-blue-600 font-black">①</span>
-                  <span>打刻漏れ・残業申請を直したい</span>
+                  <span>打刻漏れや時間をその場で直したい</span>
                 </div>
                 <p className="text-slate-600 text-[11px] leading-relaxed">
-                  上の<strong>「⏰ 勤怠修正へ戻る」</strong>から勤怠画面で打刻を修正し、戻ってきて<strong>「🔄 最新勤怠から再計算」</strong>を押すだけで最新時間で全自動更新されます。
+                  下の各社員にある<strong>「📅 出勤簿（打刻修正）」</strong>を押せば、画面を移動せずその場で打刻を直接修正できます（保存すると給与も即座に自動再計算されます）。
                 </p>
               </div>
               <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
                 <div className="font-bold text-slate-800 flex items-center gap-1.5 mb-1">
                   <span className="text-blue-600 font-black">②</span>
-                  <span>確定した給与の金額を直したい</span>
+                  <span>手当や控除、金額を手動修正したい</span>
                 </div>
                 <p className="text-slate-600 text-[11px] leading-relaxed">
-                  すでに確定済みの場合は、<strong>「⬅ 確定を取り消す（下書きに戻す）」</strong>を押せば、いつでも下書き状態に戻して手当や控除を自由に再編集できます。
+                  各社員の<strong>「✏️ 個別編集」</strong>を押せば、特別手当や控除額、勤務時間を直接上書き修正できます。確定済みの場合は<strong>「⬅ 下書きに戻す」</strong>でいつでも再編集できます。
                 </p>
               </div>
               <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-2xs">
                 <div className="font-bold text-slate-800 flex items-center gap-1.5 mb-1">
                   <span className="text-blue-600 font-black">③</span>
-                  <span>上の「STEP 1〜5」を押して移動</span>
+                  <span>修正後に全員一括で反映したい</span>
                 </div>
                 <p className="text-slate-600 text-[11px] leading-relaxed">
-                  画面上部の<strong>「STEP 1〜5の各カード」をクリック</strong>すると、勤怠画面へのジャンプや再計算、確定取消がワンクリックでいつでも実行できます。
+                  出勤簿やマスタを修正した後、上の<strong>「🔄 最新勤怠から再計算」</strong>を押せば、全員の最新打刻・保険料率で一括再計算されます。
                 </p>
               </div>
             </div>
@@ -3106,18 +2991,11 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             <p className="text-xs text-slate-400 mt-1 mb-4">「⚡ 勤怠から一括自動計算」ボタンを押すと、全員の給与を一瞬で自動試算します。</p>
             <div className="flex flex-wrap items-center justify-center gap-3">
               <button
-                onClick={handleSeedDummyAttendanceAndCalculate}
-                className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm"
-              >
-                <Sparkles className="w-4 h-4" />
-                🪄 テスト用勤怠を投入して即時計算
-              </button>
-              <button
                 onClick={handleAutoGenerateFromAttendance}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition cursor-pointer flex items-center gap-2 shadow-sm"
               >
                 <Sparkles className="w-4 h-4 text-amber-300" />
-                ⚡ 実績勤怠から自動計算する
+                ⚡ タイムカード勤怠から一括自動計算する
               </button>
             </div>
           </div>
@@ -3289,10 +3167,10 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                       <button
                         onClick={() => handleOpenAttendanceSheet(slip)}
                         className="text-xs font-bold text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-600 border border-blue-200 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                        title="当月の日別打刻実績・出勤簿・申請状況をカレンダーで確認"
+                        title="当月の日別出勤簿を開き、打刻漏れの修正や時間をその場で直せます（給与も自動再計算）"
                       >
                         <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                        出勤簿・勤怠確認
+                        出勤簿（打刻修正）
                       </button>
 
                       <button
@@ -3717,7 +3595,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                             <button
                               onClick={() => handleOpenAttendanceSheet(slip)}
                               className="p-1.5 text-blue-600 hover:text-white hover:bg-blue-600 rounded-lg transition cursor-pointer"
-                              title="当月の出勤簿・日別勤怠実績を確認"
+                              title="当月の出勤簿を開き、日別打刻漏れの修正や時間をその場で直せます（給与自動再計算）"
                             >
                               <Calendar className="w-4 h-4" />
                             </button>
