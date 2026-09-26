@@ -7,8 +7,17 @@ import { EmploymentLossDocMasterInspector } from './EmploymentLossDocMasterInspe
 import { SpouseDocMasterInspector } from './SpouseDocMasterInspector';
 import { HealthPensionAcquisitionDocMasterInspector } from './HealthPensionAcquisitionDocMasterInspector';
 import { HealthPensionLossDocMasterInspector } from './HealthPensionLossDocMasterInspector';
+import { MonthlyRevisionDocMasterInspector } from './MonthlyRevisionDocMasterInspector';
 
-export type PublicDocType = 'employment_acquisition' | 'employment_loss' | 'bonus_report' | 'health_pension_acquisition' | 'health_pension_loss' | 'tax_withholding' | 'spouse_deduction';
+export type PublicDocType = 
+  | 'employment_acquisition' 
+  | 'employment_loss' 
+  | 'bonus_report' 
+  | 'health_pension_acquisition' 
+  | 'health_pension_loss' 
+  | 'monthly_revision'
+  | 'tax_withholding' 
+  | 'spouse_deduction';
 
 export interface OfficialDocMasterInspectorProps {
   tenantId?: string;
@@ -105,6 +114,22 @@ export const OfficialDocMasterInspector: React.FC<OfficialDocMasterInspectorProp
 
           <button
             type="button"
+            onClick={() => setActiveDoc('monthly_revision')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer ${
+              activeDoc === 'monthly_revision'
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg ring-2 ring-purple-400/40'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <span className="text-base">🌸</span>
+            <span>日本年金機構 被保険者報酬月額変更届（コード2221様式）</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-200 border border-purple-500/30 font-bold">
+              NEW
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveDoc('tax_withholding')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition cursor-pointer ${
               activeDoc === 'tax_withholding'
@@ -136,10 +161,11 @@ export const OfficialDocMasterInspector: React.FC<OfficialDocMasterInspectorProp
         <HealthPensionLossDocMasterInspector tenantId={tenantId} />
       ) : activeDoc === 'bonus_report' ? (
         <BonusDocMasterInspector tenantId={tenantId} />
+      ) : activeDoc === 'monthly_revision' ? (
+        <MonthlyRevisionDocMasterInspector tenantId={tenantId} />
       ) : (
         <TaxDocMasterInspector tenantId={tenantId} />
       )}
     </div>
   );
 };
-
