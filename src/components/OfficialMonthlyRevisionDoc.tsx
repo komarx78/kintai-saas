@@ -408,7 +408,7 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                     fontSize: `${(fZip.fontSize || 9.5) * 0.115}cqi`
                   }}
                 >
-                  〒{data.companyZip}
+                  {data.companyZip.replace(/[^0-9]/g, '')}
                 </div>
               )}
               <div

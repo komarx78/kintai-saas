@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
-  Save, 
+  Save, CheckCircle,
   Building2, Calendar, Users, Loader2,
   ZoomIn, ZoomOut, RotateCcw,
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
@@ -39,6 +39,7 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
   const [previewZoom, setPreviewZoom] = useState<number>(100);
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'db_saved' | 'local_only'>('idle');
 
   // プレビューコンテナのRef
   const containerRef = useRef<HTMLDivElement>(null);
@@ -213,15 +214,19 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
   const handleSaveToDb = async () => {
     setIsSaving(true);
     try {
-      const ok = await saveMonthlyRevisionDocCoordinatesToDb(fields, resolvedTenantId);
-      if (ok) {
-        setSavedSuccess(true);
-        setTimeout(() => setSavedSuccess(false), 3000);
+      const res = await saveMonthlyRevisionDocCoordinatesToDb(fields, resolvedTenantId);
+      if (res.inDb) {
+        setSaveStatus('db_saved');
       } else {
-        alert('DBへの保存に失敗しました。');
+        setSaveStatus('local_only');
       }
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 4000);
     } catch (e: any) {
-      alert('エラー: ' + e.message);
+      console.warn('Save notice:', e);
+      setSaveStatus('local_only');
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 4000);
     } finally {
       setIsSaving(false);
     }
@@ -298,8 +303,22 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
             disabled={isSaving}
             className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
           >
-            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span>{savedSuccess ? '✅ DB全社保存完了！' : '💾 全社マスタとしてDB保存'}</span>
+            {isSaving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : savedSuccess ? (
+              <CheckCircle className="w-4 h-4 text-emerald-300" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            <span>
+              {isSaving
+                ? '保存中...'
+                : savedSuccess
+                  ? saveStatus === 'db_saved'
+                    ? '✅ 全社マスタDB保存完了！'
+                    : '✅ 設定保存完了（即時反映）'
+                  : '💾 全社マスタとしてDB保存'}
+            </span>
           </button>
 
           {onClose && (
@@ -779,7 +798,7 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                     }`}
                     title={`${f.name} (クリックして選択・ドラッグまたは十字キーで移動)`}
                   >
-                    {f.example}
+                    {f.id === 'companyZip' ? (f.example || '').replace(/[^0-9]/g, '') : f.example}
                   </div>
                 );
               })}

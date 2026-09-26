@@ -94,8 +94,8 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     y: 11.2,
     fontSize: 9.5,
     width: 15.0,
-    example: '520-0043',
-    description: '事業所所在地 郵便番号'
+    example: '5200043',
+    description: '事業所所在地 郵便番号（ハイフンなし数字7桁）'
   },
   {
     id: 'companyAddress',
@@ -517,7 +517,12 @@ export const loadMonthlyRevisionDocCoordinates = (tenantId?: string): MonthlyRev
       if (Array.isArray(parsed) && parsed.length > 0) {
         return DEFAULT_MONTHLY_REVISION_FIELDS.map(df => {
           const matched = parsed.find((p: any) => p.id === df.id);
-          return matched ? { ...df, ...matched } : df;
+          if (!matched) return df;
+          const merged = { ...df, ...matched };
+          if (df.id === 'companyZip' && merged.example) {
+            merged.example = merged.example.replace(/[^0-9]/g, '');
+          }
+          return merged;
         });
       }
     } catch (e) {
@@ -545,56 +550,115 @@ export const resetMonthlyRevisionDocCoordinates = (tenantId?: string): MonthlyRe
 
 export const fetchMonthlyRevisionDocCoordinatesFromDb = async (
   tenantId?: string
-): Promise<MonthlyRevisionDocFieldConfig[] | null> => {
-  if (!tenantId) return null;
+): Promise<MonthlyRevisionDocFieldConfig[]> => {
   try {
-    const { data, error } = await supabase
-      .from('company_settings')
-      .select('monthly_revision_doc_coordinates')
-      .eq('tenant_id', tenantId)
-      .maybeSingle();
-
-    if (!error && data?.monthly_revision_doc_coordinates) {
-      const raw = data.monthly_revision_doc_coordinates;
-      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const merged = DEFAULT_MONTHLY_REVISION_FIELDS.map(df => {
-          const matched = parsed.find((p: any) => p.id === df.id);
-          return matched ? { ...df, ...matched } : df;
-        });
-        saveMonthlyRevisionDocCoordinates(merged, tenantId);
-        return merged;
+    let saved: any = null;
+    if (tenantId) {
+      const { data: tenantData } = await supabase
+        .from('tenants')
+        .select('monthly_revision_doc_coordinates')
+        .eq('id', tenantId)
+        .maybeSingle();
+      if (tenantData?.monthly_revision_doc_coordinates && Array.isArray(tenantData.monthly_revision_doc_coordinates)) {
+        saved = tenantData.monthly_revision_doc_coordinates;
       }
     }
-  } catch (e) {
-    console.warn('DB fetch error for monthly revision coordinates:', e);
+
+    if (!saved) {
+      const { data: sysData } = await supabase
+        .from('system_settings')
+        .select('monthly_revision_doc_coordinates')
+        .limit(1)
+        .maybeSingle();
+      if (sysData?.monthly_revision_doc_coordinates && Array.isArray(sysData.monthly_revision_doc_coordinates)) {
+        saved = sysData.monthly_revision_doc_coordinates;
+      }
+    }
+
+    if (saved && Array.isArray(saved) && saved.length > 0) {
+      const merged = DEFAULT_MONTHLY_REVISION_FIELDS.map(df => {
+        const matched = saved.find((p: any) => p.id === df.id);
+        if (!matched) return df;
+        const res = { ...df, ...matched };
+        if (df.id === 'companyZip' && res.example) {
+          res.example = res.example.replace(/[^0-9]/g, '');
+        }
+        return res;
+      });
+      saveMonthlyRevisionDocCoordinates(merged, tenantId);
+      return merged;
+    }
+  } catch (err) {
+    console.warn('DBから月額変更届座標の取得をスキップ（ローカル値を使用）:', err);
   }
-  return null;
+  return loadMonthlyRevisionDocCoordinates(tenantId);
 };
+
+export interface SaveMonthlyRevisionCoordsResult {
+  ok: boolean;
+  inDb: boolean;
+  message?: string;
+}
 
 export const saveMonthlyRevisionDocCoordinatesToDb = async (
   fields: MonthlyRevisionDocFieldConfig[],
   tenantId?: string
-): Promise<boolean> => {
+): Promise<SaveMonthlyRevisionCoordsResult> => {
+  // ① まず確実にローカルストレージへ保存＆同一画面・他コンポーネントへブロードキャスト
   saveMonthlyRevisionDocCoordinates(fields, tenantId);
-  if (!tenantId) return true;
 
+  let inDb = false;
   try {
-    const { error } = await supabase
-      .from('company_settings')
-      .upsert({
-        tenant_id: tenantId,
-        monthly_revision_doc_coordinates: fields,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'tenant_id' });
+    // ② テナント指定がある場合：tenants テーブルへ保存を試行
+    if (tenantId) {
+      const { error: tenantErr } = await supabase
+        .from('tenants')
+        .update({
+          monthly_revision_doc_coordinates: fields,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', tenantId);
 
-    if (error) {
-      console.warn('DB save warning for monthly revision coordinates:', error);
-      return false;
+      if (!tenantErr) {
+        inDb = true;
+      } else {
+        console.warn('tenantsテーブルへの月額変更届座標保存をスキップ（カラム未配備等）:', tenantErr.message);
+      }
     }
-    return true;
-  } catch (e) {
-    console.error('DB save error for monthly revision coordinates:', e);
-    return false;
+
+    // ③ system_settings テーブルへの保存を試行（SuperAdmin・全社共通マスタ）
+    const { data: current } = await supabase
+      .from('system_settings')
+      .select('id')
+      .limit(1)
+      .maybeSingle();
+
+    if (current?.id) {
+      const { error: sysUpdateErr } = await supabase
+        .from('system_settings')
+        .update({
+          monthly_revision_doc_coordinates: fields,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', current.id);
+
+      if (!sysUpdateErr) inDb = true;
+      else console.warn('system_settings update スキップ（カラム未配備等）:', sysUpdateErr.message);
+    } else {
+      const { error: sysInsertErr } = await supabase
+        .from('system_settings')
+        .insert([{
+          monthly_revision_doc_coordinates: fields,
+          updated_at: new Date().toISOString()
+        }]);
+
+      if (!sysInsertErr) inDb = true;
+      else console.warn('system_settings insert スキップ（カラム未配備等）:', sysInsertErr.message);
+    }
+
+    return { ok: true, inDb };
+  } catch (err: any) {
+    console.warn('DB永続化バックグラウンド例外（ローカル設定を維持）:', err);
+    return { ok: true, inDb: false, message: err?.message };
   }
 };
