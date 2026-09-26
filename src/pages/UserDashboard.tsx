@@ -1189,14 +1189,14 @@ const UserDashboard = () => {
   // ブラウザタブのタイトルを動的に更新
   useEffect(() => {
     const titles: Record<string, string> = {
-      home: 'ホーム（打刻） | スマート勤怠',
-      attendance: '月次勤怠・有給照会 | スマート勤怠',
-      payslips: 'Web給与明細・源泉徴収票・労務書類 | スマート勤怠',
-      requests: '各種申請 | スマート勤怠',
-      approvals: '部下からの申請承認 | スマート勤怠',
-      rules_ai: '🤖 社内規定AI相談 | スマート勤怠'
+      home: 'ホーム（打刻） | みんなの らくまる労務',
+      attendance: '月次勤怠・有給照会 | みんなの らくまる労務',
+      payslips: 'Web給与明細・源泉徴収票・労務書類 | みんなの らくまる労務',
+      requests: '各種申請 | みんなの らくまる労務',
+      approvals: '部下からの申請承認 | みんなの らくまる労務',
+      rules_ai: '🤖 社内規定AI相談 | みんなの らくまる労務'
     };
-    document.title = titles[activeTab] || 'スマート勤怠・有給管理';
+    document.title = titles[activeTab] || 'みんなの らくまる労務';
   }, [activeTab]);
 
   return (

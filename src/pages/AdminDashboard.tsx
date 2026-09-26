@@ -125,7 +125,7 @@ const AdminDashboard = () => {
       payslips: 'Web給与明細管理 | 企業管理ダッシュボード',
       settings: '会社・就業規則設定 | 企業管理ダッシュボード'
     };
-    document.title = titles[activeTab] || '企業管理ダッシュボード | スマート勤怠';
+    document.title = titles[activeTab] || '企業管理ダッシュボード | みんなの らくまる労務';
   }, [activeTab]);
 
   const inviteMessage = `お疲れ様です！

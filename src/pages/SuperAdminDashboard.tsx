@@ -111,7 +111,7 @@ export default function SuperAdminDashboard() {
       ai_settings: '✨ AIプラットフォーム設定 | 特権管理者運用本部',
       staff: '運営スタッフ管理 | 特権管理者運用本部'
     };
-    document.title = titles[activeTab] || '特権管理者運用本部 | スマート勤怠';
+    document.title = titles[activeTab] || '特権管理者運用本部 | みんなの らくまる労務';
   }, [activeTab]);
 
   const fetchSystemSettings = async () => {
