@@ -222,6 +222,8 @@ export interface DetailedStatutoryLeave {
   periodText: string;
   isDiffFromContract: boolean;
   diffDaysText: string;
+  isZeroGrant: boolean;
+  zeroGrantReason: string;
 }
 
 /**
@@ -334,7 +336,9 @@ export function calculateStatutoryLeaveWithMode(
     effectiveWeeklyDays: contractWeeklyDays,
     periodText: '',
     isDiffFromContract: false,
-    diffDaysText: ''
+    diffDaysText: '',
+    isZeroGrant: false,
+    zeroGrantReason: ''
   };
 
   if (!joinDateStr || joinDateStr === '-') {
@@ -358,32 +362,53 @@ export function calculateStatutoryLeaveWithMode(
   const remMonths = months % 12;
   const serviceText = years > 0 ? `${years}年${remMonths}ヶ月` : `${remMonths}ヶ月`;
 
-  // 労働基準法第39条第3項：週30時間以上、または週5日以上、または正社員は通常の労働者（比例付与対象外・一般付与）
-  const isFullTime = employmentType === '正社員' || employmentType === 'full-time' || contractWeeklyDays >= 5 || (typeof contractWeeklyHours === 'number' && contractWeeklyHours >= 30);
+  // 労働基準法第39条第3項・施行規則第24条の3：短時間労働者（パート・アルバイト）判定
+  const isPartTime = employmentType === 'パート' || 
+                     employmentType === 'アルバイト' || 
+                     employmentType === 'part-time' || 
+                     (employmentType && (employmentType.includes('パート') || employmentType.includes('バイト')));
+
+  // 正社員・フルタイム（比例付与対象外）判定
+  const isFullTime = !isPartTime && (employmentType === '正社員' || employmentType === 'full-time' || contractWeeklyDays >= 5 || (typeof contractWeeklyHours === 'number' && contractWeeklyHours >= 30));
 
   // 実績逆算の計算
   const actualStats = calculateAnnualWorkedDaysFromRecords(joinDateStr, empAttendanceRecords, targetDate);
   const actualEquivalent = convertAnnualDaysToWeeklyEquivalent(actualStats.annualConvertedDays);
 
-  // 適用する週日数の決定（🛡️ 実績逆算 ＆ 契約週日数のハイブリッド安全判定）
   let effectiveWeeklyDays = contractWeeklyDays;
-  if (!isFullTime) {
-    if (calcMode === 'actual_worked' && actualStats.actualDaysCount > 0) {
-      if (actualEquivalent >= 1) {
-        effectiveWeeklyDays = actualEquivalent;
-      } else {
-        // 実績が極端に少ない（年48日未満）場合は、契約週日数を下限保障
-        effectiveWeeklyDays = Math.max(1, contractWeeklyDays);
-      }
+  let isZeroGrant = false;
+  let zeroGrantReason = '';
+
+  // ⚖️ 労働基準法第39条第1項・第2項（出勤率8割要件）および施行規則第24条の3（比例付与別表）厳格判定
+  if (calcMode === 'actual_worked') {
+    if (actualStats.actualDaysCount === 0) {
+      // 🚨 打刻実績0日 ➔ 出勤率8割要件未達・実労働なしのため例外なく付与0日
+      effectiveWeeklyDays = 0;
+      isZeroGrant = true;
+      zeroGrantReason = '出勤実績0日のため法定要件（出勤率8割）未達・0日付与';
+    } else if (actualStats.annualConvertedDays < 48) {
+      // 🚨 年換算労働日数48日未満 ➔ 施行規則第24条の3別表の対象外（週1日未満）のため付与0日
+      effectiveWeeklyDays = 0;
+      isZeroGrant = true;
+      zeroGrantReason = `年間実労働${actualStats.annualConvertedDays}日（48日未満のため比例付与対象外・0日付与）`;
     } else {
-      effectiveWeeklyDays = Math.max(1, contractWeeklyDays);
+      effectiveWeeklyDays = actualEquivalent;
     }
   } else {
-    effectiveWeeklyDays = 5;
+    // 契約週日数固定モード（contract_fixed）
+    // 打刻データが存在する運用環境で、直近評価期間の実出勤が0日の場合は「長期休職・出勤実績なし」として法定付与0日
+    if (empAttendanceRecords.length > 0 && actualStats.actualDaysCount === 0) {
+      effectiveWeeklyDays = contractWeeklyDays;
+      isZeroGrant = true;
+      zeroGrantReason = '出勤実績0日のため法定要件（出勤率8割）未達・0日付与';
+    } else {
+      effectiveWeeklyDays = isFullTime ? 5 : Math.max(1, contractWeeklyDays);
+    }
   }
 
-  // 該当する付与テーブルの選択
-  let tier = STATUTORY_PAID_LEAVE_TIERS.find(t => t.equivalentWeeklyDays === effectiveWeeklyDays);
+  // 該当する付与テーブルの選択（次回付与予定日・日数の算定用にも参照）
+  const referenceWeeklyDays = effectiveWeeklyDays > 0 ? effectiveWeeklyDays : Math.max(1, isFullTime ? 5 : contractWeeklyDays);
+  let tier = STATUTORY_PAID_LEAVE_TIERS.find(t => t.equivalentWeeklyDays === referenceWeeklyDays);
   if (!tier) {
     // 安全下限: 週1日テーブル
     tier = STATUTORY_PAID_LEAVE_TIERS[STATUTORY_PAID_LEAVE_TIERS.length - 1];
@@ -414,6 +439,12 @@ export function calculateStatutoryLeaveWithMode(
     }
   }
 
+  // 🚨 法定要件未達（isZeroGrant）の場合は、当期付与および前年分を「0日」に強制遮断！
+  if (isZeroGrant) {
+    currentGrant = 0;
+    prevGrant = 0;
+  }
+
   // 直近付与日（基準日）および次回付与予定日（民法第143条暦計算により月末31日入社の翌月1日オーバーフローを完全防止）
   let lastGrantDateStr: string | null = null;
   let obligationPeriodStart: string | null = null;
@@ -435,7 +466,13 @@ export function calculateStatutoryLeaveWithMode(
   let isDiffFromContract = false;
   let diffDaysText = '';
   if (!isFullTime) {
-    if (actualEquivalent !== contractWeeklyDays && actualStats.annualConvertedDays > 0) {
+    if (actualStats.actualDaysCount === 0) {
+      isDiffFromContract = true;
+      diffDaysText = `出勤実績が0日のため、法定付与要件（出勤率8割以上）を満たしていません`;
+    } else if (actualStats.annualConvertedDays < 48) {
+      isDiffFromContract = true;
+      diffDaysText = `年間実労働(${actualStats.annualConvertedDays}日)が法定比例付与の下限(48日)を下回っています`;
+    } else if (actualEquivalent !== contractWeeklyDays && actualStats.annualConvertedDays > 0) {
       isDiffFromContract = true;
       if (actualEquivalent > contractWeeklyDays) {
         diffDaysText = `実労働(年${actualStats.annualConvertedDays}日=週${actualEquivalent}日相当)が契約(週${contractWeeklyDays}日)を上回っています`;
@@ -466,7 +503,9 @@ export function calculateStatutoryLeaveWithMode(
     effectiveWeeklyDays,
     periodText: actualStats.periodText,
     isDiffFromContract,
-    diffDaysText
+    diffDaysText,
+    isZeroGrant,
+    zeroGrantReason
   };
 }
 

@@ -139,9 +139,16 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
   // 従業員ごとの有給分析・自動算定データを統合（契約固定 ＆ 実績逆算ハイブリッド対応）
   const analyzedUsers = useMemo(() => {
     return users.map(emp => {
-      const isDispatch = emp.role === 'dispatch' || emp.employment_type === '派遣';
-      const empType = emp.employment_type === 'part-time' || emp.employment_type === 'パート' ? 'パート' : '正社員';
-      const weeklyDays = Number(emp.weekly_working_days) || (empType === 'パート' ? 3 : 5);
+      const rawType = emp.employment_type || '';
+      const isDispatch = emp.role === 'dispatch' || rawType === '派遣';
+      const isPart = rawType === 'part-time' || 
+                     rawType === 'パート' || 
+                     rawType === 'アルバイト' || 
+                     rawType === 'バイト' || 
+                     rawType.includes('パート') || 
+                     rawType.includes('バイト');
+      const empType = isPart ? 'パート' : '正社員';
+      const weeklyDays = Number(emp.weekly_working_days) || (isPart ? 3 : 5);
 
       // 個人設定 または 全社設定を適用
       const userCustomMode = userCalcModeMap[emp.id] || 'default';
@@ -178,14 +185,15 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
       const hasExplicitBalance = emp.paid_leave_balance !== null && emp.paid_leave_balance !== undefined && Number(emp.paid_leave_balance) > 0;
       const hasExplicitCarryover = emp.paid_leave_carryover !== null && emp.paid_leave_carryover !== undefined && Number(emp.paid_leave_carryover) > 0;
 
-      // 手動設定値があれば優先、未設定（0日かつ法定日数あり）なら法定計算値を自動適用（SSOT・初期値ゼロ問題の完全根絶）
+      // 手動設定値があれば優先、未設定なら法定計算値を自動適用（SSOT・初期値ゼロ問題の完全根絶）
       const balance = hasExplicitBalance 
         ? Number(emp.paid_leave_balance) 
         : (emp.join_date && emp.join_date !== '-' ? statutory.statutoryGrant : 0);
 
+      // 🚨 前年繰越の架空自動捏造（憲法14条違反）を永久根絶！手動設定がない場合は0日
       const carryover = hasExplicitCarryover 
         ? Number(emp.paid_leave_carryover) 
-        : (emp.join_date && emp.join_date !== '-' && !hasExplicitBalance ? statutory.prevStatutoryGrant : 0);
+        : 0;
 
       const totalGranted = carryover + balance;
       const remainingBalance = Math.max(0, totalGranted - usedDaysTotal);
@@ -436,7 +444,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
       w.isDispatch ? '派遣 (対象外)' : w.empType,
       w.isDispatch ? '-' : `${w.weeklyDays}日`,
       w.isDispatch ? '-' : (w.statutory.calcMode === 'actual_worked' ? '打刻実績逆算' : '契約週日数固定'),
-      w.isDispatch ? '-' : (w.statutory.calcMode === 'actual_worked' ? `${w.statutory.actualWorkedDaysAnnual || 0}日(週${w.statutory.effectiveWeeklyDays || 0}日相当)` : '-'),
+      w.isDispatch ? '-' : (w.statutory.calcMode === 'actual_worked' ? (w.statutory.isZeroGrant ? `0日 (${w.statutory.zeroGrantReason})` : `${w.statutory.actualWorkedDaysAnnual || 0}日(週${w.statutory.effectiveWeeklyDays || 0}日相当)`) : '-'),
       w.join_date || '-',
       w.statutory.serviceText,
       w.isDispatch ? '0' : String(w.carryover),
@@ -823,28 +831,46 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                   ) : (
                                     <>
                                       {st.calcMode === 'actual_worked' ? (
-                                        <span 
-                                          className="bg-amber-50 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs"
-                                          title={`${st.periodText}（実出勤${st.actualDaysCount}日 ➔ 年換算${st.actualWorkedDaysAnnual}日）`}
-                                        >
-                                          <span>⚡</span>
-                                          <span>
-                                            {st.actualWorkedDaysAnnual >= 48 
-                                              ? `実績: 年${st.actualWorkedDaysAnnual}日(週${st.effectiveWeeklyDays}日相当)` 
-                                              : `実績: 年${st.actualWorkedDaysAnnual}日(契約週${st.effectiveWeeklyDays}日下限)`}
+                                        st.isZeroGrant ? (
+                                          <span 
+                                            className="bg-rose-50 text-rose-700 border border-rose-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs"
+                                            title={st.zeroGrantReason || '出勤実績0日・法定要件未達のため付与0日'}
+                                          >
+                                            <AlertTriangle className="w-3 h-3 text-rose-500" />
+                                            <span>実績: 年0日 (要件未達・0日付与)</span>
                                           </span>
-                                        </span>
+                                        ) : (
+                                          <span 
+                                            className="bg-amber-50 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs"
+                                            title={`${st.periodText}（実出勤${st.actualDaysCount}日 ➔ 年換算${st.actualWorkedDaysAnnual}日）`}
+                                          >
+                                            <span>⚡</span>
+                                            <span>
+                                              実績: 年{st.actualWorkedDaysAnnual}日 (週{st.effectiveWeeklyDays}日相当)
+                                            </span>
+                                          </span>
+                                        )
                                       ) : (
-                                        <span 
-                                          className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-black shadow-2xs"
-                                          title="雇用契約に基づく固定所定週日数で算定中"
-                                        >
-                                          🏷️ 契約固定: 週{emp.weeklyDays}日
-                                        </span>
+                                        st.isZeroGrant ? (
+                                          <span 
+                                            className="bg-rose-50 text-rose-700 border border-rose-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs"
+                                            title={st.zeroGrantReason || '出勤実績0日・法定要件未達のため付与0日'}
+                                          >
+                                            <AlertTriangle className="w-3 h-3 text-rose-500" />
+                                            <span>契約固定: 週{emp.weeklyDays}日 (出勤0日・要件未達)</span>
+                                          </span>
+                                        ) : (
+                                          <span 
+                                            className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-black shadow-2xs"
+                                            title="雇用契約に基づく固定所定週日数で算定中"
+                                          >
+                                            🏷️ 契約固定: 週{emp.weeklyDays}日
+                                          </span>
+                                        )
                                       )}
 
                                       {/* 契約と実績の乖離バッジ */}
-                                      {st.isDiffFromContract && (
+                                      {st.isDiffFromContract && !st.isZeroGrant && (
                                         <span 
                                           className={`px-1.5 py-0.5 rounded text-[9px] font-black border shadow-2xs ${
                                             st.actualEquivalentWeeklyDays > st.contractWeeklyDays
@@ -855,7 +881,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                         >
                                           {st.actualEquivalentWeeklyDays > st.contractWeeklyDays
                                             ? `実働上回り (週${st.actualEquivalentWeeklyDays}日扱い)`
-                                            : `実働下回り (契約週${st.contractWeeklyDays}日)`}
+                                            : `実働下回り (週${st.actualEquivalentWeeklyDays}日相当)`}
                                         </span>
                                       )}
                                     </>
@@ -886,8 +912,14 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                               <span className="text-slate-300">-</span>
                             ) : (
                               <div>
-                                <span className="font-black text-emerald-600 text-base">{emp.balance} 日</span>
-                                {emp.hasExplicitBalance && st.statutoryGrant !== emp.balance && emp.join_date && emp.join_date !== '-' ? (
+                                <span className={`font-black text-base ${emp.balance === 0 ? 'text-slate-400' : 'text-emerald-600'}`}>
+                                  {emp.balance} 日
+                                </span>
+                                {st.isZeroGrant ? (
+                                  <div className="text-[9px] text-rose-600 font-bold" title={st.zeroGrantReason}>
+                                    法定0日付与
+                                  </div>
+                                ) : emp.hasExplicitBalance && st.statutoryGrant !== emp.balance && emp.join_date && emp.join_date !== '-' ? (
                                   <div className="text-[10px] text-amber-600 font-bold" title="手動設定値が適用されています">
                                     (法定計算: {st.statutoryGrant}日)
                                   </div>
@@ -917,10 +949,10 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                               <span className="text-slate-300">-</span>
                             ) : (
                               <div className="inline-flex items-center gap-1">
-                                <span className="font-black text-amber-600 text-xl tracking-tight">
+                                <span className={`font-black text-xl tracking-tight ${emp.remainingBalance === 0 ? 'text-slate-400' : 'text-amber-600'}`}>
                                   {emp.remainingBalance}
                                 </span>
-                                <span className="text-xs font-bold text-amber-700">日</span>
+                                <span className="text-xs font-bold text-slate-500">日</span>
                               </div>
                             )}
                           </td>
@@ -936,7 +968,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                   {st.nextGrantDate}
                                 </div>
                                 <div className="text-[11px] font-bold text-blue-600 mt-0.5">
-                                  ＋{st.nextGrantDays}日付与 (あと {st.daysUntilNextGrant}日)
+                                  ＋{st.nextGrantDays}日付与 {st.isZeroGrant ? '(※出勤要件達成時)' : ''} (あと {st.daysUntilNextGrant}日)
                                 </div>
                               </div>
                             )}
@@ -1163,8 +1195,15 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
             </div>
 
             {(() => {
-              const empType = editingUser.empType || (editingUser.employment_type === 'part-time' || editingUser.employment_type === 'パート' ? 'パート' : '正社員');
-              const weeklyDays = Number(editingUser.weekly_working_days) || (empType === 'パート' ? 3 : 5);
+              const rawType = editingUser.employment_type || '';
+              const isPart = rawType === 'part-time' || 
+                             rawType === 'パート' || 
+                             rawType === 'アルバイト' || 
+                             rawType === 'バイト' || 
+                             rawType.includes('パート') || 
+                             rawType.includes('バイト');
+              const empType = editingUser.empType || (isPart ? 'パート' : '正社員');
+              const weeklyDays = Number(editingUser.weekly_working_days) || (isPart ? 3 : 5);
               const userCustomMode = editingUser.userCustomMode || userCalcModeMap[editingUser.id] || 'default';
               const effectiveMode: PaidLeaveCalcMode = userCustomMode === 'default' ? companyCalcMode : userCustomMode;
               const empAtt = attendanceRecords.filter(r => r.user_id === editingUser.id);
@@ -1205,7 +1244,11 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                           </div>
                           <div className="text-xs font-bold text-amber-800 mt-1">
                             今年度付与: <span className="text-base font-black text-amber-900">{st.statutoryGrant}日</span>
-                            <span className="text-slate-500 font-medium ml-2">（前年繰越目安: {st.prevStatutoryGrant}日）</span>
+                            {st.isZeroGrant ? (
+                              <span className="text-rose-600 font-bold ml-2">⚠️ {st.zeroGrantReason}</span>
+                            ) : (
+                              <span className="text-slate-500 font-medium ml-2">（前年繰越目安: {st.prevStatutoryGrant}日）</span>
+                            )}
                           </div>
                         </div>
                         <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
