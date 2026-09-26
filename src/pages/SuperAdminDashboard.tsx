@@ -69,11 +69,26 @@ export default function SuperAdminDashboard() {
   const [newStaffEmail, setNewStaffEmail] = useState('');
   
   useEffect(() => {
-    fetchSystemSettings();
-    fetchTenants();
-    fetchStaff();
-    fetchCustomDocTemplates().then(list => setCustomDocTemplates(list));
-    refreshPendingCount();
+    const checkSuperAdmin = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate('/superadmin/login');
+        return;
+      }
+      const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle();
+      if (!profile || profile.role !== 'superadmin') {
+        alert('この画面はSaaS特権管理者（superadmin）専用です。');
+        navigate('/portal');
+        return;
+      }
+      fetchSystemSettings();
+      fetchTenants();
+      fetchStaff();
+      fetchCustomDocTemplates().then(list => setCustomDocTemplates(list));
+      refreshPendingCount();
+    };
+
+    checkSuperAdmin();
   }, []);
 
   const refreshPendingCount = async () => {

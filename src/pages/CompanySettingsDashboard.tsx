@@ -753,6 +753,14 @@ export default function CompanySettingsDashboard() {
         return;
       }
 
+      // 🛡️ 最高権限分離（一般従業員の場合は /portal へ即時リダイレクト・憲法6条）
+      const { data: userData } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle();
+      if (userData && userData.role !== 'admin' && userData.role !== 'superadmin') {
+        alert('この画面は会社管理者（管理者・総管理者）専用です。');
+        navigate('/portal');
+        return;
+      }
+
       const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
       if (!tenantIdData) return;
       setTenantId(tenantIdData);
