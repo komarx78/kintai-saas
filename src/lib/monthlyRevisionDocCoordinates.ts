@@ -87,15 +87,28 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     description: '整理記号右側4マス（カタカナ・ハイフンの右）'
   },
   {
-    id: 'companyZip',
-    name: '事業所郵便番号',
+    id: 'companyZipFirst',
+    name: '事業所郵便番号（上3桁）',
     section: 'office',
-    x: 12.0,
-    y: 11.2,
-    fontSize: 9.5,
-    width: 15.0,
-    example: '5200043',
-    description: '事業所所在地 郵便番号（ハイフンなし数字7桁）'
+    x: 17.5,
+    y: 11.8,
+    fontSize: 11.0,
+    width: 4.0,
+    pitch: 1.30,
+    example: '520',
+    description: '事業所所在地 郵便番号 上3桁（〒の直後、ハイフンの左）'
+  },
+  {
+    id: 'companyZipLast',
+    name: '事業所郵便番号（下4桁）',
+    section: 'office',
+    x: 23.2,
+    y: 11.8,
+    fontSize: 11.0,
+    width: 5.5,
+    pitch: 1.30,
+    example: '0043',
+    description: '事業所所在地 郵便番号 下4桁（ハイフンの右）'
   },
   {
     id: 'companyAddress',
@@ -508,6 +521,47 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
   }
 ];
 
+export function mergeWithDefaultMonthlyRevisionFields(
+  customList: any[]
+): MonthlyRevisionDocFieldConfig[] {
+  if (!Array.isArray(customList) || customList.length === 0) {
+    return [...DEFAULT_MONTHLY_REVISION_FIELDS];
+  }
+
+  return DEFAULT_MONTHLY_REVISION_FIELDS.map(def => {
+    let custom = customList.find((p: any) => p.id === def.id);
+
+    // 旧 companyZip（単一設定）からの安全自動マイグレーション
+    if (!custom) {
+      if (def.id === 'companyZipFirst' || def.id === 'companyZipLast') {
+        const oldZip = customList.find((p: any) => p.id === 'companyZip');
+        if (oldZip) {
+          custom = {
+            ...def,
+            y: oldZip.y !== undefined ? oldZip.y : def.y,
+            fontSize: oldZip.fontSize !== undefined ? oldZip.fontSize : def.fontSize
+          };
+        }
+      }
+    }
+
+    if (custom) {
+      return {
+        ...def,
+        x: custom.x !== undefined ? custom.x : def.x,
+        y: custom.y !== undefined ? custom.y : def.y,
+        fontSize: custom.fontSize !== undefined ? custom.fontSize : def.fontSize,
+        pitch: custom.pitch !== undefined ? custom.pitch : def.pitch,
+        width: custom.width !== undefined ? custom.width : def.width,
+        example: def.example,
+        disabled: custom.disabled
+      };
+    }
+
+    return def;
+  });
+}
+
 export const loadMonthlyRevisionDocCoordinates = (tenantId?: string): MonthlyRevisionDocFieldConfig[] => {
   const tKey = tenantId ? `monthly_revision_coords_${tenantId}` : 'monthly_revision_coords_default';
   const saved = localStorage.getItem(tKey);
@@ -515,15 +569,7 @@ export const loadMonthlyRevisionDocCoordinates = (tenantId?: string): MonthlyRev
     try {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return DEFAULT_MONTHLY_REVISION_FIELDS.map(df => {
-          const matched = parsed.find((p: any) => p.id === df.id);
-          if (!matched) return df;
-          const merged = { ...df, ...matched };
-          if (df.id === 'companyZip' && merged.example) {
-            merged.example = merged.example.replace(/[^0-9]/g, '');
-          }
-          return merged;
-        });
+        return mergeWithDefaultMonthlyRevisionFields(parsed);
       }
     } catch (e) {
       console.error('Failed to parse local monthly revision coordinates:', e);
@@ -576,15 +622,7 @@ export const fetchMonthlyRevisionDocCoordinatesFromDb = async (
     }
 
     if (saved && Array.isArray(saved) && saved.length > 0) {
-      const merged = DEFAULT_MONTHLY_REVISION_FIELDS.map(df => {
-        const matched = saved.find((p: any) => p.id === df.id);
-        if (!matched) return df;
-        const res = { ...df, ...matched };
-        if (df.id === 'companyZip' && res.example) {
-          res.example = res.example.replace(/[^0-9]/g, '');
-        }
-        return res;
-      });
+      const merged = mergeWithDefaultMonthlyRevisionFields(saved);
       saveMonthlyRevisionDocCoordinates(merged, tenantId);
       return merged;
     }

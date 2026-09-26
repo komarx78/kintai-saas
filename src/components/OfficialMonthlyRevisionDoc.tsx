@@ -204,7 +204,8 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
   const fDigits = getF('symbolDigits', 14.8, 8.4, 13, 9.8);
   const fKana = getF('symbolKana', 26.6, 8.4, 12.5, 9.8);
 
-  const fZip = getF('companyZip', 12.0, 11.2, 9.5, 15.0);
+  const fZipFirst = getF('companyZipFirst', 17.5, 11.8, 11.0, 4.0);
+  const fZipLast = getF('companyZipLast', 23.2, 11.8, 11.0, 5.5);
   const fAddress = getF('companyAddress', 12.0, 13.0, 9.0, 36.0);
   const fName = getF('companyName', 12.0, 16.5, 10.5, 36.0);
   const fOwner = getF('companyOwnerName', 12.0, 19.2, 10.5, 36.0);
@@ -215,6 +216,11 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
   while (digitChars.length < 4) digitChars.push('');
   const kanaChars = symbolKana ? symbolKana.split('').slice(0, 4) : [];
   while (kanaChars.length < 4) kanaChars.push('');
+
+  // 郵便番号（上3桁・下4桁）の自動分割抽出
+  const cleanZip = (data.companyZip || '').replace(/[^0-9]/g, '');
+  const zipFirst = cleanZip.slice(0, 3);
+  const zipLast = cleanZip.slice(3, 7);
 
   return (
     <div className="bg-slate-900/80 backdrop-blur-sm min-h-screen py-8 px-4 flex flex-col items-center">
@@ -398,17 +404,33 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                 ))}
               </div>
 
-              {/* 事業所所在地・名称・事業主氏名・電話 */}
-              {data.companyZip && (
+              {/* 事業所郵便番号（上3桁・〒の直後） */}
+              {zipFirst && (
                 <div
-                  className="absolute font-mono text-xs font-medium"
+                  className="absolute font-mono font-bold tracking-widest text-center"
                   style={{
-                    top: `${fZip.y}%`,
-                    left: `${fZip.x}%`,
-                    fontSize: `${(fZip.fontSize || 9.5) * 0.115}cqi`
+                    top: `${fZipFirst.y}%`,
+                    left: `${fZipFirst.x}%`,
+                    width: `${fZipFirst.width || 4.0}%`,
+                    fontSize: `${(fZipFirst.fontSize || 11.0) * 0.115}cqi`
                   }}
                 >
-                  {data.companyZip.replace(/[^0-9]/g, '')}
+                  {zipFirst}
+                </div>
+              )}
+
+              {/* 事業所郵便番号（下4桁・ハイフンの直後） */}
+              {zipLast && (
+                <div
+                  className="absolute font-mono font-bold tracking-widest text-center"
+                  style={{
+                    top: `${fZipLast.y}%`,
+                    left: `${fZipLast.x}%`,
+                    width: `${fZipLast.width || 5.5}%`,
+                    fontSize: `${(fZipLast.fontSize || 11.0) * 0.115}cqi`
+                  }}
+                >
+                  {zipLast}
                 </div>
               )}
               <div

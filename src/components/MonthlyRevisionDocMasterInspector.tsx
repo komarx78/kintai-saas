@@ -798,7 +798,9 @@ export const MonthlyRevisionDocMasterInspector: React.FC<MonthlyRevisionDocMaste
                     }`}
                     title={`${f.name} (クリックして選択・ドラッグまたは十字キーで移動)`}
                   >
-                    {f.id === 'companyZip' ? (f.example || '').replace(/[^0-9]/g, '') : f.example}
+                    {['companyZip', 'companyZipFirst', 'companyZipLast'].includes(f.id)
+                      ? (f.example || '').replace(/[^0-9]/g, '')
+                      : f.example}
                   </div>
                 );
               })}
