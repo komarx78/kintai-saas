@@ -189,6 +189,7 @@ const UserDashboard = () => {
   }, []);
 
   const [userTakenLeaveDays, setUserTakenLeaveDays] = useState(0);
+  const [userTotalTakenLeaveDays, setUserTotalTakenLeaveDays] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -228,7 +229,9 @@ const UserDashboard = () => {
         
         if (data) {
           const days = calculateUsedPaidLeaveDaysInPeriod(data, periodStart, periodEnd);
+          const totalDays = calculateUsedPaidLeaveDaysInPeriod(data);
           setUserTakenLeaveDays(days);
+          setUserTotalTakenLeaveDays(totalDays);
         }
       };
 
@@ -1450,10 +1453,14 @@ const UserDashboard = () => {
                     <span className="font-medium text-gray-700">有給休暇（前年度繰越分）</span>
                     <span className="text-xl font-bold text-gray-700">{user?.paid_leave_carryover || 0}<span className="text-sm font-normal ml-1">日</span></span>
                   </div>
+                  <div className="flex justify-between items-center bg-amber-50 p-3 rounded-md border border-amber-200">
+                    <span className="font-medium text-amber-900">有給休暇（消化済日数）</span>
+                    <span className="text-xl font-bold text-amber-800">{userTotalTakenLeaveDays}<span className="text-sm font-normal ml-1">日</span></span>
+                  </div>
                   <div className="flex justify-between items-center bg-gray-100 p-3 rounded-md border border-gray-200">
-                    <span className="font-bold text-gray-800">有給休暇（合計残数）</span>
-                    <span className="text-2xl font-bold text-gray-900">
-                      {(user?.paid_leave_balance || 0) + (user?.paid_leave_carryover || 0)}
+                    <span className="font-bold text-gray-800">有給休暇（現在残日数）</span>
+                    <span className="text-2xl font-bold text-emerald-700">
+                      {Math.max(0, ((user?.paid_leave_balance || 0) + (user?.paid_leave_carryover || 0)) - userTotalTakenLeaveDays)}
                       <span className="text-sm font-normal ml-1">日</span>
                     </span>
                   </div>
@@ -2488,17 +2495,21 @@ const UserDashboard = () => {
                   <h3 className="text-sm font-bold text-gray-800 border-b pb-2 mb-3">現在の有給・代休残数</h3>
                   <div className="space-y-2.5">
                     <div className="flex justify-between items-center bg-blue-50/70 p-2.5 rounded-lg border border-blue-100">
-                      <span className="text-xs font-medium text-blue-900">有給休暇（今年度）</span>
-                      <span className="text-lg font-bold text-blue-700">{user?.paid_leave_balance || 0}<span className="text-xs font-normal ml-0.5">日</span></span>
+                      <span className="text-xs font-medium text-blue-900">有給休暇（今年度付与）</span>
+                      <span className="text-base font-bold text-blue-700">{user?.paid_leave_balance || 0}<span className="text-xs font-normal ml-0.5">日</span></span>
                     </div>
                     <div className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100">
                       <span className="text-xs font-medium text-gray-700">有給休暇（繰越分）</span>
                       <span className="text-base font-bold text-gray-700">{user?.paid_leave_carryover || 0}<span className="text-xs font-normal ml-0.5">日</span></span>
                     </div>
+                    <div className="flex justify-between items-center bg-amber-50/70 p-2.5 rounded-lg border border-amber-100">
+                      <span className="text-xs font-medium text-amber-900">消化済日数</span>
+                      <span className="text-base font-bold text-amber-700">{userTotalTakenLeaveDays}<span className="text-xs font-normal ml-0.5">日</span></span>
+                    </div>
                     <div className="flex justify-between items-center bg-slate-100 p-2.5 rounded-lg border border-slate-200">
-                      <span className="text-xs font-bold text-slate-800">有給合計残数</span>
-                      <span className="text-xl font-bold text-slate-900">
-                        {(user?.paid_leave_balance || 0) + (user?.paid_leave_carryover || 0)}
+                      <span className="text-xs font-bold text-slate-800">有給現在残数</span>
+                      <span className="text-xl font-bold text-emerald-700">
+                        {Math.max(0, ((user?.paid_leave_balance || 0) + (user?.paid_leave_carryover || 0)) - userTotalTakenLeaveDays)}
                         <span className="text-xs font-normal ml-0.5">日</span>
                       </span>
                     </div>
