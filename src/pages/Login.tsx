@@ -7,7 +7,13 @@ import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
 type AuthMode = 'login' | 'signup' | 'forgot' | 'resend_confirm';
 
 const Login = () => {
-  const [mode, setMode] = useState<AuthMode>('login');
+  const [mode, setMode] = useState<AuthMode>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search).get('mode');
+      if (p === 'signup' || p === 'forgot' || p === 'resend_confirm') return p;
+    }
+    return 'login';
+  });
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

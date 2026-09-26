@@ -69,7 +69,7 @@ export const LandingPage: React.FC = () => {
               ログイン
             </button>
             <button
-              onClick={() => navigate('/onboarding/welcome')}
+              onClick={() => navigate('/?mode=signup')}
               className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-lg shadow-orange-500/25 hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5"
             >
               <span>14日間 無料体験</span>
@@ -109,7 +109,7 @@ export const LandingPage: React.FC = () => {
               {/* CTAボタン群 */}
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 mb-8">
                 <button
-                  onClick={() => navigate('/onboarding/welcome')}
+                  onClick={() => navigate('/?mode=signup')}
                   className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-lg rounded-2xl shadow-xl shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 border-2 border-white"
                 >
                   <span>14日間 無料で試してみる</span>
@@ -467,7 +467,7 @@ export const LandingPage: React.FC = () => {
               </p>
             </div>
             <button
-              onClick={() => navigate('/onboarding/welcome')}
+              onClick={() => navigate('/?mode=signup')}
               className="px-8 py-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm sm:text-base rounded-2xl shadow-lg shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all shrink-0 flex items-center gap-2 cursor-pointer border border-white/20"
             >
               <span>14日間 無料で試してみる</span>
@@ -861,7 +861,7 @@ export const LandingPage: React.FC = () => {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
-              onClick={() => navigate('/onboarding/welcome')}
+              onClick={() => navigate('/?mode=signup')}
               className="w-full sm:w-auto px-10 py-4.5 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xl rounded-2xl shadow-xl shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 border-2 border-white"
             >
               <span>14日間 無料体験を始める</span>
