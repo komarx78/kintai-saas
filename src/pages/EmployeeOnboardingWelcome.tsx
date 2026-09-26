@@ -72,14 +72,14 @@ export default function EmployeeOnboardingWelcome() {
     positionAllowance: 0,
     qualificationAllowance: 0,
     fixedOvertimeAllowance: 0,
-    department: '営業部',
+    department: '',
     storeName: '',
     workLocation: '本社 および 会社が指定する就業場所',
     workHours: '09:00 〜 18:00（休憩60分・実働8時間）',
     overtimePolicy: 'あり（時間外割増 25%、深夜割増 25%、休日割増 35%）',
     holidayPolicy: '土曜日、日曜日、国民の祝日、年末年始休暇、夏季休暇、年次有給休暇',
     socialInsurance: '健康保険・厚生年金保険・雇用保険・労災保険に加入',
-    joinDate: '2026-04-01'
+    joinDate: new Date().toISOString().split('T')[0]
   });
 
   // 📍 地区推測 ＆ 正式駅名・路線バス停サジェスト State（全国マルチ地域対応）
@@ -105,7 +105,7 @@ export default function EmployeeOnboardingWelcome() {
     name: '',
     nameKana: '',
     email: '',
-    birthDate: '1998-04-01',
+    birthDate: '',
     gender: 'unspecified',
     postalCode: '',
     address: '',
@@ -152,7 +152,7 @@ export default function EmployeeOnboardingWelcome() {
     hasSpouse: false,
     spouseName: '',
     spouseNameKana: '',
-    spouseBirthDate: '1996-05-15',
+    spouseBirthDate: '',
     spouseIncomeEstimate: 0,
     spouseIsLivingTogether: true,
     dependents: [] as DependentItem[],
@@ -167,10 +167,10 @@ export default function EmployeeOnboardingWelcome() {
     name: '',
     nameKana: '',
     relation: '子',
-    birthDate: '2015-05-01',
+    birthDate: '',
     isLivingTogether: true,
     incomeEstimate: 0,
-    isUnder16: true, // 2015年生まれは令和8年時点で11歳（16歳未満）
+    isUnder16: false,
     isSpecific: false,
     isElderly: false
   });
@@ -359,7 +359,11 @@ export default function EmployeeOnboardingWelcome() {
       setCurrentStep(1);
       return;
     }
-    const compAddr = tenantInfo?.address || '東京都千代田区大手町 1-2-3';
+    const compAddr = tenantInfo?.address || '';
+    if (!compAddr.trim()) {
+      alert('会社所在地が登録されていません。管理者にお問い合わせください。');
+      return;
+    }
     const result = calculateCommutingDistanceKm(basicData.address, compAddr);
     const allowance = getTaxFreeCarAllowance(result.distanceKm);
 
@@ -507,10 +511,10 @@ export default function EmployeeOnboardingWelcome() {
       name: '',
       nameKana: '',
       relation: '子',
-      birthDate: '2015-05-01',
+      birthDate: '',
       isLivingTogether: true,
       incomeEstimate: 0,
-      isUnder16: true,
+      isUnder16: false,
       isSpecific: false,
       isElderly: false
     });

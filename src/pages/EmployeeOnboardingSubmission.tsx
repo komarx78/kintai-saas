@@ -42,9 +42,9 @@ export default function EmployeeOnboardingSubmission() {
     via_route: '', // 経由路線・駅
     transport_mode: 'train', // 'train', 'bus', 'car', 'bicycle'
     commuting_type: 'daily', // 'daily'(アルバイト日額実費), 'monthly'(定期代), 'none'(なし)
-    daily_round_trip: 800, // 1日往復交通費
-    one_month_pass_amount: 15000, // 1ヶ月定期代
-    one_way_amount: 400, // 片道運賃
+    daily_round_trip: 0, // 1日往復交通費
+    one_month_pass_amount: 0, // 1ヶ月定期代
+    one_way_amount: 0, // 片道運賃
     attachment_data: '',
     attachment_filename: '',
     fileSizeInfo: ''
