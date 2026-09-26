@@ -28,7 +28,8 @@ export interface MonthlyRevisionEmployeeDocData {
   myNumber?: string; // ⑰ 個人番号（70歳以上のみ）
   isOver70?: boolean;
   isShortTimeWorker?: boolean;
-  remarks?: string; // ⑱ 備考
+  remarks?: string; // ⑱ 備考：昇給・降給の理由テキスト（例: '基本給昇給'）
+  remarksCircles?: number[]; // ⑱ 備考：〇印をつける番号の配列 [1, 2, 3, 4, 5, 6]
 }
 
 export interface MonthlyRevisionDocProps {
@@ -547,7 +548,12 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                 const fEmpNum = getF('empInsuranceNumber', 9.8, 0.6, 11, 11.0, 'center');
                 const fEmpNm = getF('empName', 21.6, 0.6, 11, 22.0, 'left');
                 const fEmpBth = getF('empBirth', 44.2, 0.6, 10.5, 18.0, 'center');
-                const fEmpRevYM = getF('empRevisionYearMonth', 63.0, 0.6, 10.5, 9.5, 'center');
+
+                // ④ 改定年月（年・月分離、ハイフンなし）
+                const fRevY = getF('empRevisionYear', 64.6, 0.6, 10.5, 3.2, 'center');
+                const fRevM = getF('empRevisionMonth', 68.8, 0.6, 10.5, 3.2, 'center');
+                const revDate = splitNenkinYM(emp.revisionYearMonth);
+
                 const fEmpMyNo = getF('empMyNumber', 73.6, 0.6, 10, 21.0, 'left', 1.65);
 
                 const fCurH = getF('empCurrentHealthStandard', 9.8, 2.8, 10.5, 10.5, 'right');
@@ -558,9 +564,8 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                 const fPrevM = getF('empPrevRevMonth', 39.4, 4.4, 9.5, 3.2, 'center');
                 const prevRevDate = splitNenkinYM(emp.previousRevisionYM);
 
-                // ⑦ 昇(降)給（年月 ＆ 区分〇囲み）
-                const fWageY = getF('empWageChangeYear', 45.2, 4.4, 9.5, 2.8, 'center');
-                const fWageM = getF('empWageChangeMonth', 49.2, 4.4, 9.5, 2.8, 'center');
+                // ⑦ 昇(降)給（※原本は「月」のみ印字、年は不要 ＆ 区分〇囲み）
+                const fWageM = getF('empWageChangeMonth', 48.6, 4.4, 9.5, 3.0, 'center');
                 const fWageCircle = getF('empWageChangeCircle', 52.8, 2.7, 10, 3.4, 'center');
                 const wageChangeDate = splitNenkinYM(emp.wageChangeYM);
 
@@ -586,8 +591,9 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                     {/* ③ 生年月日（元号形式: 5-630503 等） */}
                     {renderRowField(formatNenkinBirthDate(emp.birthDate), fEmpBth, rowTop, 'font-mono font-bold tracking-wider')}
 
-                    {/* ④ 改定年月 */}
-                    {renderRowField(formatNenkinYM(emp.revisionYearMonth), fEmpRevYM, rowTop, 'font-mono font-bold')}
+                    {/* ④ 改定年月（年・月分離、原本の「年」「月」の各左側に印字・ハイフンなし） */}
+                    {revDate.y && renderRowField(revDate.y, fRevY, rowTop, 'font-mono font-bold')}
+                    {revDate.m && renderRowField(revDate.m, fRevM, rowTop, 'font-mono font-bold')}
 
                     {/* ⑰ 個人番号（70歳以上被用者・12マス） */}
                     {emp.isOver70 && (
@@ -626,8 +632,7 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                     {prevRevDate.y && renderRowField(prevRevDate.y, fPrevY, rowTop, 'font-mono font-bold')}
                     {prevRevDate.m && renderRowField(prevRevDate.m, fPrevM, rowTop, 'font-mono font-bold')}
 
-                    {/* ⑦ 昇(降)給 年月（年・月） */}
-                    {wageChangeDate.y && renderRowField(wageChangeDate.y, fWageY, rowTop, 'font-mono font-bold')}
+                    {/* ⑦ 昇(降)給 月（※原本には年の記入枠はないため「月」のみ印字） */}
                     {wageChangeDate.m && renderRowField(wageChangeDate.m, fWageM, rowTop, 'font-mono font-bold')}
 
                     {/* ⑦ 昇(降)給 区分〇囲み（原本の「1. 昇給」または「2. 降給」を美しく囲む） */}
@@ -653,27 +658,43 @@ export const OfficialMonthlyRevisionDoc: React.FC<MonthlyRevisionDocProps> = ({
                     {/* ⑧ 遡及支払額 */}
                     {renderRowField((emp.retroactiveAmount || 0) > 0 ? emp.retroactiveAmount?.toLocaleString() : '', fRetro, rowTop, 'font-mono text-xs')}
 
-                    {/* ⑱ 備考 該当番号〇印（通常は4.昇給降給の理由、短時間なら3、70歳なら1） */}
+                    {/* ⑱ 備考 該当番号〇印（複数〇印完全対応） */}
                     {(() => {
-                      let circleY = fRemCircle.y; // デフォルト: 4.昇給・降給の理由 (y:約6.4%)
-                      let circleX = fRemCircle.x;
-                      if (emp.isOver70) {
-                        circleY = fRemCircle.y - 3.2; // 1.70歳以上被用者
-                      } else if (emp.isShortTimeWorker) {
-                        circleY = fRemCircle.y - 1.0; // 3.短時間労働者
-                      }
+                      const activeCircles: number[] = (emp.remarksCircles && emp.remarksCircles.length > 0)
+                        ? emp.remarksCircles
+                        : [
+                            ...(emp.isOver70 ? [1] : []),
+                            ...(emp.isShortTimeWorker ? [3] : []),
+                            4 // 通常の月変理由
+                          ];
+
                       return (
-                        <div
-                          className="absolute flex items-center justify-center pointer-events-none"
-                          style={{
-                            top: `${rowTop + circleY}%`,
-                            left: `${circleX}%`,
-                            width: `${fRemCircle.width || 2.0}%`,
-                            height: '1.35%'
-                          }}
-                        >
-                          <div className="w-full h-full rounded-full border-2 border-red-600 print:border-slate-900" />
-                        </div>
+                        <>
+                          {activeCircles.map(num => {
+                            let circleY = fRemCircle.y; // 4.昇給・降給の理由（デフォルト y:約6.4%）
+                            if (num === 1) circleY = fRemCircle.y - 3.2; // 1. 70歳以上
+                            else if (num === 2) circleY = fRemCircle.y - 2.1; // 2. 二以上勤務
+                            else if (num === 3) circleY = fRemCircle.y - 1.0; // 3. 短時間労働者
+                            else if (num === 4) circleY = fRemCircle.y;       // 4. 昇給降給の理由
+                            else if (num === 5) circleY = fRemCircle.y + 2.3; // 5. 健保のみ
+                            else if (num === 6) circleY = fRemCircle.y + 4.3; // 6. その他
+
+                            return (
+                              <div
+                                key={`rem-circle-${num}`}
+                                className="absolute flex items-center justify-center pointer-events-none"
+                                style={{
+                                  top: `${rowTop + circleY}%`,
+                                  left: `${fRemCircle.x}%`,
+                                  width: `${fRemCircle.width || 2.0}%`,
+                                  height: '1.35%'
+                                }}
+                              >
+                                <div className="w-full h-full rounded-full border-2 border-red-600 print:border-slate-900" />
+                              </div>
+                            );
+                          })}
+                        </>
                       );
                     })()}
 

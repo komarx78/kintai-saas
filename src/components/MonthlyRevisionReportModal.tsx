@@ -173,13 +173,42 @@ export const MonthlyRevisionReportModal: React.FC<MonthlyRevisionReportModalProp
         myNumber: cand.myNumber,
         isOver70: cand.is70Over,
         isShortTimeWorker: cand.isShortTimeWorker,
-        remarks: cand.remarks
+        remarks: cand.remarks || (cand.isShortTimeWorker ? '短時間労働者' : '基本給改定のため'),
+        remarksCircles: [
+          ...(cand.is70Over ? [1] : []),
+          ...(cand.isShortTimeWorker ? [3] : []),
+          4
+        ]
       };
     });
 
     setSelectedUserIds(newSelected);
     setEditableRows(newRows);
   }, [isOpen, revisionYearMonth, employees, payrollProfiles, payslips]);
+
+  // 行編集ヘルパー
+  const updateEmployeeRow = (userId: string, updates: Partial<MonthlyRevisionEmployeeDocData>) => {
+    setEditableRows(prev => {
+      const existing = prev[userId];
+      if (!existing) return prev;
+      return {
+        ...prev,
+        [userId]: {
+          ...existing,
+          ...updates
+        }
+      };
+    });
+  };
+
+  // 備考欄〇印のトグル (1〜6)
+  const toggleRemarksCircle = (userId: string, num: number) => {
+    const current = editableRows[userId]?.remarksCircles || [];
+    const updated = current.includes(num)
+      ? current.filter(n => n !== num)
+      : [...current, num].sort((a, b) => a - b);
+    updateEmployeeRow(userId, { remarksCircles: updated });
+  };
 
   // 選択中の届出対象者リスト
   const selectedDocEmployees = useMemo(() => {
@@ -440,12 +469,13 @@ export const MonthlyRevisionReportModal: React.FC<MonthlyRevisionReportModalProp
                         <th className="py-2.5 px-3 text-right">新標準報酬</th>
                         <th className="py-2.5 px-3 text-center">等級差</th>
                         <th className="py-2.5 px-3">判定理由 / 備考</th>
+                        <th className="py-2.5 px-3 min-w-[280px]">届出用紙 印字設定（⑱ 備考〇印 ＆ 理由）</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800 text-slate-200">
                       {candidates.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="py-8 text-center text-slate-500">
+                          <td colSpan={10} className="py-8 text-center text-slate-500">
                             対象データが存在しません。給与確定データ（実DB payslips）をご確認ください。
                           </td>
                         </tr>
@@ -581,6 +611,105 @@ export const MonthlyRevisionReportModal: React.FC<MonthlyRevisionReportModalProp
                                 <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">
                                   {cand.reason}
                                 </p>
+                              </td>
+
+                              {/* 届出用紙 印字設定（⑱ 備考〇印 ＆ 理由） */}
+                              <td className="py-2.5 px-3 bg-slate-950/40 border-l border-slate-800/80">
+                                <div className="space-y-2">
+                                  {/* ⑱ 備考丸囲み番号 (1〜6) */}
+                                  <div>
+                                    <div className="text-[10px] text-slate-400 font-bold mb-1 flex items-center justify-between">
+                                      <span>⑱ 備考 〇印（複数選択可）:</span>
+                                      <span className="text-[9px] text-purple-400 font-mono">
+                                        {(row?.remarksCircles || []).length > 0 ? `選択中: ${(row?.remarksCircles || []).join(', ')}` : '未選択'}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1">
+                                      {[
+                                        { num: 1, label: '1. 70歳以上' },
+                                        { num: 2, label: '2. 二以上' },
+                                        { num: 3, label: '3. 短時間' },
+                                        { num: 4, label: '4. 昇降給理由' },
+                                        { num: 5, label: '5. 健保のみ' },
+                                        { num: 6, label: '6. その他' },
+                                      ].map(item => {
+                                        const isCircleActive = (row?.remarksCircles || []).includes(item.num);
+                                        return (
+                                          <button
+                                            key={item.num}
+                                            type="button"
+                                            onClick={() => toggleRemarksCircle(cand.userId, item.num)}
+                                            className={`text-[10px] px-1.5 py-0.5 rounded border transition-all ${
+                                              isCircleActive
+                                                ? 'bg-purple-600 border-purple-400 text-white font-bold shadow-xs'
+                                                : 'bg-slate-900 border-slate-700/80 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+                                            }`}
+                                            title={`届出用紙の⑱備考欄「${item.label}」に〇印を付けます`}
+                                          >
+                                            {isCircleActive ? `● ${item.label}` : item.label}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  {/* 昇給・降給理由の入力 ＆ プリセット */}
+                                  <div>
+                                    <div className="text-[10px] text-slate-400 font-bold mb-1 flex items-center justify-between">
+                                      <span>昇給・降給の理由（原本カッコ内に印字）:</span>
+                                      <div className="inline-flex rounded border border-slate-700/80 overflow-hidden text-[9px]">
+                                        <button
+                                          type="button"
+                                          onClick={() => updateEmployeeRow(cand.userId, { wageChangeType: '1.昇給' })}
+                                          className={`px-1.5 py-0.5 ${
+                                            row?.wageChangeType === '1.昇給'
+                                              ? 'bg-emerald-600 text-white font-bold'
+                                              : 'bg-slate-900 text-slate-400 hover:text-white'
+                                          }`}
+                                        >
+                                          ⑦ 昇給
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => updateEmployeeRow(cand.userId, { wageChangeType: '2.降給' })}
+                                          className={`px-1.5 py-0.5 ${
+                                            row?.wageChangeType === '2.降給'
+                                              ? 'bg-rose-600 text-white font-bold'
+                                              : 'bg-slate-900 text-slate-400 hover:text-white'
+                                          }`}
+                                        >
+                                          ⑦ 降給
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <input
+                                      type="text"
+                                      value={row?.remarks || ''}
+                                      onChange={(e) => updateEmployeeRow(cand.userId, { remarks: e.target.value })}
+                                      placeholder="例: 基本給改定、定期昇給、ベースアップ"
+                                      className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-hidden focus:border-purple-500"
+                                    />
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {['基本給改定', '定期昇給', 'ベースアップ', '役職手当変更', '短時間労働者'].map((preset) => (
+                                        <button
+                                          key={preset}
+                                          type="button"
+                                          onClick={() => {
+                                            const circles = row?.remarksCircles || [];
+                                            const newCircles = circles.includes(4) ? circles : [...circles, 4].sort((a, b) => a - b);
+                                            updateEmployeeRow(cand.userId, {
+                                              remarks: preset,
+                                              remarksCircles: newCircles
+                                            });
+                                          }}
+                                          className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/60 transition"
+                                        >
+                                          + {preset}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
                               </td>
                             </tr>
                           );

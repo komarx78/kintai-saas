@@ -225,16 +225,30 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     example: '5-630503',
     description: '1段目：生年月日（5:昭和 7:平成 9:令和 - YYMMDD）'
   },
+  // ── ④ 改定年月（原本「年」「月」の各左側空欄・ハイフンなし） ──
   {
-    id: 'empRevisionYearMonth',
-    name: '④ 改定年月',
+    id: 'empRevisionYear',
+    name: '④ 改定 年（和暦）',
     section: 'row_template',
-    x: 63.0,
+    x: 64.6,
     y: 0.6,
     fontSize: 10.5,
-    width: 9.5,
-    example: '8-09',
-    description: '1段目：改定年月（元号年-月）'
+    width: 3.2,
+    align: 'center',
+    example: '8',
+    description: '1段目：改定年月「年」の左側空欄'
+  },
+  {
+    id: 'empRevisionMonth',
+    name: '④ 改定 月',
+    section: 'row_template',
+    x: 68.8,
+    y: 0.6,
+    fontSize: 10.5,
+    width: 3.2,
+    align: 'center',
+    example: '9',
+    description: '1段目：改定年月「月」の左側空欄'
   },
   {
     id: 'empMyNumber',
@@ -298,30 +312,18 @@ export const DEFAULT_MONTHLY_REVISION_FIELDS: MonthlyRevisionDocFieldConfig[] = 
     description: '2段目：従前改定「月」の左側空欄'
   },
 
-  // ── ⑦ 昇(降)給（年月 ＆ 区分〇囲み） ──
-  {
-    id: 'empWageChangeYear',
-    name: '⑦ 昇(降)給 年（和暦）',
-    section: 'row_template',
-    x: 45.2,
-    y: 4.4,
-    fontSize: 9.5,
-    width: 2.8,
-    align: 'center',
-    example: '8',
-    description: '2段目：昇(降)給「年」の左側空欄'
-  },
+  // ── ⑦ 昇(降)給（昇給月 ＆ 区分〇囲み ※原本は「月」のみ記載） ──
   {
     id: 'empWageChangeMonth',
     name: '⑦ 昇(降)給 月',
     section: 'row_template',
-    x: 49.2,
+    x: 48.6,
     y: 4.4,
     fontSize: 9.5,
-    width: 2.8,
+    width: 3.0,
     align: 'center',
     example: '6',
-    description: '2段目：昇(降)給「月」の左側空欄'
+    description: '2段目：昇(降)給「月」の左側空欄（※原本には年の記入欄はありません）'
   },
   {
     id: 'empWageChangeCircle',
