@@ -77,7 +77,7 @@ export default function OfficialSpouseDeductionDoc({
   const year = data.year || 2026;
   const reiwaYear = year - 2018; // 2026 -> 8
   const spIncome = data.spouseIncomeEstimate ?? 0;
-  const empIncome = data.employeeIncomeEstimate ?? 3560000;
+  const empIncome = data.employeeIncomeEstimate ?? 0;
 
   // 1. 本人の区分判定（A: 900万以下, B: 900万超950万以下, C: 950万超1000万以下）
   const empCategory = useMemo(() => {
@@ -630,7 +630,7 @@ export default function OfficialSpouseDeductionDoc({
           {coords.map(field => {
             if (field.disabled) return null;
             const mapped = fieldValueMap.get(field.id);
-            const val = mapped ? mapped.value : field.example;
+            const val = mapped ? mapped.value : '';
             if (!val && val !== '0') return null;
 
             const isCircle = mapped?.isCircle !== undefined ? mapped.isCircle : field.isCircle;

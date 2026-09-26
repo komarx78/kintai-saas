@@ -52,8 +52,8 @@ export interface OfficialSocialInsuranceDocProps {
 export const OfficialSocialInsuranceDoc: React.FC<OfficialSocialInsuranceDocProps> = ({
   type: initialType,
   companyInfo,
-  officeSymbol = '01-イロハ',
-  officeNumber = '12345',
+  officeSymbol = '',
+  officeNumber = '',
   employees,
   selectedEmployeeId,
   onSelectEmployee,

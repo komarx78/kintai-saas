@@ -394,11 +394,6 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data, 
           let spName = data.spouseName || '';
           let spKana = data.spouseNameKana || '';
 
-          // 逆転補正
-          if (!spKana && spName === 'テスト 花子') {
-            spKana = 'テスト ハナコ';
-          }
-
           renderText(spKana, getField('spouseKana'), 'left', false);
           renderText(spName, getField('spouseName'));
           
@@ -453,8 +448,6 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data, 
             const temp = dName;
             dName = dKana;
             dKana = temp;
-          } else if (!dKana && dName === 'テスト 太郎') {
-            dKana = 'テスト タロウ';
           }
           
           // 上段: フリガナ / 下段: 氏名
@@ -532,8 +525,8 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data, 
 
         if (data.disabilityDetails) {
           renderText(data.disabilityDetails, getField('specialDetails'));
-        } else if (data.isWorkingStudent) {
-          renderText(`学校: ${data.workingStudentSchool || '〇〇大学'}`, getField('specialDetails'));
+        } else if (data.isWorkingStudent && data.workingStudentSchool) {
+          renderText(`学校: ${data.workingStudentSchool}`, getField('specialDetails'));
         }
 
         // 住民税（16歳未満 1人目〜2人目 原本枠準拠）
@@ -609,7 +602,7 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data, 
 
     renderCanvas();
     return () => { isCancelled = true; };
-  }, [data]);
+  }, [data, targetYear, resolvedTenantId]);
 
   /**
    * 🖨️ A4横 確実ダイレクト印刷（表面1枚 / 両面2枚セット）
@@ -728,7 +721,28 @@ export const OfficialTaxExemptionDoc: React.FC<TaxExemptionDocProps> = ({ data, 
   };
 
   return (
-    <div className="w-full bg-slate-100 py-3 select-text font-sans">
+    <div className="official-tax-exemption-print-container w-full bg-slate-100 py-3 select-text font-sans print:bg-white print:p-0">
+      <style>{`
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 0mm !important;
+          }
+          body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .official-tax-exemption-print-container {
+            width: 297mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+          }
+        }
+      `}</style>
       {/* 🧭 トップツールバー */}
       <div className="max-w-[1150px] mx-auto mb-3 flex flex-wrap items-center justify-between gap-2 px-2 no-print">
         <div className="flex items-center gap-1 bg-white p-1 rounded-xl shadow-xs border border-slate-200">
