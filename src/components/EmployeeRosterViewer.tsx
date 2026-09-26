@@ -528,7 +528,7 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                       <span className="text-xs text-slate-400">（{currentEmployee.name_kana}）</span>
                     )}
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                      {currentEmployee.department || '本社'}
+                      {currentEmployee.department || '未配属'}
                     </span>
                     {currentEmployee.is_executive && (
                       <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
@@ -783,7 +783,7 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                               <tr className="hover:bg-slate-50/50">
                                 <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">従業員番号</td>
                                 <td className="px-4 py-2.5 text-slate-800 font-mono font-bold">
-                                  {currentEmployee.employee_number || '0001'}
+                                  {currentEmployee.employee_number || '—'}
                                 </td>
                               </tr>
                               <tr className="hover:bg-slate-50/50">
@@ -794,11 +794,11 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                               </tr>
                               <tr className="hover:bg-slate-50/50">
                                 <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">所属部署</td>
-                                <td className="px-4 py-2.5 text-slate-800">{currentEmployee.department || '本社営業部'}</td>
+                                <td className="px-4 py-2.5 text-slate-800">{currentEmployee.department || '未配属'}</td>
                               </tr>
                               <tr className="hover:bg-slate-50/50">
                                 <td className="w-48 bg-slate-50/80 px-4 py-2.5 font-bold text-slate-600 border-r border-slate-100">役職</td>
-                                <td className="px-4 py-2.5 text-slate-800">{currentEmployee.position_name || '一般社員'}</td>
+                                <td className="px-4 py-2.5 text-slate-800">{currentEmployee.position_name || (currentEmployee.is_executive ? '役員' : '—')}</td>
                               </tr>
                             </tbody>
                           </table>
@@ -1057,11 +1057,11 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                         <div className="space-y-2 font-mono text-[8pt]">
                           <div className="flex items-center gap-3">
                             <span className="text-slate-500">{warekiJoin}</span>
-                            <span className="font-sans font-bold text-slate-900">当社入社（{currentEmployee.department || '本社'} 配属）</span>
+                            <span className="font-sans font-bold text-slate-900">{currentEmployee.department ? `当社入社（${currentEmployee.department} 配属）` : '当社入社'}</span>
                           </div>
                           <div className="flex items-center gap-3">
                             <span className="text-slate-500">{warekiJoin}</span>
-                            <span className="font-sans text-slate-800">役職任用: {currentEmployee.position_name || (currentEmployee.is_executive ? '役員就任' : '一般社員')}</span>
+                            <span className="font-sans text-slate-800">{currentEmployee.position_name ? `役職任用: ${currentEmployee.position_name}` : (currentEmployee.is_executive ? '役員就任' : '本採用')}</span>
                           </div>
                           <div className="flex items-center gap-3 text-slate-400">
                             <span>-</span>
@@ -1078,7 +1078,7 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                         {warekiJoin}
                       </td>
                       <th>従事業務</th>
-                      <td className="font-bold text-slate-900">{currentEmployee.department || '本社'}（{currentEmployee.position_name || '一般業務'}）</td>
+                      <td className="font-bold text-slate-900">{currentEmployee.department || '—'}{currentEmployee.position_name ? `（${currentEmployee.position_name}）` : ''}</td>
                     </tr>
 
                     {/* 7. 契約種別・役職 */}
@@ -1088,7 +1088,7 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
                         {currentEmployee.is_executive ? '役員（委任契約）' : (currentEmployee.salary_type === 'hourly' ? '有期雇用（パート・アルバイト）' : '無期雇用（正社員）')}
                       </td>
                       <th>役職・職種</th>
-                      <td className="text-slate-900">{currentEmployee.position_name || (currentEmployee.is_executive ? '役員' : '一般職')}</td>
+                      <td className="text-slate-900">{currentEmployee.position_name || (currentEmployee.is_executive ? '役員' : '—')}</td>
                     </tr>
 
                     {/* 8. 社会保険・労働保険 */}
@@ -1215,7 +1215,7 @@ export const EmployeeRosterViewer: React.FC<EmployeeRosterViewerProps> = ({
               </div>
               <div>
                 <label className="block text-[11px] font-bold text-slate-500 mb-1">
-                  対象社員: {currentEmployee?.name}（{currentEmployee?.employee_number || '0001'}）
+                  対象社員: {currentEmployee?.name}{currentEmployee?.employee_number ? `（${currentEmployee.employee_number}）` : ''}
                 </label>
                 <p className="text-[11px] text-slate-400">
                   ※ 身上申請や雇用契約書面からの変更申請を受け付けると、本労働者名簿にも即時自動反映されます。

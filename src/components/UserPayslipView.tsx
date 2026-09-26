@@ -633,7 +633,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
 
               <div className="grid grid-cols-3 gap-2 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 mb-5">
                 <div><span className="text-slate-400 text-[10px]">氏名:</span> <span className="font-black text-sm">{userName} 殿</span></div>
-                <div><span className="text-slate-400 text-[10px]">所属:</span> <span className="font-bold">{record.department || userProfile.department || '本社'}</span></div>
+                <div><span className="text-slate-400 text-[10px]">所属:</span> <span className="font-bold">{record.department || userProfile.department || '—'}</span></div>
                 <div><span className="text-slate-400 text-[10px]">算定基準:</span> <span className="font-bold text-indigo-700">{multiplier} ヶ月分</span></div>
               </div>
 
@@ -1120,20 +1120,20 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
                   companySealUrl: sealFromLocal,
                   employeeName: userName,
                   employeeAddress: userProfile.address || '',
-                  joinDate: userProfile.join_date || '2024-04-01',
+                  joinDate: userProfile.join_date || '',
                   contractType: 'indefinite',
-                  trialPeriodMonths: 3,
-                  workLocation: companySettings?.address || '本社',
+                  trialPeriodMonths: 0,
+                  workLocation: companySettings?.address || companySettings?.name || '指定の勤務場所',
                   jobDescription: '通常業務',
                   startTime: '09:00',
                   endTime: '18:00',
                   breakTimeMinutes: 60,
-                  overtimeWork: 'あり（労働基準法第36条に基づく協定の範囲内）',
-                  holidaysText: '土曜、日曜、祝日、年末年始休暇',
+                  overtimeWork: tpl?.overtime_work_notes || 'あり（労働基準法第36条に基づく協定の範囲内）',
+                  holidaysText: tpl?.holidays_special_notes || '土曜、日曜、祝日、年末年始休暇',
                   paidLeaveGrantDays: 10,
-                  salaryType: 'monthly',
+                  salaryType: (signModalDoc as any)?.salary_type || 'monthly',
                   baseSalary: signModalDoc.base_salary,
-                  hourlyWage: 1150,
+                  hourlyWage: (signModalDoc as any)?.hourly_wage || 0,
                   positionAllowance: signModalDoc.position_allowance,
                   qualificationAllowance: signModalDoc.qualification_allowance,
                   housingAllowance: signModalDoc.housing_allowance,

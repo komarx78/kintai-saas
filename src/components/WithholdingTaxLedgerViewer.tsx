@@ -853,13 +853,13 @@ export const WithholdingTaxLedgerViewer: React.FC<WithholdingTaxLedgerViewerProp
                         所　属
                       </div>
                       <div className="flex-1 px-1.5 py-0.5 font-bold text-slate-800 flex items-center">
-                        {currentEmployee?.department || '営業部'}
+                        {currentEmployee?.department || '—'}
                       </div>
                       <div className="w-12 bg-slate-100 border-l border-r border-slate-900 px-1 py-0.5 font-bold text-center flex items-center justify-center">
                         職　名
                       </div>
                       <div className="w-28 px-1.5 py-0.5 text-slate-800 flex items-center">
-                        {currentEmployee?.position_name || '一般'}
+                        {currentEmployee?.position_name || '—'}
                       </div>
                     </div>
 

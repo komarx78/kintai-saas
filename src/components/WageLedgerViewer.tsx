@@ -794,12 +794,12 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
                   <div className="flex items-center gap-4">
                     <span><strong className="text-slate-600 font-bold">氏名:</strong> <strong className="text-slate-950 font-black text-[9pt]">{currentEmployee.name}</strong> {currentEmployee.name_kana && <span className="text-slate-500 font-normal">（{currentEmployee.name_kana}）</span>}</span>
                     <span><strong className="text-slate-600 font-bold">性別:</strong> <span>{currentEmployee.gender ? (currentEmployee.gender === 'male' || currentEmployee.gender === '男' ? '男' : '女') : '-'}</span></span>
-                    <span><strong className="text-slate-600 font-bold">社員番号:</strong> <span className="font-mono font-bold">{currentEmployee.employee_number || '0001'}</span></span>
-                    <span><strong className="text-slate-600 font-bold">所属:</strong> <span className="font-bold">{currentEmployee.department || '本社'}</span></span>
-                    <span><strong className="text-slate-600 font-bold">役職:</strong> <span>{currentEmployee.position_name || (currentEmployee.is_executive ? '役員' : '一般社員')}</span></span>
+                    <span><strong className="text-slate-600 font-bold">社員番号:</strong> <span className="font-mono font-bold">{currentEmployee.employee_number || '—'}</span></span>
+                    <span><strong className="text-slate-600 font-bold">所属:</strong> <span className="font-bold">{currentEmployee.department || '—'}</span></span>
+                    <span><strong className="text-slate-600 font-bold">役職:</strong> <span>{currentEmployee.position_name || (currentEmployee.is_executive ? '役員' : '—')}</span></span>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span><strong className="text-slate-600 font-bold">雇入年月日:</strong> <span className="font-mono">{currentEmployee.join_date || `${selectedYear}-04-01`}</span></span>
+                    <span><strong className="text-slate-600 font-bold">雇入年月日:</strong> <span className="font-mono">{currentEmployee.join_date || '—'}</span></span>
                     <span><strong className="text-slate-600 font-bold">給与形態:</strong> <span className="font-bold">{currentEmployee.salary_type === 'hourly' ? '時給制' : '月給制'}</span></span>
                     <span><strong className="text-slate-600 font-bold">扶養親族:</strong> <span>{currentEmployee.dependents_count || 0}名</span></span>
                   </div>
@@ -825,8 +825,8 @@ export const WageLedgerViewer: React.FC<WageLedgerViewerProps> = ({
                       )}
                     </h3>
                     <div className="text-xs text-slate-400 flex items-center gap-3 mt-0.5 font-mono">
-                      <span>社員番号: {currentEmployee.employee_number || '0001'}</span>
-                      <span>雇入日: {currentEmployee.join_date || `${selectedYear}-04-01`}</span>
+                      <span>社員番号: {currentEmployee.employee_number || '—'}</span>
+                      <span>雇入日: {currentEmployee.join_date || '—'}</span>
                       <span>給与形態: {currentEmployee.salary_type === 'hourly' ? '時給制' : '月給制'}</span>
                     </div>
                   </div>
