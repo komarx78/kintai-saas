@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  X, Printer, Sparkles, 
+  X, Printer, 
   CheckCircle2, Users, FileText, 
-  Building2, RefreshCw 
+  Building2, RefreshCw, ChevronDown, ChevronUp, ArrowRight
 } from 'lucide-react';
 import { 
   OfficialMonthlyRevisionDoc, 
@@ -55,6 +55,7 @@ export const MonthlyRevisionReportModal: React.FC<MonthlyRevisionReportModalProp
   const [companyName, setCompanyName] = useState('');
   const [companyOwnerName, setCompanyOwnerName] = useState('');
   const [companyPhone, setCompanyPhone] = useState('');
+  const [isOfficeInfoOpen, setIsOfficeInfoOpen] = useState(false); // 事業所情報の開閉アコーディオン
 
   // 自動検出結果
   const [candidates, setCandidates] = useState<MonthlyRevisionCandidate[]>([]);
@@ -218,6 +219,49 @@ export const MonthlyRevisionReportModal: React.FC<MonthlyRevisionReportModalProp
       .filter((row): row is MonthlyRevisionEmployeeDocData => !!row);
   }, [candidates, selectedUserIds, editableRows]);
 
+  // 表示フィルター: 'eligible' (該当者のみ・デフォルト) | 'all' (全員) | 'ineligible' (対象外のみ)
+  const [filterMode, setFilterMode] = useState<'eligible' | 'all' | 'ineligible'>('eligible');
+
+  // 該当者一覧
+  const eligibleCandidates = useMemo(() => {
+    return candidates.filter(c => c.isEligible);
+  }, [candidates]);
+
+  // 対象外一覧
+  const ineligibleCandidates = useMemo(() => {
+    return candidates.filter(c => !c.isEligible);
+  }, [candidates]);
+
+  // 画面に表示する従業員リスト
+  const displayedCandidates = useMemo(() => {
+    if (filterMode === 'eligible') return eligibleCandidates;
+    if (filterMode === 'ineligible') return ineligibleCandidates;
+    return candidates;
+  }, [filterMode, eligibleCandidates, ineligibleCandidates, candidates]);
+
+  // 事業所設定の保存ヘルパー
+  const saveOfficeSettings = (updates: {
+    officeSymbol?: string;
+    companyAddress?: string;
+    companyOwnerName?: string;
+  }) => {
+    if (!tenantId) return;
+    try {
+      const key = `company_insurance_settings_${tenantId}`;
+      const raw = localStorage.getItem(key);
+      const existing = raw ? JSON.parse(raw) : {};
+      const updated = {
+        ...existing,
+        ...(updates.officeSymbol !== undefined ? { shakai_hoken_office_symbol: updates.officeSymbol } : {}),
+        ...(updates.companyAddress !== undefined ? { company_address: updates.companyAddress } : {}),
+        ...(updates.companyOwnerName !== undefined ? { representative_name: updates.companyOwnerName } : {})
+      };
+      localStorage.setItem(key, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('saveOfficeSettings error:', e);
+    }
+  };
+
   // 判定対象の3ヶ月の表示文字列 (例: '6月・7月・8月')
   const target3MonthsText = useMemo(() => {
     if (candidates.length > 0 && candidates[0].consecutiveMonths.length === 3) {
@@ -313,28 +357,146 @@ export const MonthlyRevisionReportModal: React.FC<MonthlyRevisionReportModalProp
         {/* メインコンテンツ */}
         <div className="flex-1 overflow-hidden flex flex-col">
           {activeTab === 'candidates' ? (
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-950/60">
-              {/* ガイダンスカード */}
-              <div className="bg-gradient-to-r from-purple-950/40 via-indigo-950/30 to-slate-900 border border-purple-500/30 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-md">
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white text-sm flex items-center gap-2">
-                      {revisionYearMonth} 改定（{target3MonthsText} 支給実績）の随時改定判定結果
-                    </h4>
-                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                      健康保険法第43条および厚生年金保険法第23条に基づき、
-                      <strong className="text-purple-300">①固定的賃金の変動</strong>、
-                      <strong className="text-purple-300">②変動後3ヶ月連続17日以上（短時間11日以上）の支払基礎日数</strong>、
-                      <strong className="text-purple-300">③新旧標準報酬の2等級以上の差</strong>、
-                      <strong className="text-purple-300">④変動方向の一致</strong>を全自動で判定しました。
-                    </p>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-950/60">
+              {/* 🧭 超直感かんたん3ステップ案内バー */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-900/80 p-2.5 rounded-2xl border border-slate-800 text-xs shadow-xs">
+                <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-purple-950/50 border border-purple-500/40 text-purple-200">
+                  <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
+                  <div className="truncate">
+                    <div className="font-bold text-white flex items-center gap-1.5">
+                      対象者の確認
+                      <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.2 rounded font-mono">
+                        {eligibleCandidates.length}名 該当
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-purple-300/80">自動で該当者にチェックが入っています</div>
                   </div>
                 </div>
+                <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-300">
+                  <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-[10px] shrink-0">2</span>
+                  <div className="truncate">
+                    <div className="font-bold text-white">昇降給の理由を選択</div>
+                    <div className="text-[10px] text-slate-400">「基本給改定」等のボタンを押すだけ</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-slate-300">
+                  <span className="w-5 h-5 rounded-full bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-[10px] shrink-0">3</span>
+                  <div className="truncate">
+                    <div className="font-bold text-white">公式用紙（様式2221）印刷</div>
+                    <div className="text-[10px] text-slate-400">右下ボタンからA4プレビュー＆精密印字</div>
+                  </div>
+                </div>
+              </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+              {/* 🎯 随時改定（月変）判定結果サマリーカード（誰がどうなの？を一瞬で解決） */}
+              {eligibleCandidates.length > 0 ? (
+                <div className="bg-gradient-to-r from-purple-950/70 via-indigo-950/50 to-slate-900 border-2 border-purple-500/60 rounded-2xl p-4 sm:p-5 shadow-xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-purple-500/30">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xl">📢</span>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="bg-amber-400 text-slate-950 text-xs font-black px-2.5 py-0.5 rounded-full shadow-xs">
+                            ⚠️ 届出が必要な社員（{eligibleCandidates.length}名）
+                          </span>
+                          <h4 className="font-black text-sm text-white">
+                            {revisionYearMonth} 改定：固定的賃金の変動から3ヶ月平均で2等級以上の差が生じました
+                          </h4>
+                        </div>
+                        <p className="text-xs text-purple-200/90 mt-0.5">
+                          日本年金機構への提出が必要です。下のリストで理由（⑱）を確認し、印刷へ進んでください。
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('preview')}
+                      disabled={selectedDocEmployees.length === 0}
+                      className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white font-black text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>この{selectedDocEmployees.length}名で印刷プレビューへ →</span>
+                    </button>
+                  </div>
+
+                  {/* 対象者ごとのビフォーアフター等級カード */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+                    {eligibleCandidates.map((c) => (
+                      <div
+                        key={c.userId}
+                        className="bg-slate-900/90 border border-purple-400/40 rounded-xl p-3.5 shadow-md flex flex-col justify-between gap-2"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-7 h-7 rounded-lg bg-purple-600/30 text-purple-300 flex items-center justify-center font-bold text-xs">
+                              👤
+                            </span>
+                            <span className="font-black text-white text-sm">
+                              {c.userName}
+                            </span>
+                          </div>
+                          <span
+                            className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                              c.changeType === '昇給'
+                                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                                : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                            }`}
+                          >
+                            {c.changeType} ({c.changeMonth}変動)
+                          </span>
+                        </div>
+
+                        {/* 等級ビフォーアフター */}
+                        <div className="bg-slate-950/80 p-2.5 rounded-lg border border-slate-800 text-xs flex items-center justify-between">
+                          <div>
+                            <div className="text-[10px] text-slate-400">従前</div>
+                            <div className="font-mono text-slate-300 font-bold">¥{c.currentHealthStandard.toLocaleString()}</div>
+                            <div className="text-[10px] text-purple-300 font-bold">{c.currentHealthGrade}等級</div>
+                          </div>
+                          <ArrowRight className="w-4 h-4 text-purple-400 shrink-0" />
+                          <div>
+                            <div className="text-[10px] text-slate-400">新標準報酬</div>
+                            <div className="font-mono text-emerald-400 font-bold">¥{c.newHealthStandard.toLocaleString()}</div>
+                            <div className="text-[10px] text-emerald-300 font-bold">{c.newHealthGrade}等級</div>
+                          </div>
+                          <div className="text-right pl-2 border-l border-slate-800">
+                            <div className="text-[10px] text-slate-400">等級差</div>
+                            <div className="font-mono text-amber-300 font-black text-sm">
+                              {c.healthGradeDiff > 0 ? `+${c.healthGradeDiff}` : c.healthGradeDiff} 等級
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-[11px] text-slate-400 flex items-center justify-between">
+                          <span>3ヶ月平均: <strong className="text-slate-200 font-mono">¥{c.averageWage.toLocaleString()}</strong></span>
+                          <span className="text-[10px] text-emerald-400 font-bold">✅ 随時改定要件 適合</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gradient-to-r from-emerald-950/30 via-slate-900 to-slate-900 border border-emerald-500/40 rounded-2xl p-4.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 text-xl font-bold">
+                      ✅
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          届出不要
+                        </span>
+                        <h4 className="font-bold text-white text-sm">
+                          {revisionYearMonth} 改定：月変（随時改定）の該当者はいません
+                        </h4>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        全{candidates.length}名の給与実績を自動判定しましたが、固定的賃金変動に伴う2等級以上の差が生じた社員はいません。今月は年金事務所への届出は必要ありません。
+                      </p>
+                    </div>
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -346,92 +508,157 @@ export const MonthlyRevisionReportModal: React.FC<MonthlyRevisionReportModalProp
                       });
                       setCandidates(detected);
                     }}
-                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 transition flex items-center gap-1.5 cursor-pointer shrink-0 self-start sm:self-auto"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
-                    <span>再判定実行</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('preview')}
-                    disabled={selectedDocEmployees.length === 0}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>公式用紙（様式2221）を印刷へ進む →</span>
+                    <span>最新データで再判定</span>
                   </button>
                 </div>
-              </div>
+              )}
 
-              {/* 事業所基本情報カード */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
-                  <h5 className="text-xs font-bold text-slate-200 flex items-center gap-2">
+              {/* 事業所基本情報カード（折りたたみ式） */}
+              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden transition">
+                <button
+                  type="button"
+                  onClick={() => setIsOfficeInfoOpen(!isOfficeInfoOpen)}
+                  className="w-full px-4 py-3 bg-slate-800/40 hover:bg-slate-800/60 flex items-center justify-between text-left transition cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-purple-400" />
-                    届出先年金事務所・事業所情報（様式コード2221ヘッダー印字用）
-                  </h5>
-                  <span className="text-[11px] text-slate-400">提出日: {submissionDate}</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">事業所整理記号</label>
-                    <input
-                      type="text"
-                      value={officeSymbol}
-                      onChange={(e) => {
-                        setOfficeSymbol(e.target.value);
-                        if (e.target.value.includes('-')) {
-                          const p = e.target.value.split('-');
-                          setOfficeCityCode(p[0] || '');
-                          setOfficeSymbolKana(p[1] || '');
-                        }
-                      }}
-                      placeholder="例: 25-カア"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono"
-                    />
+                    <span className="text-xs font-bold text-slate-200">
+                      🏢 届出先年金事務所・事業所情報（整理記号・所在地）
+                    </span>
+                    <span className="text-[10px] text-slate-400 hidden sm:inline">
+                      （{officeSymbol ? `整理記号: ${officeSymbol}` : '未設定'} / {companyOwnerName || '未設定'}）
+                    </span>
                   </div>
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">提出年月日</label>
-                    <input
-                      type="date"
-                      value={submissionDate}
-                      onChange={(e) => setSubmissionDate(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                    />
+                  <div className="flex items-center gap-1.5 text-xs text-purple-300 font-bold">
+                    <span>{isOfficeInfoOpen ? '閉じる' : '設定を確認・変更'}</span>
+                    {isOfficeInfoOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </div>
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">事業所所在地</label>
-                    <input
-                      type="text"
-                      value={companyAddress}
-                      onChange={(e) => setCompanyAddress(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white truncate"
-                    />
+                </button>
+
+                {isOfficeInfoOpen && (
+                  <div className="p-4 border-t border-slate-800 bg-slate-900/60 animate-in fade-in duration-150">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">事業所整理記号</label>
+                        <input
+                          type="text"
+                          value={officeSymbol}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setOfficeSymbol(val);
+                            if (val.includes('-')) {
+                              const p = val.split('-');
+                              setOfficeCityCode(p[0] || '');
+                              setOfficeSymbolKana(p[1] || '');
+                            }
+                            saveOfficeSettings({ officeSymbol: val });
+                          }}
+                          placeholder="例: 25-カア"
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">提出年月日</label>
+                        <input
+                          type="date"
+                          value={submissionDate}
+                          onChange={(e) => setSubmissionDate(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">事業所所在地</label>
+                        <input
+                          type="text"
+                          value={companyAddress}
+                          onChange={(e) => {
+                            setCompanyAddress(e.target.value);
+                            saveOfficeSettings({ companyAddress: e.target.value });
+                          }}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white truncate"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">事業主氏名</label>
+                        <input
+                          type="text"
+                          value={companyOwnerName}
+                          onChange={(e) => {
+                            setCompanyOwnerName(e.target.value);
+                            saveOfficeSettings({ companyOwnerName: e.target.value });
+                          }}
+                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">事業主氏名</label>
-                    <input
-                      type="text"
-                      value={companyOwnerName}
-                      onChange={(e) => setCompanyOwnerName(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white"
-                    />
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* 対象者一覧テーブル */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
-                <div className="px-4 py-3 bg-slate-800/80 border-b border-slate-700 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-white">
-                      従業員別 随時改定判定リスト
-                    </span>
-                    <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full font-bold">
-                      全{candidates.length}名中 {selectedDocEmployees.length}名を届出対象として選択中
-                    </span>
+                <div className="px-4 py-3 bg-slate-800/90 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                  {/* フィルター切り替えタブ */}
+                  <div className="flex items-center gap-1.5 p-1 bg-slate-950/70 rounded-xl border border-slate-700/80">
+                    <button
+                      type="button"
+                      onClick={() => setFilterMode('eligible')}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                        filterMode === 'eligible'
+                          ? 'bg-purple-600 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>🎯 届出該当者のみ</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                        filterMode === 'eligible' ? 'bg-purple-800 text-white' : 'bg-slate-800 text-slate-300'
+                      }`}>
+                        {eligibleCandidates.length}名
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setFilterMode('all')}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                        filterMode === 'all'
+                          ? 'bg-purple-600 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>👥 全従業員を表示</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                        filterMode === 'all' ? 'bg-purple-800 text-white' : 'bg-slate-800 text-slate-300'
+                      }`}>
+                        {candidates.length}名
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setFilterMode('ineligible')}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer ${
+                        filterMode === 'ineligible'
+                          ? 'bg-purple-600 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span>対象外の社員</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                        filterMode === 'ineligible' ? 'bg-purple-800 text-white' : 'bg-slate-800 text-slate-300'
+                      }`}>
+                        {ineligibleCandidates.length}名
+                      </span>
+                    </button>
                   </div>
+
                   <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400 font-bold">
+                      届出対象: <strong className="text-white">{selectedDocEmployees.length}名</strong> 選択中
+                    </span>
                     <button
                       type="button"
                       onClick={() => {
@@ -473,14 +700,27 @@ export const MonthlyRevisionReportModal: React.FC<MonthlyRevisionReportModalProp
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800 text-slate-200">
-                      {candidates.length === 0 ? (
+                      {displayedCandidates.length === 0 ? (
                         <tr>
-                          <td colSpan={10} className="py-8 text-center text-slate-500">
-                            対象データが存在しません。給与確定データ（実DB payslips）をご確認ください。
+                          <td colSpan={10} className="py-10 text-center text-slate-400">
+                            {filterMode === 'eligible' ? (
+                              <div className="space-y-1">
+                                <p className="font-bold text-slate-300 text-sm">
+                                  🎉 当月改定の月変該当者はいません（届出不要）
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  全{candidates.length}名の判定状況を確認したい場合は、上の「👥 全従業員を表示」タブをクリックしてください。
+                                </p>
+                              </div>
+                            ) : filterMode === 'ineligible' ? (
+                              <p>対象外の社員はいません。</p>
+                            ) : (
+                              <p>対象データが存在しません。給与確定データ（実DB payslips）をご確認ください。</p>
+                            )}
                           </td>
                         </tr>
                       ) : (
-                        candidates.map((cand) => {
+                        displayedCandidates.map((cand) => {
                           const isSelected = !!selectedUserIds[cand.userId];
                           const row = editableRows[cand.userId];
                           const m1 = cand.consecutiveMonths[0];
