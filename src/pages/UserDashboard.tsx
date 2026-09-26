@@ -735,6 +735,22 @@ const UserDashboard = () => {
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !user.tenant_id) return;
+
+    if (!startDate) {
+      alert('開始日を入力してください');
+      return;
+    }
+
+    if (leaveType !== '打刻修正') {
+      if (!endDate) {
+        alert('終了日を入力してください');
+        return;
+      }
+      if (startDate > endDate) {
+        alert('開始日は終了日以前の日付を指定してください');
+        return;
+      }
+    }
     
     setIsSubmittingLeave(true);
     try {
