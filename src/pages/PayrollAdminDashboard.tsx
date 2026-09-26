@@ -130,6 +130,11 @@ export default function PayrollAdminDashboard() {
             >
               <DollarSign className="w-4 h-4 shrink-0" />
               <span>給与計算・明細発行</span>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs shrink-0 ${
+                activeTab === 'payslip' ? 'bg-white text-emerald-800' : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                毎月の基本
+              </span>
             </button>
             <button
               onClick={() => setActiveTab('bonus')}
@@ -141,8 +146,10 @@ export default function PayrollAdminDashboard() {
             >
               <Gift className="w-4 h-4 text-amber-300 shrink-0" />
               <span>賞与計算・明細発行</span>
-              <span className="text-[10px] bg-amber-400 text-slate-900 font-black px-1.5 py-0.2 rounded-full shadow-2xs shrink-0">
-                賞与
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs shrink-0 ${
+                activeTab === 'bonus' ? 'bg-amber-300 text-slate-900' : 'bg-amber-100 text-amber-800'
+              }`}>
+                年2回
               </span>
             </button>
             <button
@@ -155,6 +162,11 @@ export default function PayrollAdminDashboard() {
             >
               <TrendingUp className="w-4 h-4 shrink-0" />
               <span>社員給与・昇給台帳</span>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs shrink-0 ${
+                activeTab === 'ledger' ? 'bg-white text-emerald-800' : 'bg-slate-200 text-slate-700'
+              }`}>
+                昇給時
+              </span>
             </button>
             <button
               onClick={() => setActiveTab('reports')}
@@ -166,8 +178,10 @@ export default function PayrollAdminDashboard() {
             >
               <FileText className="w-4 h-4 shrink-0" />
               <span>労務・法定帳票発行</span>
-              <span className="text-[10px] bg-indigo-100 text-indigo-800 font-black px-1.5 py-0.2 rounded-full shadow-2xs shrink-0">
-                公式帳票
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full shadow-2xs shrink-0 ${
+                activeTab === 'reports' ? 'bg-white text-emerald-800' : 'bg-indigo-100 text-indigo-800'
+              }`}>
+                公的届出
               </span>
             </button>
           </div>
