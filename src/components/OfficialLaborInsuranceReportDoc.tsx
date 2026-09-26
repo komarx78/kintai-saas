@@ -153,6 +153,35 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
         annualWage = monthlyWage * (emp.is_retired ? 6 : 12);
       }
 
+      // 🛡️ 実確定賞与（mf_bonus_campaigns_${tenantId}）の取得・合算（労働保険徴収法第2条第2項、労基法第11条）
+      let annualBonus = 0;
+      if (tenantId) {
+        try {
+          const rawBonus = localStorage.getItem(`mf_bonus_campaigns_${tenantId}`);
+          if (rawBonus) {
+            const campaigns = JSON.parse(rawBonus);
+            if (Array.isArray(campaigns)) {
+              campaigns.forEach((camp: any) => {
+                if (camp.status === 'confirmed' && camp.payment_date) {
+                  const payDate = new Date(camp.payment_date);
+                  const payYear = payDate.getFullYear();
+                  const payMonth = payDate.getMonth() + 1;
+                  // 対象年度判定: 前年4月〜当年3月
+                  const isTargetFiscal = (payYear === fiscalYear - 1 && payMonth >= 4) || (payYear === fiscalYear && payMonth <= 3);
+                  if (isTargetFiscal && Array.isArray(camp.items)) {
+                    const myBonus = camp.items.find((item: any) => item.employee_id === emp.id || item.user_id === emp.id);
+                    if (myBonus) {
+                      annualBonus += Number(myBonus.bonus_amount || myBonus.gross_bonus || 0);
+                    }
+                  }
+                }
+              });
+            }
+          }
+        } catch (_) {}
+      }
+      annualWage += annualBonus;
+
       const isAccidentEligible = !isExecutive; // 役員以外は全員労災対象
       const isEmploymentEligible = !isExecutive && (emp.employment_insurance_joined !== false); // 雇用保険加入者
 
@@ -161,6 +190,7 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
         isExecutive,
         isPartTime,
         annualWage,
+        annualBonus,
         isAccidentEligible,
         isEmploymentEligible,
         hasActualRecords,
@@ -170,18 +200,20 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
   }, [employees, dbPayslips, fiscalYear, tenantId]);
 
 
-  // 1. 労災保険対象
+  // 1. 労災保険対象（労働保険徴収法第19条: 千円未満切捨て後に料率算定）
   const accidentWorkers = eligibleEmployees.filter(e => e.isAccidentEligible);
   const accidentTotalWage = accidentWorkers.reduce((sum, e) => sum + e.annualWage, 0);
-  const accidentPremium = Math.floor((accidentTotalWage * accidentInsuranceRate) / 1000);
+  const accidentCalculatedWage = Math.floor(accidentTotalWage / 1000) * 1000;
+  const accidentPremium = Math.floor((accidentCalculatedWage * accidentInsuranceRate) / 1000);
 
-  // 2. 雇用保険対象
+  // 2. 雇用保険対象（千円未満切捨て後に料率算定）
   const employmentWorkers = eligibleEmployees.filter(e => e.isEmploymentEligible);
   const employmentTotalWage = employmentWorkers.reduce((sum, e) => sum + e.annualWage, 0);
-  const employmentPremium = Math.floor((employmentTotalWage * employmentInsuranceRate) / 1000);
+  const employmentCalculatedWage = Math.floor(employmentTotalWage / 1000) * 1000;
+  const employmentPremium = Math.floor((employmentCalculatedWage * employmentInsuranceRate) / 1000);
 
-  // 3. 一般拠出金 (労災対象賃金総額に掛かる)
-  const generalContribution = Math.floor((accidentTotalWage * generalContributionRate) / 1000);
+  // 3. 一般拠出金 (労災対象賃金千円未満切捨額に掛かる)
+  const generalContribution = Math.floor((accidentCalculatedWage * generalContributionRate) / 1000);
 
   // 確定保険料合計
   const totalDefinitePremium = accidentPremium + employmentPremium + generalContribution;
@@ -345,7 +377,7 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
                   </td>
                   <td className="p-2 border-r border-slate-300 font-mono font-bold">{accidentWorkers.length} 名</td>
                   <td className="p-2 border-r border-slate-300 font-mono font-bold text-right pr-4">
-                    ¥{accidentTotalWage.toLocaleString()}
+                    ¥{accidentCalculatedWage.toLocaleString()}
                   </td>
                   <td className="p-2 border-r border-slate-300 font-mono">
                     {accidentInsuranceRate} / 1,000
@@ -362,7 +394,7 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
                   </td>
                   <td className="p-2 border-r border-slate-300 font-mono font-bold">{employmentWorkers.length} 名</td>
                   <td className="p-2 border-r border-slate-300 font-mono font-bold text-right pr-4">
-                    ¥{employmentTotalWage.toLocaleString()}
+                    ¥{employmentCalculatedWage.toLocaleString()}
                   </td>
                   <td className="p-2 border-r border-slate-300 font-mono">
                     {employmentInsuranceRate} / 1,000
@@ -379,7 +411,7 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
                   </td>
                   <td className="p-2 border-r border-slate-300 font-mono">{accidentWorkers.length} 名</td>
                   <td className="p-2 border-r border-slate-300 font-mono text-right pr-4">
-                    ¥{accidentTotalWage.toLocaleString()}
+                    ¥{accidentCalculatedWage.toLocaleString()}
                   </td>
                   <td className="p-2 border-r border-slate-300 font-mono">
                     0.02 / 1,000
@@ -429,7 +461,12 @@ export const OfficialLaborInsuranceReportDoc: React.FC<OfficialLaborInsuranceRep
                       {emp.isExecutive ? '役員' : emp.isPartTime ? 'パート' : '正社員'}
                     </td>
                     <td className="p-1 border-r border-slate-300 font-mono text-right pr-2 font-bold">
-                      ¥{emp.annualWage.toLocaleString()}
+                      <div>¥{emp.annualWage.toLocaleString()}</div>
+                      {emp.annualBonus > 0 && (
+                        <div className="text-[8px] text-amber-700 font-normal">
+                          (賞与 ¥{emp.annualBonus.toLocaleString()}含)
+                        </div>
+                      )}
                     </td>
                     <td className="p-1 border-r border-slate-300">
                       {emp.isAccidentEligible ? (

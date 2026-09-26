@@ -169,40 +169,93 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
 
   const monthlyBaseWage = currentEmployee?.base_salary || 0;
 
-  // 賃金支払状況テーブルの自動算定（退職日から逆算・実DB SSOT直結）
+  // 賃金支払状況テーブルの自動算定（退職日から逆算・実DB SSOT直結・雇用保険法完全準拠）
   const wageRows = useMemo(() => {
     const rows = [];
-    const baseDate = new Date(retDate.getFullYear(), retDate.getMonth(), retDate.getDate());
+    const y = retDate.getFullYear();
+    const m = retDate.getMonth();
+    const d = retDate.getDate();
+    const lastDayOfRetMonth = new Date(y, m + 1, 0).getDate();
+    const isRetMonthEnd = (d === lastDayOfRetMonth);
 
     for (let i = 0; i < monthCount; i++) {
-      // ⑧ 被保険者期間算定対象期間: 離職日を基準に1ヶ月ずつ区切る
-      const pEnd = new Date(baseDate.getFullYear(), baseDate.getMonth() - i + 1, 0);
-      const pStart = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1);
-      
+      // ⑧ 被保険者期間算定対象期間: 雇用保険法に基づき離職日から1ヶ月ずつ区切る
+      let pStart: Date;
+      let pEnd: Date;
+
+      if (isRetMonthEnd) {
+        // 月末退職の場合: カレンダー月（各月1日〜各月末日）
+        pEnd = new Date(y, m - i + 1, 0);
+        pStart = new Date(y, m - i, 1);
+      } else {
+        // 月中退職の場合: 離職日を起算点として1ヶ月ごとに遡る
+        if (i === 0) {
+          pEnd = new Date(y, m, d);
+        } else {
+          const tempYear = y;
+          const tempMonth = m - i;
+          const maxD = new Date(tempYear, tempMonth + 1, 0).getDate();
+          pEnd = new Date(tempYear, tempMonth, Math.min(d, maxD));
+        }
+        // 開始日は前月の該当日の翌日
+        const prevYear = pEnd.getFullYear();
+        const prevMonth = pEnd.getMonth() - 1;
+        const maxPrevD = new Date(prevYear, prevMonth + 1, 0).getDate();
+        const prevEndEquivalent = new Date(prevYear, prevMonth, Math.min(d, maxPrevD));
+        pStart = new Date(prevEndEquivalent.getTime() + 24 * 60 * 60 * 1000);
+      }
+
       const startStr = `${pStart.getFullYear()}/${String(pStart.getMonth() + 1).padStart(2, '0')}/${String(pStart.getDate()).padStart(2, '0')}`;
       const endStr = `${pEnd.getFullYear()}/${String(pEnd.getMonth() + 1).padStart(2, '0')}/${String(pEnd.getDate()).padStart(2, '0')}`;
       const startWareki = toWarekiShort(startStr);
       const endWareki = toWarekiShort(endStr);
 
-      // ⑩ 賃金支払対象期間: 給与締日に応じた期間
+      // ⑩ 賃金支払対象期間: 給与締日に応じた期間（退職日以降の日付は含めない）
       let payStartStr = '';
       let payEndStr = '';
+      let payStart: Date;
+      let payEnd: Date;
       let targetYear = pEnd.getFullYear();
       let targetMonth = pEnd.getMonth() + 1;
 
       if (closingDay >= 28) {
         // 末日締め
-        payStartStr = startStr;
-        payEndStr = endStr;
+        if (i === 0) {
+          payStart = new Date(y, m, 1);
+          payEnd = new Date(y, m, d);
+        } else {
+          payEnd = new Date(y, m - i + 1, 0);
+          payStart = new Date(y, m - i, 1);
+        }
+        targetYear = payEnd.getFullYear();
+        targetMonth = payEnd.getMonth() + 1;
       } else {
         // 20日締めなどの場合
-        const cpEnd = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, closingDay);
-        const cpStart = new Date(baseDate.getFullYear(), baseDate.getMonth() - i - 1, closingDay + 1);
-        payStartStr = `${cpStart.getFullYear()}/${String(cpStart.getMonth() + 1).padStart(2, '0')}/${String(cpStart.getDate()).padStart(2, '0')}`;
-        payEndStr = `${cpEnd.getFullYear()}/${String(cpEnd.getMonth() + 1).padStart(2, '0')}/${String(cpEnd.getDate()).padStart(2, '0')}`;
-        targetYear = cpEnd.getFullYear();
-        targetMonth = cpEnd.getMonth() + 1;
+        const cpEndBase = new Date(y, m - i, closingDay);
+        const cpStartBase = new Date(y, m - i - 1, closingDay + 1);
+
+        if (i === 0) {
+          if (d <= closingDay) {
+            payStart = cpStartBase;
+            payEnd = new Date(y, m, d);
+            targetYear = y;
+            targetMonth = m + 1;
+          } else {
+            payStart = new Date(y, m, closingDay + 1);
+            payEnd = new Date(y, m, d);
+            targetYear = y;
+            targetMonth = m + 1;
+          }
+        } else {
+          payStart = cpStartBase;
+          payEnd = cpEndBase;
+          targetYear = cpEndBase.getFullYear();
+          targetMonth = cpEndBase.getMonth() + 1;
+        }
       }
+
+      payStartStr = `${payStart.getFullYear()}/${String(payStart.getMonth() + 1).padStart(2, '0')}/${String(payStart.getDate()).padStart(2, '0')}`;
+      payEndStr = `${payEnd.getFullYear()}/${String(payEnd.getMonth() + 1).padStart(2, '0')}/${String(payEnd.getDate()).padStart(2, '0')}`;
       const payStartWareki = toWarekiShort(payStartStr);
       const payEndWareki = toWarekiShort(payEndStr);
 
@@ -224,27 +277,44 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
         } catch (_) {}
       }
 
+      // 暦日数の算出
+      const periodDays = Math.round((pEnd.getTime() - pStart.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+      const payPeriodDays = Math.round((payEnd.getTime() - payStart.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+
       // 入社日・在職期間の判定
       const joinDateObj = currentEmployee?.join_date ? new Date(currentEmployee.join_date) : null;
       const isBeforeJoin = joinDateObj && pEnd < joinDateObj;
 
-      let baseDays = 0;
+      let periodBaseDays = 0;
+      let payBaseDays = 0;
       let wageA = 0;
       let wageB = 0;
       let note = i === 0 ? '退職月' : '';
 
+      const salaryType = currentEmployee?.salary_type || 'monthly';
+
       if (isBeforeJoin) {
         // 入社前の期間は厳格に0・実績なし（憲法14条）
-        baseDays = 0;
+        periodBaseDays = 0;
+        payBaseDays = 0;
         wageA = 0;
         wageB = 0;
         note = '入社前';
       } else if (actualPayslip) {
-        // 🛡️ 実DB確定レコードからの厳格マッピング（推計捏造の完全根絶）
+        // 🛡️ 実DB確定レコードからの厳格マッピング（給与形態別の基礎日数算定）
         const workDays = Number(actualPayslip.work_days || 0);
-        // 完全月給（欠勤なし）の場合は暦日数、出勤実績がある場合は出勤日数
-        const maxDaysInMonth = new Date(targetYear, targetMonth, 0).getDate();
-        baseDays = workDays > 0 ? workDays : (closingDay >= 28 ? maxDaysInMonth : 21);
+
+        if (salaryType === 'hourly' || salaryType === 'daily') {
+          // 時給・日給制: 実出勤日数を基礎日数とする（出勤がなければ0）
+          periodBaseDays = workDays > 0 ? workDays : 0;
+          payBaseDays = workDays > 0 ? workDays : 0;
+        } else {
+          // 月給制（完全月給または日給月給）
+          // 欠勤日数があれば控除、なければ暦日数
+          const absenceDays = Number(actualPayslip.absence_days || 0);
+          periodBaseDays = Math.max(0, periodDays - absenceDays);
+          payBaseDays = Math.max(0, payPeriodDays - absenceDays);
+        }
 
         // 賃金額A: 基本給 + 固定的手当（役職手当・職能手当・住宅手当・家族手当等）
         const base = Number(actualPayslip.base_salary || 0);
@@ -270,8 +340,13 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
         }
       } else {
         // 確定給与データ未登録の月（推計8%を捏造せず、基本給のみを計上し備考に未確定を明示）
-        const maxDaysInMonth = new Date(targetYear, targetMonth, 0).getDate();
-        baseDays = closingDay >= 28 ? maxDaysInMonth : 21;
+        if (salaryType === 'hourly' || salaryType === 'daily') {
+          periodBaseDays = 20;
+          payBaseDays = 20;
+        } else {
+          periodBaseDays = periodDays;
+          payBaseDays = payPeriodDays;
+        }
         wageA = monthlyBaseWage;
         wageB = 0;
         if (!note) note = '未確定（基本給のみ）';
@@ -286,13 +361,13 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
         periodEnd: endStr,
         periodDisplay: `${startWareki} 〜 ${endWareki}`,
         // ⑨ 基礎日数
-        periodBaseDays: baseDays,
+        periodBaseDays,
         // ⑩ 賃金支払対象期間
         payPeriodStart: payStartStr,
         payPeriodEnd: payEndStr,
         payPeriodDisplay: `${payStartWareki} 〜 ${payEndWareki}`,
         // ⑪ 賃金支払基礎日数
-        payBaseDays: baseDays,
+        payBaseDays,
         // ⑫ 賃金額
         wageA,
         wageB,
@@ -312,15 +387,31 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
   const totalWageAll = useMemo(() => wageRows.reduce((sum, r) => sum + r.wageTotal, 0), [wageRows]);
   const totalDays = useMemo(() => wageRows.reduce((sum, r) => sum + r.payBaseDays, 0), [wageRows]);
 
-  // 直近6ヶ月間 小計（基本手当日額算定対象: 第1段〜第6段）
-  const recent6Rows = useMemo(() => wageRows.slice(0, 6), [wageRows]);
+  // 直近6ヶ月間 小計（雇用保険法第17条: 賃金支払基礎日数11日以上または80時間以上ある月を直近から6ヶ月採用）
+  const eligible6Rows = useMemo(() => {
+    const valid = wageRows.filter(r => r.payBaseDays >= 11);
+    return valid.length >= 6 ? valid.slice(0, 6) : wageRows.slice(0, 6);
+  }, [wageRows]);
+
+  const recent6Rows = eligible6Rows;
   const recent6WageA = useMemo(() => recent6Rows.reduce((sum, r) => sum + r.wageA, 0), [recent6Rows]);
   const recent6WageB = useMemo(() => recent6Rows.reduce((sum, r) => sum + r.wageB, 0), [recent6Rows]);
   const recent6WageTotal = useMemo(() => recent6Rows.reduce((sum, r) => sum + r.wageTotal, 0), [recent6Rows]);
   const recent6Days = useMemo(() => recent6Rows.reduce((sum, r) => sum + r.payBaseDays, 0), [recent6Rows]);
   
-  // 賃金日額: 雇用保険法に基づき、退職前直近6ヶ月間の賃金総額 ÷ 180日 で算出
-  const dailyWageRate = Math.round(recent6WageTotal / 180);
+  // 賃金日額: 雇用保険法第17条に基づき算定
+  // 原則: 直近6ヶ月間の賃金総額 ÷ 180日
+  // 日給・時給制の最低保障額（法第17条第2項）: 直近6ヶ月間の賃金総額 ÷ 実労働日数 × 70%
+  const dailyWageRate = useMemo(() => {
+    if (recent6WageTotal === 0) return 0;
+    const standardDaily = Math.round(recent6WageTotal / 180);
+    const salaryType = currentEmployee?.salary_type || 'monthly';
+    if (salaryType === 'hourly' || salaryType === 'daily') {
+      const minGuarantee = recent6Days > 0 ? Math.round((recent6WageTotal / recent6Days) * 0.7) : 0;
+      return Math.max(standardDaily, minGuarantee);
+    }
+    return standardDaily;
+  }, [recent6WageTotal, recent6Days, currentEmployee?.salary_type]);
 
   // 全14項目のうちチェック済みの件数
   const totalKeyFields = 14;
