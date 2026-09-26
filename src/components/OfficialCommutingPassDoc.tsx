@@ -26,9 +26,10 @@ interface OfficialCommutingPassDocProps {
 }
 
 export const OfficialCommutingPassDoc: React.FC<OfficialCommutingPassDocProps> = ({ data }) => {
-  const appliedParts = (data.appliedDate || '2026-04-01').split('-');
+  const appliedDateStr = data.appliedDate || new Date().toISOString().split('T')[0];
+  const appliedParts = appliedDateStr.split('-');
   const docY = appliedParts[0] || '2026';
-  const docM = appliedParts[1] || '04';
+  const docM = appliedParts[1] || '01';
   const docD = appliedParts[2] || '01';
 
   const isCar = data.transportMode === 'car_bike';
@@ -38,27 +39,34 @@ export const OfficialCommutingPassDoc: React.FC<OfficialCommutingPassDocProps> =
     {
       id: 'default',
       transportType: 'jr' as const,
-      fromStation: data.originStation || '自宅最寄',
-      toStation: data.destinationStation || '会社最寄',
-      lineName: data.transitLines || '最短ルート',
-      oneWayFare: data.oneWayFare || 210,
-      oneMonthPassAmount: data.oneMonthPassAmount || 7550,
-      sixMonthPassAmount: data.sixMonthPassAmount || (data.oneMonthPassAmount * 5.4)
+      fromStation: data.originStation || '',
+      toStation: data.destinationStation || '',
+      lineName: data.transitLines || '',
+      oneWayFare: data.oneWayFare || 0,
+      oneMonthPassAmount: data.oneMonthPassAmount || 0,
+      sixMonthPassAmount: data.sixMonthPassAmount || 0
     }
   ];
 
   return (
-    <div className="bg-white p-6 sm:p-10 max-w-4xl mx-auto text-slate-800 font-sans text-xs leading-relaxed select-text print:p-0 print:m-0 print:max-w-none shadow-sm rounded-2xl border border-slate-200">
+    <div className="official-commuting-print-container bg-white p-6 sm:p-10 max-w-4xl mx-auto text-slate-800 font-sans text-xs leading-relaxed select-text print:p-0 print:m-0 print:max-w-none shadow-sm rounded-2xl border border-slate-200">
       {/* 印刷用スタイル */}
       <style>{`
         @media print {
           @page {
             size: A4 portrait;
-            margin: 8mm 10mm;
+            margin: 0mm !important;
           }
           body {
-            print-color-adjust: exact;
-            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact !important;
+            -webkit-print-color-adjust: exact !important;
+          }
+          .official-commuting-print-container {
+            width: 210mm !important;
+            margin: 0 !important;
+            padding: 10mm !important;
+            border: none !important;
+            box-shadow: none !important;
           }
         }
       `}</style>
@@ -164,7 +172,7 @@ export const OfficialCommutingPassDoc: React.FC<OfficialCommutingPassDocProps> =
                 片道通勤距離（自宅〜会社所在地）
               </th>
               <td className="p-2.5 font-bold text-slate-900">
-                {data.carDistanceKm || 8.5} km
+                {data.carDistanceKm !== undefined ? `${data.carDistanceKm} km` : '未登録'}
               </td>
             </tr>
             <tr className="border-b border-slate-200">
@@ -172,7 +180,7 @@ export const OfficialCommutingPassDoc: React.FC<OfficialCommutingPassDocProps> =
                 支給手当額（所得税法施行令・非課税基準）
               </th>
               <td className="p-2.5 font-black text-indigo-700 text-sm">
-                月額 ¥{(data.oneMonthPassAmount || 12900).toLocaleString()}
+                月額 ¥{(data.oneMonthPassAmount || 0).toLocaleString()}
               </td>
             </tr>
           </tbody>

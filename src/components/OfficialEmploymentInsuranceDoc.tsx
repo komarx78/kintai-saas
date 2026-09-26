@@ -48,7 +48,7 @@ export interface OfficialEmploymentInsuranceDocProps {
 export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranceDocProps> = ({
   initialType = 'separation',
   companyInfo,
-  officeNumber = '2501-123456-7',
+  officeNumber = '',
   employees,
   selectedEmployeeId,
   onSelectEmployee,
@@ -345,6 +345,7 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
           onSelectEmployee={onSelectEmployee}
           onBack={onBack}
           hideHeader={true}
+          tenantId={tenantId}
         />
       ) : (
         <OfficialEmploymentLossDoc
@@ -355,6 +356,7 @@ export const OfficialEmploymentInsuranceDoc: React.FC<OfficialEmploymentInsuranc
           onSelectEmployee={onSelectEmployee}
           onBack={onBack}
           hideHeader={true}
+          tenantId={tenantId}
         />
       )}
     </div>

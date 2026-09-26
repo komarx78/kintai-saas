@@ -20,10 +20,30 @@ interface OfficialBankPassbookDocProps {
 }
 
 export const OfficialBankPassbookDoc: React.FC<OfficialBankPassbookDocProps> = ({ data }) => {
-  const [docY, docM, docD] = data.appliedDate.split('-');
+  const appliedDateStr = data.appliedDate || new Date().toISOString().split('T')[0];
+  const [docY, docM, docD] = appliedDateStr.split('-');
 
   return (
-    <div className="bg-white p-6 sm:p-10 max-w-4xl mx-auto text-slate-800 font-sans text-xs leading-relaxed select-text print:p-0 print:m-0 print:max-w-none shadow-sm rounded-2xl border border-slate-200">
+    <div className="official-bank-passbook-print-container bg-white p-6 sm:p-10 max-w-4xl mx-auto text-slate-800 font-sans text-xs leading-relaxed select-text print:p-0 print:m-0 print:max-w-none shadow-sm rounded-2xl border border-slate-200">
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0mm !important;
+          }
+          body {
+            print-color-adjust: exact !important;
+            -webkit-print-color-adjust: exact !important;
+          }
+          .official-bank-passbook-print-container {
+            width: 210mm !important;
+            margin: 0 !important;
+            padding: 10mm !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+        }
+      `}</style>
       
       {/* 表題 */}
       <div className="text-center pb-4 border-b-2 border-slate-900 mb-6">
