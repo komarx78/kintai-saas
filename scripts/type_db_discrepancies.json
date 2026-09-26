@@ -1,0 +1,166 @@
+[
+  {
+    "table": "employee_payroll_profiles",
+    "prop": "commuting_daily_amount",
+    "types": [
+      "EmployeePayrollProfile",
+      "PayrollProfile"
+    ]
+  },
+  {
+    "table": "employee_payroll_profiles",
+    "prop": "commuting_type",
+    "types": [
+      "EmployeePayrollProfile",
+      "PayrollProfile"
+    ]
+  },
+  {
+    "table": "employee_payroll_profiles",
+    "prop": "has_spouse",
+    "types": [
+      "EmployeePayrollProfile",
+      "PayrollProfile"
+    ]
+  },
+  {
+    "table": "employee_payroll_profiles",
+    "prop": "special_allowance",
+    "types": [
+      "EmployeePayrollProfile",
+      "PayrollProfile"
+    ]
+  },
+  {
+    "table": "advanced_shifts",
+    "prop": "user",
+    "types": [
+      "Shift",
+      "AdvancedShift",
+      "ShiftRecord"
+    ]
+  },
+  {
+    "table": "shift_employee_settings",
+    "prop": "max_days_per_week",
+    "types": [
+      "ShiftEmployeeSetting",
+      "ShiftEmployeeSettings",
+      "ShiftStaffSetting"
+    ]
+  },
+  {
+    "table": "shift_employee_settings",
+    "prop": "min_shift_hours",
+    "types": [
+      "ShiftEmployeeSetting",
+      "ShiftEmployeeSettings",
+      "ShiftStaffSetting"
+    ]
+  },
+  {
+    "table": "shift_employee_settings",
+    "prop": "roles",
+    "types": [
+      "ShiftEmployeeSetting",
+      "ShiftEmployeeSettings",
+      "ShiftStaffSetting"
+    ]
+  },
+  {
+    "table": "salary_revision_history",
+    "prop": "department",
+    "types": [
+      "SalaryRevisionRecord",
+      "SalaryRevisionHistory"
+    ]
+  },
+  {
+    "table": "salary_revision_history",
+    "prop": "user_name",
+    "types": [
+      "SalaryRevisionRecord",
+      "SalaryRevisionHistory"
+    ]
+  },
+  {
+    "table": "employee_document_submissions",
+    "prop": "user_name",
+    "types": [
+      "EmployeeDocumentSubmission",
+      "DocumentSubmission"
+    ]
+  },
+  {
+    "table": "employee_maternity_leaves",
+    "prop": "attachment_mynumber_filename",
+    "types": [
+      "MaternityLeaveRecord",
+      "EmployeeMaternityLeave"
+    ]
+  },
+  {
+    "table": "employee_maternity_leaves",
+    "prop": "attachment_mynumber_url",
+    "types": [
+      "MaternityLeaveRecord",
+      "EmployeeMaternityLeave"
+    ]
+  },
+  {
+    "table": "employee_maternity_leaves",
+    "prop": "childcare_extended",
+    "types": [
+      "MaternityLeaveRecord",
+      "EmployeeMaternityLeave"
+    ]
+  },
+  {
+    "table": "payroll_settings",
+    "prop": "employment_insurance_business_type",
+    "types": [
+      "PayrollSettings",
+      "PayrollSetting"
+    ]
+  },
+  {
+    "table": "payroll_settings",
+    "prop": "employment_insurance_employer_rate",
+    "types": [
+      "PayrollSettings",
+      "PayrollSetting"
+    ]
+  },
+  {
+    "table": "payroll_settings",
+    "prop": "target_month",
+    "types": [
+      "PayrollSettings",
+      "PayrollSetting"
+    ]
+  },
+  {
+    "table": "payslips",
+    "prop": "paid_leave_remaining",
+    "types": [
+      "Payslip",
+      "PayslipRecord"
+    ]
+  },
+  {
+    "table": "payslips",
+    "prop": "pdf_data_base64",
+    "types": [
+      "Payslip",
+      "PayslipRecord"
+    ]
+  },
+  {
+    "table": "payslips",
+    "prop": "user",
+    "types": [
+      "Payslip",
+      "PayslipRecord"
+    ]
+  }
+]

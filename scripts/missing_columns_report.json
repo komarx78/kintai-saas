@@ -1,0 +1,110 @@
+[
+  {
+    "table": "attendance_records",
+    "col": "base_salary",
+    "locs": [
+      "src\\components\\PayslipManagement.tsx:1498"
+    ],
+    "message": "column attendance_records.base_salary does not exist"
+  },
+  {
+    "table": "attendance_records",
+    "col": "commuting_allowance",
+    "locs": [
+      "src\\components\\PayslipManagement.tsx:1504"
+    ],
+    "message": "column attendance_records.commuting_allowance does not exist"
+  },
+  {
+    "table": "attendance_records",
+    "col": "family_allowance",
+    "locs": [
+      "src\\components\\PayslipManagement.tsx:1503"
+    ],
+    "message": "column attendance_records.family_allowance does not exist"
+  },
+  {
+    "table": "attendance_records",
+    "col": "hourly_wage",
+    "locs": [
+      "src\\components\\PayslipManagement.tsx:1499"
+    ],
+    "message": "column attendance_records.hourly_wage does not exist"
+  },
+  {
+    "table": "attendance_records",
+    "col": "housing_allowance",
+    "locs": [
+      "src\\components\\PayslipManagement.tsx:1502"
+    ],
+    "message": "column attendance_records.housing_allowance does not exist"
+  },
+  {
+    "table": "attendance_records",
+    "col": "net_salary",
+    "locs": [
+      "src\\components\\PayslipManagement.tsx:375"
+    ],
+    "message": "column attendance_records.net_salary does not exist"
+  },
+  {
+    "table": "attendance_records",
+    "col": "paid_leave_remaining",
+    "locs": [
+      "src\\components\\PayslipManagement.tsx:1216"
+    ],
+    "message": "column attendance_records.paid_leave_remaining does not exist"
+  },
+  {
+    "table": "attendance_records",
+    "col": "payment_date",
+    "locs": [
+      "src\\components\\PayslipManagement.tsx:1215"
+    ],
+    "message": "column attendance_records.payment_date does not exist"
+  },
+  {
+    "table": "attendance_records",
+    "col": "position_allowance",
+    "locs": [
+      "src\\components\\PayslipManagement.tsx:1500"
+    ],
+    "message": "column attendance_records.position_allowance does not exist"
+  },
+  {
+    "table": "attendance_records",
+    "col": "qualification_allowance",
+    "locs": [
+      "src\\components\\PayslipManagement.tsx:1501"
+    ],
+    "message": "column attendance_records.qualification_allowance does not exist"
+  },
+  {
+    "table": "attendance_records",
+    "col": "total_deductions",
+    "locs": [
+      "src\\components\\PayslipManagement.tsx:374"
+    ],
+    "message": "column attendance_records.total_deductions does not exist"
+  },
+  {
+    "table": "attendance_records",
+    "col": "total_earnings",
+    "locs": [
+      "src\\components\\PayslipManagement.tsx:373"
+    ],
+    "message": "column attendance_records.total_earnings does not exist"
+  },
+  {
+    "table": "attendance_records",
+    "col": "year_month",
+    "locs": [
+      "src\\components\\PayslipManagement.tsx:1214",
+      "src\\components\\PayslipManagement.tsx:1496",
+      "src\\components\\PayslipManagement.tsx:1666",
+      "src\\components\\PayslipManagement.tsx:1703",
+      "src\\components\\PayslipManagement.tsx:1814"
+    ],
+    "message": "column attendance_records.year_month does not exist"
+  }
+]
