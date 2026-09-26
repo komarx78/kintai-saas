@@ -833,31 +833,31 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                       {st.calcMode === 'actual_worked' ? (
                                         st.isZeroGrant ? (
                                           <span 
-                                            className="bg-rose-50 text-rose-700 border border-rose-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs"
-                                            title={st.zeroGrantReason || '出勤実績0日・法定要件未達のため付与0日'}
+                                            className="bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs"
+                                            title={st.zeroGrantReason || '直近1年間の勤務実績が0日のため付与なし'}
                                           >
-                                            <AlertTriangle className="w-3 h-3 text-rose-500" />
-                                            <span>実績: 年0日 (要件未達・0日付与)</span>
+                                            <span>⚡</span>
+                                            <span>勤務実績: 年0日 (付与なし)</span>
                                           </span>
                                         ) : (
                                           <span 
                                             className="bg-amber-50 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs"
-                                            title={`${st.periodText}（実出勤${st.actualDaysCount}日 ➔ 年換算${st.actualWorkedDaysAnnual}日）`}
+                                            title={`${st.periodText}（実労働${st.actualDaysCount}日 ➔ 年換算${st.actualWorkedDaysAnnual}日・週${st.effectiveWeeklyDays}日相当ランク）`}
                                           >
                                             <span>⚡</span>
                                             <span>
-                                              実績: 年{st.actualWorkedDaysAnnual}日 (週{st.effectiveWeeklyDays}日相当)
+                                              勤務実績: 年{st.actualWorkedDaysAnnual}日 (週{st.effectiveWeeklyDays}日相当)
                                             </span>
                                           </span>
                                         )
                                       ) : (
                                         st.isZeroGrant ? (
                                           <span 
-                                            className="bg-rose-50 text-rose-700 border border-rose-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs"
-                                            title={st.zeroGrantReason || '出勤実績0日・法定要件未達のため付与0日'}
+                                            className="bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs"
+                                            title={st.zeroGrantReason || '出勤実績0日のため付与なし'}
                                           >
-                                            <AlertTriangle className="w-3 h-3 text-rose-500" />
-                                            <span>契約固定: 週{emp.weeklyDays}日 (出勤0日・要件未達)</span>
+                                            <AlertCircle className="w-3 h-3 text-slate-500" />
+                                            <span>契約固定: 週{emp.weeklyDays}日 (出勤0日・付与なし)</span>
                                           </span>
                                         ) : (
                                           <span 
@@ -916,8 +916,8 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                   {emp.balance} 日
                                 </span>
                                 {st.isZeroGrant ? (
-                                  <div className="text-[9px] text-rose-600 font-bold" title={st.zeroGrantReason}>
-                                    法定0日付与
+                                  <div className="text-[9px] text-slate-500 font-bold" title={st.zeroGrantReason}>
+                                    勤務実績なし (0日付与)
                                   </div>
                                 ) : emp.hasExplicitBalance && st.statutoryGrant !== emp.balance && emp.join_date && emp.join_date !== '-' ? (
                                   <div className="text-[10px] text-amber-600 font-bold" title="手動設定値が適用されています">
@@ -968,7 +968,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                   {st.nextGrantDate}
                                 </div>
                                 <div className="text-[11px] font-bold text-blue-600 mt-0.5">
-                                  ＋{st.nextGrantDays}日付与 {st.isZeroGrant ? '(※出勤要件達成時)' : ''} (あと {st.daysUntilNextGrant}日)
+                                  ＋{st.nextGrantDays}日付与 {st.isZeroGrant ? '(※次回勤務実績による)' : ''} (あと {st.daysUntilNextGrant}日)
                                 </div>
                               </div>
                             )}

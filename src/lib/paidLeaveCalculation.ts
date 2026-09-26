@@ -379,18 +379,18 @@ export function calculateStatutoryLeaveWithMode(
   let isZeroGrant = false;
   let zeroGrantReason = '';
 
-  // ⚖️ 労働基準法第39条第1項・第2項（出勤率8割要件）および施行規則第24条の3（比例付与別表）厳格判定
+  // ⚖️ 厚生労働省シフト制労働者留意事項・施行規則第24条の3（実労働日数による比例付与別表）判定
   if (calcMode === 'actual_worked') {
     if (actualStats.actualDaysCount === 0) {
-      // 🚨 打刻実績0日 ➔ 出勤率8割要件未達・実労働なしのため例外なく付与0日
+      // 🚨 打刻実績0日 ➔ 過去1年間の勤務実績が0日（年48日未満）のため付与なし（0日）
       effectiveWeeklyDays = 0;
       isZeroGrant = true;
-      zeroGrantReason = '出勤実績0日のため法定要件（出勤率8割）未達・0日付与';
+      zeroGrantReason = '勤務実績0日（年48日未満のため付与なし）';
     } else if (actualStats.annualConvertedDays < 48) {
-      // 🚨 年換算労働日数48日未満 ➔ 施行規則第24条の3別表の対象外（週1日未満）のため付与0日
+      // 🚨 年換算労働日数48日未満 ➔ 法定比例付与の対象外（週1日未満相当）のため付与なし（0日）
       effectiveWeeklyDays = 0;
       isZeroGrant = true;
-      zeroGrantReason = `年間実労働${actualStats.annualConvertedDays}日（48日未満のため比例付与対象外・0日付与）`;
+      zeroGrantReason = `年間勤務実績${actualStats.annualConvertedDays}日（48日未満のため付与対象外）`;
     } else {
       effectiveWeeklyDays = actualEquivalent;
     }
@@ -400,7 +400,7 @@ export function calculateStatutoryLeaveWithMode(
     if (empAttendanceRecords.length > 0 && actualStats.actualDaysCount === 0) {
       effectiveWeeklyDays = contractWeeklyDays;
       isZeroGrant = true;
-      zeroGrantReason = '出勤実績0日のため法定要件（出勤率8割）未達・0日付与';
+      zeroGrantReason = '出勤実績0日のため付与なし（長期欠勤等）';
     } else {
       effectiveWeeklyDays = isFullTime ? 5 : Math.max(1, contractWeeklyDays);
     }
@@ -468,16 +468,16 @@ export function calculateStatutoryLeaveWithMode(
   if (!isFullTime) {
     if (actualStats.actualDaysCount === 0) {
       isDiffFromContract = true;
-      diffDaysText = `出勤実績が0日のため、法定付与要件（出勤率8割以上）を満たしていません`;
+      diffDaysText = `直近の勤務実績が0日のため、有給休暇の付与対象となりません`;
     } else if (actualStats.annualConvertedDays < 48) {
       isDiffFromContract = true;
-      diffDaysText = `年間実労働(${actualStats.annualConvertedDays}日)が法定比例付与の下限(48日)を下回っています`;
+      diffDaysText = `年間勤務実績(${actualStats.annualConvertedDays}日)が法定付与の下限(48日)を下回っています`;
     } else if (actualEquivalent !== contractWeeklyDays && actualStats.annualConvertedDays > 0) {
       isDiffFromContract = true;
       if (actualEquivalent > contractWeeklyDays) {
-        diffDaysText = `実労働(年${actualStats.annualConvertedDays}日=週${actualEquivalent}日相当)が契約(週${contractWeeklyDays}日)を上回っています`;
+        diffDaysText = `勤務実績(年${actualStats.annualConvertedDays}日=週${actualEquivalent}日相当)が契約目安(週${contractWeeklyDays}日)を上回っています`;
       } else {
-        diffDaysText = `実労働(年${actualStats.annualConvertedDays}日=週${actualEquivalent}日相当)が契約(週${contractWeeklyDays}日)を下回っています`;
+        diffDaysText = `勤務実績(年${actualStats.annualConvertedDays}日=週${actualEquivalent}日相当)が契約目安(週${contractWeeklyDays}日)を下回っています`;
       }
     }
   }
