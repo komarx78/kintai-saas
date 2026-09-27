@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, UserCheck, Building2, Sparkles, Bell, Edit3, HelpCircle } from 'lucide-react';
+import { 
+  Clock, CalendarDays, LayoutDashboard, ChevronRight, DollarSign, LogOut, 
+  UserCheck, Building2, Sparkles, Bell, Edit3, HelpCircle, QrCode, Printer 
+} from 'lucide-react';
 import { fetchAnnouncements, type AnnouncementItem } from '../lib/announcements';
 import { fetchRevisionContracts, type RevisionContractDoc } from '../lib/revisionContracts';
 import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
+import { StaffInviteModal } from '../components/StaffInviteModal';
+import { RAKUMARU_OFFICIAL_LINE_CONSTANTS } from '../lib/lineMessaging';
 
 type UserData = {
   id: string;
@@ -21,6 +26,7 @@ export default function Portal() {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [pendingContractDoc, setPendingContractDoc] = useState<RevisionContractDoc | null>(null);
+  const [isStaffInviteModalOpen, setIsStaffInviteModalOpen] = useState(false);
 
   useEffect(() => {
     fetchUserData();
@@ -178,15 +184,27 @@ export default function Portal() {
           </div>
         </div>
         
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
           {(role === 'admin' || role === 'superadmin') && (
-            <button
-              onClick={() => navigateWithTenant('/settings/company')}
-              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-3.5 py-2 rounded-xl transition border border-indigo-200 flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
-            >
-              <Building2 className="w-4 h-4 shrink-0" />
-              <span>会社・全社マスタ設定</span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setIsStaffInviteModalOpen(true)}
+                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs px-3.5 py-2 rounded-xl transition border border-emerald-300 flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+                title="スタッフ向け公式LINE友だち追加QRコードや店舗用A4印刷を表示します"
+              >
+                <span className="text-sm">💬</span>
+                <span>公式LINE案内</span>
+              </button>
+
+              <button
+                onClick={() => navigateWithTenant('/settings/company')}
+                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-3.5 py-2 rounded-xl transition border border-indigo-200 flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+              >
+                <Building2 className="w-4 h-4 shrink-0" />
+                <span>会社・全社マスタ設定</span>
+              </button>
+            </>
           )}
 
           <div className="hidden sm:flex items-center space-x-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
@@ -243,6 +261,55 @@ export default function Portal() {
             </button>
           </div>
         )}
+
+        {/* 💬 公式LINE スタッフ連携・店舗案内センター（特等席プレミアムカード） */}
+        <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 border-2 border-emerald-500/80 rounded-3xl p-5 sm:p-6 shadow-xl text-white relative overflow-hidden animate-fade-in-up">
+          <div className="absolute right-0 top-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 relative z-10">
+            <div className="space-y-2 max-w-2xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xl">💬</span>
+                <h3 className="text-base sm:text-lg font-black tracking-tight flex items-center gap-2">
+                  {role === 'admin' || role === 'superadmin' ? '公式LINE スタッフ連携・店舗案内センター' : '公式LINE 友だち追加（通知受取用）'}
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-bold">
+                    全社共通SSOT
+                  </span>
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-300 bg-emerald-900/60 px-2.5 py-0.5 rounded-full border border-emerald-700/60">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  {RAKUMARU_OFFICIAL_LINE_CONSTANTS.accountName}（{RAKUMARU_OFFICIAL_LINE_CONSTANTS.basicId}）接続稼働中
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                {role === 'admin' || role === 'superadmin'
+                  ? 'シフト希望提出依頼・シフト確定通知・Web給与明細通知をスタッフのLINEへ自動配信します。店長個人のLINEは一切使用せず、安全かつ確実にスタッフへ連絡が届きます。'
+                  : 'あなたの確定シフトやWeb給与明細の発行通知がLINEに届きます。店長個人のLINEを通さず、安全・確実に連絡を受け取れます。'}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsStaffInviteModalOpen(true)}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow-lg shadow-emerald-950/60 flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <QrCode className="w-4 h-4" />
+                <span>{role === 'admin' || role === 'superadmin' ? '公式LINE QRコードを表示' : 'LINE友だち追加QRを開く'}</span>
+              </button>
+              {(role === 'admin' || role === 'superadmin') && (
+                <button
+                  type="button"
+                  onClick={() => setIsStaffInviteModalOpen(true)}
+                  className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>🖨️ 店舗貼付用A4 POPを印刷</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
 
         <div className="mb-10 text-center animate-fade-in-up">
           <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-3">
@@ -365,6 +432,15 @@ export default function Portal() {
           </div>
         </div>
       </main>
+
+      {/* 💬 スタッフ招待 ＆ 公式LINE QR案内モーダル */}
+      <StaffInviteModal
+        isOpen={isStaffInviteModalOpen}
+        onClose={() => setIsStaffInviteModalOpen(false)}
+        companyName="会社"
+        tenantId={userData?.tenant_id}
+        defaultTab="line"
+      />
     </div>
   );
 }
