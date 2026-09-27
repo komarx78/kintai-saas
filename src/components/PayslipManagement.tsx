@@ -2730,13 +2730,15 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-2xl border border-slate-200/80 shrink-0">
             <span className="text-xs font-bold text-slate-500">次の一手:</span>
             <span className="text-xs sm:text-sm font-black text-emerald-800 bg-white px-3 py-1.5 rounded-xl border border-emerald-200 shadow-2xs">
-              {!attendanceClosingInfo.isClosed
+              {publishedCount === employees.length && employees.length > 0 && payslips.length > 0
+                ? '👉 STEP 4「💬 LINE一括通知」または「振込CSV出力」'
+                : !attendanceClosingInfo.isClosed
                 ? '👉 STEP 1「🔒 勤怠を一括締め確定」を押す'
                 : !isMonthCalculated
                 ? '👉 STEP 2「⚡ 全員分を一括計算する」を押す'
                 : (publishedCount < employees.length || payslips.some(p => p.status !== 'published'))
                 ? '👉 STEP 3 金額確認後「✅ 全員を一括確定する」を押す'
-                : '👉 STEP 4「振込CSV出力」または「LINE通知」'}
+                : '👉 STEP 4「💬 LINE一括通知」または「振込CSV出力」'}
             </span>
           </div>
         </div>
@@ -2989,31 +2991,71 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           <div
             className={`p-3 rounded-2xl border flex flex-col justify-between text-left transition-all ${
               publishedCount === employees.length && employees.length > 0 
-                ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-200 shadow-xs' 
+                ? 'bg-emerald-50/90 border-emerald-300 ring-2 ring-emerald-200 shadow-xs' 
                 : 'bg-slate-50/80 border-slate-200'
             }`}
           >
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className={`font-black text-[10px] ${publishedCount === employees.length && employees.length > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
+                <span className={`font-black text-[10px] ${publishedCount === employees.length && employees.length > 0 ? 'text-emerald-700 font-black' : 'text-slate-400'}`}>
                   STEP 4（支給日）
                 </span>
-                <span className="text-[9px] bg-slate-200 text-slate-700 font-bold px-1.5 py-0.5 rounded-full">出力 📥</span>
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                  publishedCount === employees.length && employees.length > 0
+                    ? 'bg-emerald-200 text-emerald-900 font-black'
+                    : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {publishedCount === employees.length && employees.length > 0 ? '通知・出力可能 💬' : '出力 📥'}
+                </span>
               </div>
               <div className={`font-bold flex items-center gap-1 ${publishedCount === employees.length && employees.length > 0 ? 'text-emerald-950 font-black' : 'text-slate-800'}`}>
-                <span>📥 振込CSV・賃金台帳</span>
+                <span>💬 LINE通知 ＆ 振込CSV</span>
               </div>
-              <p className="text-[10px] text-slate-500 mt-1">全銀協CSVで銀行一括振込 ＆ 台帳印刷</p>
+              <p className="text-[10px] text-slate-500 mt-1">スタッフへWeb明細LINE配信 ＆ 振込CSV</p>
             </div>
 
-            <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex flex-col gap-1">
+            <div className="mt-2.5 pt-2 border-t border-slate-200/60 flex flex-col gap-1.5">
+              {/* 🌟 LINE一括通知ボタン（確定済みの主役） */}
+              {lineConfig.mode !== 'none' ? (
+                <button
+                  onClick={handleSendPayslipLineBatch}
+                  disabled={isSendingLine || payslips.length === 0 || publishedCount < employees.length}
+                  className={`w-full font-bold text-[11px] py-1.5 px-2 rounded-xl transition shadow-xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50 ${
+                    publishedCount === employees.length && employees.length > 0
+                      ? 'bg-[#25785C] hover:bg-[#1D604A] text-white shadow-[#25785C]/20'
+                      : 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                  }`}
+                  title={publishedCount === employees.length && employees.length > 0 ? '連携済みスタッフ全員へWeb給与明細をLINE一括送信します' : '全員の給与が確定した後にLINE通知が可能になります'}
+                >
+                  {isSendingLine ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5 text-emerald-100" />}
+                  <span>💬 LINE一括通知する ➔</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setManualShareModal({
+                      isOpen: true,
+                      selectedUserId: payslips[0]?.user_id || ''
+                    });
+                  }}
+                  disabled={payslips.length === 0}
+                  className="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold text-[11px] py-1.5 px-2 rounded-xl transition shadow-xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                  title="手動で個人LINEへ送るためのテキストをコピーします"
+                >
+                  <Copy className="w-3.5 h-3.5 text-slate-300" />
+                  <span>📋 個人LINE用コピー ➔</span>
+                </button>
+              )}
+
+              {/* 振込CSV出力ボタン */}
               <button
                 onClick={handleExportBankTransferCsv}
                 disabled={payslips.length === 0}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] py-1.5 px-2 rounded-xl transition shadow-xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                className="w-full bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300/80 font-bold text-[11px] py-1.5 px-2 rounded-xl transition shadow-2xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
                 title="全銀協形式の振込CSVを出力し、ネットバンキングで一括振込を行います"
               >
-                <span>CSVダウンロード ➔</span>
+                <Download className="w-3.5 h-3.5 text-emerald-700" />
+                <span>📥 振込CSVダウンロード</span>
               </button>
               <div className="text-[9px] text-slate-400 text-center pt-0.5">
                 全銀協フォーマット準拠
@@ -3313,7 +3355,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           <div>
             <div className="flex items-center gap-2 mb-1.5">
               <span className={`text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1.5 transition ${
-                !attendanceClosingInfo.isClosed
+                publishedCount === employees.length && employees.length > 0 && payslips.length > 0
+                  ? 'bg-[#EFF7F4] text-[#2B735A] border border-[#CDE5DC]'
+                  : !attendanceClosingInfo.isClosed
                   ? 'bg-amber-50 text-amber-800 border border-amber-200'
                   : !isMonthCalculated 
                   ? 'bg-[#FDF6ED] text-[#9A6B2F] border border-[#F2DEBF]'
@@ -3321,7 +3365,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                   ? 'bg-[#F0F5FA] text-[#3E6B89] border border-[#D1E1EC]'
                   : 'bg-[#EFF7F4] text-[#2B735A] border border-[#CDE5DC]'
               }`}>
-                {!attendanceClosingInfo.isClosed
+                {publishedCount === employees.length && employees.length > 0 && payslips.length > 0
+                  ? '🎉 ステップ 4 / 4：全員確定完了（LINE通知・振込可能）'
+                  : !attendanceClosingInfo.isClosed
                   ? '👣 ステップ 1 / 4：勤怠締め待ち'
                   : !isMonthCalculated 
                   ? '👣 ステップ 2 / 4：勤怠計算待ち'
@@ -3331,7 +3377,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 }
               </span>
               <span className="text-xs text-slate-400 font-medium hidden sm:inline">
-                {!attendanceClosingInfo.isClosed
+                {publishedCount === employees.length && employees.length > 0 && payslips.length > 0
+                  ? '※全員の給与が確定しました。スタッフへLINE一括通知できます'
+                  : !attendanceClosingInfo.isClosed
                   ? '※打刻漏れや申請を確認し、勤怠を締め確定してください'
                   : !isMonthCalculated 
                   ? '※確定した勤怠データから当月の給与を一括試算してください'
@@ -3342,7 +3390,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               </span>
             </div>
             <h3 className="text-lg font-black text-slate-800 tracking-tight">
-              {!attendanceClosingInfo.isClosed
+              {publishedCount === employees.length && employees.length > 0 && payslips.length > 0
+                ? '【STEP 4】Web給与明細の発行通知（LINE一括送信）＆ 振込CSV'
+                : !attendanceClosingInfo.isClosed
                 ? '【STEP 1】打刻漏れ・申請を確認し、勤怠を締め確定（全社ロック）'
                 : !isMonthCalculated 
                 ? '【STEP 2】確定した勤怠データから全員の給与を一括自動計算'
@@ -3355,7 +3405,44 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
           {/* 今押すべき主役ボタン（1つだけ強調表示・上質くすみマット調） */}
           <div className="flex items-center gap-2 flex-wrap">
-            {!attendanceClosingInfo.isClosed ? (
+            {publishedCount === employees.length && employees.length > 0 && payslips.length > 0 ? (
+              // 🌟 STEP 4 主役ボタン群（全員確定済：LINE一括通知 ＋ 救済ボタン：確定を取り消して下書きに戻す）
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={handleUnpublishAll}
+                  disabled={isSaving || payslips.length === 0}
+                  className="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs sm:text-sm px-4 py-3 rounded-2xl transition border border-rose-200 flex items-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
+                  title="確定を取り消して下書きに戻し、従業員へのWeb公開を一時取下げて手当・控除の再修正ができるようにします"
+                >
+                  <RotateCcw className="w-4 h-4 text-rose-500" />
+                  <span>⬅ 確定を取り消す（下書きに戻して修正）</span>
+                </button>
+                {lineConfig.mode !== 'none' ? (
+                  <button
+                    onClick={handleSendPayslipLineBatch}
+                    disabled={isSendingLine || payslips.length === 0}
+                    className="bg-[#25785C] hover:bg-[#1D604A] text-white font-bold text-sm px-6 py-3 rounded-2xl transition shadow-md shadow-[#25785C]/20 flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSendingLine ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageSquare className="w-5 h-5 text-emerald-100" />}
+                    <span className="text-base font-bold">🟢 スタッフ全員へLINE一括通知する</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setManualShareModal({
+                        isOpen: true,
+                        selectedUserId: payslips[0]?.user_id || ''
+                      });
+                    }}
+                    disabled={payslips.length === 0}
+                    className="bg-[#334155] hover:bg-[#1E293B] text-white font-bold text-sm px-6 py-3 rounded-2xl transition shadow-md flex items-center gap-2.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Copy className="w-5 h-5 text-slate-300" />
+                    <span className="text-base font-bold">📋 個人LINE送信用テキスト（個別コピー）</span>
+                  </button>
+                )}
+              </div>
+            ) : !attendanceClosingInfo.isClosed ? (
               // 🌟 STEP 1 主役ボタン群（勤怠締め確定 ＆ 先行試算）
               <div className="flex items-center gap-2 flex-wrap">
                 <button
@@ -3462,6 +3549,36 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               <Download className="w-3.5 h-3.5 text-slate-500" />
               <span>振込CSV出力</span>
             </button>
+
+            {/* 🌟 確定済みの場合、サブアクションバーにも「💬 LINE一括通知」ボタンを配置 */}
+            {publishedCount === employees.length && employees.length > 0 && (
+              lineConfig.mode !== 'none' ? (
+                <button
+                  onClick={handleSendPayslipLineBatch}
+                  disabled={isSendingLine || payslips.length === 0}
+                  className="bg-[#25785C] hover:bg-[#1D604A] text-white font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                  title="確定済みスタッフ全員へWeb給与明細をLINE一括通知します"
+                >
+                  {isSendingLine ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5 text-emerald-200" />}
+                  <span>💬 LINE一括通知</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setManualShareModal({
+                      isOpen: true,
+                      selectedUserId: payslips[0]?.user_id || ''
+                    });
+                  }}
+                  disabled={payslips.length === 0}
+                  className="bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                  title="個人LINE送信用テキストをコピーします"
+                >
+                  <Copy className="w-3.5 h-3.5 text-slate-300" />
+                  <span>📋 LINE送信用コピー</span>
+                </button>
+              )
+            )}
 
             {/* 未確定時のLINE誤爆防止 安全ロックバッジ（落ち着いたソフトアンバー） */}
             {(publishedCount < employees.length || payslips.some(p => p.status !== 'published')) && (
