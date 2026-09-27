@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Coffee, Download, Users, Loader2, AlertCircle, CheckCircle, XCircle, 
-  Plus, Calendar, ShieldCheck, Edit3, Check, Zap, Info, ChevronRight, AlertTriangle
+  Plus, Calendar, ShieldCheck, Edit3, Check, Zap, Info, ChevronRight, AlertTriangle, Trash2
 } from 'lucide-react';
 
 import {
@@ -366,6 +366,15 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
     if (requestForm.start_date > requestForm.end_date) {
       alert('開始日は終了日以前の日付を指定してください。');
       return;
+    }
+
+    // 🛡️ 有給残日数チェック（有休がない人の申請を物理遮断）
+    if (requestForm.type.includes('有給')) {
+      const targetEmp = analyzedUsers.find(u => u.id === requestForm.user_id);
+      if (targetEmp && targetEmp.remainingBalance <= 0) {
+        alert(`⚠️ ${targetEmp.name} さんは現在、有給休暇の残日数が0日です。\n有給休暇を申請することはできません。\n\n※有給を付与する場合は「編集」から付与日数を設定してください。`);
+        return;
+      }
     }
 
     try {
@@ -937,9 +946,16 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                             {emp.isDispatch ? (
                               <span className="text-slate-300">-</span>
                             ) : (
-                              <span className="font-black text-slate-700 text-sm bg-slate-100 px-2 py-1 rounded-lg">
-                                {emp.usedDays} 日
-                              </span>
+                              <div>
+                                <span className="font-black text-slate-700 text-sm bg-slate-100 px-2 py-1 rounded-lg">
+                                  {emp.usedDays} 日
+                                </span>
+                                {emp.totalGranted < emp.usedDaysTotal && (
+                                  <div className="text-[9px] text-rose-600 font-bold mt-1">
+                                    ⚠️ 保有数超過
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </td>
 
@@ -947,6 +963,17 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                           <td className="p-4 text-center">
                             {emp.isDispatch ? (
                               <span className="text-slate-300">-</span>
+                            ) : emp.totalGranted < emp.usedDaysTotal ? (
+                              <div className="inline-flex flex-col items-center">
+                                <span 
+                                  className="font-black text-rose-600 text-xs bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-2xs" 
+                                  title={`保有有給(${emp.totalGranted}日)を超えて${emp.usedDaysTotal}日消化されています。「申請一覧」タブから承認を取り消すか、有給を付与してください。`}
+                                >
+                                  <AlertTriangle className="w-3 h-3 text-rose-500 shrink-0" />
+                                  超過 {emp.usedDaysTotal - emp.totalGranted}日
+                                </span>
+                                <span className="text-[9px] text-rose-600 font-bold mt-0.5">（残数不足）</span>
+                              </div>
                             ) : (
                               <div className="inline-flex items-center gap-1">
                                 <span className={`font-black text-xl tracking-tight ${emp.remainingBalance === 0 ? 'text-slate-400' : 'text-amber-600'}`}>
@@ -1080,7 +1107,42 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                               </button>
                             </div>
                           ) : (
-                            <span className="text-slate-300 text-xs">-</span>
+                            <div className="flex items-center justify-center gap-1.5">
+                              {req.status === '承認' && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (confirm(`この「${req.type}」申請（${req.user?.name} さん）を取り消して却下（無効）に変更しますか？\n\n※消化日数が差し戻され、有給残数が回復します。`)) {
+                                      handleUpdateStatus(req.id, '却下');
+                                    }
+                                  }}
+                                  className="text-[11px] font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
+                                  title="承認を取り消して却下に変更"
+                                >
+                                  承認取消
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (confirm(`この申請履歴（${req.type} / ${req.user?.name} さん）を完全に削除しますか？`)) {
+                                    try {
+                                      const { error } = await supabase.from('leave_requests').delete().eq('id', req.id);
+                                      if (error) throw error;
+                                      showToast('申請履歴を削除しました');
+                                      await fetchData();
+                                      if (onRefreshEmployees) onRefreshEmployees();
+                                    } catch (e: any) {
+                                      alert('削除失敗: ' + e.message);
+                                    }
+                                  }
+                                }}
+                                className="text-[11px] font-bold text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition cursor-pointer"
+                                title="申請レコードの削除"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -1117,8 +1179,10 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm bg-white"
                 >
                   <option value="">選択してください</option>
-                  {users.map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
+                  {analyzedUsers.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.empType} / 有休残: {u.remainingBalance}日)
+                    </option>
                   ))}
                 </select>
               </div>
@@ -1135,6 +1199,22 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                   <option value="特別休暇">特別休暇 / 慶弔</option>
                 </select>
               </div>
+              {(() => {
+                const selUser = analyzedUsers.find(u => u.id === requestForm.user_id);
+                const isInsufficient = requestForm.type.includes('有給') && selUser && selUser.remainingBalance <= 0;
+                if (!isInsufficient) return null;
+                return (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-black block">⚠️ 有給残日数が0日のため申請できません</span>
+                      <span className="text-[11px] text-rose-600 block mt-0.5">
+                        {selUser?.name} さんは現在、有給休暇の残数が0日です。欠勤や公休等をご選択いただくか、一覧の「編集」から有給を付与してください。
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-black text-slate-700 mb-1">開始日</label>
@@ -1167,12 +1247,19 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                   placeholder="私用のため等" 
                 />
               </div>
-              <button 
-                type="submit" 
-                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black py-3 rounded-xl shadow-md transition-all mt-2 text-sm cursor-pointer"
-              >
-                登録する（即時承認）
-              </button>
+              {(() => {
+                const selUser = analyzedUsers.find(u => u.id === requestForm.user_id);
+                const isInsufficient = requestForm.type.includes('有給') && selUser && selUser.remainingBalance <= 0;
+                return (
+                  <button 
+                    type="submit" 
+                    disabled={Boolean(isInsufficient)}
+                    className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black py-3 rounded-xl shadow-md transition-all mt-2 text-sm cursor-pointer"
+                  >
+                    {isInsufficient ? '有給残数不足のため登録不可' : '登録する（即時承認）'}
+                  </button>
+                );
+              })()}
             </form>
           </div>
         </div>

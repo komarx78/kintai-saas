@@ -753,6 +753,16 @@ const UserDashboard = () => {
         return;
       }
     }
+
+    // 🛡️ 有給休暇申請時の残日数チェック（有休残0日での申請を物理遮断）
+    if (leaveType.includes('有給')) {
+      const totalBalance = (Number(user.paid_leave_balance) || 0) + (Number(user.paid_leave_carryover) || 0);
+      const remainingDays = Math.max(0, totalBalance - (userTotalTakenLeaveDays || 0));
+      if (remainingDays <= 0) {
+        alert('⚠️ 現在、有給休暇の残日数が0日のため申請できません。\nシフトの調整や公休・欠勤の申請については、店長・管理者までご相談ください。');
+        return;
+      }
+    }
     
     setIsSubmittingLeave(true);
     try {
