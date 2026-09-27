@@ -8,6 +8,8 @@ export interface OnboardingWorkflowStep {
   approver_user_id?: string; // 特定ユーザー指定時のuser_id
   approver_name: string; // 表示用名称（例: "管理者全員", "山田 太郎", "配属部署の所属長"）
   is_enabled: boolean;
+  documents?: string[]; // 📄 対象・提出書類タグ
+  action_tags?: string[]; // ⚡ 連動・アクションタグ
 }
 
 export interface OnboardingStepHistory {
@@ -20,6 +22,47 @@ export interface OnboardingStepHistory {
   comment?: string;
 }
 
+// 🏷️ 各ステップのデフォルト書類・アクションタグ取得フォールバック
+export const getStepDefaultDocuments = (step: Partial<OnboardingWorkflowStep>): string[] => {
+  if (step.documents && step.documents.length > 0) {
+    return step.documents;
+  }
+  switch (step.id) {
+    case 'step_1':
+      return ['📄 労働条件通知書（雇用契約書）'];
+    case 'step_2':
+      return ['🔢 マイナンバー', '💳 給与振込口座通帳', '📝 扶養控除等申告書', '🚲 通勤経路・交通費届'];
+    case 'step_3':
+      return ['🔍 通帳原本写真目視', '🛡️ マイナンバー厳格照合'];
+    case 'step_4':
+      return ['🏛️ 健保・厚年資格取得届', '🏛️ 雇用保険資格取得届', '🏢 住民税特別徴収異動届'];
+    case 'step_5':
+      return ['⏱️ 勤怠打刻アカウント発行', '📅 シフト募集連動', '💰 給与台帳SSOT連携'];
+    default:
+      return step.documents || [];
+  }
+};
+
+export const getStepDefaultActionTags = (step: Partial<OnboardingWorkflowStep>): string[] => {
+  if (step.action_tags && step.action_tags.length > 0) {
+    return step.action_tags;
+  }
+  switch (step.id) {
+    case 'step_1':
+      return ['⚡ クラウドサイン電子合意', '🔒 改ざん防止ロック'];
+    case 'step_2':
+      return ['📱 スマホ写真提出', '📤 暗号化ストレージ保管'];
+    case 'step_3':
+      return ['↩️ 1クリック差戻し', '✨ 台帳SSOT自動反映'];
+    case 'step_4':
+      return ['📑 届出書類一括出力', '🌐 e-Gov電子申請連動'];
+    case 'step_5':
+      return ['🚀 入社受入完了通知', '👥 社員名簿・組織図反映'];
+    default:
+      return step.action_tags || [];
+  }
+};
+
 export const DEFAULT_ONBOARDING_STEPS: OnboardingWorkflowStep[] = [
   {
     id: 'step_1',
@@ -29,7 +72,9 @@ export const DEFAULT_ONBOARDING_STEPS: OnboardingWorkflowStep[] = [
     required_action: 'contract_sign',
     approver_type: 'all_admins',
     approver_name: '管理者全員',
-    is_enabled: true
+    is_enabled: true,
+    documents: ['📄 労働条件通知書（雇用契約書）'],
+    action_tags: ['⚡ クラウドサイン電子合意', '🔒 改ざん防止ロック']
   },
   {
     id: 'step_2',
@@ -39,7 +84,9 @@ export const DEFAULT_ONBOARDING_STEPS: OnboardingWorkflowStep[] = [
     required_action: 'document_submit',
     approver_type: 'all_admins',
     approver_name: '管理者全員',
-    is_enabled: true
+    is_enabled: true,
+    documents: ['🔢 マイナンバー', '💳 給与振込口座通帳', '📝 扶養控除等申告書', '🚲 通勤経路・交通費届'],
+    action_tags: ['📱 スマホ写真提出', '📤 暗号化ストレージ保管']
   },
   {
     id: 'step_3',
@@ -49,7 +96,9 @@ export const DEFAULT_ONBOARDING_STEPS: OnboardingWorkflowStep[] = [
     required_action: 'admin_review',
     approver_type: 'all_admins',
     approver_name: '管理者全員',
-    is_enabled: true
+    is_enabled: true,
+    documents: ['🔍 通帳原本写真目視', '🛡️ マイナンバー厳格照合'],
+    action_tags: ['↩️ 1クリック差戻し', '✨ 台帳SSOT自動反映']
   },
   {
     id: 'step_4',
@@ -59,7 +108,9 @@ export const DEFAULT_ONBOARDING_STEPS: OnboardingWorkflowStep[] = [
     required_action: 'gov_procedure',
     approver_type: 'all_admins',
     approver_name: '管理者全員',
-    is_enabled: true
+    is_enabled: true,
+    documents: ['🏛️ 健保・厚年資格取得届', '🏛️ 雇用保険資格取得届', '🏢 住民税特別徴収異動届'],
+    action_tags: ['📑 届出書類一括出力', '🌐 e-Gov電子申請連動']
   },
   {
     id: 'step_5',
@@ -69,7 +120,9 @@ export const DEFAULT_ONBOARDING_STEPS: OnboardingWorkflowStep[] = [
     required_action: 'complete',
     approver_type: 'all_admins',
     approver_name: '管理者全員',
-    is_enabled: true
+    is_enabled: true,
+    documents: ['⏱️ 勤怠打刻アカウント発行', '📅 シフト募集連動', '💰 給与台帳SSOT連携'],
+    action_tags: ['🚀 入社受入完了通知', '👥 社員名簿・組織図反映']
   }
 ];
 
@@ -81,7 +134,11 @@ export const getWorkflowStepsFromStorage = (tenantId?: string | null): Onboardin
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map((s: OnboardingWorkflowStep) => ({
+            ...s,
+            documents: s.documents && s.documents.length > 0 ? s.documents : getStepDefaultDocuments(s),
+            action_tags: s.action_tags && s.action_tags.length > 0 ? s.action_tags : getStepDefaultActionTags(s)
+          }));
         }
       }
     }
