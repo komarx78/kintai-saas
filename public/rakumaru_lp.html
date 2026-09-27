@@ -41,28 +41,24 @@
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
-    /* WordPressテーマ等との干渉を防ぐベースリセット ＆ 全画面フルワイド表示 */
-    #rakumaru-lp-root {
+    /* 崩れゼロ・レスポンシブ完全適合スタイル */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      overflow-x: hidden;
       font-family: 'Noto Sans JP', sans-serif;
+      background-color: #f8fafc;
       color: #1e293b;
       line-height: 1.6;
-      background-color: #f8fafc;
-      width: 100vw;
-      position: relative;
-      left: 50%;
-      right: 50%;
-      margin-left: -50vw;
-      margin-right: -50vw;
+    }
+    #rakumaru-lp-root {
+      width: 100%;
+      min-height: 100vh;
+      overflow-x: hidden;
     }
     #rakumaru-lp-root a { text-decoration: none; }
     #rakumaru-lp-root * { box-sizing: border-box; }
-
-    /* WordPressテーマ既存の余白・ヘッダー・タイトル干渉を防止 */
-    .entry-content, .site-main, .content-area, .entry-content > * {
-      max-width: 100% !important;
-      padding-left: 0 !important;
-      padding-right: 0 !important;
-    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased">
