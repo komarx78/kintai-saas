@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/rakumaru_lp.html",
+      "destination": "/rakumaru_lp.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
