@@ -27,7 +27,8 @@ import {
 import { searchAddressFromZip } from '../lib/zipHelper';
 import { 
   getTenantLineConfig, 
-  toggleStaffLineLinkStatus 
+  toggleStaffLineLinkStatus,
+  RAKUMARU_OFFICIAL_LINE_CONSTANTS
 } from '../lib/lineMessaging';
 
 const toKatakana = (str: string): string => {
@@ -821,7 +822,7 @@ export default function EmployeeOnboardingWelcome() {
 
     const friendAddUrl = lineConfig.mode === 'own_official' && lineConfig.ownAddFriendUrl
       ? lineConfig.ownAddFriendUrl
-      : `https://lin.ee/rakumaru_demo?tenant=${encodeURIComponent(effectiveTenantId || '')}&user=${encodeURIComponent(effectiveUserId || '')}`;
+      : RAKUMARU_OFFICIAL_LINE_CONSTANTS.addFriendUrl;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 text-white flex items-center justify-center p-4">
