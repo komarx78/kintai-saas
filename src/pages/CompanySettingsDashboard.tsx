@@ -534,7 +534,7 @@ export const formatLaborInsuranceNumber = (input: string): string => {
 };
 
 // 🏛️ 案1：全社マスタ設定 4大グループ統合定義（横スクロールゼロ・初心者迷子ゼロ）
-export type SettingsTabKey = 'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements' | 'qualifications' | 'reminders' | 'billing';
+export type SettingsTabKey = 'basic' | 'departments' | 'calendar' | 'attendance_rules' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements' | 'qualifications' | 'reminders' | 'billing';
 
 export type MainCategoryKey = 'company_org' | 'attendance_payroll' | 'contract_hr' | 'options_plan';
 
@@ -571,8 +571,9 @@ export const SETTINGS_CATEGORIES: MainCategoryDef[] = [
     icon: Calendar,
     description: '年間営業日、就業時間、打刻丸め・36協定、給与締め日',
     subTabs: [
-      { key: 'calendar', label: '3. 営業カレンダー・時間', subDescription: '休日・就業・打刻丸め・残業36協定・代休', icon: Calendar },
-      { key: 'payroll', label: '4. 給与締日・社会保険', subDescription: '締め日・支払日・割増賃金・社会保険料率', icon: DollarSign },
+      { key: 'calendar', label: '3. 営業カレンダー・時間', subDescription: '年間休日・就業パターン・個別カレンダー', icon: Calendar },
+      { key: 'attendance_rules', label: '4. 打刻・勤怠ルール（36協定・代休）', subDescription: '打刻丸め・定時退勤・残業アラート・代休期限', icon: Clock },
+      { key: 'payroll', label: '5. 給与締日・社会保険', subDescription: '締め日・支払日・割増賃金・社会保険料率', icon: DollarSign },
     ]
   },
   {
@@ -582,9 +583,9 @@ export const SETTINGS_CATEGORIES: MainCategoryDef[] = [
     icon: FileText,
     description: '労働条件通知書、入社手続き、就業規則条文',
     subTabs: [
-      { key: 'contract', label: '5. 労働条件・雇用契約', subDescription: '労働条件通知書テンプレート・法定条文', icon: FileText },
-      { key: 'onboarding', label: '6. 入社手続き・承認者', subDescription: '入社オンボーディング・申請承認者フロー', icon: UserCheck },
-      { key: 'rules', label: '7. 就業規則（AI連動）', subDescription: '自社就業規則条文・AIチャット参照データ', icon: BookOpen },
+      { key: 'contract', label: '6. 労働条件・雇用契約', subDescription: '労働条件通知書テンプレート・法定条文', icon: FileText },
+      { key: 'onboarding', label: '7. 入社手続き・承認者', subDescription: '入社オンボーディング・申請承認者フロー', icon: UserCheck },
+      { key: 'rules', label: '8. 就業規則（AI連動）', subDescription: '自社就業規則条文・AIチャット参照データ', icon: BookOpen },
     ]
   },
   {
@@ -594,10 +595,10 @@ export const SETTINGS_CATEGORIES: MainCategoryDef[] = [
     icon: CreditCard,
     description: '全社お知らせ、資格手当、通知設定、プラン決済',
     subTabs: [
-      { key: 'announcements', label: '8. 全社お知らせ', subDescription: 'ポータル掲示板・社内通達・更新履歴', icon: Bell },
-      { key: 'qualifications', label: '9. 資格手当マスタ', subDescription: '公的資格・社内認定手当の支給基準', icon: Award },
-      { key: 'reminders', label: '10. 公的届出・改定通知', subDescription: '月変・算定基礎・雇用保険手続き通知', icon: Bell },
-      { key: 'billing', label: '11. プラン・決済設定', subDescription: 'ご利用プラン・人数規模・カード決済', icon: CreditCard },
+      { key: 'announcements', label: '9. 全社お知らせ', subDescription: 'ポータル掲示板・社内通達・更新履歴', icon: Bell },
+      { key: 'qualifications', label: '10. 資格手当マスタ', subDescription: '公的資格・社内認定手当の支給基準', icon: Award },
+      { key: 'reminders', label: '11. 公的届出・改定通知', subDescription: '月変・算定基礎・雇用保険手続き通知', icon: Bell },
+      { key: 'billing', label: '12. プラン・決済設定', subDescription: 'ご利用プラン・人数規模・カード決済', icon: CreditCard },
     ]
   }
 ];
@@ -627,7 +628,7 @@ export default function CompanySettingsDashboard() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tabParam = params.get('tab') as any;
-    if (tabParam && ['basic', 'departments', 'calendar', 'payroll', 'contract', 'onboarding', 'rules', 'announcements', 'qualifications', 'reminders', 'billing'].includes(tabParam)) {
+    if (tabParam && ['basic', 'departments', 'calendar', 'attendance_rules', 'payroll', 'contract', 'onboarding', 'rules', 'announcements', 'qualifications', 'reminders', 'billing'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [location.search]);
@@ -1876,8 +1877,8 @@ export default function CompanySettingsDashboard() {
       localStorage.setItem(`company_employment_rules_${tenantId}`, employmentRulesText);
       localStorage.setItem(`company_leave_rules_${tenantId}`, JSON.stringify(leaveRules));
       localStorage.setItem(`company_master_settings_saved_${tenantId}`, 'true');
-      // STEP 3（休日カレンダー・給与締め日）は、実際にそのタブを開いて確認・保存された時のみ完了フラグを付与
-      if (activeTab === 'calendar' || activeTab === 'payroll') {
+      // STEP 3（休日カレンダー・勤怠運用ルール・給与締め日）は、実際にそのタブを開いて確認・保存された時のみ完了フラグを付与
+      if (activeTab === 'calendar' || activeTab === 'attendance_rules' || activeTab === 'payroll') {
         localStorage.setItem(`step3_calendar_payroll_explicitly_saved_${tenantId}`, 'true');
       }
       if (geminiApiKey) {
@@ -5132,6 +5133,25 @@ export default function CompanySettingsDashboard() {
                     </button>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {renderSaveFooter()}
+          </div>
+        )}
+
+        {/* 4. 現場即応 打刻・勤怠運用ルール（36協定・代休） タブ */}
+        {activeTab === 'attendance_rules' && (
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-6 animate-in fade-in duration-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-indigo-600" />
+                  打刻・勤怠現場運用ルール（時間丸め・36協定残業警告・代休期限）
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  タイムカード打刻時の丸め計算（マル目）、始業前・定時退勤バッファ、36協定の残業時間警告閾値、休日出勤の代休消滅期限を管理します。
+                </p>
               </div>
             </div>
 
