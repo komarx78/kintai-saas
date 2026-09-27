@@ -50,7 +50,7 @@ import {
   Network,  Award, Crown, Shield, FileText, Upload,
   ImageIcon, Wand2, CheckCircle2, Eye, Bell, FileSpreadsheet,
   ExternalLink, Store, MapPin, CreditCard, Check, Zap,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Coffee
 } from 'lucide-react';
 import { 
   SAAS_PLANS, 
@@ -694,6 +694,35 @@ export default function CompanySettingsDashboard() {
   const [newPresetName, setNewPresetName] = useState('');
   const [newPresetDesc, setNewPresetDesc] = useState('');
 
+  // ⏱️ 会社別 休暇・代休・有給・労務ルールマスタ State（残業36協定アラート・代休振休ルール）
+  const [leaveRules, setLeaveRules] = useState({
+    paid_leave: {
+      grant_timing: 'standard_6months',
+      allow_half_day: true,
+      allow_hourly: false,
+      max_hourly_days: 5,
+      application_deadline: 'prior_day',
+      expire_years: 2,
+      allow_accumulated: false
+    },
+    substitute_leave: {
+      mode: 'both',
+      expire_months: 2,
+      furikyu_expire_months: 2,
+      grant_condition: 'half_4h_full_8h',
+      pay_overtime_premium: true
+    },
+    work_hours: {
+      closing_day: 'end_of_month',
+      daily_work_hours: 8,
+      weekly_work_days: 5,
+      rounding_unit: 15,
+      overtime_alert_warning: 20,
+      overtime_alert_danger: 40,
+      overtime_alert_prohibited: 60
+    }
+  });
+
   // 4. カレンダー・休日State（複数カレンダーパターン完全対応）
   const [calendarPatterns, setCalendarPatterns] = useState<CompanyCalendarPattern[]>(DEFAULT_CALENDAR_PATTERNS);
   const [activeCalendarId, setActiveCalendarId] = useState<string>('cal-default');
@@ -1083,6 +1112,69 @@ export default function CompanySettingsDashboard() {
       }
       setCustomPresets(loadedPresets);
       saveCustomPresetsToStorage(tenantIdData, loadedPresets);
+
+      // ⏱️ 会社別 休暇・代休・有給・労務ルールマスタ（残業36協定アラート・代休振休ルール）の復元
+      let loadedLeaveRules = {
+        paid_leave: {
+          grant_timing: 'standard_6months',
+          allow_half_day: true,
+          allow_hourly: false,
+          max_hourly_days: 5,
+          application_deadline: 'prior_day',
+          expire_years: 2,
+          allow_accumulated: false
+        },
+        substitute_leave: {
+          mode: 'both',
+          expire_months: 2,
+          furikyu_expire_months: 2,
+          grant_condition: 'half_4h_full_8h',
+          pay_overtime_premium: true
+        },
+        work_hours: {
+          closing_day: 'end_of_month',
+          daily_work_hours: 8,
+          weekly_work_days: 5,
+          rounding_unit: 15,
+          overtime_alert_warning: 20,
+          overtime_alert_danger: 40,
+          overtime_alert_prohibited: 60
+        }
+      };
+      if (tData?.leave_rules && typeof tData.leave_rules === 'object') {
+        loadedLeaveRules = {
+          ...loadedLeaveRules,
+          ...tData.leave_rules,
+          substitute_leave: {
+            ...loadedLeaveRules.substitute_leave,
+            ...(tData.leave_rules.substitute_leave || {})
+          },
+          work_hours: {
+            ...loadedLeaveRules.work_hours,
+            ...(tData.leave_rules.work_hours || {})
+          }
+        };
+      } else {
+        try {
+          const rawRules = localStorage.getItem(`company_leave_rules_${tenantIdData}`);
+          if (rawRules) {
+            const parsed = JSON.parse(rawRules);
+            loadedLeaveRules = {
+              ...loadedLeaveRules,
+              ...parsed,
+              substitute_leave: {
+                ...loadedLeaveRules.substitute_leave,
+                ...(parsed.substitute_leave || {})
+              },
+              work_hours: {
+                ...loadedLeaveRules.work_hours,
+                ...(parsed.work_hours || {})
+              }
+            };
+          }
+        } catch (_) {}
+      }
+      setLeaveRules(loadedLeaveRules);
 
       // 自社ユーザー一覧（役職・所属長・組織図用）の一元取得（400エラー対策済み）
       const { data: uData } = await supabase
@@ -1707,6 +1799,7 @@ export default function CompanySettingsDashboard() {
       saveAnnouncementsToStorage(announcements, tenantId);
       localStorage.setItem(`mock_company_holidays_${tenantId}`, JSON.stringify(Array.from(computedHolidaysSet)));
       localStorage.setItem(`company_employment_rules_${tenantId}`, employmentRulesText);
+      localStorage.setItem(`company_leave_rules_${tenantId}`, JSON.stringify(leaveRules));
       localStorage.setItem(`company_master_settings_saved_${tenantId}`, 'true');
       // STEP 3（休日カレンダー・給与締め日）は、実際にそのタブを開いて確認・保存された時のみ完了フラグを付与
       if (activeTab === 'calendar' || activeTab === 'payroll') {
@@ -1774,6 +1867,7 @@ export default function CompanySettingsDashboard() {
           corporate_number: basicInfo.corporate_number,
           company_seal_url: companySealUrl,
           work_calendar_settings: updatedCalendar,
+          leave_rules: leaveRules,
           payroll_common_settings: { ...payrollSettings, prefecture_code: autoPrefCode },
           prefecture_code: autoPrefCode,
           gemini_api_key: geminiApiKey,
@@ -1799,7 +1893,8 @@ export default function CompanySettingsDashboard() {
           // 最小限の確実カラムで再試行
           await supabase.from('tenants').update({
             position_settings: positions,
-            work_calendar_settings: updatedCalendar
+            work_calendar_settings: updatedCalendar,
+            leave_rules: leaveRules
           }).eq('id', tenantId);
         } else {
           console.log('✅ tenants.update 正常永続化完了（役職マスタ含む）');
@@ -5365,6 +5460,230 @@ export default function CompanySettingsDashboard() {
                 </div>
               )}
             </div>
+
+            {/* ⏱️ 残業・36協定アラート閾値（当月残業時間） */}
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-150 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 bg-amber-100 text-amber-700 rounded-xl">
+                      <Clock className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-sm">⏱️ 残業・36協定アラート閾値（当月時間外労働）</h4>
+                      <p className="text-xs text-slate-400">当月の時間外労働が各時間を超過した際に、勤怠集計・出勤簿画面でリアルタイムに注意喚起します</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 shrink-0 self-start sm:self-auto">
+                    労基法・36協定準拠
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* 注意アラート */}
+                  <div className="bg-amber-50/40 p-4 rounded-2xl border border-amber-200/80 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-yellow-400"></span>
+                        注意アラート
+                      </span>
+                      <span className="text-[10px] text-amber-700 font-bold bg-amber-100/70 px-2 py-0.5 rounded-full border border-amber-200">
+                        早期警戒
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="200"
+                        value={leaveRules.work_hours?.overtime_alert_warning ?? 20}
+                        onChange={(e) => setLeaveRules({
+                          ...leaveRules,
+                          work_hours: {
+                            ...leaveRules.work_hours,
+                            overtime_alert_warning: Number(e.target.value)
+                          }
+                        })}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-sm bg-white font-bold text-right focus:ring-2 focus:ring-yellow-400 focus:outline-none"
+                      />
+                      <span className="text-xs text-slate-600 font-bold whitespace-nowrap">時間超過</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium">初期目安: 20時間</p>
+                  </div>
+
+                  {/* 危険アラート */}
+                  <div className="bg-orange-50/40 p-4 rounded-2xl border border-orange-200/80 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-orange-900 flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-orange-400"></span>
+                        危険アラート
+                      </span>
+                      <span className="text-[10px] text-orange-700 font-bold bg-orange-100/70 px-2 py-0.5 rounded-full border border-orange-200">
+                        重点管理
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="200"
+                        value={leaveRules.work_hours?.overtime_alert_danger ?? 40}
+                        onChange={(e) => setLeaveRules({
+                          ...leaveRules,
+                          work_hours: {
+                            ...leaveRules.work_hours,
+                            overtime_alert_danger: Number(e.target.value)
+                          }
+                        })}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-sm bg-white font-bold text-right focus:ring-2 focus:ring-orange-400 focus:outline-none"
+                      />
+                      <span className="text-xs text-slate-600 font-bold whitespace-nowrap">時間超過</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium">初期目安: 40時間</p>
+                  </div>
+
+                  {/* 超過・禁止アラート */}
+                  <div className="bg-rose-50/40 p-4 rounded-2xl border border-rose-200/80 shadow-2xs space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
+                        超過・禁止アラート
+                      </span>
+                      <span className="text-[10px] text-rose-700 font-bold bg-rose-100/70 px-2 py-0.5 rounded-full border border-rose-200">
+                        36協定上限
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="number"
+                        min="0"
+                        max="200"
+                        value={leaveRules.work_hours?.overtime_alert_prohibited ?? 60}
+                        onChange={(e) => setLeaveRules({
+                          ...leaveRules,
+                          work_hours: {
+                            ...leaveRules.work_hours,
+                            overtime_alert_prohibited: Number(e.target.value)
+                          }
+                        })}
+                        className="w-full p-2 border border-slate-300 rounded-xl text-sm bg-white font-bold text-right focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                      />
+                      <span className="text-xs text-slate-600 font-bold whitespace-nowrap">時間超過</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium">法定上限目安: 60時間（原則月45h/特例60h等）</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 🔄 代休・振休の現場運用ルール・有効期限 */}
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-150 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">
+                      <Coffee className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-sm">🔄 代休・振替休日の現場運用ルール・有効期限</h4>
+                      <p className="text-xs text-slate-400">休日出勤後の代休付与基準・精算方式および消滅有効期限を設定します</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 shrink-0 self-start sm:self-auto">
+                    休暇・代休規定
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 代休有効期限 */}
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+                    <label className="block text-xs font-bold text-slate-800">
+                      代休の取得有効期限
+                    </label>
+                    <select
+                      value={leaveRules.substitute_leave?.expire_months ?? 2}
+                      onChange={(e) => setLeaveRules({
+                        ...leaveRules,
+                        substitute_leave: {
+                          ...leaveRules.substitute_leave,
+                          expire_months: Number(e.target.value)
+                        }
+                      })}
+                      className="w-full p-2.5 border border-slate-300 rounded-xl text-xs bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    >
+                      <option value={1}>発生から1ヶ月以内（当月度内精算）</option>
+                      <option value={2}>発生から2ヶ月以内（推奨・標準）</option>
+                      <option value={3}>発生から3ヶ月以内</option>
+                      <option value={6}>発生から6ヶ月以内</option>
+                      <option value={0}>無期限（同一年度内）</option>
+                    </select>
+                    <p className="text-[11px] text-slate-500 font-medium">※休日出勤が行われた後に事後取得する代休の消滅期限です。</p>
+                  </div>
+
+                  {/* 振休有効期限 */}
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+                    <label className="block text-xs font-bold text-slate-800">
+                      振替休日（振休）の取得有効期限
+                    </label>
+                    <select
+                      value={leaveRules.substitute_leave?.furikyu_expire_months ?? 2}
+                      onChange={(e) => setLeaveRules({
+                        ...leaveRules,
+                        substitute_leave: {
+                          ...leaveRules.substitute_leave,
+                          furikyu_expire_months: Number(e.target.value)
+                        }
+                      })}
+                      className="w-full p-2.5 border border-slate-300 rounded-xl text-xs bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    >
+                      <option value={1}>発生から1ヶ月以内（同一賃金計算期間内）</option>
+                      <option value={2}>発生から2ヶ月以内（推奨・標準）</option>
+                      <option value={3}>発生から3ヶ月以内</option>
+                    </select>
+                    <p className="text-[11px] text-slate-500 font-medium">※事前に休日と労働日を交換する振替休日の適用期限です。</p>
+                  </div>
+
+                  {/* 精算方式 */}
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+                    <label className="block text-xs font-bold text-slate-800">
+                      休日出勤の精算方式
+                    </label>
+                    <select
+                      value={leaveRules.substitute_leave?.mode ?? 'both'}
+                      onChange={(e) => setLeaveRules({
+                        ...leaveRules,
+                        substitute_leave: {
+                          ...leaveRules.substitute_leave,
+                          mode: e.target.value
+                        }
+                      })}
+                      className="w-full p-2.5 border border-slate-300 rounded-xl text-xs bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    >
+                      <option value="both">振替休日・代休の両方を認める（標準）</option>
+                      <option value="substitute_only">振替休日のみ（事前振替必須・割増賃金なし）</option>
+                      <option value="daikyu_only">代休のみ（事後精算・休日割増あり）</option>
+                    </select>
+                  </div>
+
+                  {/* 代休付与基準 */}
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+                    <label className="block text-xs font-bold text-slate-800">
+                      代休の付与基準時間
+                    </label>
+                    <select
+                      value={leaveRules.substitute_leave?.grant_condition ?? 'half_4h_full_8h'}
+                      onChange={(e) => setLeaveRules({
+                        ...leaveRules,
+                        substitute_leave: {
+                          ...leaveRules.substitute_leave,
+                          grant_condition: e.target.value
+                        }
+                      })}
+                      className="w-full p-2.5 border border-slate-300 rounded-xl text-xs bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    >
+                      <option value="half_4h_full_8h">4時間以上で半日代休、8時間以上で全日代休</option>
+                      <option value="exact_hours">実労働時間と同等の代休時間を付与</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
 
             {renderSaveFooter()}
           </div>

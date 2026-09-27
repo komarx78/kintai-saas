@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Users, FileText, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock, ShieldCheck, DollarSign, Building2, ArrowLeft, ExternalLink } from 'lucide-react';
+import { Users, FileText, LogOut, Plus, X, Calendar, Coffee, CheckCircle, Clock, DollarSign, Building2, ArrowLeft } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { PaidLeaveManagement } from '../components/PaidLeaveManagement';
@@ -21,18 +21,22 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState(
-    tabParam && ['employees', 'attendance', 'ledger', 'payslips', 'settings'].includes(tabParam)
-      ? tabParam
+  const [activeTab, setActiveTab] = useState<'employees' | 'attendance' | 'ledger' | 'payslips'>(
+    tabParam && ['employees', 'attendance', 'ledger', 'payslips'].includes(tabParam)
+      ? (tabParam as any)
       : 'employees'
   );
 
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab && ['employees', 'attendance', 'ledger', 'payslips', 'settings'].includes(tab)) {
-      setActiveTab(tab);
+    if (tab === 'settings') {
+      navigate('/settings/company');
+      return;
     }
-  }, [searchParams]);
+    if (tab && ['employees', 'attendance', 'ledger', 'payslips'].includes(tab)) {
+      setActiveTab(tab as any);
+    }
+  }, [searchParams, navigate]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<any>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -93,44 +97,13 @@ const AdminDashboard = () => {
     additional_user_price: 200, additional_user_price_annual: 2400
   });
 
-  // 会社別 休暇・労務ルールマスタ State
-  const [leaveRules, setLeaveRules] = useState({
-    paid_leave: {
-      grant_timing: 'standard_6months',
-      allow_half_day: true,
-      allow_hourly: false,
-      max_hourly_days: 5,
-      application_deadline: 'prior_day',
-      expire_years: 2,
-      allow_accumulated: false
-    },
-    substitute_leave: {
-      mode: 'both',
-      expire_months: 2,
-      furikyu_expire_months: 2,
-      grant_condition: 'half_4h_full_8h',
-      pay_overtime_premium: true
-    },
-    work_hours: {
-      closing_day: 'end_of_month',
-      daily_work_hours: 8,
-      weekly_work_days: 5,
-      rounding_unit: 15,
-      overtime_alert_warning: 20,
-      overtime_alert_danger: 40,
-      overtime_alert_prohibited: 60
-    }
-  });
-  const [isSavingAttendanceRules, setIsSavingAttendanceRules] = useState(false);
-
   // ブラウザタブのタイトルを動的に更新
   useEffect(() => {
     const titles: Record<string, string> = {
       employees: '従業員管理 | 企業管理ダッシュボード',
       attendance: '月間勤怠・出勤簿管理 | 企業管理ダッシュボード',
       ledger: '有給・休暇管理 | 企業管理ダッシュボード',
-      payslips: 'Web給与明細管理 | 企業管理ダッシュボード',
-      settings: '勤怠運用ルール設定 | 企業管理ダッシュボード'
+      payslips: 'Web給与明細管理 | 企業管理ダッシュボード'
     };
     document.title = titles[activeTab] || '企業管理ダッシュボード | みんなの らくまる労務';
   }, [activeTab]);
@@ -174,58 +147,6 @@ ${tenantId || '（エラー：コード取得失敗）'}
       alert('コピーに失敗しました。お手数ですが手動でコピーしてください。');
     }
   };
-
-  // 打刻の丸め単位（1分、15分、30分）
-  const [roundingUnit, setRoundingUnit] = useState<number>(() => {
-    return 15;
-  });
-
-  const handleRoundingChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = parseInt(e.target.value);
-    setRoundingUnit(val);
-    if (tenantId) {
-      localStorage.setItem(`mock_rounding_unit_${tenantId}`, val.toString());
-    }
-    localStorage.setItem('mock_rounding_unit', val.toString());
-
-    if (tenantId) {
-      try {
-        const { data: tData } = await supabase.from('tenants').select('payroll_common_settings').eq('id', tenantId).maybeSingle();
-        const currentPayroll = tData?.payroll_common_settings || {};
-        await supabase.from('tenants').update({
-          payroll_common_settings: {
-            ...currentPayroll,
-            rounding_unit: val.toString()
-          }
-        }).eq('id', tenantId);
-      } catch (err) {
-        console.warn('Failed to update rounding_unit in tenants DB:', err);
-      }
-    }
-  };
-
-  useEffect(() => {
-    const loadTenantSettings = async () => {
-      if (tenantId) {
-        try {
-          const { data: tData } = await supabase
-            .from('tenants')
-            .select('payroll_common_settings')
-            .eq('id', tenantId)
-            .maybeSingle();
-
-          if (tData?.payroll_common_settings?.rounding_unit) {
-            const rUnit = parseInt(tData.payroll_common_settings.rounding_unit);
-            setRoundingUnit(rUnit);
-            localStorage.setItem(`mock_rounding_unit_${tenantId}`, rUnit.toString());
-          }
-        } catch (e) {
-          console.warn('DB load payroll settings error:', e);
-        }
-      }
-    };
-    loadTenantSettings();
-  }, [tenantId]);
 
   // Dynamic Data States
   const [employees, setEmployees] = useState<any[]>([]);
@@ -329,20 +250,11 @@ ${tenantId || '（エラー：コード取得失敗）'}
     const fetchTenantAndPrices = async () => {
       if (!tenantId) return;
       try {
-        // ローカルストレージフォールバック
-        const savedRules = localStorage.getItem(`company_leave_rules_${tenantId}`);
-        if (savedRules) {
-          try { setLeaveRules(JSON.parse(savedRules)); } catch (e) {}
-        }
-
-        // 1. テナント情報と個別価格・休暇ルールを取得
+        // 1. テナント情報と個別価格を取得
         const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
         if (tData) {
           setTenantName(tData.name);
           setTenantInfo(tData);
-          if (tData.leave_rules) {
-            setLeaveRules(tData.leave_rules);
-          }
         }
 
         // 2. システム共通価格表を取得
@@ -357,62 +269,6 @@ ${tenantId || '（エラー：コード取得失敗）'}
     fetchTenantAndPrices();
     fetchEmployees();
   }, [tenantId]);
-
-  // ⏰ 勤怠現場運用ルール保存処理
-  const handleSaveAttendanceRules = async () => {
-    if (!tenantId) {
-      alert('テナントIDが取得できませんでした。');
-      return;
-    }
-    setIsSavingAttendanceRules(true);
-    try {
-      // 1. work_hoursの最新のrounding_unitをleaveRulesに反映
-      const updatedLeaveRules = {
-        ...leaveRules,
-        work_hours: {
-          ...leaveRules.work_hours,
-          rounding_unit: roundingUnit
-        }
-      };
-      setLeaveRules(updatedLeaveRules);
-
-      // 2. ローカルストレージに即時バックアップ保存
-      localStorage.setItem(`company_leave_rules_${tenantId}`, JSON.stringify(updatedLeaveRules));
-      localStorage.setItem(`mock_rounding_unit_${tenantId}`, roundingUnit.toString());
-      localStorage.setItem('mock_rounding_unit', roundingUnit.toString());
-
-      // 3. Supabase DBに保存 (leave_rules & payroll_common_settings)
-      const { data: tData } = await supabase
-        .from('tenants')
-        .select('payroll_common_settings')
-        .eq('id', tenantId)
-        .maybeSingle();
-
-      const currentPayroll = tData?.payroll_common_settings || {};
-
-      const { error } = await supabase
-        .from('tenants')
-        .update({
-          leave_rules: updatedLeaveRules,
-          payroll_common_settings: {
-            ...currentPayroll,
-            rounding_unit: roundingUnit.toString()
-          }
-        })
-        .eq('id', tenantId);
-
-      if (error) {
-        console.warn('DB update attendance rules notice:', error.message);
-      }
-
-      alert('✅ 勤怠現場運用ルールを保存しました！\nタイムカード打刻、残業アラート、代休期限に即時反映されます。');
-    } catch (err: any) {
-      console.error('Save attendance rules error:', err);
-      alert('勤怠ルールの保存に失敗しました: ' + (err.message || ''));
-    } finally {
-      setIsSavingAttendanceRules(false);
-    }
-  };
 
   const fetchRequests = async () => {
     if (!tenantId) return;
@@ -703,19 +559,15 @@ ${tenantId || '（エラー：コード取得失敗）'}
             <span>Web給与明細</span>
           </button>
           <button 
-            onClick={() => setActiveTab('settings')}
-            className={`flex items-center w-full p-2.5 rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer ${activeTab === 'settings' ? 'bg-blue-800 font-bold' : 'hover:bg-blue-800/80 text-blue-100'}`}
-          >
-            <Clock className="mr-3 h-5 w-5 text-blue-300 shrink-0" />
-            <span>⏰ 勤怠運用ルール設定</span>
-          </button>
-
-          <button 
             onClick={() => navigate('/settings/company')}
-            className="flex items-center w-full p-2.5 rounded-xl transition-colors whitespace-nowrap shrink-0 bg-indigo-800/80 hover:bg-indigo-700 text-indigo-100 font-bold mt-1 shadow-xs cursor-pointer"
+            className="flex items-center w-full p-2.5 rounded-xl transition-all whitespace-nowrap shrink-0 bg-indigo-800/80 hover:bg-indigo-700 text-indigo-100 font-bold mt-2 shadow-xs cursor-pointer border border-indigo-600/40 hover:border-indigo-400/60"
+            title="会社情報、締め日、カレンダー、打刻丸め、36協定アラート、就業規則などの全社マスタ設定"
           >
             <Building2 className="mr-3 h-5 w-5 text-indigo-300 shrink-0" />
-            <span>会社・全社マスタ設定</span>
+            <div className="flex flex-col text-left">
+              <span>会社・全社マスタ設定</span>
+              <span className="text-[10px] text-indigo-300 font-normal">打刻・36協定・カレンダー等</span>
+            </div>
           </button>
 
           <button 
@@ -1026,315 +878,6 @@ ${tenantId || '（エラー：コード取得失敗）'}
 
           {activeTab === 'payslips' && (
             <PayslipManagement tenantId={tenantId} />
-          )}
-
-          {activeTab === 'settings' && (
-            <div className="space-y-6">
-              {/* 🏢 全社マスタ一元管理 案内カード */}
-              <div className="bg-gradient-to-r from-indigo-900 via-blue-900 to-indigo-950 text-white rounded-2xl p-6 shadow-md border border-indigo-700/50">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-indigo-600/50 border border-indigo-400/40 text-cyan-300 flex items-center justify-center shrink-0 shadow-inner mt-0.5">
-                      <Building2 className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 text-[11px] font-bold mb-1.5">
-                        <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" /> 全社マスタ一本化（SSOT）準拠
-                      </div>
-                      <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                        🏢 会社基本情報・年間営業カレンダー・締め日は【会社・全社マスタ設定】で一元管理されています
-                      </h3>
-                      <p className="text-xs sm:text-sm text-indigo-200 mt-1.5 leading-relaxed">
-                        会社名・所在地、締め日・給与支払日、年間休日（営業カレンダー）、組織・部署マスタ、就業規則などの全社共通マスタは、二重管理を防ぐため全社マスタ設定画面にて一括集中管理されています。
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/settings/company')}
-                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm px-6 py-3 rounded-xl whitespace-nowrap shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 border border-indigo-400/30 group"
-                  >
-                    <Building2 className="w-4 h-4 text-cyan-300 group-hover:scale-110 transition-transform" />
-                    <span>全社マスタ設定を開く</span>
-                    <ExternalLink className="w-3.5 h-3.5 opacity-80" />
-                  </button>
-                </div>
-              </div>
-
-              {/* ⏰ 勤怠現場運用ルール設定 */}
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gray-50/50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
-                      <Clock className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900">⏰ 勤怠現場運用ルール設定</h2>
-                      <p className="text-xs text-gray-500 mt-0.5">タイムカード現場運用のための打刻丸め・36協定残業アラート・代休期限を管理します</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleSaveAttendanceRules}
-                    disabled={isSavingAttendanceRules}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    <span>{isSavingAttendanceRules ? '保存中...' : '現場運用ルールを保存'}</span>
-                  </button>
-                </div>
-
-                <div className="p-6 space-y-6">
-                  {/* ① 打刻丸め単位 */}
-                  <div className="bg-slate-50/80 rounded-xl p-5 border border-slate-200/80 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
-                      <h4 className="font-bold text-gray-900 text-sm">① タイムカード打刻の丸め単位</h4>
-                    </div>
-                    <div className="max-w-md">
-                      <label className="block text-xs font-bold text-gray-700 mb-1.5">打刻丸め単位（出勤・退勤）</label>
-                      <select
-                        value={roundingUnit}
-                        onChange={handleRoundingChange}
-                        className="w-full p-2.5 border border-gray-300 rounded-xl text-xs bg-white font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-2xs"
-                      >
-                        <option value={1}>1分単位（丸めなし・実打刻時間そのまま）</option>
-                        <option value={15}>15分単位（出勤:切り上げ, 退勤:切り捨て・標準）</option>
-                        <option value={30}>30分単位（出勤:切り上げ, 退勤:切り捨て）</option>
-                      </select>
-                      <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
-                        ※打刻時のタイムカード実時間から集計される労働時間の計算単位です（労働基準法および貴社の就業規則に準拠）。
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* ② 残業・36協定アラート閾値 */}
-                  <div className="bg-slate-50/80 rounded-xl p-5 border border-slate-200/80 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                        <h4 className="font-bold text-gray-900 text-sm">② 残業・36協定アラート閾値（当月残業時間）</h4>
-                      </div>
-                      <span className="text-[11px] text-gray-500">
-                        当月の時間外労働が各時間を超過した際に、勤怠集計画面等でリアルタイムに注意喚起します
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      {/* 注意アラート */}
-                      <div className="bg-white p-4 rounded-xl border border-yellow-200 shadow-2xs space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-yellow-800 flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400"></span>
-                            注意アラート
-                          </span>
-                          <span className="text-[10px] text-yellow-600 font-semibold bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-100">
-                            早期警戒
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 pt-1">
-                          <input
-                            type="number"
-                            min="0"
-                            max="200"
-                            value={leaveRules.work_hours?.overtime_alert_warning ?? 20}
-                            onChange={(e) => setLeaveRules({
-                              ...leaveRules,
-                              work_hours: {
-                                ...leaveRules.work_hours,
-                                overtime_alert_warning: Number(e.target.value)
-                              }
-                            })}
-                            className="w-full p-2 border border-gray-300 rounded-lg text-sm bg-white font-bold text-right focus:ring-2 focus:ring-yellow-400"
-                          />
-                          <span className="text-xs text-gray-600 font-bold whitespace-nowrap">時間超過</span>
-                        </div>
-                        <p className="text-[10px] text-gray-400">初期目安: 20時間</p>
-                      </div>
-
-                      {/* 危険アラート */}
-                      <div className="bg-white p-4 rounded-xl border border-orange-200 shadow-2xs space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-orange-800 flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full bg-orange-400"></span>
-                            危険アラート
-                          </span>
-                          <span className="text-[10px] text-orange-600 font-semibold bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100">
-                            重点管理
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 pt-1">
-                          <input
-                            type="number"
-                            min="0"
-                            max="200"
-                            value={leaveRules.work_hours?.overtime_alert_danger ?? 40}
-                            onChange={(e) => setLeaveRules({
-                              ...leaveRules,
-                              work_hours: {
-                                ...leaveRules.work_hours,
-                                overtime_alert_danger: Number(e.target.value)
-                              }
-                            })}
-                            className="w-full p-2 border border-gray-300 rounded-lg text-sm bg-white font-bold text-right focus:ring-2 focus:ring-orange-400"
-                          />
-                          <span className="text-xs text-gray-600 font-bold whitespace-nowrap">時間超過</span>
-                        </div>
-                        <p className="text-[10px] text-gray-400">初期目安: 40時間</p>
-                      </div>
-
-                      {/* 超過・禁止アラート */}
-                      <div className="bg-white p-4 rounded-xl border border-red-200 shadow-2xs space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-red-800 flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full bg-red-600"></span>
-                            超過・禁止アラート
-                          </span>
-                          <span className="text-[10px] text-red-600 font-semibold bg-red-50 px-2 py-0.5 rounded-full border border-red-100">
-                            36協定上限
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 pt-1">
-                          <input
-                            type="number"
-                            min="0"
-                            max="200"
-                            value={leaveRules.work_hours?.overtime_alert_prohibited ?? 60}
-                            onChange={(e) => setLeaveRules({
-                              ...leaveRules,
-                              work_hours: {
-                                ...leaveRules.work_hours,
-                                overtime_alert_prohibited: Number(e.target.value)
-                              }
-                            })}
-                            className="w-full p-2 border border-gray-300 rounded-lg text-sm bg-white font-bold text-right focus:ring-2 focus:ring-red-500"
-                          />
-                          <span className="text-xs text-gray-600 font-bold whitespace-nowrap">時間超過</span>
-                        </div>
-                        <p className="text-[10px] text-gray-400">法定上限目安: 60時間</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ③ 代休・振休の有効期限 */}
-                  <div className="bg-slate-50/80 rounded-xl p-5 border border-slate-200/80 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                      <h4 className="font-bold text-gray-900 text-sm">③ 代休・振休の現場運用ルール・有効期限</h4>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* 代休有効期限 */}
-                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs space-y-2">
-                        <label className="block text-xs font-bold text-gray-800">
-                          代休の取得有効期限
-                        </label>
-                        <select
-                          value={leaveRules.substitute_leave?.expire_months ?? 2}
-                          onChange={(e) => setLeaveRules({
-                            ...leaveRules,
-                            substitute_leave: {
-                              ...leaveRules.substitute_leave,
-                              expire_months: Number(e.target.value)
-                            }
-                          })}
-                          className="w-full p-2.5 border border-gray-300 rounded-xl text-xs bg-white font-medium focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value={1}>発生から1ヶ月以内（当月度内精算）</option>
-                          <option value={2}>発生から2ヶ月以内（推奨・標準）</option>
-                          <option value={3}>発生から3ヶ月以内</option>
-                          <option value={6}>発生から6ヶ月以内</option>
-                          <option value={0}>無期限（同一年度内）</option>
-                        </select>
-                        <p className="text-[11px] text-gray-500">※休日出勤が行われた後に取得する代休の消滅期限です。</p>
-                      </div>
-
-                      {/* 振休有効期限 */}
-                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs space-y-2">
-                        <label className="block text-xs font-bold text-gray-800">
-                          振替休日（振休）の取得有効期限
-                        </label>
-                        <select
-                          value={leaveRules.substitute_leave?.furikyu_expire_months ?? 2}
-                          onChange={(e) => setLeaveRules({
-                            ...leaveRules,
-                            substitute_leave: {
-                              ...leaveRules.substitute_leave,
-                              furikyu_expire_months: Number(e.target.value)
-                            }
-                          })}
-                          className="w-full p-2.5 border border-gray-300 rounded-xl text-xs bg-white font-medium focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value={1}>発生から1ヶ月以内（同一賃金計算期間内）</option>
-                          <option value={2}>発生から2ヶ月以内（推奨・標準）</option>
-                          <option value={3}>発生から3ヶ月以内</option>
-                        </select>
-                        <p className="text-[11px] text-gray-500">※事前に休日と労働日を交換する振替休日の適用期限です。</p>
-                      </div>
-
-                      {/* 精算方式 */}
-                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs space-y-2">
-                        <label className="block text-xs font-bold text-gray-800">
-                          休日出勤の精算方式
-                        </label>
-                        <select
-                          value={leaveRules.substitute_leave?.mode ?? 'both'}
-                          onChange={(e) => setLeaveRules({
-                            ...leaveRules,
-                            substitute_leave: {
-                              ...leaveRules.substitute_leave,
-                              mode: e.target.value
-                            }
-                          })}
-                          className="w-full p-2.5 border border-gray-300 rounded-xl text-xs bg-white font-medium focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="both">振替休日・代休の両方を認める（標準）</option>
-                          <option value="substitute_only">振替休日のみ（事前振替必須・割増賃金なし）</option>
-                          <option value="daikyu_only">代休のみ（事後精算・休日割増あり）</option>
-                        </select>
-                      </div>
-
-                      {/* 代休付与基準 */}
-                      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs space-y-2">
-                        <label className="block text-xs font-bold text-gray-800">
-                          代休の付与基準時間
-                        </label>
-                        <select
-                          value={leaveRules.substitute_leave?.grant_condition ?? 'half_4h_full_8h'}
-                          onChange={(e) => setLeaveRules({
-                            ...leaveRules,
-                            substitute_leave: {
-                              ...leaveRules.substitute_leave,
-                              grant_condition: e.target.value
-                            }
-                          })}
-                          className="w-full p-2.5 border border-gray-300 rounded-xl text-xs bg-white font-medium focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="half_4h_full_8h">4時間以上で半日代休、8時間以上で全日代休</option>
-                          <option value="exact_hours">実労働時間と同等の代休時間を付与</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* フッター保存ボタン */}
-                <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <span className="text-xs text-gray-500">
-                    ※保存した設定は全従業員のタイムカード集計・出勤簿・申請判定に即座に反映されます。
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleSaveAttendanceRules}
-                    disabled={isSavingAttendanceRules}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold text-sm shadow-md transition flex items-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
-                  >
-                    <CheckCircle className="w-5 h-5" />
-                    <span>{isSavingAttendanceRules ? '現場運用ルールを保存中...' : '勤怠現場運用ルールを保存する'}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
           )}
         </div>
       </div>
