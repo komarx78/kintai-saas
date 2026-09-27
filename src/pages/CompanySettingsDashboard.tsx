@@ -678,6 +678,7 @@ export default function CompanySettingsDashboard() {
 
   // 入社手続きワークフローステップState
   const [onboardingSteps, setOnboardingSteps] = useState<OnboardingWorkflowStep[]>(DEFAULT_ONBOARDING_STEPS);
+  const [selectedStepIdx, setSelectedStepIdx] = useState<number>(0); // 案5：左右2ペイン選択中インデックス
   const [companyUsers, setCompanyUsers] = useState<OrgMemberInfo[]>([]);
   const [newStepName, setNewStepName] = useState('');
   const [newStepDesc, setNewStepDesc] = useState('');
@@ -3058,6 +3059,7 @@ export default function CompanySettingsDashboard() {
     const newSteps = onboardingSteps.filter((_, i) => i !== index);
     newSteps.forEach((s, i) => { s.step_number = i + 1; });
     setOnboardingSteps(newSteps);
+    setSelectedStepIdx(prev => Math.min(prev, Math.max(0, newSteps.length - 1)));
   };
 
   // 新規ステップ追加
@@ -3091,6 +3093,7 @@ export default function CompanySettingsDashboard() {
       action_tags: actArr.length > 0 ? actArr : ['⚙️ 自社ワークフロー']
     };
     setOnboardingSteps([...onboardingSteps, newStep]);
+    setSelectedStepIdx(onboardingSteps.length); // 追加した新ステップを選択状態にする
     setNewStepName('');
     setNewStepDesc('');
     setNewStepApproverType('all_admins');
@@ -3116,6 +3119,7 @@ export default function CompanySettingsDashboard() {
   const handleResetDefaultSteps = () => {
     if (confirm('入社手続きステップをデフォルト設定（標準5ステップ）に戻しますか？')) {
       setOnboardingSteps(DEFAULT_ONBOARDING_STEPS);
+      setSelectedStepIdx(0);
     }
   };
 
@@ -6202,245 +6206,327 @@ export default function CompanySettingsDashboard() {
               </button>
             </div>
 
-            {/* ステップ一覧リスト */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-700">登録済み手続きステップ ({onboardingSteps.length}ステップ)</span>
-                <span className="text-[10px] text-slate-400">※ 各ステップの「✏️ 編集」ボタンや「承認権限」をクリックして変更できます</span>
-              </div>
+            {/* 🏛️ 左右2ペインレイアウト（左：ステップ一覧 ➔ 右：設定プレビュー） */}
+            {(() => {
+              const currentStep = onboardingSteps[selectedStepIdx] || onboardingSteps[0] || null;
+              const currentDocs = currentStep ? getStepDefaultDocuments(currentStep) : [];
+              const currentActions = currentStep ? getStepDefaultActionTags(currentStep) : [];
 
-              <div className="space-y-3">
-                {onboardingSteps.map((step, idx) => {
-                  const docs = getStepDefaultDocuments(step);
-                  const actions = getStepDefaultActionTags(step);
-                  return (
-                    <div
-                      key={step.id}
-                      className={`p-4 sm:p-5 rounded-2xl border transition flex flex-col xl:flex-row xl:items-center justify-between gap-4 ${
-                        step.is_enabled
-                          ? 'bg-slate-50/80 border-slate-200 hover:border-indigo-300 hover:shadow-xs'
-                          : 'bg-slate-100/50 border-slate-200 opacity-60'
-                      }`}
-                    >
-                      {/* 左側：ステップ基本情報（番号・タイトル・承認者・説明） */}
-                      <div className="flex items-start gap-3.5 min-w-[280px] xl:max-w-md shrink-0">
-                        <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white font-black text-xs flex items-center justify-center shadow-xs shrink-0 mt-0.5">
-                          {step.step_number}
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-slate-800 text-sm">{step.name}</span>
-                            <button
-                              onClick={() => setEditingStepModal({ 
-                                isOpen: true, 
-                                index: idx, 
-                                step: { 
-                                  ...step,
-                                  documents: docs,
-                                  action_tags: actions
-                                } 
-                              })}
-                              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 cursor-pointer transition shadow-2xs"
-                              title="クリックして承認権限やステップ名を編集"
+              return (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  
+                  {/* 👈 左ペイン（幅5/12）：手続きステップ一覧リスト */}
+                  <div className="lg:col-span-5 space-y-3">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                        手続きステップ一覧
+                        <span className="bg-indigo-100 text-indigo-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                          {onboardingSteps.length}
+                        </span>
+                      </span>
+                      <span className="text-[10px] text-slate-400">クリックして右側で確認</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {onboardingSteps.map((step, idx) => {
+                        const isSelected = selectedStepIdx === idx;
+                        return (
+                          <div
+                            key={step.id}
+                            onClick={() => setSelectedStepIdx(idx)}
+                            className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between gap-3 ${
+                              isSelected
+                                ? 'bg-gradient-to-r from-indigo-50/90 via-white to-indigo-50/30 border-indigo-300 ring-2 ring-indigo-500/20 shadow-xs'
+                                : 'bg-white border-slate-200/90 hover:bg-slate-50/80 hover:border-slate-300'
+                            } ${!step.is_enabled ? 'opacity-60' : ''}`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              {/* 番号バッジ */}
+                              <div className={`w-7 h-7 rounded-xl font-black text-xs flex items-center justify-center shrink-0 shadow-2xs transition ${
+                                isSelected
+                                  ? 'bg-indigo-600 text-white'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {step.step_number}
+                              </div>
+                              
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className={`text-xs font-bold truncate ${
+                                    isSelected ? 'text-indigo-950 font-black' : 'text-slate-800'
+                                  }`}>
+                                    {step.name}
+                                  </span>
+                                  {!step.is_enabled && (
+                                    <span className="bg-slate-100 text-slate-500 text-[9px] font-bold px-1.5 py-0.5 rounded-md border border-slate-200">
+                                      無効
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[10px] text-slate-400 block truncate mt-0.5">
+                                  承認: {step.approver_name || '管理者全員'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* 右端操作（並び替え ＆ 選択インジケータ） */}
+                            <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center bg-slate-50 p-0.5 rounded-lg border border-slate-200/70">
+                                <button
+                                  onClick={() => handleMoveStepUp(idx)}
+                                  disabled={idx === 0}
+                                  className="p-1 hover:bg-white rounded text-slate-500 disabled:opacity-20 cursor-pointer transition"
+                                  title="上へ移動"
+                                >
+                                  <ArrowUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleMoveStepDown(idx)}
+                                  disabled={idx === onboardingSteps.length - 1}
+                                  className="p-1 hover:bg-white rounded text-slate-500 disabled:opacity-20 cursor-pointer transition"
+                                  title="下へ移動"
+                                >
+                                  <ArrowDown className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <ChevronRight className={`w-4 h-4 transition ${
+                                isSelected ? 'text-indigo-600 translate-x-0.5' : 'text-slate-300'
+                              }`} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* 自社ステップ追加エリア（左ペイン下部にコンパクト配備） */}
+                    <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 space-y-2.5 mt-3">
+                      <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                        <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                        ＋ 自社独自のステップを追加
+                      </h4>
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          placeholder="ステップ名（例: PC手配・研修受講）"
+                          value={newStepName}
+                          onChange={e => setNewStepName(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800"
+                        />
+                        <input
+                          type="text"
+                          placeholder="手続き内容説明（例: 社内PCのキッティング）"
+                          value={newStepDesc}
+                          onChange={e => setNewStepDesc(e.target.value)}
+                          className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-700"
+                        />
+                        <div className="flex gap-2">
+                          <select
+                            value={newStepApproverType}
+                            onChange={e => {
+                              const val = e.target.value as any;
+                              setNewStepApproverType(val);
+                              if (val === 'specific_user' && companyUsers.length > 0 && !newStepApproverUserId) {
+                                setNewStepApproverUserId(companyUsers[0].id);
+                              }
+                            }}
+                            className="flex-1 bg-white border border-slate-300 rounded-xl px-2 py-1.5 text-xs font-bold text-slate-800"
+                          >
+                            <option value="all_admins">👥 管理者全員</option>
+                            <option value="specific_user">👤 担当者指定</option>
+                            <option value="department_head">🏢 所属長</option>
+                          </select>
+
+                          {newStepApproverType === 'specific_user' && (
+                            <select
+                              value={newStepApproverUserId}
+                              onChange={e => setNewStepApproverUserId(e.target.value)}
+                              className="flex-1 bg-indigo-50 border border-indigo-200 rounded-xl px-2 py-1.5 text-xs font-bold text-indigo-900"
                             >
-                              <span>承認権限: {step.approver_name || '管理者全員'}</span>
-                              <Edit3 className="w-3 h-3 text-indigo-500" />
-                            </button>
-                            {!step.is_enabled && (
-                              <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                無効化中
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-500 leading-relaxed">{step.description}</p>
-                        </div>
-                      </div>
+                              {companyUsers.map(u => (
+                                <option key={u.id} value={u.id}>
+                                  {u.name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
 
-                      {/* 中央：余白を活かした「対象書類 ＆ 連動機能」のスマートタグバッジ群 */}
-                      <div className="flex-1 flex flex-col justify-center gap-2 px-0 xl:px-4 py-2 xl:py-0 border-y xl:border-y-0 xl:border-l border-slate-200/80">
-                        {/* 📄 提出・対象書類チップ */}
-                        {docs.length > 0 && (
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[10px] font-extrabold text-slate-400 flex items-center gap-1 uppercase tracking-wider shrink-0 mr-1">
-                              <FileText className="w-3 h-3 text-sky-500" />
-                              対象書類:
-                            </span>
-                            {docs.map((doc, dIdx) => (
-                              <span
-                                key={dIdx}
-                                className="inline-flex items-center gap-1 bg-sky-50 text-sky-800 border border-sky-200/90 px-2.5 py-0.5 rounded-lg text-[11px] font-bold shadow-2xs"
-                              >
-                                {doc}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* ⚡ 連動アクション・自動化チップ */}
-                        {actions.length > 0 && (
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[10px] font-extrabold text-slate-400 flex items-center gap-1 uppercase tracking-wider shrink-0 mr-1">
-                              <Zap className="w-3 h-3 text-purple-500" />
-                              連動機能:
-                            </span>
-                            {actions.map((act, aIdx) => (
-                              <span
-                                key={aIdx}
-                                className="inline-flex items-center gap-1 bg-purple-50 text-purple-800 border border-purple-200/90 px-2.5 py-0.5 rounded-lg text-[11px] font-bold shadow-2xs"
-                              >
-                                {act}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 右端：操作ボタン群 */}
-                      <div className="flex items-center gap-2 shrink-0 self-end xl:self-center">
-                        <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-xs">
                           <button
-                            onClick={() => handleMoveStepUp(idx)}
-                            disabled={idx === 0}
-                            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 disabled:opacity-30 cursor-pointer"
-                            title="上へ移動"
+                            onClick={handleAddNewStep}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-xs cursor-pointer whitespace-nowrap flex items-center gap-1"
                           >
-                            <ArrowUp className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleMoveStepDown(idx)}
-                            disabled={idx === onboardingSteps.length - 1}
-                            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 disabled:opacity-30 cursor-pointer"
-                            title="下へ移動"
-                          >
-                            <ArrowDown className="w-4 h-4" />
+                            <Plus className="w-3.5 h-3.5" />
+                            追加
                           </button>
                         </div>
-
-                        <button
-                          onClick={() => setEditingStepModal({ 
-                            isOpen: true, 
-                            index: idx, 
-                            step: { 
-                              ...step,
-                              documents: docs,
-                              action_tags: actions
-                            } 
-                          })}
-                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border border-slate-300 flex items-center gap-1 shadow-2xs"
-                          title="ステップ名・説明・承認権限・タグを編集"
-                        >
-                          <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
-                          編集
-                        </button>
-
-                        <button
-                          onClick={() => handleToggleStep(idx)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border shadow-2xs ${
-                            step.is_enabled
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                              : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
-                          }`}
-                        >
-                          {step.is_enabled ? '有効' : '無効'}
-                        </button>
-
-                        <button
-                          onClick={() => handleDeleteStep(idx)}
-                          className="p-2 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition cursor-pointer"
-                          title="ステップを削除"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
+                  </div>
 
-            {/* 新規ステップ追加エリア */}
-            <div className="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 space-y-3">
-              <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                <Plus className="w-4 h-4 text-indigo-600" />
-                ＋ 自社独自の入社手続きステップを追加
-              </h4>
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5">
-                <input
-                  type="text"
-                  placeholder="ステップ名（例: PC手配・研修受講）"
-                  value={newStepName}
-                  onChange={e => setNewStepName(e.target.value)}
-                  className="lg:col-span-3 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800"
-                />
-                <input
-                  type="text"
-                  placeholder="手続き内容説明（例: 社内PCのキッティングと受講案内）"
-                  value={newStepDesc}
-                  onChange={e => setNewStepDesc(e.target.value)}
-                  className="lg:col-span-4 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700"
-                />
-                <div className="lg:col-span-5 flex gap-2 flex-wrap sm:flex-nowrap">
-                  <select
-                    value={newStepApproverType}
-                    onChange={e => {
-                      const val = e.target.value as any;
-                      setNewStepApproverType(val);
-                      if (val === 'specific_user' && companyUsers.length > 0 && !newStepApproverUserId) {
-                        setNewStepApproverUserId(companyUsers[0].id);
-                      }
-                    }}
-                    className="w-44 bg-white border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-800"
-                  >
-                    <option value="all_admins">👥 管理者全員</option>
-                    <option value="specific_user">👤 担当者を指名</option>
-                    <option value="department_head">🏢 配属部署の所属長</option>
-                  </select>
+                  {/* 👉 右ペイン（幅7/12）：選択中ステップの広々プレビュー＆設定状況 */}
+                  <div className="lg:col-span-7 bg-slate-50/70 rounded-3xl p-5 sm:p-6 border border-slate-200/90 space-y-4">
+                    {currentStep ? (
+                      <>
+                        {/* 上部ヘッダー（ステップ番号 ＋ タイトル ＋ 操作ボタン） */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white font-black text-sm flex items-center justify-center shadow-xs shrink-0">
+                              {currentStep.step_number}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-black text-indigo-600 tracking-wide uppercase">
+                                  Step {currentStep.step_number} 設定状況
+                                </span>
+                                {currentStep.is_enabled ? (
+                                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                                    ● 有効稼働中
+                                  </span>
+                                ) : (
+                                  <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                    無効化中
+                                  </span>
+                                )}
+                              </div>
+                              <h4 className="font-black text-slate-900 text-base mt-0.5">
+                                {currentStep.name}
+                              </h4>
+                            </div>
+                          </div>
 
-                  {newStepApproverType === 'specific_user' && (
-                    <select
-                      value={newStepApproverUserId}
-                      onChange={e => setNewStepApproverUserId(e.target.value)}
-                      className="flex-1 bg-indigo-50 border border-indigo-200 rounded-xl px-2.5 py-2 text-xs font-bold text-indigo-900"
-                    >
-                      {companyUsers.map(u => (
-                        <option key={u.id} value={u.id}>
-                          {u.name} ({u.department || '所属なし'}{u.role === 'admin' ? ' / 管理者' : ''})
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
+                          {/* 編集・有効化・削除ボタン */}
+                          <div className="flex items-center gap-2 self-end sm:self-auto">
+                            <button
+                              onClick={() => setEditingStepModal({
+                                isOpen: true,
+                                index: selectedStepIdx,
+                                step: {
+                                  ...currentStep,
+                                  documents: currentDocs,
+                                  action_tags: currentActions
+                                }
+                              })}
+                              className="bg-white hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border border-slate-300 flex items-center gap-1.5 shadow-2xs"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+                              設定を編集
+                            </button>
 
-                {/* 2段目：対象書類 ＆ 連動機能タグ入力 */}
-                <div className="lg:col-span-6">
-                  <input
-                    type="text"
-                    placeholder="対象・提出書類タグ（カンマ区切り、例: 📄 PC貸与申請書, 🔐 秘密保持誓約書）"
-                    value={newStepDocs}
-                    onChange={e => setNewStepDocs(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700"
-                  />
+                            <button
+                              onClick={() => handleToggleStep(selectedStepIdx)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border shadow-2xs ${
+                                currentStep.is_enabled
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+                              }`}
+                            >
+                              {currentStep.is_enabled ? '有効' : '無効'}
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteStep(selectedStepIdx)}
+                              className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl transition cursor-pointer"
+                              title="このステップを削除"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* 手続き内容説明 */}
+                        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1">
+                          <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                            <FileText className="w-3 h-3 text-indigo-500" />
+                            手続き内容・目的
+                          </span>
+                          <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                            {currentStep.description || '社内規定の手続き'}
+                          </p>
+                        </div>
+
+                        {/* 承認ルール・権限情報カード */}
+                        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs space-y-1.5">
+                          <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3 text-indigo-500" />
+                            承認権限（誰が承認・チェックを実行するか）
+                          </span>
+                          <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                            <span className="bg-indigo-50 text-indigo-800 border border-indigo-200 px-3 py-1 rounded-xl text-xs font-black">
+                              {currentStep.approver_name || '管理者全員'}
+                            </span>
+                            <span className="text-xs text-slate-500">
+                              {currentStep.approver_type === 'all_admins' && '（システム管理者権限を持つアカウントなら誰でも承認可能）'}
+                              {currentStep.approver_type === 'specific_user' && '（指定された個別担当者のみが承認可能）'}
+                              {currentStep.approver_type === 'department_head' && '（配属先の所属長・部門長が承認可能）'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 📄 回収・提出書類リスト（広々とした2列グリッドカード） */}
+                        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-extrabold text-slate-700 flex items-center gap-1.5">
+                              <FileText className="w-3.5 h-3.5 text-sky-600" />
+                              対象・提出書類
+                              <span className="bg-sky-100 text-sky-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                {currentDocs.length}件
+                              </span>
+                            </span>
+                            <span className="text-[10px] text-slate-400">※ 従業員が提出または内容合意する書類</span>
+                          </div>
+
+                          {currentDocs.length > 0 ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                              {currentDocs.map((doc, dIdx) => (
+                                <div
+                                  key={dIdx}
+                                  className="bg-sky-50/70 border border-sky-200/80 rounded-xl px-3 py-2 text-xs font-bold text-sky-900 flex items-center gap-2 shadow-2xs"
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                                  <span className="truncate">{doc}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-400 italic py-2">
+                              登録されている提出書類はありません（社内連絡・環境手配等）
+                            </p>
+                          )}
+                        </div>
+
+                        {/* ⚡ 連動機能・自動化アクション */}
+                        {currentActions.length > 0 && (
+                          <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-2xs space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-extrabold text-slate-700 flex items-center gap-1.5">
+                                <Zap className="w-3.5 h-3.5 text-purple-600" />
+                                連動機能 ＆ 自動化アクション
+                              </span>
+                              <span className="text-[10px] text-slate-400">※ システム連動処理</span>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                              {currentActions.map((act, aIdx) => (
+                                <span
+                                  key={aIdx}
+                                  className="inline-flex items-center gap-1 bg-purple-50 text-purple-800 border border-purple-200 px-3 py-1 rounded-xl text-xs font-bold shadow-2xs"
+                                >
+                                  {act}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center py-16 text-slate-400 text-xs">
+                        ステップが選択されていません
+                      </div>
+                    )}
+                  </div>
+
                 </div>
-                <div className="lg:col-span-4">
-                  <input
-                    type="text"
-                    placeholder="連動機能・アクションタグ（カンマ区切り、例: 💻 情シス発注, 📧 歓迎メール）"
-                    value={newStepActionTags}
-                    onChange={e => setNewStepActionTags(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-700"
-                  />
-                </div>
-                <div className="lg:col-span-2 flex justify-end">
-                  <button
-                    onClick={handleAddNewStep}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-xs cursor-pointer whitespace-nowrap flex items-center justify-center gap-1.5"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    ステップ追加
-                  </button>
-                </div>
-              </div>
-            </div>
+              );
+            })()}
 
             {renderSaveFooter()}
           </div>
