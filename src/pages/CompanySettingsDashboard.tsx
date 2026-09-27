@@ -15,7 +15,8 @@ import { LineConfigModal } from '../components/LineConfigModal';
 import { 
   type LineIntegrationConfig, 
   getTenantLineConfig, 
-  fetchTenantLineConfigFromDb 
+  fetchTenantLineConfigFromDb,
+  RAKUMARU_OFFICIAL_LINE_CONSTANTS
 } from '../lib/lineMessaging';
 import { 
   type LaborContractTemplate, 
@@ -7325,6 +7326,16 @@ export default function CompanySettingsDashboard() {
                     </div>
                     <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
                       「みんなのらくまる労務」公式アカウントから代行通知。LINEの審査や設定が一切不要で今すぐ使えます。
+                    </div>
+                    {/* 🌟 接続中公式アカウント情報（大元SSOT） */}
+                    <div className="mt-3 pt-2.5 border-t border-emerald-200/80 flex items-center justify-between text-[11px]">
+                      <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        {RAKUMARU_OFFICIAL_LINE_CONSTANTS.accountName}
+                      </span>
+                      <span className="font-mono font-bold text-emerald-800 bg-emerald-100/90 px-1.5 py-0.5 rounded text-[10px] border border-emerald-300">
+                        {RAKUMARU_OFFICIAL_LINE_CONSTANTS.basicId}
+                      </span>
                     </div>
                   </div>
 
