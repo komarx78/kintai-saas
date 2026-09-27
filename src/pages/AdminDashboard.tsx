@@ -1035,7 +1035,7 @@ ${tenantId || '（エラー：コード取得失敗）'}
         </header>
 
         <div className="p-4 md:p-8 flex-1">
-          <div className="max-w-6xl mx-auto">
+          <div className={`${activeTab === 'ledger' || activeTab === 'attendance' || activeTab === 'employees' ? 'max-w-[1440px]' : 'max-w-6xl'} mx-auto w-full transition-all`}>
             {/* Debug Error Alert */}
           {debugError && (
             <div className="bg-red-50 p-4 rounded-lg shadow-sm border border-red-200 mb-6 print:hidden">

@@ -1518,28 +1518,42 @@ const UserDashboard = () => {
                 <h2 className="text-lg font-medium text-gray-800 mb-4 border-b pb-2">有給休暇・代休 残数</h2>
                 
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center bg-blue-50 p-3 rounded-md">
-                    <span className="font-medium text-blue-900">有給休暇（今年度付与分）</span>
-                    <span className="text-2xl font-bold text-blue-700">{user?.paid_leave_balance || 0}<span className="text-sm font-normal ml-1">日</span></span>
+                  <div className="flex justify-between items-center bg-blue-50 p-3 rounded-xl border border-blue-100">
+                    <span className="font-bold text-blue-900 text-sm">有給休暇（今年度付与分）</span>
+                    <div className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+                      <span className="text-2xl font-black text-blue-700">{user?.paid_leave_balance || 0}</span>
+                      <span className="text-xs font-bold text-blue-600">日</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center bg-gray-50 p-3 rounded-md">
-                    <span className="font-medium text-gray-700">有給休暇（前年度繰越分）</span>
-                    <span className="text-xl font-bold text-gray-700">{user?.paid_leave_carryover || 0}<span className="text-sm font-normal ml-1">日</span></span>
+                  <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-200">
+                    <span className="font-bold text-gray-700 text-sm">有給休暇（前年度繰越分）</span>
+                    <div className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+                      <span className="text-xl font-black text-gray-700">{user?.paid_leave_carryover || 0}</span>
+                      <span className="text-xs font-bold text-gray-500">日</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center bg-amber-50 p-3 rounded-md border border-amber-200">
-                    <span className="font-medium text-amber-900">有給休暇（消化済日数）</span>
-                    <span className="text-xl font-bold text-amber-800">{userTotalTakenLeaveDays}<span className="text-sm font-normal ml-1">日</span></span>
+                  <div className="flex justify-between items-center bg-amber-50 p-3 rounded-xl border border-amber-200">
+                    <span className="font-bold text-amber-900 text-sm">有給休暇（消化済日数）</span>
+                    <div className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+                      <span className="text-xl font-black text-amber-800">{userTotalTakenLeaveDays}</span>
+                      <span className="text-xs font-bold text-amber-700">日</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center bg-gray-100 p-3 rounded-md border border-gray-200">
-                    <span className="font-bold text-gray-800">有給休暇（現在残日数）</span>
-                    <span className="text-2xl font-bold text-emerald-700">
-                      {Math.max(0, ((user?.paid_leave_balance || 0) + (user?.paid_leave_carryover || 0)) - userTotalTakenLeaveDays)}
-                      <span className="text-sm font-normal ml-1">日</span>
-                    </span>
+                  <div className="flex justify-between items-center bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-200">
+                    <span className="font-black text-emerald-950 text-sm">有給休暇（現在残日数）</span>
+                    <div className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+                      <span className="text-2xl font-black text-emerald-700">
+                        {Math.max(0, ((user?.paid_leave_balance || 0) + (user?.paid_leave_carryover || 0)) - userTotalTakenLeaveDays)}
+                      </span>
+                      <span className="text-xs font-bold text-emerald-600">日</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center bg-green-50 p-3 rounded-md">
-                    <span className="font-medium text-green-900">利用可能な代休</span>
-                    <span className="text-xl font-bold text-green-700">0<span className="text-sm font-normal ml-1">日</span></span>
+                  <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <span className="font-bold text-slate-700 text-sm">利用可能な代休</span>
+                    <div className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+                      <span className="text-xl font-black text-slate-700">0</span>
+                      <span className="text-xs font-bold text-slate-500">日</span>
+                    </div>
                   </div>
 
                   {/* 本日の確定シフト予定 */}
@@ -2579,23 +2593,34 @@ const UserDashboard = () => {
                   <h3 className="text-sm font-bold text-gray-800 border-b pb-2 mb-3">現在の有給・代休残数</h3>
                   <div className="space-y-2.5">
                     <div className="flex justify-between items-center bg-blue-50/70 p-2.5 rounded-lg border border-blue-100">
-                      <span className="text-xs font-medium text-blue-900">有給休暇（今年度付与）</span>
-                      <span className="text-base font-bold text-blue-700">{user?.paid_leave_balance || 0}<span className="text-xs font-normal ml-0.5">日</span></span>
+                      <span className="text-xs font-bold text-blue-900">有給休暇（今年度付与）</span>
+                      <div className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+                        <span className="text-base font-black text-blue-700">{user?.paid_leave_balance || 0}</span>
+                        <span className="text-xs font-bold text-blue-600">日</span>
+                      </div>
                     </div>
                     <div className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                      <span className="text-xs font-medium text-gray-700">有給休暇（繰越分）</span>
-                      <span className="text-base font-bold text-gray-700">{user?.paid_leave_carryover || 0}<span className="text-xs font-normal ml-0.5">日</span></span>
+                      <span className="text-xs font-bold text-gray-700">有給休暇（繰越分）</span>
+                      <div className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+                        <span className="text-base font-black text-gray-700">{user?.paid_leave_carryover || 0}</span>
+                        <span className="text-xs font-bold text-gray-500">日</span>
+                      </div>
                     </div>
                     <div className="flex justify-between items-center bg-amber-50/70 p-2.5 rounded-lg border border-amber-100">
-                      <span className="text-xs font-medium text-amber-900">消化済日数</span>
-                      <span className="text-base font-bold text-amber-700">{userTotalTakenLeaveDays}<span className="text-xs font-normal ml-0.5">日</span></span>
+                      <span className="text-xs font-bold text-amber-900">消化済日数</span>
+                      <div className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+                        <span className="text-base font-black text-amber-700">{userTotalTakenLeaveDays}</span>
+                        <span className="text-xs font-bold text-amber-600">日</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center bg-slate-100 p-2.5 rounded-lg border border-slate-200">
-                      <span className="text-xs font-bold text-slate-800">有給現在残数</span>
-                      <span className="text-xl font-bold text-emerald-700">
-                        {Math.max(0, ((user?.paid_leave_balance || 0) + (user?.paid_leave_carryover || 0)) - userTotalTakenLeaveDays)}
-                        <span className="text-xs font-normal ml-0.5">日</span>
-                      </span>
+                    <div className="flex justify-between items-center bg-emerald-50/60 p-2.5 rounded-lg border border-emerald-200">
+                      <span className="text-xs font-black text-emerald-950">有給現在残数</span>
+                      <div className="inline-flex items-baseline gap-0.5 whitespace-nowrap">
+                        <span className="text-lg font-black text-emerald-700">
+                          {Math.max(0, ((user?.paid_leave_balance || 0) + (user?.paid_leave_carryover || 0)) - userTotalTakenLeaveDays)}
+                        </span>
+                        <span className="text-xs font-bold text-emerald-600">日</span>
+                      </div>
                     </div>
                   </div>
                 </div>

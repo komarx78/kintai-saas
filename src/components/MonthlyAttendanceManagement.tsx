@@ -1186,19 +1186,19 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[900px]">
+                <table className="w-full text-left border-collapse min-w-[1140px]">
                   <thead>
                     <tr className="bg-slate-100/70 border-b border-slate-200 text-xs font-black text-slate-600 uppercase tracking-wider">
-                      <th className="p-4">従業員名</th>
-                      <th className="p-4">部署</th>
-                      <th className="p-4">雇用形態</th>
-                      <th className="p-4 text-right">出勤日数</th>
-                      <th className="p-4 text-right">総実働時間</th>
-                      <th className="p-4 text-right">総残業時間</th>
-                      <th className="p-4 text-right">有給取得</th>
-                      <th className="p-4 text-center">打刻エラー</th>
-                      <th className="p-4 text-center">各種申請</th>
-                      <th className="p-4 text-center w-36">アクション</th>
+                      <th className="p-4 min-w-[180px] whitespace-nowrap">従業員名</th>
+                      <th className="p-4 min-w-[120px] whitespace-nowrap">部署</th>
+                      <th className="p-4 min-w-[110px] whitespace-nowrap">雇用形態</th>
+                      <th className="p-4 text-right min-w-[100px] whitespace-nowrap">出勤日数</th>
+                      <th className="p-4 text-right min-w-[120px] whitespace-nowrap">総実働時間</th>
+                      <th className="p-4 text-right min-w-[140px] whitespace-nowrap">総残業時間</th>
+                      <th className="p-4 text-right min-w-[110px] whitespace-nowrap">有給取得</th>
+                      <th className="p-4 text-center min-w-[120px] whitespace-nowrap">打刻エラー</th>
+                      <th className="p-4 text-center min-w-[110px] whitespace-nowrap">各種申請</th>
+                      <th className="p-4 text-center min-w-[120px] whitespace-nowrap">アクション</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1216,16 +1216,16 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
 
                       return (
                         <tr key={user.id} className="hover:bg-blue-50/30 transition-colors">
-                          <td className="p-4">
+                          <td className="p-4 whitespace-nowrap">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-black text-xs flex items-center justify-center">
+                              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-black text-xs flex items-center justify-center shrink-0">
                                 {user.name.substring(0, 1)}
                               </div>
                               <span className="font-bold text-slate-900 text-sm">{user.name}</span>
                             </div>
                           </td>
-                          <td className="p-4 text-xs font-medium text-slate-600">{user.department || '-'}</td>
-                          <td className="p-4 text-xs">
+                          <td className="p-4 text-xs font-medium text-slate-600 whitespace-nowrap">{user.department || '-'}</td>
+                          <td className="p-4 text-xs whitespace-nowrap">
                             <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
                               user.employment_type === 'part-time' 
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
@@ -1234,9 +1234,15 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                               {user.employment_type === 'part-time' ? 'パート' : '正社員'}
                             </span>
                           </td>
-                          <td className="p-4 text-right font-bold text-slate-800 text-sm">{summary.totalDays} 日</td>
-                          <td className="p-4 text-right font-black text-slate-800 text-sm">{summary.totalHours} 時間</td>
-                          <td className="p-4 text-right font-black text-sm">
+                          <td className="p-4 text-right whitespace-nowrap">
+                            <span className="font-bold text-slate-800 text-sm">{summary.totalDays}</span>
+                            <span className="text-xs font-bold text-slate-500 ml-1">日</span>
+                          </td>
+                          <td className="p-4 text-right whitespace-nowrap">
+                            <span className="font-black text-slate-800 text-sm">{summary.totalHours}</span>
+                            <span className="text-xs font-bold text-slate-500 ml-1">時間</span>
+                          </td>
+                          <td className="p-4 text-right font-black text-sm whitespace-nowrap">
                             {(overtimeNum > 0 || holidayNum > 0) ? (
                               <div className="flex flex-col items-end">
                                 <span className={
@@ -1278,8 +1284,11 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                               <span className="text-slate-400 font-normal">0.0 時間</span>
                             )}
                           </td>
-                          <td className="p-4 text-right font-bold text-slate-700 text-sm">{summary.paidLeaveDays} 日</td>
-                          <td className="p-4 text-center">
+                          <td className="p-4 text-right whitespace-nowrap">
+                            <span className="font-bold text-slate-700 text-sm">{summary.paidLeaveDays}</span>
+                            <span className="text-xs font-bold text-slate-500 ml-1">日</span>
+                          </td>
+                          <td className="p-4 text-center whitespace-nowrap">
                             <div className="flex flex-col items-center gap-1">
                               {summary.missedPunchCount > 0 && (
                                 <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded text-xs font-black animate-pulse">
@@ -1297,7 +1306,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                               )}
                             </div>
                           </td>
-                          <td className="p-4 text-center">
+                          <td className="p-4 text-center whitespace-nowrap">
                             {summary.pendingRequestsCount > 0 ? (
                               <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full text-xs font-black shadow-2xs animate-pulse">
                                 🟡 申請中 {summary.pendingRequestsCount}件
@@ -1306,13 +1315,13 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                               <span className="text-slate-300 text-xs">-</span>
                             )}
                           </td>
-                          <td className="p-4 text-center">
+                          <td className="p-4 text-center whitespace-nowrap">
                             <button 
                               onClick={() => {
                                 setSelectedUserId(user.id);
                                 setViewMode('individual');
                               }}
-                              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-xs rounded-xl transition cursor-pointer"
+                              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-xs rounded-xl transition cursor-pointer shadow-2xs whitespace-nowrap"
                             >
                               出勤簿を見る ➔
                             </button>
@@ -1468,17 +1477,17 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse min-w-[950px]">
+                  <table className="w-full text-left border-collapse min-w-[1050px]">
                     <thead>
-                      <tr className="bg-slate-100/70 border-b border-slate-200 text-xs font-black text-slate-600 uppercase">
-                        <th className="p-3.5 w-28">日付</th>
-                        <th className="p-3.5 w-28">出勤打刻</th>
-                        <th className="p-3.5 w-28">退勤打刻</th>
-                        <th className="p-3.5 text-center w-20">休憩</th>
-                        <th className="p-3.5 text-right w-24">実働時間</th>
-                        <th className="p-3.5 text-right w-24">残業時間</th>
-                        <th className="p-3.5">事由・申請・備考</th>
-                        <th className="p-3.5 text-center w-36">操作</th>
+                      <tr className="bg-slate-100/70 border-b border-slate-200 text-xs font-black text-slate-600 uppercase tracking-wider">
+                        <th className="p-3.5 min-w-[120px] whitespace-nowrap">日付</th>
+                        <th className="p-3.5 min-w-[140px] whitespace-nowrap">出勤打刻</th>
+                        <th className="p-3.5 min-w-[140px] whitespace-nowrap">退勤打刻</th>
+                        <th className="p-3.5 text-center min-w-[90px] whitespace-nowrap">休憩</th>
+                        <th className="p-3.5 text-right min-w-[100px] whitespace-nowrap">実働時間</th>
+                        <th className="p-3.5 text-right min-w-[100px] whitespace-nowrap">残業時間</th>
+                        <th className="p-3.5 min-w-[220px]">事由・申請・備考</th>
+                        <th className="p-3.5 text-center min-w-[140px] whitespace-nowrap">操作</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">

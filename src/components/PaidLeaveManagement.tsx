@@ -510,7 +510,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
           <div className="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200">
             <button 
               onClick={() => setActiveTab('balance')}
-              className={`px-4 py-2 rounded-lg text-xs font-black transition-all cursor-pointer ${
+              className={`px-4 py-2 rounded-lg text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'balance' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -518,13 +518,13 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
             </button>
             <button 
               onClick={() => setActiveTab('requests')}
-              className={`px-4 py-2 rounded-lg text-xs font-black transition-all cursor-pointer ${
+              className={`px-4 py-2 rounded-lg text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'requests' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               休暇申請・承認履歴
               {leaveRequests.filter(r => r.status === '申請中').length > 0 && (
-                <span className="ml-1.5 bg-rose-500 text-white text-[10px] px-1.5 py-0.2 rounded-full">
+                <span className="ml-1.5 bg-rose-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-black">
                   {leaveRequests.filter(r => r.status === '申請中').length}
                 </span>
               )}
@@ -535,9 +535,10 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
           <button 
             type="button"
             onClick={handleExportCsv}
-            className="flex items-center gap-1.5 bg-white border border-slate-200 text-slate-700 hover:text-amber-700 hover:border-amber-300 px-3.5 py-2 rounded-xl font-bold text-xs hover:bg-amber-50/50 shadow-sm transition-all cursor-pointer"
+            className="flex items-center gap-1.5 bg-white border border-slate-200 text-slate-700 hover:text-amber-700 hover:border-amber-300 px-3.5 py-2 rounded-xl font-bold text-xs hover:bg-amber-50/50 shadow-sm transition-all cursor-pointer whitespace-nowrap"
           >
-            <Download className="w-4 h-4 text-amber-600" /> 台帳CSV
+            <Download className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>台帳CSV</span>
           </button>
 
           {activeTab === 'balance' && (
@@ -545,36 +546,37 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
               type="button"
               onClick={handleAutoApplyAllStatutory}
               disabled={isProcessing}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-4 py-2 rounded-xl font-black text-xs shadow-md shadow-amber-500/20 hover:shadow-lg transition-all disabled:opacity-50 cursor-pointer"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-4 py-2 rounded-xl font-black text-xs shadow-md shadow-amber-500/20 hover:shadow-lg transition-all disabled:opacity-50 cursor-pointer whitespace-nowrap"
             >
-              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-              全員の法定有給を一括自動反映
+              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : <Zap className="w-4 h-4 shrink-0" />}
+              <span>全員の法定有給を一括自動反映</span>
             </button>
           )}
 
           {activeTab === 'requests' && (
             <button 
               onClick={() => setIsRequestModalOpen(true)}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-4 py-2 rounded-xl font-black text-xs shadow-md shadow-amber-500/20 hover:shadow-lg transition-all cursor-pointer"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-4 py-2 rounded-xl font-black text-xs shadow-md shadow-amber-500/20 hover:shadow-lg transition-all cursor-pointer whitespace-nowrap"
             >
-              <Plus className="w-4 h-4" /> 休暇代理申請
+              <Plus className="w-4 h-4 shrink-0" />
+              <span>休暇代理申請</span>
             </button>
           )}
         </div>
       </div>
 
       {/* ⚡ パート・アルバイト有給 算定方式切替バー（労基法第39条第3項・厚労省通達準拠） */}
-      <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 p-4 rounded-2xl border border-amber-200/80 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 p-4 rounded-2xl border border-amber-200/80 shadow-2xs flex flex-col xl:flex-row xl:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <span className="p-2 bg-amber-500 text-white rounded-xl shadow-xs shrink-0">
             <Zap className="w-4 h-4" />
           </span>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-xs font-black text-amber-950">
+              <h3 className="text-xs font-black text-amber-950 whitespace-nowrap">
                 パート・アルバイト有給算定方式（労基法第39条第3項 比例付与）
               </h3>
-              <span className="bg-amber-200/70 text-amber-900 text-[10px] font-black px-2 py-0.2 rounded-full border border-amber-300">
+              <span className="bg-amber-200/70 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-300 whitespace-nowrap">
                 全社標準
               </span>
             </div>
@@ -584,11 +586,11 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-amber-300 shadow-2xs shrink-0">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 bg-white p-1 rounded-xl border border-amber-300 shadow-2xs shrink-0">
           <button
             type="button"
             onClick={() => handleToggleCompanyCalcMode('actual_worked')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
               companyCalcMode === 'actual_worked'
                 ? 'bg-amber-500 text-white shadow-xs'
                 : 'text-slate-600 hover:text-amber-800 hover:bg-amber-50'
@@ -596,7 +598,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
             title="直近1年（または半年×2）の出勤打刻日数から年間労働日数を割り出し、労基法テーブルに照合して自動逆算します"
           >
             <span>⚡ 打刻実績から自動逆算</span>
-            <span className={`text-[10px] px-1 py-0.2 rounded font-black ${
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-black whitespace-nowrap ${
               companyCalcMode === 'actual_worked' ? 'bg-amber-600 text-white' : 'bg-emerald-100 text-emerald-800'
             }`}>
               推奨・労基法通達準拠
@@ -605,7 +607,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
           <button
             type="button"
             onClick={() => handleToggleCompanyCalcMode('contract_fixed')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
               companyCalcMode === 'contract_fixed'
                 ? 'bg-amber-500 text-white shadow-xs'
                 : 'text-slate-600 hover:text-amber-800 hover:bg-amber-50'
@@ -754,8 +756,8 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
         {/* フィルターバー（残日数管理タブ時） */}
         {activeTab === 'balance' && (
           <div className="p-4 bg-slate-50/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black text-slate-500 mr-1">絞り込み:</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-black text-slate-500 mr-1 whitespace-nowrap">絞り込み:</span>
               {[
                 { id: 'all', label: 'すべて表示' },
                 { id: 'alert_only', label: `⚠️ 年5日未達 (${summary.alertCount})` },
@@ -765,7 +767,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                 <button
                   key={tab.id}
                   onClick={() => setFilterType(tab.id as any)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer whitespace-nowrap ${
                     filterType === tab.id
                       ? 'bg-amber-500 border-amber-500 text-white shadow-sm font-black'
                       : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
@@ -776,8 +778,8 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
               ))}
             </div>
 
-            <div className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
-              <Info className="w-3.5 h-3.5" />
+            <div className="text-xs font-bold text-slate-400 flex items-center gap-1.5 whitespace-nowrap">
+              <Info className="w-3.5 h-3.5 shrink-0" />
               <span>勤怠打刻および承認済み申請と自動連動中</span>
             </div>
           </div>
@@ -793,18 +795,18 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
             {/* タブ1: 残日数管理・法定算定台帳 */}
             {activeTab === 'balance' && (
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[1000px]">
+                <table className="w-full text-left border-collapse min-w-[1260px]">
                   <thead>
                     <tr className="bg-amber-50/50 border-b border-amber-100 text-xs font-black text-amber-900 tracking-wider">
-                      <th className="p-4 w-48">従業員・勤務形態</th>
-                      <th className="p-4 w-40">入社日・勤続期間</th>
-                      <th className="p-4 text-center">前年繰越</th>
-                      <th className="p-4 text-center">今年度付与</th>
-                      <th className="p-4 text-center">消化日数</th>
-                      <th className="p-4 text-center">現在残日数</th>
-                      <th className="p-4 w-48">次回付与予定</th>
-                      <th className="p-4 text-center w-36">年5日義務</th>
-                      <th className="p-4 text-center w-36">操作</th>
+                      <th className="p-4 min-w-[260px] whitespace-nowrap">従業員・勤務形態</th>
+                      <th className="p-4 min-w-[140px] whitespace-nowrap">入社日・勤続期間</th>
+                      <th className="p-4 min-w-[100px] text-center whitespace-nowrap">前年繰越</th>
+                      <th className="p-4 min-w-[140px] text-center whitespace-nowrap">今年度付与</th>
+                      <th className="p-4 min-w-[120px] text-center whitespace-nowrap">消化日数</th>
+                      <th className="p-4 min-w-[140px] text-center whitespace-nowrap">現在残日数</th>
+                      <th className="p-4 min-w-[200px] whitespace-nowrap">次回付与予定</th>
+                      <th className="p-4 min-w-[150px] text-center whitespace-nowrap">年5日義務</th>
+                      <th className="p-4 min-w-[110px] text-center whitespace-nowrap">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -821,20 +823,20 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                         <tr key={emp.id} className={`hover:bg-amber-50/20 transition-colors ${emp.isDispatch ? 'bg-slate-50/50 opacity-60' : ''}`}>
                           
                           {/* 1. 従業員名・雇用形態 */}
-                          <td className="p-4">
+                          <td className="p-4 whitespace-nowrap">
                             <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center font-black text-sm">
+                              <div className="w-9 h-9 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center font-black text-sm shrink-0">
                                 {emp.name.substring(0, 1)}
                               </div>
                               <div>
-                                <span className="font-black text-slate-800 text-sm block">{emp.name}</span>
-                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span className="font-black text-slate-800 text-sm block leading-tight">{emp.name}</span>
+                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                   {emp.isDispatch ? (
-                                    <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-black">
+                                    <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[10px] font-black whitespace-nowrap">
                                       派遣 (対象外)
                                     </span>
                                   ) : emp.empType === '正社員' ? (
-                                    <span className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded text-[10px] font-black">
+                                    <span className="bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded text-[10px] font-black whitespace-nowrap">
                                       正社員 (週5日)
                                     </span>
                                   ) : (
@@ -842,7 +844,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                       {st.calcMode === 'actual_worked' ? (
                                         st.isZeroGrant ? (
                                           <span 
-                                            className="bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs"
+                                            className="bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs whitespace-nowrap"
                                             title={st.zeroGrantReason || '直近1年間の勤務実績が0日のため付与なし'}
                                           >
                                             <span>⚡</span>
@@ -850,7 +852,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                           </span>
                                         ) : (
                                           <span 
-                                            className="bg-amber-50 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs"
+                                            className="bg-amber-50 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs whitespace-nowrap"
                                             title={`${st.periodText}（実労働${st.actualDaysCount}日 ➔ 年換算${st.actualWorkedDaysAnnual}日・週${st.effectiveWeeklyDays}日相当ランク）`}
                                           >
                                             <span>⚡</span>
@@ -862,15 +864,15 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                       ) : (
                                         st.isZeroGrant ? (
                                           <span 
-                                            className="bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs"
+                                            className="bg-slate-100 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded text-[10px] font-black flex items-center gap-1 shadow-2xs whitespace-nowrap"
                                             title={st.zeroGrantReason || '出勤実績0日のため付与なし'}
                                           >
-                                            <AlertCircle className="w-3 h-3 text-slate-500" />
+                                            <AlertCircle className="w-3 h-3 text-slate-500 shrink-0" />
                                             <span>契約固定: 週{emp.weeklyDays}日 (出勤0日・付与なし)</span>
                                           </span>
                                         ) : (
                                           <span 
-                                            className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-black shadow-2xs"
+                                            className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px] font-black shadow-2xs whitespace-nowrap"
                                             title="雇用契約に基づく固定所定週日数で算定中"
                                           >
                                             🏷️ 契約固定: 週{emp.weeklyDays}日
@@ -881,7 +883,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                       {/* 契約と実績の乖離バッジ */}
                                       {st.isDiffFromContract && !st.isZeroGrant && (
                                         <span 
-                                          className={`px-1.5 py-0.5 rounded text-[9px] font-black border shadow-2xs ${
+                                          className={`px-1.5 py-0.5 rounded text-[9px] font-black border shadow-2xs whitespace-nowrap ${
                                             st.actualEquivalentWeeklyDays > st.contractWeeklyDays
                                               ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                                               : 'bg-rose-100 text-rose-800 border-rose-300'
@@ -901,141 +903,158 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                           </td>
 
                           {/* 2. 入社日・勤続期間 */}
-                          <td className="p-4">
-                            <div className="text-xs font-bold text-slate-700">{emp.join_date && emp.join_date !== '-' ? emp.join_date : '未設定'}</div>
-                            <div className="text-[11px] font-bold text-slate-400 mt-0.5">
+                          <td className="p-4 whitespace-nowrap">
+                            <div className="text-xs font-bold text-slate-700 leading-tight">{emp.join_date && emp.join_date !== '-' ? emp.join_date : '未設定'}</div>
+                            <div className="text-[11px] font-bold text-slate-400 mt-1 leading-tight">
                               勤続 {st.serviceText}
                             </div>
                           </td>
 
                           {/* 3. 前年度繰越 */}
-                          <td className="p-4 text-center">
-                            <span className="font-bold text-slate-500 text-sm">
-                              {emp.isDispatch ? '-' : `${emp.carryover} 日`}
-                            </span>
+                          <td className="p-4 text-center whitespace-nowrap">
+                            {emp.isDispatch ? (
+                              <span className="text-slate-300 font-bold">-</span>
+                            ) : (
+                              <div className="inline-flex items-baseline justify-center gap-1 font-bold text-slate-600">
+                                <span className="text-base font-black text-slate-700 leading-none">{emp.carryover}</span>
+                                <span className="text-xs text-slate-400 font-bold leading-none">日</span>
+                              </div>
+                            )}
                           </td>
 
                           {/* 4. 今年度付与 */}
-                          <td className="p-4 text-center">
+                          <td className="p-4 text-center whitespace-nowrap">
                             {emp.isDispatch ? (
-                              <span className="text-slate-300">-</span>
+                              <span className="text-slate-300 font-bold">-</span>
                             ) : (
-                              <div>
-                                <span className={`font-black text-base ${emp.balance === 0 ? 'text-slate-400' : 'text-emerald-600'}`}>
-                                  {emp.balance} 日
-                                </span>
+                              <div className="flex flex-col items-center justify-center">
+                                <div className="inline-flex items-baseline justify-center gap-1">
+                                  <span className={`font-black text-lg leading-none ${emp.balance === 0 ? 'text-slate-400' : 'text-emerald-600'}`}>
+                                    {emp.balance}
+                                  </span>
+                                  <span className="text-xs font-bold text-slate-500 leading-none">日</span>
+                                </div>
                                 {st.isZeroGrant ? (
-                                  <div className="text-[9px] text-slate-500 font-bold" title={st.zeroGrantReason}>
+                                  <span className="inline-block mt-1 text-[10px] text-slate-500 font-bold bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs whitespace-nowrap" title={st.zeroGrantReason}>
                                     勤務実績なし (0日付与)
-                                  </div>
+                                  </span>
                                 ) : emp.hasExplicitBalance && st.statutoryGrant !== emp.balance && emp.join_date && emp.join_date !== '-' ? (
-                                  <div className="text-[10px] text-amber-600 font-bold" title="手動設定値が適用されています">
-                                    (法定計算: {st.statutoryGrant}日)
-                                  </div>
+                                  <span className="inline-block mt-1 text-[10px] text-amber-700 font-black bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md whitespace-nowrap" title="手動設定値が適用されています">
+                                    法定: {st.statutoryGrant}日
+                                  </span>
                                 ) : !emp.hasExplicitBalance && emp.join_date && emp.join_date !== '-' && emp.balance > 0 ? (
-                                  <div className="text-[9px] text-emerald-700 font-bold">
+                                  <span className="inline-block mt-1 text-[10px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
                                     法定自動適用 ✓
-                                  </div>
+                                  </span>
                                 ) : null}
                               </div>
                             )}
                           </td>
 
                           {/* 5. 消化日数 */}
-                          <td className="p-4 text-center">
+                          <td className="p-4 text-center whitespace-nowrap">
                             {emp.isDispatch ? (
-                              <span className="text-slate-300">-</span>
+                              <span className="text-slate-300 font-bold">-</span>
                             ) : (
-                              <div>
-                                <span className="font-black text-slate-700 text-sm bg-slate-100 px-2 py-1 rounded-lg">
-                                  {emp.usedDays} 日
+                              <div className="flex flex-col items-center justify-center">
+                                <span className="inline-flex items-baseline justify-center gap-1 bg-slate-100/90 border border-slate-200/80 px-2.5 py-1 rounded-xl shadow-2xs">
+                                  <span className="font-black text-slate-800 text-base leading-none">{emp.usedDays}</span>
+                                  <span className="text-xs font-bold text-slate-500 leading-none">日</span>
                                 </span>
                                 {emp.totalGranted < emp.usedDaysTotal && (
-                                  <div className="text-[9px] text-rose-600 font-bold mt-1">
-                                    ⚠️ 保有数超過
-                                  </div>
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-rose-600 font-black bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md mt-1.5 shadow-2xs whitespace-nowrap" title="保有有給数を超えて消化されています">
+                                    <AlertTriangle className="w-3 h-3 text-rose-500 shrink-0" />
+                                    <span>保有数超過</span>
+                                  </span>
                                 )}
                               </div>
                             )}
                           </td>
 
                           {/* 6. 現在残日数合計 */}
-                          <td className="p-4 text-center">
+                          <td className="p-4 text-center whitespace-nowrap">
                             {emp.isDispatch ? (
-                              <span className="text-slate-300">-</span>
+                              <span className="text-slate-300 font-bold">-</span>
                             ) : emp.totalGranted < emp.usedDaysTotal ? (
-                              <div className="inline-flex flex-col items-center">
+                              <div className="flex flex-col items-center justify-center">
                                 <span 
-                                  className="font-black text-rose-600 text-xs bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-2xs" 
+                                  className="font-black text-rose-700 text-xs bg-rose-50 border border-rose-300 px-2.5 py-1 rounded-xl flex items-center gap-1 shadow-2xs whitespace-nowrap" 
                                   title={`保有有給(${emp.totalGranted}日)を超えて${emp.usedDaysTotal}日消化されています。「申請一覧」タブから承認を取り消すか、有給を付与してください。`}
                                 >
-                                  <AlertTriangle className="w-3 h-3 text-rose-500 shrink-0" />
+                                  <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                                   超過 {emp.usedDaysTotal - emp.totalGranted}日
                                 </span>
-                                <span className="text-[9px] text-rose-600 font-bold mt-0.5">（残数不足）</span>
+                                <span className="text-[10px] text-rose-600 font-bold mt-1 whitespace-nowrap">（残数不足）</span>
                               </div>
                             ) : (
-                              <div className="inline-flex items-center gap-1">
-                                <span className={`font-black text-xl tracking-tight ${emp.remainingBalance === 0 ? 'text-slate-400' : 'text-amber-600'}`}>
+                              <div className="inline-flex items-baseline justify-center gap-1">
+                                <span className={`font-black text-2xl tracking-tight leading-none ${emp.remainingBalance === 0 ? 'text-slate-400' : 'text-amber-600'}`}>
                                   {emp.remainingBalance}
                                 </span>
-                                <span className="text-xs font-bold text-slate-500">日</span>
+                                <span className="text-xs font-bold text-slate-500 leading-none">日</span>
                               </div>
                             )}
                           </td>
 
                           {/* 7. 次回付与予定 */}
-                          <td className="p-4">
+                          <td className="p-4 whitespace-nowrap">
                             {emp.isDispatch || !st.nextGrantDate ? (
-                              <span className="text-slate-300 text-xs">-</span>
+                              <span className="text-slate-300 text-xs font-bold">-</span>
                             ) : (
                               <div>
-                                <div className="text-xs font-black text-slate-700 flex items-center gap-1">
-                                  <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                                  {st.nextGrantDate}
+                                <div className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                                  <Calendar className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                  <span>{st.nextGrantDate}</span>
+                                  <span className="text-[10px] text-slate-400 font-normal">({st.daysUntilNextGrant}日後)</span>
                                 </div>
-                                <div className="text-[11px] font-bold text-blue-600 mt-0.5">
-                                  ＋{st.nextGrantDays}日付与 {st.isZeroGrant ? '(※次回勤務実績による)' : ''} (あと {st.daysUntilNextGrant}日)
+                                <div className="text-[11px] font-bold text-blue-600 mt-1 flex items-center gap-1">
+                                  <span>＋{st.nextGrantDays}日付与</span>
+                                  {st.isZeroGrant && (
+                                    <span className="text-[10px] text-slate-400 font-normal">(次回実績による)</span>
+                                  )}
                                 </div>
                               </div>
                             )}
                           </td>
 
                           {/* 8. 年5日義務達成状況 */}
-                          <td className="p-4 text-center">
+                          <td className="p-4 text-center whitespace-nowrap">
                             {emp.isDispatch ? (
-                              <span className="text-slate-300 text-xs">-</span>
+                              <span className="text-slate-300 text-xs font-bold">-</span>
                             ) : !emp.isObligated ? (
-                              <span className="text-slate-400 text-[11px] font-bold">対象外 (付与10日未満)</span>
+                              <span className="text-slate-400 text-xs font-bold">対象外 (付与10日未満)</span>
                             ) : emp.isObligationSatisfied ? (
-                              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1 rounded-lg text-xs font-black">
-                                <Check className="w-3.5 h-3.5" /> 達成 ({emp.usedDays}日)
+                              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-xl text-xs font-black shadow-2xs whitespace-nowrap">
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>達成 ({emp.usedDays}日)</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 px-2 py-1 rounded-lg text-xs font-black animate-pulse">
-                                <AlertCircle className="w-3.5 h-3.5" /> あと {emp.daysNeededForObligation}日
+                              <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-1 rounded-xl text-xs font-black shadow-2xs whitespace-nowrap animate-pulse">
+                                <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+                                <span>あと {emp.daysNeededForObligation}日</span>
                               </span>
                             )}
                           </td>
 
                           {/* 9. 操作 */}
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
+                          <td className="p-4 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-2">
                               {!emp.isDispatch && emp.join_date && emp.join_date !== '-' && st.statutoryGrant !== emp.balance && (
                                 <button
                                   type="button"
                                   onClick={() => handleApplySingleStatutory(emp)}
-                                  className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg border border-amber-200 transition-colors cursor-pointer"
+                                  className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl border border-amber-200 transition-colors shadow-2xs cursor-pointer"
                                   title={`法定付与日数(${st.statutoryGrant}日)を適用`}
                                 >
-                                  <Zap className="w-3.5 h-3.5" />
+                                  <Zap className="w-4 h-4" />
                                 </button>
                               )}
                               <button 
                                 onClick={() => { setEditingUser(emp); setIsEditModalOpen(true); }}
-                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
+                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
                               >
-                                <Edit3 className="w-3.5 h-3.5" /> 編集
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>編集</span>
                               </button>
                             </div>
                           </td>
@@ -1051,63 +1070,63 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
             {/* タブ2: 休暇申請・承認履歴 */}
             {activeTab === 'requests' && (
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[800px]">
+                <table className="w-full text-left border-collapse min-w-[1060px]">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-xs font-black text-slate-500">
-                      <th className="p-4">申請日</th>
-                      <th className="p-4">従業員名</th>
-                      <th className="p-4">種別</th>
-                      <th className="p-4">期間 (日付)</th>
-                      <th className="p-4">理由・備考</th>
-                      <th className="p-4 text-center">ステータス</th>
-                      <th className="p-4 text-center">アクション</th>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-xs font-black text-slate-500 tracking-wider">
+                      <th className="p-4 min-w-[110px] whitespace-nowrap">申請日</th>
+                      <th className="p-4 min-w-[140px] whitespace-nowrap">従業員名</th>
+                      <th className="p-4 min-w-[110px] whitespace-nowrap">種別</th>
+                      <th className="p-4 min-w-[180px] whitespace-nowrap">期間 (日付)</th>
+                      <th className="p-4 min-w-[220px]">理由・備考</th>
+                      <th className="p-4 min-w-[110px] text-center whitespace-nowrap">ステータス</th>
+                      <th className="p-4 min-w-[160px] text-center whitespace-nowrap">アクション</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {leaveRequests.length === 0 ? (
                       <tr><td colSpan={7} className="p-12 text-center text-slate-400 font-bold">申請履歴はありません</td></tr>
                     ) : leaveRequests.map((req: any) => (
-                      <tr key={req.id} className="hover:bg-slate-50">
-                        <td className="p-4 text-xs font-bold text-slate-500">{req.created_at ? req.created_at.substring(0,10) : '-'}</td>
-                        <td className="p-4 font-black text-slate-800">{req.user?.name || '-'}</td>
-                        <td className="p-4">
-                          <span className={`px-2 py-0.5 rounded text-xs font-black ${
-                            req.type?.includes('有給') ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
+                      <tr key={req.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-4 text-xs font-bold text-slate-500 whitespace-nowrap">{req.created_at ? req.created_at.substring(0,10) : '-'}</td>
+                        <td className="p-4 font-black text-slate-800 text-sm whitespace-nowrap">{req.user?.name || '-'}</td>
+                        <td className="p-4 whitespace-nowrap">
+                          <span className={`px-2.5 py-1 rounded-xl text-xs font-black inline-block shadow-2xs ${
+                            req.type?.includes('有給') ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700 border border-slate-200'
                           }`}>
                             {req.type}
                           </span>
                         </td>
-                        <td className="p-4 font-bold text-slate-700 text-sm">{req.start_date} 〜 {req.end_date}</td>
-                        <td className="p-4 text-xs text-slate-600 font-medium whitespace-pre-wrap">
+                        <td className="p-4 font-bold text-slate-700 text-sm whitespace-nowrap">{req.start_date} 〜 {req.end_date}</td>
+                        <td className="p-4 text-xs text-slate-600 font-medium whitespace-pre-wrap leading-relaxed">
                           {(req.reason || '-').split('【シフトデータ')[0].trim() || '-'}
                         </td>
-                        <td className="p-4 text-center">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-black ${
-                            req.status === '承認' ? 'bg-emerald-100 text-emerald-700' :
-                            req.status === '却下' ? 'bg-rose-100 text-rose-700' :
-                            'bg-amber-100 text-amber-700'
+                        <td className="p-4 text-center whitespace-nowrap">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-black shadow-2xs inline-block ${
+                            req.status === '承認' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                            req.status === '却下' ? 'bg-rose-100 text-rose-700 border border-rose-200' :
+                            'bg-amber-100 text-amber-700 border border-amber-200'
                           }`}>{req.status}</span>
                         </td>
-                        <td className="p-4 text-center">
+                        <td className="p-4 text-center whitespace-nowrap">
                           {req.status === '申請中' ? (
                             <div className="flex items-center justify-center gap-2">
                               <button 
                                 onClick={() => handleUpdateStatus(req.id, '承認')} 
-                                className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer" 
+                                className="p-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors cursor-pointer border border-emerald-200 shadow-2xs" 
                                 title="承認"
                               >
                                 <CheckCircle className="w-5 h-5" />
                               </button>
                               <button 
                                 onClick={() => handleUpdateStatus(req.id, '却下')} 
-                                className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer" 
+                                className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl transition-colors cursor-pointer border border-rose-200 shadow-2xs" 
                                 title="却下"
                               >
                                 <XCircle className="w-5 h-5" />
                               </button>
                             </div>
                           ) : (
-                            <div className="flex items-center justify-center gap-1.5">
+                            <div className="flex items-center justify-center gap-2">
                               {req.status === '承認' && (
                                 <button
                                   type="button"
@@ -1116,7 +1135,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                       handleUpdateStatus(req.id, '却下');
                                     }
                                   }}
-                                  className="text-[11px] font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 px-2 py-1 rounded-lg border border-slate-200 transition cursor-pointer"
+                                  className="text-[11px] font-black text-slate-600 hover:text-rose-600 hover:bg-rose-50 px-2.5 py-1.5 rounded-xl border border-slate-200 hover:border-rose-200 transition-all shadow-2xs cursor-pointer whitespace-nowrap"
                                   title="承認を取り消して却下に変更"
                                 >
                                   承認取消
@@ -1137,7 +1156,7 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                     }
                                   }
                                 }}
-                                className="text-[11px] font-bold text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-lg transition cursor-pointer"
+                                className="text-[11px] font-bold text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1.5 rounded-xl transition-colors cursor-pointer"
                                 title="申請レコードの削除"
                               >
                                 <Trash2 className="w-4 h-4" />
