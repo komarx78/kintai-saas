@@ -571,11 +571,12 @@ export const SETTINGS_CATEGORIES: MainCategoryDef[] = [
     label: '勤怠・給与ルール',
     badgeNumber: '②',
     icon: Calendar,
-    description: '年間営業日、就業時間、打刻丸め・36協定、給与締め日',
+    description: '年間営業日、打刻丸め・36協定、給与締め日、資格手当',
     subTabs: [
       { key: 'calendar', label: '3. 営業カレンダー・時間', subDescription: '年間休日・就業パターン・個別カレンダー', icon: Calendar },
       { key: 'attendance_rules', label: '4. 打刻・勤怠ルール（36協定・代休）', subDescription: '打刻丸め・定時退勤・残業アラート・代休期限', icon: Clock },
       { key: 'payroll', label: '5. 給与締日・社会保険', subDescription: '締め日・支払日・割増賃金・社会保険料率', icon: DollarSign },
+      { key: 'qualifications', label: '6. 資格手当マスタ', subDescription: '公的資格・社内認定手当の支給基準', icon: Award },
     ]
   },
   {
@@ -585,9 +586,9 @@ export const SETTINGS_CATEGORIES: MainCategoryDef[] = [
     icon: FileText,
     description: '労働条件通知書、入社手続き、就業規則条文',
     subTabs: [
-      { key: 'contract', label: '6. 労働条件・雇用契約', subDescription: '労働条件通知書テンプレート・法定条文', icon: FileText },
-      { key: 'onboarding', label: '7. 入社手続き・承認者', subDescription: '入社オンボーディング・申請承認者フロー', icon: UserCheck },
-      { key: 'rules', label: '8. 就業規則（AI連動）', subDescription: '自社就業規則条文・AIチャット参照データ', icon: BookOpen },
+      { key: 'contract', label: '7. 労働条件・雇用契約', subDescription: '労働条件通知書テンプレート・法定条文', icon: FileText },
+      { key: 'onboarding', label: '8. 入社手続き・承認者', subDescription: '入社オンボーディング・申請承認者フロー', icon: UserCheck },
+      { key: 'rules', label: '9. 就業規則（AI連動）', subDescription: '自社就業規則条文・AIチャット参照データ', icon: BookOpen },
     ]
   },
   {
@@ -595,10 +596,9 @@ export const SETTINGS_CATEGORIES: MainCategoryDef[] = [
     label: '運用・プラン決済',
     badgeNumber: '④',
     icon: CreditCard,
-    description: '全社お知らせ、資格手当、通知設定、プラン決済',
+    description: '全社お知らせ、公的届出通知、プラン・決済管理',
     subTabs: [
-      { key: 'announcements', label: '9. 全社お知らせ', subDescription: 'ポータル掲示板・社内通達・更新履歴', icon: Bell },
-      { key: 'qualifications', label: '10. 資格手当マスタ', subDescription: '公的資格・社内認定手当の支給基準', icon: Award },
+      { key: 'announcements', label: '10. 全社お知らせ', subDescription: 'ポータル掲示板・社内通達・更新履歴', icon: Bell },
       { key: 'reminders', label: '11. 公的届出・改定通知', subDescription: '月変・算定基礎・雇用保険手続き通知', icon: Bell },
       { key: 'billing', label: '12. プラン・決済設定', subDescription: 'ご利用プラン・人数規模・カード決済', icon: CreditCard },
     ]
