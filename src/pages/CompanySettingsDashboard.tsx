@@ -533,6 +533,75 @@ export const formatLaborInsuranceNumber = (input: string): string => {
   return `${digits.slice(0, 2)}-${digits.slice(2, 3)}-${digits.slice(3, 5)}-${digits.slice(5, 11)}-${digits.slice(11, 14)}`;
 };
 
+// 🏛️ 案1：全社マスタ設定 4大グループ統合定義（横スクロールゼロ・初心者迷子ゼロ）
+export type SettingsTabKey = 'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements' | 'qualifications' | 'reminders' | 'billing';
+
+export type MainCategoryKey = 'company_org' | 'attendance_payroll' | 'contract_hr' | 'options_plan';
+
+export interface MainCategoryDef {
+  key: MainCategoryKey;
+  label: string;
+  badgeNumber: string;
+  icon: any;
+  description: string;
+  subTabs: {
+    key: SettingsTabKey;
+    label: string;
+    subDescription: string;
+    icon: any;
+  }[];
+}
+
+export const SETTINGS_CATEGORIES: MainCategoryDef[] = [
+  {
+    key: 'company_org',
+    label: '会社・組織マスタ',
+    badgeNumber: '①',
+    icon: Building2,
+    description: '会社基本情報、組織・部署、役職階層、店舗拠点',
+    subTabs: [
+      { key: 'basic', label: '1. 会社基本情報', subDescription: '会社名・所在地・代表者・社印画像', icon: Building2 },
+      { key: 'departments', label: '2. 組織・役職・店舗', subDescription: '部署マスタ・役職階層・店舗管理', icon: Network },
+    ]
+  },
+  {
+    key: 'attendance_payroll',
+    label: '勤怠・給与ルール',
+    badgeNumber: '②',
+    icon: Calendar,
+    description: '年間営業日、就業時間、打刻丸め・36協定、給与締め日',
+    subTabs: [
+      { key: 'calendar', label: '3. 営業カレンダー・時間', subDescription: '休日・就業・打刻丸め・残業36協定・代休', icon: Calendar },
+      { key: 'payroll', label: '4. 給与締日・社会保険', subDescription: '締め日・支払日・割増賃金・社会保険料率', icon: DollarSign },
+    ]
+  },
+  {
+    key: 'contract_hr',
+    label: '雇用契約・人事労務',
+    badgeNumber: '③',
+    icon: FileText,
+    description: '労働条件通知書、入社手続き、就業規則条文',
+    subTabs: [
+      { key: 'contract', label: '5. 労働条件・雇用契約', subDescription: '労働条件通知書テンプレート・法定条文', icon: FileText },
+      { key: 'onboarding', label: '6. 入社手続き・承認者', subDescription: '入社オンボーディング・申請承認者フロー', icon: UserCheck },
+      { key: 'rules', label: '7. 就業規則（AI連動）', subDescription: '自社就業規則条文・AIチャット参照データ', icon: BookOpen },
+    ]
+  },
+  {
+    key: 'options_plan',
+    label: '運用・プラン決済',
+    badgeNumber: '④',
+    icon: CreditCard,
+    description: '全社お知らせ、資格手当、通知設定、プラン決済',
+    subTabs: [
+      { key: 'announcements', label: '8. 全社お知らせ', subDescription: 'ポータル掲示板・社内通達・更新履歴', icon: Bell },
+      { key: 'qualifications', label: '9. 資格手当マスタ', subDescription: '公的資格・社内認定手当の支給基準', icon: Award },
+      { key: 'reminders', label: '10. 公的届出・改定通知', subDescription: '月変・算定基礎・雇用保険手続き通知', icon: Bell },
+      { key: 'billing', label: '11. プラン・決済設定', subDescription: 'ご利用プラン・人数規模・カード決済', icon: CreditCard },
+    ]
+  }
+];
+
 export default function CompanySettingsDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -545,8 +614,14 @@ export default function CompanySettingsDashboard() {
     setSaveSuccessMsg(msg);
     setTimeout(() => setSaveSuccessMsg(null), 4000);
   };
-  const [activeTab, setActiveTab] = useState<'basic' | 'departments' | 'calendar' | 'payroll' | 'contract' | 'onboarding' | 'rules' | 'announcements' | 'qualifications' | 'reminders' | 'billing'>('basic');
+  const [activeTab, setActiveTab] = useState<SettingsTabKey>('basic');
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  // 🏛️ 現在アクティブな大グループ（activeTabから自動導出）
+  const activeMainCategory = useMemo(() => {
+    const found = SETTINGS_CATEGORIES.find(cat => cat.subTabs.some(sub => sub.key === activeTab));
+    return found || SETTINGS_CATEGORIES[0];
+  }, [activeTab]);
 
   // 🔗 URLクエリパラメータ（?tab=billing 等）によるタブ自動選択
   useEffect(() => {
@@ -3178,122 +3253,94 @@ export default function CompanySettingsDashboard() {
           </div>
         </div>
 
-        {/* タブナビゲーション */}
-        <div id="company-settings-tabs-header" className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-slate-200 scroll-mt-20">
-          <button
-            onClick={() => setActiveTab('basic')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'basic' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-            }`}
-          >
-            <Building2 className="w-4 h-4 shrink-0" />
-            <span>1. 会社基本情報</span>
-          </button>
+        {/* 🏛️ 案1：4大グループ統合タブナビゲーション（横スクロール完全ゼロ ＆ 初心者迷子ゼロ） */}
+        <div id="company-settings-tabs-header" className="space-y-3 scroll-mt-20">
+          {/* 上段：4大グループ切り替えカード（2列×2行 または 4列で完全表示・横スクロールゼロ） */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+            {SETTINGS_CATEGORIES.map((cat) => {
+              const isCatActive = activeMainCategory.key === cat.key;
+              const IconComp = cat.icon;
+              return (
+                <button
+                  key={cat.key}
+                  type="button"
+                  onClick={() => {
+                    if (!isCatActive) {
+                      setActiveTab(cat.subTabs[0].key);
+                    }
+                  }}
+                  className={`p-3.5 rounded-2xl text-left transition-all cursor-pointer border flex flex-col justify-between relative overflow-hidden group ${
+                    isCatActive
+                      ? 'bg-gradient-to-br from-indigo-700 via-indigo-600 to-blue-700 text-white shadow-md border-indigo-500 scale-[1.01]'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 hover:border-indigo-300 shadow-2xs'
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`p-1.5 rounded-xl flex items-center justify-center ${
+                        isCatActive ? 'bg-white/20 text-cyan-200' : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100'
+                      }`}>
+                        <IconComp className="w-4 h-4 shrink-0" />
+                      </span>
+                      <span className={`text-[11px] font-black px-1.5 py-0.2 rounded-full ${
+                        isCatActive ? 'bg-indigo-900/60 text-indigo-200 border border-indigo-400/30' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {cat.badgeNumber}
+                      </span>
+                    </div>
+                    {isCatActive && (
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                    )}
+                  </div>
 
-          <button
-            onClick={() => setActiveTab('departments')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'departments' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-            }`}
-          >
-            <Network className="w-4 h-4 shrink-0" />
-            <span>2. 組織・役職・店舗</span>
-          </button>
+                  <div>
+                    <h3 className={`text-xs sm:text-sm font-black tracking-tight ${isCatActive ? 'text-white' : 'text-slate-800'}`}>
+                      {cat.label}
+                    </h3>
+                    <p className={`text-[10px] mt-0.5 leading-snug line-clamp-1 ${isCatActive ? 'text-indigo-100' : 'text-slate-400'}`}>
+                      {cat.description}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
 
-          <button
-            onClick={() => setActiveTab('calendar')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'calendar' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-            }`}
-          >
-            <Calendar className="w-4 h-4 shrink-0" />
-            <span>3. 営業カレンダー・時間</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('payroll')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'payroll' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-            }`}
-          >
-            <DollarSign className="w-4 h-4 shrink-0" />
-            <span>4. 給与締日・社会保険</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('contract')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'contract' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-            }`}
-          >
-            <FileText className="w-4 h-4 shrink-0" />
-            <span>5. 労働条件・雇用契約</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('onboarding')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'onboarding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-            }`}
-          >
-            <UserCheck className="w-4 h-4 shrink-0" />
-            <span>6. 入社手続き・承認者</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('rules')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'rules' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-            }`}
-          >
-            <BookOpen className="w-4 h-4 shrink-0" />
-            <span>7. 就業規則（AI連動）</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('announcements')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'announcements' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-            }`}
-          >
-            <Bell className="w-4 h-4 shrink-0" />
-            <span>8. 📢 全社お知らせ</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('qualifications')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'qualifications' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-            }`}
-          >
-            <Award className="w-4 h-4 shrink-0" />
-            <span>9. 📜 資格手当</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('reminders')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'reminders' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
-            }`}
-          >
-            <Bell className="w-4 h-4 text-amber-500 shrink-0" />
-            <span>10. 🔔 公的届出・改定通知</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('billing')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'billing' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md' : 'bg-white text-emerald-700 hover:bg-emerald-50 border border-emerald-300'
-            }`}
-          >
-            <CreditCard className="w-4 h-4 shrink-0" />
-            <span>11. 💳 プラン・決済設定</span>
-            {tenantBilling.plan_type === 'trial' && (
-              <span className="text-[10px] bg-amber-400 text-amber-950 font-black px-1.5 py-0.2 rounded-full shrink-0">
-                お試し中
-              </span>
-            )}
-          </button>
+          {/* 下段：選択中グループ内のサブタブ切替（ピル型スイッチ） */}
+          <div className="bg-slate-100/90 p-2 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center gap-2">
+            <div className="flex items-center gap-1.5 text-[11px] font-black text-slate-600 px-1 shrink-0">
+              <span className="w-2 h-2 rounded-full bg-indigo-600" />
+              <span>{activeMainCategory.badgeNumber} {activeMainCategory.label} の詳細設定:</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 flex-1">
+              {activeMainCategory.subTabs.map((sub) => {
+                const isSubActive = activeTab === sub.key;
+                const SubIcon = sub.icon;
+                return (
+                  <button
+                    key={sub.key}
+                    type="button"
+                    onClick={() => setActiveTab(sub.key)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                      isSubActive
+                        ? 'bg-indigo-600 text-white shadow-sm font-black ring-2 ring-indigo-300/50'
+                        : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
+                    }`}
+                  >
+                    <SubIcon className={`w-3.5 h-3.5 shrink-0 ${isSubActive ? 'text-cyan-300' : 'text-slate-400'}`} />
+                    <span>{sub.label}</span>
+                    {sub.key === 'billing' && tenantBilling.plan_type === 'trial' && (
+                      <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-black ${
+                        isSubActive ? 'bg-amber-400 text-amber-950' : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        お試し中
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* 💾 全タブ共通：保存必須ガイダンス ＆ クイック一括保存バー */}
