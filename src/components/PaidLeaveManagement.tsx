@@ -1322,29 +1322,36 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
               return (
                 <div className="p-6 space-y-4">
                   {editingUser.join_date && editingUser.join_date !== '-' ? (
-                    <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="text-xs font-black text-amber-900 flex items-center gap-1.5">
-                            <span>🏛️ 労働基準法に基づく法定参考値</span>
-                            <span className="text-[11px] text-slate-500 font-bold">(勤続: {st.serviceText})</span>
-                          </div>
-                          <div className="text-xs font-bold text-amber-800 mt-1">
-                            今年度付与: <span className="text-base font-black text-amber-900">{st.statutoryGrant}日</span>
-                            {st.isZeroGrant ? (
-                              <span className="text-rose-600 font-bold ml-2">⚠️ {st.zeroGrantReason}</span>
-                            ) : (
-                              <span className="text-slate-500 font-medium ml-2">（前年繰越目安: {st.prevStatutoryGrant}日）</span>
-                            )}
-                          </div>
+                    <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200 space-y-2.5">
+                      {/* 上段: タイトル ＆ 適用モードバッジ */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-black text-amber-900">🏛️ 労働基準法に基づく法定参考値</span>
+                          <span className="text-[11px] text-slate-500 font-bold">(勤続: {st.serviceText})</span>
                         </div>
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border shrink-0 ${
                           effectiveMode === 'actual_worked' 
                             ? 'bg-amber-100 text-amber-900 border-amber-300' 
                             : 'bg-emerald-100 text-emerald-900 border-emerald-300'
                         }`}>
                           {effectiveMode === 'actual_worked' ? '⚡ 実績逆算適用中' : '🏷️ 契約固定適用中'}
                         </span>
+                      </div>
+
+                      {/* 下段: 付与日数 ＆ 勤務実績ステータスバッジ */}
+                      <div className="flex items-center gap-2 pt-1.5 border-t border-amber-200/60 flex-wrap">
+                        <span className="text-xs font-bold text-amber-800">今年度付与:</span>
+                        <span className="text-lg font-black text-amber-950">{st.statutoryGrant}日</span>
+                        {st.isZeroGrant ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-black text-rose-700 bg-rose-50 border border-rose-300 px-2 py-0.5 rounded-lg shadow-2xs">
+                            <AlertTriangle className="w-3 h-3 text-rose-500 shrink-0" />
+                            <span>{st.zeroGrantReason || '勤務実績0日（付与なし）'}</span>
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-500 font-bold ml-1">
+                            （前年繰越目安: {st.prevStatutoryGrant}日）
+                          </span>
+                        )}
                       </div>
 
                       {/* パートの場合: 実績と契約の2大ワンタッチボタン */}
@@ -1357,15 +1364,17 @@ export const PaidLeaveManagement: React.FC<PaidLeaveManagementProps> = ({ tenant
                                 ...editingUser,
                                 userCustomMode: 'actual_worked',
                                 paid_leave_balance: actualSt.statutoryGrant,
-                                paid_leave_carryover: actualSt.prevStatutoryGrant
+                                paid_leave_carryover: 0
                               });
                               showToast(`⚡ 打刻実績逆算値（${actualSt.statutoryGrant}日）をセットしました`);
                             }}
-                            className="p-2 bg-white hover:bg-amber-100 text-amber-950 border border-amber-300 rounded-xl text-xs font-bold text-left transition shadow-2xs cursor-pointer"
+                            className="p-2.5 bg-white hover:bg-amber-100 text-amber-950 border border-amber-300 rounded-xl text-xs font-bold text-left transition shadow-2xs cursor-pointer"
                           >
                             <span className="block text-[10px] text-amber-700 font-black">⚡ 打刻実績逆算でセット</span>
-                            <span className="text-sm font-black">{actualSt.statutoryGrant}日</span>
-                            <span className="text-[10px] text-slate-400 block font-normal">(実働年{st.actualWorkedDaysAnnual}日・週{st.actualEquivalentWeeklyDays}日相当)</span>
+                            <span className="text-base font-black">{actualSt.statutoryGrant}日</span>
+                            <span className="text-[10px] text-slate-500 block font-normal">
+                              {actualSt.isZeroGrant ? '(勤務実績0日・付与なし)' : `(実働年${st.actualWorkedDaysAnnual}日・週${st.actualEquivalentWeeklyDays}日相当)`}
+                            </span>
                           </button>
 
                           <button
