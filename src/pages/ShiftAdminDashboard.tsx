@@ -3,7 +3,7 @@ import {
   DollarSign, Zap, Calendar, ArrowLeft, CheckCircle, CheckCircle2, 
   Settings, Send, LogOut, RotateCcw, 
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Lock, Unlock, Clock, Sparkles, AlertCircle, 
-  FileText, ExternalLink, HelpCircle, MessageSquare, X, Trash2
+  FileText, ExternalLink, HelpCircle, MessageSquare, X
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -13,7 +13,7 @@ import AppSwitcher from '../components/AppSwitcher';
 
 import { calculateLaborCost, generateAutoShift } from '../lib/shiftAlgorithm';
 import { HelpGuideModal } from '../components/HelpGuideModal';
-import { seedShiftDemoData } from '../lib/seedShiftDemoData';
+import { StaffInviteModal } from '../components/StaffInviteModal';
 import { clearShiftDemoData } from '../lib/clearShiftDemoData';
 import { 
   getAllStaffLineLinkMap, 
@@ -32,6 +32,7 @@ const ShiftAdminDashboard: React.FC = () => {
   const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [generationResult, setGenerationResult] = useState<{ added: number } | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isStaffInviteModalOpen, setIsStaffInviteModalOpen] = useState(false);
 
   const [allEmployees, setAllEmployees] = useState<any[]>([]);
   const [submittedUserIds, setSubmittedUserIds] = useState<string[]>([]);
@@ -54,7 +55,6 @@ const ShiftAdminDashboard: React.FC = () => {
 
   // ⚙️ 運用基本設定アコーディオンの開閉状態
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
 
   // 📱 LINE未提出者リマインド用State
   const [tenantId, setTenantId] = useState<string>('');
@@ -62,34 +62,6 @@ const ShiftAdminDashboard: React.FC = () => {
   const [isReminderSending, setIsReminderSending] = useState(false);
   const [reminderSuccessMessage, setReminderSuccessMessage] = useState<string | null>(null);
   const [reminderDeadlineInput, setReminderDeadlineInput] = useState<string>('金曜日 23:59まで');
-
-  // 🧪 検証用ダミーデータの一括投入（店舗配属・必要時間枠・希望シフトを一元生成）
-  const handleSeedDummyRequests = async () => {
-    if (!window.confirm('【検証用ダミーデータ一括生成】\n全スタッフを3店舗（新宿・渋谷・池袋）に自動配属し、各店舗の必要枠マスタと今週〜来週のダミー希望シフトを一括投入しますか？\n（既存の希望データおよび下書きシフトは一旦上書きされます）')) return;
-    setIsSeeding(true);
-    try {
-      const { data: tenantId } = await supabase.rpc('get_user_tenant_id');
-      if (!tenantId) {
-        alert('テナントIDが取得できませんでした。');
-        return;
-      }
-
-      const res = await seedShiftDemoData(tenantId);
-      if (!res.success) {
-        alert('ダミーデータの投入に失敗しました: ' + res.message);
-        return;
-      }
-
-      alert(`🎉 ${res.message}\n次にカード②の「⚡ 今週のシフトをAI自動作成する」を押してAI割り振りをテストしてください！`);
-      setGenerationResult(null);
-      await fetchStats();
-    } catch (err: any) {
-      console.error('ダミー投入エラー:', err);
-      alert('ダミー投入に失敗しました: ' + (err.message || err));
-    } finally {
-      setIsSeeding(false);
-    }
-  };
 
   // 1. シフト・ダミーデータの安全完全消去（本番保護型）
   const handleResetAllShiftData = async () => {
@@ -637,6 +609,14 @@ const ShiftAdminDashboard: React.FC = () => {
 
         <div className="flex items-center space-x-2 sm:space-x-3">
           <button
+            onClick={() => setIsStaffInviteModalOpen(true)}
+            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-xl flex items-center space-x-1.5 transition font-black text-xs shadow-xs cursor-pointer"
+            title="スタッフ向け 公式LINE友だち追加QRコードや招待URLを表示します"
+          >
+            <span className="text-sm">💬</span>
+            <span className="hidden sm:inline">スタッフ公式LINE案内</span>
+          </button>
+          <button
             onClick={() => setIsHelpOpen(true)}
             className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-1.5 rounded-xl flex items-center space-x-1.5 transition font-bold text-xs shadow-xs cursor-pointer"
             title="シフト作成の流れ・ガイドを見る"
@@ -946,31 +926,13 @@ const ShiftAdminDashboard: React.FC = () => {
                 </button>
                 
                 <button
-                  onClick={handleSeedDummyRequests}
-                  disabled={isSeeding}
-                  className="w-full bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold py-2.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-amber-300 shadow-2xs"
-                  title={`全スタッフの${periodInfo.durationLabel}分（${periodInfo.daysCount}日間）の希望シフトを一発で投入してAI生成をテストできます`}
+                  type="button"
+                  onClick={() => setIsStaffInviteModalOpen(true)}
+                  className="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold py-2.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-emerald-300 shadow-2xs"
+                  title="未連携のスタッフに公式LINEを友だち追加してもらうためのQRコードや招待URLを表示します"
                 >
-                  {isSeeding ? (
-                    <div className="animate-spin w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full"></div>
-                  ) : (
-                    <Sparkles className="w-3.5 h-3.5 text-amber-600 fill-amber-600" />
-                  )}
-                  <span>{isSeeding ? 'ダミー希望を投入中...' : '🧪 検証用ダミー希望を一括投入する'}</span>
-                </button>
-
-                <button
-                  onClick={handleResetAllShiftData}
-                  disabled={isResetting}
-                  className="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-2 px-4 rounded-xl transition text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-rose-200 shadow-2xs"
-                  title="検証用で投入した下書きシフト・希望データ・ダミー店舗枠を一括消去します（社員アカウントや会社情報は完全に保護されます）"
-                >
-                  {isResetting ? (
-                    <div className="animate-spin w-3.5 h-3.5 border-2 border-rose-600 border-t-transparent rounded-full"></div>
-                  ) : (
-                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                  )}
-                  <span>{isResetting ? 'ダミー消去中...' : '🧹 検証用ダミーデータを全消去'}</span>
+                  <span className="text-sm">💬</span>
+                  <span>スタッフ向け 公式LINE追加QRコード案内</span>
                 </button>
 
                 <button
@@ -1548,6 +1510,14 @@ const ShiftAdminDashboard: React.FC = () => {
         screenKey="shift_dashboard" 
         isOpen={isHelpOpen} 
         onClose={() => setIsHelpOpen(false)} 
+      />
+
+      {/* 💬 スタッフ招待 ＆ 公式LINE QR案内モーダル */}
+      <StaffInviteModal
+        isOpen={isStaffInviteModalOpen}
+        onClose={() => setIsStaffInviteModalOpen(false)}
+        companyName={tenantName || '会社'}
+        defaultTab="line"
       />
     </div>
   );

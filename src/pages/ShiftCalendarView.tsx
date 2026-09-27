@@ -12,8 +12,6 @@ import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { ConfirmedShiftCalendarModal } from '../components/ConfirmedShiftCalendarModal';
 import { fetchStoresUnified, getStoresFromStorage } from '../lib/storeMaster';
-import { seedShiftDemoData } from '../lib/seedShiftDemoData';
-import { clearShiftDemoData } from '../lib/clearShiftDemoData';
 import { 
   getAllStaffLineLinkMap, 
   syncStaffLineLinkFromDb,
@@ -107,8 +105,6 @@ const ShiftCalendarView: React.FC = () => {
 
   // 📋 確定版シフトカレンダー（店舗貼り出し・印刷用）モーダル用State
   const [isConfirmedCalendarOpen, setIsConfirmedCalendarOpen] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
-  const [isClearing, setIsClearing] = useState(false);
 
   // 📱 LINE確定シフト送信モーダル用State
   const [tenantId, setTenantId] = useState<string>('');
@@ -224,50 +220,6 @@ const ShiftCalendarView: React.FC = () => {
     };
     loadStoreRequirements();
   }, [selectedDepartment]);
-
-  // 🎲 検証用ダミーデータ自動投入ハンドラー
-  const handleSeedDemoData = async () => {
-    if (!window.confirm('【検証用ダミーデータ自動投入】\n\n全スタッフを「新宿店・渋谷店・池袋店」に均等配属し、各店舗の必要人数枠（早番・遅番など）とスタッフのシフト希望データを一括投入します。\n実行してよろしいですか？')) {
-      return;
-    }
-    setIsSeeding(true);
-    try {
-      const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
-      if (!tenantIdData) throw new Error('テナント情報の取得に失敗しました');
-      const result = await seedShiftDemoData(tenantIdData);
-      alert(`✨ ${result.message}\n\n【店舗別配属人数】\n・新宿店: ${result.storeCounts['新宿店'] || 0}名\n・渋谷店: ${result.storeCounts['渋谷店'] || 0}名\n・池袋店: ${result.storeCounts['池袋店'] || 0}名\n\n店舗ボタンを切り替えて各店舗のシフト作成やAI自動生成をお試しください！`);
-      await fetchSettingsAndData();
-      if (selectedDepartment === 'all') {
-        setSelectedDepartment('新宿店');
-      }
-    } catch (err: any) {
-      console.error('Seed demo error:', err);
-      alert(`ダミーデータ投入に失敗しました: ${err.message || err}`);
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
-  // 🧹 検証用ダミーデータ安全消去ハンドラー（本番保護型）
-  const handleClearDemoData = async () => {
-    if (!window.confirm('【検証用ダミーデータ安全消去】\n\n・下書き/確定シフトデータ\n・検証用シフト希望データ\n・ダミー店舗の必要人数枠\n・ローカルキャッシュ\nを安全に全消去します。\n\n※ 社員・管理者アカウントや会社情報、勤怠・給与データ等は一切削除されません。\n実行してよろしいですか？')) {
-      return;
-    }
-    setIsClearing(true);
-    try {
-      const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
-      if (!tenantIdData) throw new Error('テナント情報の取得に失敗しました');
-      const result = await clearShiftDemoData(tenantIdData);
-      alert(`🧹 ${result.message}`);
-      setSelectedDepartment('all');
-      await fetchSettingsAndData();
-    } catch (err: any) {
-      console.error('Clear demo error:', err);
-      alert(`ダミーデータ消去に失敗しました: ${err.message || err}`);
-    } finally {
-      setIsClearing(false);
-    }
-  };
 
   useEffect(() => {
     fetchSettingsAndData();
@@ -1840,45 +1792,7 @@ const ShiftCalendarView: React.FC = () => {
 
           {/* 右側：検証用ダミーデータ投入 ＆ 店舗応援ステータス */}
           <div className="flex items-center gap-2 self-start md:self-center shrink-0 flex-wrap">
-            {/* 🎲 検証用ダミーデータ自動投入ボタン */}
-            <button
-              onClick={handleSeedDemoData}
-              disabled={isSeeding}
-              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
-              title="全スタッフを新宿・渋谷・池袋にダミー配属し、各店舗の必要時間枠とシフト希望を一括投入します"
-            >
-              {isSeeding ? (
-                <>
-                  <div className="animate-spin w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full"></div>
-                  <span>投入中...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                  <span>🎲 ダミー投入</span>
-                </>
-              )}
-            </button>
 
-            {/* 🧹 検証用ダミーデータ安全消去ボタン */}
-            <button
-              onClick={handleClearDemoData}
-              disabled={isClearing}
-              className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 font-bold text-xs px-3 py-1.5 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
-              title="検証用で投入した下書きシフト・希望データ・ダミー店舗枠を一括消去します（社員アカウントや会社情報は完全に保護されます）"
-            >
-              {isClearing ? (
-                <>
-                  <div className="animate-spin w-3.5 h-3.5 border-2 border-rose-600 border-t-transparent rounded-full"></div>
-                  <span>消去中...</span>
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                  <span>🧹 ダミー消去</span>
-                </>
-              )}
-            </button>
 
             <span className={`text-xs px-2.5 py-1 rounded-lg font-bold border flex items-center gap-1.5 ${
               enableStoreHelp

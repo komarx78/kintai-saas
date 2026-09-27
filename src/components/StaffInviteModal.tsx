@@ -11,15 +11,20 @@ import {
   MessageSquare, 
   QrCode, 
   ExternalLink, 
-  CheckCircle2 
+  CheckCircle2,
+  Printer
 } from 'lucide-react';
+import { 
+  getStoreLineQrCodeUrl, 
+  RAKUMARU_OFFICIAL_LINE_CONSTANTS 
+} from '../lib/lineMessaging';
 
 interface StaffInviteModalProps {
   isOpen: boolean;
   onClose: () => void;
   companyName?: string;
   tenantId?: string | null;
-  defaultTab?: 'kintai' | 'onboarding';
+  defaultTab?: 'kintai' | 'onboarding' | 'line';
   showCompleteButton?: boolean;
   onCompleteStep?: () => void;
   onNavigateToCustomInvite?: () => void;
@@ -35,7 +40,7 @@ export const StaffInviteModal: React.FC<StaffInviteModalProps> = ({
   onCompleteStep,
   onNavigateToCustomInvite
 }) => {
-  const [inviteTab, setInviteTab] = useState<'kintai' | 'onboarding'>(defaultTab);
+  const [inviteTab, setInviteTab] = useState<'kintai' | 'onboarding' | 'line'>(defaultTab);
   const [copiedType, setCopiedType] = useState<string | null>(null);
 
   if (!isOpen || typeof document === 'undefined') return null;
@@ -114,30 +119,42 @@ ${onboardingUrl}
         </div>
 
         {/* 用途別タブ切替 */}
-        <div className="flex items-center gap-2 p-1.5 bg-slate-100 rounded-2xl">
+        <div className="flex items-center gap-1.5 p-1.5 bg-slate-100 rounded-2xl">
           <button
             type="button"
             onClick={() => setInviteTab('kintai')}
-            className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
               inviteTab === 'kintai'
                 ? 'bg-white text-indigo-700 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Clock className="w-4 h-4" />
-            <span>① 明日から打刻（タイムカード案内）</span>
+            <Clock className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">① 明日から打刻</span>
           </button>
           <button
             type="button"
             onClick={() => setInviteTab('onboarding')}
-            className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
               inviteTab === 'onboarding'
                 ? 'bg-white text-emerald-700 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Users className="w-4 h-4" />
-            <span>② 新入社員の書類提出（入社手続きURL）</span>
+            <Users className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">② 新入社員書類提出</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setInviteTab('line')}
+            className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              inviteTab === 'line'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-emerald-700 hover:bg-emerald-50'
+            }`}
+          >
+            <span className="text-sm">💬</span>
+            <span className="truncate">③ 公式LINE追加QR</span>
           </button>
         </div>
 
@@ -300,23 +317,77 @@ ${onboardingUrl}
               </button>
             </div>
 
-            {/* QRコード表示（目の前の新入社員用） */}
-            <div className="flex items-center gap-4 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-              <div className="w-20 h-20 bg-white p-1 rounded-xl border border-slate-300 shadow-2xs shrink-0 flex items-center justify-center">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(onboardingUrl)}`}
-                  alt="入社手続きQRコード"
-                  className="w-full h-full object-contain"
-                />
+            {/* 🌟 2つのQRコードを明確に区別して配備（LINEとWeb登録の混同ゼロ） */}
+            <div className="space-y-2.5">
+              <div className="text-xs font-black text-slate-800 flex items-center justify-between">
+                <span>📱 目の前の新入社員にスマホで読み取ってもらう場合:</span>
+                <span className="text-[10px] text-slate-400">用途に合わせてご提示ください</span>
               </div>
-              <div className="space-y-1 text-xs">
-                <span className="font-black text-slate-800 flex items-center gap-1">
-                  <QrCode className="w-3.5 h-3.5 text-emerald-600" />
-                  目の前の新入社員に読み取ってもらう場合
-                </span>
-                <p className="text-slate-500 text-[11px] leading-snug">
-                  スマホのカメラでQRコードを読み取ってもらうと、すぐに口座やマイナンバーの登録画面を開けます。
-                </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 1. 公式LINE友だち追加QR（緑） */}
+                <div className="bg-emerald-50/80 border-2 border-emerald-400/80 p-3.5 rounded-2xl flex flex-col justify-between space-y-2 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
+                      <span className="text-base">💬</span>
+                      <span>① 公式LINE 友だち追加</span>
+                    </span>
+                    <span className="text-[9px] font-black bg-emerald-600 text-white px-1.5 py-0.5 rounded shadow-2xs">
+                      LINEアプリ起動
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="w-20 h-20 bg-white p-1 rounded-xl border border-emerald-300 shadow-2xs shrink-0 flex items-center justify-center">
+                      <img
+                        src={getStoreLineQrCodeUrl(resolvedTenantId || '')}
+                        alt="公式LINE友だち追加QR"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <div className="text-[11px] text-slate-700 leading-tight space-y-1">
+                      <p className="font-bold text-slate-900">{RAKUMARU_OFFICIAL_LINE_CONSTANTS.accountName}</p>
+                      <p className="font-mono text-[10px] text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded font-bold inline-block border border-emerald-300">
+                        {RAKUMARU_OFFICIAL_LINE_CONSTANTS.basicId}
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        シフト確定通知や給与明細が届きます
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Web入社書類提出フォームQR（青） */}
+                <div className="bg-blue-50/80 border-2 border-blue-400/80 p-3.5 rounded-2xl flex flex-col justify-between space-y-2 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-blue-950 flex items-center gap-1.5">
+                      <span className="text-base">🌐</span>
+                      <span>② 口座・マイナンバー登録</span>
+                    </span>
+                    <span className="text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.5 rounded shadow-2xs">
+                      ブラウザ起動
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="w-20 h-20 bg-white p-1 rounded-xl border border-blue-300 shadow-2xs shrink-0 flex items-center justify-center">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(onboardingUrl)}`}
+                        alt="Web書類登録フォームQRコード"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <div className="text-[11px] text-slate-700 leading-tight space-y-1">
+                      <p className="font-bold text-slate-900">Web登録フォーム</p>
+                      <p className="text-[10px] text-blue-800 bg-blue-100 px-1.5 py-0.5 rounded font-bold inline-block border border-blue-300">
+                        ※LINEではありません
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        通帳写真や個人情報を入力します
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -335,6 +406,86 @@ ${onboardingUrl}
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* タブ③: 公式LINE友だち追加案内（店舗POP・即時追加） */}
+        {inviteTab === 'line' && (
+          <div className="space-y-4">
+            <div className="bg-emerald-950/90 text-white p-5 rounded-2xl border-2 border-emerald-500 shadow-lg space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">💬</span>
+                  <div>
+                    <h4 className="font-black text-sm text-white flex items-center gap-2">
+                      公式LINE 友だち追加案内
+                      <span className="text-[10px] px-2 py-0.5 bg-emerald-500/30 text-emerald-300 rounded-full border border-emerald-400/40">
+                        店舗・アルバイト共通
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-emerald-200">
+                      シフト確定通知・シフト募集・Web給与明細が自動でスタッフのLINEに届きます
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-mono font-bold px-2 py-1 bg-emerald-900 text-emerald-300 rounded border border-emerald-700">
+                  {RAKUMARU_OFFICIAL_LINE_CONSTANTS.basicId}
+                </span>
+              </div>
+
+              <div className="bg-white text-slate-900 p-4 rounded-xl flex flex-col sm:flex-row items-center gap-5 shadow-sm">
+                <div className="w-36 h-36 bg-white p-2 rounded-xl border-2 border-emerald-400 shadow-sm shrink-0 flex items-center justify-center">
+                  <img
+                    src={getStoreLineQrCodeUrl(resolvedTenantId || '')}
+                    alt="みんなのらくまる労務 公式LINE QRコード"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="space-y-2 text-xs flex-1 text-center sm:text-left">
+                  <div className="font-black text-base text-slate-900 flex items-center justify-center sm:justify-start gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>{RAKUMARU_OFFICIAL_LINE_CONSTANTS.accountName}</span>
+                  </div>
+                  <p className="text-slate-600 text-[11px] leading-relaxed">
+                    スマホのLINEアプリ「友だち追加」またはカメラでQRコードを読み取ってください。<br />
+                    店長個人のLINEアカウントは100%使用せず、安全に公私分離されます。
+                  </p>
+                  
+                  <div className="pt-2 flex flex-wrap gap-2 justify-center sm:justify-start">
+                    <a
+                      href={RAKUMARU_OFFICIAL_LINE_CONSTANTS.addFriendUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs inline-flex items-center gap-1 shadow-xs transition"
+                    >
+                      <ExternalLink size={12} />
+                      LINEで直接開く
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(RAKUMARU_OFFICIAL_LINE_CONSTANTS.addFriendUrl, 'line-url')}
+                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs inline-flex items-center gap-1 transition"
+                    >
+                      <Copy size={12} />
+                      {copiedType === 'line-url' ? 'コピー完了！' : '招待URLをコピー'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 店舗バックヤード印刷用ヒント */}
+              <div className="p-3 bg-emerald-900/40 border border-emerald-700/50 rounded-xl text-xs text-emerald-200 flex items-center justify-between">
+                <span>💡 レジ横や更衣室に貼っておくと、スタッフが初日に迷わず友だち追加できます</span>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3 py-1 bg-white text-emerald-900 hover:bg-emerald-100 rounded-lg font-black text-xs transition flex items-center gap-1 shrink-0"
+                >
+                  <Printer size={12} />
+                  <span>この画面を印刷</span>
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
