@@ -370,15 +370,38 @@ export async function sendStaffPayslipLineMessages(
 }
 
 /**
- * 店舗用LINE友だち追加QRコード画像URL（無料即時生成）
+ * 🌟 システム共通大元SSOT：みんなのらくまる労務 公式LINEアカウント本番情報（Messaging API）
  */
-export function getStoreLineQrCodeUrl(tenantId: string, storeName: string): string {
+export const RAKUMARU_OFFICIAL_LINE_CONSTANTS = {
+  accountName: 'みんなのらくまる労務',
+  basicId: '@622tslqk',
+  channelId: '2011756733',
+  channelSecret: 'c1a3ff8ae39ff4951cd69eb3b1b96d81',
+  channelAccessToken: '2bzMLZ1Svthjn94ea3y4HHSeRjMw9SA1F9lgom1PkoUa2gUs3F8ovxG+ikJFVTwF5UM6tfmXrOF2C+ZplN6/JHdhOQur8Rt8eGchRIcILN1idPlIDv7OLvlva7Zfahj+ZAvjBfIwYSV+FZQ7sG97fwdB04t89/10/w1cDnyilFU=',
+  addFriendUrl: 'https://line.me/R/ti/p/@622tslqk',
+  qrCodeUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https%3A%2F%2Fline.me%2FR%2Fti%2Fp%2F%40622tslqk'
+};
+
+/**
+ * 店舗用LINE友だち追加QRコード画像URL（本物の公式LINE QRコード即時生成）
+ */
+export function getStoreLineQrCodeUrl(tenantId: string, _storeName?: string): string {
   // 公式LINEアカウント友だち追加URL または招待リンク
   const config = getTenantLineConfig(tenantId);
   const addFriendUrl = (config.mode === 'own_official' && config.ownAddFriendUrl)
     ? config.ownAddFriendUrl
-    : `https://lin.ee/rakumaru_demo?tenant=${encodeURIComponent(tenantId || '')}&store=${encodeURIComponent(storeName || '')}`;
+    : RAKUMARU_OFFICIAL_LINE_CONSTANTS.addFriendUrl;
   return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(addFriendUrl)}`;
+}
+
+/**
+ * 店舗用LINE友だち追加URL（招待リンク）
+ */
+export function getStoreLineAddFriendUrl(tenantId: string): string {
+  const config = getTenantLineConfig(tenantId);
+  return (config.mode === 'own_official' && config.ownAddFriendUrl)
+    ? config.ownAddFriendUrl
+    : RAKUMARU_OFFICIAL_LINE_CONSTANTS.addFriendUrl;
 }
 
 /**
@@ -570,6 +593,9 @@ export type LineIntegrationMode = 'none' | 'rakumaru_official' | 'own_official';
 export interface LineIntegrationConfig {
   mode: LineIntegrationMode;
   rakumaruAccountName: string;
+  rakumaruBasicId?: string;
+  rakumaruAddFriendUrl?: string;
+  rakumaruQrCodeUrl?: string;
   ownChannelAccessToken?: string;
   ownChannelSecret?: string;
   ownAccountName?: string;
@@ -580,7 +606,10 @@ export interface LineIntegrationConfig {
 
 export const DEFAULT_LINE_CONFIG: LineIntegrationConfig = {
   mode: 'rakumaru_official', // 🌟 お客様目線：初期値は面倒な設定不要の「らくまる労務公式代行」
-  rakumaruAccountName: 'みんなのらくまる労務（公式通知）',
+  rakumaruAccountName: RAKUMARU_OFFICIAL_LINE_CONSTANTS.accountName,
+  rakumaruBasicId: RAKUMARU_OFFICIAL_LINE_CONSTANTS.basicId,
+  rakumaruAddFriendUrl: RAKUMARU_OFFICIAL_LINE_CONSTANTS.addFriendUrl,
+  rakumaruQrCodeUrl: RAKUMARU_OFFICIAL_LINE_CONSTANTS.qrCodeUrl,
   updatedAt: new Date().toISOString()
 };
 
@@ -715,3 +744,48 @@ export async function sendOnboardingInviteViaLine(
     timestamp
   };
 }
+
+/**
+ * 🔑 有効なLINEチャネルアクセストークンを取得
+ */
+export function getEffectiveLineAccessToken(tenantId: string | null | undefined): string | null {
+  const config = getTenantLineConfig(tenantId);
+  if (config.mode === 'rakumaru_official') {
+    return RAKUMARU_OFFICIAL_LINE_CONSTANTS.channelAccessToken;
+  }
+  if (config.mode === 'own_official' && config.ownChannelAccessToken) {
+    return config.ownChannelAccessToken;
+  }
+  return null;
+}
+
+/**
+ * 🚀 LINE Messaging API 直接プッシュ送信（サーバー/Edge/プロキシ連携用）
+ */
+export async function pushLineMessageApi(
+  channelAccessToken: string,
+  toLineUserId: string,
+  messages: Array<{ type: 'text'; text: string }>
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${channelAccessToken}`
+      },
+      body: JSON.stringify({
+        to: toLineUserId,
+        messages
+      })
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      return { success: false, error: `HTTP ${res.status}: ${errText}` };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error' };
+  }
+}
+

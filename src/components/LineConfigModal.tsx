@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  X, ShieldCheck, Sparkles, HelpCircle, Save 
+  X, ShieldCheck, Sparkles, HelpCircle, Save, ExternalLink, CheckCircle2 
 } from 'lucide-react';
 import { 
   type LineIntegrationConfig, 
   getTenantLineConfig, 
   saveTenantLineConfigUnified, 
   fetchTenantLineConfigFromDb,
-  DEFAULT_LINE_CONFIG 
+  DEFAULT_LINE_CONFIG,
+  RAKUMARU_OFFICIAL_LINE_CONSTANTS
 } from '../lib/lineMessaging';
 
 interface LineConfigModalProps {
@@ -97,7 +98,7 @@ export const LineConfigModal: React.FC<LineConfigModalProps> = ({
               }`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3 w-full">
                   <input 
                     type="radio" 
                     name="line_mode" 
@@ -105,7 +106,7 @@ export const LineConfigModal: React.FC<LineConfigModalProps> = ({
                     onChange={() => setConfig({ ...config, mode: 'rakumaru_official' })}
                     className="mt-1 w-4 h-4 text-emerald-600 focus:ring-emerald-500"
                   />
-                  <div>
+                  <div className="w-full">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-white text-base">
                         ⚡ みんなのらくまる労務 公式LINE代行
@@ -116,12 +117,50 @@ export const LineConfigModal: React.FC<LineConfigModalProps> = ({
                     </div>
                     <p className="text-xs text-slate-300 mt-1 leading-relaxed">
                       難しいトークン設定やLINE公式アカウントの開設は<strong>一切不要</strong>です。
-                      通知専用の安心アカウントから、新入社員やアルバイトへ自動配信されます。
+                      システム標準の認証済み公式アカウントから、新入社員やアルバイトへ自動配信されます。
                     </p>
                     <div className="mt-2.5 flex flex-wrap gap-2 text-[11px] text-emerald-400">
                       <span className="px-2 py-0.5 bg-emerald-950/60 rounded border border-emerald-800/60">✓ 設定作業 0分</span>
                       <span className="px-2 py-0.5 bg-emerald-950/60 rounded border border-emerald-800/60">✓ 店長個人LINE完全不要</span>
-                      <span className="px-2 py-0.5 bg-emerald-950/60 rounded border border-emerald-800/60">✓ 月額オプションで即日稼働</span>
+                      <span className="px-2 py-0.5 bg-emerald-950/60 rounded border border-emerald-800/60">✓ 本番公式アカウント常時接続</span>
+                    </div>
+
+                    {/* 🌟 接続中公式アカウント情報カード（大元SSOT） */}
+                    <div className="mt-3.5 pt-3 border-t border-emerald-800/40 bg-slate-950/50 p-3.5 rounded-xl space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 size={14} className="text-emerald-400" />
+                          <span className="text-xs font-bold text-emerald-300">本番公式LINE 接続稼働中</span>
+                        </div>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-900/60 text-emerald-200 border border-emerald-700/50 font-mono">
+                          Messaging API連携済
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                          <div className="text-[10px] text-slate-400 font-medium">公式アカウント名</div>
+                          <div className="text-white font-bold mt-0.5">{RAKUMARU_OFFICIAL_LINE_CONSTANTS.accountName}</div>
+                        </div>
+                        <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                          <div className="text-[10px] text-slate-400 font-medium">ベーシックID</div>
+                          <div className="text-emerald-400 font-mono font-bold mt-0.5">{RAKUMARU_OFFICIAL_LINE_CONSTANTS.basicId}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <a 
+                          href={RAKUMARU_OFFICIAL_LINE_CONSTANTS.addFriendUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-emerald-400 hover:text-emerald-300 hover:underline flex items-center gap-1 font-bold"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink size={12} />
+                          公式LINE 友だち追加リンクを開く ({RAKUMARU_OFFICIAL_LINE_CONSTANTS.basicId})
+                        </a>
+                        <span className="text-[10px] text-slate-400">※通知専用アカウント</span>
+                      </div>
                     </div>
                   </div>
                 </div>
