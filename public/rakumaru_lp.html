@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="ja" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>みんなの らくまる労務 | 公式LINE連携・1人月額300円の人事労務クラウド</title>
+  <meta name="description" content="もうスタッフにアプリを入れさせない！LINE友だち追加だけで勤怠・シフト・給与明細が即日稼働。初期費用0円・最低縛りなし・1人月額300円の中小企業・店舗応援クラウド。">
+  
+  <!-- Google Fonts: Noto Sans JP -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans JP"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              800: '#1e40af',
+              900: '#1e3a8a',
+            },
+            line: '#06C755',
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* WordPressテーマ等との干渉を防ぐベースリセット */
+    #rakumaru-lp-root {
+      font-family: 'Noto Sans JP', sans-serif;
+      color: #1e293b;
+      line-height: 1.6;
+      background-color: #f8fafc;
+    }
+    #rakumaru-lp-root a { text-decoration: none; }
+    #rakumaru-lp-root * { box-sizing: border-box; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+<div id="rakumaru-lp-root" class="min-h-screen">
+
+  <!-- ─── 1. トップ案内バー ─── -->
+  <div class="bg-gradient-to-r from-blue-700 via-sky-600 to-blue-700 text-white py-2.5 px-4 text-center text-xs sm:text-sm font-bold shadow-sm flex items-center justify-center gap-2">
+    <span class="bg-amber-400 text-slate-950 text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-xs">新登場</span>
+    <span>【公式LINE完全対応】アプリ不要・初期費用0円・1人月額300円の中小企業・店舗応援モデル！</span>
+  </div>
+
+  <!-- ─── 2. ヘッダー ─── -->
+  <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-500 via-blue-600 to-indigo-600 flex items-center justify-center font-black text-sm text-white shadow-md shadow-blue-500/20">
+          らく
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-black text-xl tracking-tight text-slate-900">みんなの らくまる労務</span>
+            <span class="bg-sky-100 text-sky-800 text-[10px] font-extrabold px-2 py-0.5 rounded-md border border-sky-200 hidden sm:inline">
+              中小零細企業 応援モデル
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-500 hidden sm:block">操作が「楽」に、労務が「丸ごと」解決する次世代人事労務クラウド</p>
+        </div>
+      </div>
+
+      <nav class="hidden lg:flex items-center gap-7 text-xs font-bold text-slate-600">
+        <a href="#problems" class="hover:text-blue-600 transition-colors">お悩み解決</a>
+        <a href="#features" class="hover:text-blue-600 transition-colors">7大機能</a>
+        <a href="#comparison" class="hover:text-blue-600 transition-colors">他社との違い</a>
+        <a href="#pricing" class="hover:text-blue-600 transition-colors">料金シミュレーター</a>
+        <a href="#story" class="hover:text-blue-600 transition-colors">名前の由来</a>
+        <a href="#faq" class="hover:text-blue-600 transition-colors">よくある質問</a>
+      </nav>
+
+      <div class="flex items-center gap-3">
+        <a
+          href="https://kintai-saas.vercel.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-xs sm:text-sm font-bold text-slate-700 hover:text-blue-600 px-3.5 py-2 rounded-xl hover:bg-slate-100 transition-colors"
+        >
+          ログイン
+        </a>
+        <a
+          href="https://kintai-saas.vercel.app/?mode=signup"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs sm:text-sm font-black rounded-xl shadow-lg shadow-orange-500/25 hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5"
+        >
+          <span>14日間 無料体験</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── 3. ファーストビュー（FV） ─── -->
+  <section class="relative bg-gradient-to-b from-sky-50/70 via-white to-slate-50 pt-12 pb-16 sm:pt-20 sm:pb-24 overflow-hidden border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+        
+        {/* 左カラム：コピー＆行動喚起 */}
+        <div class="lg:col-span-7 text-center lg:text-left">
+          <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-xs sm:text-sm font-bold border border-emerald-300 mb-5 shadow-xs">
+            <span class="w-2 h-2 rounded-full bg-[#06C755] animate-pulse"></span>
+            <span class="font-extrabold">【公式LINE完全対応】もう現場にアプリを入れさせない！</span>
+          </div>
+
+          <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 leading-tight sm:leading-snug tracking-tight mb-5">
+            みんなの操作が<span class="text-blue-600 underline decoration-amber-400 decoration-4 underline-offset-4">「楽（らく）」</span>になる。<br />
+            LINE・打刻・給与から役所原本まで<br />
+            <span class="text-blue-600 underline decoration-amber-400 decoration-4 underline-offset-4">「丸（まる）ごと」</span>繋がる。
+          </h1>
+
+          <p class="text-base sm:text-lg text-slate-600 font-normal leading-relaxed mb-8 max-w-2xl mx-auto lg:mx-0">
+            アルバイト・現場スタッフは<strong>公式LINEを友だち追加するだけ</strong>。アプリのインストールもパスワード管理も一切不要！<br />
+            打刻から給与計算、Web明細配信、ハローワーク離職票のA4原本印字まで全部これ1つ。<br />
+            大手SaaSのような高額固定費を全廃し、<strong class="text-slate-900 font-bold bg-amber-100 px-2 py-0.5 rounded text-blue-700">【1人月額300円・初期費用0円・最低縛りなし】</strong>でお届けします。
+          </p>
+
+          <div class="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 mb-8">
+            <a
+              href="https://kintai-saas.vercel.app/?mode=signup"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-lg rounded-2xl shadow-xl shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 border-2 border-white"
+            >
+              <span>14日間 無料で試してみる</span>
+              <i data-lucide="arrow-right" class="w-5 h-5"></i>
+            </a>
+            <a
+              href="#pricing"
+              class="w-full sm:w-auto px-6 py-4 bg-white hover:bg-slate-100 text-slate-700 font-bold text-base rounded-2xl border-2 border-slate-300 shadow-xs transition-all flex items-center justify-center gap-2"
+            >
+              <span>料金シミュレーションを見る</span>
+              <i data-lucide="trending-down" class="w-5 h-5 text-blue-600"></i>
+            </a>
+          </div>
+
+          <!-- 4大安心保証バッジ -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-w-xl mx-auto lg:mx-0 text-left">
+            <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs flex items-center gap-2">
+              <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+              <span class="text-xs font-bold text-slate-700">初期費用 0円</span>
+            </div>
+            <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs flex items-center gap-2">
+              <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+              <span class="text-xs font-bold text-slate-700">最低縛り なし</span>
+            </div>
+            <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs flex items-center gap-2">
+              <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+              <span class="text-xs font-bold text-slate-700">クレカ不要</span>
+            </div>
+            <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs flex items-center gap-2">
+              <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+              <span class="text-xs font-bold text-slate-700">公式LINE対応</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 右カラム：プロダクトモック（ダッシュボード ＆ LINE連携画面） */}
+        <div class="lg:col-span-5 relative">
+          <div class="bg-white rounded-3xl p-5 shadow-2xl border border-slate-200/80 relative z-10 space-y-4">
+            <!-- 画面上部ヘッダー -->
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-rose-400"></span>
+                <span class="w-3 h-3 rounded-full bg-amber-400"></span>
+                <span class="w-3 h-3 rounded-full bg-emerald-400"></span>
+                <span class="text-xs font-bold text-slate-700 ml-1">らくまるポータル 管理ダッシュボード</span>
+              </div>
+              <span class="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 本番稼働中
+              </span>
+            </div>
+
+            <!-- LINE連携ハイライトカード -->
+            <div class="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl p-3.5 text-white shadow-md">
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-xs font-black flex items-center gap-1.5">
+                  <i data-lucide="message-square" class="w-4 h-4 text-white"></i>
+                  公式LINEスタッフ連携センター
+                </span>
+                <span class="bg-white/20 text-[10px] px-2 py-0.5 rounded-full font-bold">アプリ不要</span>
+              </div>
+              <p class="text-[11px] text-emerald-50 leading-relaxed">
+                店頭QRをLINEで読み取るだけ！シフト希望回収・確定シフト配信・Web給与明細通知がすべてLINEで届きます。
+              </p>
+            </div>
+
+            <!-- サマリーステータス -->
+            <div class="grid grid-cols-3 gap-2">
+              <div class="bg-sky-50 p-2.5 rounded-xl border border-sky-100 text-center">
+                <div class="text-[10px] text-sky-700 font-bold">打刻・勤怠集計</div>
+                <div class="text-base font-black text-sky-900">ミス 0 件</div>
+              </div>
+              <div class="bg-emerald-50 p-2.5 rounded-xl border border-emerald-100 text-center">
+                <div class="text-[10px] text-emerald-700 font-bold">給与一括確定</div>
+                <div class="text-base font-black text-emerald-900">46 / 46 名</div>
+              </div>
+              <div class="bg-amber-50 p-2.5 rounded-xl border border-amber-100 text-center">
+                <div class="text-[10px] text-amber-700 font-bold">月額利用料</div>
+                <div class="text-base font-black text-amber-900">¥ 13,800</div>
+              </div>
+            </div>
+
+            <!-- スタッフLINE受信プレビュー（スマホ吹き出し） -->
+            <div class="bg-slate-100 p-3 rounded-2xl border border-slate-200 space-y-2">
+              <div class="text-[10px] font-bold text-slate-500 flex items-center justify-between">
+                <span>📱 スタッフのLINE画面（届く通知）</span>
+                <span class="text-[#06C755] font-black">みんなのらくまる労務</span>
+              </div>
+              <div class="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs text-[11px] space-y-1">
+                <div class="font-black text-slate-800">【Web給与明細のお届け】</div>
+                <div class="text-slate-600 text-[10px]">2026年9月度の給与明細が確定しました。下記URLよりご確認ください。</div>
+                <div class="text-blue-600 font-mono text-[9px] underline">https://kintai-saas.vercel.app/payslip/view?...</div>
+              </div>
+            </div>
+
+            <!-- 神機能バッジ（役所A4印刷） -->
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 rounded-2xl shadow-md flex items-center gap-3">
+              <i data-lucide="file-check" class="w-8 h-8 text-amber-300 shrink-0"></i>
+              <div>
+                <div class="font-black text-[11px]">ハローワーク・税務署 提出用A4原本印刷</div>
+                <div class="text-[10px] text-blue-100">離職票・資格取得届・扶養控除申告書を1ミリの狂いもなく直印字！</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 背景グロー -->
+          <div class="absolute -top-6 -right-6 w-40 h-40 bg-amber-400/20 rounded-full blur-3xl -z-10"></div>
+          <div class="absolute -bottom-6 -left-6 w-40 h-40 bg-sky-400/20 rounded-full blur-3xl -z-10"></div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── 4. お悩み共感 ─── -->
+  <section id="problems" class="py-16 sm:py-20 bg-white border-b border-slate-200">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto mb-12">
+        <span class="text-rose-600 font-black text-xs tracking-wider uppercase bg-rose-50 px-3 py-1 rounded-full border border-rose-200">
+          現場のお悩み解決
+        </span>
+        <h2 class="text-2xl sm:text-3xl font-black text-slate-900 mt-3 tracking-tight">
+          中小企業・店舗の社長や総務が<br />
+          毎月頭を抱えている「3大ストレス」
+        </h2>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- 悩み1 -->
+        <div class="bg-slate-50 rounded-3xl p-6 border-2 border-slate-200/80 hover:border-blue-400 transition-all shadow-xs">
+          <div class="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center font-black text-xl mb-4">
+            1
+          </div>
+          <h3 class="text-base font-black text-slate-900 mb-2">
+            アプリを誰も入れてくれない…<br />シフト提出の催促電話で毎月消耗
+          </h3>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            「他社SaaSを導入したのに、アルバイトがアプリを入れてくれない」「ログインパスワードを忘れたと言われる」…結局LINEや紙でシフトを集め、店長が夜中に転記するハメに。
+          </p>
+          <div class="mt-4 pt-3 border-t border-slate-200 text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+            <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+            <span>公式LINE友だち追加だけで即日100%定着！</span>
+          </div>
+        </div>
+
+        <!-- 悩み2 -->
+        <div class="bg-slate-50 rounded-3xl p-6 border-2 border-slate-200/80 hover:border-blue-400 transition-all shadow-xs">
+          <div class="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center font-black text-xl mb-4">
+            2
+          </div>
+          <h3 class="text-base font-black text-slate-900 mb-2">
+            タイムカード集計と給与計算ミス…<br />毎月月末に残業が発生
+          </h3>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            打刻漏れを本人に確認し、エクセルに打ち直して深夜割増を手計算。振込前には銀行サイトに1人ずつ口座と金額を手入力し、万が一の振込ミスに怯える日々。
+          </p>
+          <div class="mt-4 pt-3 border-t border-slate-200 text-xs font-bold text-blue-700 flex items-center gap-1.5">
+            <i data-lucide="check-circle-2" class="w-4 h-4 text-blue-600 shrink-0"></i>
+            <span>打刻から給与一括計算＆全銀協CSV一発振込！</span>
+          </div>
+        </div>
+
+        <!-- 悩み3 -->
+        <div class="bg-slate-50 rounded-3xl p-6 border-2 border-slate-200/80 hover:border-blue-400 transition-all shadow-xs">
+          <div class="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center font-black text-xl mb-4">
+            3
+          </div>
+          <h3 class="text-base font-black text-slate-900 mb-2">
+            退職時の離職票手書き転記や、<br />有給「あと何日？」の質問攻め
+          </h3>
+          <p class="text-xs text-slate-600 leading-relaxed">
+            ハローワークの指定複写用紙に電卓で算定基礎日数を手書き計算…さらに社員から「有給あと何日残ってますか？」と聞かれるたびに台帳を探して総務の手が止まる。
+          </p>
+          <div class="mt-4 pt-3 border-t border-slate-200 text-xs font-bold text-amber-700 flex items-center gap-1.5">
+            <i data-lucide="check-circle-2" class="w-4 h-4 text-amber-600 shrink-0"></i>
+            <span>A4原本ジャスト印字 ＆ 有給スマホ自己確認！</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── 5. 7大機能一覧 ─── -->
+  <section id="features" class="py-16 sm:py-20 bg-slate-50 border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto mb-14">
+        <span class="text-blue-600 font-black text-xs tracking-wider uppercase bg-blue-50 px-3.5 py-1 rounded-full border border-blue-200 shadow-2xs">
+          充実の機能ラインナップ
+        </span>
+        <h2 class="text-2xl sm:text-4xl font-black text-slate-900 mt-3 tracking-tight">
+          中小企業に必要な労務実務を、これ1つで完全網羅
+        </h2>
+        <p class="text-xs sm:text-sm text-slate-600 mt-3 leading-relaxed">
+          大手なら3社分の個別契約（月額数万円）が必要な機能が、すべて1つのシステムに集約されています。
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+        
+        <!-- 機能1：公式LINE連携 -->
+        <div class="bg-white rounded-3xl p-6 sm:p-7 border-2 border-slate-200/90 hover:border-emerald-500 hover:shadow-xl transition-all duration-300 flex flex-col justify-between group shadow-xs">
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-4">
+              <span class="text-[11px] font-black px-2.5 py-1 rounded-full border bg-emerald-100 text-emerald-900 border-emerald-300">
+                ★ 現場定着率100%
+              </span>
+              <div class="w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 bg-emerald-100 text-[#06C755] group-hover:scale-110 transition-transform">
+                <i data-lucide="message-square" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="text-xs font-bold text-slate-400 mb-1">コミュニケーション・通知</div>
+            <h3 class="text-lg sm:text-xl font-black text-slate-900 mb-3 group-hover:text-emerald-600 transition-colors">
+              公式LINE完全連携（アプリ不要）
+            </h3>
+            <p class="text-xs text-slate-600 leading-relaxed mb-5">
+              スタッフはアプリ不要！店頭QRをLINEで友だち追加するだけで、シフト希望提出・確定シフト受信・Web給与明細の閲覧がすべてLINE上で完結します。
+            </p>
+            <div class="space-y-2 mb-6 pt-4 border-t border-slate-100 text-xs text-slate-700 font-bold">
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>LINE友だち追加だけで即日稼働（登録率100%）</span></div>
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>未提出スタッフへワンクリックでLINE一括催促</span></div>
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>給与確定と同時にスタッフのLINEへWeb明細を個別通知</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 機能2：官公庁A4原本印刷 -->
+        <div class="bg-white rounded-3xl p-6 sm:p-7 border-2 border-slate-200/90 hover:border-amber-500 hover:shadow-xl transition-all duration-300 flex flex-col justify-between group shadow-xs">
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-4">
+              <span class="text-[11px] font-black px-2.5 py-1 rounded-full border bg-amber-100 text-amber-900 border-amber-300">
+                ★ 業界唯一（神機能）
+              </span>
+              <div class="w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 bg-amber-100 text-amber-700 group-hover:scale-110 transition-transform">
+                <i data-lucide="file-check" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="text-xs font-bold text-slate-400 mb-1">行政手続き・公的帳票</div>
+            <h3 class="text-lg sm:text-xl font-black text-slate-900 mb-3 group-hover:text-amber-600 transition-colors">
+              ハローワーク・税務署 提出用A4原本印刷
+            </h3>
+            <p class="text-xs text-slate-600 leading-relaxed mb-5">
+              離職票や資格取得届、扶養控除申告書をハローワーク・税務署の公式様式に直接1ミリの狂いもなくジャスト座標印字。電卓の手計算と手書き転記がゼロに。
+            </p>
+            <div class="space-y-2 mb-6 pt-4 border-t border-slate-100 text-xs text-slate-700 font-bold">
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>雇用保険離職証明書（離職票-2）の基礎日数を自動計算</span></div>
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>資格取得・喪失届、年末調整扶養控除申告書に対応</span></div>
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>A4普通紙で印刷してそのまま役所窓口へ提出可能</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 機能3：給与一括計算＆振込CSV -->
+        <div class="bg-white rounded-3xl p-6 sm:p-7 border-2 border-slate-200/90 hover:border-blue-500 hover:shadow-xl transition-all duration-300 flex flex-col justify-between group shadow-xs">
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-4">
+              <span class="text-[11px] font-black px-2.5 py-1 rounded-full border bg-blue-100 text-blue-900 border-blue-300">
+                勤怠直結・ミスゼロ
+              </span>
+              <div class="w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 bg-blue-100 text-blue-700 group-hover:scale-110 transition-transform">
+                <i data-lucide="dollar-sign" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="text-xs font-bold text-slate-400 mb-1">給与計算・銀行振込</div>
+            <h3 class="text-lg sm:text-xl font-black text-slate-900 mb-3 group-hover:text-blue-600 transition-colors">
+              給与一括自動計算 ＆ 全銀協振込CSV
+            </h3>
+            <p class="text-xs text-slate-600 leading-relaxed mb-5">
+              タイムカード打刻からボタン1つで給与一括計算。40歳介護保険料の自動判定や最新料率同期、ネットバンキングで一括振込できる全銀協CSVを出力します。
+            </p>
+            <div class="space-y-2 mb-6 pt-4 border-t border-slate-100 text-xs text-slate-700 font-bold">
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>生年月日から「40歳介護保険料」天引きを自動判定</span></div>
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>全国47都道府県の最新健康保険・厚生年金料率に自動同期</span></div>
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>ネットバンキング（全銀協標準）一括振込CSV出力</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 機能4：勤怠打刻＆集計 -->
+        <div class="bg-white rounded-3xl p-6 sm:p-7 border-2 border-slate-200/90 hover:border-sky-500 hover:shadow-xl transition-all duration-300 flex flex-col justify-between group shadow-xs">
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-4">
+              <span class="text-[11px] font-black px-2.5 py-1 rounded-full border bg-sky-100 text-sky-900 border-sky-300">
+                現場目線・ミスゼロ
+              </span>
+              <div class="w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 bg-sky-100 text-sky-700 group-hover:scale-110 transition-transform">
+                <i data-lucide="clock" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="text-xs font-bold text-slate-400 mb-1">勤怠管理・タイムレコーダー</div>
+            <h3 class="text-lg sm:text-xl font-black text-slate-900 mb-3 group-hover:text-sky-600 transition-colors">
+              スマホ・PC打刻 ＆ リアルタイム自動集計
+            </h3>
+            <p class="text-xs text-slate-600 leading-relaxed mb-5">
+              現場スタッフは手元のスマホから1タップ打刻。GPS位置情報による不正打刻防止や、飲食店などの深夜労働・日跨ぎ勤務も自動判定してリアルタイム集計します。
+            </p>
+            <div class="space-y-2 mb-6 pt-4 border-t border-slate-100 text-xs text-slate-700 font-bold">
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>スマホ・タブレット・PC全対応の迷子ゼロUI</span></div>
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>GPS位置記録＆不正防止、24時以降の夜勤自動集計</span></div>
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>月末のタイムカード電卓集計作業が完全に消滅</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 機能5：シフト作成・回収 -->
+        <div class="bg-white rounded-3xl p-6 sm:p-7 border-2 border-slate-200/90 hover:border-purple-500 hover:shadow-xl transition-all duration-300 flex flex-col justify-between group shadow-xs">
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-4">
+              <span class="text-[11px] font-black px-2.5 py-1 rounded-full border bg-purple-100 text-purple-900 border-purple-300">
+                人手不足警告つき
+              </span>
+              <div class="w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 bg-purple-100 text-purple-700 group-hover:scale-110 transition-transform">
+                <i data-lucide="calendar" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="text-xs font-bold text-slate-400 mb-1">シフト管理・人員配置</div>
+            <h3 class="text-lg sm:text-xl font-black text-slate-900 mb-3 group-hover:text-purple-600 transition-colors">
+              シフト希望収集 ＆ カレンダー自動反映
+            </h3>
+            <p class="text-xs text-slate-600 leading-relaxed mb-5">
+              LINEから集まったスタッフの希望シフトがカレンダーに自動集約。時間帯ごとの必要人数に対する不足が一目でわかり、確定シフトはボタン1つで全員のLINEへ即時配信されます。
+            </p>
+            <div class="space-y-2 mb-6 pt-4 border-t border-slate-100 text-xs text-slate-700 font-bold">
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>希望シフトがカレンダーへ自動同期（転記作業ゼロ）</span></div>
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>時間帯・ポジションごとの人手不足アラート機能</span></div>
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>確定シフトをスタッフのLINEへ一括配信</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 機能6：有給休暇自動付与 -->
+        <div class="bg-white rounded-3xl p-6 sm:p-7 border-2 border-slate-200/90 hover:border-emerald-500 hover:shadow-xl transition-all duration-300 flex flex-col justify-between group shadow-xs">
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-4">
+              <span class="text-[11px] font-black px-2.5 py-1 rounded-full border bg-emerald-100 text-emerald-900 border-emerald-300">
+                労基法完全準拠
+              </span>
+              <div class="w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 bg-emerald-100 text-emerald-700 group-hover:scale-110 transition-transform">
+                <i data-lucide="calendar" class="w-5 h-5"></i>
+              </div>
+            </div>
+            <div class="text-xs font-bold text-slate-400 mb-1">有給・休暇管理</div>
+            <h3 class="text-lg sm:text-xl font-black text-slate-900 mb-3 group-hover:text-emerald-600 transition-colors">
+              有給の法定自動付与 ＆ 管理簿作成
+            </h3>
+            <p class="text-xs text-slate-600 leading-relaxed mb-5">
+              入社日からの勤続年数に応じた法定日数を自動付与。パートの比例付与にも完全対応し、法律で義務付けられた「年次有給休暇管理簿」も自動作成・保存されます。
+            </p>
+            <div class="space-y-2 mb-6 pt-4 border-t border-slate-100 text-xs text-slate-700 font-bold">
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>スマホで自分の有給残日数を自己確認（質問ゼロ）</span></div>
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>年5日取得義務アラートで労基署罰則（最大30万円）を防止</span></div>
+              <div class="flex items-center gap-2"><i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i><span>法定「年次有給休暇管理簿」の自動作成＆3年保存</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 全機能使い放題バナー -->
+      <div class="bg-gradient-to-r from-blue-900 to-indigo-900 text-white rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
+        <div class="text-center md:text-left">
+          <div class="inline-flex items-center gap-1.5 text-amber-300 font-black text-xs mb-1">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+            <span>全機能が使い放題・追加オプション課金なし</span>
+          </div>
+          <h4 class="text-xl sm:text-2xl font-black">
+            これら全機能がすべて、1人月額300円に含まれます
+          </h4>
+          <p class="text-xs sm:text-sm text-blue-200 mt-1">
+            大手のように「LINE連携は月額+1万円」「給与計算は別プラン」といった隠れコストは一切ありません。
+          </p>
+        </div>
+        <a
+          href="https://kintai-saas.vercel.app/?mode=signup"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="px-8 py-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm sm:text-base rounded-2xl shadow-lg shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all shrink-0 flex items-center gap-2 border border-white/20"
+        >
+          <span>14日間 無料で試してみる</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── 6. 他社徹底比較表 ─── -->
+  <section id="comparison" class="py-16 sm:py-20 bg-white border-b border-slate-200">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto mb-12">
+        <span class="text-sky-600 font-black text-xs tracking-wider uppercase bg-sky-50 px-3 py-1 rounded-full border border-sky-200">
+          他社との違い
+        </span>
+        <h2 class="text-2xl sm:text-3xl font-black text-slate-900 mt-3 tracking-tight">
+          大手SaaSバラバラ契約 vs みんなの らくまる労務
+        </h2>
+        <p class="text-xs sm:text-sm text-slate-600 mt-2">
+          他社ツールを何社も契約するのと比べ、コストも現場の手間も圧倒的に削減されます。
+        </p>
+      </div>
+
+      <div class="overflow-x-auto shadow-sm rounded-3xl border border-slate-200">
+        <table class="w-full text-left border-collapse text-xs sm:text-sm">
+          <thead>
+            <tr class="bg-slate-100 border-b border-slate-200">
+              <th class="p-4 sm:p-5 font-bold text-slate-700">比較項目</th>
+              <th class="p-4 sm:p-5 font-bold text-slate-500">
+                大手SaaSをバラバラに契約<br />
+                <span class="text-[10px] font-normal">（勤怠ソフト ＋ シフトソフト ＋ 給与ソフト）</span>
+              </th>
+              <th class="p-4 sm:p-5 font-black text-blue-700 bg-sky-50 border-l-2 border-r-2 border-sky-300">
+                🌈 みんなの らくまる労務<br />
+                <span class="text-[11px] font-normal text-slate-600">（本システム・これ1本で完結）</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 bg-white">
+            <tr>
+              <td class="p-4 sm:p-5 font-bold text-slate-800">1人あたりの月額利用料</td>
+              <td class="p-4 sm:p-5 text-rose-600 font-bold">1,300円 〜 2,000円 / 人</td>
+              <td class="p-4 sm:p-5 bg-sky-50/60 border-l-2 border-r-2 border-sky-300 text-blue-700 font-black text-base">
+                300 円 / 人（他社の約1/5！）
+              </td>
+            </tr>
+            <tr>
+              <td class="p-4 sm:p-5 font-bold text-slate-800">最低利用料金（下限縛り）</td>
+              <td class="p-4 sm:p-5 text-slate-500">月額 2万円〜3万円の最低料金あり</td>
+              <td class="p-4 sm:p-5 bg-sky-50/60 border-l-2 border-r-2 border-sky-300 font-bold text-slate-900">
+                完全なし（3名なら月900円）
+              </td>
+            </tr>
+            <tr>
+              <td class="p-4 sm:p-5 font-bold text-slate-800">スタッフのアプリ導入</td>
+              <td class="p-4 sm:p-5 text-rose-600 font-bold">専用アプリのインストール必須（嫌がられる）</td>
+              <td class="p-4 sm:p-5 bg-sky-50/60 border-l-2 border-r-2 border-sky-300 text-emerald-700 font-bold">
+                ◎ LINE友だち追加のみ（アプリ・パスワード不要）
+              </td>
+            </tr>
+            <tr>
+              <td class="p-4 sm:p-5 font-bold text-slate-800">
+                官公庁A4原本への直接座標印字<br />
+                <span class="text-[10px] font-normal text-slate-500">（離職票・雇用保険届出・扶養控除申告書）</span>
+              </td>
+              <td class="p-4 sm:p-5 text-slate-500">× 不可（CSV出力止まりで結局手書き）</td>
+              <td class="p-4 sm:p-5 bg-sky-50/60 border-l-2 border-r-2 border-sky-300 text-emerald-700 font-bold">
+                ◎ 完全対応（A4原本にそのまま印字・提出可）
+              </td>
+            </tr>
+            <tr>
+              <td class="p-4 sm:p-5 font-bold text-slate-800">データの手動転記（二重入力）</td>
+              <td class="p-4 sm:p-5 text-rose-600 font-bold">毎月発生（CSV出力・取り込みの手間）</td>
+              <td class="p-4 sm:p-5 bg-sky-50/60 border-l-2 border-r-2 border-sky-300 text-emerald-700 font-bold">
+                ◎ ゼロ（入社・打刻・シフト・給与が自動連携）
+              </td>
+            </tr>
+            <tr>
+              <td class="p-4 sm:p-5 font-bold text-slate-800">初期費用・契約期間縛り</td>
+              <td class="p-4 sm:p-5 text-slate-500">初期設定費 数万円〜 / 年間契約縛りあり</td>
+              <td class="p-4 sm:p-5 bg-sky-50/60 border-l-2 border-r-2 border-sky-300 font-bold text-slate-900">
+                初期費用0円 / いつでも解約可能
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── 7. リアルタイム料金シミュレーター ─── -->
+  <section id="pricing" class="py-16 sm:py-20 bg-slate-50 border-b border-slate-200">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-10">
+        <span class="text-emerald-600 font-black text-xs tracking-wider uppercase bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+          安心の明朗会計
+        </span>
+        <h2 class="text-2xl sm:text-3xl font-black text-slate-900 mt-3 tracking-tight">
+          うちの会社なら月いくら？<br />
+          料金 ＆ コスト削減シミュレーター
+        </h2>
+        <p class="text-xs sm:text-sm text-slate-600 mt-2">
+          スライダーを左右に動かして、自社のスタッフ数に合わせてみてください。
+        </p>
+      </div>
+
+      <div class="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xl">
+        <!-- スライダー -->
+        <div class="mb-8">
+          <div class="flex justify-between items-center mb-3">
+            <span class="text-xs sm:text-sm font-bold text-slate-700">従業員数（役員・正社員・アルバイト合計）</span>
+            <span class="text-3xl font-black text-blue-600"><span id="employee-count-display">10</span> <span class="text-sm font-normal text-slate-500">名</span></span>
+          </div>
+          <input
+            id="employee-slider"
+            type="range"
+            min="3"
+            max="60"
+            step="1"
+            value="10"
+            class="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+          >
+          <div class="flex justify-between text-xs text-slate-400 mt-2">
+            <span>3名（極小店舗）</span>
+            <span>15名</span>
+            <span>30名</span>
+            <span>60名</span>
+          </div>
+        </div>
+
+        <!-- 比較カード -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 text-center">
+            <div class="text-xs text-slate-500 font-bold mb-1">大手SaaSを3社契約した場合</div>
+            <div class="text-2xl font-black text-slate-700">
+              ¥ <span id="competitor-price-display">15,000</span> <span class="text-xs font-normal">/ 月</span>
+            </div>
+            <div class="text-[11px] text-slate-400 mt-1">（1人あたり1,500円換算）</div>
+          </div>
+
+          <div class="bg-sky-50 p-5 rounded-2xl border-2 border-blue-500 text-center shadow-md">
+            <div class="text-xs text-blue-700 font-bold mb-1">みんなの らくまる労務</div>
+            <div class="text-3xl font-black text-blue-700">
+              ¥ <span id="our-price-display">3,000</span> <span class="text-xs font-normal">/ 月</span>
+            </div>
+            <div class="text-[11px] text-emerald-600 font-bold mt-1">（1人300円・最低基本料なし！）</div>
+          </div>
+        </div>
+
+        <!-- 削減額ハイライト -->
+        <div class="p-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white text-center shadow-lg">
+          <div class="text-xs font-bold text-emerald-100 uppercase tracking-wider mb-1">
+            年間コスト削減見込み
+          </div>
+          <div class="text-3xl sm:text-4xl font-black tracking-tight">
+            年間 ¥ <span id="savings-display">144,000</span> のコスト削減！
+          </div>
+          <p class="text-xs text-emerald-100 mt-2">
+            ※さらに、毎月発生していた手書き転記やシフト催促の「人件費（数十時間）」も丸ごと浮きます。
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── 8. よくある質問（FAQ） ─── -->
+  <section id="faq" class="py-16 sm:py-20 bg-white border-b border-slate-200">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <span class="text-blue-600 font-black text-xs tracking-wider uppercase bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
+          疑問を解消
+        </span>
+        <h2 class="text-2xl sm:text-3xl font-black text-slate-900 mt-3 tracking-tight">
+          よくあるご質問
+        </h2>
+      </div>
+
+      <div class="space-y-4">
+        <!-- FAQ 1 -->
+        <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+          <button class="faq-toggle w-full p-5 text-left font-black text-sm sm:text-base text-slate-900 bg-white hover:bg-slate-50 flex items-center justify-between transition cursor-pointer">
+            <span>スタッフは本当にアプリを入れなくていいのですか？</span>
+            <i data-lucide="chevron-down" class="w-5 h-5 text-slate-400 faq-icon transition-transform"></i>
+          </button>
+          <div class="faq-content hidden p-5 pt-0 text-xs sm:text-sm text-slate-600 bg-white border-t border-slate-100 leading-relaxed">
+            はい、アプリのインストールは一切不要です！スタッフは店舗に掲示されたQRコードをLINEで友だち追加するだけで、その日からシフト希望の提出や給与明細の受け取りが可能です。パスワード忘れ等のトラブルもゼロになります。
+          </div>
+        </div>
+
+        <!-- FAQ 2 -->
+        <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+          <button class="faq-toggle w-full p-5 text-left font-black text-sm sm:text-base text-slate-900 bg-white hover:bg-slate-50 flex items-center justify-between transition cursor-pointer">
+            <span>3名〜5名などの小さな店舗でも利用できますか？</span>
+            <i data-lucide="chevron-down" class="w-5 h-5 text-slate-400 faq-icon transition-transform"></i>
+          </button>
+          <div class="faq-content hidden p-5 pt-0 text-xs sm:text-sm text-slate-600 bg-white border-t border-slate-100 leading-relaxed">
+            もちろん大歓迎です！大手SaaSのような「月額最低2万円」といった下限縛りは一切ございません。3名様なら月額900円、5名様なら月額1,500円で全機能をお使いいただけます。
+          </div>
+        </div>
+
+        <!-- FAQ 3 -->
+        <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+          <button class="faq-toggle w-full p-5 text-left font-black text-sm sm:text-base text-slate-900 bg-white hover:bg-slate-50 flex items-center justify-between transition cursor-pointer">
+            <span>無料体験期間中に料金は発生しますか？</span>
+            <i data-lucide="chevron-down" class="w-5 h-5 text-slate-400 faq-icon transition-transform"></i>
+          </button>
+          <div class="faq-content hidden p-5 pt-0 text-xs sm:text-sm text-slate-600 bg-white border-t border-slate-100 leading-relaxed">
+            14日間の無料トライアル期間中は、クレジットカードの登録も不要で完全無料です。期間終了後に自動で課金されることもございませんので、安心してお試しください。
+          </div>
+        </div>
+
+        <!-- FAQ 4 -->
+        <div class="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+          <button class="faq-toggle w-full p-5 text-left font-black text-sm sm:text-base text-slate-900 bg-white hover:bg-slate-50 flex items-center justify-between transition cursor-pointer">
+            <span>ハローワークや税務署の書類は本当にそのまま提出できるのですか？</span>
+            <i data-lucide="chevron-down" class="w-5 h-5 text-slate-400 faq-icon transition-transform"></i>
+          </button>
+          <div class="faq-content hidden p-5 pt-0 text-xs sm:text-sm text-slate-600 bg-white border-t border-slate-100 leading-relaxed">
+            はい！本システム独自の座標印字エンジンにより、雇用保険被保険者離職証明書（離職票-2）や資格取得届、扶養控除申告書などを、役所の公式様式そのままA4普通紙にピタリと印字します。手書き転記なしでそのまま窓口へ提出いただけます。
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── 9. フッター ＆ 最終CTA ─── -->
+  <footer class="bg-slate-900 text-white pt-16 pb-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-8 sm:p-12 text-center text-white mb-16 shadow-2xl relative overflow-hidden">
+        <h2 class="text-2xl sm:text-4xl font-black mb-4">
+          今すぐ、14日間の無料体験を始めましょう
+        </h2>
+        <p class="text-xs sm:text-base text-blue-100 max-w-xl mx-auto mb-8 leading-relaxed">
+          初期費用0円・クレジットカード登録不要・自動課金なし。<br />
+          店舗・現場のストレスがゼロになる感動を、今日から体験してください。
+        </p>
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a
+            href="https://kintai-saas.vercel.app/?mode=signup"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="w-full sm:w-auto px-8 py-4 bg-white hover:bg-slate-100 text-blue-700 font-black text-base rounded-2xl shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2"
+          >
+            <span>14日間 無料で試してみる</span>
+            <i data-lucide="arrow-right" class="w-5 h-5"></i>
+          </a>
+          <a
+            href="https://kap-cocotte.com/#contact"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="w-full sm:w-auto px-6 py-4 bg-blue-800/80 hover:bg-blue-800 text-white font-bold text-sm rounded-2xl border border-blue-400 transition-all flex items-center justify-center gap-2"
+          >
+            <span>導入のご相談・お問い合わせ</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row items-center justify-between border-t border-slate-800 pt-8 text-xs text-slate-400 gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-xs text-white">
+            らく
+          </div>
+          <div>
+            <div class="font-bold text-slate-200">みんなの らくまる労務</div>
+            <div class="text-[10px] text-slate-500">運営・開発：株式会社KAP / 株式会社cocotte</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-6">
+          <a href="https://kap-cocotte.com/" class="hover:text-white transition">運営会社</a>
+          <a href="https://kap-cocotte.com/#contact" class="hover:text-white transition">お問い合わせ</a>
+        </div>
+        <div class="text-[11px] text-slate-500">
+          &copy; 2026 みんなの らくまる労務 All Rights Reserved.
+        </div>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<!-- 料金シミュレーター ＆ FAQ アコーディオン スクリプト -->
+<script>
+  // 1. Lucide Icons の初期化
+  lucide.createIcons();
+
+  // 2. 料金シミュレーター
+  const slider = document.getElementById('employee-slider');
+  const countDisplay = document.getElementById('employee-count-display');
+  const competitorDisplay = document.getElementById('competitor-price-display');
+  const ourDisplay = document.getElementById('our-price-display');
+  const savingsDisplay = document.getElementById('savings-display');
+
+  function updatePricing() {
+    const count = parseInt(slider.value, 10);
+    const ourPrice = count * 300;
+    const competitorPrice = count * 1500;
+    const savings = (competitorPrice - ourPrice) * 12;
+
+    countDisplay.textContent = count;
+    ourDisplay.textContent = ourPrice.toLocaleString();
+    competitorDisplay.textContent = competitorPrice.toLocaleString();
+    savingsDisplay.textContent = savings.toLocaleString();
+  }
+
+  slider.addEventListener('input', updatePricing);
+  updatePricing();
+
+  // 3. FAQ アコーディオン
+  document.querySelectorAll('.faq-toggle').forEach(button => {
+    button.addEventListener('click', () => {
+      const content = button.nextElementSibling;
+      const icon = button.querySelector('.faq-icon');
+      const isHidden = content.classList.contains('hidden');
+
+      // 全て閉じる
+      document.querySelectorAll('.faq-content').forEach(c => c.classList.add('hidden'));
+      document.querySelectorAll('.faq-icon').forEach(i => i.classList.remove('rotate-180'));
+
+      // 押されたものを開く
+      if (isHidden) {
+        content.classList.remove('hidden');
+        icon.classList.add('rotate-180');
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
