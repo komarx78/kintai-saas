@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, Mail, Lock, UserPlus, ArrowLeft, ArrowRight, CheckCircle2, KeyRound, RefreshCw, Send, AlertCircle } from 'lucide-react';
+import { LogIn, Mail, Lock, UserPlus, ArrowLeft, CheckCircle2, KeyRound, RefreshCw, Send, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { purgeTenantLocalStorageCache } from '../lib/tenantCache';
 
@@ -305,23 +305,11 @@ const Login = () => {
           {mode === 'resend_confirm' && '確認メールの再送'}
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
-          {mode === 'signup' && (signupSuccess ? 'メール内のリンクをクリックして本登録を完了してください' : '新しくアカウントを登録します')}
+          {mode === 'signup' && (signupSuccess ? 'メール内のリンクをクリックして本登録を完了してください' : '新しくアカウントを登録します（1ヶ月無料体験）')}
           {mode === 'login' && '勤怠・シフト・給与・労務書類 完全統合クラウド'}
           {mode === 'forgot' && 'ご登録済みのメールアドレスに再設定用リンクをお送りします'}
           {mode === 'resend_confirm' && 'アカウント登録時のメールアドレスに確認メールを再送します'}
         </p>
-
-        {/* 🌟 LPへの誘導リンク */}
-        <div className="mt-3 text-center">
-          <button
-            type="button"
-            onClick={() => navigate('/lp')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 text-blue-700 font-bold text-xs rounded-full border border-blue-200/80 transition-all shadow-sm hover:scale-105 active:scale-95"
-          >
-            <span>✨ 1人300円！サービス詳細・5大機能LPを見る</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
