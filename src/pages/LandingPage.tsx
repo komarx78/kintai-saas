@@ -72,7 +72,7 @@ export const LandingPage: React.FC = () => {
               onClick={() => navigate('/?mode=signup')}
               className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-lg shadow-orange-500/25 hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5"
             >
-              <span>14日間 無料体験</span>
+              <span>1ヶ月 無料体験</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -112,7 +112,7 @@ export const LandingPage: React.FC = () => {
                   onClick={() => navigate('/?mode=signup')}
                   className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-lg rounded-2xl shadow-xl shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 border-2 border-white"
                 >
-                  <span>14日間 無料で試してみる</span>
+                  <span>1ヶ月 無料で試してみる</span>
                   <ArrowRight className="w-5 h-5" />
                 </button>
                 <a
@@ -470,7 +470,7 @@ export const LandingPage: React.FC = () => {
               onClick={() => navigate('/?mode=signup')}
               className="px-8 py-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-sm sm:text-base rounded-2xl shadow-lg shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all shrink-0 flex items-center gap-2 cursor-pointer border border-white/20"
             >
-              <span>14日間 無料で試してみる</span>
+              <span>1ヶ月 無料で試してみる</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -797,7 +797,7 @@ export const LandingPage: React.FC = () => {
               },
               {
                 q: '無料トライアル期間が終わったら勝手に課金されたりしませんか？',
-                a: '自動的に課金されることは絶対にありません。クレジットカードの事前登録も不要です。14日間じっくりとお試しいただき、本当に気に入って継続したい場合のみご契約手続きを行っていただきます。'
+                a: '自動的に課金されることは絶対にありません。クレジットカードの事前登録も不要です。たっぷり1ヶ月間（30日間）じっくりとお試しいただき、本当に気に入って継続したい場合のみご契約手続きを行っていただきます。'
               },
               {
                 q: '社員やパートから「有給あと何日残ってますか？」と毎月聞かれるのですが、各自で確認できますか？',
@@ -846,7 +846,7 @@ export const LandingPage: React.FC = () => {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-100 text-amber-900 text-xs font-bold mb-4 shadow-sm">
             <Sparkles className="w-4 h-4 text-amber-600" />
-            <span>まずは14日間、完全無料で使いやすさをお確かめください</span>
+            <span>まずは1ヶ月間（30日間）、完全無料で使いやすさをお確かめください</span>
           </div>
 
           <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight leading-snug mb-4">
@@ -864,7 +864,7 @@ export const LandingPage: React.FC = () => {
               onClick={() => navigate('/?mode=signup')}
               className="w-full sm:w-auto px-10 py-4.5 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xl rounded-2xl shadow-xl shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2 border-2 border-white"
             >
-              <span>14日間 無料体験を始める</span>
+              <span>1ヶ月 無料体験を始める</span>
               <ArrowRight className="w-5 h-5" />
             </button>
           </div>
