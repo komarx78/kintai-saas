@@ -7303,89 +7303,138 @@ export default function CompanySettingsDashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                  {/* 現在の契約モード */}
-                  <div className={`p-4 rounded-2xl border transition-all ${
-                    lineConfig.mode === 'rakumaru_official'
-                      ? 'bg-emerald-50/60 border-emerald-300 ring-2 ring-emerald-200'
-                      : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-500">選択中プラン</span>
-                      {lineConfig.mode === 'rakumaru_official' && (
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded bg-emerald-600 text-white">
-                          現在適用中
+                  {/* ① 公式代行配信カード */}
+                  <div 
+                    onClick={() => setShowLineConfigModal(true)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99] flex flex-col justify-between ${
+                      lineConfig.mode === 'rakumaru_official'
+                        ? 'bg-emerald-50/70 border-emerald-400 ring-2 ring-emerald-300 shadow-xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-500">選択中プラン</span>
+                        {lineConfig.mode === 'rakumaru_official' ? (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded bg-emerald-600 text-white shadow-xs">
+                            現在適用中
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                            クリックで選択
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
+                        <span>🟢</span>
+                        <span>公式代行配信</span>
+                      </div>
+                      <div className="text-xs font-bold text-emerald-700 mt-1">
+                        月額 ¥3,000 / 社（税込）
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                        「みんなのらくまる労務」公式アカウントから代行通知。LINEの審査や設定が一切不要で今すぐ使えます。
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      {/* 🌟 接続中公式アカウント情報（大元SSOT） */}
+                      <div className="pt-2.5 border-t border-emerald-200/80 flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                          {RAKUMARU_OFFICIAL_LINE_CONSTANTS.accountName}
                         </span>
-                      )}
+                        <span className="font-mono font-bold text-emerald-800 bg-emerald-100/90 px-1.5 py-0.5 rounded text-[10px] border border-emerald-300">
+                          {RAKUMARU_OFFICIAL_LINE_CONSTANTS.basicId}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-center">
+                        <span className="text-[10px] font-bold text-emerald-700 hover:underline">
+                          ⚙️ クリックして詳細設定を開く
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
-                      <span>🟢</span>
-                      <span>公式代行配信</span>
+                  </div>
+
+                  {/* ② 自社アカウント運用カード */}
+                  <div 
+                    onClick={() => setShowLineConfigModal(true)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99] flex flex-col justify-between ${
+                      lineConfig.mode === 'own_official'
+                        ? 'bg-blue-50/70 border-blue-400 ring-2 ring-blue-300 shadow-xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-500">自社アカウント運用</span>
+                        {lineConfig.mode === 'own_official' ? (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded bg-blue-600 text-white shadow-xs">
+                            現在適用中
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                            クリックで選択
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
+                        <span>🔵</span>
+                        <span>自社公式LINE</span>
+                      </div>
+                      <div className="text-xs font-bold text-blue-700 mt-1">
+                        システム月額 ¥0（LINE公式従量のみ）
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                        自社のLINE公式アカウント（Messaging API）のトークンを設定し、貴社ブランド名義で通知します。
+                      </div>
                     </div>
-                    <div className="text-xs font-bold text-emerald-700 mt-1">
-                      月額 ¥3,000 / 社（税込）
-                    </div>
-                    <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-                      「みんなのらくまる労務」公式アカウントから代行通知。LINEの審査や設定が一切不要で今すぐ使えます。
-                    </div>
-                    {/* 🌟 接続中公式アカウント情報（大元SSOT） */}
-                    <div className="mt-3 pt-2.5 border-t border-emerald-200/80 flex items-center justify-between text-[11px]">
-                      <span className="font-bold text-emerald-900 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        {RAKUMARU_OFFICIAL_LINE_CONSTANTS.accountName}
-                      </span>
-                      <span className="font-mono font-bold text-emerald-800 bg-emerald-100/90 px-1.5 py-0.5 rounded text-[10px] border border-emerald-300">
-                        {RAKUMARU_OFFICIAL_LINE_CONSTANTS.basicId}
+
+                    <div className="mt-4 pt-2.5 border-t border-slate-100 text-center">
+                      <span className="text-[10px] font-bold text-blue-700 hover:underline">
+                        ⚙️ クリックして自社LINEを設定
                       </span>
                     </div>
                   </div>
 
-                  <div className={`p-4 rounded-2xl border transition-all ${
-                    lineConfig.mode === 'own_official'
-                      ? 'bg-blue-50/60 border-blue-300 ring-2 ring-blue-200'
-                      : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-500">自社アカウント運用</span>
-                      {lineConfig.mode === 'own_official' && (
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded bg-blue-600 text-white">
-                          現在適用中
-                        </span>
-                      )}
+                  {/* ③ LINE通知なしカード */}
+                  <div 
+                    onClick={() => setShowLineConfigModal(true)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99] flex flex-col justify-between ${
+                      lineConfig.mode === 'none'
+                        ? 'bg-amber-50/70 border-amber-400 ring-2 ring-amber-300 shadow-xs'
+                        : 'bg-white hover:bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-500">LINE通知なし</span>
+                        {lineConfig.mode === 'none' ? (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded bg-slate-700 text-white shadow-xs">
+                            現在適用中
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                            クリックで選択
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
+                        <span>⚪</span>
+                        <span>利用しない</span>
+                      </div>
+                      <div className="text-xs font-bold text-slate-600 mt-1">
+                        オプション追加料金 ¥0
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                        LINE通知は行わず、メール通知やスタッフのWebマイページでのみシフト・明細を確認します。
+                      </div>
                     </div>
-                    <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
-                      <span>🔵</span>
-                      <span>自社公式LINE</span>
-                    </div>
-                    <div className="text-xs font-bold text-blue-700 mt-1">
-                      システム月額 ¥0（LINE公式従量のみ）
-                    </div>
-                    <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-                      自社のLINE公式アカウント（Messaging API）のトークンを設定し、貴社ブランド名義で通知します。
-                    </div>
-                  </div>
 
-                  <div className={`p-4 rounded-2xl border transition-all ${
-                    lineConfig.mode === 'none'
-                      ? 'bg-amber-50/60 border-amber-300 ring-2 ring-amber-200'
-                      : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-500">LINE通知なし</span>
-                      {lineConfig.mode === 'none' && (
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded bg-slate-600 text-white">
-                          現在適用中
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
-                      <span>⚪</span>
-                      <span>利用しない</span>
-                    </div>
-                    <div className="text-xs font-bold text-slate-600 mt-1">
-                      オプション追加料金 ¥0
-                    </div>
-                    <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-                      LINE通知は行わず、メール通知やスタッフのWebマイページでのみシフト・明細を確認します。
+                    <div className="mt-4 pt-2.5 border-t border-slate-100 text-center">
+                      <span className="text-[10px] font-bold text-slate-600 hover:underline">
+                        ⚙️ クリックして「利用しない」に変更
+                      </span>
                     </div>
                   </div>
                 </div>
