@@ -3566,8 +3566,8 @@ export default function OnboardingAdminDashboard() {
                       </th>
                       <th className="py-3 px-3">手続き進捗（ステップ）</th>
                       <th className="py-3 px-3">給与 / 口座・通勤費</th>
-                      <th className="py-3 px-3 text-center">労務書面証憑</th>
-                      <th className="py-3 px-4 text-center">操作</th>
+                      <th className="py-3 px-3 text-center min-w-[110px]">書面 / 案内</th>
+                      <th className="py-3 px-3 text-center">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
@@ -3835,27 +3835,26 @@ export default function OnboardingAdminDashboard() {
                             </div>
                           </td>
 
-                          {/* 📁 労務書面キャビネット ボタン */}
-                          <td className="py-3.5 px-3 text-center">
-                            <button
-                              onClick={() => {
-                                const fullEmp = resolveEmployeeFullData(emp);
-                                setCabinetModal({
-                                  isOpen: true,
-                                  employee: fullEmp,
-                                  activeDoc: 'contract'
-                                });
-                              }}
-                              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-2.5 py-1.5 rounded-xl border border-indigo-200 transition flex items-center gap-1 mx-auto cursor-pointer"
-                              title="労働条件通知書・通勤届・口座届・扶養控除申告書をまとめて閲覧"
-                            >
-                              <FolderOpen className="w-3.5 h-3.5" />
-                              書面・証憑
-                            </button>
-                          </td>
+                          {/* 📁 書面証憑 ＆ 🔑 ログイン案内 縦型統合列 */}
+                          <td className="py-2.5 px-3 text-center align-middle">
+                            <div className="flex flex-col gap-1.5 items-center justify-center w-full min-w-[105px]">
+                              {/* 📁 労務書面キャビネット ボタン */}
+                              <button
+                                onClick={() => {
+                                  const fullEmp = resolveEmployeeFullData(emp);
+                                  setCabinetModal({
+                                    isOpen: true,
+                                    employee: fullEmp,
+                                    activeDoc: 'contract'
+                                  });
+                                }}
+                                className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] px-2.5 py-1.5 rounded-lg border border-indigo-200 transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs hover:shadow-xs active:scale-98"
+                                title="労働条件通知書・通勤届・口座届・扶養控除申告書をまとめて閲覧"
+                              >
+                                <FolderOpen className="w-3.5 h-3.5 shrink-0 text-indigo-600" />
+                                <span className="whitespace-nowrap">書面・証憑</span>
+                              </button>
 
-                          <td className="py-3.5 px-4 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
                               {/* 🔑 ログインアカウント発行・初期パスワード＆LINE案内ボタン */}
                               <button
                                 onClick={() => {
@@ -3872,12 +3871,17 @@ export default function OnboardingAdminDashboard() {
                                     }
                                   });
                                 }}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs px-2.5 py-1.5 rounded-lg shadow-xs transition flex items-center gap-1 cursor-pointer shrink-0"
+                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-2.5 py-1.5 rounded-lg shadow-2xs transition flex items-center justify-center gap-1 cursor-pointer hover:shadow-xs active:scale-98"
                                 title="この従業員のログインアカウント・初期パスワードを発行し、LINE用案内文をコピーします"
                               >
-                                <KeyRound className="w-3.5 h-3.5 text-cyan-200" />
-                                <span>🔑 ログイン案内</span>
+                                <KeyRound className="w-3.5 h-3.5 shrink-0 text-cyan-200" />
+                                <span className="whitespace-nowrap">ログイン案内</span>
                               </button>
+                            </div>
+                          </td>
+
+                          <td className="py-3.5 px-3 text-center align-middle">
+                            <div className="flex items-center justify-center gap-1.5">
 
                               <button
                                 onClick={() => {
