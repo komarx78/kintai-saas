@@ -3615,15 +3615,11 @@ export default function OnboardingAdminDashboard() {
                 <table className="w-full text-left border-collapse min-w-[1150px]">
                   <thead>
                     <tr className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                      <th className="py-3 px-4 min-w-[180px]">氏名 / 所属</th>
-                      <th className="py-3 px-3 min-w-[145px] whitespace-nowrap">雇用形態 / 就業時間</th>
-                      <th className="py-3 px-3 min-w-[190px] bg-emerald-50/70 text-emerald-950 border-x border-emerald-100">
-                        📱 公式LINE連携（ID・登録名）
-                      </th>
-                      <th className="py-3 px-3">手続き進捗（ステップ）</th>
-                      <th className="py-3 px-3">給与 / 口座・通勤費</th>
-                      <th className="py-3 px-3 text-center min-w-[110px]">書面 / 案内</th>
-                      <th className="py-3 px-3 text-center">操作</th>
+                      <th className="py-3 px-4 min-w-[230px]">従業員（氏名・所属・就業時間）</th>
+                      <th className="py-3 px-3 min-w-[190px]">手続き進捗（ステップ）</th>
+                      <th className="py-3 px-3 min-w-[170px]">給与 / 口座・通勤費</th>
+                      <th className="py-3 px-3 text-center min-w-[130px]">書類 / 案内（LINE）</th>
+                      <th className="py-3 px-3 text-center min-w-[100px]">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-xs">
@@ -3636,32 +3632,55 @@ export default function OnboardingAdminDashboard() {
 
                       return (
                         <tr key={emp.user_id} className={`hover:bg-slate-50/80 transition ${isRetired ? 'bg-slate-50/50 opacity-75' : ''}`}>
-                          {/* 1. 氏名 / 所属 */}
-                          <td className="py-3.5 px-4">
-                            <div className="flex items-center gap-2.5">
-                              <div className={`w-8 h-8 rounded-full font-bold flex items-center justify-center text-xs ${
-                                isRetired ? 'bg-slate-200 text-slate-600' : 'bg-blue-50 text-blue-700'
+                          {/* 1. 従業員（氏名・雇用形態・所属・就業時間） */}
+                          <td className="py-3.5 px-4 min-w-[240px]">
+                            <div className="flex items-start gap-3">
+                              <div className={`w-9 h-9 rounded-full font-bold flex items-center justify-center text-xs shrink-0 mt-0.5 ${
+                                isRetired ? 'bg-slate-200 text-slate-600' : 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-xs'
                               }`}>
                                 {emp.name.substring(0, 1)}
                               </div>
-                              <div>
-                                <div className="font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
-                                  <span>{emp.name}</span>
+                              <div className="space-y-1 min-w-0 flex-1">
+                                {/* 1行目: 氏名 + かな + 雇用形態バッジ + 退職バッジ */}
+                                <div className="font-bold text-slate-900 flex items-center gap-2 flex-wrap">
+                                  <span className="text-[13px]">{emp.name}</span>
                                   {emp.name_kana && (
-                                    <span className="text-[10px] text-slate-500 font-normal">
+                                    <span className="text-[10px] text-slate-400 font-normal">
                                       （{emp.name_kana}）
                                     </span>
                                   )}
-                                  {isRetired && <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-bold">退職</span>}
+                                  <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.2 rounded border whitespace-nowrap shadow-2xs ${
+                                    isHourly 
+                                      ? 'bg-amber-50 text-amber-800 border-amber-200' 
+                                      : 'bg-blue-50 text-blue-800 border-blue-200'
+                                  }`}>
+                                    {isHourly ? 'パート・バイト' : '正社員'}
+                                  </span>
+                                  {isRetired && (
+                                    <span className="text-[9px] bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded font-bold">
+                                      退職
+                                    </span>
+                                  )}
                                 </div>
-                                <div className="text-[10px] text-slate-400 flex items-center gap-1.5 flex-wrap mt-0.5">
-                                  <span className="text-slate-600 font-medium">{emp.department || '未配属'}{emp.position_name ? ` (${emp.position_name})` : ''}</span>
-                                  <span>•</span>
-                                  <span>{emp.join_date}入社</span>
+
+                                {/* 2行目: 所属役職 + 勤務時間バッジ */}
+                                <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                                  <span className="text-slate-700 font-semibold">
+                                    {emp.department || '未配属'}{emp.position_name ? ` (${emp.position_name})` : ''}
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-indigo-700 font-semibold bg-indigo-50/70 px-1.5 py-0.2 rounded border border-indigo-100/60 whitespace-nowrap">
+                                    <Clock className="w-2.5 h-2.5 text-indigo-500 shrink-0" />
+                                    <span>{emp.start_time || '09:00'}〜{emp.end_time || '18:00'}</span>
+                                  </span>
+                                </div>
+
+                                {/* 3行目: 入社日 + 生年月日 */}
+                                <div className="text-[10px] text-slate-400 flex items-center gap-1.5 flex-wrap">
+                                  <span>{emp.join_date} 入社</span>
                                   {emp.birth_date && (
                                     <>
                                       <span>•</span>
-                                      <span className="text-indigo-600 font-medium">🎂 {emp.birth_date}生</span>
+                                      <span className="text-slate-500">🎂 {emp.birth_date}生</span>
                                     </>
                                   )}
                                 </div>
@@ -3669,127 +3688,11 @@ export default function OnboardingAdminDashboard() {
                             </div>
                           </td>
 
-                          {/* 2. 雇用形態 / 就業時間 */}
-                          <td className="py-3.5 px-3 min-w-[145px] whitespace-nowrap">
-                            <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md border whitespace-nowrap shadow-2xs ${
-                              isHourly ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-blue-50 text-blue-800 border-blue-200'
-                            }`}>
-                              {isHourly ? 'パート・アルバイト' : '正社員（無期）'}
-                            </span>
-                            <div className="text-[10px] text-slate-500 font-bold mt-1.5 flex items-center gap-1 whitespace-nowrap">
-                              <Clock className="w-3 h-3 text-indigo-500 shrink-0" />
-                              <span>{emp.start_time || '09:00'} 〜 {emp.end_time || '18:00'}</span>
-                            </div>
-                          </td>
-
-                          {/* 3. 📱 公式LINE連携（ID・登録名・10秒案内）★独立専用列 */}
-                          <td className="py-3.5 px-3 bg-emerald-50/20 border-x border-emerald-100/60">
-                            {dbLineLinkDetails[emp.user_id]?.isLinked ? (
-                              <div className="bg-white border border-emerald-200 rounded-xl p-2 space-y-1 shadow-2xs">
-                                <div className="flex items-center justify-between">
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-600 text-white shadow-xs">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-                                    🟢 連携済
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setLineLinkModalState({
-                                      isOpen: true,
-                                      userId: emp.user_id,
-                                      userName: emp.name
-                                    })}
-                                    className="text-[10px] text-emerald-800 hover:text-emerald-950 font-bold underline cursor-pointer"
-                                    title="LINE連携情報・解除"
-                                  >
-                                    詳細・解除
-                                  </button>
-                                </div>
-
-                                {/* スタッフのLINE登録名 */}
-                                <div className="text-[11px] font-bold text-slate-800 flex items-center gap-1 truncate" title={`LINE登録名: ${dbLineLinkDetails[emp.user_id]?.lineDisplayName || emp.name}`}>
-                                  <span className="text-[10px] text-slate-400 font-normal">LINE名:</span>
-                                  <span className="truncate">{dbLineLinkDetails[emp.user_id]?.lineDisplayName || emp.name}</span>
-                                </div>
-
-                                {/* スタッフのLINE User ID（U...） */}
-                                {dbLineLinkDetails[emp.user_id]?.lineUserId && (
-                                  <div className="flex items-center justify-between text-[10px] font-mono bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200 text-slate-600">
-                                    <span className="text-[9px] text-slate-400">ID:</span>
-                                    <span className="truncate max-w-[85px]" title={dbLineLinkDetails[emp.user_id].lineUserId}>
-                                      {dbLineLinkDetails[emp.user_id].lineUserId}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (dbLineLinkDetails[emp.user_id]?.lineUserId) {
-                                          navigator.clipboard.writeText(dbLineLinkDetails[emp.user_id].lineUserId || '');
-                                          setLineToast(`📋 ${emp.name} 様のLINE IDをコピーしました`);
-                                          setTimeout(() => setLineToast(null), 3000);
-                                        }
-                                      }}
-                                      className="text-slate-400 hover:text-indigo-600 ml-1 cursor-pointer"
-                                      title="LINE User IDをクリップボードにコピー"
-                                    >
-                                      <Copy className="w-2.5 h-2.5" />
-                                    </button>
-                                  </div>
-                                )}
-
-                                {/* 💬 ログイン案内 LINE直接送信ボタン */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleDirectStaffLineAction(emp)}
-                                  disabled={isSendingDirectLine === emp.user_id}
-                                  className="w-full mt-1 text-[10px] font-black py-1 px-1.5 rounded-lg bg-[#06C755] hover:bg-[#05b34c] text-white flex items-center justify-center gap-1 shadow-2xs transition cursor-pointer active:scale-98 disabled:opacity-50"
-                                  title="公式LINEへログインアカウント案内を直接プッシュ送信します"
-                                >
-                                  {isSendingDirectLine === emp.user_id ? (
-                                    <div className="w-2.5 h-2.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                  ) : (
-                                    <MessageSquare className="w-2.5 h-2.5" />
-                                  )}
-                                  <span>{isSendingDirectLine === emp.user_id ? '送信中...' : '💬 LINEで案内送信'}</span>
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="bg-amber-50/50 border border-amber-200/80 rounded-xl p-2 space-y-1.5 shadow-2xs">
-                                <div className="flex items-center justify-between">
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                    📲 未連携
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setLineLinkModalState({
-                                      isOpen: true,
-                                      userId: emp.user_id,
-                                      userName: emp.name
-                                    })}
-                                    className="text-[10px] text-amber-800 hover:text-amber-950 font-bold underline cursor-pointer"
-                                    title="QRコード・PINコード表示"
-                                  >
-                                    QR/PIN
-                                  </button>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleDirectStaffLineAction(emp)}
-                                  className="w-full text-[10px] font-black py-1.5 px-2 rounded-lg bg-[#06C755] hover:bg-[#05b34c] text-white flex items-center justify-center gap-1 shadow-2xs transition cursor-pointer active:scale-98"
-                                  title="10秒LINE連携案内文を自動コピーし、QRコード画面を開きます"
-                                >
-                                  <MessageSquare className="w-2.5 h-2.5" />
-                                  <span>💬 LINE連携案内</span>
-                                </button>
-                              </div>
-                            )}
-                          </td>
-
-                          {/* 🚶 手続き進捗ステップ ＆ 順次進行ボタン */}
-                          <td className="py-3.5 px-3">
-                            <div className="space-y-1.5 min-w-[200px]">
-                              <div className="flex items-center justify-between">
-                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${
+                          {/* 2. 手続き進捗（ステップ） */}
+                          <td className="py-3.5 px-3 min-w-[190px]">
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between gap-1 flex-wrap">
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border whitespace-nowrap shadow-2xs ${
                                   isCompleted
                                     ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
                                     : 'bg-indigo-50 text-indigo-700 border-indigo-200'
@@ -3797,12 +3700,12 @@ export default function OnboardingAdminDashboard() {
                                   Step {currentStepNum}/{workflowSteps.length}: {currentStepObj?.name || '手続き中'}
                                 </span>
                                 {!isCompleted && (
-                                  <span className="text-[9px] text-slate-600 font-bold bg-slate-100 px-1.5 py-0.5 rounded">
+                                  <span className="text-[9px] text-slate-500 font-medium bg-slate-100 px-1.5 py-0.5 rounded whitespace-nowrap">
                                     承認: {
                                       currentStepObj?.approver_type === 'department_head'
                                         ? (() => {
                                             const dObj = departments.find(d => d.name === emp.department);
-                                            return dObj?.manager_user_name ? `${emp.department || '配属先'}所属長 (${dObj.manager_user_name})` : `${emp.department || '配属先'}所属長`;
+                                            return dObj?.manager_user_name ? `${emp.department || '配属先'}長 (${dObj.manager_user_name})` : `${emp.department || '配属先'}長`;
                                           })()
                                         : (currentStepObj?.approver_name || '管理者全員')
                                     }
@@ -3811,7 +3714,7 @@ export default function OnboardingAdminDashboard() {
                               </div>
 
                               {!isRetired && (
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1.5">
                                   {currentStepNum > 1 && (
                                     <button
                                       onClick={() => handleRollbackStep(emp)}
@@ -3828,15 +3731,8 @@ export default function OnboardingAdminDashboard() {
                                     <button
                                       onClick={() => handleAdvanceStep(emp)}
                                       disabled={isSaving}
-                                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-2.5 py-1 rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50"
-                                      title={`承認して次のステップへ進める (承認権限: ${
-                                        currentStepObj?.approver_type === 'department_head'
-                                          ? (() => {
-                                              const dObj = departments.find(d => d.name === emp.department);
-                                              return dObj?.manager_user_name ? `${emp.department || '配属先'}所属長 (${dObj.manager_user_name})` : `${emp.department || '配属先'}所属長`;
-                                            })()
-                                          : (currentStepObj?.approver_name || '管理者全員')
-                                      })`}
+                                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-2.5 py-1 rounded-lg transition flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50 active:scale-98"
+                                      title={`承認して次のステップへ進める`}
                                     >
                                       承認して次へ
                                       <ArrowRight className="w-3 h-3" />
@@ -3853,8 +3749,9 @@ export default function OnboardingAdminDashboard() {
                             </div>
                           </td>
 
-                          <td className="py-3.5 px-3 text-slate-700 text-[11px]">
-                            <div className="font-bold flex items-center gap-1">
+                          {/* 3. 給与 / 口座・通勤費 */}
+                          <td className="py-3.5 px-3 min-w-[170px] text-slate-700 text-[11px]">
+                            <div className="font-bold flex items-center gap-1 flex-wrap">
                               {isHourly 
                                 ? (emp.hourly_wage && emp.hourly_wage > 0 ? `時給 ¥${emp.hourly_wage.toLocaleString()}` : <span className="text-slate-400 font-normal">時給 未設定</span>)
                                 : (emp.base_salary && emp.base_salary > 0 ? `月給 ¥${emp.base_salary.toLocaleString()}` : <span className="text-slate-400 font-normal">月給 未設定</span>)}
@@ -3873,36 +3770,38 @@ export default function OnboardingAdminDashboard() {
                                 </span>
                               ) : null}
                             </div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">
+                            <div className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[200px]" title={`口座: ${emp.bank_name || '未登録'} / 通勤費: ¥${emp.commuting_allowance?.toLocaleString() || 0}`}>
                               口座: {emp.bank_name || '未登録'} / 通勤: ¥{emp.commuting_allowance?.toLocaleString() || 0}
                             </div>
                             <div className="flex items-center gap-1 mt-1 text-[9px] text-slate-500 flex-wrap">
-                              <span className="bg-amber-50 text-amber-900 font-bold px-1.5 py-0.5 rounded border border-amber-200">
+                              <span className="bg-amber-50 text-amber-900 font-bold px-1.5 py-0.2 rounded border border-amber-200 whitespace-nowrap">
                                 👨‍👩‍👧 扶養: {emp.dependents_count || 0}名{emp.has_spouse ? ' (💍配偶者有)' : ''}
                               </span>
                               {emp.health_standard_monthly_remuneration ? (
-                                <span className="bg-indigo-50 text-indigo-700 font-bold px-1 py-0.5 rounded border border-indigo-100">
+                                <span className="bg-indigo-50 text-indigo-700 font-bold px-1 py-0.2 rounded border border-indigo-100 whitespace-nowrap">
                                   健保: ¥{(emp.health_standard_monthly_remuneration / 10000).toFixed(0)}万
                                 </span>
                               ) : null}
                               {emp.pension_standard_monthly_remuneration ? (
-                                <span className="bg-purple-50 text-purple-700 font-bold px-1 py-0.5 rounded border border-purple-100">
+                                <span className="bg-purple-50 text-purple-700 font-bold px-1 py-0.2 rounded border border-purple-100 whitespace-nowrap">
                                   年金: ¥{(emp.pension_standard_monthly_remuneration / 10000).toFixed(0)}万
                                 </span>
                               ) : null}
                               {(emp.resident_tax_monthly || (emp.resident_tax_details && Object.keys(emp.resident_tax_details).length > 0)) ? (
-                                <span className="bg-slate-100 text-slate-700 font-bold px-1 py-0.5 rounded border border-slate-200">
-                                  住民税: {emp.resident_tax_details && Object.keys(emp.resident_tax_details).length > 0
+                                <span className="bg-slate-100 text-slate-700 font-bold px-1 py-0.2 rounded border border-slate-200 whitespace-nowrap" title={
+                                  emp.resident_tax_details && Object.keys(emp.resident_tax_details).length > 0
                                     ? `月別設定 (年¥${Object.values(emp.resident_tax_details).reduce((a, b) => a + Number(b), 0).toLocaleString()})`
-                                    : `¥${emp.resident_tax_monthly?.toLocaleString()}`}
+                                    : `¥${emp.resident_tax_monthly?.toLocaleString()}`
+                                }>
+                                  住民税: {emp.resident_tax_details && Object.keys(emp.resident_tax_details).length > 0 ? '月別設定' : `¥${emp.resident_tax_monthly?.toLocaleString()}`}
                                 </span>
                               ) : null}
                             </div>
                           </td>
 
-                          {/* 📁 書面証憑 ＆ 🔑 ログイン案内 縦型統合列 */}
-                          <td className="py-2.5 px-3 text-center align-middle">
-                            <div className="flex flex-col gap-1.5 items-center justify-center w-full min-w-[105px]">
+                          {/* 4. 書類 / 案内（LINE） */}
+                          <td className="py-2.5 px-3 text-center align-middle min-w-[135px]">
+                            <div className="flex flex-col gap-1.5 items-stretch justify-center w-full max-w-[135px] mx-auto">
                               {/* 📁 労務書面キャビネット ボタン */}
                               <button
                                 onClick={() => {
@@ -3913,35 +3812,106 @@ export default function OnboardingAdminDashboard() {
                                     activeDoc: 'contract'
                                   });
                                 }}
-                                className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] px-2.5 py-1.5 rounded-lg border border-indigo-200 transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs hover:shadow-xs active:scale-98"
+                                className="w-full bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] px-2 py-1.5 rounded-lg border border-indigo-200 transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs hover:shadow-xs active:scale-98"
                                 title="労働条件通知書・通勤届・口座届・扶養控除申告書をまとめて閲覧"
                               >
                                 <FolderOpen className="w-3.5 h-3.5 shrink-0 text-indigo-600" />
                                 <span className="whitespace-nowrap">書面・証憑</span>
                               </button>
 
-                              {/* 🔑 ログインアカウント発行・初期パスワード＆LINE案内ボタン */}
-                              <button
-                                onClick={() => {
-                                  const fullEmp = resolveEmployeeFullData(emp);
-                                  setAccountIssueModal({
-                                    isOpen: true,
-                                    staff: {
-                                      id: fullEmp.user_id || '',
-                                      name: fullEmp.name || '',
-                                      email: fullEmp.email || '',
-                                      department: fullEmp.department || '',
-                                      role: fullEmp.role || 'user',
-                                      employment_type: fullEmp.employment_type || ''
-                                    }
-                                  });
-                                }}
-                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-2.5 py-1.5 rounded-lg shadow-2xs transition flex items-center justify-center gap-1 cursor-pointer hover:shadow-xs active:scale-98"
-                                title="この従業員のログインアカウント・初期パスワードを発行し、LINE用案内文をコピーします"
-                              >
-                                <KeyRound className="w-3.5 h-3.5 shrink-0 text-cyan-200" />
-                                <span className="whitespace-nowrap">ログイン案内</span>
-                              </button>
+                              {/* 案内・LINEアクション（連携状態に応じて切り替え） */}
+                              {dbLineLinkDetails[emp.user_id]?.isLinked ? (
+                                /* 🟢 LINE連携済みの場合 */
+                                <div className="space-y-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDirectStaffLineAction(emp)}
+                                    disabled={isSendingDirectLine === emp.user_id}
+                                    className="w-full text-[10px] font-black py-1.5 px-1.5 rounded-lg bg-[#06C755] hover:bg-[#05b34c] text-white flex items-center justify-center gap-1 shadow-2xs transition cursor-pointer active:scale-98 disabled:opacity-50"
+                                    title="公式LINEへログインアカウント案内を直接プッシュ送信します"
+                                  >
+                                    {isSendingDirectLine === emp.user_id ? (
+                                      <div className="w-2.5 h-2.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    ) : (
+                                      <MessageSquare className="w-3 h-3 shrink-0" />
+                                    )}
+                                    <span className="whitespace-nowrap">{isSendingDirectLine === emp.user_id ? '送信中...' : '💬 LINEで案内'}</span>
+                                  </button>
+
+                                  <div className="flex items-center justify-between text-[9px] px-1 text-slate-500">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const fullEmp = resolveEmployeeFullData(emp);
+                                        setAccountIssueModal({
+                                          isOpen: true,
+                                          staff: {
+                                            id: fullEmp.user_id || '',
+                                            name: fullEmp.name || '',
+                                            email: fullEmp.email || '',
+                                            department: fullEmp.department || '',
+                                            role: fullEmp.role || 'user',
+                                            employment_type: fullEmp.employment_type || ''
+                                          }
+                                        });
+                                      }}
+                                      className="text-slate-500 hover:text-indigo-600 font-semibold underline cursor-pointer"
+                                      title="ログインアカウント・初期パスワードの手動発行・確認"
+                                    >
+                                      🔑 ログイン情報
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setLineLinkModalState({
+                                        isOpen: true,
+                                        userId: emp.user_id,
+                                        userName: emp.name
+                                      })}
+                                      className="text-emerald-700 hover:text-emerald-900 font-semibold underline cursor-pointer"
+                                      title="LINE連携情報・解除"
+                                    >
+                                      🟢 連携中
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                /* 📲 LINE未連携の場合 */
+                                <div className="space-y-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const fullEmp = resolveEmployeeFullData(emp);
+                                      setAccountIssueModal({
+                                        isOpen: true,
+                                        staff: {
+                                          id: fullEmp.user_id || '',
+                                          name: fullEmp.name || '',
+                                          email: fullEmp.email || '',
+                                          department: fullEmp.department || '',
+                                          role: fullEmp.role || 'user',
+                                          employment_type: fullEmp.employment_type || ''
+                                        }
+                                      });
+                                    }}
+                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-2 py-1.5 rounded-lg shadow-2xs transition flex items-center justify-center gap-1 cursor-pointer hover:shadow-xs active:scale-98"
+                                    title="この従業員のログインアカウント・初期パスワードを発行し、LINE用案内文をコピーします"
+                                  >
+                                    <KeyRound className="w-3.5 h-3.5 shrink-0 text-cyan-200" />
+                                    <span className="whitespace-nowrap">ログイン案内</span>
+                                  </button>
+
+                                  <div className="flex items-center justify-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDirectStaffLineAction(emp)}
+                                      className="text-[9px] text-emerald-600 hover:text-emerald-700 font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
+                                      title="10秒LINE連携案内文を自動コピーし、QRコード画面を開きます"
+                                    >
+                                      <span>💬 10秒LINE案内</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </td>
 
