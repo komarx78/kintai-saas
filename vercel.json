@@ -5,7 +5,7 @@
       "destination": "/rakumaru_lp.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/|rakumaru_lp\\.html).*)",
       "destination": "/index.html"
     }
   ]

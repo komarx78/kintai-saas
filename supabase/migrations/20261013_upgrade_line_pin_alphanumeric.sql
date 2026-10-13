@@ -6,7 +6,20 @@
 -- 3. 発行時の重複チェック・再抽選ループによる完全一意性保証
 -- ==============================================================================
 
--- 1. ワンタイムPINコード発行 RPC 関数（英大文字＋数字 4桁・約168万通り）
+-- 0. usersテーブルに必要なLINE連携カラムの確実な配備
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS line_link_pin text;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS line_link_pin_expires_at timestamptz;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS line_user_id text;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS line_display_name text;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS line_picture_url text;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_line_linked boolean DEFAULT false;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS line_linked_at timestamptz;
+
+-- 検索用インデックスの作成（大文字インデックスで照合を爆速化）
+CREATE INDEX IF NOT EXISTS idx_users_line_link_pin ON public.users(upper(line_link_pin));
+CREATE INDEX IF NOT EXISTS idx_users_line_user_id ON public.users(line_user_id);
+
+-- 1. ワンタイムPINコード発行 RPC 関数（英大文字＋数字 4桁・約105万通り）
 CREATE OR REPLACE FUNCTION public.generate_user_line_pin(p_user_id uuid)
 RETURNS json
 LANGUAGE plpgsql
