@@ -415,7 +415,7 @@ export const RAKUMARU_OFFICIAL_LINE_CONSTANTS = {
   basicId: '@622tslqk',
   channelId: '2011756733',
   channelSecret: 'c1a3ff8ae39ff4951cd69eb3b1b96d81',
-  channelAccessToken: '2bzMLZ1Svthjn94ea3y4HHSeRjMw9SA1F9lgom1PkoUa2gUs3F8ovxG+ikJFVTwF5UM6tfmXrOF2C+ZplN6/JHdhOQur8Rt8eGchRIcILN1idPlIDv7OLvlva7Zfahj+ZAvjBfIwYSV+FZQ7sG97fwdB04t89/10/w1cDnyilFU=',
+  channelAccessToken: 'fGqeLsJrOA06OQPgvm8DcmWI4kPwHg8Jw4fGr4Wb8vsns8CbKG/Pg/2llBsFQL205UM6tfmXrOF2C+ZpIN6/JHdhOQur8Rt8eGchRIclLN3DkEIuzl8Qq1RHoCq8NCfTMqF27v6OYkm5gTe3EVRzkAdB04t89/1O/w1cDnyilFU=',
   addFriendUrl: 'https://line.me/R/ti/p/@622tslqk',
   qrCodeUrl: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https%3A%2F%2Fline.me%2FR%2Fti%2Fp%2F%40622tslqk'
 };
