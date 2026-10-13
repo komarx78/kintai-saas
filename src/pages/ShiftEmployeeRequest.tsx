@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, ArrowLeft, CheckCircle2, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, ArrowLeft, CheckCircle2, X, ChevronLeft, ChevronRight, MessageSquare, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths } from 'date-fns';
@@ -28,6 +28,9 @@ const ShiftEmployeeRequest: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'request' | 'confirmed'>('request');
   const [isLocked, setIsLocked] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isLineLinked, setIsLineLinked] = useState<boolean>(true);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [currentTenantId, setCurrentTenantId] = useState<string>('');
   
   // 📅 表示対象月（当月・翌月への切り替え対応 SSOT）
   const [viewDate, setViewDate] = useState<Date>(() => startOfMonth(new Date()));
@@ -56,14 +59,28 @@ const ShiftEmployeeRequest: React.FC = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setCurrentUserId(user.id);
 
       const { data: tenantIdData } = await supabase.rpc('get_user_tenant_id');
       if (tenantIdData) {
+        setCurrentTenantId(tenantIdData);
         const { data: settings } = await supabase.from('shift_settings').select('is_submission_locked, auto_lock_day, auto_lock_days').eq('tenant_id', tenantIdData).maybeSingle();
         const localRule = localStorage.getItem(`shift_deadline_rule_${tenantIdData}`);
         if (localRule) {
           setDeadlineRule(localRule);
         }
+
+      // LINE連携状況を取得
+      try {
+        const { data: uData } = await supabase
+          .from('users')
+          .select('is_line_linked, line_user_id')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (uData) {
+          setIsLineLinked(!!(uData.line_user_id || uData.is_line_linked));
+        }
+      } catch (_) {}
         if (settings) {
           let locked = settings.is_submission_locked || false;
 
@@ -327,6 +344,39 @@ const ShiftEmployeeRequest: React.FC = () => {
           ✅ 確定済みシフト
         </button>
       </div>
+
+      {/* 📱 公式LINE未連携時のワンタップ案内バナー */}
+      {!isLineLinked && currentUserId && (
+        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-2 border-emerald-400 rounded-2xl p-4 mx-4 mt-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 max-w-2xl md:mx-auto">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#06C755] text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/20">
+              <MessageSquare className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-800 text-xs sm:text-sm">
+                  公式LINEで確定シフトを受け取る
+                </span>
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  未連携
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                ワンタップでLINEが開き、送信を押すだけで10秒で完了します。
+              </p>
+            </div>
+          </div>
+          <a
+            href={`/line-link?tid=${currentTenantId}&uid=${currentUserId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full sm:w-auto px-4 py-2 bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 shrink-0 no-underline cursor-pointer"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span>👉 LINE連携する（10秒）</span>
+          </a>
+        </div>
+      )}
 
       {deadlineRule && (
         <div className="bg-amber-100 border-l-4 border-amber-500 p-3 mx-4 mt-4 mb-2 rounded-r-lg shadow-sm flex items-start max-w-2xl md:mx-auto">

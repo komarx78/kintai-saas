@@ -11,7 +11,11 @@ import {
   AlertCircle,
   Loader2,
   Lock,
-  Mail
+  Mail,
+  Send,
+  ExternalLink,
+  CheckCircle2,
+  ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -55,6 +59,7 @@ export const StaffAccountIssueModal: React.FC<StaffAccountIssueModalProps> = ({
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warningMsg, setWarningMsg] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isIssuedSuccess, setIsIssuedSuccess] = useState(false);
 
@@ -67,12 +72,13 @@ export const StaffAccountIssueModal: React.FC<StaffAccountIssueModalProps> = ({
       if (!isDummyEmail && existingEmail.trim() !== '') {
         setEmail(existingEmail.trim());
       } else {
-        // 架空ドメインの捏造を完全撤廃：未登録・仮アドレスの場合は空欄にして管理者に本物のアドレスを入力してもらう
+        // 未登録・仮アドレスの場合は空欄にして入力してもらう
         setEmail('');
       }
       
       setPassword(generateInitialPassword());
       setError(null);
+      setWarningMsg(null);
       setIsCopied(false);
       setIsIssuedSuccess(false);
     }
@@ -83,26 +89,53 @@ export const StaffAccountIssueModal: React.FC<StaffAccountIssueModalProps> = ({
   const resolvedTenantId = tenantId || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tenant_id') || undefined : undefined);
   const loginUrl = `${window.location.origin}/kintai/user${resolvedTenantId ? `?tenant_id=${resolvedTenantId}` : ''}`;
 
-  const generateLineMessage = (targetEmail: string, targetPass: string) => {
-    const displayEmail = targetEmail.trim() || '（スタッフ本人のメールアドレス）';
-    return `【${companyName || '勤怠管理システム'} ログインのご案内】
+  const cleanEmail = email.trim();
+  const cleanPassword = password.trim();
+
+  // メール件名・本文の生成
+  const emailSubject = `【${companyName || '勤怠管理システム'}】ログインアカウント発行のご案内`;
+  const emailBody = `${staff.name} 様
+
+お疲れ様です。${companyName || '勤怠管理システム'} です。
+明日からのタイムカード打刻・Web給与明細確認用のアカウントが発行されました。
+
+以下のURLよりログインしてください。
+
+▼ タイムカード打刻・ログインURL
+${loginUrl}
+
+▼ あなたのログイン情報
+ログインID（メールアドレス）: ${cleanEmail || '（スタッフ本人のメールアドレス）'}
+初期パスワード: ${cleanPassword}
+
+💡【スマホでアプリのように使う方法】
+URLを開いた後、スマホ画面のメニュー（共有ボタン等）から「ホーム画面に追加」をしておくと、アプリのようにワンタップで打刻できます！
+※ 初回ログイン後、パスワードはいつでも自由に変更できます。
+
+よろしくお願いいたします。`;
+
+  // LINE用メッセージ（シンプル版）
+  const lineMessage = `【${companyName || '勤怠管理システム'} ログインのご案内】
 ${staff.name} 様
 
-明日からのタイムカード打刻・給与明細確認用のアカウントが発行されました。
+タイムカード打刻・給与明細確認用のアカウントが発行されました。
 以下のURLからログインしてください。
 
 ▼ タイムカード打刻・ログインURL
 ${loginUrl}
 
 ▼ あなたのログイン情報
-メールアドレス（ログインID）: ${displayEmail}
-初期パスワード: ${targetPass}
+メールアドレス（ID）: ${cleanEmail || '（本人のメールアドレス）'}
+初期パスワード: ${cleanPassword}
 
 💡【スマホでアプリのように使う方法】
-URLを開いた後、スマホ画面のメニューから「ホーム画面に追加」をしておくと、アプリのようにワンタップで打刻できます！
-※ 初回ログイン後、パスワードはいつでも自由に変更できます。
-よろしくお願いいたします。`;
-  };
+URLを開いた後、スマホのメニューから「ホーム画面に追加」をしておくと、ワンタップで打刻できます！
+※ 初回ログイン後、パスワードは自由に変更できます。`;
+
+  // 各種送信URL
+  const mailtoUrl = `mailto:${encodeURIComponent(cleanEmail)}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(cleanEmail)}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+  const lineShareUrl = `https://line.me/R/share?text=${encodeURIComponent(lineMessage)}`;
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -122,10 +155,9 @@ URLを開いた後、スマホ画面のメニューから「ホーム画面に�
   };
 
   const handleIssueAccount = async () => {
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPassword = password.trim();
+    const normalizedEmail = cleanEmail.toLowerCase();
 
-    if (!cleanEmail || !cleanEmail.includes('@')) {
+    if (!normalizedEmail || !normalizedEmail.includes('@')) {
       setError('スタッフ本人の有効なメールアドレス（例: staff@gmail.com）を入力してください。');
       return;
     }
@@ -136,40 +168,49 @@ URLを開いた後、スマホ画面のメニューから「ホーム画面に�
 
     setLoading(true);
     setError(null);
+    setWarningMsg(null);
 
     try {
       // 1. Supabase RPC による auth.users アカウント直接発行・更新
-      const { error: rpcError } = await supabase.rpc('create_or_update_staff_auth_account', {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('create_or_update_staff_auth_account', {
         p_target_user_id: staff.id,
-        p_email: cleanEmail,
+        p_email: normalizedEmail,
         p_password: cleanPassword
       });
 
       if (rpcError) {
-        console.warn('RPC create_or_update_staff_auth_account warning/fallback:', rpcError);
+        console.warn('RPC create_or_update_staff_auth_account warning:', rpcError);
+        // RPCがエラーでも台帳の保存は試みる
+        setWarningMsg('※ 認証基盤への直接登録で一時的な警告が発生しましたが、台帳への登録を完了しました。');
+      } else if (rpcData && typeof rpcData === 'object' && (rpcData as any).success === false) {
+        const customErr = (rpcData as any).error || 'アカウント発行に失敗しました。';
+        console.warn('RPC business logic error:', customErr);
+        if ((rpcData as any).error_code === 'EMAIL_ALREADY_IN_USE') {
+          setError(customErr);
+          setLoading(false);
+          return;
+        } else {
+          setWarningMsg(`※ ${customErr}`);
+        }
       }
 
       // 2. public.users のメールアドレスも最新の実アドレスで確実に永続化（台帳同期）
       try {
-        await supabase.from('users').update({ email: cleanEmail }).eq('id', staff.id);
+        await supabase.from('users').update({ email: normalizedEmail }).eq('id', staff.id);
       } catch (uErr) {
         console.warn('Failed to sync email to public.users:', uErr);
       }
 
-      // 3. LINE用案内文を自動コピー
-      const msg = generateLineMessage(cleanEmail, cleanPassword);
-      await copyToClipboard(msg);
+      // 3. 案内文をクリップボードに自動コピー
+      await copyToClipboard(emailBody);
 
       setIsIssuedSuccess(true);
       if (onSuccess) {
-        onSuccess({ id: staff.id, email: cleanEmail });
+        onSuccess({ id: staff.id, email: normalizedEmail });
       }
     } catch (err: any) {
       console.error('Account issue error:', err);
-      // エラー発生時でも案内文はコピーしてあげる
-      const msg = generateLineMessage(cleanEmail, cleanPassword);
-      await copyToClipboard(msg);
-      setIsIssuedSuccess(true);
+      setError('予期せぬエラーが発生しました: ' + (err.message || '通信エラー'));
     } finally {
       setLoading(false);
     }
@@ -186,7 +227,7 @@ URLを開いた後、スマホ画面のメニューから「ホーム画面に�
             </div>
             <div>
               <h3 className="font-black text-slate-800 text-base flex items-center gap-2">
-                ログインアカウント発行 ＆ LINE案内
+                ログインアカウント発行 ＆ 送信センター
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 対象スタッフ：<strong className="text-slate-800">{staff.name}</strong> 様{staff.department ? `（${staff.department}）` : '（未配属）'}
@@ -201,16 +242,56 @@ URLを開いた後、スマホ画面のメニューから「ホーム画面に�
           </button>
         </div>
 
-        {/* 成功バナー */}
+        {/* 成功バナー ＆ ワンタップ送信パネル */}
         {isIssuedSuccess && (
-          <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-4 text-xs text-emerald-950 space-y-1 animate-in fade-in">
+          <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-4 text-xs text-emerald-950 space-y-3 animate-in fade-in">
             <div className="flex items-center gap-1.5 font-black text-emerald-800 text-sm">
-              <Check className="w-5 h-5 text-emerald-600 shrink-0" />
-              <span>✔ アカウントを発行し、LINE用案内文をコピーしました！</span>
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span>✔ アカウントを発行しました！案内を送信してください</span>
             </div>
-            <p className="text-[11px] leading-relaxed text-emerald-900 pt-0.5">
-              スタッフのLINEやメールにそのまま貼り付けて送信してください。スタッフは送られた情報で1秒でログイン・打刻を開始できます。
+            <p className="text-[11px] leading-relaxed text-emerald-900">
+              案内文をクリップボードにコピーしました。下のボタンから<strong>メール</strong>または<strong>LINE</strong>でスタッフ本人へ1タップで送信できます。
             </p>
+
+            {/* 即時送信アクションボタン群 */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <a
+                href={mailtoUrl}
+                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs shadow-xs transition cursor-pointer"
+                title="OutlookやMac標準メール等のメールソフトを起動"
+              >
+                <Mail className="w-4 h-4 shrink-0" />
+                <span>メールソフトで送信</span>
+              </a>
+              <a
+                href={gmailUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-black text-xs shadow-xs transition cursor-pointer"
+                title="ブラウザでGmail作成画面を直接開く"
+              >
+                <ExternalLink className="w-4 h-4 shrink-0" />
+                <span>Gmailで送信</span>
+              </a>
+              <a
+                href={lineShareUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 py-2 px-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl font-black text-xs shadow-xs transition cursor-pointer col-span-2"
+                title="LINEアプリでこの案内文を送信"
+              >
+                <MessageSquare className="w-4 h-4 shrink-0" />
+                <span>💬 LINEで案内メッセージを送る</span>
+              </a>
+            </div>
+          </div>
+        )}
+
+        {/* 警告バナー */}
+        {warningMsg && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-800 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>{warningMsg}</span>
           </div>
         )}
 
@@ -281,18 +362,36 @@ URLを開いた後、スマホ画面のメニューから「ホーム画面に�
             </p>
           </div>
 
-          {/* LINE・メール送信用 プレビュー */}
+          {/* メール・LINE送信用 案内文プレビュー */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-black text-slate-700 flex items-center gap-1.5">
                 <MessageSquare className="w-4 h-4 text-emerald-600" />
-                送信用メッセージ（ワンクリックで丸ごとコピー）:
+                スタッフへ送信される案内文プレビュー:
               </label>
-              <span className="text-[10px] text-slate-400">LINEにそのまま貼るだけ</span>
+              <button
+                type="button"
+                onClick={() => copyToClipboard(emailBody)}
+                className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{isCopied ? 'コピー済' : '全文コピー'}</span>
+              </button>
             </div>
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] text-slate-700 leading-relaxed font-sans whitespace-pre-wrap select-all max-h-36 overflow-y-auto">
-              {generateLineMessage(email, password)}
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] text-slate-700 leading-relaxed font-sans whitespace-pre-wrap select-all max-h-32 overflow-y-auto">
+              {emailBody}
             </div>
+          </div>
+
+          {/* 確実な送信に関する案内 */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 text-[11px] text-slate-600 space-y-1">
+            <div className="font-bold text-slate-700 flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+              <span>安心・確実な連絡体制について</span>
+            </div>
+            <p className="text-slate-500 leading-normal">
+              本システムは迷惑メール（スパム）誤判定や不達事故を防ぐため、裏で勝手に自動送信せず、管理者の手元から<strong>【メールソフト（Outlook等）】</strong>や<strong>【Gmail】</strong>、<strong>【LINE】</strong>で確実に届く仕組みを採用しています。
+            </p>
           </div>
 
           {/* QRコード表示（目の前のスタッフ用） */}
@@ -325,33 +424,45 @@ URLを開いた後、スマホ画面のメニューから「ホーム画面に�
           >
             閉じる
           </button>
-          <button
-            type="button"
-            disabled={loading}
-            onClick={handleIssueAccount}
-            className={`py-2.5 px-5 rounded-xl font-black text-xs transition flex items-center gap-2 cursor-pointer shadow-md ${
-              isCopied
-                ? 'bg-emerald-600 text-white shadow-emerald-200'
-                : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white shadow-indigo-200'
-            }`}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>アカウント発行中...</span>
-              </>
-            ) : isCopied ? (
-              <>
-                <Check className="w-4 h-4 text-emerald-200" />
-                <span>✔ 案内文をコピーしました！</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4" />
-                <span>アカウントを発行してLINE案内文をコピー</span>
-              </>
+          
+          <div className="flex items-center gap-2">
+            {isIssuedSuccess && (
+              <a
+                href={mailtoUrl}
+                className="py-2.5 px-4 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-xl font-black text-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Mail className="w-4 h-4" />
+                <span>メール送信</span>
+              </a>
             )}
-          </button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleIssueAccount}
+              className={`py-2.5 px-5 rounded-xl font-black text-xs transition flex items-center gap-2 cursor-pointer shadow-md ${
+                isIssuedSuccess
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200'
+                  : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white shadow-indigo-200'
+              }`}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>アカウント発行中...</span>
+                </>
+              ) : isIssuedSuccess ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-200" />
+                  <span>再発行・案内文コピー</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  <span>アカウントを発行する</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>,

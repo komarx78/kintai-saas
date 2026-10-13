@@ -41,10 +41,11 @@ import {
   type LineIntegrationConfig,
   getTenantLineConfig,
   fetchTenantLineConfigFromDb,
-  syncStaffLineLinkFromDb,
+  fetchStaffLineLinkMapFromDb,
   formatSingleStaffPayslipShareText,
   sendStaffPayslipLineMessages
 } from '../lib/lineMessaging';
+import { LineLinkModal } from './LineLinkModal';
 import { calculateUsedPaidLeaveDaysInPeriod } from '../lib/paidLeaveCalculation';
 
 interface PayslipManagementProps {
@@ -160,9 +161,19 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     payslip: null
   });
 
-  // 📱 公式LINE通知 & 個別手動配信 State
+  // 📱 公式LINE通知 & 個別手動配信 & ワンタイムPIN連携 State
   const [lineConfig, setLineConfig] = useState<LineIntegrationConfig>(() => getTenantLineConfig(tenantId));
   const [lineLinkMap, setLineLinkMap] = useState<Record<string, boolean>>({});
+  const [dbLineLinkDetails, setDbLineLinkDetails] = useState<Record<string, { isLinked: boolean; lineDisplayName?: string; lineUserId?: string; lineLinkPin?: string }>>({});
+  const [lineLinkModalState, setLineLinkModalState] = useState<{
+    isOpen: boolean;
+    userId: string;
+    userName: string;
+  }>({
+    isOpen: false,
+    userId: '',
+    userName: ''
+  });
   const [isSendingLine, setIsSendingLine] = useState(false);
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [manualShareModal, setManualShareModal] = useState<{
@@ -592,12 +603,17 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const loadedRules = await fetchAttendanceRoundingRulesFromDb(tenantId);
       setRoundingRules(loadedRules);
 
-      // 📱 LINE通知設定 & スタッフ連携状態を同期取得（SSOT）
+      // 📱 LINE通知設定 & 実DBスタッフ連携状態を同期取得（SSOT）
       try {
         const lineCfg = await fetchTenantLineConfigFromDb(tenantId);
         if (lineCfg) setLineConfig(lineCfg);
-        const lMap = await syncStaffLineLinkFromDb(tenantId);
-        if (lMap) setLineLinkMap(lMap);
+        const dbLinkDetails = await fetchStaffLineLinkMapFromDb(tenantId);
+        setDbLineLinkDetails(dbLinkDetails);
+        const boolMap: Record<string, boolean> = {};
+        Object.entries(dbLinkDetails).forEach(([uid, info]) => {
+          boolMap[uid] = info.isLinked;
+        });
+        setLineLinkMap(boolMap);
       } catch (lineErr) {
         console.warn('LINE config fetch error:', lineErr);
       }
@@ -2126,6 +2142,22 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     }
   };
 
+  // 🔄 スタッフのLINE連携状態を実DBから最新同期
+  const refreshLineLinkMap = async () => {
+    if (!tenantId) return;
+    try {
+      const dbLinkDetails = await fetchStaffLineLinkMapFromDb(tenantId);
+      setDbLineLinkDetails(dbLinkDetails);
+      const boolMap: Record<string, boolean> = {};
+      Object.entries(dbLinkDetails).forEach(([uid, info]) => {
+        boolMap[uid] = info.isLinked;
+      });
+      setLineLinkMap(boolMap);
+    } catch (e) {
+      console.warn('refreshLineLinkMap err:', e);
+    }
+  };
+
   // 🟢 スタッフへLINE一括自動配信ハンドラー（公式LINE代行・自社公式アカウント）
   const handleSendPayslipLineBatch = async () => {
     if (!tenantId || payslips.length === 0) return;
@@ -2147,7 +2179,11 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       return;
     }
 
-    const linkedStaffCount = payslips.filter(p => lineLinkMap[p.user_id] || p.user?.contact_line_id).length;
+    // 最新のDB連携情報を取得
+    const currentDbLinkMap = await fetchStaffLineLinkMapFromDb(tenantId);
+    setDbLineLinkDetails(currentDbLinkMap);
+
+    const linkedStaffCount = payslips.filter(p => currentDbLinkMap[p.user_id]?.isLinked && currentDbLinkMap[p.user_id]?.lineUserId).length;
     const accountName = lineConfig.mode === 'rakumaru_official' 
       ? 'みんなのらくまる労務 公式LINE代行' 
       : (lineConfig.ownAccountName || '自社公式LINE');
@@ -2155,25 +2191,28 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     const confirmMsg = `【${currentYearMonth}度 Web給与明細 LINE一斉配信】\n\n` +
       `送信アカウント: ${accountName}\n` +
       `対象スタッフ: 全${payslips.length}名中、LINE連携済みの ${linkedStaffCount}名\n\n` +
-      `※ プライバシー保護（覗き見防止）のため、金額面は直書きせず「セキュアWeb明細URL」が送信されます。\n` +
-      `※ 未連携のスタッフ（${payslips.length - linkedStaffCount}名）には送信されません。\n\n` +
-      `スタッフのLINEへ一斉配信を実行しますか？`;
+      `※ プライバシー保護（覗き見防止）のため、金額面は直書きせず「セキュアWeb明細URL」が本番LINE PUSH送信されます。\n` +
+      `※ 未連携のスタッフ（${payslips.length - linkedStaffCount}名）はスキップされます。\n\n` +
+      `スタッフのLINEへ本番一斉配信を実行しますか？`;
 
     if (!confirm(confirmMsg)) return;
 
     setIsSendingLine(true);
     try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://kintai.kap-cocotte.com';
       const payslipItems = payslips.map(p => ({
         userId: p.user_id,
         userName: p.user?.name || 'スタッフ',
         yearMonth: currentYearMonth,
         paymentDate: p.payment_date,
-        isLineLinked: !!lineLinkMap[p.user_id] || !!p.user?.contact_line_id
+        isLineLinked: !!(currentDbLinkMap[p.user_id]?.isLinked && currentDbLinkMap[p.user_id]?.lineUserId),
+        payslipUrl: `${origin}/payslip?tid=${tenantId}&uid=${p.user_id}`
       }));
 
       const res = await sendStaffPayslipLineMessages(tenantId, payslipItems, tenantInfo?.name || tenantInfo?.company_name);
 
       alert(res.message);
+      await refreshLineLinkMap();
     } catch (err: any) {
       console.error('Line send error:', err);
       alert('LINE一括送信処理中にエラーが発生しました: ' + err.message);
@@ -3818,17 +3857,35 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                               🎉 当月途中入社（{slip.user.join_date.substring(5)}）
                             </span>
                           )}
-                          {/* 📱 LINE連携状態バッジ */}
-                          {lineLinkMap[slip.user_id] || slip.user?.contact_line_id ? (
-                            <span className="text-[10px] font-black px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1 shadow-2xs">
+                          {/* 📱 LINE連携状態バッジ（クリックでワンタイムPIN連携モーダル表示） */}
+                          {dbLineLinkDetails[slip.user_id]?.isLinked || lineLinkMap[slip.user_id] ? (
+                            <button
+                              type="button"
+                              onClick={() => setLineLinkModalState({
+                                isOpen: true,
+                                userId: slip.user_id,
+                                userName: slip.user?.name || 'スタッフ'
+                              })}
+                              className="text-[10px] font-black px-2 py-0.5 rounded-md border bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100 flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                              title="LINE連携情報・解除"
+                            >
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                              LINE連携済
-                            </span>
+                              🟢 LINE連携済{dbLineLinkDetails[slip.user_id]?.lineDisplayName ? ` (${dbLineLinkDetails[slip.user_id].lineDisplayName})` : ''}
+                            </button>
                           ) : (
-                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-md border bg-slate-50 text-slate-400 border-slate-200 flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                              LINE未連携
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setLineLinkModalState({
+                                isOpen: true,
+                                userId: slip.user_id,
+                                userName: slip.user?.name || 'スタッフ'
+                              })}
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                              title="ワンタイム4桁PINを発行してLINE連携"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                              📲 LINE未連携（PIN連携）
+                            </button>
                           )}
                         </div>
                         <div className="text-xs text-slate-400 flex flex-wrap items-center gap-2.5 mt-1.5">
@@ -6615,6 +6672,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           </div>
         </div>
       )}
+      {/* 📱 スタッフ専用 ワンタイムPIN LINE公式アカウント自動連携モーダル */}
+      <LineLinkModal
+        isOpen={lineLinkModalState.isOpen}
+        onClose={() => setLineLinkModalState(prev => ({ ...prev, isOpen: false }))}
+        userId={lineLinkModalState.userId}
+        userName={lineLinkModalState.userName}
+        tenantId={tenantId}
+        onLinkedSuccess={refreshLineLinkMap}
+      />
+
       {copyToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 border border-slate-700 animate-in slide-in-from-bottom-5 duration-200">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />

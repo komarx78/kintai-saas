@@ -5,10 +5,10 @@ import { useNavigate } from 'react-router-dom';
 import AppSwitcher from '../components/AppSwitcher';
 import { HelpGuideModal } from '../components/HelpGuideModal';
 import { 
-  getAllStaffLineLinkMap, 
-  toggleStaffLineLinkStatus, 
-  getStoreLineQrCodeUrl 
+  getStoreLineQrCodeUrl,
+  fetchStaffLineLinkMapFromDb
 } from '../lib/lineMessaging';
+import { LineLinkModal } from '../components/LineLinkModal';
 
 interface EmployeeSetting {
   user_id: string;
@@ -38,6 +38,16 @@ const ShiftEmployeeMaster: React.FC = () => {
   const [copySuccess, setCopySuccess] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [lineLinkedMap, setLineLinkedMap] = useState<Record<string, boolean>>({});
+  const [dbLineLinkDetails, setDbLineLinkDetails] = useState<Record<string, { isLinked: boolean; lineDisplayName?: string; lineUserId?: string; lineLinkPin?: string }>>({});
+  const [lineLinkModalState, setLineLinkModalState] = useState<{
+    isOpen: boolean;
+    userId: string;
+    userName: string;
+  }>({
+    isOpen: false,
+    userId: '',
+    userName: ''
+  });
 
   useEffect(() => {
     fetchData();
@@ -56,19 +66,14 @@ const ShiftEmployeeMaster: React.FC = () => {
       const { data: usersData } = await supabase.from('users').select('id, name, role, department, employment_type, has_shift_access, hourly_wage, base_salary, salary_type').eq('tenant_id', tId);
 
       if (tId) {
-        // 📱 LINE連携マップ復元
-        let map = getAllStaffLineLinkMap(tId);
-        // 初期データがない場合は、テスト用に上位スタッフを連携済みに自動シミュレーション
-        if (Object.keys(map).length === 0) {
-          const raw = localStorage.getItem(`line_linked_users_${tId}`);
-          if (!raw) {
-            // 最初の2名をテスト連携済みに初期登録
-            const initialIds = (usersData || []).slice(0, 2).map((u: any) => u.id);
-            initialIds.forEach((uid: string) => toggleStaffLineLinkStatus(tId, uid, true));
-            map = getAllStaffLineLinkMap(tId);
-          }
-        }
-        setLineLinkedMap(map);
+        // 📱 実DB（usersテーブル）から最新のLINE連携情報を取得（SSOT）
+        const dbDetails = await fetchStaffLineLinkMapFromDb(tId);
+        setDbLineLinkDetails(dbDetails);
+        const boolMap: Record<string, boolean> = {};
+        Object.entries(dbDetails).forEach(([uid, info]) => {
+          boolMap[uid] = info.isLinked;
+        });
+        setLineLinkedMap(boolMap);
       }
 
       const { data: settingsData } = await supabase.from('shift_employee_settings').select('*').eq('tenant_id', tId);
@@ -104,14 +109,6 @@ const ShiftEmployeeMaster: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // 📱 LINE連携状態のトグル（テスト・検証用ワンクリック切り替え）
-  const handleToggleLine = (userId: string, current: boolean) => {
-    if (!tenantId) return;
-    const nextState = !current;
-    toggleStaffLineLinkStatus(tenantId, userId, nextState);
-    setLineLinkedMap(prev => ({ ...prev, [userId]: nextState }));
   };
 
   const handleUpdate = (userId: string, field: string, value: any) => {
@@ -257,23 +254,27 @@ const ShiftEmployeeMaster: React.FC = () => {
                     <td className="p-4 text-center">
                       <button
                         type="button"
-                        onClick={() => handleToggleLine(emp.user_id, Boolean(lineLinkedMap[emp.user_id]))}
+                        onClick={() => setLineLinkModalState({
+                          isOpen: true,
+                          userId: emp.user_id,
+                          userName: emp.name || 'スタッフ'
+                        })}
                         className={`px-2.5 py-1 rounded-full text-xs font-bold transition flex items-center gap-1 mx-auto cursor-pointer shadow-2xs border ${
-                          lineLinkedMap[emp.user_id]
+                          dbLineLinkDetails[emp.user_id]?.isLinked || lineLinkedMap[emp.user_id]
                             ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
-                            : 'bg-slate-100 text-slate-500 border-slate-300 hover:bg-slate-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
                         }`}
-                        title="クリックでLINE連携状態をテスト切り替えできます"
+                        title="クリックでワンタイム4桁PIN発行・LINE連携モーダルを開きます"
                       >
-                        {lineLinkedMap[emp.user_id] ? (
+                        {dbLineLinkDetails[emp.user_id]?.isLinked || lineLinkedMap[emp.user_id] ? (
                           <>
                             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                            <span>🟢 連携済</span>
+                            <span>🟢 連携済{dbLineLinkDetails[emp.user_id]?.lineDisplayName ? ` (${dbLineLinkDetails[emp.user_id].lineDisplayName})` : ''}</span>
                           </>
                         ) : (
                           <>
-                            <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-                            <span>⚪ 未連携</span>
+                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                            <span>📲 未連携（PIN発行）</span>
                           </>
                         )}
                       </button>
@@ -470,6 +471,19 @@ const ShiftEmployeeMaster: React.FC = () => {
         screenKey="shift_employees" 
         isOpen={isHelpOpen} 
         onClose={() => setIsHelpOpen(false)} 
+      />
+
+      {/* 📱 スタッフ専用 ワンタイムPIN LINE公式アカウント自動連携モーダル */}
+      <LineLinkModal
+        isOpen={lineLinkModalState.isOpen}
+        onClose={() => {
+          setLineLinkModalState(prev => ({ ...prev, isOpen: false }));
+          fetchData();
+        }}
+        userId={lineLinkModalState.userId}
+        userName={lineLinkModalState.userName}
+        tenantId={tenantId}
+        onLinkedSuccess={fetchData}
       />
     </div>
   );

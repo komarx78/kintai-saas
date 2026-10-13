@@ -22,12 +22,12 @@ import {
   UserCheck, CreditCard, Train, ShieldCheck, 
   Upload, Trash2, CheckCircle2, ChevronRight, ChevronLeft, 
   Loader2, Home, Lock, Plus, FileText, Sparkles, MapPin, Check,
-  Bot, Edit3, Users
+  Bot, Edit3, Users, Copy, RefreshCw, ExternalLink
 } from 'lucide-react';
 import { searchAddressFromZip } from '../lib/zipHelper';
 import { 
   getTenantLineConfig, 
-  toggleStaffLineLinkStatus,
+  generateOrFetchLinePin,
   RAKUMARU_OFFICIAL_LINE_CONSTANTS
 } from '../lib/lineMessaging';
 
@@ -53,6 +53,10 @@ export default function EmployeeOnboardingWelcome() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [submittedUserId, setSubmittedUserId] = useState<string | null>(null);
+  const [linePin, setLinePin] = useState<string>('');
+  const [isLineLinkedOnb, setIsLineLinkedOnb] = useState<boolean>(false);
+  const [lineDisplayNameOnb, setLineDisplayNameOnb] = useState<string | null>(null);
+  const [pinCopied, setPinCopied] = useState<boolean>(false);
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
   const [isAiRouting, setIsAiRouting] = useState(false);
   const [ocrSuccessMsg, setOcrSuccessMsg] = useState<string | null>(null);
@@ -798,6 +802,42 @@ export default function EmployeeOnboardingWelcome() {
     }
   };
 
+  // 📱 新入社員向け LINE連携PINコード自動発行＆リアルタイム完了検知
+  useEffect(() => {
+    if (!isCompleted) return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const effectiveUserId = submittedUserId || searchParams.get('user_id');
+    if (!effectiveUserId) return;
+
+    let isMounted = true;
+    generateOrFetchLinePin(effectiveUserId).then(res => {
+      if (isMounted && res.success && res.pin) {
+        setLinePin(res.pin);
+      }
+    });
+
+    // リアルタイムポーリング（LINE送信で即座に連携完了へ切り替え）
+    const timer = setInterval(async () => {
+      try {
+        const { data: user } = await supabase
+          .from('users')
+          .select('is_line_linked, line_user_id, line_display_name')
+          .eq('id', effectiveUserId)
+          .maybeSingle();
+        if (user && (user.line_user_id || user.is_line_linked)) {
+          setIsLineLinkedOnb(true);
+          setLineDisplayNameOnb(user.line_display_name || '連携完了済アカウント');
+          clearInterval(timer);
+        }
+      } catch (_) {}
+    }, 2500);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, [isCompleted, submittedUserId]);
+
   const commuteTotals = calculateTotalCommuteAmounts(commutingData.segments);
 
   if (loading) {
@@ -811,18 +851,20 @@ export default function EmployeeOnboardingWelcome() {
   if (isCompleted) {
     const searchParams = new URLSearchParams(window.location.search);
     const effectiveTenantId = tenantId || searchParams.get('tenant_id') || searchParams.get('tenant');
-    const effectiveUserId = submittedUserId || searchParams.get('user_id');
     const lineConfig = getTenantLineConfig(effectiveTenantId);
 
-    const handleLineFriendAdd = async () => {
-      if (effectiveTenantId && effectiveUserId) {
-        toggleStaffLineLinkStatus(effectiveTenantId, effectiveUserId, true);
-      }
+    const handleCopyPin = () => {
+      if (!linePin) return;
+      navigator.clipboard.writeText(linePin);
+      setPinCopied(true);
+      setTimeout(() => setPinCopied(false), 2000);
     };
 
-    const friendAddUrl = lineConfig.mode === 'own_official' && lineConfig.ownAddFriendUrl
-      ? lineConfig.ownAddFriendUrl
-      : RAKUMARU_OFFICIAL_LINE_CONSTANTS.addFriendUrl;
+    const basicId = (lineConfig.mode === 'own_official' && lineConfig.ownAccountName)
+      ? (lineConfig.rakumaruBasicId || RAKUMARU_OFFICIAL_LINE_CONSTANTS.basicId)
+      : RAKUMARU_OFFICIAL_LINE_CONSTANTS.basicId;
+    const cleanBasicId = basicId.replace(/^@/, '');
+    const lineDeeplinkUrl = `https://line.me/R/oaMessage/@${cleanBasicId}/?${encodeURIComponent(linePin)}`;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 text-white flex items-center justify-center p-4">
@@ -838,38 +880,87 @@ export default function EmployeeOnboardingWelcome() {
             </p>
           </div>
 
-          {/* 📱 公式LINE友だち追加 ＆ 連携セクション（お客様目線・シンプル自然） */}
+          {/* 📱 公式LINEワンタップ連携セクション（新入社員向け至高導線） */}
           {lineConfig.mode !== 'none' && (
-            <div className="bg-emerald-950/40 border-2 border-emerald-500/60 rounded-2xl p-4 text-left space-y-3 shadow-lg">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-lg shrink-0">
-                  💬
+            isLineLinkedOnb ? (
+              <div className="bg-emerald-950/50 border-2 border-emerald-400 rounded-3xl p-5 text-center space-y-3 shadow-xl animate-in zoom-in-95 duration-200">
+                <div className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center mx-auto text-white shadow-lg shadow-emerald-500/30">
+                  <CheckCircle2 className="w-8 h-8" />
                 </div>
                 <div>
-                  <div className="font-black text-white text-xs sm:text-sm flex items-center gap-1.5">
-                    公式LINEを友だち追加してください
-                    <span className="text-[9px] bg-emerald-500 text-slate-950 px-1.5 py-0.5 rounded-full font-bold">推奨</span>
-                  </div>
-                  <p className="text-[11px] text-emerald-300">
-                    次回から【Web給与明細通知】や【確定シフト連絡】がLINEに届きます
+                  <h3 className="text-base font-black text-white">
+                    公式LINE連携が完了しました！ 🎉
+                  </h3>
+                  <p className="text-xs text-emerald-200 mt-1">
+                    今後のWeb給与明細や確定シフトのお知らせがLINEに届きます。
                   </p>
                 </div>
+                {lineDisplayNameOnb && (
+                  <div className="p-2.5 bg-slate-900/80 rounded-xl border border-emerald-800 text-xs text-emerald-300">
+                    連携アカウント: <strong className="text-white">{lineDisplayNameOnb}</strong>
+                  </div>
+                )}
               </div>
+            ) : (
+              <div className="bg-emerald-950/40 border-2 border-emerald-500/60 rounded-3xl p-5 text-left space-y-4 shadow-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-xl shrink-0">
+                    💬
+                  </div>
+                  <div>
+                    <div className="font-black text-white text-sm flex items-center gap-2">
+                      公式LINEを連携してください
+                      <span className="text-[10px] bg-emerald-500 text-slate-950 px-2 py-0.5 rounded-full font-bold">必須ステップ</span>
+                    </div>
+                    <p className="text-xs text-emerald-300">
+                      毎月の【Web給与明細】や【シフト確定連絡】がLINEに届きます
+                    </p>
+                  </div>
+                </div>
 
-              <p className="text-[10px] text-slate-300 leading-relaxed bg-slate-900/70 p-2.5 rounded-xl border border-emerald-900/60">
-                ※ 友だち追加いただくことで、毎月のWeb給与明細通知やシフト希望の確認がスムーズに行えます。
-              </p>
+                <div className="space-y-3">
+                  {/* 🚀 ワンタップLINE起動ディープリンクボタン */}
+                  <a
+                    href={lineDeeplinkUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3.5 px-4 bg-[#06C755] hover:bg-[#05b34c] text-white font-black text-sm rounded-2xl shadow-lg shadow-emerald-500/30 transition flex items-center justify-center gap-2 cursor-pointer no-underline text-center"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>👉 公式LINEを開いて連携を完了する</span>
+                  </a>
 
-              <a
-                href={friendAddUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={handleLineFriendAdd}
-                className="w-full py-3 px-4 bg-[#06C755] hover:bg-[#05b34c] text-white font-black text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer no-underline block text-center"
-              >
-                <span>💬 公式LINEを友だち追加する</span>
-              </a>
-            </div>
+                  {/* 🛡️ フェイルセーフ案内カード */}
+                  <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-emerald-800/60 space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-slate-300">
+                      <span className="font-bold flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                        あなた専用の認証コード
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleCopyPin}
+                        className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 border border-white/20 transition"
+                      >
+                        {pinCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        {pinCopied ? 'コピー済' : 'コードをコピー'}
+                      </button>
+                    </div>
+                    <div className="text-2xl font-black text-center tracking-widest text-emerald-400 font-mono py-1 select-all bg-emerald-950/60 rounded-xl border border-emerald-700/50">
+                      {linePin || '----'}
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      ※ 上の緑のボタンを押してLINEが立ち上がったら、そのまま【送信】を押してください。もし文字が入っていない場合は、上記の4桁番号【{linePin}】を送ってください。
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-2.5 bg-emerald-950/60 rounded-xl border border-emerald-800/40 flex items-center justify-center gap-2 text-[11px] text-emerald-300">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                  <span>トーク送信後、1〜2秒で自動的にこの画面が完了へ切り替わります</span>
+                </div>
+              </div>
+            )
           )}
 
           <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-left text-xs space-y-2 text-slate-300">

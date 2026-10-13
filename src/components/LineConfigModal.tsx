@@ -252,12 +252,55 @@ export const LineConfigModal: React.FC<LineConfigModalProps> = ({
                           />
                         </div>
 
+                        <div>
+                          <label className="block text-xs font-bold text-slate-200 mb-1">
+                            ④ チャネルシークレット（Channel Secret）
+                          </label>
+                          <input 
+                            type="password" 
+                            value={config.ownChannelSecret || ''} 
+                            onChange={e => setConfig({ ...config, ownChannelSecret: e.target.value })}
+                            placeholder="LINE Developers ＞ 基本設定 ＞ チャネルシークレット"
+                            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs focus:ring-1 focus:ring-indigo-500 font-mono"
+                          />
+                        </div>
+
+                        <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
+                          <label className="block text-xs font-bold text-indigo-300">
+                            ⑤ Webhook URL（4桁PINコード自動連携用）
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="text" 
+                              readOnly
+                              value={`${typeof window !== 'undefined' ? window.location.origin : 'https://kintai.kap-cocotte.com'}/api/line-webhook`}
+                              className="w-full px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-slate-300 text-xs font-mono select-all"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const url = `${window.location.origin}/api/line-webhook`;
+                                navigator.clipboard.writeText(url);
+                                alert('📋 Webhook URLをコピーしました！\nLINE Developersの「Messaging API設定 ＞ Webhook URL」に貼り付け、「Webhookの利用」をオンにしてください。');
+                              }}
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shrink-0 transition"
+                            >
+                              コピー
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-relaxed">
+                            ※ LINE Developers ＞ Messaging API設定 ＞ Webhook URL に上記を貼り付け、【Webhookの利用】をオンにしてください。スタッフがPINをトークに送った際に自動でDB連携されます。
+                          </p>
+                        </div>
+
                         {showTokenHelp && (
                           <div className="p-3 bg-indigo-950/40 border border-indigo-800/60 rounded-lg text-xs text-indigo-200 space-y-1">
-                            <p className="font-bold">📘 アクセストークンの確認手順:</p>
+                            <p className="font-bold">📘 アクセストークン・シークレットの確認手順:</p>
                             <p>1. LINE Developers (developers.line.biz) にログイン</p>
                             <p>2. ご利用のチャネル ＞「Messaging API設定」タブを開く</p>
                             <p>3. 最下部の「チャネルアクセストークン（長期）」の【発行】を押してコピー</p>
+                            <p>4. 「基本設定」タブの「チャネルシークレット」をコピー</p>
+                            <p>5. 「Messaging API設定」の Webhook URL に上記のURLを登録し、Webhookの利用をON</p>
                           </div>
                         )}
                       </div>

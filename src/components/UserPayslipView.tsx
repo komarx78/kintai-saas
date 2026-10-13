@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   DollarSign, Printer, FileText, Loader2, CheckCircle2, Sparkles, X, Check,
-  CreditCard, UserCheck, Gift, ChevronDown
+  CreditCard, UserCheck, Gift, ChevronDown, MessageSquare, ExternalLink
 } from 'lucide-react';
 import { OfficialPayslipDoc } from './OfficialPayslipDoc';
 import { OfficialLaborContractDoc, type LaborContractData } from './OfficialLaborContractDoc';
@@ -13,7 +13,6 @@ import { calculateNetEmploymentIncome } from '../lib/payrollEngine';
 import { calculateUsedPaidLeaveDaysInPeriod } from '../lib/paidLeaveCalculation';
 
 interface UserPayslipViewProps {
-
   userId: string;
   userName: string;
   tenantId?: string | null;
@@ -21,6 +20,7 @@ interface UserPayslipViewProps {
 
 export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userName, tenantId }) => {
   const [activeDocTab, setActiveDocTab] = useState<'payslip' | 'bonus' | 'tax_slip' | 'contract' | 'labor_profile'>('payslip');
+  const [isLineLinked, setIsLineLinked] = useState<boolean>(true);
   const currentCalYear = new Date().getFullYear();
   const [selectedTaxYear, setSelectedTaxYear] = useState<number>(currentCalYear - 1);
   const [payslips, setPayslips] = useState<any[]>([]);
@@ -116,6 +116,10 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
               .select('*')
               .eq('id', userId)
               .maybeSingle();
+
+            if (uData) {
+              setIsLineLinked(!!(uData.line_user_id || uData.is_line_linked));
+            }
 
             let localPay: Record<string, any> = {};
             try {
@@ -444,6 +448,39 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
           </button>
         </div>
       </div>
+
+      {/* 📱 公式LINE未連携時のワンタップ案内バナー */}
+      {!isLineLinked && (
+        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-2 border-emerald-400 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm mb-6 print:hidden">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-[#06C755] text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-500/20">
+              <MessageSquare className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-black text-slate-800 text-sm sm:text-base">
+                  公式LINE連携で、明細発行やシフト連絡を受け取る
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  未連携
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                ワンタップでLINEが開き、送信を押すだけで10秒で完了します。
+              </p>
+            </div>
+          </div>
+          <a
+            href={`/line-link?tid=${tenantId || ''}&uid=${userId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full sm:w-auto px-5 py-2.5 bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 shrink-0 no-underline cursor-pointer"
+          >
+            <ExternalLink className="w-4 h-4" />
+            <span>👉 LINE連携する（10秒）</span>
+          </a>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 1. 💰 給与明細書ビュー                                                    */}

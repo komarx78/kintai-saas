@@ -22,6 +22,7 @@ import OnboardingAdminDashboard from './pages/OnboardingAdminDashboard';
 import EmployeeOnboardingSubmission from './pages/EmployeeOnboardingSubmission';
 import EmployeeOnboardingWelcome from './pages/EmployeeOnboardingWelcome';
 import EmployeeMaternityApplication from './pages/EmployeeMaternityApplication';
+import StaffLineLinkPage from './pages/StaffLineLinkPage';
 import CompanySettingsDashboard from './pages/CompanySettingsDashboard';
 import CommunitySupportDashboard from './pages/CommunitySupportDashboard';
 import TrialEnded from './pages/TrialEnded';
@@ -208,6 +209,8 @@ function App() {
         } />
         <Route path="/onboarding/welcome" element={<EmployeeOnboardingWelcome />} />
         <Route path="/maternity/apply" element={<EmployeeMaternityApplication />} />
+        {/* 📱 既存・新人スタッフ専用 10秒LINEワンタップ連携ルート（パスワードレス公開） */}
+        <Route path="/line-link" element={<StaffLineLinkPage />} />
         {/* 🚨【軍律 第9条・第12条 遵守】アルバイト・現場専用 確定シフト公開閲覧ルート（パスワードレス） */}
         <Route path="/shift/view" element={<ShiftPublicView />} />
         <Route path="/settings/company/*" element={
