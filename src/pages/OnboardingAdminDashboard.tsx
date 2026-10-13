@@ -3615,8 +3615,8 @@ export default function OnboardingAdminDashboard() {
                 <table className="w-full text-left border-collapse min-w-[1150px]">
                   <thead>
                     <tr className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                      <th className="py-3 px-4">氏名 / 所属</th>
-                      <th className="py-3 px-3">雇用形態 / 就業時間</th>
+                      <th className="py-3 px-4 min-w-[180px]">氏名 / 所属</th>
+                      <th className="py-3 px-3 min-w-[145px] whitespace-nowrap">雇用形態 / 就業時間</th>
                       <th className="py-3 px-3 min-w-[190px] bg-emerald-50/70 text-emerald-950 border-x border-emerald-100">
                         📱 公式LINE連携（ID・登録名）
                       </th>
@@ -3670,15 +3670,15 @@ export default function OnboardingAdminDashboard() {
                           </td>
 
                           {/* 2. 雇用形態 / 就業時間 */}
-                          <td className="py-3.5 px-3">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
-                              isHourly ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+                          <td className="py-3.5 px-3 min-w-[145px] whitespace-nowrap">
+                            <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md border whitespace-nowrap shadow-2xs ${
+                              isHourly ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-blue-50 text-blue-800 border-blue-200'
                             }`}>
                               {isHourly ? 'パート・アルバイト' : '正社員（無期）'}
                             </span>
-                            <div className="text-[10px] text-slate-500 font-bold mt-1 flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-indigo-500" />
-                              {emp.start_time || '09:00'} 〜 {emp.end_time || '18:00'}
+                            <div className="text-[10px] text-slate-500 font-bold mt-1.5 flex items-center gap-1 whitespace-nowrap">
+                              <Clock className="w-3 h-3 text-indigo-500 shrink-0" />
+                              <span>{emp.start_time || '09:00'} 〜 {emp.end_time || '18:00'}</span>
                             </div>
                           </td>
 
