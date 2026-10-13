@@ -897,11 +897,11 @@ const ShiftAdminDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setIsReminderModalOpen(true)}
-                      className="w-full mt-3 py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl font-black text-xs shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer border border-emerald-400"
+                      className="w-full mt-3 py-3 px-3 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl font-black text-xs shadow-md shadow-[#06C755]/25 transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
                       title="シフト希望がまだ提出されていないスタッフへLINEで一括リマインドを送信します"
                     >
-                      <MessageSquare className="w-4 h-4 text-emerald-200" />
-                      <span>📱 未提出者（{unsubmittedEmployees.length}名）へLINE一括催促</span>
+                      <MessageSquare className="w-4 h-4 text-white" />
+                      <span>💬 未提出者（{unsubmittedEmployees.length}名）へLINE一括催促 ➔</span>
                     </button>
                   )}
                 </div>

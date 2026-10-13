@@ -51,6 +51,8 @@ import {
   fetchTenantLineConfigFromDb,
   syncStaffLineLinkFromDb,
   fetchStaffLineLinkMapFromDb,
+  pushLineMessageApi,
+  getEffectiveLineAccessToken,
   RAKUMARU_OFFICIAL_LINE_CONSTANTS,
   type LineIntegrationConfig 
 } from '../lib/lineMessaging';
@@ -379,6 +381,60 @@ export default function OnboardingAdminDashboard() {
       const details = await fetchStaffLineLinkMapFromDb(tenantId);
       setDbLineLinkDetails(details);
     } catch (_) {}
+  };
+
+  // 📱 スタッフ個別のLINE直接送信＆案内ハンドラー（LINEボタン用）
+  const [isSendingDirectLine, setIsSendingDirectLine] = useState<string | null>(null);
+
+  const handleDirectStaffLineAction = async (emp: any) => {
+    const userId = emp.user_id;
+    const staffName = emp.name;
+    const linkDetail = dbLineLinkDetails[userId];
+    const isLinked = linkDetail?.isLinked && linkDetail?.lineUserId;
+
+    if (isLinked) {
+      // 🟢 連携済み：公式LINEへアカウントログイン案内を直接プッシュ送信
+      setIsSendingDirectLine(userId);
+      try {
+        const portalUrl = window.location.origin + '/portal';
+        const cleanEmail = (!emp.email || emp.email.startsWith('emp_') || emp.email.includes('@sample.local') || emp.email.includes('@company.local')) ? '' : emp.email;
+        const loginId = cleanEmail || emp.code || emp.name;
+        
+        const lineMsg = 
+`【みんなのらくまる労務】\nログインアカウントのご案内📢\n\n` +
+`${staffName} 様\nお疲れ様です！社内システム（勤怠打刻・給与明細・シフト）のログイン情報をご案内いたします。\n\n` +
+`🌐 社員マイページURL:\n${portalUrl}\n\n` +
+`👤 ログインID:\n${loginId}\n\n` +
+`※ パスワードは社内ルールに基づき管理者より付与された初期パスワードをご利用いただくか、ログイン画面の「パスワードをお忘れの方」より再設定してください。\n\n` +
+`※ Web給与明細や確定シフトもこの公式LINEから届きます！`;
+
+        const token = getEffectiveLineAccessToken(tenantId) || RAKUMARU_OFFICIAL_LINE_CONSTANTS.channelAccessToken;
+        const pushRes = await pushLineMessageApi(token, linkDetail.lineUserId!, [{ type: 'text', text: lineMsg }]);
+        if (pushRes.success) {
+          setLineToast(`🎉 ${staffName} 様の公式LINEへログイン案内を直接送信しました！`);
+        } else {
+          setLineToast(`⚠️ 送信に失敗しました: ${pushRes.error || 'エラー'}`);
+        }
+      } catch (err: any) {
+        setLineToast(`⚠️ 送信エラー: ${err.message || '通信に失敗しました'}`);
+      } finally {
+        setIsSendingDirectLine(null);
+        setTimeout(() => setLineToast(null), 4000);
+      }
+    } else {
+      // 📲 未連携：10秒連携案内文を自動コピーし、QR/PINモーダルを開く
+      const origin = window.location.origin;
+      const linkUrl = `${origin}/line-link?tid=${tenantId}&uid=${userId}`;
+      const msg = `【会社より給与明細・シフトLINE配信のご案内】\n${staffName} 様\nWeb給与明細や確定シフトを公式LINEで直接受け取るための連携をお願いいたします。\n以下のリンクをスマホでタップし、「LINEを開いて送信」を押すだけで完了します（所要時間10秒）：\n${linkUrl}`;
+      await navigator.clipboard.writeText(msg);
+      setLineLinkModalState({
+        isOpen: true,
+        userId: userId,
+        userName: staffName
+      });
+      setLineToast(`📋 ${staffName} 様の10秒LINE連携案内をコピー＆QRを表示しました！`);
+      setTimeout(() => setLineToast(null), 4000);
+    }
   };
 
   useEffect(() => {
@@ -3678,6 +3734,22 @@ export default function OnboardingAdminDashboard() {
                                     </button>
                                   </div>
                                 )}
+
+                                {/* 💬 ログイン案内 LINE直接送信ボタン */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDirectStaffLineAction(emp)}
+                                  disabled={isSendingDirectLine === emp.user_id}
+                                  className="w-full mt-1 text-[10px] font-black py-1 px-1.5 rounded-lg bg-[#06C755] hover:bg-[#05b34c] text-white flex items-center justify-center gap-1 shadow-2xs transition cursor-pointer active:scale-98 disabled:opacity-50"
+                                  title="公式LINEへログインアカウント案内を直接プッシュ送信します"
+                                >
+                                  {isSendingDirectLine === emp.user_id ? (
+                                    <div className="w-2.5 h-2.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                  ) : (
+                                    <MessageSquare className="w-2.5 h-2.5" />
+                                  )}
+                                  <span>{isSendingDirectLine === emp.user_id ? '送信中...' : '💬 LINEで案内送信'}</span>
+                                </button>
                               </div>
                             ) : (
                               <div className="bg-amber-50/50 border border-amber-200/80 rounded-xl p-2 space-y-1.5 shadow-2xs">
@@ -3702,19 +3774,12 @@ export default function OnboardingAdminDashboard() {
 
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    const origin = window.location.origin;
-                                    const linkUrl = `${origin}/line-link?tid=${tenantId}&uid=${emp.user_id}`;
-                                    const msg = `【会社より給与明細・シフトLINE配信のご案内】\n${emp.name} 様\nWeb給与明細や確定シフトを公式LINEで直接受け取るための連携をお願いいたします。\n以下のリンクをスマホでタップし、「LINEを開いて送信」を押すだけで完了します（所要時間10秒）：\n${linkUrl}`;
-                                    navigator.clipboard.writeText(msg);
-                                    setLineToast(`📋 ${emp.name} 様の10秒LINE連携案内文をコピーしました！`);
-                                    setTimeout(() => setLineToast(null), 4000);
-                                  }}
-                                  className="w-full text-[10px] font-black py-1 px-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-1 shadow-2xs transition cursor-pointer"
-                                  title="スタッフ専用の10秒連携URL入り案内文をコピー"
+                                  onClick={() => handleDirectStaffLineAction(emp)}
+                                  className="w-full text-[10px] font-black py-1.5 px-2 rounded-lg bg-[#06C755] hover:bg-[#05b34c] text-white flex items-center justify-center gap-1 shadow-2xs transition cursor-pointer active:scale-98"
+                                  title="10秒LINE連携案内文を自動コピーし、QRコード画面を開きます"
                                 >
-                                  <Copy className="w-2.5 h-2.5" />
-                                  <span>10秒連携文コピー</span>
+                                  <MessageSquare className="w-2.5 h-2.5" />
+                                  <span>💬 LINE連携案内</span>
                                 </button>
                               </div>
                             )}

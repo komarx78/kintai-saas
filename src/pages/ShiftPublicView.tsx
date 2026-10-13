@@ -22,7 +22,9 @@ import {
   ChevronRight, 
   Search, 
   CheckCircle2, 
-  Info
+  Info,
+  MessageSquare,
+  ExternalLink
 } from 'lucide-react';
 import { 
   format, 
@@ -290,6 +292,35 @@ export default function ShiftPublicView() {
       {/* 🧭 メインコンテンツ枠 */}
       <main className="max-w-4xl mx-auto px-3 sm:px-4 py-4 space-y-4">
         
+        {/* 💬 公式LINE連携クイックバナー（スマホ閲覧用） */}
+        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-300 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#06C755] text-white flex items-center justify-center shrink-0 shadow-xs">
+              <MessageSquare className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-black text-slate-800 text-xs sm:text-sm flex items-center gap-1.5">
+                <span>公式LINE連携で、次回のシフトをLINEで直接受信</span>
+                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  おすすめ
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                友だち追加して4桁PINを送るだけ！シフト確定や給与明細が直接LINEに届きます。
+              </p>
+            </div>
+          </div>
+          <a
+            href={`/line-link?tid=${tenantId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full sm:w-auto px-4 py-2 bg-[#06C755] hover:bg-[#05b34c] text-white font-black text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 shrink-0 no-underline cursor-pointer active:scale-98"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span>💬 LINE連携する（10秒）</span>
+          </a>
+        </div>
+
         {/* 🔍 スマホ用クイック絞り込みバー */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 space-y-2.5">
           <div className="flex flex-wrap items-center gap-2">

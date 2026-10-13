@@ -2238,6 +2238,56 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     setTimeout(() => setCopyToast(null), 4000);
   };
 
+  // 💬 スタッフ個別の給与明細を直接公式LINEへPush送信（または未連携時に案内）
+  const [isSendingIndividualLine, setIsSendingIndividualLine] = useState<string | null>(null);
+
+  const handleSendIndividualPayslipLineMessage = async (payslip: Payslip) => {
+    const userId = payslip.user_id;
+    const userName = payslip.user?.name || 'スタッフ';
+    const linkDetail = dbLineLinkDetails[userId];
+    const isLinked = !!(linkDetail?.isLinked && linkDetail?.lineUserId);
+
+    if (isLinked) {
+      // 🟢 連携済み：このスタッフの給与明細を公式LINEへPush送信
+      setIsSendingIndividualLine(userId);
+      try {
+        const item = {
+          payslipId: payslip.id,
+          userId: userId,
+          userName: userName,
+          yearMonth: payslip.year_month || currentYearMonth,
+          paymentDate: payslip.payment_date,
+          grossPay: Number(payslip.total_earnings || payslip.base_salary || 0),
+          netPay: Number(payslip.net_salary || 0),
+          isLineLinked: true
+        };
+        const res = await sendStaffPayslipLineMessages(
+          tenantId,
+          [item],
+          tenantInfo?.name || tenantInfo?.company_name || '会社'
+        );
+        if (res.success && (res.totalSent ?? 0) > 0) {
+          setCopyToast(`🎉 ${userName} 様へ公式LINEより給与明細を送信しました！`);
+        } else {
+          setCopyToast(`⚠️ 送信結果: ${res.message}`);
+        }
+      } catch (err: any) {
+        setCopyToast(`⚠️ 送信エラー: ${err.message || '通信に失敗しました'}`);
+      } finally {
+        setIsSendingIndividualLine(null);
+        setTimeout(() => setCopyToast(null), 4000);
+      }
+    } else {
+      // 📲 未連携：文面を自動コピーし、ワンタイムPINモーダルを開く
+      handleCopyIndividualPayslipLineText(payslip);
+      setLineLinkModalState({
+        isOpen: true,
+        userId: userId,
+        userName: userName
+      });
+    }
+  };
+
   // 個別の確定公開 / 下書きトグル
   const handleTogglePublishSingle = async (slip: Payslip) => {
     if (!tenantId) return;
@@ -3059,15 +3109,15 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 <button
                   onClick={handleSendPayslipLineBatch}
                   disabled={isSendingLine || payslips.length === 0 || publishedCount < employees.length}
-                  className={`w-full font-bold text-[11px] py-1.5 px-2 rounded-xl transition shadow-xs flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50 ${
+                  className={`w-full font-black text-xs py-2 px-2.5 rounded-xl transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-98 ${
                     publishedCount === employees.length && employees.length > 0
-                      ? 'bg-[#25785C] hover:bg-[#1D604A] text-white shadow-[#25785C]/20'
+                      ? 'bg-[#06C755] hover:bg-[#05b34c] text-white shadow-md shadow-[#06C755]/20 animate-pulse'
                       : 'bg-slate-200 text-slate-500 cursor-not-allowed'
                   }`}
                   title={publishedCount === employees.length && employees.length > 0 ? '連携済みスタッフ全員へWeb給与明細をLINE一括送信します' : '全員の給与が確定した後にLINE通知が可能になります'}
                 >
-                  {isSendingLine ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5 text-emerald-100" />}
-                  <span>💬 LINE一括通知する ➔</span>
+                  {isSendingLine ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5 text-white" />}
+                  <span>💬 Web給与明細をLINE一括送信 ➔</span>
                 </button>
               ) : (
                 <button
@@ -3991,15 +4041,33 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                         明細プレビュー / 印刷
                       </button>
 
-                      {/* 📋 LINE送信用文面コピー（手動・個別通知） */}
-                      <button
-                        onClick={() => handleCopyIndividualPayslipLineText(slip)}
-                        className="text-xs font-bold text-emerald-700 hover:text-white bg-emerald-50 hover:bg-emerald-600 border border-emerald-200 px-3 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                        title="このスタッフ向けの給与明細LINE案内文面をクリップボードにコピー（個人LINEやチャットツールへ貼り付け可能）"
-                      >
-                        <Copy className="w-3.5 h-3.5 text-emerald-600" />
-                        LINE文面コピー
-                      </button>
+                      {/* 💬 公式LINE直接送信 ＆ LINE文面コピー（スマートLINEボタン） */}
+                      {dbLineLinkDetails[slip.user_id]?.isLinked ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSendIndividualPayslipLineMessage(slip)}
+                          disabled={isSendingIndividualLine === slip.user_id}
+                          className="text-xs font-black text-white bg-[#06C755] hover:bg-[#05b34c] px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-98 disabled:opacity-50"
+                          title="このスタッフの公式LINEへWeb給与明細を直接プッシュ送信します"
+                        >
+                          {isSendingIndividualLine === slip.user_id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <MessageSquare className="w-3.5 h-3.5 text-white" />
+                          )}
+                          <span>{isSendingIndividualLine === slip.user_id ? '送信中...' : '💬 LINEで明細送信'}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSendIndividualPayslipLineMessage(slip)}
+                          className="text-xs font-bold text-emerald-800 hover:text-white bg-emerald-50 hover:bg-[#06C755] border border-emerald-300 px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-98"
+                          title="LINE未連携のため、案内文をコピーしワンタイムPIN画面を開きます"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-600 group-hover:text-white" />
+                          <span>💬 LINE案内＆文面コピー</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -4440,15 +4508,33 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                     <span>🔄 再計算</span>
                                   </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCopyIndividualPayslipLineText(slip)}
-                                    className="text-xs font-bold text-emerald-700 hover:text-white bg-emerald-50 hover:bg-emerald-600 border border-emerald-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                                    title="LINE送信用文面をコピー"
-                                  >
-                                    <Copy className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span>LINE文面コピー</span>
-                                  </button>
+                                  {/* 💬 公式LINE直接送信 ＆ LINE文面コピー（スマートLINEボタン） */}
+                                  {dbLineLinkDetails[slip.user_id]?.isLinked ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSendIndividualPayslipLineMessage(slip)}
+                                      disabled={isSendingIndividualLine === slip.user_id}
+                                      className="text-xs font-black text-white bg-[#06C755] hover:bg-[#05b34c] px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-98 disabled:opacity-50"
+                                      title="このスタッフの公式LINEへWeb給与明細を直接プッシュ送信します"
+                                    >
+                                      {isSendingIndividualLine === slip.user_id ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <MessageSquare className="w-3.5 h-3.5 text-white" />
+                                      )}
+                                      <span>{isSendingIndividualLine === slip.user_id ? '送信中...' : '💬 LINEで明細送信'}</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSendIndividualPayslipLineMessage(slip)}
+                                      className="text-xs font-bold text-emerald-800 hover:text-white bg-emerald-50 hover:bg-[#06C755] border border-emerald-300 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-98"
+                                      title="LINE未連携のため、案内文をコピーしワンタイムPIN画面を開きます"
+                                    >
+                                      <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                                      <span>💬 LINE案内＆コピー</span>
+                                    </button>
+                                  )}
                                 </div>
                               </div>
 

@@ -3,7 +3,7 @@
  */
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, Users, ChevronDown, CheckCircle2, Scale, Sparkles, ArrowRightLeft, Calendar, Briefcase, Printer, Building2, MapPin, Store, MessageSquare, Send, Smartphone, HelpCircle } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plus, User, X, Save, Clock, Trash2, Wand2, RotateCcw, AlertTriangle, AlertCircle, Users, ChevronDown, CheckCircle2, Scale, Sparkles, ArrowRightLeft, Calendar, Briefcase, Printer, Building2, MapPin, Store, MessageSquare, Send, Smartphone, HelpCircle } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { format, addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -1681,7 +1681,7 @@ const ShiftCalendarView: React.FC = () => {
                 <span className="text-[10px] text-teal-200 font-normal">（本番公開）</span>
               </button>
 
-              {/* 📱 確定シフト LINE一括送信 */}
+              {/* 💬 確定シフト LINE一括配信 */}
               <button 
                 onClick={() => {
                   if (lineStaffList.length > 0) {
@@ -1689,11 +1689,35 @@ const ShiftCalendarView: React.FC = () => {
                   }
                   setIsLineSendModalOpen(true);
                 }}
-                className="h-[42px] px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center gap-1.5 transition shadow-xs hover:shadow font-bold cursor-pointer border border-emerald-500 shrink-0 whitespace-nowrap text-xs"
-                title="確定したシフトを各スタッフのLINE宛てに個別一括送信します"
+                className="h-[42px] px-3.5 bg-[#06C755] hover:bg-[#05b34c] text-white rounded-xl flex items-center gap-1.5 transition shadow-xs hover:shadow font-black cursor-pointer border border-[#05b34c] shrink-0 whitespace-nowrap text-xs active:scale-98"
+                title="確定したシフトを各スタッフの公式LINE宛てに個別一括送信します"
               >
-                <MessageSquare className="w-3.5 h-3.5 text-emerald-200 shrink-0" />
-                <span>LINEで確定送信</span>
+                <MessageSquare className="w-4 h-4 text-white shrink-0" />
+                <span>💬 確定シフトLINE配信</span>
+                <span className="text-[10px] bg-white/25 px-1.5 py-0.5 rounded-full font-bold ml-0.5">
+                  🟢 {lineStaffList.filter(s => s.isLineLinked).length}名連携済
+                </span>
+              </button>
+
+              {/* 🚨 緊急ヘルプ LINE一括募集 */}
+              <button 
+                onClick={() => {
+                  setEmergencyHelpTarget({
+                    shiftId: 'emergency_broadcast',
+                    userId: 'broadcast_all',
+                    targetDate: format(baseDate, 'yyyy-MM-dd'),
+                    startTime: '18:00',
+                    endTime: '22:00',
+                    role: roles[0]?.name || 'ホール',
+                    storeName: selectedDepartment !== 'all' ? selectedDepartment : (departmentsList[0] || '全店舗')
+                  });
+                  setIsEmergencyModalOpen(true);
+                }}
+                className="h-[42px] px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl flex items-center gap-1.5 transition shadow-xs hover:shadow font-black cursor-pointer border border-rose-500 shrink-0 whitespace-nowrap text-xs active:scale-98"
+                title="人員不足・欠勤時にスタッフ全員の公式LINE宛てに緊急ヘルプ募集を一斉配信します"
+              >
+                <AlertCircle className="w-3.5 h-3.5 text-rose-200 shrink-0" />
+                <span>🚨 緊急ヘルプ募集</span>
               </button>
 
               {/* 📋 確定版カレンダー */}
@@ -2548,11 +2572,26 @@ const ShiftCalendarView: React.FC = () => {
                                       <div key={uid} className="flex group hover:bg-slate-50 transition-colors">
                                         <div className="w-56 shrink-0 p-2 font-bold text-slate-700 border-r border-slate-100 flex items-center justify-between sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors shadow-[1px_0_5px_-2px_rgba(0,0,0,0.1)]">
                                           <div className="flex flex-col min-w-0 pr-1">
-                                            <div className="flex items-center">
-                                              <User className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0" />
-                                              <span className="truncate text-sm font-bold" title={userObj?.name || (userShifts[0]?.user?.name && userShifts[0]?.user?.name !== '不明' ? userShifts[0]?.user?.name : '') || '不明なユーザー'}>
-                                                {userObj?.name || (userShifts[0]?.user?.name && userShifts[0]?.user?.name !== '不明' ? userShifts[0]?.user?.name : '') || '不明なユーザー'}
-                                              </span>
+                                            <div className="flex items-center justify-between gap-1">
+                                              <div className="flex items-center min-w-0">
+                                                <User className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0" />
+                                                <span className="truncate text-sm font-bold" title={userObj?.name || (userShifts[0]?.user?.name && userShifts[0]?.user?.name !== '不明' ? userShifts[0]?.user?.name : '') || '不明なユーザー'}>
+                                                  {userObj?.name || (userShifts[0]?.user?.name && userShifts[0]?.user?.name !== '不明' ? userShifts[0]?.user?.name : '') || '不明なユーザー'}
+                                                </span>
+                                              </div>
+                                              {/* 💬 スタッフ個別 LINE配信/プレビューボタン */}
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedPreviewStaffId(uid);
+                                                  setIsLineSendModalOpen(true);
+                                                }}
+                                                className="shrink-0 p-1 rounded-md text-[#06C755] hover:bg-emerald-50 transition cursor-pointer"
+                                                title={`【${userObj?.name || 'スタッフ'}】の確定シフトをLINE送信・プレビュー`}
+                                              >
+                                                <MessageSquare className="w-3.5 h-3.5" />
+                                              </button>
                                             </div>
                                             {/* 所属店舗名 ＆ 他店舗からの応援バッジ */}
                                             <div className="flex items-center gap-1 mt-0.5 ml-4 flex-wrap">
