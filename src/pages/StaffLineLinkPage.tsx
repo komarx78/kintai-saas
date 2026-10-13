@@ -275,7 +275,7 @@ export default function StaffLineLinkPage() {
                 <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
                   <p className="font-bold">⚠️ 万が一、LINEを開いた時に文字が入っていない場合：</p>
                   <p className="mt-0.5">
-                    LINEのトーク画面で、上記の4桁コード【<strong className="text-amber-950 font-mono font-bold text-xs">{pin}</strong>】をそのまま打って送信してください。
+                    LINEのトーク画面で、上記の4桁コード【<strong className="text-amber-950 font-mono font-bold text-xs">{pin}</strong>】をそのまま打って送信してください。（※ 大文字・小文字どちらで送っても自動認識されます）
                   </p>
                 </div>
               </div>

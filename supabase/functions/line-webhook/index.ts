@@ -51,11 +51,14 @@ serve(async (req) => {
       }
 
       if (event.type === "message" && event.message?.type === "text") {
-        const text = (event.message.text || "").trim();
+        const rawText = (event.message.text || "").trim();
+        const halfText = rawText.replace(/[！-～]/g, (s: string) => String.fromCharCode(s.charCodeAt(0) - 0xfee0));
+        const extractedPin = halfText.replace(/^.*?(コード|CODE|PIN)[:：\s]*/i, '').trim();
 
-        if (/^\d{4,6}$/.test(text)) {
+        if (/^[A-Za-z0-9]{4,6}$/.test(extractedPin)) {
+          const pinUpper = extractedPin.toUpperCase();
           const { data: linkResult } = await supabase.rpc("link_user_by_line_pin", {
-            p_pin: text,
+            p_pin: pinUpper,
             p_line_user_id: lineUserId
           });
 
@@ -68,7 +71,7 @@ serve(async (req) => {
           } else if (replyToken) {
             await replyLineMessage(
               replyToken,
-              `⚠️ 連携コードが見つからないか、有効期限が切れています。\n画面の最新コードをご確認の上、再度送信してください。`,
+              `⚠️ 連携コードが見つからないか、有効期限が切れています。\n画面の最新コード（例: 7K9X）をご確認の上、再度送信してください。`,
               RAKUMARU_CHANNEL_ACCESS_TOKEN
             );
           }

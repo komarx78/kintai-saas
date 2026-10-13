@@ -98,49 +98,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 2. メッセージ受信イベント (message)
     if (event.type === 'message' && event.message?.type === 'text') {
-      const text = (event.message.text || '').trim();
+      const rawText = (event.message.text || '').trim();
 
-      // (A) 連携コード（4〜6桁の数字）が送信された場合
-      if (/^\d{4,6}$/.test(text)) {
+      // 全角英数字を半角に変換し、前後の日本語（「連携コード:」等）を除去して正規化
+      const halfText = rawText.replace(/[！-～]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xfee0));
+      const extractedPin = halfText.replace(/^.*?(コード|CODE|PIN)[:：\s]*/i, '').trim();
+
+      // (A) 連携コード（4〜6桁の英数字：大文字小文字両対応）が送信された場合
+      if (/^[A-Za-z0-9]{4,6}$/.test(extractedPin)) {
+        const pinUpper = extractedPin.toUpperCase();
+
         // LINEプロフィールを取得
         const profile = lineUserId ? await getLineProfile(lineUserId, RAKUMARU_CHANNEL_ACCESS_TOKEN) : {};
 
-        // Supabase RPC で照合・連携
+        // Supabase RPC で照合・連携（大文字小文字非依存）
         const { data: linkResult, error: rpcErr } = await supabase.rpc('link_user_by_line_pin', {
-          p_pin: text,
+          p_pin: pinUpper,
           p_line_user_id: lineUserId,
           p_line_display_name: profile.displayName || null,
           p_line_picture_url: profile.pictureUrl || null
         });
 
         if (rpcErr || !linkResult?.success) {
-          // 万が一RPCがない場合の直接UPDATEフォールバック
-          const { data: directUser } = await supabase
+          // 万が一RPCがない場合の直接UPDATEフォールバック（大文字小文字フォールバック検索）
+          const { data: directUsers } = await supabase
             .from('users')
-            .select('id, name')
-            .eq('line_link_pin', text)
-            .maybeSingle();
+            .select('id, name, line_link_pin, line_link_pin_expires_at')
+            .not('line_link_pin', 'is', null)
+            .limit(100);
 
-          if (directUser) {
+          const matchedUser = directUsers?.find(u => 
+            u.line_link_pin && 
+            u.line_link_pin.trim().toUpperCase() === pinUpper &&
+            (!u.line_link_pin_expires_at || new Date(u.line_link_pin_expires_at) > new Date())
+          );
+
+          if (matchedUser) {
             await supabase.from('users').update({
               line_user_id: lineUserId,
               line_display_name: profile.displayName || null,
               line_picture_url: profile.pictureUrl || null,
               is_line_linked: true,
               line_linked_at: new Date().toISOString(),
-              line_link_pin: null
-            }).eq('id', directUser.id);
+              line_link_pin: null,
+              line_link_pin_expires_at: null
+            }).eq('id', matchedUser.id);
 
             if (replyToken) {
               await replyLineMessage(
                 replyToken,
-                `🎉 【みんなのらくまる労務】\n${directUser.name} 様、LINE連携が完了しました！\n\n今後、給与明細や確定シフトの通知がこのLINEに届きます。`,
+                `🎉 【みんなのらくまる労務】\n${matchedUser.name} 様、LINE連携が完了しました！\n\n今後、給与明細や確定シフトの通知がこのLINEに届きます。`,
                 RAKUMARU_CHANNEL_ACCESS_TOKEN
               );
             }
           } else {
             if (replyToken) {
-              const errMsg = linkResult?.error || '連携コードが見つからないか、有効期限が切れています。\n社内システムの画面に表示されている最新の連携コードをご確認の上、再度送信してください。';
+              const errMsg = linkResult?.error || '連携コードが見つからないか、有効期限が切れています。\n社内システムの画面に表示されている最新のコード（例: 7K9X）をご確認の上、再度送信してください。';
               await replyLineMessage(replyToken, `⚠️ ${errMsg}`, RAKUMARU_CHANNEL_ACCESS_TOKEN);
             }
           }

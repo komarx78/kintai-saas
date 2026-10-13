@@ -1014,8 +1014,12 @@ export async function generateOrFetchLinePin(userId: string): Promise<{ success:
       }
     } catch (_) {}
 
-    // 3. 直接生成＆UPDATEフォールバック（4桁の数字）
-    const newPin = String(Math.floor(1000 + Math.random() * 9000));
+    // 3. 直接生成＆UPDATEフォールバック（英大文字＋数字4桁：約105万通り）
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let newPin = '';
+    for (let i = 0; i < 4; i++) {
+      newPin += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 
     const { error: updErr } = await supabase
@@ -1029,9 +1033,8 @@ export async function generateOrFetchLinePin(userId: string): Promise<{ success:
     if (updErr) {
       console.warn('generateOrFetchLinePin update note:', updErr);
       // カラム未定義の場合でも画面操作できるようローカルキーを生成
-      const mockPin = String(Math.floor(1000 + Math.random() * 9000));
-      localStorage.setItem(`line_mock_pin_${userId}`, mockPin);
-      return { success: true, pin: mockPin, expiresAt };
+      localStorage.setItem(`line_mock_pin_${userId}`, newPin);
+      return { success: true, pin: newPin, expiresAt };
     }
 
     return { success: true, pin: newPin, expiresAt };

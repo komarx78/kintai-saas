@@ -295,7 +295,7 @@ export const LineLinkModal: React.FC<LineLinkModalProps> = ({
                 </h4>
                 <ol className="mt-2 space-y-1.5 text-xs text-emerald-800 list-decimal list-inside font-medium leading-relaxed">
                   <li>下のQRコードを読み取り、公式LINEを「友だち追加」</li>
-                  <li>トーク画面で、下の <span className="font-bold text-emerald-950 underline underline-offset-2">4桁の認証PIN</span> をそのまま送信</li>
+                  <li>トーク画面で、下の <span className="font-bold text-emerald-950 underline underline-offset-2">4桁の認証コード</span> をそのまま送信（大文字・小文字どちらでも可）</li>
                   <li>約1秒で自動照合され、即座に連携が完了します</li>
                 </ol>
               </div>
@@ -332,8 +332,8 @@ export const LineLinkModal: React.FC<LineLinkModalProps> = ({
 
                 <p className="text-[11px] text-slate-500 font-medium">
                   {expiresAt 
-                    ? `※ 有効期限: ${new Date(expiresAt).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} まで有効` 
-                    : '※ 有効期限: 発行後48時間（期限内であればいつでも連携可能）'}
+                    ? `※ 有効期限: ${new Date(expiresAt).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })} まで有効（大文字・小文字どちらで送っても自動認識されます）` 
+                    : '※ 有効期限: 発行後48時間（大文字・小文字どちらで送っても自動認識されます）'}
                 </p>
               </div>
 

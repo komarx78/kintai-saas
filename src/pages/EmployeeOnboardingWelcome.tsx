@@ -950,7 +950,7 @@ export default function EmployeeOnboardingWelcome() {
                       {linePin || '----'}
                     </div>
                     <p className="text-[10px] text-slate-400 leading-relaxed">
-                      ※ 上の緑のボタンを押してLINEが立ち上がったら、そのまま【送信】を押してください。もし文字が入っていない場合は、上記の4桁番号【{linePin}】を送ってください。
+                      ※ 上の緑のボタンを押してLINEが立ち上がったら、そのまま【送信】を押してください。もし文字が入っていない場合は、上記の4桁コード【<strong className="text-emerald-300 font-mono font-bold">{linePin}</strong>】を送ってください。（大文字・小文字どちらでも自動認識されます）
                     </p>
                   </div>
                 </div>
