@@ -175,23 +175,45 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
                0;
       };
 
-      // 保存済み賞与キャンペーンの読み込み（LocalStorage ＆ DB）
+      // 保存済み賞与キャンペーンの読み込み（LocalStorage ＆ Supabase DB SSOTマージ）
       const localKey = `mf_bonus_campaigns_${tenantId}`;
-      let loadedCampaigns: BonusCampaign[] = [];
+      let localCampaigns: BonusCampaign[] = [];
       try {
         const localRaw = localStorage.getItem(localKey);
         if (localRaw) {
-          loadedCampaigns = JSON.parse(localRaw);
+          localCampaigns = JSON.parse(localRaw);
         }
       } catch (e) {
         console.warn('LocalStorage bonus parse error:', e);
       }
 
-      // DBに bonus_records_data カラム等があれば取得（将来の拡張・同期）
-      if (tData?.bonus_records_data && Array.isArray(tData.bonus_records_data)) {
-        if (loadedCampaigns.length === 0) {
-          loadedCampaigns = tData.bonus_records_data;
+      // DBの tenants.work_calendar_settings.bonus_campaigns（または bonus_records_data）から取得
+      let dbCampaigns: BonusCampaign[] = [];
+      if (tData?.work_calendar_settings?.bonus_campaigns && Array.isArray(tData.work_calendar_settings.bonus_campaigns)) {
+        dbCampaigns = tData.work_calendar_settings.bonus_campaigns;
+      } else if (tData?.bonus_records_data && Array.isArray(tData.bonus_records_data)) {
+        dbCampaigns = tData.bonus_records_data;
+      }
+
+      // IDごとに updated_at が新しい方を優先してマージ（別PC・スタッフスマホとの完全同期）
+      const campaignMap = new Map<string, BonusCampaign>();
+      localCampaigns.forEach(c => {
+        if (c && c.id) campaignMap.set(c.id, c);
+      });
+      dbCampaigns.forEach(c => {
+        if (c && c.id) {
+          const existing = campaignMap.get(c.id);
+          if (!existing || (c.updated_at && (!existing.updated_at || c.updated_at >= existing.updated_at))) {
+            campaignMap.set(c.id, c);
+          }
         }
+      });
+
+      let loadedCampaigns: BonusCampaign[] = Array.from(campaignMap.values());
+      if (loadedCampaigns.length > 0 && tenantId) {
+        try {
+          localStorage.setItem(localKey, JSON.stringify(loadedCampaigns));
+        } catch (_) {}
       }
 
       // 初回でキャンペーンが1件もない場合、デフォルトの夏季賞与キャンペーンを雛形生成
@@ -849,27 +871,49 @@ export const BonusManagement: React.FC<BonusManagementProps> = ({ tenantId }) =>
     showNotice(`⚡ 雇用形態別にまとめて一括算定しました（正社員: ${mult}ヶ月 / パート: ¥${amt.toLocaleString()}）`);
   };
 
-  // 6. 保存処理（LocalStorage & DB 二重同期）
+  // 6. 保存処理（LocalStorage & Supabase DB 二重永続化）
   const saveCampaignsData = async (targetCampaigns: BonusCampaign[]) => {
     setIsSaving(true);
     try {
       const localKey = `mf_bonus_campaigns_${tenantId}`;
       localStorage.setItem(localKey, JSON.stringify(targetCampaigns));
 
-      // Supabase tenantsテーブルにもバックアップ格納（カラム対応可能な場合）
-      try {
-        await supabase
-          .from('tenants')
-          .update({ 
-            updated_at: new Date().toISOString() 
-          })
-          .eq('id', tenantId);
-      } catch (e) {
-        console.warn('DB tenant update error (non-fatal):', e);
+      // Supabase tenantsテーブルの work_calendar_settings (JSONB) 内に bonus_campaigns として永続化
+      if (tenantId) {
+        try {
+          const { data: currentTenant } = await supabase
+            .from('tenants')
+            .select('work_calendar_settings')
+            .eq('id', tenantId)
+            .maybeSingle();
+
+          const currentCalSettings = (currentTenant?.work_calendar_settings && typeof currentTenant.work_calendar_settings === 'object')
+            ? currentTenant.work_calendar_settings
+            : {};
+
+          const updatedCalSettings = {
+            ...currentCalSettings,
+            bonus_campaigns: targetCampaigns
+          };
+
+          const { error: dbErr } = await supabase
+            .from('tenants')
+            .update({ 
+              work_calendar_settings: updatedCalSettings,
+              updated_at: new Date().toISOString() 
+            })
+            .eq('id', tenantId);
+
+          if (dbErr) {
+            console.warn('DB tenant bonus_campaigns update warning:', dbErr.message);
+          }
+        } catch (e) {
+          console.warn('DB tenant update error (non-fatal):', e);
+        }
       }
 
       setCampaigns(targetCampaigns);
-      showNotice('賞与計算データを正常に保存しました！');
+      showNotice('賞与計算データをデータベースへ正常に保存しました！');
     } catch (err) {
       console.error('Save error:', err);
       alert('保存中にエラーが発生しました。');

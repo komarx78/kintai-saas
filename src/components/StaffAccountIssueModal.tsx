@@ -179,19 +179,16 @@ URLを開いた後、スマホのメニューから「ホーム画面に追加�
       });
 
       if (rpcError) {
-        console.warn('RPC create_or_update_staff_auth_account warning:', rpcError);
-        // RPCがエラーでも台帳の保存は試みる
-        setWarningMsg('※ 認証基盤への直接登録で一時的な警告が発生しましたが、台帳への登録を完了しました。');
+        console.error('RPC create_or_update_staff_auth_account error:', rpcError);
+        setError(`認証アカウントの作成・更新に失敗しました: ${rpcError.message || 'RPC実行エラー'}`);
+        setLoading(false);
+        return;
       } else if (rpcData && typeof rpcData === 'object' && (rpcData as any).success === false) {
         const customErr = (rpcData as any).error || 'アカウント発行に失敗しました。';
         console.warn('RPC business logic error:', customErr);
-        if ((rpcData as any).error_code === 'EMAIL_ALREADY_IN_USE') {
-          setError(customErr);
-          setLoading(false);
-          return;
-        } else {
-          setWarningMsg(`※ ${customErr}`);
-        }
+        setError(customErr);
+        setLoading(false);
+        return;
       }
 
       // 2. public.users のメールアドレスも最新の実アドレスで確実に永続化（台帳同期）

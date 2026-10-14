@@ -35,6 +35,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
 
   // 👤 本人労務・給与プロファイル（SSOT一元連携）
   const [userProfile, setUserProfile] = useState<{
+    name_kana?: string;
     birth_date?: string;
     address?: string;
     join_date?: string;
@@ -46,6 +47,8 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
     account_type?: string;
     account_number?: string;
     account_holder?: string;
+    has_spouse?: boolean;
+    spouse_name?: string;
     dependents_count?: number;
     base_salary?: number;
     position_name?: string;
@@ -67,14 +70,18 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
       setIsLoading(true);
       try {
         // 会社名・所在地・社印の取得
+        let fetchedTenantData: any = null;
         if (tenantId) {
           try {
             const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
-            if (tData?.name) setTenantName(tData.name);
-            if (tData?.address) setCompanyAddress(tData.address);
-            if (tData?.phone_number) setCompanyPhone(tData.phone_number);
-            if (tData?.corporate_number) setCorporateNumber(tData.corporate_number);
-            if (tData?.company_seal_url) setCompanySealUrl(tData.company_seal_url);
+            if (tData) {
+              fetchedTenantData = tData;
+              if (tData.name) setTenantName(tData.name);
+              if (tData.address) setCompanyAddress(tData.address);
+              if (tData.phone_number) setCompanyPhone(tData.phone_number);
+              if (tData.corporate_number) setCorporateNumber(tData.corporate_number);
+              if (tData.company_seal_url) setCompanySealUrl(tData.company_seal_url);
+            }
           } catch (tErr) {
             console.warn('Tenant fetch error:', tErr);
           }
@@ -129,20 +136,23 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
             const myLocalPay = localPay[userId] || {};
 
             setUserProfile({
-              birth_date: obData?.birth_date || '',
-              address: obData?.address || '',
+              name_kana: obData?.name_kana || uData?.name_kana || obData?.furigana || uData?.furigana || '',
+              birth_date: obData?.birth_date || uData?.birth_date || '',
+              address: obData?.address || uData?.address || '',
               join_date: obData?.join_date || uData?.join_date || '',
-              retirement_date: obData?.retirement_date || uData?.retirement_date,
-              is_retired: uData?.status === 'retired' || !!obData?.retirement_date,
+              retirement_date: obData?.retirement_date || uData?.retirement_date || uData?.resignation_date,
+              is_retired: uData?.status === 'retired' || !!obData?.retirement_date || !!uData?.resignation_date,
               my_number: obData?.my_number || '',
               bank_name: obData?.bank_name || pyData?.bank_name || myLocalPay?.bank_name || '',
               branch_name: obData?.branch_name || pyData?.branch_name || myLocalPay?.branch_name || '',
               account_type: obData?.account_type || pyData?.account_type || myLocalPay?.account_type || '',
               account_number: obData?.account_number || pyData?.account_number || myLocalPay?.account_number || '',
               account_holder: obData?.account_holder || pyData?.account_holder || userName || '',
-              dependents_count: obData?.dependents_count || pyData?.dependents_count || 0,
+              has_spouse: Boolean(obData?.has_spouse || obData?.spouse_name || pyData?.has_spouse),
+              spouse_name: obData?.spouse_name || '',
+              dependents_count: Number(obData?.dependents_count ?? pyData?.dependents_count ?? myLocalPay?.dependents_count ?? 0),
               base_salary: pyData?.base_salary || myLocalPay?.base_salary || obData?.base_salary || 0,
-              position_name: obData?.position_name || '',
+              position_name: obData?.position_name || uData?.position || '',
               department: obData?.department || uData?.department || ''
             });
           } catch (pErr) {
@@ -237,44 +247,72 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
           const allDocs = await fetchRevisionContracts(tenantId);
           const mine = allDocs.filter(d => d.user_id === userId || (userName && d.user_name === userName));
           setMyContracts(mine);
-
-          try {
-            const { data: tData } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
-            setCompanySettings(tData || {});
-          } catch (e) {}
+          setCompanySettings(fetchedTenantData || {});
         }
 
-        // 🎁 確定公開済み賞与データ（status === 'published'）の取得・同期
+        // 🎁 確定公開済み賞与データ（status === 'published'）の取得・同期（クラウドSSOT + LocalStorageマージ）
         const bonusKey = tenantId ? `mf_bonus_campaigns_${tenantId}` : 'mf_bonus_campaigns_default';
         const storedBonus = localStorage.getItem(bonusKey);
-        let myBonusList: any[] = [];
+        const campaignMap = new Map<string, any>();
+
+        // 1. クラウド（tenants.work_calendar_settings.bonus_campaigns）から取得
+        const cloudBonusCampaigns = fetchedTenantData?.work_calendar_settings?.bonus_campaigns;
+        if (Array.isArray(cloudBonusCampaigns)) {
+          cloudBonusCampaigns.forEach((camp: any) => {
+            if (camp && camp.id) {
+              campaignMap.set(camp.id, camp);
+            }
+          });
+        }
+
+        // 2. LocalStorageから取得してマージ（updated_at が新しい方を優先）
         if (storedBonus) {
           try {
-            const allCampaigns: any[] = JSON.parse(storedBonus);
-            allCampaigns.forEach(camp => {
-              const isEligibleStatus = camp.status === 'published' || camp.status === 'confirmed';
-              const items = Array.isArray(camp.items) ? camp.items : Array.isArray(camp.records) ? camp.records : [];
-              if (isEligibleStatus && items.length > 0) {
-                const myRec = items.find((r: any) => 
-                  (userId && (r.user_id === userId || r.employee_id === userId)) ||
-                  (userName && r.user_name && r.user_name.replace(/\s+/g, '') === userName.replace(/\s+/g, ''))
-                );
-                if (myRec) {
-                  myBonusList.push({
-                    campaignId: camp.id,
-                    title: camp.title,
-                    bonusType: camp.bonus_type,
-                    paymentDate: camp.payment_date,
-                    assessmentPeriod: camp.assessment_period,
-                    record: myRec
-                  });
+            const localCampaigns: any[] = JSON.parse(storedBonus);
+            if (Array.isArray(localCampaigns)) {
+              localCampaigns.forEach(camp => {
+                if (camp && camp.id) {
+                  const existing = campaignMap.get(camp.id);
+                  if (!existing) {
+                    campaignMap.set(camp.id, camp);
+                  } else {
+                    const tLocal = camp.updated_at ? new Date(camp.updated_at).getTime() : 0;
+                    const tCloud = existing.updated_at ? new Date(existing.updated_at).getTime() : 0;
+                    if (tLocal >= tCloud) {
+                      campaignMap.set(camp.id, camp);
+                    }
+                  }
                 }
-              }
-            });
+              });
+            }
           } catch (bErr) {
             console.warn('Bonus parse error:', bErr);
           }
         }
+
+        const myBonusList: any[] = [];
+        Array.from(campaignMap.values()).forEach(camp => {
+          const isEligibleStatus = camp.status === 'published' || camp.status === 'confirmed';
+          const items = Array.isArray(camp.items) ? camp.items : Array.isArray(camp.records) ? camp.records : [];
+          if (isEligibleStatus && items.length > 0) {
+            const myRec = items.find((r: any) => 
+              (userId && (r.user_id === userId || r.employee_id === userId)) ||
+              (userName && r.user_name && r.user_name.replace(/\s+/g, '') === userName.replace(/\s+/g, ''))
+            );
+            if (myRec) {
+              myBonusList.push({
+                campaignId: camp.id,
+                title: camp.title,
+                bonusType: camp.bonus_type,
+                paymentDate: camp.payment_date,
+                payment_date: camp.payment_date,
+                assessmentPeriod: camp.assessment_period,
+                record: myRec
+              });
+            }
+          }
+        });
+        myBonusList.sort((a, b) => (b.paymentDate || '').localeCompare(a.paymentDate || ''));
         setPublishedBonusList(myBonusList);
         if (myBonusList.length > 0) {
           setSelectedBonusId(myBonusList[0].campaignId);
@@ -552,7 +590,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
               </p>
             </div>
           ) : (
-            <div id="user-payslip-print-area" className="bg-white rounded-2xl border border-slate-300 shadow-xl overflow-hidden print:border-none print:shadow-none print:rounded-none">
+            <div id="user-payslip-print-area" className="bg-white rounded-2xl border border-slate-300 shadow-xl overflow-x-auto print:overflow-visible print:border-none print:shadow-none print:rounded-none">
               <OfficialPayslipDoc
                 payslip={selectedPayslip}
                 userName={userName}
@@ -785,7 +823,7 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
         });
 
         const targetYearBonuses = (publishedBonusList || []).filter(b => {
-          const payDate = b.payment_date || b.created_at || '';
+          const payDate = b.paymentDate || b.payment_date || b.created_at || '';
           return payDate.startsWith(`${selectedTaxYear}-`);
         });
 
@@ -926,35 +964,39 @@ export const UserPayslipView: React.FC<UserPayslipViewProps> = ({ userId, userNa
               </div>
             )}
 
-            {/* 国税庁公式NTAOHSZ062010060様式本体 */}
-            <div className="max-w-4xl mx-auto">
-              <OfficialTaxWithholdingSlipDoc
-                data={{
-                  year: selectedTaxYear,
-                  recipientAddress: userProfile.address,
-                  recipientKana: '',
-                  recipientName: userName,
-                  recipientNumber: `EMP-${userId.slice(0, 4)}`,
-                  recipientPosition: userProfile.position_name,
-                  myNumber: userProfile.my_number,
-                  birthDate: userProfile.birth_date,
-                  joinDate: userProfile.join_date,
-                  retirementDate: userProfile.retirement_date,
-                  isRetired: userProfile.is_retired,
-                  totalPayment: totalPaid,
-                  deductionAfterPayment: deductionAfterPayment,
-                  totalIncomeDeduction: totalIncomeDeduction,
-                  withholdingTaxAmount: taxDeducted,
-                  socialInsuranceAmount: socialDeducted,
-                  dependentsCount: userProfile.dependents_count,
-                  basicDeduction: basicDeduction,
-                  companyAddress: companyAddress,
-                  companyName: tenantName,
-                  companyPhone: companyPhone,
-                  corporateNumber: corporateNumber,
-                  companySealUrl: companySealUrl
-                }}
-              />
+            {/* 国税庁公式NTAOHSZ062010060様式本体（スマホ横スクロール対応） */}
+            <div className="max-w-4xl mx-auto overflow-x-auto pb-2 print:overflow-visible">
+              <div className="min-w-[720px] print:min-w-0">
+                <OfficialTaxWithholdingSlipDoc
+                  data={{
+                    year: selectedTaxYear,
+                    recipientAddress: userProfile.address,
+                    recipientKana: userProfile.name_kana || '',
+                    recipientName: userName,
+                    recipientNumber: `EMP-${userId.slice(0, 4)}`,
+                    recipientPosition: userProfile.position_name,
+                    myNumber: userProfile.my_number,
+                    birthDate: userProfile.birth_date,
+                    joinDate: userProfile.join_date,
+                    retirementDate: userProfile.retirement_date,
+                    isRetired: userProfile.is_retired,
+                    totalPayment: totalPaid,
+                    deductionAfterPayment: deductionAfterPayment,
+                    totalIncomeDeduction: totalIncomeDeduction,
+                    withholdingTaxAmount: taxDeducted,
+                    socialInsuranceAmount: socialDeducted,
+                    hasSpouse: userProfile.has_spouse,
+                    spouseName: userProfile.spouse_name,
+                    dependentsCount: userProfile.dependents_count,
+                    basicDeduction: basicDeduction,
+                    companyAddress: companyAddress,
+                    companyName: tenantName,
+                    companyPhone: companyPhone,
+                    corporateNumber: corporateNumber,
+                    companySealUrl: companySealUrl
+                  }}
+                />
+              </div>
             </div>
           </div>
         );

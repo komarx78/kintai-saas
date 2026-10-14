@@ -126,7 +126,14 @@ const ShiftEmployeeMaster: React.FC = () => {
       }
       
       for (const emp of employees) {
-        await supabase.from('users').update({ has_shift_access: emp.has_shift_access }).eq('id', emp.user_id).eq('tenant_id', tenantId);
+        const userUpdatePayload: any = { has_shift_access: emp.has_shift_access };
+        if (emp.hire_date) {
+          userUpdatePayload.join_date = emp.hire_date;
+        }
+        if (emp.base_wage > 0) {
+          userUpdatePayload.hourly_wage = emp.base_wage;
+        }
+        await supabase.from('users').update(userUpdatePayload).eq('id', emp.user_id).eq('tenant_id', tenantId);
       }
 
       for (const emp of employees.filter(e => e.has_shift_access)) {
@@ -157,6 +164,16 @@ const ShiftEmployeeMaster: React.FC = () => {
           await supabase.from('shift_employee_settings').update(payload).eq('id', exist.id).eq('tenant_id', tenantId);
         } else {
           await supabase.from('shift_employee_settings').insert(payload);
+        }
+
+        if (emp.base_wage > 0) {
+          try {
+            await supabase
+              .from('employee_payroll_profiles')
+              .update({ hourly_wage: emp.base_wage })
+              .eq('user_id', emp.user_id)
+              .eq('tenant_id', tenantId);
+          } catch (_) {}
         }
       }
       
@@ -350,13 +367,13 @@ const ShiftEmployeeMaster: React.FC = () => {
                   <input
                     type="text"
                     readOnly
-                    value={`${window.location.origin}/?tenant=${encodeURIComponent(tenantName)}`}
+                    value={`${window.location.origin}/login?mode=signup&tenant_id=${tenantId}`}
                     className="flex-1 bg-slate-50 border border-slate-200 rounded-l-xl px-3 py-2 text-sm text-slate-600 font-mono focus:outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/?tenant=${encodeURIComponent(tenantName)}`);
+                      navigator.clipboard.writeText(`${window.location.origin}/login?mode=signup&tenant_id=${tenantId}`);
                       setCopySuccess(true);
                       setTimeout(() => setCopySuccess(false), 2000);
                     }}

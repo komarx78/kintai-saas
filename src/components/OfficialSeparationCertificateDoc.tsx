@@ -688,7 +688,7 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
                     <span className="text-xs font-black text-slate-800">① 被保険者番号</span>
                   </div>
                   <button
-                    onClick={() => copyToClipboard('field_1', currentEmployee.employment_insurance_number || '1234-567890-1')}
+                    onClick={() => copyToClipboard('field_1', currentEmployee.employment_insurance_number || '')}
                     className="text-[10px] text-slate-400 hover:text-blue-600 flex items-center gap-1 cursor-pointer"
                   >
                     {copiedKey === 'field_1' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
@@ -697,7 +697,7 @@ export const OfficialSeparationCertificateDoc: React.FC<OfficialSeparationCertif
                 </div>
                 <div className="mt-2 pl-6">
                   <span className="font-mono text-base font-black tracking-widest text-blue-900 bg-blue-50/80 px-3 py-1 rounded-lg border border-blue-200 inline-block">
-                    {currentEmployee.employment_insurance_number || '1234-567890-1'}
+                    {currentEmployee.employment_insurance_number || ''}
                   </span>
                   <p className="text-[10px] text-slate-400 mt-1">4桁-6桁-1桁のマス目に記入します</p>
                 </div>

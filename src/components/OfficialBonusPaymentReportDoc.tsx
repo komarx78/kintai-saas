@@ -792,7 +792,7 @@ export const OfficialBonusPaymentReportDoc: React.FC<BonusPaymentReportDocProps>
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           const { data: profile } = await supabase
-            .from('profiles')
+            .from('users')
             .select('tenant_id')
             .eq('id', user.id)
             .maybeSingle();

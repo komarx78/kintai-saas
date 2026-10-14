@@ -570,6 +570,18 @@ export default function EmployeeOnboardingWelcome() {
 
       let userId = user?.id || (urlUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(urlUserId) ? urlUserId : null);
 
+      if (!userId && effectiveTenantId && basicData.email && basicData.email.trim()) {
+        try {
+          const { data: matchedByEmail } = await supabase
+            .from('users')
+            .select('id')
+            .eq('tenant_id', effectiveTenantId)
+            .eq('email', basicData.email.trim())
+            .maybeSingle();
+          if (matchedByEmail?.id) userId = matchedByEmail.id;
+        } catch (_) {}
+      }
+
       if (!userId && effectiveTenantId && basicData.name) {
         try {
           const { data: matchedUser } = await supabase
@@ -755,20 +767,35 @@ export default function EmployeeOnboardingWelcome() {
 
       // 💡 大元従業員台帳（users / employee_onboarding_profiles / payroll）へフリガナ・基本情報を即時確定反映
       try {
-        // 1. users テーブルのフリガナ・メール・生年月日・住所・電話番号を即時同期
-        const userUpdatePayload: any = {
+        // 1. users テーブルのフリガナ・メール・生年月日・住所・電話番号を即時同期（未登録時はupsertで新規作成）
+        const userUpsertPayload: any = {
+          id: userId,
+          tenant_id: effectiveTenantId,
           name: basicData.name,
+          email: (basicData.email && basicData.email.trim()) ? basicData.email.trim() : `emp_${Date.now()}@sample.local`,
+          role: 'user',
+          status: 'onboarding',
           name_kana: basicData.nameKana || null,
           birth_date: basicData.birthDate || null,
           address: basicData.address || null,
           address_kana: basicData.addressKana || null,
           postal_code: basicData.postalCode || null,
           phone: basicData.phoneNumber || null,
+          join_date: contractAgreement.joinDate || null,
         };
-        if (basicData.email && basicData.email.trim()) {
-          userUpdatePayload.email = basicData.email.trim();
+        const { error: upsertErr } = await supabase.from('users').upsert(userUpsertPayload, { onConflict: 'id' });
+        if (upsertErr) {
+          await supabase.from('users').update({
+            name: basicData.name,
+            name_kana: basicData.nameKana || null,
+            birth_date: basicData.birthDate || null,
+            address: basicData.address || null,
+            address_kana: basicData.addressKana || null,
+            postal_code: basicData.postalCode || null,
+            phone: basicData.phoneNumber || null,
+            ...(basicData.email && basicData.email.trim() ? { email: basicData.email.trim() } : {})
+          }).eq('id', userId);
         }
-        await supabase.from('users').update(userUpdatePayload).eq('id', userId);
       } catch (uSyncErr) {
         console.warn('users table name_kana sync note:', uSyncErr);
       }

@@ -266,9 +266,9 @@ export function generateResidentTaxAdvanceSchedule(params: {
           monthlyAmounts[m] = Number(existing.monthlyAmounts[m]);
         } else {
           // 月別詳細(6月〜翌5月)があればそこから、なければ月額固定
-          const detailKey = `${m}月`;
-          const amount = (monthlyDetails && monthlyDetails[detailKey] !== undefined)
-            ? Number(monthlyDetails[detailKey])
+          const taxVal = monthlyDetails ? (monthlyDetails[String(m)] ?? monthlyDetails[`${m}月`]) : undefined;
+          const amount = taxVal !== undefined
+            ? Number(taxVal)
             : Number(monthlyResidentTax || 0);
           monthlyAmounts[m] = amount;
         }
@@ -336,10 +336,11 @@ export async function saveMaternityLeaveRecord(record: MaternityLeaveRecord): Pr
       updated_at: new Date().toISOString()
     };
 
-    // 念のためローカルキャッシュに即座にバックアップ
+    // 念のためローカルキャッシュに即座にバックアップ（セキュリティ保護のため child_my_number は空文字マスク）
     try {
       if (record.user_id) {
-        localStorage.setItem(`maternity_leave_record_${record.user_id}`, JSON.stringify(dataToSave));
+        const { child_my_number: _omitMyNumber, ...safeLocalData } = dataToSave;
+        localStorage.setItem(`maternity_leave_record_${record.user_id}`, JSON.stringify({ ...safeLocalData, child_my_number: '' }));
       }
     } catch (_) {}
 

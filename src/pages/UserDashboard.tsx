@@ -253,7 +253,7 @@ const UserDashboard = () => {
     }
   }, [user, viewMonth]);
 
-  const [compressedFile, setCompressedFile] = useState<{name: string, originalSize: string, compressedSize: string} | null>(null);
+  const [compressedFile, setCompressedFile] = useState<{name: string, originalSize: string, compressedSize: string, dataUrl?: string} | null>(null);
 
   // Leave Request Form States
   const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
@@ -797,18 +797,44 @@ const UserDashboard = () => {
         }
       }
 
-      const { error } = await supabase.from('leave_requests').insert({
+      const reasonWithAttachment = (leaveType === '打刻修正'
+        ? `【修正区分: ${punchType}】【修正時刻: ${punchTime}】${punchBreakMins !== '' ? `【休憩時間: ${punchBreakMins}分】` : ''}\n${leaveReason}`
+        : leaveReason) + (compressedFile ? `\n【添付ファイル: ${compressedFile.name}】` : '');
+
+      if (compressedFile?.dataUrl) {
+        try {
+          localStorage.setItem(
+            `leave_attachment_${user.tenant_id}_${user.id}_${startDate}`,
+            JSON.stringify({ name: compressedFile.name, dataUrl: compressedFile.dataUrl })
+          );
+        } catch (_) {}
+      }
+
+      const baseInsertPayload: any = {
         tenant_id: user.tenant_id,
         user_id: user.id,
         approver_id: user.approver_id,
         start_date: startDate,
         end_date: leaveType === '打刻修正' ? startDate : endDate,
         type: leaveType,
-        reason: leaveType === '打刻修正' ? `【修正区分: ${punchType}】【修正時刻: ${punchTime}】${punchBreakMins !== '' ? `【休憩時間: ${punchBreakMins}分】` : ''}\n${leaveReason}` : leaveReason,
+        reason: reasonWithAttachment,
         status: '申請中'
-      });
+      };
 
-      if (error) throw error;
+      if (compressedFile?.dataUrl) {
+        const { error: attErr } = await supabase.from('leave_requests').insert({
+          ...baseInsertPayload,
+          attachment_url: compressedFile.dataUrl,
+          attachment_name: compressedFile.name
+        });
+        if (attErr) {
+          const { error } = await supabase.from('leave_requests').insert(baseInsertPayload);
+          if (error) throw error;
+        }
+      } else {
+        const { error } = await supabase.from('leave_requests').insert(baseInsertPayload);
+        if (error) throw error;
+      }
       
       alert('申請を送信しました。（※管理者に通知メールが送信されます）');
       
@@ -832,11 +858,16 @@ const UserDashboard = () => {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      setCompressedFile({
-        name: file.name,
-        originalSize: (file.size / 1024).toFixed(1) + ' KB',
-        compressedSize: (file.size / 1024).toFixed(1) + ' KB (非画像のため圧縮なし)'
-      });
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (ev) => {
+        setCompressedFile({
+          name: file.name,
+          originalSize: (file.size / 1024).toFixed(1) + ' KB',
+          compressedSize: (file.size / 1024).toFixed(1) + ' KB (非画像のため圧縮なし)',
+          dataUrl: (ev.target?.result as string) || undefined
+        });
+      };
       return;
     }
 
@@ -869,12 +900,14 @@ const UserDashboard = () => {
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
 
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
         canvas.toBlob((blob) => {
           if (blob) {
             setCompressedFile({
               name: file.name,
               originalSize: (file.size / 1024).toFixed(1) + ' KB',
-              compressedSize: (blob.size / 1024).toFixed(1) + ' KB (圧縮完了)'
+              compressedSize: (blob.size / 1024).toFixed(1) + ' KB (圧縮完了)',
+              dataUrl
             });
           }
         }, 'image/jpeg', 0.7);
@@ -897,21 +930,28 @@ const UserDashboard = () => {
     setIsPunching(true);
 
     let gpsData: { latitude: number; longitude: number; accuracy: number } | null = null;
+    let gpsFallbackNote = '';
     const deviceType = isMobile ? 'mobile' : 'pc';
 
-    // 📱 スマートフォンの場合はGPS位置情報の取得を必須化（不正打刻防止）
+    // 📱 スマートフォンの場合はGPS位置情報の取得を試行（取得失敗時はフェイルセーフ確認）
     if (isMobile) {
       setGpsStatusText('📍 スマートフォンGPS位置情報を取得中...');
       try {
         gpsData = await getGpsPosition();
       } catch (err: any) {
-        setIsPunching(false);
-        setGpsStatusText(null);
-        setGpsErrorModal({
-          isOpen: true,
-          message: err.message || '位置情報が取得できませんでした。'
-        });
-        return;
+        const proceedWithoutGps = window.confirm(
+          `${err.message || '位置情報の取得に失敗しました。'}\n（LINE内ブラウザや屋内では取得できない場合があります）\n\n位置情報なしでこのまま出勤打刻を記録しますか？`
+        );
+        if (!proceedWithoutGps) {
+          setIsPunching(false);
+          setGpsStatusText(null);
+          setGpsErrorModal({
+            isOpen: true,
+            message: err.message || '位置情報が取得できませんでした。'
+          });
+          return;
+        }
+        gpsFallbackNote = '[位置情報未取得]';
       }
     }
 
@@ -935,6 +975,10 @@ const UserDashboard = () => {
       fullPayload.check_in_lat = gpsData.latitude;
       fullPayload.check_in_lng = gpsData.longitude;
       fullPayload.check_in_accuracy = gpsData.accuracy;
+    } else if (gpsFallbackNote) {
+      fullPayload.note = currentRecord?.note
+        ? (currentRecord.note.includes(gpsFallbackNote) ? currentRecord.note : `${currentRecord.note} ${gpsFallbackNote}`)
+        : gpsFallbackNote;
     }
 
     try {
@@ -1121,21 +1165,28 @@ const UserDashboard = () => {
     setIsPunching(true);
 
     let gpsData: { latitude: number; longitude: number; accuracy: number } | null = null;
+    let gpsFallbackNote = '';
     const deviceType = isMobile ? 'mobile' : 'pc';
 
-    // 📱 スマートフォンの場合はGPS位置情報の取得を必須化（不正打刻防止）
+    // 📱 スマートフォンの場合はGPS位置情報の取得を試行（取得失敗時はフェイルセーフ確認）
     if (isMobile) {
       setGpsStatusText('📍 スマートフォンGPS位置情報を取得中...');
       try {
         gpsData = await getGpsPosition();
       } catch (err: any) {
-        setIsPunching(false);
-        setGpsStatusText(null);
-        setGpsErrorModal({
-          isOpen: true,
-          message: err.message || '位置情報が取得できませんでした。'
-        });
-        return;
+        const proceedWithoutGps = window.confirm(
+          `${err.message || '位置情報の取得に失敗しました。'}\n（LINE内ブラウザや屋内では取得できない場合があります）\n\n位置情報なしでこのまま退勤打刻を記録しますか？`
+        );
+        if (!proceedWithoutGps) {
+          setIsPunching(false);
+          setGpsStatusText(null);
+          setGpsErrorModal({
+            isOpen: true,
+            message: err.message || '位置情報が取得できませんでした。'
+          });
+          return;
+        }
+        gpsFallbackNote = '[位置情報未取得]';
       }
     }
 
@@ -1152,6 +1203,10 @@ const UserDashboard = () => {
       updatePayload.check_out_lat = gpsData.latitude;
       updatePayload.check_out_lng = gpsData.longitude;
       updatePayload.check_out_accuracy = gpsData.accuracy;
+    } else if (gpsFallbackNote) {
+      updatePayload.note = currentRecord?.note
+        ? (currentRecord.note.includes(gpsFallbackNote) ? currentRecord.note : `${currentRecord.note} ${gpsFallbackNote}`)
+        : gpsFallbackNote;
     }
 
     try {
@@ -1212,7 +1267,7 @@ const UserDashboard = () => {
   }, [activeTab]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row print:block print:h-auto print:overflow-visible">
       {/* Sidebar */}
       <div className="w-full md:w-64 bg-slate-800 text-white flex flex-col print:hidden">
         <div className="p-4 text-xl font-bold border-b border-slate-700">
@@ -1301,7 +1356,7 @@ const UserDashboard = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto relative flex flex-col">
+      <div className="flex-1 overflow-auto relative flex flex-col print:h-auto print:overflow-visible">
         {/* Top App Bar (全システム統一) */}
         <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 px-6 py-3 flex items-center justify-between sticky top-0 z-30 shadow-xs print:hidden">
           <div className="flex items-center space-x-3">
@@ -1342,7 +1397,7 @@ const UserDashboard = () => {
           </div>
         </header>
 
-        <div className="p-4 md:p-8 flex-1">
+        <div className="p-4 md:p-8 flex-1 print:p-0 print:h-auto print:overflow-visible">
           <div className="max-w-4xl mx-auto space-y-6">
           
           {activeTab === 'home' && (
@@ -1945,8 +2000,19 @@ const UserDashboard = () => {
                                     const m = String(r.date.getMonth() + 1).padStart(2, '0');
                                     const d = String(r.date.getDate()).padStart(2, '0');
                                     const ds = `${y}-${m}-${d}`;
+                                    setLeaveType('打刻修正');
                                     setStartDate(ds);
                                     setEndDate(ds);
+                                    if (r.rawInTime && r.rawInTime !== '-' && (!r.rawOutTime || r.rawOutTime === '-')) {
+                                      setPunchType('退勤');
+                                      setPunchTime('18:00');
+                                    } else if (r.rawInTime && r.rawInTime !== '-') {
+                                      setPunchType('出勤');
+                                      setPunchTime(r.rawInTime.substring(0, 5));
+                                    } else if (r.rawOutTime && r.rawOutTime !== '-') {
+                                      setPunchType('退勤');
+                                      setPunchTime(r.rawOutTime.substring(0, 5));
+                                    }
                                     setPunchBreakMins((r.breakMins !== undefined && r.breakMins !== null ? r.breakMins : 60).toString());
                                     setActiveTab('requests');
                                   }}

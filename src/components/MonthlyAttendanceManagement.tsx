@@ -11,6 +11,7 @@ import {
   fetchAttendanceRoundingRulesFromDb,
   calculateDailyAttendanceDetails
 } from '../lib/attendanceRounding';
+import { calculateUsedPaidLeaveDaysInPeriod } from '../lib/paidLeaveCalculation';
 
 interface MonthlyAttendanceManagementProps {
   tenantId: string | null;
@@ -48,6 +49,10 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
   const [users, setUsers] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+  const [shiftsList, setShiftsList] = useState<any[]>([]);
+  const [onboardingMap, setOnboardingMap] = useState<Record<string, any>>({});
+  const [closingDaySetting, setClosingDaySetting] = useState<string>('end_of_month');
+  const [periodRange, setPeriodRange] = useState<{ startDate: string; endDate: string }>({ startDate: '', endDate: '' });
   const [isLoading, setIsLoading] = useState(true);
   const [isBulkApproving, setIsBulkApproving] = useState(false);
   
@@ -104,15 +109,48 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  // 締め日設定に基づく対象集計期間の算出ヘルパー
+  const computePeriodRange = (targetMonthDate: Date, closingDay: string) => {
+    const year = targetMonthDate.getFullYear();
+    const month = targetMonthDate.getMonth() + 1;
+    const lastDay = new Date(year, month, 0).getDate();
+    let startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+    let endDate = `${year}-${month.toString().padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    if (closingDay === '20') {
+      const prevM = month === 1 ? 12 : month - 1;
+      const prevY = month === 1 ? year - 1 : year;
+      startDate = `${prevY}-${prevM.toString().padStart(2, '0')}-21`;
+      endDate = `${year}-${month.toString().padStart(2, '0')}-20`;
+    } else if (closingDay === '25') {
+      const prevM = month === 1 ? 12 : month - 1;
+      const prevY = month === 1 ? year - 1 : year;
+      startDate = `${prevY}-${prevM.toString().padStart(2, '0')}-26`;
+      endDate = `${year}-${month.toString().padStart(2, '0')}-25`;
+    }
+    return { startDate, endDate };
+  };
+
   const fetchData = async () => {
     if (!tenantId) return;
     setIsLoading(true);
     try {
-      const year = currentMonth.getFullYear();
-      const month = currentMonth.getMonth() + 1;
-      const lastDay = new Date(year, month, 0).getDate();
-      const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
-      const endDate = `${year}-${month.toString().padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      // 0. 給与基本設定（締め日）を取得して集計期間を決定（給与計算画面と100%完全同期）
+      let resolvedClosingDay = 'end_of_month';
+      try {
+        const { data: setRow } = await supabase
+          .from('payroll_settings')
+          .select('closing_day')
+          .eq('tenant_id', tenantId)
+          .maybeSingle();
+        if (setRow?.closing_day) {
+          resolvedClosingDay = setRow.closing_day;
+        }
+      } catch (e) {}
+      setClosingDaySetting(resolvedClosingDay);
+
+      const { startDate, endDate } = computePeriodRange(currentMonth, resolvedClosingDay);
+      setPeriodRange({ startDate, endDate });
 
       // 1. 従業員一覧取得
       const { data: uData } = await supabase
@@ -129,7 +167,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           setSelectedUserId(currentUsers[0].id);
         }
 
-        // 2. 当月の打刻レコード取得
+        // 2. 当月度集計期間の打刻レコード取得
         const { data: attData } = await supabase
           .from('attendance_records')
           .select('*')
@@ -139,15 +177,68 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
 
         setAttendanceRecords(attData || []);
 
-        // 3. 当月の全申請（申請中・承認・却下）を取得
+        // 3. 当月度集計期間に関わる全申請（期間またぎ連休も捕捉）を取得
         const { data: reqData } = await supabase
           .from('leave_requests')
           .select('*')
-          .eq('tenant_id', tenantId)
-          .gte('start_date', startDate)
-          .lte('start_date', endDate);
+          .eq('tenant_id', tenantId);
 
-        setLeaveRequests(reqData || []);
+        const filteredReqs = (reqData || []).filter((r: any) => {
+          if (r.type === 'シフト希望') {
+            return r.start_date >= startDate && r.start_date <= endDate;
+          }
+          return (r.end_date || r.start_date) >= startDate && r.start_date <= endDate;
+        });
+        setLeaveRequests(filteredReqs);
+
+        // 3.5 当月度集計期間の確定シフト取得（advanced_shifts と shifts をマージ）＆個人契約プロファイル取得
+        try {
+          const [advRes, legRes, onbRes] = await Promise.all([
+            supabase
+              .from('advanced_shifts')
+              .select('*')
+              .eq('tenant_id', tenantId)
+              .gte('target_date', startDate)
+              .lte('target_date', endDate),
+            supabase
+              .from('shifts')
+              .select('*')
+              .eq('tenant_id', tenantId)
+              .gte('work_date', startDate)
+              .lte('work_date', endDate),
+            supabase
+              .from('employee_onboarding_profiles')
+              .select('*')
+              .eq('tenant_id', tenantId)
+          ]);
+
+          const advShifts = (advRes.data || []).map((s: any) => ({
+            ...s,
+            date: s.date || s.target_date,
+            work_date: s.date || s.target_date
+          }));
+          const legShifts = (legRes.data || []).map((s: any) => ({
+            ...s,
+            date: s.work_date || s.date,
+            work_date: s.work_date || s.date
+          }));
+          const mergedMap = new Map<string, any>();
+          legShifts.forEach((s: any) => {
+            if (s.user_id && s.date) mergedMap.set(`${s.user_id}_${s.date}`, s);
+          });
+          advShifts.forEach((s: any) => {
+            if (s.user_id && s.date) mergedMap.set(`${s.user_id}_${s.date}`, s);
+          });
+          setShiftsList(Array.from(mergedMap.values()));
+
+          const oMap: Record<string, any> = {};
+          (onbRes.data || []).forEach((o: any) => {
+            if (o.user_id) oMap[o.user_id] = o;
+          });
+          setOnboardingMap(oMap);
+        } catch (sErr) {
+          console.warn('shifts / onboarding fetch warning:', sErr);
+        }
 
         // 4. 就業時間パターンマスタ取得
         try {
@@ -167,6 +258,7 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       } else {
         setAttendanceRecords([]);
         setLeaveRequests([]);
+        setShiftsList([]);
       }
     } catch (err) {
       console.error('Monthly attendance fetch error:', err);
@@ -251,9 +343,12 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       };
 
       try {
-        await supabase
+        const { error: upsertErr } = await supabase
           .from('attendance_monthly_closings')
           .upsert(payload, { onConflict: 'tenant_id,year_month' });
+        if (upsertErr) {
+          console.warn('attendance_monthly_closings upsert warning:', upsertErr.message);
+        }
       } catch (dbErr) {
         console.warn('attendance_monthly_closings upsert fallback:', dbErr);
       }
@@ -289,11 +384,14 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     setIsProcessingClosing(true);
     try {
       try {
-        await supabase
+        const { error: updateErr } = await supabase
           .from('attendance_monthly_closings')
           .update({ status: 'open', notes: `${yearMonth} 勤怠締め解除` })
           .eq('tenant_id', tenantId)
           .eq('year_month', yearMonth);
+        if (updateErr) {
+          console.warn('attendance_monthly_closings reopen warning:', updateErr.message);
+        }
       } catch (dbErr) {
         console.warn('attendance_monthly_closings reopen fallback:', dbErr);
       }
@@ -541,11 +639,50 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     return workPatterns[0] || null;
   };
 
-  // 1人あたりの集計計算ヘルパー（現場即応 打刻丸めエンジン連動）
+  // 所定労働時間の優先解決ヘルパー（①当日確定シフト ➔ ②個人契約時間 ➔ ③部署パターン ➔ ④09:00〜18:00）
+  const resolveUserScheduledTime = (user: any, dateStr: string) => {
+    const dayShift = shiftsList.find(s => s.user_id === user?.id && (s.date || s.work_date) === dateStr);
+    if (dayShift && dayShift.start_time && dayShift.end_time && !dayShift.is_holiday && dayShift.shift_type !== 'holiday' && dayShift.start_time !== '00:00:00') {
+      return {
+        startTime: dayShift.start_time.slice(0, 5),
+        endTime: dayShift.end_time.slice(0, 5),
+        breakMinutes: dayShift.break_minutes !== undefined && dayShift.break_minutes !== null ? Number(dayShift.break_minutes) : 60,
+        dayShift
+      };
+    }
+
+    const onb = user?.id ? onboardingMap[user.id] : null;
+    if (onb && onb.work_start_time && onb.work_end_time) {
+      return {
+        startTime: String(onb.work_start_time).slice(0, 5),
+        endTime: String(onb.work_end_time).slice(0, 5),
+        breakMinutes: onb.break_minutes !== undefined && onb.break_minutes !== null ? Number(onb.break_minutes) : 60,
+        dayShift
+      };
+    }
+
+    const userPattern = getUserWorkPattern(user);
+    if (userPattern && userPattern.start_time && userPattern.end_time) {
+      return {
+        startTime: String(userPattern.start_time).slice(0, 5),
+        endTime: String(userPattern.end_time).slice(0, 5),
+        breakMinutes: userPattern.break_minutes !== undefined && userPattern.break_minutes !== null ? Number(userPattern.break_minutes) : 60,
+        dayShift
+      };
+    }
+
+    return {
+      startTime: '09:00',
+      endTime: '18:00',
+      breakMinutes: 60,
+      dayShift
+    };
+  };
+
+  // 1人あたりの集計計算ヘルパー（現場即応 打刻丸めエンジン・給与計算SSOT連動）
   const calculateUserMonthlySummary = (user: any) => {
     const userRecords = attendanceRecords.filter(r => r.user_id === user.id);
     const userLeaves = leaveRequests.filter(r => r.user_id === user.id);
-    const userPattern = getUserWorkPattern(user);
 
     let totalDays = 0;
     let totalActualMins = 0;
@@ -559,13 +696,14 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       if (r.check_in_time) {
         totalDays += 1;
         if (r.check_out_time) {
+          const resolvedSched = resolveUserScheduledTime(user, r.date);
           const details = calculateDailyAttendanceDetails(
             r.check_in_time,
             r.check_out_time,
             r.break_minutes,
-            userPattern?.start_time || '09:00',
-            userPattern?.end_time || '18:00',
-            userPattern?.break_minutes || 60,
+            resolvedSched.startTime,
+            resolvedSched.endTime,
+            resolvedSched.breakMinutes,
             roundingRules
           );
 
@@ -574,18 +712,21 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
           // 🛡️ 休日判定（労基法第35条・第37条準拠）
           const recDate = new Date(r.date);
           const isSunday = !isNaN(recDate.getTime()) && recDate.getDay() === 0;
+          const dayShift = resolvedSched.dayShift;
           const isHoliday = Boolean(
             r.is_holiday || 
             r.status === '休日出勤' || 
             r.status?.includes('休日') ||
-            (!r.shift_id && isSunday)
+            dayShift?.is_holiday ||
+            dayShift?.shift_type === 'holiday' ||
+            (!dayShift && !r.shift_id && isSunday)
           );
 
           if (isHoliday) {
             // 法定休日労働: 割増手当1.35倍対象・36協定80h/100h算入
             totalHolidayMins += details.actualWorkMinutes;
           } else {
-            totalOvertimeMins += details.overtimeMinutes;
+            totalOvertimeMins += (r.overtime_minutes && r.overtime_minutes > 0) ? r.overtime_minutes : details.overtimeMinutes;
             if (details.isLate) lateCount += 1;
           }
 
@@ -596,14 +737,17 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       }
     });
 
-    const approvedLeaves = userLeaves.filter(l => l.status === '承認' && l.type !== 'シフト希望');
+    const approvedPaidLeaves = userLeaves.filter(l => 
+      (l.status === '承認' || l.status === 'approved') && 
+      l.type !== 'シフト希望' &&
+      (l.type?.includes('有給') || l.type?.includes('年休') || l.leave_type?.includes('有給') || l.reason?.includes('有給'))
+    );
     const pendingRequests = userLeaves.filter(l => l.status === '申請中' && l.type !== 'シフト希望');
 
-    const paidLeaveDays = approvedLeaves.reduce((acc, req) => {
-      if (req.type?.includes('半休')) return acc + 0.5;
-      if (req.type?.includes('有給')) return acc + 1.0;
-      return acc;
-    }, 0);
+    const { startDate: pStart, endDate: pEnd } = periodRange.startDate
+      ? periodRange
+      : computePeriodRange(currentMonth, closingDaySetting);
+    const paidLeaveDays = calculateUsedPaidLeaveDaysInPeriod(approvedPaidLeaves, pStart, pEnd);
 
     const overtimeHoursNum = totalOvertimeMins / 60;
     const holidayHoursNum = totalHolidayMins / 60;
@@ -624,16 +768,16 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
   };
 
 
-  // 選択中従業員の当月カレンダー行データ生成
+  // 選択中従業員の当月度集計期間カレンダー行データ生成（締め日設定に完全連動）
   const selectedUserRows = useMemo(() => {
     if (!selectedUserId) return [];
     const user = users.find(u => u.id === selectedUserId);
     if (!user) return [];
 
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
     const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+    const { startDate: pStart, endDate: pEnd } = periodRange.startDate
+      ? periodRange
+      : computePeriodRange(currentMonth, closingDaySetting);
 
     const userRecords = attendanceRecords.filter(r => r.user_id === selectedUserId);
     const userLeaves = leaveRequests.filter(r => r.user_id === selectedUserId);
@@ -658,10 +802,15 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
     }
 
     const rows = [];
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dateObj = new Date(year, month, day);
-      const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-      const dayOfWeek = dateObj.getDay();
+    const curDate = new Date(pStart + 'T00:00:00');
+    const lastDate = new Date(pEnd + 'T00:00:00');
+
+    while (curDate <= lastDate) {
+      const yNum = curDate.getFullYear();
+      const mNum = curDate.getMonth() + 1;
+      const dNum = curDate.getDate();
+      const dateStr = `${yNum}-${String(mNum).padStart(2, '0')}-${String(dNum).padStart(2, '0')}`;
+      const dayOfWeek = curDate.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
       const record = userRecords.find(r => r.date === dateStr);
@@ -684,14 +833,14 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         (l.end_date ? l.end_date >= dateStr : l.start_date >= dateStr)
       );
 
-      const userPattern = getUserWorkPattern(user);
+      const resolvedSched = resolveUserScheduledTime(user, dateStr);
       const details = calculateDailyAttendanceDetails(
         record?.check_in_time,
         record?.check_out_time,
         record?.break_minutes,
-        userPattern?.start_time || '09:00',
-        userPattern?.end_time || '18:00',
-        userPattern?.break_minutes || 60,
+        resolvedSched.startTime,
+        resolvedSched.endTime,
+        resolvedSched.breakMinutes,
         roundingRules
       );
 
@@ -699,15 +848,17 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
       const actualStr = details.actualWorkMinutes > 0
         ? `${Math.floor(details.actualWorkMinutes / 60)}h ${(details.actualWorkMinutes % 60).toString().padStart(2, '0')}m`
         : '-';
-      const overtimeStr = details.overtimeMinutes > 0
-        ? `${Math.floor(details.overtimeMinutes / 60)}h ${(details.overtimeMinutes % 60).toString().padStart(2, '0')}m`
+      const overMins = (record?.overtime_minutes && record.overtime_minutes > 0) ? record.overtime_minutes : details.overtimeMinutes;
+      const overtimeStr = overMins > 0
+        ? `${Math.floor(overMins / 60)}h ${(overMins % 60).toString().padStart(2, '0')}m`
         : '-';
       const midnightStr = details.midnightMinutes > 0
         ? `${Math.floor(details.midnightMinutes / 60)}h ${(details.midnightMinutes % 60).toString().padStart(2, '0')}m`
         : '-';
 
       rows.push({
-        day,
+        day: dNum,
+        monthNum: mNum,
         dateStr,
         dayOfWeekStr: dayNames[dayOfWeek],
         isWeekend,
@@ -728,17 +879,18 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
         actualStr,
         actualMins: details.actualWorkMinutes,
         overtimeStr,
-        overtimeMins: details.overtimeMinutes,
+        overtimeMins: overMins,
         midnightStr,
         midnightMins: details.midnightMinutes,
         status: record?.status || (dayApprovedLeave ? dayApprovedLeave.type : '-'),
         note: record?.note || dayApprovedLeave?.reason || ''
       });
 
+      curDate.setDate(curDate.getDate() + 1);
     }
 
     return rows;
-  }, [selectedUserId, users, attendanceRecords, leaveRequests, currentMonth, workPatterns, roundingRules]);
+  }, [selectedUserId, users, attendanceRecords, leaveRequests, shiftsList, onboardingMap, currentMonth, workPatterns, roundingRules, periodRange, closingDaySetting]);
 
   // 打刻編集モーダルを開く
   const handleOpenEditModal = (row: any) => {
@@ -939,9 +1091,17 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                   <span>⬅ 給与計算（{currentMonth.getMonth() + 1}月度）へ戻る</span>
                 </button>
               </div>
-              <p className="text-xs font-bold text-slate-500 mt-0.5">
-                全社および各従業員の月別打刻実績・残業集計・タイムカード詳細
-              </p>
+              <div className="flex items-center gap-2 flex-wrap mt-1">
+                <p className="text-xs font-bold text-slate-500">
+                  全社および各従業員の月別打刻実績・残業集計・タイムカード詳細
+                </p>
+                {periodRange.startDate && periodRange.endDate && (
+                  <span className="text-[11px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full">
+                    📅 集計対象期間: {periodRange.startDate.replace(/-/g, '/')} 〜 {periodRange.endDate.replace(/-/g, '/')}
+                    （{closingDaySetting === '20' ? '20日締め' : closingDaySetting === '25' ? '25日締め' : '末日締め'}）
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1507,9 +1667,9 @@ export const MonthlyAttendanceManagement: React.FC<MonthlyAttendanceManagementPr
                         }
 
                         return (
-                          <tr key={row.day} className={`transition-colors ${rowBgClass}`}>
+                          <tr key={row.dateStr} className={`transition-colors ${rowBgClass}`}>
                             <td className={`p-3.5 whitespace-nowrap text-xs ${dateColorClass}`}>
-                              {(currentMonth.getMonth() + 1).toString().padStart(2, '0')}/{row.day.toString().padStart(2, '0')} ({row.dayOfWeekStr})
+                              {String((row as any).monthNum || (currentMonth.getMonth() + 1)).padStart(2, '0')}/{row.day.toString().padStart(2, '0')} ({row.dayOfWeekStr})
                             </td>
                             <td className="p-3.5 font-bold text-slate-800 text-xs">
                               {row.checkIn !== '-' ? (

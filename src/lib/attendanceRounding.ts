@@ -233,10 +233,16 @@ export const roundCheckOutTime = (
   const schedMins = timeToMinutes(scheduledEndTime);
 
   // 1. 定時退勤バッファ判定（終業後、指定分以内なら定時退勤とみなす）
-  if (schedMins !== null && rawMins > schedMins && rules.overtime_buffer_minutes > 0) {
-    const diff = rawMins - schedMins;
-    if (diff <= rules.overtime_buffer_minutes) {
-      return minutesToTime(schedMins);
+  // 日跨ぎ退勤（例：定時23:30、実退勤翌00:05で rawMins < schedMins かつ差が12時間以上の場合）も考慮
+  if (schedMins !== null && rules.overtime_buffer_minutes > 0) {
+    const effectiveRawMins = (rawMins < schedMins && (schedMins - rawMins) >= 720)
+      ? rawMins + 1440
+      : rawMins;
+    if (effectiveRawMins > schedMins) {
+      const diff = effectiveRawMins - schedMins;
+      if (diff <= rules.overtime_buffer_minutes) {
+        return minutesToTime(schedMins);
+      }
     }
   }
 
@@ -392,20 +398,22 @@ export const calculateDailyAttendanceDetails = (
 
   // 🌙 深夜労働時間（22:00〜翌05:00・労働基準法第37条第4項）の自動集計
   let midnightMins = 0;
-  let normalizedOutM = outM;
-  if (normalizedOutM < inM) {
-    normalizedOutM += 24 * 60;
-  }
-  for (let m = inM; m < normalizedOutM; m++) {
-    const h = Math.floor(m / 60) % 24;
-    if (h >= 22 || h < 5) {
-      midnightMins++;
+  if (rules.night_work_enabled !== false) {
+    let normalizedOutM = outM;
+    if (normalizedOutM < inM) {
+      normalizedOutM += 24 * 60;
     }
-  }
-  // 休憩時間が深夜帯に重なる場合の簡易按分（深夜滞在比率に基づく控除）
-  if (breakMins > 0 && totalStayMinutes > 0 && midnightMins > 0) {
-    const nightRatio = midnightMins / totalStayMinutes;
-    midnightMins = Math.max(0, Math.round(midnightMins - breakMins * nightRatio));
+    for (let m = inM; m < normalizedOutM; m++) {
+      const h = Math.floor(m / 60) % 24;
+      if (h >= 22 || h < 5) {
+        midnightMins++;
+      }
+    }
+    // 休憩時間が深夜帯に重なる場合の簡易按分（深夜滞在比率に基づく控除）
+    if (breakMins > 0 && totalStayMinutes > 0 && midnightMins > 0) {
+      const nightRatio = midnightMins / totalStayMinutes;
+      midnightMins = Math.max(0, Math.round(midnightMins - breakMins * nightRatio));
+    }
   }
   result.midnightMinutes = midnightMins;
   result.midnightHoursText = (midnightMins / 60).toFixed(1);

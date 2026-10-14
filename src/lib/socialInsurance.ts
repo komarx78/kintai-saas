@@ -65,53 +65,53 @@ export const EMPLOYMENT_INSURANCE_RATES_R8: Record<EmploymentInsuranceBusinessTy
 
 // 令和7年度（2025/2026年度・最新改定値）47都道府県 協会けんぽ標準料率
 export const PREFECTURES: PrefectureSocialRate[] = [
-  { code: '01', name: '北海道', healthRate: 0.1028, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '02', name: '青森県', healthRate: 0.0985, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '03', name: '岩手県', healthRate: 0.0951, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '04', name: '宮城県', healthRate: 0.1010, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '05', name: '秋田県', healthRate: 0.1001, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '06', name: '山形県', healthRate: 0.0975, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '07', name: '福島県', healthRate: 0.0950, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '08', name: '茨城県', healthRate: 0.0952, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '09', name: '栃木県', healthRate: 0.0982, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '10', name: '群馬県', healthRate: 0.0968, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '11', name: '埼玉県', healthRate: 0.0967, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '12', name: '千葉県', healthRate: 0.0973, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '13', name: '東京都', healthRate: 0.0985, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '14', name: '神奈川県', healthRate: 0.0992, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '15', name: '新潟県', healthRate: 0.0921, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '16', name: '富山県', healthRate: 0.0959, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '17', name: '石川県', healthRate: 0.0970, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '18', name: '福井県', healthRate: 0.0971, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '19', name: '山梨県', healthRate: 0.0955, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '20', name: '長野県', healthRate: 0.0963, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '21', name: '岐阜県', healthRate: 0.0980, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '22', name: '静岡県', healthRate: 0.0961, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '23', name: '愛知県', healthRate: 0.0993, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '24', name: '三重県', healthRate: 0.0977, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '25', name: '滋賀県', healthRate: 0.0988, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '26', name: '京都府', healthRate: 0.0989, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '27', name: '大阪府', healthRate: 0.1013, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '28', name: '兵庫県', healthRate: 0.1012, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '29', name: '奈良県', healthRate: 0.0991, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '30', name: '和歌山県', healthRate: 0.1006, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '31', name: '鳥取県', healthRate: 0.0986, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '32', name: '島根県', healthRate: 0.0994, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '33', name: '岡山県', healthRate: 0.1005, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '34', name: '広島県', healthRate: 0.0978, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '35', name: '山口県', healthRate: 0.1015, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '36', name: '徳島県', healthRate: 0.1024, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '37', name: '香川県', healthRate: 0.1002, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '38', name: '愛媛県', healthRate: 0.0998, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '39', name: '高知県', healthRate: 0.1005, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '40', name: '福岡県', healthRate: 0.1011, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '41', name: '佐賀県', healthRate: 0.1055, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '42', name: '長崎県', healthRate: 0.1006, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '43', name: '熊本県', healthRate: 0.1008, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '44', name: '大分県', healthRate: 0.1008, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '45', name: '宮崎県', healthRate: 0.0977, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '46', name: '鹿児島県', healthRate: 0.1013, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
-  { code: '47', name: '沖縄県', healthRate: 0.0944, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0060, childRearingRate: 0.0036 },
+  { code: '01', name: '北海道', healthRate: 0.1028, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '02', name: '青森県', healthRate: 0.0985, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '03', name: '岩手県', healthRate: 0.0951, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '04', name: '宮城県', healthRate: 0.1010, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '05', name: '秋田県', healthRate: 0.1001, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '06', name: '山形県', healthRate: 0.0975, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '07', name: '福島県', healthRate: 0.0950, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '08', name: '茨城県', healthRate: 0.0952, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '09', name: '栃木県', healthRate: 0.0982, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '10', name: '群馬県', healthRate: 0.0968, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '11', name: '埼玉県', healthRate: 0.0967, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '12', name: '千葉県', healthRate: 0.0973, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '13', name: '東京都', healthRate: 0.0985, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '14', name: '神奈川県', healthRate: 0.0992, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '15', name: '新潟県', healthRate: 0.0921, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '16', name: '富山県', healthRate: 0.0959, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '17', name: '石川県', healthRate: 0.0970, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '18', name: '福井県', healthRate: 0.0971, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '19', name: '山梨県', healthRate: 0.0955, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '20', name: '長野県', healthRate: 0.0963, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '21', name: '岐阜県', healthRate: 0.0980, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '22', name: '静岡県', healthRate: 0.0961, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '23', name: '愛知県', healthRate: 0.0993, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '24', name: '三重県', healthRate: 0.0977, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '25', name: '滋賀県', healthRate: 0.0988, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '26', name: '京都府', healthRate: 0.0989, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '27', name: '大阪府', healthRate: 0.1013, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '28', name: '兵庫県', healthRate: 0.1012, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '29', name: '奈良県', healthRate: 0.0991, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '30', name: '和歌山県', healthRate: 0.1006, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '31', name: '鳥取県', healthRate: 0.0986, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '32', name: '島根県', healthRate: 0.0994, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '33', name: '岡山県', healthRate: 0.1005, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '34', name: '広島県', healthRate: 0.0978, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '35', name: '山口県', healthRate: 0.1015, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '36', name: '徳島県', healthRate: 0.1024, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '37', name: '香川県', healthRate: 0.1002, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '38', name: '愛媛県', healthRate: 0.0998, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '39', name: '高知県', healthRate: 0.1005, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '40', name: '福岡県', healthRate: 0.1011, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '41', name: '佐賀県', healthRate: 0.1055, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '42', name: '長崎県', healthRate: 0.1006, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '43', name: '熊本県', healthRate: 0.1008, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '44', name: '大分県', healthRate: 0.1008, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '45', name: '宮崎県', healthRate: 0.0977, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '46', name: '鹿児島県', healthRate: 0.1013, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
+  { code: '47', name: '沖縄県', healthRate: 0.0944, nursingRate: 0.0160, pensionRate: 0.1830, employmentRate: 0.0050, childRearingRate: 0.0036 },
 ];
 
 /**
@@ -278,6 +278,7 @@ export function calculateSocialInsuranceDeduction(params: {
 }) {
   const {
     monthlySalary,
+    standardRemunerationBase,
     healthStandardRemuneration,
     pensionStandardRemuneration,
     prefectureCode,
@@ -292,16 +293,21 @@ export function calculateSocialInsuranceDeduction(params: {
 
   const pref = getPrefectureRate(prefectureCode);
 
-  // 🏛️ 法定労務SSOT原則（年金事務所の確定通知書に記載された標準報酬月額のみから控除）：
-  // 給与マスタで標準報酬月額が未設定（空欄・0円）の場合、勝手に給料から架空推測して天引きすることを構造的に100%完全禁止する！
-  // 決定通知書が届いてマスタに登録されるまでは、健康保険・厚生年金保険料は0円（未設定・未控除）とする。
+  const fallbackBase = (standardRemunerationBase !== undefined && standardRemunerationBase !== null)
+    ? standardRemunerationBase
+    : monthlySalary;
+
   const healthBase = (healthStandardRemuneration && healthStandardRemuneration > 0)
     ? healthStandardRemuneration
-    : 0;
+    : (fallbackBase && fallbackBase > 0)
+      ? lookupStandardMonthlyRemuneration(fallbackBase, 'health')
+      : 0;
 
   const pensionBase = (pensionStandardRemuneration && pensionStandardRemuneration > 0)
     ? pensionStandardRemuneration
-    : 0;
+    : (fallbackBase && fallbackBase > 0)
+      ? lookupStandardMonthlyRemuneration(fallbackBase, 'pension')
+      : 0;
 
   // 介護保険該当フラグ（生年月日の実年齢を最優先判定、生年月日未指定時は手動指定を参照）
   let isNursing = false;
@@ -415,7 +421,7 @@ export function determineRetirementSocialInsuranceMonths(
 
   return {
     retirementDate: retirementDateStr,
-    lossDate: lossDate.toISOString().split('T')[0],
+    lossDate: `${lossDate.getFullYear()}-${String(lossDate.getMonth() + 1).padStart(2, '0')}-${String(lossDate.getDate()).padStart(2, '0')}`,
     lossMonth,
     isEndOfMonth,
     isSameMonthGainLoss,
@@ -561,10 +567,13 @@ export function checkMonthlyRevisionEligibility(params: MonthlyRevisionCheckPara
   const sum = consecutiveMonths.reduce((acc, m) => acc + m.totalWage, 0);
   const averageWage = Math.round(sum / 3);
 
+  const normalizedCurrentHealth = lookupStandardMonthlyRemuneration(currentHealthStandard, 'health');
+  const normalizedCurrentPension = lookupStandardMonthlyRemuneration(currentPensionStandard, 'pension');
+
   const newHealthStandard = lookupStandardMonthlyRemuneration(averageWage, 'health');
   const newPensionStandard = lookupStandardMonthlyRemuneration(averageWage, 'pension');
 
-  const curHealthRowIndex = HEALTH_REMUNERATION_TABLE.findIndex(r => r.standard === currentHealthStandard);
+  const curHealthRowIndex = HEALTH_REMUNERATION_TABLE.findIndex(r => r.standard === normalizedCurrentHealth);
   const newHealthRowIndex = HEALTH_REMUNERATION_TABLE.findIndex(r => r.standard === newHealthStandard);
   const curHealthGrade = curHealthRowIndex !== -1 ? HEALTH_REMUNERATION_TABLE[curHealthRowIndex].grade : 1;
   const newHealthGrade = newHealthRowIndex !== -1 ? HEALTH_REMUNERATION_TABLE[newHealthRowIndex].grade : 1;
@@ -579,16 +588,16 @@ export function checkMonthlyRevisionEligibility(params: MonthlyRevisionCheckPara
   const isPensionGradeEligible = pensionGradeDiff >= 2;
 
   let isHealthDirectionMatching = true;
-  if (fixedWageChangeType === 'increase' && newHealthStandard < currentHealthStandard) {
+  if (fixedWageChangeType === 'increase' && newHealthStandard < normalizedCurrentHealth) {
     isHealthDirectionMatching = false;
-  } else if (fixedWageChangeType === 'decrease' && newHealthStandard > currentHealthStandard) {
+  } else if (fixedWageChangeType === 'decrease' && newHealthStandard > normalizedCurrentHealth) {
     isHealthDirectionMatching = false;
   }
 
   let isPensionDirectionMatching = true;
-  if (fixedWageChangeType === 'increase' && newPensionStandard < currentPensionStandard) {
+  if (fixedWageChangeType === 'increase' && newPensionStandard < normalizedCurrentPension) {
     isPensionDirectionMatching = false;
-  } else if (fixedWageChangeType === 'decrease' && newPensionStandard > currentPensionStandard) {
+  } else if (fixedWageChangeType === 'decrease' && newPensionStandard > normalizedCurrentPension) {
     isPensionDirectionMatching = false;
   }
 

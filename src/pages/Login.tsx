@@ -18,8 +18,21 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
-  const [isEmployeeSignup, setIsEmployeeSignup] = useState(false);
-  const [inviteCode, setInviteCode] = useState('');
+  const [isEmployeeSignup, setIsEmployeeSignup] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      return Boolean(sp.get('tenant_id') || sp.get('tid') || sp.get('tenant') || sp.get('invite_code'));
+    }
+    return false;
+  });
+  const [inviteCode, setInviteCode] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      return sp.get('tenant_id') || sp.get('tid') || sp.get('invite_code') || '';
+    }
+    return '';
+  });
+  const [invitedCompanyName, setInvitedCompanyName] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resetSuccess, setResetSuccess] = useState(false);
@@ -34,12 +47,73 @@ const Login = () => {
   const [isAlreadyRegistered, setIsAlreadyRegistered] = useState(false);
   const navigate = useNavigate();
 
-  // メールアドレス保存の復元
+  // 🔗 安全な内部リダイレクト先（redirect_to）を取得するヘルパー
+  const getSafeRedirectTo = (): string | null => {
+    if (typeof window === 'undefined') return null;
+    const sp = new URLSearchParams(window.location.search);
+    const rawRedirect = sp.get('redirect_to');
+    if (rawRedirect && rawRedirect.startsWith('/') && !rawRedirect.startsWith('//')) {
+      return rawRedirect;
+    }
+    return null;
+  };
+
+  // メールアドレス保存の復元 ＆ URLクエリからのテナント招待補完
   useEffect(() => {
     const savedEmail = localStorage.getItem('mf_remember_email');
     if (savedEmail) {
       setEmail(savedEmail);
       setRememberMe(true);
+    }
+
+    // URLクエリ ?tenant_id= または ?tenant= による従業員招待情報の自動補完
+    const sp = new URLSearchParams(window.location.search);
+    const urlTenantId = sp.get('tenant_id') || sp.get('tid') || sp.get('invite_code');
+    const urlTenantParam = sp.get('tenant');
+
+    if (urlTenantId) {
+      setIsEmployeeSignup(true);
+      setInviteCode(urlTenantId);
+      supabase
+        .from('tenants')
+        .select('id, name')
+        .eq('id', urlTenantId)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.name) setInvitedCompanyName(data.name);
+        });
+    } else if (urlTenantParam) {
+      setIsEmployeeSignup(true);
+      const trimmed = urlTenantParam.trim();
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
+      if (isUuid) {
+        setInviteCode(trimmed);
+        supabase
+          .from('tenants')
+          .select('id, name')
+          .eq('id', trimmed)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data?.name) setInvitedCompanyName(data.name);
+          });
+      } else {
+        // テナント名検索でIDを補完
+        supabase
+          .from('tenants')
+          .select('id, name')
+          .ilike('name', `%${trimmed}%`)
+          .limit(1)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (data?.id) {
+              setInviteCode(data.id);
+              setInvitedCompanyName(data.name || trimmed);
+            } else {
+              setInviteCode(trimmed);
+              setInvitedCompanyName(trimmed);
+            }
+          });
+      }
     }
 
     // パスワードリセット用リカバリーURL検知（過去リンクやcodeパラメータも確実に新設画面へ自動転送）
@@ -79,7 +153,8 @@ const Login = () => {
 
     try {
       if (mode === 'signup') {
-        const redirectUrl = `${window.location.origin}/portal`;
+        const redirectTo = getSafeRedirectTo();
+        const redirectUrl = redirectTo ? `${window.location.origin}${redirectTo}` : `${window.location.origin}/portal`;
         const signUpOptions: any = {
           data: {
             name: name.trim() || email.split('@')[0],
@@ -99,9 +174,13 @@ const Login = () => {
 
         // 🌟 もしセッションが即座に発行された場合（メール確認不要設定、または自動認証）
         if (signUpData.session) {
+          if (redirectTo) {
+            navigate(redirectTo, { replace: true });
+            return;
+          }
           const searchParams = new URLSearchParams(window.location.search);
-          const urlTid = searchParams.get('tenant_id');
-          navigate(urlTid ? `/portal?tenant_id=${urlTid}` : '/portal');
+          const urlTid = searchParams.get('tenant_id') || inviteCode.trim();
+          navigate(urlTid ? `/portal?tenant_id=${urlTid}` : '/portal', { replace: true });
           return;
         }
 
@@ -145,9 +224,14 @@ const Login = () => {
               const { data: healData, error: healError } = await supabase.rpc('self_heal_user');
               if (!healError && healData && healData.success) {
                 console.log('User account successfully self-healed:', healData);
+                const redirectTo = getSafeRedirectTo();
+                if (redirectTo) {
+                  navigate(redirectTo, { replace: true });
+                  return;
+                }
                 const searchParams = new URLSearchParams(window.location.search);
-                const urlTid = searchParams.get('tenant_id');
-                navigate(urlTid ? `/portal?tenant_id=${urlTid}` : '/portal');
+                const urlTid = searchParams.get('tenant_id') || inviteCode.trim();
+                navigate(urlTid ? `/portal?tenant_id=${urlTid}` : '/portal', { replace: true });
                 return;
               }
             } catch (healErr) {
@@ -160,10 +244,17 @@ const Login = () => {
             return;
           }
 
+          // 🔗 redirect_to が指定されており安全な内部パスの場合は元の目的画面へ優先遷移
+          const redirectTo = getSafeRedirectTo();
+          if (redirectTo) {
+            navigate(redirectTo, { replace: true });
+            return;
+          }
+
           // 🏛️ 憲法9条遵守：管理者も一般ユーザーも、所属tenant_idをURLに100%バインドして総合ポータルへ遷移する
           const searchParams = new URLSearchParams(window.location.search);
-          const targetTenantId = userRecord?.tenant_id || searchParams.get('tenant_id');
-          navigate(targetTenantId ? `/portal?tenant_id=${targetTenantId}` : '/portal');
+          const targetTenantId = userRecord?.tenant_id || searchParams.get('tenant_id') || inviteCode.trim();
+          navigate(targetTenantId ? `/portal?tenant_id=${targetTenantId}` : '/portal', { replace: true });
         }
       }
     } catch (err: any) {
@@ -689,20 +780,28 @@ const Login = () => {
                   </div>
                   
                   {isEmployeeSignup ? (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700" htmlFor="inviteCode">
-                        招待コード（管理者から共有されたコード）
-                      </label>
-                      <div className="mt-1">
-                        <input
-                          id="inviteCode"
-                          type="text"
-                          required={isEmployeeSignup}
-                          value={inviteCode}
-                          onChange={(e) => setInviteCode(e.target.value)}
-                          className="focus:ring-green-500 focus:border-green-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 border bg-white"
-                          placeholder="例: 123e4567-e89b-12d3-a456-426614174000"
-                        />
+                    <div className="space-y-2">
+                      {invitedCompanyName && (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-md px-3 py-1.5 text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>招待先企業：{invitedCompanyName}</span>
+                        </div>
+                      )}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700" htmlFor="inviteCode">
+                          招待コード（管理者から共有されたコード）
+                        </label>
+                        <div className="mt-1">
+                          <input
+                            id="inviteCode"
+                            type="text"
+                            required={isEmployeeSignup}
+                            value={inviteCode}
+                            onChange={(e) => setInviteCode(e.target.value)}
+                            className="focus:ring-green-500 focus:border-green-500 block w-full sm:text-sm border-gray-300 rounded-md py-2 px-3 border bg-white"
+                            placeholder="例: 123e4567-e89b-12d3-a456-426614174000"
+                          />
+                        </div>
                       </div>
                     </div>
                   ) : (

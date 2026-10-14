@@ -84,33 +84,37 @@ const ShiftEmployeeRequest: React.FC = () => {
         if (settings) {
           let locked = settings.is_submission_locked || false;
 
-          // 新しい auto_lock_days (文字列: "10,25" など) がある場合
+          const now = new Date();
+          const nowYm = now.getFullYear() * 12 + now.getMonth();
+          const viewYm = currentMonthStart.getFullYear() * 12 + currentMonthStart.getMonth();
+
+          let lockDays: number[] = [];
           if (settings.auto_lock_days) {
-            const days = settings.auto_lock_days.split(',').map((d: string) => Number(d.trim())).filter((d: number) => !isNaN(d));
-            if (days.length > 0) {
-              days.sort((a: number, b: number) => a - b);
-              const today = new Date().getDate();
-              
-              // 次の締め切り日を探す
-              let nextDay = days.find((d: number) => d >= today);
-              // もし今日がすべての締め切り日を過ぎているなら、次の締め切り日は来月の最初の締め切り日
-              if (nextDay === undefined) {
-                // 簡易的に月の日数を30日として計算（厳密には月によるが簡易的判定とする）
-                nextDay = days[0] + 30;
-              }
-              
-              // 提出開始期間を「次の締め切り日の 10日前 から」とする
-              const daysUntilNext = nextDay - today;
-              
-              // 締め切り日まで10日より遠い場合（＝過去の締め切りは過ぎており、まだ次の開始前）はロックする
-              if (daysUntilNext > 10) {
+            lockDays = settings.auto_lock_days
+              .split(',')
+              .map((d: string) => Number(d.trim()))
+              .filter((d: number) => !isNaN(d) && d >= 1 && d <= 31)
+              .sort((a: number, b: number) => a - b);
+          } else if (settings.auto_lock_day) {
+            const d = Number(settings.auto_lock_day);
+            if (!isNaN(d) && d >= 1 && d <= 31) {
+              lockDays = [d];
+            }
+          }
+
+          if (lockDays.length > 0) {
+            if (viewYm < nowYm) {
+              locked = true;
+            } else if (viewYm === nowYm) {
+              const maxDeadlineDay = lockDays[lockDays.length - 1];
+              if (lockDays.length === 1 || now.getDate() > maxDeadlineDay) {
                 locked = true;
               }
-            }
-          } else if (settings.auto_lock_day) {
-            const today = new Date().getDate();
-            if (today > settings.auto_lock_day) {
-              locked = true;
+            } else if (viewYm === nowYm + 1) {
+              const prevMonthDeadlineDay = lockDays[0];
+              if (now.getDate() > prevMonthDeadlineDay) {
+                locked = true;
+              }
             }
           }
           setIsLocked(locked);
@@ -286,7 +290,12 @@ const ShiftEmployeeRequest: React.FC = () => {
     );
   }
 
-  const hours = Array.from({ length: 15 }, (_, i) => i + 9);
+  const timeOptions = Array.from({ length: 48 }, (_, i) => {
+    const totalIndex = (i + 12) % 48; // 06:00〜23:30, 00:00〜05:30
+    const h = Math.floor(totalIndex / 2);
+    const m = totalIndex % 2 === 0 ? '00' : '30';
+    return `${h.toString().padStart(2, '0')}:${m}`;
+  });
   const weekDays = ['日', '月', '火', '水', '木', '金', '土'];
 
   return (
@@ -578,7 +587,7 @@ const ShiftEmployeeRequest: React.FC = () => {
                         onChange={e => setModalData({...modalData, startTime: e.target.value})}
                         className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
                       >
-                        {hours.map(h => <option key={h} value={`${h.toString().padStart(2, '0')}:00`}>{h}:00</option>)}
+                        {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
                     <div className="px-4 text-indigo-300 font-black pt-4">〜</div>
@@ -589,14 +598,17 @@ const ShiftEmployeeRequest: React.FC = () => {
                         onChange={e => setModalData({...modalData, endTime: e.target.value})}
                         className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5 font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
                       >
-                        {hours.map(h => <option key={h} value={`${h.toString().padStart(2, '0')}:00`}>{h}:00</option>)}
+                        {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
                   </div>
                   {(() => {
-                    const [sh] = modalData.startTime.split(':').map(Number);
-                    const [eh] = modalData.endTime.split(':').map(Number);
-                    const dur = eh > sh ? eh - sh : 24 - sh + eh;
+                    const [sh, sm] = modalData.startTime.split(':').map(Number);
+                    const [eh, em] = modalData.endTime.split(':').map(Number);
+                    const startMins = sh * 60 + (sm || 0);
+                    const endMins = eh * 60 + (em || 0);
+                    const diffMins = endMins > startMins ? endMins - startMins : 1440 - startMins + endMins;
+                    const dur = Math.round((diffMins / 60) * 10) / 10;
                     return (
                       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 rounded-xl text-xs font-bold text-slate-600 border border-slate-100">
                         <span>希望勤務時間: <strong className="text-indigo-600">{dur}時間</strong></span>

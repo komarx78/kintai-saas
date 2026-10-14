@@ -5,7 +5,7 @@
 -- 2. pgcrypto のスキーマ（extensions / public）フォールバック対応
 -- 3. auth.identities も連動して自動生成・更新（Supabase Auth ログイン保証）
 -- 4. 同一メールアドレスが別ユーザーで既に存在する場合の衝突防止と明確な警告
--- 5. anon, authenticated, service_role に実行権限を付与し認証セッション切れによる遮断を防止
+-- 5. セキュリティ強化：anon 実行権限を廃止し、authenticated（同一テナント管理者または本人初回登録）と service_role のみに制限
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
@@ -23,6 +23,7 @@ AS $$
 DECLARE
   v_caller_id UUID;
   v_caller_role TEXT;
+  v_caller_tenant_id UUID;
   v_target_name TEXT;
   v_target_tenant_id UUID;
   v_encrypted_pw TEXT;
@@ -61,6 +62,45 @@ BEGIN
     );
   END IF;
 
+  -- 2-B. 呼び出し元（auth.uid()）の権限・テナント境界検証
+  v_caller_id := auth.uid();
+  SELECT id INTO v_existing_by_id FROM auth.users WHERE id = p_target_user_id LIMIT 1;
+
+  IF v_caller_id IS NOT NULL THEN
+    SELECT role, tenant_id INTO v_caller_role, v_caller_tenant_id
+    FROM public.users
+    WHERE id = v_caller_id;
+
+    -- superadmin 以外は同一テナント内のみ操作可能
+    IF v_caller_role IS DISTINCT FROM 'superadmin' THEN
+      IF v_caller_tenant_id IS DISTINCT FROM v_target_tenant_id THEN
+        RETURN jsonb_build_object(
+          'success', false,
+          'error_code', 'FORBIDDEN_TENANT',
+          'error', '他社テナントの従業員アカウントは操作できません。'
+        );
+      END IF;
+
+      -- 管理者（admin）または本人以外による操作を遮断
+      IF v_caller_role IS DISTINCT FROM 'admin' AND v_caller_id != p_target_user_id THEN
+        RETURN jsonb_build_object(
+          'success', false,
+          'error_code', 'FORBIDDEN_ROLE',
+          'error', 'アカウントの発行・更新は管理者権限が必要です。'
+        );
+      END IF;
+    END IF;
+  ELSE
+    -- auth.uid() が存在しない場合：既存アカウントの無認証パスワード上書きを遮断（初回未発行オンボーディングまたは service_role 以外は拒否）
+    IF current_user NOT IN ('postgres', 'service_role', 'supabase_admin') AND v_existing_by_id IS NOT NULL THEN
+      RETURN jsonb_build_object(
+        'success', false,
+        'error_code', 'UNAUTHORIZED',
+        'error', '認証セッションが確認できません。再度ログインしてから実行してください。'
+      );
+    END IF;
+  END IF;
+
   -- 3. パスワード暗号化（スキーマ多層フォールバック）
   BEGIN
     v_encrypted_pw := extensions.crypt(p_password, extensions.gen_salt('bf'));
@@ -73,7 +113,6 @@ BEGIN
   END;
 
   -- 4. auth.users の重複・既存確認
-  SELECT id INTO v_existing_by_id FROM auth.users WHERE id = p_target_user_id LIMIT 1;
   SELECT id INTO v_existing_by_email FROM auth.users WHERE lower(email) = v_clean_email LIMIT 1;
 
   -- 他のユーザーIDで既にこのメールが使われている場合の衝突検知
@@ -183,5 +222,6 @@ BEGIN
 END;
 $$;
 
--- anon および authenticated の双方に実行許可を付与
-GRANT EXECUTE ON FUNCTION public.create_or_update_staff_auth_account(UUID, TEXT, TEXT) TO anon, authenticated, service_role;
+-- anon の実行権限を剥奪し、authenticated および service_role のみに実行許可を付与
+REVOKE EXECUTE ON FUNCTION public.create_or_update_staff_auth_account(UUID, TEXT, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.create_or_update_staff_auth_account(UUID, TEXT, TEXT) TO authenticated, service_role;

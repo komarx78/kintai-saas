@@ -216,10 +216,10 @@ export function formatStaffPayslipLineMessage(params: {
   const ymLabel = `${year}年${parseInt(month, 10)}月度`;
   const companyTitle = params.companyName || '会社';
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://kintai.kap-cocotte.com';
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com';
   const tenantParam = params.tenantId ? `?tid=${params.tenantId}` : '';
-  const userParam = params.userId ? `&uid=${params.userId}` : '';
-  const defaultPublicUrl = `${origin}/payslip${tenantParam}${userParam}`;
+  const userParam = params.userId ? `${tenantParam ? '&' : '?'}uid=${params.userId}` : '';
+  const defaultPublicUrl = `${origin}/payroll/user${tenantParam}${userParam}`;
   const url = params.payslipUrl || defaultPublicUrl;
 
   let text = `【みんなのらくまる労務】\nWeb給与明細 発行のお知らせ📢\n\n`;
@@ -367,29 +367,20 @@ export async function sendStaffPayslipLineMessages(
   }
 
   // 3. 送信ログを保存（マルチデバイス永続化）
-  try {
-    const logKey = `line_payslip_logs_${tenantId}`;
-    const raw = localStorage.getItem(logKey);
-    const logs = raw ? JSON.parse(raw) : [];
-    const newLog = {
-      id: `payslip_line_${Date.now()}`,
-      type: 'payslip_notification',
-      yearMonth: payslips[0]?.yearMonth || '',
-      sentAt: timestamp,
-      sentCount,
-      skippedCount,
-      senderMode: config.mode,
-      senderAccount: config.mode === 'rakumaru_official' 
-        ? config.rakumaruAccountName 
-        : (config.ownAccountName || '自社公式LINE'),
-      companyName: companyName || '',
-      recipients: results.filter(r => r.success).map(r => ({ userId: r.userId, userName: r.userName }))
-    };
-    logs.unshift(newLog);
-    localStorage.setItem(logKey, JSON.stringify(logs.slice(0, 50)));
-  } catch (e) {
-    console.warn('Payslip line send log error:', e);
-  }
+  appendLineSendLog(`line_payslip_logs_${tenantId}`, tenantId, {
+    id: `payslip_line_${Date.now()}`,
+    type: 'payslip_notification',
+    yearMonth: payslips[0]?.yearMonth || '',
+    sentAt: timestamp,
+    sentCount,
+    skippedCount,
+    senderMode: config.mode,
+    senderAccount: config.mode === 'rakumaru_official' 
+      ? config.rakumaruAccountName 
+      : (config.ownAccountName || '自社公式LINE'),
+    companyName: companyName || '',
+    recipients: results.filter(r => r.success).map(r => ({ userId: r.userId, userName: r.userName }))
+  });
 
   const accountName = config.mode === 'rakumaru_official' 
     ? 'みんなのらくまる労務 公式LINE' 
@@ -539,24 +530,15 @@ export async function sendConfirmedShiftsViaLine(
     }
   }
   
-  try {
-    const logKey = `line_shift_send_logs_${tenantId}`;
-    const raw = localStorage.getItem(logKey);
-    const logs = raw ? JSON.parse(raw) : [];
-    const newLog = {
-      id: `log_${Date.now()}`,
-      type: 'confirmed_shift',
-      period: targetPeriodLabel,
-      sentAt: timestamp,
-      sentCount,
-      skippedCount,
-      recipients: sentRecipients
-    };
-    logs.unshift(newLog);
-    localStorage.setItem(logKey, JSON.stringify(logs.slice(0, 50)));
-  } catch (e) {
-    console.warn('LINE send log error:', e);
-  }
+  appendLineSendLog(`line_shift_send_logs_${tenantId}`, tenantId, {
+    id: `log_${Date.now()}`,
+    type: 'confirmed_shift',
+    period: targetPeriodLabel,
+    sentAt: timestamp,
+    sentCount,
+    skippedCount,
+    recipients: sentRecipients
+  });
 
   return {
     success: sentCount > 0,
@@ -616,26 +598,17 @@ export async function sendEmergencyHelpViaLine(
     }
   }
   
-  try {
-    const logKey = `line_emergency_help_logs_${tenantId}`;
-    const raw = localStorage.getItem(logKey);
-    const logs = raw ? JSON.parse(raw) : [];
-    const newLog = {
-      id: `emergency_${Date.now()}`,
-      type: 'emergency_help',
-      date: helpInfo.targetDate,
-      time: helpInfo.timeRange,
-      role: helpInfo.role,
-      sentAt: timestamp,
-      sentCount,
-      skippedCount,
-      recipientUserIds
-    };
-    logs.unshift(newLog);
-    localStorage.setItem(logKey, JSON.stringify(logs.slice(0, 50)));
-  } catch (e) {
-    console.warn('Emergency help send log error:', e);
-  }
+  appendLineSendLog(`line_emergency_help_logs_${tenantId}`, tenantId, {
+    id: `emergency_${Date.now()}`,
+    type: 'emergency_help',
+    date: helpInfo.targetDate,
+    time: helpInfo.timeRange,
+    role: helpInfo.role,
+    sentAt: timestamp,
+    sentCount,
+    skippedCount,
+    recipientUserIds
+  });
 
   return {
     success: sentCount > 0,
@@ -695,24 +668,15 @@ export async function sendShiftRemindersViaLine(
     }
   }
 
-  try {
-    const logKey = `line_reminder_logs_${tenantId}`;
-    const raw = localStorage.getItem(logKey);
-    const logs = raw ? JSON.parse(raw) : [];
-    const newLog = {
-      id: `remind_${Date.now()}`,
-      type: 'shift_reminder',
-      period: periodLabel,
-      sentAt: timestamp,
-      sentCount,
-      skippedCount,
-      recipients: sentRecipients
-    };
-    logs.unshift(newLog);
-    localStorage.setItem(logKey, JSON.stringify(logs.slice(0, 50)));
-  } catch (e) {
-    console.warn('Reminder send log error:', e);
-  }
+  appendLineSendLog(`line_reminder_logs_${tenantId}`, tenantId, {
+    id: `remind_${Date.now()}`,
+    type: 'shift_reminder',
+    period: periodLabel,
+    sentAt: timestamp,
+    sentCount,
+    skippedCount,
+    recipients: sentRecipients
+  });
 
   return {
     success: sentCount > 0,
@@ -720,6 +684,37 @@ export async function sendShiftRemindersViaLine(
     skippedCount,
     timestamp
   };
+}
+
+/**
+ * 📝 LINE通知送信ログ保存ヘルパー（LocalStorage即時保存 ＋ Supabase line_notification_logs 非同期記録）
+ */
+export function appendLineSendLog(
+  logKey: string,
+  tenantId: string | null | undefined,
+  newLog: Record<string, any>
+): void {
+  try {
+    const raw = localStorage.getItem(logKey);
+    const logs = raw ? JSON.parse(raw) : [];
+    logs.unshift(newLog);
+    localStorage.setItem(logKey, JSON.stringify(logs.slice(0, 50)));
+  } catch (e) {
+    console.warn('LINE send log localStorage error:', e);
+  }
+
+  if (tenantId) {
+    Promise.resolve(
+      supabase.from('line_notification_logs').insert({
+        tenant_id: tenantId,
+        notification_type: newLog.type || 'general',
+        sent_count: typeof newLog.sentCount === 'number' ? newLog.sentCount : (newLog.success ? 1 : 0),
+        skipped_count: typeof newLog.skippedCount === 'number' ? newLog.skippedCount : 0,
+        payload: newLog,
+        created_at: newLog.sentAt || new Date().toISOString()
+      })
+    ).catch(() => {});
+  }
 }
 
 export type LineIntegrationMode = 'none' | 'rakumaru_official' | 'own_official';
@@ -778,18 +773,72 @@ export function saveTenantLineConfig(tenantId: string | null | undefined, config
 }
 
 /**
- * 会社のLINE連携設定をDBから同期取得（マルチ端末・店長端末へ完全引き継ぎ）
+ * 会社のLINE連携設定をDBから同期取得（マルチ端末・店長端末・スタッフスマホへ完全引き継ぎ）
  */
 export async function fetchTenantLineConfigFromDb(tenantId: string | null | undefined): Promise<LineIntegrationConfig> {
   const local = getTenantLineConfig(tenantId);
+  if (!tenantId) return local;
+
+  try {
+    const { data, error } = await supabase
+      .from('tenants')
+      .select('work_calendar_settings, leave_rules')
+      .eq('id', tenantId)
+      .maybeSingle();
+
+    if (!error && data) {
+      const dbCfg =
+        (data.work_calendar_settings && typeof data.work_calendar_settings === 'object' && (data.work_calendar_settings as any).line_config) ||
+        (data.leave_rules && typeof data.leave_rules === 'object' && (data.leave_rules as any).line_config);
+
+      if (dbCfg && typeof dbCfg === 'object') {
+        const merged: LineIntegrationConfig = {
+          ...DEFAULT_LINE_CONFIG,
+          ...local,
+          ...dbCfg
+        };
+        saveTenantLineConfig(tenantId, merged);
+        return merged;
+      }
+    }
+  } catch (e) {
+    console.warn('fetchTenantLineConfigFromDb fallback to localStorage:', e);
+  }
+
   return local;
 }
 
 /**
- * 会社のLINE連携設定をLocalStorageへ完全永続化
+ * 会社のLINE連携設定をDB（tenants.work_calendar_settings.line_config）およびLocalStorageへ完全永続化
  */
 export async function saveTenantLineConfigUnified(tenantId: string | null | undefined, config: LineIntegrationConfig): Promise<void> {
-  saveTenantLineConfig(tenantId, config);
+  const toSave: LineIntegrationConfig = { ...config, updatedAt: new Date().toISOString() };
+  saveTenantLineConfig(tenantId, toSave);
+  if (!tenantId) return;
+
+  try {
+    const { data: tData } = await supabase
+      .from('tenants')
+      .select('work_calendar_settings')
+      .eq('id', tenantId)
+      .maybeSingle();
+
+    const currentCal = (tData?.work_calendar_settings && typeof tData.work_calendar_settings === 'object')
+      ? tData.work_calendar_settings
+      : {};
+
+    await supabase
+      .from('tenants')
+      .update({
+        work_calendar_settings: {
+          ...currentCal,
+          line_config: toSave
+        }
+      })
+      .eq('id', tenantId);
+  } catch (e) {
+    console.warn('saveTenantLineConfigUnified DB sync notice:', e);
+  }
 }
 
 /**
@@ -866,27 +915,18 @@ export async function sendOnboardingInviteViaLine(
   }
 
   // 4. 送信ログ保存
-  try {
-    const logKey = `line_onboarding_logs_${tenantId}`;
-    const raw = localStorage.getItem(logKey);
-    const logs = raw ? JSON.parse(raw) : [];
-    const newLog = {
-      id: `onb_line_${Date.now()}`,
-      type: 'onboarding_invite',
-      userId: params.userId,
-      staffName: params.staffName,
-      lineUserId,
-      mode: config.mode,
-      senderAccount: config.mode === 'rakumaru_official' ? config.rakumaruAccountName : (config.ownAccountName || '自社公式LINE'),
-      sentAt: timestamp,
-      success: pushSuccess,
-      url: params.onboardingUrl
-    };
-    logs.unshift(newLog);
-    localStorage.setItem(logKey, JSON.stringify(logs.slice(0, 50)));
-  } catch (e) {
-    console.warn('Onboarding line send log error:', e);
-  }
+  appendLineSendLog(`line_onboarding_logs_${tenantId}`, tenantId, {
+    id: `onb_line_${Date.now()}`,
+    type: 'onboarding_invite',
+    userId: params.userId,
+    staffName: params.staffName,
+    lineUserId,
+    mode: config.mode,
+    senderAccount: config.mode === 'rakumaru_official' ? config.rakumaruAccountName : (config.ownAccountName || '自社公式LINE'),
+    sentAt: timestamp,
+    success: pushSuccess,
+    url: params.onboardingUrl
+  });
 
   const accountName = config.mode === 'rakumaru_official' 
     ? 'みんなのらくまる労務 公式LINE' 

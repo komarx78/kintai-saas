@@ -2802,21 +2802,24 @@ export default function OnboardingAdminDashboard() {
 
       // 3. shift_employee_settings の更新
       try {
+        const resolvedBaseWage = (data.hourly_wage && Number(data.hourly_wage) > 0)
+          ? Number(data.hourly_wage)
+          : (data.salary_type === 'hourly' ? (data.hourly_wage || 0) : (data.base_salary ? Math.round(data.base_salary / 160) : 0));
         await supabase
           .from('shift_employee_settings')
           .upsert({
             tenant_id: tenantId,
             user_id: data.user_id,
             hire_date: data.join_date,
-            base_wage: data.salary_type === 'hourly' ? (data.hourly_wage || 0) : (data.base_salary ? Math.round(data.base_salary / 160) : 0)
+            base_wage: resolvedBaseWage
           }, { onConflict: 'user_id' });
       } catch (sErr) {
         console.warn('shift_employee_settings upsert warn:', sErr);
       }
 
-      // 4. employee_onboarding_profiles の更新（実在カラムのみ厳格バインド）
+      // 4. employee_onboarding_profiles の更新（住宅手当・家族手当含む同期）
       try {
-        const onbPayload: any = {
+        const onbBasePayload: any = {
           tenant_id: tenantId,
           user_id: data.user_id,
           status: data.status,
@@ -2856,11 +2859,19 @@ export default function OnboardingAdminDashboard() {
           account_holder: data.account_holder,
           updated_at: new Date().toISOString()
         };
+        const onbPayloadWithAllowances = {
+          ...onbBasePayload,
+          housing_allowance: data.housing_allowance || 0,
+          family_allowance: data.family_allowance || 0
+        };
         const { error: onbErr } = await supabase
           .from('employee_onboarding_profiles')
-          .upsert(onbPayload, { onConflict: 'tenant_id,user_id' });
+          .upsert(onbPayloadWithAllowances, { onConflict: 'tenant_id,user_id' });
         if (onbErr) {
-          console.warn('employee_onboarding_profiles upsert warn:', onbErr);
+          console.warn('employee_onboarding_profiles upsert fallback:', onbErr);
+          await supabase
+            .from('employee_onboarding_profiles')
+            .upsert(onbBasePayload, { onConflict: 'tenant_id,user_id' });
         }
       } catch (onbErr) {
         console.warn('employee_onboarding_profiles exception:', onbErr);

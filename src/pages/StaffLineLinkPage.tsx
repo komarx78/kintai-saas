@@ -2,26 +2,39 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   CheckCircle2, Copy, Check, MessageSquare, 
-  ExternalLink, RefreshCw, AlertCircle, Sparkles, ShieldCheck
+  ExternalLink, RefreshCw, AlertCircle, Sparkles, ShieldCheck, Users, ChevronRight, ArrowLeft
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { 
   generateOrFetchLinePin, 
   RAKUMARU_OFFICIAL_LINE_CONSTANTS,
-  getTenantLineConfig
+  getTenantLineConfig,
+  fetchTenantLineConfigFromDb,
+  type LineIntegrationConfig
 } from '../lib/lineMessaging';
+
+interface TenantStaffOption {
+  id: string;
+  name: string;
+  department?: string | null;
+  is_line_linked?: boolean | null;
+  line_user_id?: string | null;
+}
 
 /**
  * 📱 既存・新人スタッフ専用 10秒LINEワンタップ連携ページ (StaffLineLinkPage)
- * （URL: /line-link?tid=xxx&uid=yyy）
+ * （URL: /line-link?tid=xxx&uid=yyy または /line-link?tid=xxx）
  * 
  * 現場スタッフがスマホでタップした瞬間、1秒で直感理解・ワンタップでLINEが開き送信完了できる至高画面
  */
 export default function StaffLineLinkPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tenantId = searchParams.get('tid') || searchParams.get('tenant_id') || '';
-  const userId = searchParams.get('uid') || searchParams.get('user_id') || '';
+  const initialUserId = searchParams.get('uid') || searchParams.get('user_id') || '';
 
+  const [selectedUserId, setSelectedUserId] = useState<string>(initialUserId);
+  const [staffList, setStaffList] = useState<TenantStaffOption[]>([]);
+  const [dropdownStaffId, setDropdownStaffId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState<string>('');
   const [companyName, setCompanyName] = useState<string>('');
@@ -31,9 +44,9 @@ export default function StaffLineLinkPage() {
   const [lineDisplayName, setLineDisplayName] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [config, setConfig] = useState<LineIntegrationConfig>(() => getTenantLineConfig(tenantId));
   const pollTimerRef = useRef<any>(null);
 
-  const config = getTenantLineConfig(tenantId);
   const basicId = (config.mode === 'own_official' && config.ownAccountName)
     ? (config.rakumaruBasicId || RAKUMARU_OFFICIAL_LINE_CONSTANTS.basicId)
     : RAKUMARU_OFFICIAL_LINE_CONSTANTS.basicId;
@@ -44,24 +57,61 @@ export default function StaffLineLinkPage() {
     ? config.ownAccountName
     : RAKUMARU_OFFICIAL_LINE_CONSTANTS.accountName;
 
-  // 1. 初期ロード
+  // 1. 初期ロード ＆ スタッフ選択時のPIN発行処理
   useEffect(() => {
-    if (!userId) {
+    if (!tenantId && !selectedUserId) {
       setLoading(false);
-      setErrorMsg('スタッフ認証パラメータが不足しています。店長から共有されたURLを再度ご確認ください。');
+      setErrorMsg('スタッフ認証パラメータが不足しています。店長から共有されたURLまたは店頭のQRコードを再度ご確認ください。');
       return;
     }
 
     let isMounted = true;
     setLoading(true);
+    setErrorMsg(null);
 
-    const initData = async () => {
+    const init = async () => {
       try {
-        // スタッフ情報取得
+        // (A) まず tenantId がある場合はテナントのLINE設定と会社名・在籍スタッフ一覧を取得
+        if (tenantId) {
+          const dbCfg = await fetchTenantLineConfigFromDb(tenantId);
+          if (isMounted && dbCfg) {
+            setConfig(dbCfg);
+          }
+
+          const { data: tenant } = await supabase
+            .from('tenants')
+            .select('name')
+            .eq('id', tenantId)
+            .maybeSingle();
+          if (isMounted && tenant?.name) {
+            setCompanyName(tenant.name);
+          }
+
+          // uid が未指定の場合はテナントの在籍スタッフ一覧を取得して選択画面を表示
+          if (!selectedUserId) {
+            const { data: staffs, error: staffErr } = await supabase
+              .from('users')
+              .select('id, name, department')
+              .eq('tenant_id', tenantId)
+              .order('name', { ascending: true });
+
+            if (staffErr) {
+              if (isMounted) setErrorMsg('スタッフ一覧の取得に失敗しました。電波の良い場所で再度お試しください。');
+              return;
+            }
+
+            if (isMounted) {
+              setStaffList(staffs || []);
+            }
+            return;
+          }
+        }
+
+        // (B) selectedUserId が決定している場合：個別スタッフ情報の取得 ＆ PIN発行
         const { data: user, error: uErr } = await supabase
           .from('users')
           .select('name, is_line_linked, line_user_id, line_display_name, tenant_id')
-          .eq('id', userId)
+          .eq('id', selectedUserId)
           .maybeSingle();
 
         if (uErr || !user) {
@@ -75,22 +125,28 @@ export default function StaffLineLinkPage() {
           setLineDisplayName(user.line_display_name || null);
         }
 
-        // テナント名取得
+        // テナント名・LINE設定の補完取得（URLにtidが無くuidのみだった場合にも対応）
         const effectiveTid = tenantId || user.tenant_id;
         if (effectiveTid) {
-          const { data: tenant } = await supabase
-            .from('tenants')
-            .select('name')
-            .eq('id', effectiveTid)
-            .maybeSingle();
-          if (isMounted && tenant) {
-            setCompanyName(tenant.name || '');
+          const dbCfg = await fetchTenantLineConfigFromDb(effectiveTid);
+          if (isMounted && dbCfg) {
+            setConfig(dbCfg);
+          }
+          if (!companyName) {
+            const { data: tenant } = await supabase
+              .from('tenants')
+              .select('name')
+              .eq('id', effectiveTid)
+              .maybeSingle();
+            if (isMounted && tenant?.name) {
+              setCompanyName(tenant.name);
+            }
           }
         }
 
         // 未連携の場合、PINコードを取得・発行
         if (!user.line_user_id && !user.is_line_linked) {
-          const pinRes = await generateOrFetchLinePin(userId);
+          const pinRes = await generateOrFetchLinePin(selectedUserId);
           if (isMounted && pinRes.success && pinRes.pin) {
             setPin(pinRes.pin);
             setExpiresAt(pinRes.expiresAt || '');
@@ -103,16 +159,16 @@ export default function StaffLineLinkPage() {
       }
     };
 
-    initData();
+    init();
 
     return () => {
       isMounted = false;
     };
-  }, [tenantId, userId]);
+  }, [tenantId, selectedUserId]);
 
   // 2. リアルタイム完了検知（ポーリング：LINE送信後1〜2秒で自動切り替え）
   useEffect(() => {
-    if (!userId || isLinked) {
+    if (!selectedUserId || isLinked) {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
       return;
     }
@@ -122,7 +178,7 @@ export default function StaffLineLinkPage() {
         const { data: user } = await supabase
           .from('users')
           .select('is_line_linked, line_user_id, line_display_name')
-          .eq('id', userId)
+          .eq('id', selectedUserId)
           .maybeSingle();
 
         if (user && (user.line_user_id || user.is_line_linked)) {
@@ -136,7 +192,32 @@ export default function StaffLineLinkPage() {
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
-  }, [userId, isLinked]);
+  }, [selectedUserId, isLinked]);
+
+  const handleSelectStaff = (uid: string) => {
+    if (!uid) return;
+    setPin('');
+    setExpiresAt('');
+    setIsLinked(false);
+    setSelectedUserId(uid);
+    // URLクエリにも uid を反映（リロード耐性）
+    const nextParams = new URLSearchParams(searchParams);
+    if (tenantId) nextParams.set('tid', tenantId);
+    nextParams.set('uid', uid);
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const handleResetStaffSelection = () => {
+    setSelectedUserId('');
+    setUserName('');
+    setPin('');
+    setExpiresAt('');
+    setIsLinked(false);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('uid');
+    nextParams.delete('user_id');
+    setSearchParams(nextParams, { replace: true });
+  };
 
   const handleCopyPin = () => {
     if (!pin) return;
@@ -145,7 +226,7 @@ export default function StaffLineLinkPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // 🚀 LINEディープリンク（メッセージ欄に4桁PINが自動入力された状態でLINEを開くURL）
+  // 🚀 LINEディープリンク（メッセージ欄に連携PINが自動入力された状態でLINEを開くURL）
   const cleanBasicId = basicId.replace(/^@/, '');
   const lineDeeplinkUrl = `https://line.me/R/oaMessage/@${cleanBasicId}/?${encodeURIComponent(pin)}`;
 
@@ -181,6 +262,90 @@ export default function StaffLineLinkPage() {
                 <p className="text-rose-700">{errorMsg}</p>
               </div>
             </div>
+          ) : !selectedUserId ? (
+            /* 👥 URLに uid が無い場合：スタッフ選択UI */
+            <div className="space-y-5 animate-in fade-in duration-200">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-1.5">
+                <div className="flex items-center gap-2 text-emerald-900 font-black text-sm">
+                  <Users className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>ご自身の名前を選択してください</span>
+                </div>
+                <p className="text-xs text-emerald-800 leading-relaxed">
+                  一覧からあなたのお名前を選択すると、専用のLINE連携コードが即座に発行されます。
+                </p>
+              </div>
+
+              {staffList.length === 0 ? (
+                <div className="p-6 bg-white border border-slate-200 rounded-2xl text-center text-xs text-slate-500">
+                  在籍スタッフ情報が見つかりませんでした。店舗管理者へお問い合わせください。
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* ドロップダウンで選択 */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-slate-700">
+                      リストから名前を選択
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        value={dropdownStaffId}
+                        onChange={(e) => setDropdownStaffId(e.target.value)}
+                        className="flex-1 bg-white border-2 border-slate-200 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-800 focus:outline-none"
+                      >
+                        <option value="">-- ご自身の名前を選択してください --</option>
+                        {staffList.map((st) => (
+                          <option key={st.id} value={st.id}>
+                            {st.name}{st.department ? `（${st.department}）` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={!dropdownStaffId}
+                        onClick={() => handleSelectStaff(dropdownStaffId)}
+                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-black text-xs rounded-xl shadow-sm transition cursor-pointer shrink-0"
+                      >
+                        決定
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ワンタップ選択リスト */}
+                  <div className="space-y-1.5">
+                    <p className="text-[11px] font-bold text-slate-500">
+                      または下の一覧から直接タップ：
+                    </p>
+                    <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 bg-white border border-slate-200 rounded-2xl shadow-2xs">
+                      {staffList.map((st) => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => handleSelectStaff(st.id)}
+                          className="w-full px-4 py-3 text-left hover:bg-emerald-50/70 transition flex items-center justify-between group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 font-black text-xs flex items-center justify-center shrink-0">
+                              {st.name.charAt(0)}
+                            </div>
+                            <div className="truncate">
+                              <div className="text-sm font-bold text-slate-800 group-hover:text-emerald-700 truncate">
+                                {st.name}
+                              </div>
+                              {st.department && (
+                                <div className="text-[11px] text-slate-400 truncate">
+                                  {st.department}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600 shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           ) : isLinked ? (
             /* 連携完了済みUI */
             <div className="space-y-6 text-center animate-in zoom-in-95 duration-200">
@@ -213,10 +378,34 @@ export default function StaffLineLinkPage() {
                   ※ 店長や社員の個人LINEは使用せず、会社の公式通知アカウントから直接あなたのアカウントへ安全に配信されます。
                 </p>
               </div>
+
+              {!initialUserId && tenantId && (
+                <button
+                  type="button"
+                  onClick={handleResetStaffSelection}
+                  className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>スタッフ選択に戻る</span>
+                </button>
+              )}
             </div>
           ) : (
             /* 未連携：ワンタップLINE起動 ＆ フェイルセーフUI */
             <div className="space-y-5">
+              {!initialUserId && tenantId && (
+                <div className="flex justify-start">
+                  <button
+                    type="button"
+                    onClick={handleResetStaffSelection}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-emerald-700 transition cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>別の名前を選び直す</span>
+                  </button>
+                </div>
+              )}
+
               <div className="text-center space-y-1">
                 <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full">
                   たった1タップで完了！
@@ -275,7 +464,7 @@ export default function StaffLineLinkPage() {
                 <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-[11px] text-amber-900 leading-relaxed">
                   <p className="font-bold">⚠️ 万が一、LINEを開いた時に文字が入っていない場合：</p>
                   <p className="mt-0.5">
-                    LINEのトーク画面で、上記の4桁コード【<strong className="text-amber-950 font-mono font-bold text-xs">{pin}</strong>】をそのまま打って送信してください。（※ 大文字・小文字どちらで送っても自動認識されます）
+                    LINEのトーク画面で、上記のコード【<strong className="text-amber-950 font-mono font-bold text-xs">{pin}</strong>】をそのまま打って送信してください。（※ 大文字・小文字どちらで送っても自動認識されます）
                   </p>
                 </div>
               </div>

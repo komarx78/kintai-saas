@@ -23,7 +23,8 @@ import { OfficialReminderSettingsModal } from './OfficialReminderSettingsModal';
 import { MonthlyRevisionReportModal } from './MonthlyRevisionReportModal';
 import { detectMonthlyRevisionCandidates } from '../lib/monthlyRevisionEngine';
 import { Bell } from 'lucide-react';
-import { calculateNetEmploymentIncome } from '../lib/payrollEngine';
+import { calculateNetEmploymentIncome, calculateBonusDeductions } from '../lib/payrollEngine';
+import { extractPrefectureCodeFromAddress } from '../lib/socialInsurance';
 
 export interface OfficialReportsCenterProps {
 
@@ -55,6 +56,8 @@ interface EmployeeItem {
   account_number?: string;
   account_holder?: string;
   dependents_count?: number;
+  has_spouse?: boolean;
+  spouse_name?: string;
   health_insurance_joined?: boolean;
   pension_insurance_joined?: boolean;
   employment_insurance_joined?: boolean;
@@ -195,7 +198,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
         address: tData?.address || '',
         representative_name: tData?.representative_name || '',
         phone_number: tData?.phone_number || '',
-        corporate_number: '',
+        corporate_number: (tData as any)?.corporate_number || '',
         company_seal_url: ''
       };
 
@@ -295,23 +298,6 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                      conDoc.name_kana || conDoc.nameKana || conDoc.furigana || conDoc.kana ||
                      localBackup?.name_kana || localBackup?.nameKana || localBackup?.furigana || localBackup?.kana || '';
 
-        // 💡 大元台帳（users / employee_onboarding_profiles）へフリガナ自動確定バックフィル
-        if (kana && (!u.name_kana || !ob?.name_kana)) {
-          void (async () => {
-            try {
-              await supabase.from('users').update({ name_kana: kana }).eq('id', u.id);
-            } catch (e) {}
-            try {
-              await supabase.from('employee_onboarding_profiles').upsert({
-                tenant_id: tenantId,
-                user_id: u.id,
-                name_kana: kana,
-                updated_at: new Date().toISOString()
-              }, { onConflict: 'tenant_id,user_id' });
-            } catch (e) {}
-          })();
-        }
-
         const bDate = depDoc.birth_date || depDoc.birthDate ||
                       resDoc.birth_date || resDoc.birthDate ||
                       conDoc.birth_date || conDoc.birthDate ||
@@ -345,6 +331,11 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
 
         const base = conDoc.base_salary || pp.base_salary || ob.base_salary || localBackup?.base_salary || 0;
 
+        const hasSpouseVal = depDoc.has_spouse !== undefined
+          ? !!depDoc.has_spouse
+          : (ob.has_spouse !== undefined ? !!ob.has_spouse : (pp.has_spouse !== undefined ? !!pp.has_spouse : !!(u.has_spouse ?? localBackup?.has_spouse)));
+        const spouseNameVal = depDoc.spouse_name || ob.spouse_name || pp.spouse_name || localBackup?.spouse_name || '';
+
         return {
           id: u.id,
           name: u.name || '',
@@ -371,6 +362,8 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           account_number: bankDoc.account_number || ob.account_number || pp.account_number || localBackup?.account_number || '',
           account_holder: bankDoc.account_holder || ob.account_holder || pp.account_holder || localBackup?.account_holder || '',
           dependents_count: depDoc.dependents_count !== undefined ? Number(depDoc.dependents_count) : (ob.dependents_count || pp.dependents_count || 0),
+          has_spouse: hasSpouseVal,
+          spouse_name: spouseNameVal,
           health_insurance_joined: ob.health_insurance_joined !== false,
           pension_insurance_joined: ob.pension_insurance_joined !== false,
           employment_insurance_joined: ob.employment_insurance_joined !== false,
@@ -390,7 +383,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
     }
   };
 
-  // 共通賞与データ解決ヘルパー（SSOT連携・雇用形態別対応）
+  // 共通賞与データ解決ヘルパー（SSOT連携・雇用形態別対応・calculateBonusDeductions完全統一）
   const resolveEmployeeBonusData = (emp: EmployeeItem, targetYearMonth: string) => {
     // 1. 指定年月の届出保存データ
     let savedRow: any = null;
@@ -459,13 +452,34 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
     }
 
     const bonusGross = currencyAmount + goodsAmount;
-    const standardBonus = Math.floor(bonusGross / 1000) * 1000;
+
+    const prefCode =
+      tenantInfo?.shakai_hoken_settings?.prefecture_code ||
+      tenantInfo?.prefecture_code ||
+      extractPrefectureCodeFromAddress(companyInfo.address) ||
+      undefined;
+    const payDateStr = savedRow?.individualPaymentDate || `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-10`;
+    const bDateStr = savedRow?.birthDate || emp.birth_date || null;
+    const isExec = emp.employment_type === 'executive';
+
+    const deductions = calculateBonusDeductions({
+      bonusGross,
+      dependentsCount: emp.dependents_count || 0,
+      birthDate: bDateStr,
+      targetDate: payDateStr,
+      prefectureCode: prefCode,
+      isHealthEnabled: emp.health_insurance_joined !== false,
+      isPensionEnabled: emp.pension_insurance_joined !== false,
+      isEmploymentEnabled: emp.employment_insurance_joined !== false,
+      isExecutive: isExec,
+    });
 
     return {
       currencyAmount,
       goodsAmount,
       bonusGross,
-      standardBonus,
+      standardBonus: deductions.standardBonus,
+      deductions,
       insuranceNumber: savedRow?.insuranceNumber,
       nameKana: savedRow?.nameKana || emp.name_kana,
       birthDate: savedRow?.birthDate || emp.birth_date,
@@ -1237,7 +1251,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           <div className="max-w-6xl mx-auto w-full">
             <OfficialSeparationCertificateDoc
               companyInfo={companyInfo}
-              officeNumber={employmentInsuranceOfficeNumber || '2501-123456-7'}
+              officeNumber={employmentInsuranceOfficeNumber || ''}
               employees={employees as any}
               selectedEmployeeId={selectedEmployeeId === 'all' ? (employees[0]?.id || '') : selectedEmployeeId}
               onSelectEmployee={(id) => setSelectedEmployeeId(id)}
@@ -1252,7 +1266,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
             <OfficialEmploymentInsuranceDoc
               initialType="acquisition"
               companyInfo={companyInfo}
-              officeNumber={employmentInsuranceOfficeNumber || tenantInfo?.employment_insurance_office_number || tenantInfo?.office_number || '2501-123456-7'}
+              officeNumber={employmentInsuranceOfficeNumber || tenantInfo?.employment_insurance_office_number || tenantInfo?.office_number || ''}
               employees={employees as any}
               selectedEmployeeId={selectedEmployeeId === 'all' ? (employees[0]?.id || '') : selectedEmployeeId}
               onSelectEmployee={(id) => setSelectedEmployeeId(id)}
@@ -1267,7 +1281,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
           <div className="max-w-5xl mx-auto w-full">
             <OfficialLaborInsuranceReportDoc
               companyInfo={companyInfo}
-              laborInsuranceNumber={laborInsuranceNumber || '25-1-02-123456-000'}
+              laborInsuranceNumber={laborInsuranceNumber || ''}
               employees={employees as any}
               targetFiscalYear={selectedYear}
               onBack={() => setSelectedDocType(null)}
@@ -1359,16 +1373,15 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                       const bonusData = resolveEmployeeBonusData(emp, targetMonthKey);
                       const bonusAmount = bonusData.bonusGross;
                       const isPartTime = emp.employment_type === 'part-time' || emp.salary_type === 'hourly';
-                      // 賞与時の社保・税金概算
-                      const healthBonus = emp.health_insurance_joined ? Math.round(bonusAmount * 0.05) : 0;
-                      const pensionBonus = emp.pension_insurance_joined ? Math.round(bonusAmount * 0.0915) : 0;
-                      const empInsBonus = emp.employment_insurance_joined ? Math.round(bonusAmount * 0.006) : 0;
-                      const socialTotal = healthBonus + pensionBonus + empInsBonus;
-                      const taxable = Math.max(0, bonusAmount - socialTotal);
-                      const taxRate = emp.dependents_count ? Math.max(0.02, 0.06 - (emp.dependents_count * 0.01)) : 0.06;
-                      const incomeTaxBonus = Math.round(taxable * taxRate);
-                      const deductionTotal = socialTotal + incomeTaxBonus;
-                      const netBonus = bonusAmount - deductionTotal;
+                      const {
+                        healthInsurance: healthBonus,
+                        nursingInsurance: nursingBonus,
+                        welfarePension: pensionBonus,
+                        employmentInsurance: empInsBonus,
+                        incomeTax: incomeTaxBonus,
+                        deductionTotal,
+                        netPay: netBonus
+                      } = bonusData.deductions;
 
                       return (
                         <div 
@@ -1433,6 +1446,10 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                                 <div className="flex justify-between">
                                   <span>健康保険料</span>
                                   <span className="font-mono">¥{healthBonus.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>介護保険料</span>
+                                  <span className="font-mono">¥{nursingBonus.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span>厚生年金保険料</span>
@@ -1505,11 +1522,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                 const rows = activeEmps.map(emp => {
                   const bonusData = resolveEmployeeBonusData(emp, targetMonthKey);
                   const bonusAmount = bonusData.bonusGross;
-                  const healthBonus = emp.health_insurance_joined ? Math.round(bonusAmount * 0.05) : 0;
-                  const pensionBonus = emp.pension_insurance_joined ? Math.round(bonusAmount * 0.0915) : 0;
-                  const empInsBonus = emp.employment_insurance_joined ? Math.round(bonusAmount * 0.006) : 0;
-                  const taxBonus = Math.round((bonusAmount - (healthBonus + pensionBonus + empInsBonus)) * 0.05);
-                  const netBonus = bonusAmount - (healthBonus + pensionBonus + empInsBonus + taxBonus);
+                  const netBonus = bonusData.deductions.netPay;
                   return { emp, bonusAmount, netBonus };
                 });
                 const totalTransfer = rows.reduce((sum, r) => sum + r.netBonus, 0);
@@ -1627,19 +1640,25 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                 const list = activeEmps.map(emp => {
                   const bonusData = resolveEmployeeBonusData(emp, targetMonthKey);
                   const gross = bonusData.bonusGross;
-                  const h = emp.health_insurance_joined ? Math.round(gross * 0.05) : 0;
-                  const p = emp.pension_insurance_joined ? Math.round(gross * 0.0915) : 0;
-                  const e = emp.employment_insurance_joined ? Math.round(gross * 0.006) : 0;
-                  const t = Math.round((gross - (h + p + e)) * 0.05);
-                  const net = gross - (h + p + e + t);
-                  return { emp, gross, h, p, e, t, net, ded: h + p + e + t };
+                  const {
+                    healthInsurance: h,
+                    nursingInsurance: n,
+                    welfarePension: p,
+                    employmentInsurance: e,
+                    incomeTax: t,
+                    deductionTotal: ded,
+                    netPay: net
+                  } = bonusData.deductions;
+                  return { emp, gross, h, n, p, e, t, net, ded };
                 });
 
                 const totalGross = list.reduce((s, r) => s + r.gross, 0);
                 const totalH = list.reduce((s, r) => s + r.h, 0);
+                const totalN = list.reduce((s, r) => s + r.n, 0);
                 const totalP = list.reduce((s, r) => s + r.p, 0);
                 const totalE = list.reduce((s, r) => s + r.e, 0);
                 const totalT = list.reduce((s, r) => s + r.t, 0);
+                const totalDed = list.reduce((s, r) => s + r.ded, 0);
                 const totalNet = list.reduce((s, r) => s + r.net, 0);
 
                 return (
@@ -1654,11 +1673,11 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                       <button
                         onClick={() => {
                           const csvRows = list.map(r => [
-                            r.emp.name, r.emp.department || '', r.gross, r.h, r.p, r.e, r.t, r.ded, r.net
+                            r.emp.name, r.emp.department || '', r.gross, r.h, r.n, r.p, r.e, r.t, r.ded, r.net
                           ]);
                           downloadCsv(
                             `支給控除一覧表_賞与_${selectedYear}_${selectedMonth}.csv`,
-                            ['氏名', '部署', '賞与総支給額', '健康保険', '厚生年金', '雇用保険', '所得税', '控除合計', '差引支給額'],
+                            ['氏名', '部署', '賞与総支給額', '健康保険', '介護保険', '厚生年金', '雇用保険', '所得税', '控除合計', '差引支給額'],
                             csvRows
                           );
                         }}
@@ -1675,6 +1694,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                           <th className="p-2 border-r border-slate-300 text-left">部署</th>
                           <th className="p-2 border-r border-slate-300 text-right bg-emerald-50/50">総支給額</th>
                           <th className="p-2 border-r border-slate-300 text-right">健康保険</th>
+                          <th className="p-2 border-r border-slate-300 text-right">介護保険</th>
                           <th className="p-2 border-r border-slate-300 text-right">厚生年金</th>
                           <th className="p-2 border-r border-slate-300 text-right">雇用保険</th>
                           <th className="p-2 border-r border-slate-300 text-right">所得税</th>
@@ -1689,6 +1709,7 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                             <td className="p-2 border-r border-slate-200">{r.emp.department}</td>
                             <td className="p-2 border-r border-slate-200 text-right font-mono font-bold bg-emerald-50/30">¥{r.gross.toLocaleString()}</td>
                             <td className="p-2 border-r border-slate-200 text-right font-mono">¥{r.h.toLocaleString()}</td>
+                            <td className="p-2 border-r border-slate-200 text-right font-mono">¥{r.n.toLocaleString()}</td>
                             <td className="p-2 border-r border-slate-200 text-right font-mono">¥{r.p.toLocaleString()}</td>
                             <td className="p-2 border-r border-slate-200 text-right font-mono">¥{r.e.toLocaleString()}</td>
                             <td className="p-2 border-r border-slate-200 text-right font-mono">¥{r.t.toLocaleString()}</td>
@@ -1702,10 +1723,11 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                           <td colSpan={2} className="p-2.5 text-center">全社合計</td>
                           <td className="p-2.5 text-right font-mono text-emerald-900">¥{totalGross.toLocaleString()}</td>
                           <td className="p-2.5 text-right font-mono">¥{totalH.toLocaleString()}</td>
+                          <td className="p-2.5 text-right font-mono">¥{totalN.toLocaleString()}</td>
                           <td className="p-2.5 text-right font-mono">¥{totalP.toLocaleString()}</td>
                           <td className="p-2.5 text-right font-mono">¥{totalE.toLocaleString()}</td>
                           <td className="p-2.5 text-right font-mono">¥{totalT.toLocaleString()}</td>
-                          <td className="p-2.5 text-right font-mono text-rose-800">¥{(totalH + totalP + totalE + totalT).toLocaleString()}</td>
+                          <td className="p-2.5 text-right font-mono text-rose-800">¥{totalDed.toLocaleString()}</td>
                           <td className="p-2.5 text-right font-mono text-sm text-slate-950">¥{totalNet.toLocaleString()}</td>
                         </tr>
                       </tfoot>
@@ -1727,6 +1749,32 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                   deptMap.get(d)!.push(e);
                 });
 
+                const deptSummaries = Array.from(deptMap.entries()).map(([deptName, deptEmps]) => {
+                  const empCalcs = deptEmps.map(e => resolveEmployeeBonusData(e, targetMonthKey));
+                  const deptGross = empCalcs.reduce((s, c) => s + c.bonusGross, 0);
+                  const deptHealth = empCalcs.reduce((s, c) => s + c.deductions.healthInsurance, 0);
+                  const deptNursing = empCalcs.reduce((s, c) => s + c.deductions.nursingInsurance, 0);
+                  const deptPension = empCalcs.reduce((s, c) => s + c.deductions.welfarePension, 0);
+                  const deptEmpIns = empCalcs.reduce((s, c) => s + c.deductions.employmentInsurance, 0);
+                  const deptSocial = empCalcs.reduce((s, c) => s + c.deductions.socialInsuranceTotal, 0);
+                  const deptTax = empCalcs.reduce((s, c) => s + c.deductions.incomeTax, 0);
+                  const deptDed = empCalcs.reduce((s, c) => s + c.deductions.deductionTotal, 0);
+                  const deptNet = empCalcs.reduce((s, c) => s + c.deductions.netPay, 0);
+                  return {
+                    deptName,
+                    count: deptEmps.length,
+                    deptGross,
+                    deptHealth,
+                    deptNursing,
+                    deptPension,
+                    deptEmpIns,
+                    deptSocial,
+                    deptTax,
+                    deptDed,
+                    deptNet
+                  };
+                });
+
                 return (
                   <div className="bg-white p-8 rounded-2xl border border-slate-300 text-slate-900 font-sans text-xs max-w-5xl mx-auto shadow-sm print:p-0 print:border-none print:shadow-none">
                     <div className="border-b-2 border-slate-900 pb-3 mb-5 flex items-center justify-between">
@@ -1738,29 +1786,22 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                       </div>
                       <button
                         onClick={() => {
-                          const csvRows = Array.from(deptMap.entries()).map(([deptName, deptEmps]) => {
-                            const deptGross = deptEmps.reduce((s, e) => s + resolveEmployeeBonusData(e, targetMonthKey).bonusGross, 0);
-                            const deptHealth = deptEmps.reduce((s, e) => s + (e.health_insurance_joined ? Math.round(resolveEmployeeBonusData(e, targetMonthKey).bonusGross * 0.05) : 0), 0);
-                            const deptPension = deptEmps.reduce((s, e) => s + (e.pension_insurance_joined ? Math.round(resolveEmployeeBonusData(e, targetMonthKey).bonusGross * 0.0915) : 0), 0);
-                            const deptEmpIns = deptEmps.reduce((s, e) => s + (e.employment_insurance_joined ? Math.round(resolveEmployeeBonusData(e, targetMonthKey).bonusGross * 0.006) : 0), 0);
-                            const deptSocial = deptHealth + deptPension + deptEmpIns;
-                            const deptTax = Math.round((deptGross - deptSocial) * 0.05);
-                            const deptNet = deptGross - (deptSocial + deptTax);
-                            return [
-                              deptName,
-                              deptEmps.length,
-                              deptGross,
-                              deptHealth,
-                              deptPension,
-                              deptEmpIns,
-                              deptSocial,
-                              deptTax,
-                              deptNet
-                            ];
-                          });
+                          const csvRows = deptSummaries.map(d => [
+                            d.deptName,
+                            d.count,
+                            d.deptGross,
+                            d.deptHealth,
+                            d.deptNursing,
+                            d.deptPension,
+                            d.deptEmpIns,
+                            d.deptSocial,
+                            d.deptTax,
+                            d.deptDed,
+                            d.deptNet
+                          ]);
                           downloadCsv(
                             `支給控除一覧表_賞与部門別_${selectedYear}_${selectedMonth}.csv`,
-                            ['部署・部門名', '対象人数', '賞与総支給額', '健康保険（折半後）', '厚生年金（折半後）', '雇用保険', '社会保険計', '源泉所得税', '差引支給総額'],
+                            ['部署・部門名', '対象人数', '賞与総支給額', '健康保険（折半後）', '介護保険（折半後）', '厚生年金（折半後）', '雇用保険', '社会保険計', '源泉所得税', '控除合計', '差引支給総額'],
                             csvRows
                           );
                         }}
@@ -1771,45 +1812,41 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                     </div>
 
                     <div className="space-y-6">
-                      {Array.from(deptMap.entries()).map(([deptName, deptEmps]) => {
-                        const deptGross = deptEmps.reduce((s, e) => s + resolveEmployeeBonusData(e, targetMonthKey).bonusGross, 0);
-                        const deptSocial = Math.round(deptGross * 0.1475);
-                        const deptTax = Math.round((deptGross - deptSocial) * 0.05);
-                        const deptNet = deptGross - (deptSocial + deptTax);
+                      {deptSummaries.map(d => (
+                        <div key={d.deptName} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50">
+                          <div className="flex items-center justify-between font-black text-sm mb-3 text-slate-900 border-b border-slate-200 pb-2">
+                            <span className="flex items-center gap-1.5">
+                              <Building2 className="w-4 h-4 text-indigo-600" />
+                              {d.deptName}（対象: {d.count}名）
+                            </span>
+                            <span className="text-emerald-700 font-mono">
+                              部門賞与総額: ¥{d.deptGross.toLocaleString()}
+                            </span>
+                          </div>
 
-                        return (
-                          <div key={deptName} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50">
-                            <div className="flex items-center justify-between font-black text-sm mb-3 text-slate-900 border-b border-slate-200 pb-2">
-                              <span className="flex items-center gap-1.5">
-                                <Building2 className="w-4 h-4 text-indigo-600" />
-                                {deptName}（対象: {deptEmps.length}名）
-                              </span>
-                              <span className="text-emerald-700 font-mono">
-                                部門賞与総額: ¥{deptGross.toLocaleString()}
-                              </span>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs mb-2">
+                            <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                              <div className="text-[10px] text-slate-400">賞与総支給額</div>
+                              <div className="font-mono font-bold text-slate-900">¥{d.deptGross.toLocaleString()}</div>
                             </div>
-
-                            <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                              <div className="bg-white p-2.5 rounded-lg border border-slate-200">
-                                <div className="text-[10px] text-slate-400">賞与総支給額</div>
-                                <div className="font-mono font-bold text-slate-900">¥{deptGross.toLocaleString()}</div>
+                            <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                              <div className="text-[10px] text-slate-400">法定福利社保控除（健保・介護・厚年・雇保）</div>
+                              <div className="font-mono font-bold text-rose-700">¥{d.deptSocial.toLocaleString()}</div>
+                              <div className="text-[9px] text-slate-400 font-mono mt-0.5">
+                                健¥{d.deptHealth.toLocaleString()} / 介¥{d.deptNursing.toLocaleString()} / 厚¥{d.deptPension.toLocaleString()} / 雇¥{d.deptEmpIns.toLocaleString()}
                               </div>
-                              <div className="bg-white p-2.5 rounded-lg border border-slate-200">
-                                <div className="text-[10px] text-slate-400">法定福利社保控除</div>
-                                <div className="font-mono font-bold text-rose-700">¥{deptSocial.toLocaleString()}</div>
-                              </div>
-                              <div className="bg-white p-2.5 rounded-lg border border-slate-200">
-                                <div className="text-[10px] text-slate-400">源泉所得税</div>
-                                <div className="font-mono font-bold text-slate-700">¥{deptTax.toLocaleString()}</div>
-                              </div>
-                              <div className="bg-white p-2.5 rounded-lg border border-slate-200">
-                                <div className="text-[10px] text-slate-400">差引振込手取り額</div>
-                                <div className="font-mono font-black text-emerald-700">¥{deptNet.toLocaleString()}</div>
-                              </div>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                              <div className="text-[10px] text-slate-400">源泉所得税</div>
+                              <div className="font-mono font-bold text-slate-700">¥{d.deptTax.toLocaleString()}</div>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                              <div className="text-[10px] text-slate-400">差引振込手取り額</div>
+                              <div className="font-mono font-black text-emerald-700">¥{d.deptNet.toLocaleString()}</div>
                             </div>
                           </div>
-                        );
-                      })}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 );
@@ -2120,12 +2157,14 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                   }
                 }
 
-                // 扶養控除（所得税法第84条: 一般扶養親族1人あたり380,000円）
+                // 配偶者控除・扶養控除（所得税法第83条・第84条: 1人あたり380,000円）
+                const hasSpouse = !!targetEmp.has_spouse;
+                const spouseDeduction = (totalPaid > 0 && hasSpouse && deductionAfterPayment <= 9000000) ? 380000 : 0;
                 const depCount = Number(targetEmp.dependents_count) || 0;
                 const depDeduction = depCount * 380000;
 
-                // 所得控除の額の合計額（G06: 社会保険料等の金額 + 扶養控除額 + 基礎控除額）
-                const totalIncomeDeduction = totalPaid > 0 ? (socialDeducted + depDeduction + basicDeduction) : 0;
+                // 所得控除の額の合計額（G06: 社会保険料等の金額 + 配偶者控除額 + 扶養控除額 + 基礎控除額）
+                const totalIncomeDeduction = totalPaid > 0 ? (socialDeducted + spouseDeduction + depDeduction + basicDeduction) : 0;
 
                 return (
                   <div className="max-w-4xl mx-auto space-y-4">
@@ -2170,12 +2209,15 @@ export const OfficialReportsCenter: React.FC<OfficialReportsCenterProps> = ({ te
                         totalIncomeDeduction: totalIncomeDeduction,
                         withholdingTaxAmount: taxDeducted,
                         socialInsuranceAmount: socialDeducted,
+                        hasSpouse: hasSpouse,
+                        spouseName: targetEmp.spouse_name,
+                        spouseDeduction: spouseDeduction,
                         dependentsCount: targetEmp.dependents_count,
                         basicDeduction: basicDeduction,
                         companyAddress: companyInfo.address,
                         companyName: companyInfo.name,
                         companyPhone: companyInfo.phone_number,
-                        corporateNumber: companyInfo.corporate_number || '1010001999999',
+                        corporateNumber: companyInfo.corporate_number || '',
                         companySealUrl: companyInfo.company_seal_url
                       }}
                     />

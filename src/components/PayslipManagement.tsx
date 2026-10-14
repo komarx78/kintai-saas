@@ -120,12 +120,303 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
     rounding_method: 'floor'
   });
   const [roundingRules, setRoundingRules] = useState<AttendanceRoundingRules>(DEFAULT_ROUNDING_RULES);
+  const [workSchedulePatterns, setWorkSchedulePatterns] = useState<any[]>([]);
+  const [onboardingProfilesMap, setOnboardingProfilesMap] = useState<Record<string, any>>({});
   const [payslips, setPayslips] = useState<Payslip[]>([]);
   const [isMonthCalculated, setIsMonthCalculated] = useState(false);
   const [isInsuranceBarOpen, setIsInsuranceBarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [tenantInfo, setTenantInfo] = useState<any>(null);
+
+  // 🎌 日本の国民の祝日判定ヘルパー（内閣府公表基準・春分/秋分・ハッピーマンデー・振替休日対応）
+  const isJapanesePublicHoliday = (dateStr: string): boolean => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if (!y || !m || !d) return false;
+
+    const checkSingleDayHoliday = (year: number, month: number, day: number): boolean => {
+      // 固定祝日
+      if (month === 1 && day === 1) return true; // 元日
+      if (month === 2 && day === 11) return true; // 建国記念の日
+      if (month === 2 && day === 23 && year >= 2020) return true; // 天皇誕生日
+      if (month === 4 && day === 29) return true; // 昭和の日
+      if (month === 5 && (day === 3 || day === 4 || day === 5)) return true; // 憲法記念日・みどりの日・こどもの日
+      if (month === 8 && day === 11 && year >= 2016) return true; // 山の日
+      if (month === 11 && (day === 3 || day === 23)) return true; // 文化の日・勤労感謝の日
+
+      // 春分の日・秋分の日（国立天文台略算式）
+      const vernalEquinox = Math.floor(20.8431 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
+      const autumnalEquinox = Math.floor(23.2488 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
+      if (month === 3 && day === vernalEquinox) return true;
+      if (month === 9 && day === autumnalEquinox) return true;
+
+      // ハッピーマンデー（第2月曜: 1月成人の日、10月スポーツの日 / 第3月曜: 7月海の日、9月敬老の日）
+      const dt = new Date(year, month - 1, day);
+      if (dt.getDay() === 1) {
+        const nthMonday = Math.floor((day - 1) / 7) + 1;
+        if ((month === 1 || month === 10) && nthMonday === 2) return true;
+        if ((month === 7 || month === 9) && nthMonday === 3) return true;
+      }
+      return false;
+    };
+
+    if (checkSingleDayHoliday(y, m, d)) return true;
+
+    // 振替休日判定（祝日が日曜日の場合、以降の最初の平日が振替休日）
+    const curDate = new Date(y, m - 1, d);
+    if (curDate.getDay() !== 0) {
+      const checkPrev = new Date(y, m - 1, d);
+      while (true) {
+        checkPrev.setDate(checkPrev.getDate() - 1);
+        const py = checkPrev.getFullYear();
+        const pm = checkPrev.getMonth() + 1;
+        const pd = checkPrev.getDate();
+        if (checkSingleDayHoliday(py, pm, pd)) {
+          if (checkPrev.getDay() === 0) return true;
+        } else {
+          break;
+        }
+      }
+    }
+
+    return false;
+  };
+
+  // 🕒 所定労働時間（始業・終業・休憩）の統一解決ヘルパー
+  // 優先順位: ①当日の確定シフト ➔ ②個人の労働条件マスタ(employee_onboarding_profiles) ➔ ③所属部署の就業パターン(work_schedule_patterns) ➔ ④デフォルト(09:00〜18:00, 休憩60分)
+  const resolveScheduledWorkTime = (
+    user: any,
+    dayShift: any,
+    onbProfile: any,
+    patterns: any[] = workSchedulePatterns
+  ): { startTime: string; endTime: string; breakMinutes: number } => {
+    const isWorkingShift = dayShift &&
+      !dayShift.is_holiday &&
+      dayShift.shift_type !== 'holiday' &&
+      dayShift.shift_type !== 'off' &&
+      dayShift.start_time &&
+      dayShift.end_time &&
+      !(dayShift.start_time.startsWith('00:00') && dayShift.end_time.startsWith('00:00'));
+
+    // ① 当日の確定シフト
+    if (isWorkingShift) {
+      const sTime = String(dayShift.start_time).slice(0, 5);
+      const eTime = String(dayShift.end_time).slice(0, 5);
+      const bMins = dayShift.break_minutes ?? dayShift.break_time_minutes ?? onbProfile?.break_time_minutes ?? onbProfile?.break_minutes ?? 60;
+      return { startTime: sTime, endTime: eTime, breakMinutes: Number(bMins) };
+    }
+
+    // ② 個人の労働条件マスタ (employee_onboarding_profiles)
+    const onbStart = onbProfile?.start_time || onbProfile?.work_start_time;
+    const onbEnd = onbProfile?.end_time || onbProfile?.work_end_time;
+    if (onbStart && onbEnd) {
+      const bMins = onbProfile?.break_time_minutes ?? onbProfile?.break_minutes ?? 60;
+      return {
+        startTime: String(onbStart).slice(0, 5),
+        endTime: String(onbEnd).slice(0, 5),
+        breakMinutes: Number(bMins)
+      };
+    }
+
+    // ③ 所属部署の就業パターン (work_schedule_patterns)
+    if (Array.isArray(patterns) && patterns.length > 0) {
+      const dept = user?.department || onbProfile?.department;
+      const matchedPattern =
+        (dept ? patterns.find(p => p.target_department && p.target_department === dept) : null) ||
+        patterns.find(p => !p.target_department) ||
+        patterns[0];
+
+      if (matchedPattern?.start_time && matchedPattern?.end_time) {
+        return {
+          startTime: String(matchedPattern.start_time).slice(0, 5),
+          endTime: String(matchedPattern.end_time).slice(0, 5),
+          breakMinutes: Number(matchedPattern.break_minutes ?? 60)
+        };
+      }
+    }
+
+    // ④ デフォルト
+    return { startTime: '09:00', endTime: '18:00', breakMinutes: 60 };
+  };
+
+  // 📅 カレンダー・シフト連動の自動欠勤判定ヘルパー
+  const calculateAutoDetectedAbsenceDays = (params: {
+    startDateStr: string;
+    endDateStr: string;
+    isMonthly: boolean;
+    realWorkDays: number;
+    empAttendanceRecords: any[];
+    empLeaveRequests: any[];
+    empShifts: any[];
+    joinDate?: string | null;
+    resignationDate?: string | null;
+    manualAbsenceDays?: number | null;
+    companyCalendarSettings?: any;
+  }): number => {
+    const {
+      startDateStr,
+      endDateStr,
+      isMonthly,
+      realWorkDays,
+      empAttendanceRecords,
+      empLeaveRequests,
+      empShifts,
+      joinDate,
+      resignationDate,
+      manualAbsenceDays,
+      companyCalendarSettings
+    } = params;
+
+    // 却下以外の有効な申請（承認済み or ステータス未設定）
+    const activeLeaveReqs = (empLeaveRequests || []).filter(r =>
+      r.status === '承認' || !r.status || r.status === 'approved'
+    );
+
+    // 明示的な「欠勤」申請の抽出
+    const explicitAbsenceReqs = activeLeaveReqs.filter(r =>
+      String(r.type || '').includes('欠勤') || String(r.leave_type || '').includes('欠勤')
+    );
+
+    // 有給・特別休暇等の承認済み休暇申請（欠勤・シフト希望・打刻修正を除く）
+    const approvedNonAbsenceLeaves = activeLeaveReqs.filter(r => {
+      const t = String(r.type || '');
+      const lt = String(r.leave_type || '');
+      return !t.includes('欠勤') && !lt.includes('欠勤') && t !== 'シフト希望' && t !== '打刻修正';
+    });
+
+    // ルール2: 打刻0件・休暇0件の月給社員の保護（タイムカード未運用・管理職・導入初月とみなし自動欠勤0日）
+    if (isMonthly && realWorkDays === 0 && approvedNonAbsenceLeaves.length === 0) {
+      if (explicitAbsenceReqs.length > 0) {
+        let explicitDays = 0;
+        explicitAbsenceReqs.forEach(req => {
+          const s = new Date(req.start_date);
+          const e = new Date(req.end_date || req.start_date);
+          if (!isNaN(s.getTime()) && !isNaN(e.getTime())) {
+            const cur = new Date(s);
+            while (cur <= e) {
+              const dStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+              if (dStr >= startDateStr && dStr <= endDateStr) explicitDays += 1;
+              cur.setDate(cur.getDate() + 1);
+            }
+          } else {
+            explicitDays += 1;
+          }
+        });
+        return explicitDays;
+      }
+      // 管理者が手動で 1〜19日 等の欠勤日数を明示入力済みの場合はその値を維持（旧バグの自動20日は除外）
+      if (typeof manualAbsenceDays === 'number' && manualAbsenceDays > 0 && manualAbsenceDays < 20) {
+        return manualAbsenceDays;
+      }
+      return 0;
+    }
+
+    // 今日の日付（ローカル日付 YYYY-MM-DD）
+    const nowLocal = new Date();
+    const todayStr = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, '0')}-${String(nowLocal.getDate()).padStart(2, '0')}`;
+
+    // その社員の確定出勤シフト（休日以外のシフト）
+    const workingShifts = (empShifts || []).filter(s => {
+      const isHoli = Boolean(
+        s.is_holiday ||
+        s.shift_type === 'holiday' ||
+        s.shift_type === 'off' ||
+        !s.start_time ||
+        !s.end_time ||
+        (String(s.start_time).startsWith('00:00') && String(s.end_time).startsWith('00:00'))
+      );
+      return !isHoli;
+    });
+    const hasRegisteredWorkingShifts = workingShifts.length > 0;
+    const workingShiftDateSet = new Set(workingShifts.map(s => s.date || s.target_date || s.work_date));
+
+    // 会社指定休日のセット
+    const companySpecificHolidays = new Set<string>(
+      Array.isArray(companyCalendarSettings?.company_holidays)
+        ? companyCalendarSettings.company_holidays
+        : Array.isArray(companyCalendarSettings?.custom_holidays)
+        ? companyCalendarSettings.custom_holidays
+        : []
+    );
+
+    // 出勤打刻がある日のセット
+    const attendedDateSet = new Set(
+      (empAttendanceRecords || [])
+        .filter(r => Boolean(r.check_in_time || r.check_out_time))
+        .map(r => r.date)
+    );
+
+    let autoDetectedAbsenceDays = 0;
+    const [sY, sM, sD] = startDateStr.split('-').map(Number);
+    const [eY, eM, eD] = endDateStr.split('-').map(Number);
+    const cur = new Date(sY, sM - 1, sD);
+    const endObj = new Date(eY, eM - 1, eD);
+
+    while (cur <= endObj) {
+      const dateStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+
+      // 入社前・退職後の日付は除外
+      if (joinDate && dateStr < joinDate.slice(0, 10)) {
+        cur.setDate(cur.getDate() + 1);
+        continue;
+      }
+      if (resignationDate && dateStr > resignationDate.slice(0, 10)) {
+        cur.setDate(cur.getDate() + 1);
+        continue;
+      }
+
+      // 明示的な欠勤申請がその日にあるかチェック
+      const hasExplicitAbsence = explicitAbsenceReqs.some(req => {
+        const rs = req.start_date;
+        const re = req.end_date || req.start_date;
+        return rs <= dateStr && re >= dateStr;
+      });
+
+      if (hasExplicitAbsence) {
+        autoDetectedAbsenceDays += 1;
+        cur.setDate(cur.getDate() + 1);
+        continue;
+      }
+
+      // ルール1: 今日より後の未来日は絶対に自動欠勤カウントしない
+      if (dateStr > todayStr) {
+        cur.setDate(cur.getDate() + 1);
+        continue;
+      }
+
+      // ルール3: 勤務予定日の判定
+      let isScheduledWorkDay = false;
+      if (hasRegisteredWorkingShifts) {
+        // 確定シフトが1件以上登録されている場合は、確定シフトが入っている日を勤務予定日とする
+        isScheduledWorkDay = workingShiftDateSet.has(dateStr);
+      } else if (isMonthly) {
+        // 確定シフト未登録の月給社員は、会社の営業日（土日・日本の祝日・会社指定休日を除いた平日）を勤務予定日とする
+        const dayOfWeek = cur.getDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const isNationalHoliday = isJapanesePublicHoliday(dateStr);
+        const isCompanyHoliday = companySpecificHolidays.has(dateStr);
+        isScheduledWorkDay = !isWeekend && !isNationalHoliday && !isCompanyHoliday;
+      }
+
+      if (isScheduledWorkDay) {
+        // ルール4: 出勤打刻が無く、かつ承認済みの有給・特別休暇等の申請も無い日をカウント
+        const hasAttended = attendedDateSet.has(dateStr);
+        const hasApprovedLeave = approvedNonAbsenceLeaves.some(req => {
+          const rs = req.start_date;
+          const re = req.end_date || req.start_date;
+          return rs <= dateStr && re >= dateStr;
+        });
+
+        if (!hasAttended && !hasApprovedLeave) {
+          autoDetectedAbsenceDays += 1;
+        }
+      }
+
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    return autoDetectedAbsenceDays;
+  };
 
   // モーダル State
   const [profileModal, setProfileModal] = useState<{
@@ -359,17 +650,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         return true;
       }
 
-      // 2. カラム不一致エラー等の場合、レガシー対応版で upsert
-      const { error: legacyUpsertErr } = await supabase
-        .from('payslips')
-        .upsert(legacyPayload, { onConflict: 'tenant_id,user_id,year_month' });
-
-      if (!legacyUpsertErr) {
-        updateLocalStorageBackup(fullPayload);
-        return true;
-      }
-
-      // 3. フォールバック: 既存レコードの select + update / insert
+      // 2. UNIQUE制約未設定等の場合は、完全版 (fullPayload) のまま既存レコードの select + update / insert を試行
       const { data: existRow } = await supabase
         .from('payslips')
         .select('id')
@@ -379,16 +660,44 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         .maybeSingle();
 
       if (existRow?.id) {
+        const { error: fullUpdateErr } = await supabase
+          .from('payslips')
+          .update(fullPayload)
+          .eq('id', existRow.id);
+        if (!fullUpdateErr) {
+          updateLocalStorageBackup(fullPayload);
+          return true;
+        }
+      } else {
+        const { error: fullInsertErr } = await supabase
+          .from('payslips')
+          .insert([fullPayload]);
+        if (!fullInsertErr) {
+          updateLocalStorageBackup(fullPayload);
+          return true;
+        }
+      }
+
+      // 3. カラム未存在エラー（旧DBスキーマ環境）の場合のみ、レガシー対応版でフォールバック保存
+      if (existRow?.id) {
         const { error: updateErr } = await supabase
           .from('payslips')
           .update(legacyPayload)
           .eq('id', existRow.id);
-        if (updateErr) console.warn('Payslip update fallback error:', updateErr.message);
+        if (updateErr) {
+          console.warn('Payslip update fallback error:', updateErr.message);
+          updateLocalStorageBackup(fullPayload);
+          return false;
+        }
       } else {
         const { error: insertErr } = await supabase
           .from('payslips')
           .insert([legacyPayload]);
-        if (insertErr) console.warn('Payslip insert fallback error:', insertErr.message);
+        if (insertErr) {
+          console.warn('Payslip insert fallback error:', insertErr.message);
+          updateLocalStorageBackup(fullPayload);
+          return false;
+        }
       }
 
       updateLocalStorageBackup(fullPayload);
@@ -627,7 +936,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const usersList = uData || [];
       setEmployees(usersList);
 
-      // 4. 【大元マスタ SSOT】入退社労務プロファイル取得 (employee_onboarding_profiles)
+      // 4. 【大元マスタ SSOT】入退社労務プロファイル取得 (employee_onboarding_profiles) & 勤務時間パターン取得 (work_schedule_patterns)
       let onbList: any[] = [];
       try {
         const { data: oData } = await supabase
@@ -639,6 +948,21 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         console.warn('employee_onboarding_profiles fetch error:', e);
       }
       const onbMap = new Map(onbList.map(o => [o.user_id, o]));
+      const onbObjMap: Record<string, any> = {};
+      onbList.forEach(o => { if (o.user_id) onbObjMap[o.user_id] = o; });
+      setOnboardingProfilesMap(onbObjMap);
+
+      let loadedPatterns: any[] = [];
+      try {
+        const { data: patData } = await supabase
+          .from('work_schedule_patterns')
+          .select('*')
+          .eq('tenant_id', tenantId);
+        loadedPatterns = patData || [];
+        setWorkSchedulePatterns(loadedPatterns);
+      } catch (e) {
+        console.warn('work_schedule_patterns fetch error:', e);
+      }
 
       // 5. 従業員給与プロファイル取得 (employee_payroll_profiles)
       let profList: any[] = [];
@@ -872,38 +1196,46 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       } catch (lErr) {
         console.warn('leave_requests fetch error:', lErr);
       }
+      // 期間またぎ連休申請も正確に捕捉
       const leaveReqs = allLeaveReqs.filter(r => 
-        r.start_date >= monthStartDate && r.start_date <= monthEndDate
+        (r.end_date || r.start_date) >= monthStartDate && r.start_date <= monthEndDate
       );
 
-      // 当月のシフト予定データ取得 (advanced_shifts を優先、フォールバックで shifts)
+      // 当月のシフト予定データ取得 (advanced_shifts と shifts の両方を取得してマージ)
       let shiftsList: any[] = [];
       try {
-        const { data: advShifts } = await supabase
-          .from('advanced_shifts')
-          .select('user_id, date, target_date, start_time, end_time')
-          .eq('tenant_id', tenantId)
-          .gte('target_date', monthStartDate)
-          .lte('target_date', monthEndDate);
-        if (advShifts && advShifts.length > 0) {
-          shiftsList = advShifts.map((s: any) => ({
-            ...s,
-            date: s.date || s.target_date
-          }));
-        } else {
-          const { data: sData } = await supabase
+        const [advRes, legRes] = await Promise.all([
+          supabase
+            .from('advanced_shifts')
+            .select('*')
+            .eq('tenant_id', tenantId)
+            .gte('target_date', monthStartDate)
+            .lte('target_date', monthEndDate),
+          supabase
             .from('shifts')
-            .select('user_id, work_date, start_time, end_time')
+            .select('*')
             .eq('tenant_id', tenantId)
             .gte('work_date', monthStartDate)
-            .lte('work_date', monthEndDate);
-          if (sData) {
-            shiftsList = sData.map((s: any) => ({
-              ...s,
-              date: s.work_date
-            }));
-          }
-        }
+            .lte('work_date', monthEndDate)
+        ]);
+        const advShifts = (advRes.data || []).map((s: any) => ({
+          ...s,
+          date: s.date || s.target_date,
+          work_date: s.date || s.target_date
+        }));
+        const legShifts = (legRes.data || []).map((s: any) => ({
+          ...s,
+          date: s.work_date || s.date,
+          work_date: s.work_date || s.date
+        }));
+        const mergedMap = new Map<string, any>();
+        legShifts.forEach((s: any) => {
+          if (s.user_id && s.date) mergedMap.set(`${s.user_id}_${s.date}`, s);
+        });
+        advShifts.forEach((s: any) => {
+          if (s.user_id && s.date) mergedMap.set(`${s.user_id}_${s.date}`, s);
+        });
+        shiftsList = Array.from(mergedMap.values());
       } catch (sErr) {
         console.warn('shifts fetch error:', sErr);
       }
@@ -1011,6 +1343,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const finalPayslips = usersList.map(u => {
         const prof = profileMap[u.id];
         const existingSlip = combinedPayslips.find(cp => cp.user_id === u.id);
+        const onbProfile = onbMap.get(u.id);
 
         // 実際の勤怠打刻（attendance_records）の集計
         const empAtt = attRecords.filter(r => r.user_id === u.id);
@@ -1032,8 +1365,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           empAtt.forEach(r => {
             if (r.check_in_time && r.check_out_time) {
               const dayShift = shiftsList.find(s => s.user_id === u.id && s.date === r.date);
-              const schedStart = dayShift?.start_time || '09:00';
-              const schedEnd = dayShift?.end_time || '18:00';
+              const resolvedSched = resolveScheduledWorkTime(u, dayShift, onbProfile, loadedPatterns);
+              const schedStart = resolvedSched.startTime;
+              const schedEnd = resolvedSched.endTime;
 
               // 現場即応 打刻丸めエンジンによる高精度集計（出勤簿と完全一致）
               const details = calculateDailyAttendanceDetails(
@@ -1042,7 +1376,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 r.break_minutes,
                 schedStart,
                 schedEnd,
-                60,
+                resolvedSched.breakMinutes,
                 roundingRules
               );
 
@@ -1106,15 +1440,28 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         const realMidnightHours = realMidnightMins > 0 ? Number((realMidnightMins / 60).toFixed(1)) : 0;
         const realLateEarlyHours = realLateEarlyMins > 0 ? Number((realLateEarlyMins / 60).toFixed(1)) : 0;
         const realHolidayHoursVal = Number(realHolidayHours.toFixed(1));
-        const realPaidLeaveDays = empReqs.length;
+        const realPaidLeaveDays = calculateUsedPaidLeaveDaysInPeriod(empReqs, monthStartDate, monthEndDate);
 
-        // 【勤怠SSOT絶対原則】：実際の打刻データ（attendance_records）を100%忠実に反映
+        // 【勤怠SSOT絶対原則】：実際の打刻データ・確定シフト・承認済み休暇申請から正確に集計
         const isMonthlyProf = prof?.salary_type === 'monthly' || (!prof?.salary_type && u.employment_type !== 'part-time');
         const effectiveWorkDays = realWorkDays;
         const effectiveLeaveDays = realPaidLeaveDays;
-        const defaultAbsenceDays = isMonthlyProf 
-          ? (effectiveWorkDays === 0 && effectiveLeaveDays === 0 ? 20 : Math.max(0, 20 - effectiveWorkDays - effectiveLeaveDays))
-          : 0;
+        const autoDetectedAbsenceDays = calculateAutoDetectedAbsenceDays({
+          startDateStr: monthStartDate,
+          endDateStr: monthEndDate,
+          isMonthly: isMonthlyProf,
+          realWorkDays: effectiveWorkDays,
+          empAttendanceRecords: empAtt,
+          empLeaveRequests: leaveReqs.filter(r => r.user_id === u.id),
+          empShifts: shiftsList.filter(s => s.user_id === u.id),
+          joinDate: prof?.join_date || u.join_date || onbProfile?.join_date,
+          resignationDate: prof?.resignation_date || u.resignation_date || onbProfile?.resignation_date,
+          manualAbsenceDays: existingSlip?.absence_days,
+          companyCalendarSettings: tData?.work_calendar_settings
+        });
+        const defaultAbsenceDays = existingSlip?.absence_days !== undefined && existingSlip?.absence_days !== null
+          ? Number(existingSlip.absence_days)
+          : autoDetectedAbsenceDays;
 
         const attSummary: AttendanceSummary = {
           work_days: effectiveWorkDays,
@@ -1129,6 +1476,13 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
 
         // 大元労務マスタから最新の給与計算（個別基本給・各種手当＋生年月日の介護保険自動判定）を実行！
         const calculated = calculatePayroll(prof, attSummary, latestPayrollSettings);
+
+        // 個別編集された特別手当・その他控除がある場合は引き継いで差引支給額を再調整
+        const savedSpecialAllowance = Number(existingSlip?.special_allowance || 0);
+        const savedOtherDeductions = Number(existingSlip?.other_deductions || 0);
+        const adjustedTotalEarnings = Math.max(0, (calculated.total_earnings || 0) - (calculated.special_allowance || 0) + savedSpecialAllowance);
+        const adjustedTotalDeductions = (calculated.total_deductions || 0) - (calculated.other_deductions || 0) + savedOtherDeductions;
+        const adjustedNetSalary = Math.max(0, adjustedTotalEarnings - adjustedTotalDeductions);
 
         // 有給残日数（今年度付与分 + 前年度繰越分 - 累計消化日数【有給台帳と100%完全一致】）
         const userAllReqs = allLeaveReqs.filter(r => r.user_id === u.id);
@@ -1151,6 +1505,11 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
             ? Number(existingSlip.paid_leave_remaining) 
             : userTotalLeaveBal,
           ...calculated,
+          special_allowance: savedSpecialAllowance,
+          other_deductions: savedOtherDeductions,
+          total_earnings: adjustedTotalEarnings,
+          total_deductions: adjustedTotalDeductions,
+          net_salary: adjustedNetSalary,
           note: existingSlip?.note || '今月も勤務お疲れ様でした。',
           status: existingSlip?.status || 'draft',
           user: u
@@ -1233,13 +1592,38 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         .gte('date', startDate)
         .lte('date', endDate);
 
-      // 2. 当月の確定シフトデータ取得 (advanced_shifts: フォールバック用)
-      const { data: shiftData } = await supabase
-        .from('advanced_shifts')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .gte('target_date', startDate)
-        .lte('target_date', endDate);
+      // 2. 当月の確定シフトデータ取得 (advanced_shifts と shifts の両方をマージ取得)
+      const [advShiftRes, legShiftRes] = await Promise.all([
+        supabase
+          .from('advanced_shifts')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .gte('target_date', startDate)
+          .lte('target_date', endDate),
+        supabase
+          .from('shifts')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .gte('work_date', startDate)
+          .lte('work_date', endDate)
+      ]);
+      const advShifts = (advShiftRes.data || []).map((s: any) => ({
+        ...s,
+        date: s.date || s.target_date,
+        work_date: s.date || s.target_date
+      }));
+      const legShifts = (legShiftRes.data || []).map((s: any) => ({
+        ...s,
+        date: s.work_date || s.date,
+        work_date: s.work_date || s.date
+      }));
+      const shiftMap = new Map<string, any>();
+      legShifts.forEach((s: any) => {
+        if (s.user_id && s.date) shiftMap.set(`${s.user_id}_${s.date}`, s);
+      });
+      advShifts.forEach((s: any) => {
+        if (s.user_id && s.date) shiftMap.set(`${s.user_id}_${s.date}`, s);
+      });
 
       // 3. 有給申請データ取得 (leave_requests: 全期間・残日数算出用 ＆ 当月分・勤怠集計用)
       const { data: reqData } = await supabase
@@ -1250,15 +1634,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         .neq('type', '打刻修正');
 
       const records = attData || [];
-      const shifts = shiftData || [];
+      const shifts = Array.from(shiftMap.values());
       const allRequests = reqData || [];
-      const requests = allRequests.filter(r => r.start_date >= startDate && r.start_date <= endDate);
+      const requests = allRequests.filter(r => (r.end_date || r.start_date) >= startDate && r.start_date <= endDate);
 
       const activePrefecture = payrollSettings.prefecture_code || tenantInfo?.prefecture_code || '25';
 
       for (const emp of employees) {
         const empRecords = records.filter(r => r.user_id === emp.id);
         const empShifts = shifts.filter(s => s.user_id === emp.id);
+        const empOnb = onboardingProfilesMap[emp.id];
 
         let workDays = 0;
         let actualMins = 0;
@@ -1273,8 +1658,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           empRecords.forEach(r => {
             if (r.check_in_time && r.check_out_time) {
               const dayShift = empShifts.find(s => s.date === r.date);
-              const schedStart = dayShift?.start_time || '09:00';
-              const schedEnd = dayShift?.end_time || '18:00';
+              const resolvedSched = resolveScheduledWorkTime(emp, dayShift, empOnb, workSchedulePatterns);
+              const schedStart = resolvedSched.startTime;
+              const schedEnd = resolvedSched.endTime;
 
               // 現場即応 打刻丸めエンジンによる高精度集計（出勤簿と完全一致）
               const details = calculateDailyAttendanceDetails(
@@ -1283,7 +1669,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 r.break_minutes,
                 schedStart,
                 schedEnd,
-                60,
+                resolvedSched.breakMinutes,
                 roundingRules
               );
 
@@ -1341,9 +1727,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
           });
         } else if (empShifts.length > 0) {
           // ② 打刻がまだないが確定シフトが存在する場合
-          workDays = empShifts.length;
+          workDays = empShifts.filter(s => !s.is_holiday && s.shift_type !== 'holiday' && s.start_time && s.end_time).length;
           empShifts.forEach(s => {
-            if (s.start_time && s.end_time) {
+            if (s.start_time && s.end_time && !s.is_holiday && s.shift_type !== 'holiday') {
               const [inH, inM] = s.start_time.split(':').map(Number);
               const [outH, outM] = s.end_time.split(':').map(Number);
               let inTotal = inH * 60 + inM;
@@ -1355,13 +1741,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               const breakM = total > 480 ? 60 : (total > 360 ? 45 : 0);
               const work = Math.max(0, total - breakM);
               actualMins += work;
-
-              const isShiftHoliday = Boolean(s.is_holiday || s.shift_type === 'holiday');
-              if (isShiftHoliday) {
-                holidayHours += Number((work / 60).toFixed(2));
-              } else {
-                overtimeMins += Math.max(0, work - 480);
-              }
+              overtimeMins += Math.max(0, work - 480);
 
               // 🌙 シフト予定からの深夜時間集計（22:00〜翌05:00・労基法第37条4項）
               let shiftNightMins = 0;
@@ -1379,13 +1759,13 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         }
 
 
-        // 有給休暇日数集計
+        // 有給休暇日数集計（複数日申請や半休0.5日も正確に算出）
         const empRequests = requests.filter(r => 
           r.user_id === emp.id && 
           (r.status === '承認' || !r.status || r.status === 'approved') &&
           (r.type?.includes('有給') || r.type?.includes('年休') || r.leave_type?.includes('有給') || r.reason?.includes('有給'))
         );
-        const paidLeaveDays = empRequests.length;
+        const paidLeaveDays = calculateUsedPaidLeaveDaysInPeriod(empRequests, startDate, endDate);
 
         // 従業員の給与マスタプロファイル
         const existingProf = payrollProfiles[emp.id];
@@ -1433,9 +1813,19 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         };
 
         const isMonthlyEmp = profile.salary_type === 'monthly';
-        const autoAbsenceDays = isMonthlyEmp
-          ? (workDays === 0 && paidLeaveDays === 0 ? 20 : Math.max(0, 20 - workDays - paidLeaveDays))
-          : 0;
+        const empAllPeriodReqs = requests.filter(r => r.user_id === emp.id);
+        const autoAbsenceDays = calculateAutoDetectedAbsenceDays({
+          startDateStr: startDate,
+          endDateStr: endDate,
+          isMonthly: isMonthlyEmp,
+          realWorkDays: workDays,
+          empAttendanceRecords: empRecords,
+          empLeaveRequests: empAllPeriodReqs,
+          empShifts: empShifts,
+          joinDate: empJoinDate,
+          resignationDate: empResignationDate,
+          companyCalendarSettings: tenantInfo?.work_calendar_settings
+        });
 
         // 実打刻データを100%忠実に反映（打刻が0件なら0日・0時間とする）
         const attSummary: AttendanceSummary = {
@@ -1858,38 +2248,45 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         .neq('type', '打刻修正');
 
       const userAllLeave = userAllLeaveData || [];
-      const userLeaveData = userAllLeave.filter(r => r.start_date >= monthStartDate && r.start_date <= monthEndDate);
+      const userLeaveData = userAllLeave.filter(r => (r.end_date || r.start_date) >= monthStartDate && r.start_date <= monthEndDate);
 
-      // 当該社員のシフト予定 (advanced_shifts / shifts) を取得
+      // 当該社員のシフト予定 (advanced_shifts と shifts の両方をマージ取得)
       let userShiftData: any[] = [];
       try {
-        const { data: advData } = await supabase
-          .from('advanced_shifts')
-          .select('user_id, date, target_date, start_time, end_time')
-          .eq('tenant_id', tenantId)
-          .eq('user_id', userId)
-          .gte('target_date', monthStartDate)
-          .lte('target_date', monthEndDate);
-        if (advData && advData.length > 0) {
-          userShiftData = advData.map((s: any) => ({
-            ...s,
-            date: s.date || s.target_date
-          }));
-        } else {
-          const { data: legacyShifts } = await supabase
+        const [advRes, legRes] = await Promise.all([
+          supabase
+            .from('advanced_shifts')
+            .select('*')
+            .eq('tenant_id', tenantId)
+            .eq('user_id', userId)
+            .gte('target_date', monthStartDate)
+            .lte('target_date', monthEndDate),
+          supabase
             .from('shifts')
-            .select('user_id, work_date, start_time, end_time')
+            .select('*')
             .eq('tenant_id', tenantId)
             .eq('user_id', userId)
             .gte('work_date', monthStartDate)
-            .lte('work_date', monthEndDate);
-          if (legacyShifts) {
-            userShiftData = legacyShifts.map((s: any) => ({
-              ...s,
-              date: s.work_date
-            }));
-          }
-        }
+            .lte('work_date', monthEndDate)
+        ]);
+        const advShifts = (advRes.data || []).map((s: any) => ({
+          ...s,
+          date: s.date || s.target_date,
+          work_date: s.date || s.target_date
+        }));
+        const legShifts = (legRes.data || []).map((s: any) => ({
+          ...s,
+          date: s.work_date || s.date,
+          work_date: s.work_date || s.date
+        }));
+        const shiftMap = new Map<string, any>();
+        legShifts.forEach((s: any) => {
+          if (s.date) shiftMap.set(s.date, s);
+        });
+        advShifts.forEach((s: any) => {
+          if (s.date) shiftMap.set(s.date, s);
+        });
+        userShiftData = Array.from(shiftMap.values());
       } catch (_) {}
 
       const userAtt = userAttData || [];
@@ -1910,8 +2307,9 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         userAtt.forEach((r: any) => {
           if (r.check_in_time && r.check_out_time) {
             const dayShift = (userShiftData || []).find((s: any) => s.date === r.date);
-            const schedStart = dayShift?.start_time || '09:00';
-            const schedEnd = dayShift?.end_time || '18:00';
+            const resolvedSched = resolveScheduledWorkTime(emp, dayShift, dbOnb, workSchedulePatterns);
+            const schedStart = resolvedSched.startTime;
+            const schedEnd = resolvedSched.endTime;
 
             // 現場即応 打刻丸めエンジンによる高精度集計（出勤簿と完全一致）
             const details = calculateDailyAttendanceDetails(
@@ -1920,7 +2318,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
               r.break_minutes,
               schedStart,
               schedEnd,
-              60,
+              resolvedSched.breakMinutes,
               roundingRules
             );
 
@@ -1982,12 +2380,21 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       const calcOvertimeHours = calcOvertimeMins > 0 ? Number((calcOvertimeMins / 60).toFixed(1)) : 0;
       const calcMidnightHours = calcMidnightMins > 0 ? Number((calcMidnightMins / 60).toFixed(1)) : 0;
       const calcLateEarlyHours = calcLateEarlyMins > 0 ? Number((calcLateEarlyMins / 60).toFixed(1)) : 0;
-      const calcPaidLeaveDays = userReqs.length;
+      const calcPaidLeaveDays = calculateUsedPaidLeaveDaysInPeriod(userReqs, monthStartDate, monthEndDate);
 
       const isMonthlyRes = resolvedProf.salary_type === 'monthly';
-      const autoAbsenceDays = isMonthlyRes
-        ? (calcWorkDays === 0 && calcPaidLeaveDays === 0 ? 20 : Math.max(0, 20 - calcWorkDays - calcPaidLeaveDays))
-        : 0;
+      const autoAbsenceDays = calculateAutoDetectedAbsenceDays({
+        startDateStr: monthStartDate,
+        endDateStr: monthEndDate,
+        isMonthly: isMonthlyRes,
+        realWorkDays: calcWorkDays,
+        empAttendanceRecords: userAtt,
+        empLeaveRequests: userLeaveData,
+        empShifts: userShiftData,
+        joinDate: resolvedProf.join_date || dbOnb?.join_date,
+        resignationDate: resolvedProf.resignation_date || dbOnb?.resignation_date,
+        companyCalendarSettings: tenantInfo?.work_calendar_settings
+      });
 
       const attSummary: AttendanceSummary = {
         work_days: calcWorkDays,
@@ -2354,20 +2761,46 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         .eq('user_id', slip.user_id)
         .or(`and(start_date.gte.${startStr},start_date.lte.${endStr}),and(end_date.gte.${startStr},end_date.lte.${endStr})`);
 
-      // 3. 確定シフト取得
-      const { data: shiftData } = await supabase
-        .from('shifts')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .eq('user_id', slip.user_id)
-        .gte('work_date', startStr)
-        .lte('work_date', endStr);
+      // 3. 確定シフト取得 (advanced_shifts と shifts の両方をマージ取得)
+      const [advShiftRes, legShiftRes] = await Promise.all([
+        supabase
+          .from('advanced_shifts')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .eq('user_id', slip.user_id)
+          .gte('target_date', startStr)
+          .lte('target_date', endStr),
+        supabase
+          .from('shifts')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .eq('user_id', slip.user_id)
+          .gte('work_date', startStr)
+          .lte('work_date', endStr)
+      ]);
+      const advShifts = (advShiftRes.data || []).map((s: any) => ({
+        ...s,
+        date: s.date || s.target_date,
+        work_date: s.date || s.target_date
+      }));
+      const legShifts = (legShiftRes.data || []).map((s: any) => ({
+        ...s,
+        date: s.work_date || s.date,
+        work_date: s.work_date || s.date
+      }));
+      const mergedShiftMap = new Map<string, any>();
+      legShifts.forEach((s: any) => {
+        if (s.work_date) mergedShiftMap.set(s.work_date, s);
+      });
+      advShifts.forEach((s: any) => {
+        if (s.work_date) mergedShiftMap.set(s.work_date, s);
+      });
 
       setAttendanceSheetModal(prev => ({
         ...prev,
         records: recData || [],
         requests: reqData || [],
-        shifts: shiftData || [],
+        shifts: Array.from(mergedShiftMap.values()),
         loading: false
       }));
     } catch (e) {
@@ -2379,9 +2812,12 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
   // 🕒 出勤簿モーダルから打刻個別編集を開く
   const handleOpenAttEdit = (dateStr: string, dayOfWeekStr: string, rec?: any) => {
     // 同日のシフトがあれば参考取得
-    const shift = attendanceSheetModal.shifts.find(s => s.work_date === dateStr);
-    const defaultCheckIn = shift?.start_time ? shift.start_time.substring(0, 5) : '09:00';
-    const defaultCheckOut = shift?.end_time ? shift.end_time.substring(0, 5) : '18:00';
+    const shift = attendanceSheetModal.shifts.find(s => (s.work_date || s.date) === dateStr);
+    const empUser = attendanceSheetModal.user;
+    const empOnb = empUser?.id ? onboardingProfilesMap[empUser.id] : undefined;
+    const resolvedSched = resolveScheduledWorkTime(empUser, shift, empOnb, workSchedulePatterns);
+    const defaultCheckIn = resolvedSched.startTime;
+    const defaultCheckOut = resolvedSched.endTime;
 
     setAttEditModal({
       isOpen: true,
@@ -2392,7 +2828,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
       recordId: rec?.id || null,
       checkIn: rec?.check_in_time ? rec.check_in_time.substring(0, 5) : defaultCheckIn,
       checkOut: rec?.check_out_time ? rec.check_out_time.substring(0, 5) : defaultCheckOut,
-      breakMinutes: (rec?.break_minutes !== undefined && rec?.break_minutes !== null) ? Number(rec.break_minutes) : 60,
+      breakMinutes: (rec?.break_minutes !== undefined && rec?.break_minutes !== null) ? Number(rec.break_minutes) : resolvedSched.breakMinutes,
       note: rec?.note || ''
     });
   };
@@ -2616,24 +3052,69 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
         console.warn('Supabase payroll profile exception:', dbErr);
       }
 
-      // 3. employee_onboarding_profiles にも口座情報・通勤手当情報を同期（実在カラムのみ）
+      // 3. employee_onboarding_profiles にも給与・各種手当・口座情報・扶養情報を双方向SSOT同期
       try {
-        await supabase
+        const fullOnbUpdate = {
+          salary_type: prof.salary_type,
+          base_salary: prof.base_salary,
+          hourly_wage: prof.hourly_wage,
+          position_allowance: prof.position_allowance,
+          qualification_allowance: prof.qualification_allowance,
+          housing_allowance: prof.housing_allowance,
+          family_allowance: prof.family_allowance,
+          commuting_allowance: prof.commuting_allowance,
+          dependents_count: prof.dependents_count,
+          birth_date: prof.birth_date || null,
+          bank_name: prof.bank_name,
+          branch_name: prof.branch_name,
+          account_type: prof.account_type,
+          account_number: prof.account_number,
+          account_holder: prof.account_holder,
+          updated_at: new Date().toISOString()
+        };
+        const { error: onbFullErr } = await supabase
           .from('employee_onboarding_profiles')
-          .update({
-            commuting_allowance: prof.commuting_allowance,
-            bank_name: prof.bank_name,
-            branch_name: prof.branch_name,
-            account_type: prof.account_type,
-            account_number: prof.account_number,
-            account_holder: prof.account_holder,
-            updated_at: new Date().toISOString()
-          })
+          .update(fullOnbUpdate)
           .eq('tenant_id', tenantId)
           .eq('user_id', prof.user_id);
+
+        if (onbFullErr) {
+          // 旧DBスキーマ用の最小カラムフォールバック
+          await supabase
+            .from('employee_onboarding_profiles')
+            .update({
+              commuting_allowance: prof.commuting_allowance,
+              bank_name: prof.bank_name,
+              branch_name: prof.branch_name,
+              account_type: prof.account_type,
+              account_number: prof.account_number,
+              account_holder: prof.account_holder,
+              updated_at: new Date().toISOString()
+            })
+            .eq('tenant_id', tenantId)
+            .eq('user_id', prof.user_id);
+        }
       } catch (onbErr) {}
 
-      // 3. users テーブル側にも生年月日を安全に同期
+      // 4. 時給設定がある場合は shift_employee_settings の base_wage にも自動同期（シフト画面とのSSOT統一）
+      if (prof.hourly_wage && prof.hourly_wage > 0 && prof.user_id) {
+        try {
+          const { data: existShiftSetting } = await supabase
+            .from('shift_employee_settings')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('user_id', prof.user_id)
+            .maybeSingle();
+          if (existShiftSetting?.id) {
+            await supabase
+              .from('shift_employee_settings')
+              .update({ base_wage: prof.hourly_wage })
+              .eq('id', existShiftSetting.id);
+          }
+        } catch (sErr) {}
+      }
+
+      // 5. users テーブル側にも生年月日を安全に同期
       if (prof.birth_date && prof.user_id) {
         try {
           await supabase
@@ -5459,6 +5940,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                 {(() => {
                   const mRecords = attendanceSheetModal.records || [];
                   const mShifts = attendanceSheetModal.shifts || [];
+                  const empUser = attendanceSheetModal.user;
+                  const empOnb = empUser?.id ? onboardingProfilesMap[empUser.id] : undefined;
                   let mWorkDays = 0;
                   let mActualMins = 0;
                   let mOvertimeMins = 0;
@@ -5466,17 +5949,16 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                   mRecords.forEach(r => {
                     if (r.check_in_time) mWorkDays++;
                     if (r.check_in_time && r.check_out_time) {
-                      const dayShift = mShifts.find((s: any) => s.date === r.date);
-                      const schedStart = dayShift?.start_time || '09:00';
-                      const schedEnd = dayShift?.end_time || '18:00';
+                      const dayShift = mShifts.find((s: any) => (s.date || s.work_date) === r.date);
+                      const resolvedSched = resolveScheduledWorkTime(empUser, dayShift, empOnb, workSchedulePatterns);
 
                       const details = calculateDailyAttendanceDetails(
                         r.check_in_time,
                         r.check_out_time,
                         r.break_minutes,
-                        schedStart,
-                        schedEnd,
-                        60,
+                        resolvedSched.startTime,
+                        resolvedSched.endTime,
+                        resolvedSched.breakMinutes,
                         roundingRules
                       );
 
@@ -5556,6 +6038,8 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                         const mNum = parseInt(mStr, 10);
                         const lastDay = new Date(yNum, mNum, 0).getDate();
                         const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+                        const empUser = attendanceSheetModal.user;
+                        const empOnb = empUser?.id ? onboardingProfilesMap[empUser.id] : undefined;
                         const rows = [];
 
                         for (let day = 1; day <= lastDay; day++) {
@@ -5569,23 +6053,27 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                           const req = attendanceSheetModal.requests.find(l => 
                             (l.start_date <= dateStr && (l.end_date ? l.end_date >= dateStr : l.start_date >= dateStr))
                           );
-                          const shift = attendanceSheetModal.shifts.find(s => s.work_date === dateStr);
+                          const shift = attendanceSheetModal.shifts.find(s => (s.work_date || s.date) === dateStr);
 
                           let actualStr = '-';
                           let overtimeStr = '-';
 
                           if (rec?.check_in_time && rec?.check_out_time) {
-                            const [inH, inM] = rec.check_in_time.split(':').map(Number);
-                            const [outH, outM] = rec.check_out_time.split(':').map(Number);
-                            let inTotal = inH * 60 + inM;
-                            let outTotal = outH * 60 + outM;
-                            if (outTotal < inTotal) outTotal += 24 * 60;
-                            const totalM = Math.max(0, outTotal - inTotal);
-                            const breakM = totalM >= 480 ? 60 : (totalM >= 360 ? 45 : 0);
-                            const workM = Math.max(0, totalM - breakM);
+                            const resolvedSched = resolveScheduledWorkTime(empUser, shift, empOnb, workSchedulePatterns);
+                            const details = calculateDailyAttendanceDetails(
+                              rec.check_in_time,
+                              rec.check_out_time,
+                              rec.break_minutes,
+                              resolvedSched.startTime,
+                              resolvedSched.endTime,
+                              resolvedSched.breakMinutes,
+                              roundingRules
+                            );
+                            const workM = details.actualWorkMinutes;
+                            const overM = (rec.overtime_minutes && rec.overtime_minutes > 0) ? rec.overtime_minutes : details.overtimeMinutes;
                             actualStr = `${(workM / 60).toFixed(1)}h`;
-                            if (workM > 480) {
-                              overtimeStr = `${((workM - 480) / 60).toFixed(1)}h`;
+                            if (overM > 0) {
+                              overtimeStr = `${(overM / 60).toFixed(1)}h`;
                             }
                           }
 
@@ -5601,7 +6089,7 @@ export const PayslipManagement: React.FC<PayslipManagementProps> = ({ tenantId }
                                 </span>
                               </td>
                               <td className="py-2 px-2 text-slate-500 font-mono text-[11px]">
-                                {shift ? (shift.is_holiday ? <span className="text-slate-400">公休</span> : `${shift.start_time?.substring(0, 5)}〜${shift.end_time?.substring(0, 5)}`) : '-'}
+                                {shift ? ((shift.is_holiday || shift.shift_type === 'holiday') ? <span className="text-slate-400">公休</span> : `${shift.start_time?.substring(0, 5)}〜${shift.end_time?.substring(0, 5)}`) : '-'}
                               </td>
                               <td className="py-2 px-2 text-center font-mono font-bold text-slate-800">
                                 {rec?.check_in_time ? rec.check_in_time.substring(0, 5) : '-'}

@@ -138,8 +138,10 @@ export function calculateAnnualWorkedDaysFromRecords(
 
   // 評価期間開始日（入社日と1年前の遅い方）
   const periodStart = joinDate > oneYearAgo ? joinDate : oneYearAgo;
-  const periodStartStr = periodStart.toISOString().split('T')[0];
-  const targetDateStr = targetDate.toISOString().split('T')[0];
+  const formatLocalYMD = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const periodStartStr = formatLocalYMD(periodStart);
+  const targetDateStr = formatLocalYMD(targetDate);
 
   // 期間内の有効な出勤打刻レコード（check_in_timeが存在する日）
   const validRecords = records.filter(r => {
@@ -368,8 +370,8 @@ export function calculateStatutoryLeaveWithMode(
                      employmentType === 'part-time' || 
                      (employmentType && (employmentType.includes('パート') || employmentType.includes('バイト')));
 
-  // 正社員・フルタイム（比例付与対象外）判定
-  const isFullTime = !isPartTime && (employmentType === '正社員' || employmentType === 'full-time' || contractWeeklyDays >= 5 || (typeof contractWeeklyHours === 'number' && contractWeeklyHours >= 30));
+  // 正社員・フルタイム（比例付与対象外：労基法第39条第3項によりパートでも週30時間以上または週5日以上は一般付与）判定
+  const isFullTime = !isPartTime || contractWeeklyDays >= 5 || (typeof contractWeeklyHours === 'number' && contractWeeklyHours >= 30);
 
   // 実績逆算の計算
   const actualStats = calculateAnnualWorkedDaysFromRecords(joinDateStr, empAttendanceRecords, targetDate);

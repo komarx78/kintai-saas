@@ -128,19 +128,77 @@ export interface CalculatedPayslip {
 export function calculateIncomeTax(
   taxableIncome: number,
   dependentsCount: number = 0,
-  taxBracket: 'kou' | 'otsu' | 'hei' = 'kou'
+  taxBracket: 'kou' | 'otsu' | 'hei' = 'kou',
+  workDays: number = 1
 ): number {
   if (taxableIncome <= 0) return 0;
 
-  // 乙欄（副業・従たる給与）: 88,000円未満でも源泉徴収義務あり
+  // 丙欄（日雇い・短期アルバイト）: 国税庁「給与所得の源泉徴収税額表（日額表）丙欄」基準
+  // 実働日数 × 日額非課税枠（9,300円/日）を超える部分に対して段階的税率を適用
+  if (taxBracket === 'hei') {
+    const effectiveDays = Math.max(1, workDays || 1);
+    const dailyTaxable = Math.floor(taxableIncome / effectiveDays);
+    // 1日あたり9,300円未満は非課税（0円）
+    if (dailyTaxable < 9300) return 0;
+
+    // 日額表・電算機計算特例に基づく1日あたり給与所得控除額
+    let dailySalaryDeduction = 0;
+    if (dailyTaxable <= 4417) {
+      dailySalaryDeduction = 1505;
+    } else if (dailyTaxable < 8334) {
+      dailySalaryDeduction = Math.ceil(dailyTaxable * 0.30 + 186);
+    } else if (dailyTaxable < 15278) {
+      dailySalaryDeduction = Math.ceil(dailyTaxable * 0.20 + 1019);
+    } else if (dailyTaxable < 19676) {
+      dailySalaryDeduction = Math.ceil(dailyTaxable * 0.10 + 2547);
+    } else {
+      dailySalaryDeduction = 4514;
+    }
+
+    // 基礎控除日額（1,343円）＋丙欄特例控除額（5,861円）＝ 7,204円
+    const dailyB = dailyTaxable - dailySalaryDeduction - 7204;
+    if (dailyB <= 0) return 0;
+
+    let dailyRawTax = 0;
+    if (dailyB <= 4514) {
+      dailyRawTax = dailyB * 0.05105;
+    } else if (dailyB <= 7639) {
+      dailyRawTax = dailyB * 0.10210 - 231;
+    } else if (dailyB <= 16088) {
+      dailyRawTax = dailyB * 0.20420 - 1010;
+    } else if (dailyB <= 20833) {
+      dailyRawTax = dailyB * 0.23483 - 1503;
+    } else {
+      dailyRawTax = dailyB * 0.33693 - 3630;
+    }
+
+    const dailyTax = Math.max(0, Math.round(dailyRawTax / 10) * 10);
+    return dailyTax * effectiveDays;
+  }
+
+  // 乙欄（副業・従たる給与）: 国税庁「給与所得の源泉徴収税額表（月額表）乙欄」準拠の段階的超過累進算式
+  // 88,000円未満でも源泉徴収義務あり（3.063%）
   if (taxBracket === 'otsu') {
     if (taxableIncome < 88000) {
       return Math.floor(taxableIncome * 0.03063);
     }
-    if (taxableIncome < 250000) {
-      return Math.floor(taxableIncome * 0.08);
+    let otsuTax = 0;
+    if (taxableIncome < 100000) {
+      otsuTax = 3200 + (taxableIncome - 88000) * 0.1021;
+    } else if (taxableIncome < 150000) {
+      otsuTax = 4400 + (taxableIncome - 100000) * 0.2042;
+    } else if (taxableIncome < 220000) {
+      otsuTax = 14600 + (taxableIncome - 150000) * 0.25525;
+    } else if (taxableIncome < 300000) {
+      otsuTax = 32500 + (taxableIncome - 220000) * 0.3063;
+    } else if (taxableIncome < 500000) {
+      otsuTax = 57000 + (taxableIncome - 300000) * 0.35735;
+    } else if (taxableIncome < 750000) {
+      otsuTax = 128400 + (taxableIncome - 500000) * 0.4084;
+    } else {
+      otsuTax = 230500 + (taxableIncome - 750000) * 0.45945;
     }
-    return Math.floor(taxableIncome * 0.15);
+    return Math.max(0, Math.round(otsuTax / 100) * 100);
   }
 
   // 甲欄（主たる給与）: 社会保険料控除後の給与等の金額が88,000円以下は非課税限度（税額0円）
@@ -226,7 +284,7 @@ export function calculatePayroll(
   let holidayAllowance = 0;
   let absenceDeduction = 0;
   let lateEarlyDeduction = 0;
-  let finalAbsenceDays = attendance.absence_days || 0;
+  const finalAbsenceDays = Math.max(0, attendance.absence_days || 0);
 
   // 🛡️ 労働基準法第37条第1項ただし書（2023年4月1日中小企業完全義務化）:
   // 月60時間超の時間外労働に対する50%以上の割増賃金率対応
@@ -293,24 +351,20 @@ export function calculatePayroll(
     // 休日割増手当 (1.35倍)
     holidayAllowance = round(attendance.holiday_hours * hourlyFromMonthly * 1.35);
 
-
     const standardWorkDays = 20;
     const totalWorkedDays = (attendance.work_days || 0) + (attendance.paid_leave_days || 0);
-
-    // 欠勤日数の自動判定（明示的な指定がない場合、所定日数20日との差分を欠勤とする）
-    if (finalAbsenceDays === 0 && totalWorkedDays < standardWorkDays) {
-      finalAbsenceDays = standardWorkDays - totalWorkedDays;
-    }
 
     const allAllowances = (profile.position_allowance || 0) + 
       (profile.qualification_allowance || 0) + 
       (profile.housing_allowance || 0) + 
-      (profile.family_allowance || 0);
+      (profile.family_allowance || 0) + 
+      (profile.special_allowance || 0) + 
+      (profile.fixed_overtime_allowance || 0);
 
     // 欠勤控除 (1日あたり控除額 = 基本給 / 所定日数20日)
-    // 出勤0日かつ有休0日の全休（未打刻・未就労）の場合は、ノーワーク・ノーペイに基づき基本給および諸手当全額を控除
-    if (totalWorkedDays === 0) {
-      finalAbsenceDays = standardWorkDays;
+    // 完全休業（出勤0日かつ有休0日、かつ欠勤日数が所定日数以上）のときは、特別手当や固定残業手当も含め全額を控除し、
+    // 打刻0日でも finalAbsenceDays === 0（打刻しない管理職等の満額試算時）の場合は手当を0にしない
+    if (totalWorkedDays === 0 && finalAbsenceDays >= standardWorkDays) {
       absenceDeduction = baseSalary + allAllowances;
     } else if (finalAbsenceDays > 0) {
       absenceDeduction = round(finalAbsenceDays * (baseSalary / standardWorkDays));
@@ -329,7 +383,7 @@ export function calculatePayroll(
 
   // 通勤手当の自動計算
   // ① 時給制・日額実費は「出勤日数 × 1日往復交通費」
-  // ② 月額固定（定期代）でも出勤日数が0日（全休・未出勤）の場合は通勤実費が発生しないため0円（全額不支給）
+  // ② 月額固定（定期代）でも完全休業（出勤0日かつ欠勤あり）の場合は通勤実費が発生しないため0円（全額不支給）
   let commutingAllowance = 0;
   if (profile.commuting_type === 'none') {
     commutingAllowance = 0;
@@ -337,8 +391,8 @@ export function calculatePayroll(
     const dailyAmount = profile.commuting_daily_amount ?? profile.commuting_allowance ?? 0;
     commutingAllowance = round(dailyAmount * (attendance.work_days || 0));
   } else {
-    // 月額固定（定期代）: 出勤が1日以上あれば満額、0日（未就労・全休）なら0円
-    commutingAllowance = (attendance.work_days || 0) > 0 ? (profile.commuting_allowance || 0) : 0;
+    // 月額固定（定期代）: 出勤が1日以上、または欠勤0日（打刻省略の管理職等の満額試算時）なら満額、完全休業なら0円
+    commutingAllowance = ((attendance.work_days || 0) > 0 || finalAbsenceDays === 0) ? (profile.commuting_allowance || 0) : 0;
   }
 
   const specialAllowance = profile.special_allowance || 0;
@@ -454,7 +508,7 @@ export function calculatePayroll(
 
   // 国税庁基準: 源泉控除対象配偶者がいる場合は扶養親族等の数に+1名として税額表適用
   const effectiveDeps = (profile.dependents_count || 0) + (profile.has_spouse ? 1 : 0);
-  const incomeTax = calculateIncomeTax(taxBase, effectiveDeps, profile.tax_bracket || 'kou');
+  const incomeTax = calculateIncomeTax(taxBase, effectiveDeps, profile.tax_bracket || 'kou', attendance.work_days);
   
   // 住民税特別徴収額（12ヶ月月別テーブルが設定されていれば対象支給月を優先適用、未設定時は一律値をフォールバック）
   let residentTax = Number(profile.resident_tax_monthly) || 0;
@@ -573,7 +627,7 @@ export function calculateBonusDeductions(params: {
   healthRate?: number; // 健康保険料率（指定時は優先、未指定時は都道府県または全国平均）
   nursingRate?: number; // 介護保険料率（指定時は優先、未指定時は都道府県または全国平均）
   pensionRate?: number; // 厚生年金保険料率（本人負担、9.15%）
-  employmentRate?: number; // 雇用保険料率（本人負担、一般 0.006 = 6/1000）
+  employmentRate?: number; // 雇用保険料率（本人負担、一般 0.005 = 5/1000）
 }): {
   standardBonus: number;
   healthInsurance: number;
@@ -616,7 +670,7 @@ export function calculateBonusDeductions(params: {
   let effectiveHealthRate = params.healthRate;
   let effectiveNursingRate = params.nursingRate;
   let effectivePensionRate = params.pensionRate ?? 0.0915;
-  let effectiveEmploymentRate = params.employmentRate ?? 0.006;
+  let effectiveEmploymentRate = params.employmentRate ?? 0.005;
 
   if (prefectureCode) {
     const pref = getPrefectureRate(prefectureCode);

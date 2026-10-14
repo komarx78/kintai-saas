@@ -27,6 +27,7 @@ export default function Portal() {
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [pendingContractDoc, setPendingContractDoc] = useState<RevisionContractDoc | null>(null);
   const [isStaffInviteModalOpen, setIsStaffInviteModalOpen] = useState(false);
+  const [companyName, setCompanyName] = useState<string>('自社');
 
   useEffect(() => {
     fetchUserData();
@@ -66,9 +67,20 @@ export default function Portal() {
       const list = await fetchAnnouncements(data?.tenant_id);
       setAnnouncements(list);
 
-      // 📄 未押印の労働条件通知書チェック（DB自動同期）
+      // 📄 会社名および未押印の労働条件通知書チェック（DB自動同期）
       if (data?.tenant_id) {
         purgeTenantLocalStorageCache(data.tenant_id);
+        const { data: tenantRow } = await supabase
+          .from('tenants')
+          .select('name')
+          .eq('id', data.tenant_id)
+          .maybeSingle();
+        if (tenantRow?.name && tenantRow.name.trim() !== '') {
+          setCompanyName(tenantRow.name.trim());
+        } else {
+          setCompanyName('自社');
+        }
+
         const contracts = await fetchRevisionContracts(data.tenant_id);
         const pending = contracts.find(c => (c.user_id === user.id || c.user_name === data.name) && c.status === 'pending_signature');
         setPendingContractDoc(pending || null);
@@ -332,9 +344,11 @@ export default function Portal() {
               if (app.id === 'settings') return true;
               return false;
             }
-            // 従業員が利用できるものは「勤怠・有給管理」「シフト管理」「社内Q&A・目安箱」
+            // 従業員が利用できるものは「勤怠・有給管理」「シフト管理」「給与計算・明細」「入退社・労務手続き」「社内Q&A・目安箱」
             if (app.id === 'kintai') return userData?.has_kintai_access !== false;
             if (app.id === 'shift') return userData?.has_shift_access !== false;
+            if (app.id === 'payroll') return true;
+            if (app.id === 'onboarding') return true;
             if (app.id === 'support') return true;
             return false;
           }).map((app, index) => (
@@ -437,7 +451,7 @@ export default function Portal() {
       <StaffInviteModal
         isOpen={isStaffInviteModalOpen}
         onClose={() => setIsStaffInviteModalOpen(false)}
-        companyName="会社"
+        companyName={companyName || '自社'}
         tenantId={userData?.tenant_id}
         defaultTab="line"
       />

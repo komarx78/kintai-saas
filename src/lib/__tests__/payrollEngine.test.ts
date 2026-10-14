@@ -81,11 +81,11 @@ export function runPayrollEngineTests(): { success: boolean; results: string[] }
     // 健康保険 300,000 * 9.85% / 2 = 14,775円
     // 介護保険 300,000 * 1.60% / 2 = 2,400円
     // 厚生年金 300,000 * 18.30% / 2 = 27,450円
-    // 雇用保険 300,000 * 0.6% = 1,800円
-    if (tokyoDeduction.healthInsurance === 14775 && tokyoDeduction.nursingInsurance === 2400 && tokyoDeduction.pensionInsurance === 27450 && tokyoDeduction.employmentInsurance === 1800) {
+    // 雇用保険 300,000 * 0.5% = 1,500円（令和8年度一般の事業）
+    if (tokyoDeduction.healthInsurance === 14775 && tokyoDeduction.nursingInsurance === 2400 && tokyoDeduction.pensionInsurance === 27450 && tokyoDeduction.employmentInsurance === 1500) {
       results.push('✅ テスト3 パス: 東京都・40代の社会保険料（健康・介護・厚生年金・雇用）折半計算が1円単位で完全一致');
     } else {
-      results.push(`❌ テスト3 失敗: 東京都社保計算不整合 (health:${tokyoDeduction.healthInsurance}, nursing:${tokyoDeduction.nursingInsurance}, pension:${tokyoDeduction.pensionInsurance})`);
+      results.push(`❌ テスト3 失敗: 東京都社保計算不整合 (health:${tokyoDeduction.healthInsurance}, nursing:${tokyoDeduction.nursingInsurance}, pension:${tokyoDeduction.pensionInsurance}, emp:${tokyoDeduction.employmentInsurance})`);
     }
 
     // 大阪府（27: 10.13%, 介護 1.60%）25歳（介護非該当）
@@ -431,14 +431,14 @@ export function runPayrollEngineTests(): { success: boolean; results: string[] }
     // standardBonus = 2,000,000円
     // health = 2,000,000 * 9.85% / 2 = 98,500円
     // pension = 1,500,000 * 18.30% / 2 = 137,250円（150万円上限クリア）
-    // employment = 2,000,500 * 0.6% = 12,003円
+    // employment = Math.round(2,000,500 * 0.5%) = 10,003円（令和8年度一般の事業）
     // bonusTurn40Applicable: nursing > 0
     // bonusTurn40NotApplicable: nursing === 0
     if (
       bonusHigh.standardBonus === 2000000 &&
       bonusHigh.welfarePension === 137250 &&
       bonusHigh.healthInsurance === 98500 &&
-      bonusHigh.employmentInsurance === 12003 &&
+      bonusHigh.employmentInsurance === 10003 &&
       bonusTurn40Applicable.nursingInsurance > 0 &&
       bonusTurn40NotApplicable.nursingInsurance === 0
     ) {

@@ -112,9 +112,13 @@ export function detectMonthlyRevisionCandidates(params: {
     // 社会保険（健康保険または厚生年金）が有効でない社員はスキップ
     if (!prof.health_insurance_enabled && !prof.pension_insurance_enabled) continue;
 
-    // 従前の標準報酬月額（マスタまたは登録値）
-    const curHealthStd = prof.health_standard_monthly_remuneration || prof.base_salary || 300000;
-    const curPensionStd = prof.pension_standard_monthly_remuneration || curHealthStd;
+    // 従前の標準報酬月額（マスタまたは登録値。生の基本給がフォールバックされる場合も標準報酬月額等級表で正規化）
+    const curHealthStd = (prof.health_standard_monthly_remuneration && prof.health_standard_monthly_remuneration > 0)
+      ? lookupStandardMonthlyRemuneration(prof.health_standard_monthly_remuneration, 'health')
+      : lookupStandardMonthlyRemuneration(prof.base_salary || 300000, 'health');
+    const curPensionStd = (prof.pension_standard_monthly_remuneration && prof.pension_standard_monthly_remuneration > 0)
+      ? lookupStandardMonthlyRemuneration(prof.pension_standard_monthly_remuneration, 'pension')
+      : lookupStandardMonthlyRemuneration(curHealthStd, 'pension');
 
     // 3ヶ月分の給与明細を抽出
     const slip1 = payslips.find(s => s.user_id === emp.id && s.year_month === m1YM);

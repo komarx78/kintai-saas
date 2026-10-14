@@ -442,7 +442,7 @@ export const OfficialTaxWithholdingSlipDoc: React.FC<TaxWithholdingDocProps> = (
               基礎控除の額 G46
             </div>
             <div className="col-span-2 p-0.5 text-right font-mono font-bold">
-              480,000
+              {(data.basicDeduction ?? 0) > 0 ? fmt(data.basicDeduction) : ''}
             </div>
           </div>
 

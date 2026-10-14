@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
 import SuperAdminLogin from './pages/SuperAdminLogin';
@@ -36,6 +36,7 @@ const PrivateRoute = ({ children, requiredRole }: { children: React.ReactNode, r
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [trialEnded, setTrialEnded] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     checkAuth();
@@ -107,9 +108,22 @@ const PrivateRoute = ({ children, requiredRole }: { children: React.ReactNode, r
     }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
+        <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-bold text-slate-600">読み込み中...</p>
+      </div>
+    );
+  }
   if (trialEnded) return <Navigate to="/trial-ended" replace />;
-  if (!authorized) return <Navigate to="/" replace />;
+  if (!authorized) {
+    const currentPathWithQuery = location.pathname + location.search;
+    if (location.pathname !== '/') {
+      return <Navigate to={`/?redirect_to=${encodeURIComponent(currentPathWithQuery)}`} replace />;
+    }
+    return <Navigate to="/" replace />;
+  }
   
   return <>{children}</>;
 };
@@ -227,6 +241,7 @@ function App() {
         <Route path="/lp" element={<LandingPage />} />
         <Route path="/lp/features/:featureId" element={<LandingFeatureDetail />} />
         {/* 旧URLや未定義ルートへのアクセス対策リダイレクト */}
+        <Route path="/payslip" element={<Navigate to="/payroll/user" replace />} />
         <Route path="/admin/*" element={<Navigate to="/kintai/admin" replace />} />
         <Route path="/user/*" element={<Navigate to="/kintai/user" replace />} />
         <Route path="*" element={<Navigate to="/portal" replace />} />

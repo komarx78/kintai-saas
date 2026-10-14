@@ -311,7 +311,7 @@ export default function ShiftPublicView() {
             </div>
           </div>
           <a
-            href={`/line-link?tid=${tenantId}`}
+            href={`/line-link?tid=${tenantId}${selectedStaffFilter && selectedStaffFilter !== 'all' ? `&uid=${selectedStaffFilter}` : (searchParams.get('uid') ? `&uid=${searchParams.get('uid')}` : '')}`}
             target="_blank"
             rel="noopener noreferrer"
             className="w-full sm:w-auto px-4 py-2 bg-[#06C755] hover:bg-[#05b34c] text-white font-black text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 shrink-0 no-underline cursor-pointer active:scale-98"

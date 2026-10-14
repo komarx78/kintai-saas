@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-const RAKUMARU_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || '2bzMLZ1Svthjn94ea3y4HHSeRjMw9SA1F9lgom1PkoUa2gUs3F8ovxG+ikJFVTwF5UM6tfmXrOF2C+ZplN6/JHdhOQur8Rt8eGchRIcILN1idPlIDv7OLvlva7Zfahj+ZAvjBfIwYSV+FZQ7sG97fwdB04t89/10/w1cDnyilFU=';
+const RAKUMARU_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || 'fGqeLsJrOA06OQPgvm8DcmWI4kPwHg8Jw4fGr4Wb8vsns8CbKG/Pg/2llBsFQL205UM6tfmXrOF2C+ZpIN6/JHdhOQur8Rt8eGchRIclLN3DkEIuzl8Qq1RHoCq8NCfTMqF27v6OYkm5gTe3EVRzkAdB04t89/1O/w1cDnyilFU=';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS ヘッダー

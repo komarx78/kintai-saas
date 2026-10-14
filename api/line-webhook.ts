@@ -171,7 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // (B) 連携解除
-      if (text === '連携解除' || text === '解除') {
+      if (rawText === '連携解除' || rawText === '解除') {
         if (lineUserId) {
           await supabase.from('users').update({
             line_user_id: null,
