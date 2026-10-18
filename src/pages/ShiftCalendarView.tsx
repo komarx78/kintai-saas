@@ -803,7 +803,7 @@ const ShiftCalendarView: React.FC = () => {
 
       const isLineLinked = Boolean(linkMap[u.id]);
       const storeNameParam = selectedDepartment === 'all' ? undefined : selectedDepartment;
-      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com';
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://kintai.kap-cocotte.com';
       const calendarPublicUrl = `${origin}/shift/view?tid=${tenantId}${storeNameParam ? `&store=${encodeURIComponent(storeNameParam)}` : ''}&period=${startStr}`;
 
       const { messageText, shiftCount, totalHours } = formatStaffShiftLineMessage(
@@ -1835,7 +1835,7 @@ const ShiftCalendarView: React.FC = () => {
               )}
             </span>
             <button
-              onClick={() => navigate('/shift/settings')}
+              onClick={() => navigate('/shift/admin/settings')}
               className="text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline font-bold"
               title="シフト設定画面で応援機能のON/OFFを切り替えます"
             >
@@ -2459,7 +2459,7 @@ const ShiftCalendarView: React.FC = () => {
                                             </span>
                                           ) : dayReqs.length === 0 ? (
                                             <button 
-                                              onClick={() => navigate('/shift/requirements')} 
+                                              onClick={() => navigate('/shift/admin/patterns')} 
                                               className="text-[9px] bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold px-1.5 py-0.5 rounded border border-amber-300 transition-colors shrink-0 cursor-pointer"
                                               title="必要人数枠の設定画面を開く"
                                             >

@@ -35,7 +35,7 @@ export const OFFICIAL_ANNUAL_EVENTS: OfficialReminderEvent[] = [
       '従業員へ料率改定のお知らせを周知'
     ],
     targetDocumentName: '健康保険・厚生年金保険 被保険者資格取得・喪失届',
-    recommendedLink: '/company-settings'
+    recommendedLink: '/settings/company'
   },
   {
     id: 'employment_rate_april',
@@ -52,7 +52,7 @@ export const OFFICIAL_ANNUAL_EVENTS: OfficialReminderEvent[] = [
       '新入社員の雇用保険資格取得届を提出'
     ],
     targetDocumentName: '雇用保険被保険者資格取得届',
-    recommendedLink: '/payroll'
+    recommendedLink: '/payroll/admin'
   },
   {
     id: 'labor_insurance_june',
@@ -69,7 +69,7 @@ export const OFFICIAL_ANNUAL_EVENTS: OfficialReminderEvent[] = [
       '労働局または金融機関窓口にて申告書提出および納付手続きを完了'
     ],
     targetDocumentName: '労働保険 確定・概算保険料算定基礎集計表',
-    recommendedLink: '/payroll'
+    recommendedLink: '/payroll/admin'
   },
   {
     id: 'standard_remuneration_july',
@@ -86,7 +86,7 @@ export const OFFICIAL_ANNUAL_EVENTS: OfficialReminderEvent[] = [
       '所轄年金事務所または事務センターへ郵送・電子申請にて提出'
     ],
     targetDocumentName: '被保険者算定基礎届（定時決定）',
-    recommendedLink: '/payroll'
+    recommendedLink: '/payroll/admin'
   },
   {
     id: 'grade_change_september',
@@ -103,7 +103,7 @@ export const OFFICIAL_ANNUAL_EVENTS: OfficialReminderEvent[] = [
       '標準報酬月額変更のお知らせ（改定通知書）を従業員へ配布'
     ],
     targetDocumentName: '標準報酬決定通知書連動データ',
-    recommendedLink: '/company-settings'
+    recommendedLink: '/settings/company'
   },
   {
     id: 'year_end_tax_november',
@@ -120,7 +120,7 @@ export const OFFICIAL_ANNUAL_EVENTS: OfficialReminderEvent[] = [
       '12月支給給与（または賞与）にて年税額の過不足税額を精算・還付'
     ],
     targetDocumentName: '給与所得・退職所得に対する源泉徴収簿',
-    recommendedLink: '/payroll'
+    recommendedLink: '/payroll/admin'
   },
   {
     id: 'salary_report_january',
@@ -137,7 +137,7 @@ export const OFFICIAL_ANNUAL_EVENTS: OfficialReminderEvent[] = [
       '所轄税務署へ給与所得の源泉徴収票等の法定調書合計表を提出'
     ],
     targetDocumentName: '給与支払報告書 ＆ 法定調書合計表',
-    recommendedLink: '/payroll'
+    recommendedLink: '/payroll/admin'
   },
   {
     id: 'bonus_report_any',
@@ -154,7 +154,7 @@ export const OFFICIAL_ANNUAL_EVENTS: OfficialReminderEvent[] = [
       '支給後速やかに年金事務所へ提出'
     ],
     targetDocumentName: '被保険者賞与支払届',
-    recommendedLink: '/payroll'
+    recommendedLink: '/payroll/admin'
   }
 ];
 

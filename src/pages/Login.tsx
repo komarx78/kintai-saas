@@ -402,16 +402,17 @@ const Login = () => {
           {mode === 'resend_confirm' && 'アカウント登録時のメールアドレスに確認メールを再送します'}
         </p>
 
-        {/* 🌟 LPへの誘導リンク */}
+        {/* 🌟 公式LPへの誘導リンク（正規URLに完全統一） */}
         <div className="mt-3 text-center">
-          <button
-            type="button"
-            onClick={() => navigate('/lp')}
+          <a
+            href="https://kap-cocotte.com/rakumaru/"
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 text-blue-700 font-bold text-xs rounded-full border border-blue-200/80 transition-all shadow-sm hover:scale-105 active:scale-95"
           >
-            <span>✨ 1人300円！サービス詳細・5大機能LPを見る</span>
+            <span>✨ 公式サービス詳細・料金プランを見る</span>
             <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          </a>
         </div>
       </div>
 

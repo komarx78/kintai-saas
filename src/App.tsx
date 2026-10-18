@@ -26,11 +26,23 @@ import StaffLineLinkPage from './pages/StaffLineLinkPage';
 import CompanySettingsDashboard from './pages/CompanySettingsDashboard';
 import CommunitySupportDashboard from './pages/CommunitySupportDashboard';
 import TrialEnded from './pages/TrialEnded';
-import { LandingPage } from './pages/LandingPage';
-import { LandingFeatureDetail } from './pages/LandingFeatureDetail';
 import { FloatingSupportAssistant } from './components/FloatingSupportAssistant';
 import { supabase } from './lib/supabase';
 import { purgeAllLegacyGlobalCache } from './lib/tenantCache';
+
+// 🔗 クエリパラメータ（?tenant_id=...&tab=...）を100%保持して正規URLへ転送するコンポーネント
+const RedirectWithSearch = ({ to }: { to: string }) => {
+  const location = useLocation();
+  return <Navigate to={`${to}${location.search}`} replace />;
+};
+
+// 🌐 旧 /lp アクセス時に正規の公式LP（https://kap-cocotte.com/rakumaru/）へ即時転送するコンポーネント
+const RedirectToOfficialLp = () => {
+  useEffect(() => {
+    window.location.replace('https://kap-cocotte.com/rakumaru/');
+  }, []);
+  return null;
+};
 
 const PrivateRoute = ({ children, requiredRole }: { children: React.ReactNode, requiredRole?: string }) => {
   const [loading, setLoading] = useState(true);
@@ -237,14 +249,19 @@ function App() {
             <CommunitySupportDashboard />
           </PrivateRoute>
         } />
-        <Route path="/community" element={<Navigate to="/support" replace />} />
-        <Route path="/lp" element={<LandingPage />} />
-        <Route path="/lp/features/:featureId" element={<LandingFeatureDetail />} />
-        {/* 旧URLや未定義ルートへのアクセス対策リダイレクト */}
-        <Route path="/payslip" element={<Navigate to="/payroll/user" replace />} />
-        <Route path="/admin/*" element={<Navigate to="/kintai/admin" replace />} />
-        <Route path="/user/*" element={<Navigate to="/kintai/user" replace />} />
-        <Route path="*" element={<Navigate to="/portal" replace />} />
+        <Route path="/community" element={<RedirectWithSearch to="/support" />} />
+        <Route path="/lp" element={<RedirectToOfficialLp />} />
+        <Route path="/lp/*" element={<RedirectToOfficialLp />} />
+        {/* 旧URL・別名エイリアスへのアクセス時もクエリ（?tenant_id=...&tab=...）を100%保持して正規URLへ自動転送 */}
+        <Route path="/company-settings/*" element={<RedirectWithSearch to="/settings/company" />} />
+        <Route path="/payroll" element={<RedirectWithSearch to="/payroll/admin" />} />
+        <Route path="/onboarding" element={<RedirectWithSearch to="/onboarding/admin" />} />
+        <Route path="/shift/settings" element={<RedirectWithSearch to="/shift/admin/settings" />} />
+        <Route path="/shift/requirements" element={<RedirectWithSearch to="/shift/admin/patterns" />} />
+        <Route path="/payslip" element={<RedirectWithSearch to="/payroll/user" />} />
+        <Route path="/admin/*" element={<RedirectWithSearch to="/kintai/admin" />} />
+        <Route path="/user/*" element={<RedirectWithSearch to="/kintai/user" />} />
+        <Route path="*" element={<RedirectWithSearch to="/portal" />} />
       </Routes>
       {/* 🤖 24時間常駐・全画面対応 労務＆操作AI自律サポート門番 */}
       <FloatingSupportAssistant />

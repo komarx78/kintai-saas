@@ -2219,7 +2219,7 @@ export default function CompanySettingsDashboard() {
           userCount,
           lineOptionFee: lineFee,
           lineOptionName: '公式LINE代行配信オプション（月額）',
-          redirectUrl: window.location.origin + '/company-settings?tab=billing'
+          redirectUrl: `${window.location.origin}/settings/company?tenant_id=${tid}&tab=billing`
         })
       });
 
@@ -7354,7 +7354,7 @@ export default function CompanySettingsDashboard() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => navigate(`/payroll?tid=${tenantId || ''}`)}
+                    onClick={() => navigate(`/payroll/admin?tenant_id=${tenantId || ''}`)}
                     className="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
                     <span>💴</span>

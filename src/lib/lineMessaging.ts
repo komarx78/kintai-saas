@@ -102,7 +102,7 @@ export function formatStaffShiftLineMessage(
   }
 
   // 🔗 確定シフトカレンダー閲覧リンク（🚨 軍律第9条：SaaS完全防壁URL）
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com';
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://kintai.kap-cocotte.com';
   const storeParam = storeName && storeName !== 'all' ? `&store=${encodeURIComponent(storeName)}` : '';
   const periodParam = periodStartDate ? `&period=${periodStartDate}` : '';
   const defaultPublicUrl = `${origin}/shift/view?tid=${tenantId || ''}${storeParam}${periodParam}`;
@@ -156,7 +156,7 @@ export function formatEmergencyHelpLineMessage(params: {
   text += `\n`;
 
   // 🔗 確定シフト確認URL（軍律第9条：URL最優先SSOT）
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com';
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://kintai.kap-cocotte.com';
   const storeParam = params.storeName && params.storeName !== 'all' ? `&store=${encodeURIComponent(params.storeName)}` : '';
   const dateParam = params.targetDate ? `&period=${params.targetDate}` : '';
   const defaultPublicUrl = `${origin}/shift/view?tid=${params.tenantId || ''}${storeParam}${dateParam}`;
@@ -181,7 +181,7 @@ export function formatShiftReminderLineMessage(params: {
   requestUrl?: string;
   tenantId?: string;
 }): string {
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com';
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://kintai.kap-cocotte.com';
   const tenantParam = params.tenantId ? `?tid=${params.tenantId}` : '';
   const url = params.requestUrl || `${origin}/shift/user${tenantParam}`;
   const deadline = params.deadlineText || '近日中';
@@ -216,7 +216,7 @@ export function formatStaffPayslipLineMessage(params: {
   const ymLabel = `${year}年${parseInt(month, 10)}月度`;
   const companyTitle = params.companyName || '会社';
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://rakumaru-kintai.com';
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://kintai.kap-cocotte.com';
   const tenantParam = params.tenantId ? `?tid=${params.tenantId}` : '';
   const userParam = params.userId ? `${tenantParam ? '&' : '?'}uid=${params.userId}` : '';
   const defaultPublicUrl = `${origin}/payroll/user${tenantParam}${userParam}`;
