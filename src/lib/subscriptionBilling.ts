@@ -170,7 +170,7 @@ export const SAAS_PLANS: Record<SaasPlanType, SaasPlanMeta> = {
     badge: '📱 シフト特化',
     badgeColor: 'bg-teal-100 text-teal-800 border-teal-300',
     unitPriceMonthly: 300,
-    unitPriceAnnual: 3000,
+    unitPriceAnnual: 3600,
     description: '他社の勤怠ソフトをお使いで、「LINEシフト募集・AI自動割り当て・確定LINE通知」だけを安く使いたい店舗に最適。',
     recommendedFor: '飲食店・カフェ・美容室・小売店・シフト制店舗',
     features: [
@@ -187,7 +187,7 @@ export const SAAS_PLANS: Record<SaasPlanType, SaasPlanMeta> = {
     badge: '💼 勤怠・労務特化',
     badgeColor: 'bg-blue-100 text-blue-800 border-blue-300',
     unitPriceMonthly: 300,
-    unitPriceAnnual: 3000,
+    unitPriceAnnual: 3600,
     description: 'シフト作成が不要な固定勤務企業向け。打刻管理・有給休暇・入社労務手続きをスマートに完結。',
     recommendedFor: 'オフィスワーク・IT企業・製造業・士業・固定勤務企業',
     features: [
@@ -204,7 +204,7 @@ export const SAAS_PLANS: Record<SaasPlanType, SaasPlanMeta> = {
     badge: '👑 一番人気・100円お得！',
     badgeColor: 'bg-gradient-to-r from-amber-500 to-indigo-600 text-white border-amber-400',
     unitPriceMonthly: 500,
-    unitPriceAnnual: 5000,
+    unitPriceAnnual: 6000,
     originalPriceMonthly: 600,
     discountText: '通常600円 ➔ セット割で100円おトク！',
     description: 'シフトと勤怠・労務が完全連動！シフト確定が出勤予定に直結し、打刻漏れ防止から給与計算まで一気通貫。',
@@ -242,9 +242,9 @@ export function calculateSaasPlanPrice(
   let savedMonthlyAmount = 0;
   let originalTotalPrice = totalPrice;
   if (planId === 'full_advance') {
-    const originalUnit = isAnnual ? 6000 : 600;
+    const originalUnit = isAnnual ? 7200 : 600;
     originalTotalPrice = count * originalUnit;
-    savedMonthlyAmount = isAnnual ? count * 1000 : count * 100;
+    savedMonthlyAmount = isAnnual ? count * 1200 : count * 100;
   }
 
   return {
