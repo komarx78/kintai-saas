@@ -14,8 +14,10 @@ import { StartupGuideCard } from '../components/StartupGuideCard';
 import { LineConfigModal } from '../components/LineConfigModal';
 import { 
   type LineIntegrationConfig, 
+  type LineIntegrationMode,
   getTenantLineConfig, 
   fetchTenantLineConfigFromDb,
+  saveTenantLineConfigUnified,
   RAKUMARU_OFFICIAL_LINE_CONSTANTS
 } from '../lib/lineMessaging';
 import { 
@@ -1078,8 +1080,19 @@ export default function CompanySettingsDashboard() {
           if (localUrl) loadedSquareUrl = localUrl;
         } catch (_) {}
 
+        let resolvedPlanType: SaasPlanType = 'trial';
+        const rawSavedPlan =
+          tData.payroll_common_settings?.selected_saas_plan ||
+          localStorage.getItem(`selected_saas_plan_${tenantIdData}`) ||
+          tData.plan_type;
+        if (rawSavedPlan && ['trial', 'shift_only', 'kintai_only', 'full_advance'].includes(rawSavedPlan)) {
+          resolvedPlanType = rawSavedPlan as SaasPlanType;
+        } else if (tData.plan_type === 'paid' || tData.plan_type === 'pro' || tData.plan_type === 'standard') {
+          resolvedPlanType = 'full_advance';
+        }
+
         setTenantBilling({
-          plan_type: (tData.plan_type as SaasPlanType) || 'trial',
+          plan_type: resolvedPlanType,
           trial_ends_at: tData.trial_ends_at || null,
           billing_cycle: (tData.billing_cycle as any) || 'monthly',
           square_checkout_url: loadedSquareUrl,
@@ -2115,21 +2128,43 @@ export default function CompanySettingsDashboard() {
     showToast('🗑️ カスタムプリセットを削除しました');
   };
 
-  // 💳 ご利用プラン・決済設定の変更保存ハンドラ
+  // 💳 ご利用プラン・決済設定の変更保存ハンドラ（DB制約に影響されず確実に永続化）
   const handleSaveBillingPlan = async (newPlan: SaasPlanType) => {
-    if (!tenantId) return;
+    const tid = tenantId || localStorage.getItem('current_tenant_id');
+    if (!tid) return;
     const planMeta = SAAS_PLANS[newPlan];
-    if (!confirm(`ご利用プランを「${planMeta.name}」に変更しますか？`)) return;
 
     try {
       setIsSaving(true);
-      await supabase.from('tenants').update({
-        plan_type: newPlan
-      }).eq('id', tenantId);
-
+      // 1. ローカル＆Stateへ即時反映（体感0秒・確実な選択）
+      localStorage.setItem(`selected_saas_plan_${tid}`, newPlan);
       setTenantBilling(prev => ({ ...prev, plan_type: newPlan }));
-      alert(`✅ ご利用プランを「${planMeta.name}」に更新しました！`);
-      await fetchData();
+
+      // 2. DBのJSONB（payroll_common_settings.selected_saas_plan）へ確実に保存
+      try {
+        const { data: curT } = await supabase.from('tenants').select('payroll_common_settings').eq('id', tid).maybeSingle();
+        const updatedPayrollCommon = {
+          ...(curT?.payroll_common_settings || {}),
+          selected_saas_plan: newPlan
+        };
+        await supabase.from('tenants').update({
+          payroll_common_settings: updatedPayrollCommon
+        }).eq('id', tid);
+      } catch (e) {
+        console.warn('payroll_common_settings plan save note:', e);
+      }
+
+      // 3. tenants.plan_type カラム更新（CHECK制約がある場合は 'paid' / 'trial' へ安全フォールバック）
+      const { error: planErr } = await supabase.from('tenants').update({
+        plan_type: newPlan
+      }).eq('id', tid);
+      if (planErr) {
+        await supabase.from('tenants').update({
+          plan_type: newPlan === 'trial' ? 'trial' : 'paid'
+        }).eq('id', tid);
+      }
+
+      showToast(`✅ ご利用プランを「${planMeta.name}」に設定しました！`);
     } catch (e: any) {
       alert('プランの更新に失敗しました: ' + (e.message || e));
     } finally {
@@ -2137,24 +2172,109 @@ export default function CompanySettingsDashboard() {
     }
   };
 
+  // 💬 LINE配信オプションカードのワンクリック直接切替ハンドラ
+  const handleQuickSelectLineMode = async (mode: LineIntegrationMode) => {
+    const tid = tenantId || localStorage.getItem('current_tenant_id');
+    const nextCfg: LineIntegrationConfig = {
+      ...lineConfig,
+      mode,
+      updatedAt: new Date().toISOString()
+    };
+    setLineConfig(nextCfg);
+    await saveTenantLineConfigUnified(tid, nextCfg);
+
+    const modeLabel =
+      mode === 'rakumaru_official'
+        ? '🟢 公式代行配信（月額 ¥3,000）'
+        : mode === 'own_official'
+        ? '🔵 自社公式LINE（システム月額 ¥0）'
+        : '⚪ LINE通知を利用しない（¥0）';
+    showToast(`✅ LINE配信プランを「${modeLabel}」に変更しました！`);
+
+    if (mode === 'own_official') {
+      setShowLineConfigModal(true);
+    }
+  };
+
+  // 🚀 Squareオンライン決済リンクの自動生成＆即時遷移ハンドラ
+  const handleGenerateSquareCheckout = async (openAfterGenerate = true) => {
+    const tid = tenantId || localStorage.getItem('current_tenant_id');
+    if (!tid) return;
+
+    const userCount = Math.max(1, companyUsers.length);
+    const activePlanKey = tenantBilling.plan_type === 'trial' ? 'full_advance' : tenantBilling.plan_type;
+    const planMeta = SAAS_PLANS[activePlanKey] || SAAS_PLANS.full_advance;
+    const lineFee = lineConfig.mode === 'rakumaru_official' ? 3000 : 0;
+
+    try {
+      setIsSaving(true);
+      const res = await fetch('/api/square-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: tid,
+          tenantName: basicInfo.name || 'ご契約企業',
+          planName: planMeta.name,
+          unitPrice: planMeta.unitPriceMonthly,
+          userCount,
+          lineOptionFee: lineFee,
+          lineOptionName: '公式LINE代行配信オプション（月額）',
+          redirectUrl: window.location.origin + '/company-settings?tab=billing'
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.url) {
+        throw new Error(data.error || 'Square決済リンクの自動生成に失敗しました');
+      }
+
+      const generatedUrl = data.url;
+      localStorage.setItem(`square_checkout_url_${tid}`, generatedUrl);
+      setTenantBilling(prev => ({ ...prev, square_checkout_url: generatedUrl }));
+
+      const inputEl = document.getElementById('square_checkout_url_input') as HTMLInputElement | null;
+      if (inputEl) inputEl.value = generatedUrl;
+
+      try {
+        const { data: curT } = await supabase.from('tenants').select('payroll_common_settings').eq('id', tid).maybeSingle();
+        await supabase.from('tenants').update({
+          payroll_common_settings: {
+            ...(curT?.payroll_common_settings || {}),
+            square_checkout_url: generatedUrl
+          }
+        }).eq('id', tid);
+      } catch (_) {}
+
+      showToast('✨ Square決済リンクを自動生成・保存しました！');
+      if (openAfterGenerate) {
+        window.open(generatedUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (e: any) {
+      alert('Square決済リンク生成エラー: ' + (e.message || e));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleSaveSquareUrl = async (url: string) => {
-    if (!tenantId) return;
+    const tid = tenantId || localStorage.getItem('current_tenant_id');
+    if (!tid) return;
     try {
       setIsSaving(true);
       const cleanUrl = url.trim();
-      localStorage.setItem(`square_checkout_url_${tenantId}`, cleanUrl);
+      localStorage.setItem(`square_checkout_url_${tid}`, cleanUrl);
       try {
-        const { data: curT } = await supabase.from('tenants').select('payroll_common_settings').eq('id', tenantId).maybeSingle();
+        const { data: curT } = await supabase.from('tenants').select('payroll_common_settings').eq('id', tid).maybeSingle();
         const updatedPayrollCommon = {
           ...(curT?.payroll_common_settings || {}),
           square_checkout_url: cleanUrl
         };
         await supabase.from('tenants').update({
           payroll_common_settings: updatedPayrollCommon
-        }).eq('id', tenantId);
+        }).eq('id', tid);
       } catch (_) {}
       setTenantBilling(prev => ({ ...prev, square_checkout_url: cleanUrl }));
-      alert('✅ Square決済リンクURLを保存しました！');
+      showToast('✅ Square決済リンクURLを保存しました！');
     } catch (e: any) {
       alert('Squareリンクの保存に失敗しました: ' + (e.message || e));
     } finally {
@@ -7186,7 +7306,7 @@ export default function CompanySettingsDashboard() {
           </div>
         )}
 
-        {/* 11. 💳 ご利用プラン ＆ お支払い設定 タブ */}
+        {/* 12. 💳 ご利用プラン ＆ お支払い設定 タブ */}
         {activeTab === 'billing' && (() => {
           const userCount = Math.max(1, companyUsers.length);
           const trialEnd = tenantBilling.trial_ends_at ? new Date(tenantBilling.trial_ends_at) : null;
@@ -7194,37 +7314,92 @@ export default function CompanySettingsDashboard() {
           const diffDays = trialEnd ? Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 30;
           const isTrialActive = tenantBilling.plan_type === 'trial';
           const currentPlanMeta = SAAS_PLANS[tenantBilling.plan_type] || SAAS_PLANS.trial;
+          const lineMonthlyFee = lineConfig.mode === 'rakumaru_official' ? 3000 : 0;
+          const basePlanMonthlyFee = isTrialActive ? 0 : userCount * currentPlanMeta.unitPriceMonthly;
+          const totalMonthlyFee = isTrialActive ? 0 : basePlanMonthlyFee + lineMonthlyFee;
 
           return (
             <div className="space-y-6 animate-in fade-in duration-200">
+              {/* 💡 お金に関する各種設定の迷子ゼロ・ワンクリック案内バー */}
+              <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-5 shadow-md border border-indigo-700/50 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-xl shrink-0">
+                    💰
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-amber-300 flex items-center gap-2">
+                      お金に関する設定メニュー（目的別ショートカット）
+                    </h4>
+                    <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                      この画面では<strong>「① システム利用プラン・Squareカード決済」</strong>を設定できます。自社の<strong>「② 給与締め日・支払日・社保料率」</strong>や<strong>「③ 社員・アルバイトの基本給・時給・手当」</strong>は右のボタンから1秒で開けます。
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('payroll')}
+                    className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <DollarSign className="w-3.5 h-3.5 text-amber-300" />
+                    5. 給与締日・社会保険設定へ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('qualifications')}
+                    className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Award className="w-3.5 h-3.5 text-emerald-300" />
+                    6. 資格手当マスタへ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/payroll?tid=${tenantId || ''}`)}
+                    className="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <span>💴</span>
+                    社員別の給与・時給・明細設定へ
+                  </button>
+                </div>
+              </div>
+
               {/* プラン概要ヘッダーカード */}
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
                   <div>
                     <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
                       <CreditCard className="w-5 h-5 text-indigo-600" />
-                      ご利用プラン ＆ お支払い設定
+                      ご利用プラン ＆ Squareお支払い設定
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
-                      会社の成長やニーズに合わせて自由にプランをお選びいただけます。1ヶ月無料トライアル中も全機能をご利用いただけます。
+                      会社の成長やニーズに合わせて自由にプランをお選びいただけます。下のカードをクリックすると即座に切り替わります。
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs font-black px-3 py-1.5 rounded-full border shadow-2xs ${currentPlanMeta.badgeColor}`}>
                       {currentPlanMeta.badge}
                     </span>
+                    {!isTrialActive && (
+                      <button
+                        type="button"
+                        onClick={() => handleSaveBillingPlan('trial')}
+                        className="text-[11px] font-bold text-slate-500 hover:text-slate-800 underline px-2 py-1 cursor-pointer"
+                      >
+                        無料トライアル表示に戻す
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 {/* 4大ステータス指標 */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                    <div className="text-[11px] font-bold text-slate-500">現在のご利用状況</div>
+                    <div className="text-[11px] font-bold text-slate-500">現在のご利用プラン</div>
                     <div className="text-base font-black text-slate-900 mt-1">
                       {currentPlanMeta.name}
                     </div>
                     <div className="text-[10px] text-slate-400 mt-0.5">
-                      {isTrialActive ? '全機能フルアクセス中' : '有料プラン稼働中'}
+                      {isTrialActive ? '全機能フルアクセス中' : '選択プラン適用中'}
                     </div>
                   </div>
 
@@ -7238,11 +7413,11 @@ export default function CompanySettingsDashboard() {
                           <span className="text-rose-600">本日終了 / 期限切れ</span>
                         )
                       ) : (
-                        <span className="text-indigo-600">本契約移行済み</span>
+                        <span className="text-indigo-600">有料プラン選択済</span>
                       )}
                     </div>
                     <div className="text-[10px] text-slate-400 mt-0.5">
-                      {isTrialActive && trialEnd ? `期限: ${trialEnd.toLocaleDateString('ja-JP')}` : '安心の月額自動更新'}
+                      {isTrialActive && trialEnd ? `期限: ${trialEnd.toLocaleDateString('ja-JP')}` : 'いつでもプラン変更可能'}
                     </div>
                   </div>
 
@@ -7256,17 +7431,19 @@ export default function CompanySettingsDashboard() {
                     </div>
                   </div>
 
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                    <div className="text-[11px] font-bold text-slate-500">現在の月額利用料（試算）</div>
-                    <div className="text-base font-black text-indigo-600 mt-1">
+                  <div className="bg-indigo-50/60 p-4 rounded-2xl border border-indigo-200">
+                    <div className="text-[11px] font-bold text-indigo-900">現在の月額利用料（税込試算）</div>
+                    <div className="text-base font-black text-indigo-700 mt-1">
                       {isTrialActive ? (
                         <span>¥0 <span className="text-xs text-emerald-600 font-bold">（無料体験中）</span></span>
                       ) : (
-                        <span>¥{(userCount * currentPlanMeta.unitPriceMonthly).toLocaleString()} <span className="text-xs font-normal text-slate-500">/月</span></span>
+                        <span>¥{totalMonthlyFee.toLocaleString()} <span className="text-xs font-normal text-slate-500">/月</span></span>
                       )}
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      1名あたり ¥{currentPlanMeta.unitPriceMonthly.toLocaleString()}/月
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      {isTrialActive
+                        ? `本契約時: プラン¥${(userCount * 500).toLocaleString()} + LINE¥${lineMonthlyFee.toLocaleString()}`
+                        : `内訳: プラン¥${basePlanMonthlyFee.toLocaleString()} + LINE¥${lineMonthlyFee.toLocaleString()}`}
                     </div>
                   </div>
                 </div>
@@ -7281,9 +7458,9 @@ export default function CompanySettingsDashboard() {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h4 className="text-base font-black text-slate-900">公式LINE通知・配信オプション設定</h4>
+                        <h4 className="text-base font-black text-slate-900">STEP 1：公式LINE通知・配信オプションを選択</h4>
                         <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          全店舗共通・店長個人LINE不要
+                          カードをクリックで即時切替
                         </span>
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
@@ -7298,36 +7475,44 @@ export default function CompanySettingsDashboard() {
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-sm transition-all flex items-center gap-2 self-start md:self-auto cursor-pointer"
                   >
                     <span>⚙️</span>
-                    <span>LINE配信プラン・設定を変更</span>
+                    <span>LINE詳細設定・トークン確認</span>
                   </button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                  {/* 現在の契約モード */}
-                  <div className={`p-4 rounded-2xl border transition-all ${
-                    lineConfig.mode === 'rakumaru_official'
-                      ? 'bg-emerald-50/60 border-emerald-300 ring-2 ring-emerald-200'
-                      : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-500">選択中プラン</span>
-                      {lineConfig.mode === 'rakumaru_official' && (
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded bg-emerald-600 text-white">
-                          現在適用中
-                        </span>
-                      )}
+                  {/* ① 公式代行配信 */}
+                  <div
+                    onClick={() => handleQuickSelectLineMode('rakumaru_official')}
+                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                      lineConfig.mode === 'rakumaru_official'
+                        ? 'bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-200 shadow-sm'
+                        : 'bg-slate-50 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/20'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-500">一番人気・設定ゼロ</span>
+                        {lineConfig.mode === 'rakumaru_official' ? (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded bg-emerald-600 text-white">
+                            ✅ 現在適用中
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white text-emerald-700 border border-emerald-300">
+                            クリックして選択
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
+                        <span>🟢</span>
+                        <span>公式代行配信</span>
+                      </div>
+                      <div className="text-xs font-bold text-emerald-700 mt-1">
+                        月額 ¥3,000 / 社（税込）
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                        「みんなのらくまる労務」公式アカウントから代行通知。LINEの審査や設定が一切不要で今すぐ使えます。
+                      </div>
                     </div>
-                    <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
-                      <span>🟢</span>
-                      <span>公式代行配信</span>
-                    </div>
-                    <div className="text-xs font-bold text-emerald-700 mt-1">
-                      月額 ¥3,000 / 社（税込）
-                    </div>
-                    <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-                      「みんなのらくまる労務」公式アカウントから代行通知。LINEの審査や設定が一切不要で今すぐ使えます。
-                    </div>
-                    {/* 🌟 接続中公式アカウント情報（大元SSOT） */}
                     <div className="mt-3 pt-2.5 border-t border-emerald-200/80 flex items-center justify-between text-[11px]">
                       <span className="font-bold text-emerald-900 flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -7339,63 +7524,84 @@ export default function CompanySettingsDashboard() {
                     </div>
                   </div>
 
-                  <div className={`p-4 rounded-2xl border transition-all ${
-                    lineConfig.mode === 'own_official'
-                      ? 'bg-blue-50/60 border-blue-300 ring-2 ring-blue-200'
-                      : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-500">自社アカウント運用</span>
-                      {lineConfig.mode === 'own_official' && (
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded bg-blue-600 text-white">
-                          現在適用中
-                        </span>
-                      )}
+                  {/* ② 自社公式LINE */}
+                  <div
+                    onClick={() => handleQuickSelectLineMode('own_official')}
+                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                      lineConfig.mode === 'own_official'
+                        ? 'bg-blue-50/70 border-blue-500 ring-2 ring-blue-200 shadow-sm'
+                        : 'bg-slate-50 border-slate-200 hover:border-blue-300 hover:bg-blue-50/20'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-500">自社アカウント運用</span>
+                        {lineConfig.mode === 'own_official' ? (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded bg-blue-600 text-white">
+                            ✅ 現在適用中
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white text-blue-700 border border-blue-300">
+                            クリックして選択
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
+                        <span>🔵</span>
+                        <span>自社公式LINE</span>
+                      </div>
+                      <div className="text-xs font-bold text-blue-700 mt-1">
+                        システム月額 ¥0（LINE公式従量のみ）
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                        自社のLINE公式アカウント（Messaging API）のトークンを設定し、貴社ブランド名義で通知します。
+                      </div>
                     </div>
-                    <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
-                      <span>🔵</span>
-                      <span>自社公式LINE</span>
-                    </div>
-                    <div className="text-xs font-bold text-blue-700 mt-1">
-                      システム月額 ¥0（LINE公式従量のみ）
-                    </div>
-                    <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-                      自社のLINE公式アカウント（Messaging API）のトークンを設定し、貴社ブランド名義で通知します。
+                    <div className="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between text-[11px]">
+                      <span className="text-blue-700 font-bold">
+                        {lineConfig.ownAccountName ? `設定済: ${lineConfig.ownAccountName}` : 'クリックしてAPIトークンを設定'}
+                      </span>
+                      <span className="text-[10px] font-bold text-blue-600 underline">設定を開く ➔</span>
                     </div>
                   </div>
 
-                  <div className={`p-4 rounded-2xl border transition-all ${
-                    lineConfig.mode === 'none'
-                      ? 'bg-amber-50/60 border-amber-300 ring-2 ring-amber-200'
-                      : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-slate-500">LINE通知なし</span>
-                      {lineConfig.mode === 'none' && (
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded bg-slate-600 text-white">
-                          現在適用中
-                        </span>
-                      )}
+                  {/* ③ 利用しない */}
+                  <div
+                    onClick={() => handleQuickSelectLineMode('none')}
+                    className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                      lineConfig.mode === 'none'
+                        ? 'bg-amber-50/70 border-amber-500 ring-2 ring-amber-200 shadow-sm'
+                        : 'bg-slate-50 border-slate-200 hover:border-slate-300 hover:bg-slate-100/60'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-500">LINE通知なし</span>
+                        {lineConfig.mode === 'none' ? (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded bg-slate-700 text-white">
+                            ✅ 現在適用中
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white text-slate-700 border border-slate-300">
+                            クリックして選択
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
+                        <span>⚪</span>
+                        <span>利用しない</span>
+                      </div>
+                      <div className="text-xs font-bold text-slate-600 mt-1">
+                        オプション追加料金 ¥0
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                        LINE通知は行わず、メール通知やスタッフのWebマイページでのみシフト・明細を確認します。
+                      </div>
                     </div>
-                    <div className="text-sm font-black text-slate-900 mt-2 flex items-center gap-1.5">
-                      <span>⚪</span>
-                      <span>利用しない</span>
+                    <div className="mt-3 pt-2.5 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
+                      <span>Webマイページ・メール運用</span>
+                      <span className="font-bold">追加費用 ¥0</span>
                     </div>
-                    <div className="text-xs font-bold text-slate-600 mt-1">
-                      オプション追加料金 ¥0
-                    </div>
-                    <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-                      LINE通知は行わず、メール通知やスタッフのWebマイページでのみシフト・明細を確認します。
-                    </div>
-                  </div>
-                </div>
-
-                {/* データの血流・店長業務への引き継ぎ案内 */}
-                <div className="mt-4 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-3">
-                  <span className="text-base">💡</span>
-                  <div className="text-xs text-slate-600 leading-relaxed">
-                    <span className="font-bold text-slate-800">店長業務・新入社員への自動連動について：</span><br />
-                    ここで設定されたLINE配信プランは、全店舗の店長画面（シフト収集・シフト確定配信・入社手続き）および新入社員のスマホ登録画面へ自動で引き継がれます。店長個人のLINEアカウントを聞く必要は一切なく、安全・確実に通知が届きます。
                   </div>
                 </div>
               </div>
@@ -7405,7 +7611,7 @@ export default function CompanySettingsDashboard() {
                 <div className="mb-3 flex items-center justify-between">
                   <h4 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
                     <Zap className="w-4 h-4 text-amber-500" />
-                    プランをお選びください（用途に合わせていつでも切り替え可能）
+                    STEP 2：基本システムプランを選択（用途に合わせていつでも切り替え可能）
                   </h4>
                   <span className="text-[11px] text-slate-500 font-bold">
                     ※ 貴社の在籍人数（{userCount}名）で自動試算
@@ -7420,9 +7626,12 @@ export default function CompanySettingsDashboard() {
                     const monthlyTotal = userCount * plan.unitPriceMonthly;
 
                     return (
-                      <div className={`bg-white rounded-3xl p-6 border-2 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-md ${
-                        isCurrent ? 'border-teal-500 ring-2 ring-teal-200' : 'border-slate-200 hover:border-slate-300'
-                      }`}>
+                      <div
+                        onClick={() => !isCurrent && !isSaving && handleSaveBillingPlan('shift_only')}
+                        className={`bg-white rounded-3xl p-6 border-2 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer ${
+                          isCurrent ? 'border-teal-500 ring-2 ring-teal-200' : 'border-slate-200 hover:border-teal-300'
+                        }`}
+                      >
                         <div>
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 border border-teal-300">
@@ -7461,7 +7670,11 @@ export default function CompanySettingsDashboard() {
 
                         <div className="mt-6 pt-4 border-t border-slate-100">
                           <button
-                            onClick={() => handleSaveBillingPlan('shift_only')}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSaveBillingPlan('shift_only');
+                            }}
                             disabled={isCurrent || isSaving}
                             className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                               isCurrent 
@@ -7469,7 +7682,7 @@ export default function CompanySettingsDashboard() {
                                 : 'bg-teal-600 hover:bg-teal-700 text-white shadow-xs'
                             }`}
                           >
-                            {isCurrent ? '✅ 現在の選択プラン' : 'このプランに変更する'}
+                            {isCurrent ? '✅ 現在の選択プラン' : 'このプランを選択する'}
                           </button>
                         </div>
                       </div>
@@ -7483,9 +7696,12 @@ export default function CompanySettingsDashboard() {
                     const monthlyTotal = userCount * plan.unitPriceMonthly;
 
                     return (
-                      <div className={`bg-white rounded-3xl p-6 border-2 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-md ${
-                        isCurrent ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200 hover:border-slate-300'
-                      }`}>
+                      <div
+                        onClick={() => !isCurrent && !isSaving && handleSaveBillingPlan('kintai_only')}
+                        className={`bg-white rounded-3xl p-6 border-2 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer ${
+                          isCurrent ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200 hover:border-blue-300'
+                        }`}
+                      >
                         <div>
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300">
@@ -7524,7 +7740,11 @@ export default function CompanySettingsDashboard() {
 
                         <div className="mt-6 pt-4 border-t border-slate-100">
                           <button
-                            onClick={() => handleSaveBillingPlan('kintai_only')}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSaveBillingPlan('kintai_only');
+                            }}
                             disabled={isCurrent || isSaving}
                             className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                               isCurrent 
@@ -7532,7 +7752,7 @@ export default function CompanySettingsDashboard() {
                                 : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
                             }`}
                           >
-                            {isCurrent ? '✅ 現在の選択プラン' : 'このプランに変更する'}
+                            {isCurrent ? '✅ 現在の選択プラン' : 'このプランを選択する'}
                           </button>
                         </div>
                       </div>
@@ -7548,9 +7768,12 @@ export default function CompanySettingsDashboard() {
                     const savedAnnual = savedMonthly * 12;
 
                     return (
-                      <div className={`bg-gradient-to-b from-amber-50/60 via-white to-indigo-50/40 rounded-3xl p-6 border-2 flex flex-col justify-between transition-all duration-200 shadow-md hover:shadow-lg relative overflow-hidden ${
-                        isCurrent ? 'border-amber-500 ring-2 ring-amber-300' : 'border-indigo-400'
-                      }`}>
+                      <div
+                        onClick={() => !isCurrent && !isSaving && handleSaveBillingPlan('full_advance')}
+                        className={`bg-gradient-to-b from-amber-50/60 via-white to-indigo-50/40 rounded-3xl p-6 border-2 flex flex-col justify-between transition-all duration-200 shadow-md hover:shadow-lg relative overflow-hidden cursor-pointer ${
+                          isCurrent ? 'border-amber-500 ring-2 ring-amber-300' : 'border-indigo-400'
+                        }`}
+                      >
                         {/* おすすめリボン */}
                         <div className="absolute top-0 right-0 bg-gradient-to-r from-amber-500 to-indigo-600 text-white text-[10px] font-black px-4 py-1 rounded-bl-2xl shadow-xs">
                           一番人気 ★ セットでお得！
@@ -7599,7 +7822,11 @@ export default function CompanySettingsDashboard() {
 
                         <div className="mt-6 pt-4 border-t border-indigo-100">
                           <button
-                            onClick={() => handleSaveBillingPlan('full_advance')}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSaveBillingPlan('full_advance');
+                            }}
                             disabled={isCurrent || isSaving}
                             className={`w-full py-3 px-4 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm ${
                               isCurrent 
@@ -7617,59 +7844,97 @@ export default function CompanySettingsDashboard() {
                 </div>
               </div>
 
-              {/* Square決済とお支払い手続きエリア */}
-              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              {/* STEP 3：Square決済とお支払い手続きエリア（自動リンク生成対応） */}
+              <div className="bg-white rounded-3xl p-6 shadow-sm border-2 border-slate-200 space-y-5">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-sm">
+                    <div className="w-11 h-11 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-sm shadow-xs">
                       Sq
                     </div>
                     <div>
-                      <h4 className="font-bold text-slate-800 text-sm">
-                        Square クレジットカード決済（定期請求）
-                      </h4>
-                      <p className="text-xs text-slate-400">
-                        VISA、Mastercard、JCB、American Express、Diners Club による安全なオンライン定期決済
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-black text-slate-900 text-base">
+                          STEP 3：Square クレジットカード決済（オンライン自動発行）
+                        </h4>
+                        <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                          Square本番API接続済 (LV2RHGP5T5613)
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        選択中のプラン（{isTrialActive ? 'フルセットプラン基準' : currentPlanMeta.name} × 在籍{userCount}名 {lineMonthlyFee > 0 ? '+ 公式LINE代行 ¥3,000' : ''}）の決済画面をボタン1つで自動生成して開きます。
                       </p>
                     </div>
                   </div>
 
-                  {tenantBilling.square_checkout_url ? (
-                    <a
-                      href={tenantBilling.square_checkout_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <CreditCard className="w-4 h-4 text-amber-400" />
-                      Squareでお支払い手続きへ進む
-                      <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-                    </a>
-                  ) : (
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
-                      onClick={() => alert('お支払いリンクが設定されていません。下記の入力欄にSquare決済リンクURLを入力するか、サポートまでお問い合わせください。')}
-                      className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => handleGenerateSquareCheckout(true)}
+                      className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 hover:opacity-95 text-white font-black text-xs px-5 py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                     >
                       <CreditCard className="w-4 h-4 text-amber-400" />
-                      お支払い手続き
+                      <span>⚡ 現在のプラン内容でSquare決済画面を開く</span>
+                      <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
                     </button>
-                  )}
+
+                    {tenantBilling.square_checkout_url && (
+                      <a
+                        href={tenantBilling.square_checkout_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs px-4 py-3 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <span>保存済みリンクを開く</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
                 </div>
 
-                {/* 管理者用 Square決済URL登録フォーム */}
+                {/* 現在の自動計算お支払い内訳プレビュー */}
+                <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="space-y-1">
+                    <div className="font-black text-indigo-950 flex items-center gap-1.5">
+                      <span>🧾 Square決済リンクの自動計算内訳（税込）</span>
+                    </div>
+                    <div className="text-slate-600">
+                      ・基本システム利用料（{(tenantBilling.plan_type === 'trial' ? SAAS_PLANS.full_advance : currentPlanMeta).name}）: ¥{(tenantBilling.plan_type === 'trial' ? SAAS_PLANS.full_advance : currentPlanMeta).unitPriceMonthly.toLocaleString()} × {userCount}名 ＝ <strong>¥{(userCount * (tenantBilling.plan_type === 'trial' ? SAAS_PLANS.full_advance : currentPlanMeta).unitPriceMonthly).toLocaleString()}</strong>
+                    </div>
+                    <div className="text-slate-600">
+                      ・公式LINE配信オプション（{lineConfig.mode === 'rakumaru_official' ? '公式代行配信' : lineConfig.mode === 'own_official' ? '自社公式LINE' : '利用しない'}）: <strong>¥{lineMonthlyFee.toLocaleString()}</strong>
+                    </div>
+                  </div>
+                  <div className="bg-white px-4 py-3 rounded-xl border border-indigo-200 text-right shrink-0">
+                    <div className="text-[10px] font-bold text-slate-500">決済合計金額（月額・税込）</div>
+                    <div className="text-xl font-black text-indigo-700">
+                      ¥{(userCount * (tenantBilling.plan_type === 'trial' ? SAAS_PLANS.full_advance : currentPlanMeta).unitPriceMonthly + lineMonthlyFee).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 管理者用 Square決済URL確認・手動登録フォーム */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-[11px] font-bold text-slate-700 block">
-                      🔗 Square決済リンクURL（定期支払いチェックアウトURL）
+                      🔗 発行済みSquare決済リンクURL（自動生成または手動URLの保存が可能）
                     </label>
-                    <span className="text-[10px] text-slate-400 font-medium">管理者設定項目</span>
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => handleGenerateSquareCheckout(false)}
+                      className="text-[11px] font-black text-indigo-600 hover:text-indigo-800 bg-white border border-indigo-200 px-3 py-1 rounded-lg shadow-2xs cursor-pointer transition"
+                    >
+                      🔄 最新の人数・プランで決済URLを自動生成して枠にセット
+                    </button>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="url"
                       defaultValue={tenantBilling.square_checkout_url}
                       id="square_checkout_url_input"
-                      placeholder="https://checkout.square.site/merchant/... または https://square.link/u/..."
+                      placeholder="上の「決済画面を開く」または「決済URLを自動生成」を押すと自動でhttps://square.link/...が入ります"
                       className="flex-1 bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:outline-indigo-500"
                     />
                     <button
@@ -7686,7 +7951,7 @@ export default function CompanySettingsDashboard() {
                     </button>
                   </div>
                   <p className="text-[10px] text-slate-400">
-                    ※ Squareの加盟店管理画面 ➔「オンラインチェックアウト」で作成した決済リンクURLを入力して保存すると、自社管理者用のお支払いボタンに直結されます。
+                    ※ 手動でSquare管理画面に入る必要はありません。「⚡ 現在のプラン内容でSquare決済画面を開く」ボタンを押すだけで、Square本番API経由でお支払いリンクが自動発行・保存されます。
                   </p>
                 </div>
               </div>

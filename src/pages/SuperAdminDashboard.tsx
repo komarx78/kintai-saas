@@ -223,10 +223,21 @@ export default function SuperAdminDashboard() {
   const handleSaveTenantCustomPrices = async () => {
     if (!editingTenant) return;
     try {
-      const updatePayload = {
+      const selectedPlan = editingTenant.plan_type || 'trial';
+      const dbSafePlanType = ['shift_only', 'kintai_only', 'full_advance'].includes(selectedPlan)
+        ? 'paid'
+        : selectedPlan;
+
+      const updatedPayrollCommon = {
+        ...(editingTenant.payroll_common_settings || {}),
+        selected_saas_plan: selectedPlan
+      };
+
+      const updatePayload: any = {
         name: editingTenant.name,
-        plan_type: editingTenant.plan_type,
-        status: editingTenant.status || (editingTenant.plan_type === 'terminated' ? 'terminated' : editingTenant.plan_type === 'suspended' ? 'suspended' : 'active'),
+        plan_type: selectedPlan,
+        payroll_common_settings: updatedPayrollCommon,
+        status: editingTenant.status || (selectedPlan === 'terminated' ? 'terminated' : selectedPlan === 'suspended' ? 'suspended' : 'active'),
         trial_ends_at: editingTenant.trial_ends_at,
         custom_billing_model: editingTenant.custom_billing_model || null,
         custom_unit_price_per_user: editingTenant.custom_unit_price_per_user ? Number(editingTenant.custom_unit_price_per_user) : null,
@@ -235,12 +246,16 @@ export default function SuperAdminDashboard() {
         custom_included_users: editingTenant.custom_included_users ? Number(editingTenant.custom_included_users) : null,
         custom_flat_monthly_price: editingTenant.custom_flat_monthly_price ? Number(editingTenant.custom_flat_monthly_price) : null,
       };
-      const { error } = await supabase.from('tenants').update(updatePayload).eq('id', editingTenant.id);
-      if (error) throw error;
+      let { error } = await supabase.from('tenants').update(updatePayload).eq('id', editingTenant.id);
+      if (error) {
+        updatePayload.plan_type = dbSafePlanType;
+        const retry = await supabase.from('tenants').update(updatePayload).eq('id', editingTenant.id);
+        if (retry.error) throw retry.error;
+      }
       
-      setTenants(tenants.map(t => t.id === editingTenant.id ? { ...t, ...updatePayload } : t));
+      setTenants(tenants.map(t => t.id === editingTenant.id ? { ...t, ...updatePayload, plan_type: selectedPlan } : t));
       setEditingTenant(null);
-      alert('企業情報を保存しました。');
+      alert('企業情報・プラン設定を保存しました。');
     } catch (err) {
       console.error(err);
       alert('テナントの保存に失敗しました。');
@@ -1234,7 +1249,10 @@ export default function SuperAdminDashboard() {
                     })}
                     className="w-full p-2.5 border border-slate-300 rounded-xl font-bold"
                   >
-                    <option value="trial">トライアル中</option>
+                    <option value="trial">トライアル中（無料体験）</option>
+                    <option value="full_advance">👑 フルセットプラン（月額500円/名）</option>
+                    <option value="shift_only">📱 シフト＆LINE単体（月額300円/名）</option>
+                    <option value="kintai_only">⏱️ 勤怠＆労務単体（月額300円/名）</option>
                     <option value="standard">スタンダード（有料）</option>
                     <option value="pro">プロ（有料）</option>
                     <option value="paid">有料本契約</option>
