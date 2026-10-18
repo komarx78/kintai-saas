@@ -92,15 +92,28 @@ const PrivateRoute = ({ children, requiredRole }: { children: React.ReactNode, r
         }
       }
 
-      // Check trial lock (Superadmins bypass this)
-      if (userData.role !== 'superadmin' && userData.tenant_id) {
+      // Check trial lock (Superadmins bypass this, and Admins accessing /settings/company bypass this so they can upgrade/pay)
+      const isBillingSettingsRoute =
+        location.pathname.startsWith('/settings/company') ||
+        location.pathname.startsWith('/company-settings');
+      const canBypassTrialLock =
+        userData.role === 'superadmin' ||
+        (userData.role === 'admin' && isBillingSettingsRoute);
+
+      if (!canBypassTrialLock && userData.tenant_id) {
         const { data: tenantData } = await supabase
           .from('tenants')
-          .select('plan_type, trial_ends_at')
+          .select('plan_type, trial_ends_at, payroll_common_settings')
           .eq('id', userData.tenant_id)
           .single();
 
-        if (tenantData && tenantData.plan_type === 'trial' && tenantData.trial_ends_at) {
+        const effectivePlan =
+          tenantData?.payroll_common_settings?.selected_saas_plan ||
+          localStorage.getItem(`selected_saas_plan_${userData.tenant_id}`) ||
+          tenantData?.plan_type ||
+          'trial';
+
+        if (tenantData && effectivePlan === 'trial' && tenantData.trial_ends_at) {
           const now = new Date();
           const trialEnd = new Date(tenantData.trial_ends_at);
           if (now > trialEnd) {
